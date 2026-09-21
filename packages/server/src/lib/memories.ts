@@ -4,6 +4,7 @@ import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
 import { mapMemory, memories, memoryIncludes } from 'src/lib/memoryMapper';
+import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { paginatedList } from 'src/lib/pagination';
 import { registerResourceFieldMap } from 'src/lib/policyCompiler';
 import { hasPolicyConstraints } from 'src/lib/policyWhere';
@@ -125,7 +126,7 @@ export const listMemories = async (args: {
 }) => {
   const where: Record<string, unknown> = {
     memoryStoreId: args.memoryStoreId,
-    ...(args.includeInvalidated ? {} : { invalidatedAt: null }),
+    ...(args.includeInvalidated ? {} : validMemoryWhere()),
   };
   applyTagFilter({ where, tags: args.tags });
   if (hasPolicyConstraints(args.policyWhere)) {

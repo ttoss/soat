@@ -113,9 +113,9 @@ export class Memory extends Model {
    * at the memory that replaced it.
    *
    * Validity lives here and only here. It is the filter on every hot read
-   * (dedup, listing, knowledge search), and a future "forget this" is
-   * `invalidatedAt` set with no replacement — a state of the memory that no
-   * supersede assertion could express.
+   * (dedup, listing, knowledge search). A retraction is this column set with no
+   * replacement — the fact stopped holding and nothing took its place, a state
+   * no supersede assertion could express.
    */
   @Column({ type: DataType.DATE, allowNull: true })
   declare invalidatedAt: Date | null;

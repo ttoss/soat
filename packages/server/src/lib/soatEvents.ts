@@ -87,6 +87,10 @@ export const SOAT_EVENTS = {
   guardrail: {
     'guardrail.tripwire': 'A guardrail tripwire aborted a tool call.',
   },
+  memory: {
+    'memories.retracted':
+      'A memory was retracted: the fact stopped holding with nothing replacing it, so it leaves knowledge search, dedup and the default listing. It stays readable by id, with its assertions.',
+  },
   orchestration_run: {
     'orchestration_runs.started': 'An orchestration run started.',
     'orchestration_runs.awaiting_input':

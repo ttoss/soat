@@ -33,14 +33,16 @@ components:
           description: >-
             The memory this assertion resolved into: the new memory for
             `created` and `superseded`, the existing memory that matched for
-            `skipped`. Null only once that memory has been deleted.
+            `skipped`, the memory withdrawn for `retracted`. Null only once
+            that memory has been deleted.
           example: mem_V1StGXR8Z5jdHi6B
         superseded_memory_id:
           type: string
           nullable: true
           description: >-
             The memory this assertion retired, on a `superseded` outcome; null
-            otherwise. Read back from `memories.superseded_by_memory_id` rather
+            otherwise, a retraction included — it retires its own memory, which
+            `memory_id` already names. Read back from `memories.superseded_by_memory_id` rather
             than stored here, because validity lives on the memory — where
             every read filters it — and exactly one memory is superseded per
             assertion.
@@ -93,11 +95,13 @@ components:
           example: agent_V1StGXR8Z5jdHi6B
         outcome:
           type: string
-          enum: [created, superseded, skipped]
+          enum: [created, superseded, skipped, retracted]
           description: >-
             What the write resolved to. `created` is a distinct fact,
             `superseded` is the same fact changed (the top match was
-            invalidated and replaced), `skipped` is a fact already known.
+            invalidated and replaced), `skipped` is a fact already known,
+            `retracted` is a fact that stopped holding with nothing replacing
+            it.
           example: created
         similarity:
           type: number
@@ -106,15 +110,16 @@ components:
             The cosine similarity the outcome was decided against — the top
             match's, or the declared target's when `declared` is true, where it
             decides nothing and only records how far apart the two statements
-            were. Null when there was nothing to compare against, or when the
-            content could not be embedded.
+            were. Null when there was nothing to compare against, when the
+            content could not be embedded, and on a `retracted` outcome, which
+            compares nothing.
           example: 0.97
         declared:
           type: boolean
           description: >-
             Whether the write named the memory it replaced (`supersedes` on
             create) instead of the thresholds choosing one. Always false on a
-            `created` or `skipped` outcome.
+            `created`, `skipped` or `retracted` outcome.
           example: false
         created_at:
           type: string

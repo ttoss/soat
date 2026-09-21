@@ -7,6 +7,7 @@ import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
 import type { MappedMemory, MemoryRow } from 'src/lib/memoryMapper';
 import { mapMemory, memories, memoryIncludes } from 'src/lib/memoryMapper';
+import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { mergeTags } from 'src/lib/tags';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
@@ -140,7 +141,10 @@ const findTopSimilarMemory = async (args: {
   const match = await withIterativeVectorScan({
     run: ({ transaction }) => {
       return db.Memory.findOne({
-        where: { memoryStoreId: args.memoryStoreId, invalidatedAt: null },
+        where: {
+          memoryStoreId: args.memoryStoreId,
+          ...validMemoryWhere(),
+        },
         attributes: {
           include: [[db.Memory.sequelize!.literal(distance), 'distance']],
         },

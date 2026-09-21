@@ -851,6 +851,40 @@ describe('MCP tools - happy path', () => {
     expect(history.data[0].declared).toBe(true);
   });
 
+  test('retract-memory retires a fact with no successor', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Retraction',
+      })
+    );
+
+    const written = parseResult(
+      await mcpCall('create-memory', {
+        memory_store_id: store.id,
+        content: 'The MCP warehouse is in Porto.',
+      })
+    );
+
+    const retracted = parseResult(
+      await mcpCall('retract-memory', { memory_id: written.id })
+    );
+
+    expect(retracted.id).toBe(written.id);
+    expect(retracted.invalidated_at).not.toBeNull();
+    expect(retracted.superseded_by_memory_id).toBeNull();
+
+    const listed = parseResult(
+      await mcpCall('list-memories', { memory_store_id: store.id })
+    );
+    expect(listed.total).toBe(0);
+
+    const history = parseResult(
+      await mcpCall('list-memory-assertions', { memory_id: written.id })
+    );
+    expect(history.data[1].outcome).toBe('retracted');
+  });
+
   test('the memory-rule tools drive a store\u2019s ingestion policy', async () => {
     const store = parseResult(
       await mcpCall('create-memory-store', {

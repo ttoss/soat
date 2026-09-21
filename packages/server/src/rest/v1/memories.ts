@@ -1,5 +1,3 @@
-import type { MemorySource } from '@soat/postgresdb';
-import { MEMORY_SOURCES } from '@soat/postgresdb';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
@@ -17,6 +15,7 @@ import {
   writeMemory,
 } from 'src/lib/memories';
 import { listMemoryAssertions } from 'src/lib/memoryAssertions';
+import { retractMemory } from 'src/lib/memoryRetraction';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { getMemoryTags, updateMemoryTags } from 'src/lib/memoryTags';
 import { compilePolicy } from 'src/lib/policyCompiler';
@@ -34,6 +33,13 @@ import {
   requireAuth,
   writePreconditionOf,
 } from './helpers';
+import {
+  isPlainObject,
+  readSourcePair,
+  readSupersedes,
+  readThreshold,
+  validateTagsMetadata,
+} from './memoriesRequestBody';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
@@ -44,36 +50,6 @@ export const memoriesRouter = new Router<Context>();
  * answers with an empty page, never an error.
  */
 const NO_MEMORY = -1;
-
-const normalizeSourceType = (value: unknown): MemorySource | undefined => {
-  return MEMORY_SOURCES.includes(value as MemorySource)
-    ? (value as MemorySource)
-    : undefined;
-};
-
-/**
- * A per-request threshold, bounded to `[0, 1]` — the range a cosine similarity
- * can take. A value outside it silently disables one of the three outcomes for
- * that write, so it is refused rather than clamped.
- */
-const readThreshold = (args: {
-  value: unknown;
-  field: string;
-}): number | undefined => {
-  if (args.value === undefined) return undefined;
-  if (
-    typeof args.value !== 'number' ||
-    !Number.isFinite(args.value) ||
-    args.value < 0 ||
-    args.value > 1
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `${args.field} must be a number between 0 and 1`
-    );
-  }
-  return args.value;
-};
 
 /**
  * Rejects a threshold pair that would make one of the three outcomes
@@ -100,81 +76,6 @@ const assertThresholdOrder = async (args: {
   if (error) {
     throw new DomainError('VALIDATION_FAILED', error);
   }
-};
-
-/**
- * The provenance pair as one read. It is the whole contract: `conversation`
- * means `source_id` names the conversation, `manual` means there is nothing to
- * name. Accepting either half alone would store a provenance that says one
- * thing and points at another.
- */
-const readSourcePair = (body: {
-  source_type?: string;
-  source_id?: string;
-}): MemorySource => {
-  const sourceType = normalizeSourceType(body.source_type) ?? 'manual';
-  if (sourceType === 'conversation' && !body.source_id) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "source_id is required when source_type is 'conversation'"
-    );
-  }
-  if (sourceType !== 'conversation' && body.source_id) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "source_id is only accepted when source_type is 'conversation'"
-    );
-  }
-  return sourceType;
-};
-
-/**
- * The declared supersede target, as a memory id. Narrowed here rather than
- * trusted from the body: the value reaches a `where` clause on `public_id`, and
- * JSON can put an object where a string belongs.
- */
-const readSupersedes = (value: unknown): string | undefined => {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string' || value === '') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'supersedes must be a memory id'
-    );
-  }
-  return value;
-};
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-/**
- * Validates optional `tags` / `metadata` on a request body. `allowNull` permits
- * an explicit null (used by the update route to clear a field). Returns an error
- * message, or null when the fields are valid or absent.
- */
-const validateTagsMetadata = (
-  body: { tags?: unknown; metadata?: unknown },
-  opts: { allowNull: boolean }
-): string | null => {
-  const nullable = (v: unknown) => {
-    return opts.allowNull && v === null;
-  };
-  if (
-    body.tags !== undefined &&
-    !nullable(body.tags) &&
-    !isStringRecord(body.tags)
-  ) {
-    return 'tags must be an object of string values';
-  }
-  if (
-    body.metadata !== undefined &&
-    !nullable(body.metadata) &&
-    !isPlainObject(body.metadata)
-  ) {
-    return 'metadata must be an object';
-  }
-  return null;
 };
 
 // Memories are a top-level resource (/memories) but every memory
@@ -470,6 +371,33 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
         ? undefined
         : (body.metadata as Record<string, unknown> | null),
     expectedVersion: writePreconditionOf(ctx),
+  });
+});
+
+/**
+ * @openapi
+ * POST /api/v1/memories/{memory_id}/retract
+ * operationId: retractMemory
+ * Retires a fact that stopped holding with nothing replacing it, and records
+ * the retraction on the assertion ledger.
+ */
+memoriesRouter.post('/memories/:memory_id/retract', async (ctx: Context) => {
+  requireAuth(ctx);
+
+  const entry = await resolveEntryForAction(
+    ctx,
+    ctx.params.memory_id,
+    'memories:RetractMemory'
+  );
+  if (!entry) return;
+
+  ctx.body = await retractMemory({
+    id: ctx.params.memory_id,
+    expectedVersion: writePreconditionOf(ctx),
+    assertion: {
+      mechanism: 'api',
+      ...requestPrincipalFromCtx(ctx),
+    },
   });
 });
 

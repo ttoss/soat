@@ -37,6 +37,7 @@ export const MEMORY_ASSERTION_OUTCOMES = [
   'created',
   'superseded',
   'skipped',
+  'retracted',
 ] as const;
 export type MemoryAssertionOutcome = (typeof MEMORY_ASSERTION_OUTCOMES)[number];
 
@@ -122,7 +123,8 @@ export class MemoryAssertion extends Model {
 
   /**
    * `created` and `superseded` name the new memory; `skipped` names the
-   * existing memory that matched. Null only after that memory is deleted.
+   * existing memory that matched; `retracted` names the memory withdrawn.
+   * Null only after that memory is deleted.
    *
    * The memory a `superseded` assertion retired is deliberately not a column:
    * it is `memories WHERE superseded_by_memory_id = assertion.memory_id`, and
