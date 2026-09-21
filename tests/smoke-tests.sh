@@ -1614,6 +1614,44 @@ if [ "$ME_DEC_AGAIN_STATUS" != "400" ]; then
 fi
 echo "Declared supersede retired a distant target, recorded the declaration, and refused a chain."
 
+echo "--- Memories: retraction withdraws a fact with no successor ---"
+# A store of its own: the retracted fact must not narrow the knowledge queries
+# that follow.
+ME_RET_STORE=$($SOAT_CLI create-memory-store \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-retraction-store | jq -r '.id')
+ME_RET_ID=$($SOAT_CLI create-memory \
+  --memory-store-id "$ME_RET_STORE" \
+  --content "Smoke warehouse is in Porto" | jq -r '.id')
+ME_RET_RESP=$($SOAT_CLI retract-memory --memory-id "$ME_RET_ID")
+ME_RET_INVAL=$(printf '%s\n' "$ME_RET_RESP" | jq -r '.invalidated_at')
+ME_RET_LINK=$(printf '%s\n' "$ME_RET_RESP" | jq -r '.superseded_by_memory_id')
+if [ "$ME_RET_INVAL" = "null" ] || [ "$ME_RET_LINK" != "null" ]; then
+  echo "ERROR: a retraction invalidates with no successor, got invalidated_at=$ME_RET_INVAL link=$ME_RET_LINK" >&2
+  exit 1
+fi
+ME_RET_LISTED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" | jq -r '.total')
+ME_RET_AUDITED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" --include_invalidated true | jq -r '.total')
+if [ "$ME_RET_LISTED" != "0" ] || [ "$ME_RET_AUDITED" != "1" ]; then
+  echo "ERROR: retracted memory should leave the listing and stay auditable, got $ME_RET_LISTED and $ME_RET_AUDITED" >&2
+  exit 1
+fi
+ME_RET_OUTCOME=$($SOAT_CLI list-memory-assertions --memory-id "$ME_RET_ID" | jq -r '.data[1].outcome')
+if [ "$ME_RET_OUTCOME" != "retracted" ]; then
+  echo "ERROR: the ledger should record the retraction, got $ME_RET_OUTCOME" >&2
+  exit 1
+fi
+# The fact is already out of every read, so there is nothing left to retract.
+ME_RET_AGAIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories/$ME_RET_ID/retract" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}')
+if [ "$ME_RET_AGAIN_STATUS" != "409" ]; then
+  echo "ERROR: retracting an invalidated memory expected 409, got $ME_RET_AGAIN_STATUS" >&2
+  exit 1
+fi
+echo "Retraction withdrew the fact, recorded it, and refused a second attempt."
+
 # A query names no store, so it reaches both; include_memories takes the memory
 # store back out. Placed after the memory fixtures exist — the search steps
 # earlier in this script run before this project has any memory at all.

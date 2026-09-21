@@ -62,6 +62,11 @@
       "description": "Update a memory"
     },
     {
+      "operationId": "retractMemory",
+      "action": "memories:RetractMemory",
+      "description": "Retract a memory, retiring the fact it holds"
+    },
+    {
       "operationId": "deleteMemory",
       "action": "memories:DeleteMemory",
       "description": "Delete a memory"

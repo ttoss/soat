@@ -593,6 +593,11 @@ export const ERROR_CODES = {
     description:
       "A task create request's `state` does not name a declared state of the workflow.",
   },
+  MEMORY_ALREADY_INVALIDATED: {
+    httpStatus: 409,
+    description:
+      'The memory no longer holds — a retraction or a supersede already invalidated it — so there is nothing to retract. `meta.memory_id` names it; read it by id to see which.',
+  },
   DOCUMENT_ALREADY_WITHDRAWN: {
     httpStatus: 409,
     description:

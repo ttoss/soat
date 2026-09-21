@@ -48,8 +48,12 @@ const VERSIONED_RESOURCES: Record<
     { module: 'documentVersionRoutes.ts', update: 'withdrawDocument' },
   ],
   // A memory has no archived-config table: its counter only separates two
-  // writers racing on one memory, so its only call site is the update.
-  'Memory.ts': [{ module: 'memories.ts', update: 'updateMemory' }],
+  // writers racing on one memory. Both writes that change one claim it — the
+  // update, and the retraction that retires the fact it holds.
+  'Memory.ts': [
+    { module: 'memories.ts', update: 'updateMemory' },
+    { module: 'memories.ts', update: 'retractMemory' },
+  ],
 };
 
 const callSites = Object.entries(VERSIONED_RESOURCES).flatMap(

@@ -834,8 +834,8 @@ describe('Knowledge', () => {
       expect(before.status).toBe(200);
       expect(memoryStoreResults(before.body)).toHaveLength(1);
 
-      // Seeded directly: no public API sets `invalidated_at` until Memories 5a
-      // ships the LLM arbitration that produces it (roadmap RC-2).
+      // Invalidated directly rather than through the retract route: this file's
+      // subject is what search returns, not which door retired the fact.
       const entry = await db.Memory.findOne({
         where: { publicId: entryRes.body.id },
       });

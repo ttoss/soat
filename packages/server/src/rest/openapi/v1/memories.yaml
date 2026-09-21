@@ -53,7 +53,7 @@ paths:
         - name: include_invalidated
           in: query
           required: false
-          description: Include invalidated (superseded) memories. They are excluded by default; set this to audit the supersede history.
+          description: Include invalidated memories — superseded or retracted. They are excluded by default; set this to audit what a store once held.
           schema:
             type: boolean
             default: false
@@ -347,6 +347,71 @@ paths:
           description: Memory store or memory not found
         '500':
           description: Internal server error
+  /api/v1/memories/{memory_id}/retract:
+    post:
+      tags:
+        - Memories
+      summary: Retract a memory
+      description: >
+        Retires a fact that stopped holding with nothing replacing it. The
+        memory leaves the default listing, [knowledge
+        search](/docs/api/knowledge/search-knowledge) and write deduplication,
+        so restating the fact later lands as a new memory.
+
+
+        It is an invalidation with no successor, which is what tells it apart
+        from a supersede: `invalidated_at` is set and
+        `superseded_by_memory_id` stays null. The retraction is appended to the
+        assertion ledger with outcome `retracted`, so who withdrew the fact is
+        part of the record.
+
+
+        The memory stays readable by id, with its text and its assertions.
+        `DELETE` remains the way to remove it outright.
+      operationId: retractMemory
+      x-soat-resource:
+        kind: memory
+        from: memory_id
+      x-iam-action: memories:RetractMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                expected_version:
+                  description: >-
+                    Refuses the retraction unless the memory is at this version.
+                  allOf:
+                    - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
+      responses:
+        '200':
+          description: The retracted memory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store or memory not found
+        '409':
+          description: >-
+            Conflict — the memory is already invalidated, or the version moved
+        '500':
+          description: Internal server error
   /api/v1/memories/{memory_id}/assertions:
     get:
       tags:
@@ -584,14 +649,15 @@ components:
           format: date-time
           nullable: true
           description: >-
-            When the memory was superseded. Null means the memory is currently
-            valid. Invalidated memories are excluded from listing, from write
+            When the memory stopped holding, whether a supersede replaced it or
+            a retraction withdrew it. Null means the memory is currently valid.
+            Invalidated memories are excluded from listing, from write
             deduplication, and from knowledge search, but remain readable by ID
             — with their original text — for audit.
         superseded_by_memory_id:
           type: string
           nullable: true
-          description: The memory that replaced this one, when it was superseded. Null for valid memories.
+          description: The memory that replaced this one, when it was superseded. Null for a valid memory and for a retracted one, which nothing replaced.
           example: mem_V1StGXR8Z5jdHi6B
         version:
           type: integer

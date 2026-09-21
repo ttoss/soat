@@ -56,8 +56,8 @@ When a memory is created or updated, its `content` is embedded for semantic simi
 | `source_id`  | `string \| null` | The [conversation](./conversations.md) this fact was learned in when `source_type` is `conversation`; `null` when `manual` |
 | `tags`       | `object \| null`   | Per-memory key-value labels for memory-granularity tag filtering in [Knowledge search](./knowledge.md) |
 | `metadata`   | `object \| null`   | Arbitrary structured metadata attached to the memory    |
-| `invalidated_at` | `string \| null` | When the memory was superseded; `null` means currently valid — see [Temporal invalidation](#temporal-invalidation) |
-| `superseded_by_memory_id` | `string \| null` | The memory that replaced this one, when superseded |
+| `invalidated_at` | `string \| null` | When the memory stopped holding, superseded or retracted; `null` means currently valid — see [Temporal invalidation](#temporal-invalidation) |
+| `superseded_by_memory_id` | `string \| null` | The memory that replaced this one, when superseded; `null` when a retraction withdrew it |
 | `version`    | `integer` | Write version, starting at 1 and incremented on every update — see [Concurrent writes](#concurrent-writes) |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp                         |
@@ -70,7 +70,7 @@ One row per write attempt, append-only, whatever the write resolved to.
 | ------------ | -------- | ------------------------------------------------------- |
 | `id`         | `string` | Public ID (`massert_` prefix)                           |
 | `memory_store_id` | `string` | ID of the store written to                         |
-| `memory_id`  | `string \| null` | The memory the write resolved into: the new memory for `created` and `superseded`, the memory that matched for `skipped` |
+| `memory_id`  | `string \| null` | The memory the write resolved into: the new memory for `created` and `superseded`, the memory that matched for `skipped`, the memory withdrawn for `retracted` |
 | `superseded_memory_id` | `string \| null` | The memory this assertion retired, on a `superseded` outcome |
 | `content`    | `string` | The text **as asserted**, which is not always the memory's text — a `skipped` assertion records what was claimed |
 | `mechanism`  | `string` | Which door the write came through: `tool`, `rule`, `api` or `formation` — see [Mechanism](#mechanism) |
@@ -78,8 +78,8 @@ One row per write attempt, append-only, whatever the write resolved to.
 | `generation_id` | `string \| null` | The turn that asserted the fact; `null` on the `api` and `formation` doors |
 | `principal_type` | `string` | Who claimed it, in the vocabulary a [generation](./generations.md) records its starter with, plus `agent` |
 | `principal_id` | `string` | The principal's public ID                             |
-| `outcome`    | `string` | `created`, `superseded` or `skipped`                    |
-| `similarity` | `number \| null` | The cosine the outcome was decided against — the top match's, or the declared target's when `declared` is true; `null` when there was nothing to compare against |
+| `outcome`    | `string` | `created`, `superseded`, `skipped` or `retracted`        |
+| `similarity` | `number \| null` | The cosine the outcome was decided against — the top match's, or the declared target's when `declared` is true; `null` when there was nothing to compare against, and on a retraction, which compares nothing |
 | `declared`   | `boolean` | Whether the caller named the memory this write replaced (`supersedes`) instead of the thresholds choosing one |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 
@@ -198,7 +198,7 @@ The *who* is `principal_type` / `principal_id`. On both agent doors the principa
 
 Both listings are gated on `memories:ListMemoryAssertions`, against the store's SRN like every other item read.
 
-Validity — `invalidated_at` and `superseded_by_memory_id` — is on the memory, not on the assertion: it is the filter on every read, and an invalidation with no replacement has no assertion to carry it. `superseded_memory_id` is read back from the memory, and is unique because a write supersedes exactly its top match.
+Validity — `invalidated_at` and `superseded_by_memory_id` — is on the memory, not on the assertion: it is the filter on every read, and one memory has one answer however many writes reached it. `superseded_memory_id` is read back from the memory, and is unique because a write supersedes exactly its top match; a `retracted` assertion leaves it null, because the memory it retired is the one `memory_id` already names.
 
 ### Provenance
 
@@ -226,7 +226,8 @@ See [Agent with Persistent Memory - Step 13 (Trace a fact back to the conversati
 ### Temporal invalidation
 
 A memory that no longer holds is **retired rather than rewritten**: superseding sets
-`invalidated_at` and points `superseded_by_memory_id` at the replacement.
+`invalidated_at` and points `superseded_by_memory_id` at the replacement, and
+[retracting](#retraction) sets `invalidated_at` with nothing to point at.
 
 Invalidated memories are excluded from:
 
@@ -238,9 +239,26 @@ Invalidated memories are excluded from:
 They stay readable by ID ([`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory)),
 with their original text and their own [assertions](#assertions), for audit.
 
-Superseding is the write outcome that produces an invalidation, whether the thresholds chose the
-memory or the caller [declared it](#declaring-the-supersede). `DELETE` remains the way to
-remove a memory outright.
+A supersede and a retraction are the two ways a memory reaches that state — the first
+because the fact changed, whether the thresholds chose the memory or the caller
+[declared it](#declaring-the-supersede), the second because it stopped holding with nothing
+taking its place. `DELETE` remains the way to remove a memory outright.
+
+### Retraction
+
+[`POST /api/v1/memories/{memory_id}/retract`](/docs/api/memories/retract-memory) withdraws a
+fact. The memory leaves every default read at once, because a retraction is an invalidation
+and validity is already the filter each of them applies — there is no second exclusion to
+keep in sync.
+
+What tells a retraction from a supersede is what it leaves behind: `superseded_by_memory_id`
+stays `null`, and the [ledger](#assertions) gets an assertion with outcome `retracted`
+naming who withdrew the fact. Restating the fact later lands as a new memory, since dedup
+only ever matches a valid one.
+
+The write claims the memory's `version`, so it takes `expected_version` or `If-Match` like
+[any other write](#concurrent-writes). A memory that is already invalidated — retracted, or
+superseded by a later write — answers `409 MEMORY_ALREADY_INVALIDATED`.
 
 ### Concurrent writes
 
@@ -248,7 +266,8 @@ remove a memory outright.
 changing, either `expected_version` in the body or an `If-Match` header, and is refused with
 `409 VERSION_CONFLICT` when the memory has moved on since — see [Concurrent Writes](../advanced/concurrent-writes.md).
 A caller that states nothing still gets the version bump: two writers racing on the same memory
-serialize, and the loser sees the conflict rather than silently overwriting the winner.
+serialize, and the loser sees the conflict rather than silently overwriting the winner. A
+[retraction](#retraction) claims the same counter, so it is refused the same way.
 
 ### Tag Filtering
 

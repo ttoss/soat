@@ -14,6 +14,7 @@ import type {
   SignalCandidate,
 } from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
+import { validMemoryWhere } from './memoryValidity';
 import { hasPolicyConstraints } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter, tagContainment } from './tags';
@@ -415,7 +416,7 @@ const buildSearchWheres = (args: {
   const entryWhere = {
     [Op.and]: [
       args.selection,
-      { invalidatedAt: null },
+      validMemoryWhere(),
       ...(hasPolicyConstraints(args.policyWhere?.memory)
         ? [args.policyWhere.memory]
         : []),
