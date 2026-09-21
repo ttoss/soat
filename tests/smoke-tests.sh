@@ -5321,10 +5321,18 @@ TRIGGER_CREATE_RESP=$($SOAT_CLI create-trigger \
   --type manual \
   --target-type orchestration \
   --target-id "$TRIGGER_ORCH_ID" \
-  --input '{"cycle":"daily"}')
+  --input '{"cycle":"daily"}' \
+  --tool_context '{"advertiserId":"adv_smoke"}')
 TRIGGER_ID=$(printf '%s\n' "$TRIGGER_CREATE_RESP" | jq -r '.id')
 if [ -z "$TRIGGER_ID" ] || [ "$TRIGGER_ID" = "null" ]; then
   echo "ERROR: Failed to create trigger" >&2
+  printf '%s\n' "$TRIGGER_CREATE_RESP" >&2
+  exit 1
+fi
+# The stored bag is write-only: accepted above, never handed back, so the record
+# cannot be used to recover a credential a firing forwards.
+if ! printf '%s\n' "$TRIGGER_CREATE_RESP" | jq -e '.tool_context == null' >/dev/null 2>&1; then
+  echo "ERROR: create-trigger returned tool_context, which is write-only" >&2
   printf '%s\n' "$TRIGGER_CREATE_RESP" >&2
   exit 1
 fi

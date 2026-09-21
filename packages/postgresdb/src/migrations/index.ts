@@ -8,6 +8,7 @@ import { memoryAssertionsDeclared } from './2026-09-17-memoryAssertionsDeclared'
 import { activityEntryGenerationId } from './2026-09-18-activityEntryGenerationId';
 import { orchestrationRunIdempotencyKey } from './2026-09-18-orchestrationRunIdempotencyKey';
 import { orchestrationNodeExecutionDispatches } from './2026-09-20-orchestrationNodeExecutionDispatches';
+import { triggerToolContext } from './2026-09-20-triggerToolContext';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -37,4 +38,5 @@ export const MIGRATIONS: Migration[] = [
   activityEntryGenerationId,
   orchestrationRunIdempotencyKey,
   orchestrationNodeExecutionDispatches,
+  triggerToolContext,
 ];

@@ -16,6 +16,24 @@ import {
 import { defineFormationModule } from './defineFormationModule';
 import { isFormationExpression } from './formationSpecLoader';
 
+/**
+ * Narrows a template's `tool_context` to a string bag. Values are stringified
+ * rather than dropped, so a number in a template reaches the header the same
+ * way `parseToolContextBody` sends one from a request.
+ */
+const toToolContext = (
+  value: unknown
+): Record<string, string> | undefined | null => {
+  if (value === null) return null;
+  if (typeof value !== 'object' || value === undefined || Array.isArray(value))
+    return undefined;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+      return [key, String(item)];
+    })
+  );
+};
+
 /** Narrows an untyped template value to a plain input object, else undefined. */
 const toInputObject = (value: unknown): Record<string, unknown> | undefined => {
   return value != null && typeof value === 'object' && !Array.isArray(value)
@@ -120,6 +138,7 @@ export const triggersFormationModule = defineFormationModule({
       targetId: properties.target_id as string,
       action: toOptionalString(properties.action) ?? undefined,
       input: toInputObject(properties.input),
+      toolContext: toToolContext(properties.tool_context),
       cron: toOptionalString(properties.cron) ?? undefined,
       eventPattern: toOptionalString(properties.event_pattern) ?? undefined,
       active: toOptionalBoolean(properties.active),
@@ -141,6 +160,7 @@ export const triggersFormationModule = defineFormationModule({
       targetId: toOptionalString(properties.target_id),
       action: toNullableString(properties.action),
       input: toInputObject(properties.input),
+      toolContext: toToolContext(properties.tool_context),
       cron: toNullableString(properties.cron),
       eventPattern: toNullableString(properties.event_pattern),
       active: toOptionalBoolean(properties.active),

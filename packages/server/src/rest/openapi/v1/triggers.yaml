@@ -498,6 +498,27 @@ components:
           description: Tool targets only — the action for builtin/mcp tools
         input:
           type: object
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >
+            Caller context every firing forwards to the run it starts, so an
+            agent whose tools authorize through `{{context:<key>}}` can be put
+            on a schedule — a firing has no request to carry one. Each key is
+            forwarded as one `X-Soat-Context-<key>` header.
+
+
+            **Write-only.** It is accepted here and never returned on a read,
+            so the record cannot be used to recover a value.
+
+
+            A value may be a `{{secret:...}}` reference, which keeps the
+            credential in the [secret](/docs/modules/secrets) store and leaves
+            only its name on the trigger; it is resolved at fire time, so
+            rotating the secret changes the next firing without touching the
+            trigger. A reference naming a secret that does not exist in this
+            project is refused here rather than at fire time.
         cron:
           type: string
           description: 5-field cron expression (UTC). Required when type is schedule
@@ -538,6 +559,14 @@ components:
         input:
           type: object
           nullable: true
+        tool_context:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: >
+            Replaces the stored bag; `null` clears it. Write-only and resolved
+            at fire time — see `CreateTriggerRequest.tool_context`.
         cron:
           type: string
           nullable: true
@@ -561,6 +590,19 @@ components:
             Fire-time input, shallow-merged over the trigger's static input.
             For `eval` targets it may carry `agent_version` and
             `baseline_run_id`.
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >
+            Fire-time caller context, shallow-merged per key over the trigger's
+            stored `tool_context`. A manual fire has a caller, so this is the
+            one path that can supply a value without storing it.
+
+
+            Forwarded exactly as written: a `{{secret:...}}` reference is
+            resolved only in the trigger's stored bag, never in one supplied
+            here.
 
     TriggerSecretResponse:
       type: object

@@ -5,10 +5,12 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import {
+  assertSecretRefsExist,
   decryptStoredSecret,
   encryptValue,
   generateSecretValue,
 } from './secrets';
+import { assertValidToolContextKeys } from './toolContext';
 import {
   assertTriggerConfigValid,
   computeNextFireAt,
@@ -192,9 +194,28 @@ type CreateTriggerArgs = {
   targetId: string;
   action?: string | null;
   input?: Record<string, unknown> | null;
+  toolContext?: Record<string, string> | null;
   cron?: string | null;
   eventPattern?: string | null;
   active?: boolean;
+};
+
+/**
+ * A stored context bag is checked the way a tool's own templates are: keys have
+ * to survive becoming headers, and a `{{secret:...}}` has to name a secret in
+ * this project. Both fail here rather than at 3am on a firing nobody is
+ * watching, which is the whole reason the value is allowed to be stored.
+ */
+const assertToolContextValid = async (args: {
+  toolContext?: Record<string, string> | null;
+  projectId: number;
+}): Promise<void> => {
+  if (!args.toolContext) return;
+  assertValidToolContextKeys(args.toolContext);
+  await assertSecretRefsExist({
+    value: args.toolContext,
+    projectId: args.projectId,
+  });
 };
 
 /** Derives the type-dependent fields: a secret for webhooks, next fire for schedules. */
@@ -220,6 +241,7 @@ const buildCreateAttributes = (args: CreateTriggerArgs) => {
     targetId: args.targetId,
     action: args.action ?? null,
     input: args.input ?? null,
+    toolContext: args.toolContext ?? null,
     cron: args.cron ?? null,
     eventPattern: args.eventPattern ?? null,
     active: args.active ?? true,
@@ -245,6 +267,10 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     cron: args.cron,
     eventPattern: args.eventPattern,
   });
+  await assertToolContextValid({
+    toolContext: args.toolContext,
+    projectId: args.projectId,
+  });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
 
   const trigger = await db.Trigger.create(buildCreateAttributes(args));
@@ -264,6 +290,7 @@ type UpdateTriggerArgs = {
   targetId?: string;
   action?: string | null;
   input?: Record<string, unknown> | null;
+  toolContext?: Record<string, string> | null;
   cron?: string | null;
   eventPattern?: string | null;
   active?: boolean;
@@ -295,6 +322,7 @@ const DIRECT_UPDATE_FIELDS = [
   ['targetId', 'targetId'],
   ['action', 'action'],
   ['input', 'input'],
+  ['toolContext', 'toolContext'],
   ['eventPattern', 'eventPattern'],
   ['active', 'active'],
 ] as const satisfies readonly (readonly [
@@ -336,6 +364,11 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
         ? args.eventPattern
         : trigger.eventPattern,
     validateTarget: targetChanged,
+  });
+
+  await assertToolContextValid({
+    toolContext: args.toolContext,
+    projectId: trigger.projectId as number,
   });
 
   if (args.name !== undefined && args.name !== trigger.name) {

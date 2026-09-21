@@ -21,7 +21,9 @@ A value is never interpolated into a URL or into arguments the model chooses. Th
 | [`POST /api/v1/tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
 | [`POST /api/v1/evals/{eval_id}/runs`](/docs/api/evaluations/start-eval-run) | `tool_context` — persisted on the run and applied to every item's generation, so an agent is scored as it runs in production. Write-only, and cleared when the run settles (see [Run tool context](../modules/evaluations.md#run-tool-context)) |
 | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) | `tool_context` — this call only ([below](#calling-a-context-dependent-tool-directly)) |
-| Formation templates | `tool_context` on a `Session` resource |
+| [`POST /api/v1/triggers`](/docs/api/triggers/create-trigger) / [`PUT /api/v1/triggers/{trigger_id}`](/docs/api/triggers/update-trigger) | `tool_context` — persisted on the trigger and forwarded by every firing, which is what puts a context-dependent agent on a schedule. Write-only, and values may be `{{secret:...}}` (see [Scheduled firings](../modules/triggers.md#carrying-tool-context)) |
+| [`POST /api/v1/triggers/{trigger_id}/fire`](/docs/api/triggers/fire-trigger) | `tool_context` — shallow-merged per key over the trigger's stored bag, this firing only |
+| Formation templates | `tool_context` on a `Session` resource, and on a `Trigger` resource |
 
 ## Which tools receive the headers
 
@@ -47,7 +49,7 @@ The [auto-populated identity keys](#auto-populated-keys-sessions) are always for
 
 When a generation pauses with `status: "requires_action"`, the original `tool_context` is reapplied on resume. An orchestration run's bag lives on its own row and survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive. A [task](../modules/workflows.md#dispatch-tool-context) stores its bag the same way, across an approval gate, a retry and an automated hop.
 
-A session's and a run's bag is readable; a **task's is write-only**: a task is read by every principal on the board, so its stored bag is never returned by a read and is cleared when the task closes.
+A session's and a run's bag is readable; a **task's and a trigger's are write-only**: both are read by more principals than the one who wrote them, so a stored bag is never returned by a read. A task's is cleared when the task closes; a trigger's persists, because it has to survive until the next firing.
 
 ## Placing a value in a real header
 

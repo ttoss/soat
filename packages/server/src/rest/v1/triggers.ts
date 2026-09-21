@@ -18,6 +18,7 @@ import {
 
 import {
   parsePagination,
+  parseToolContextBody,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -94,6 +95,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     target_id: string;
     action?: string;
     input?: Record<string, unknown>;
+    tool_context?: unknown;
     cron?: string;
     event_pattern?: string;
     active?: boolean;
@@ -135,6 +137,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     targetId: body.target_id,
     action: body.action,
     input: body.input,
+    toolContext: parseToolContextBody(body.tool_context),
     cron: body.cron,
     eventPattern: body.event_pattern,
     active: body.active,
@@ -212,6 +215,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     target_id?: string;
     action?: string | null;
     input?: Record<string, unknown> | null;
+    tool_context?: unknown;
     cron?: string | null;
     event_pattern?: string | null;
     active?: boolean;
@@ -233,6 +237,10 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     targetId: body.target_id,
     action: body.action,
     input: body.input,
+    toolContext:
+      body.tool_context === null
+        ? null
+        : parseToolContextBody(body.tool_context),
     cron: body.cron,
     eventPattern: body.event_pattern,
     active: body.active,
@@ -292,12 +300,14 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     input?: Record<string, unknown>;
+    tool_context?: unknown;
   };
 
   const firing = await fireTriggerNow({
     triggerPublicId: ctx.params.trigger_id,
     source: 'manual',
     fireInput: body.input,
+    fireToolContext: parseToolContextBody(body.tool_context),
   });
 
   ctx.status = 200;

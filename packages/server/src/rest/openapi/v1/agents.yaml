@@ -1075,6 +1075,20 @@ components:
                 `min_similarity`. No default: omitted means no floor at all,
                 and every one of the `limit` nearest chunks is injected however
                 weak it is.
+            rrf_k:
+              type: integer
+              description: >
+                The `k` in the fusion term `1 / (k + rank)`, the same knob
+                knowledge search takes. Smaller weights the top of each ranking
+                more heavily. Omitted, the deployment's `KNOWLEDGE_RRF_K`
+                applies.
+            recency_half_life_days:
+              type: number
+              description: >
+                Half-life in days of the decay applied to **memory** results
+                after fusion, the same knob knowledge search takes. `0`
+                disables it. Omitted, the deployment's
+                `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` applies.
             limit:
               type: integer
               description: >
@@ -1453,6 +1467,20 @@ components:
                 `min_similarity`. No default: omitted means no floor at all,
                 and every one of the `limit` nearest chunks is injected however
                 weak it is.
+            rrf_k:
+              type: integer
+              description: >
+                The `k` in the fusion term `1 / (k + rank)`, the same knob
+                knowledge search takes. Smaller weights the top of each ranking
+                more heavily. Omitted, the deployment's `KNOWLEDGE_RRF_K`
+                applies.
+            recency_half_life_days:
+              type: number
+              description: >
+                Half-life in days of the decay applied to **memory** results
+                after fusion, the same knob knowledge search takes. `0`
+                disables it. Omitted, the deployment's
+                `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` applies.
             limit:
               type: integer
               description: >
@@ -1651,6 +1679,20 @@ components:
                 `min_similarity`. No default: omitted means no floor at all,
                 and every one of the `limit` nearest chunks is injected however
                 weak it is.
+            rrf_k:
+              type: integer
+              description: >
+                The `k` in the fusion term `1 / (k + rank)`, the same knob
+                knowledge search takes. Smaller weights the top of each ranking
+                more heavily. Omitted, the deployment's `KNOWLEDGE_RRF_K`
+                applies.
+            recency_half_life_days:
+              type: number
+              description: >
+                Half-life in days of the decay applied to **memory** results
+                after fusion, the same knob knowledge search takes. `0`
+                disables it. Omitted, the deployment's
+                `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` applies.
             limit:
               type: integer
               description: >
@@ -1835,7 +1877,7 @@ components:
         knowledge_config:
           type: object
           nullable: true
-          description: Per-generation knowledge retrieval override. Array filters (memory_store_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, limit) use the per-generation value when present.
+          description: Per-generation knowledge retrieval override. Array filters (memory_store_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, rrf_k, recency_half_life_days, limit) use the per-generation value when present.
           additionalProperties: false
           properties:
             memory_store_ids:
@@ -1866,6 +1908,20 @@ components:
                 `min_similarity`. No default: omitted means no floor at all,
                 and every one of the `limit` nearest chunks is injected however
                 weak it is.
+            rrf_k:
+              type: integer
+              description: >
+                The `k` in the fusion term `1 / (k + rank)`, the same knob
+                knowledge search takes. Smaller weights the top of each ranking
+                more heavily. Omitted, the deployment's `KNOWLEDGE_RRF_K`
+                applies.
+            recency_half_life_days:
+              type: number
+              description: >
+                Half-life in days of the decay applied to **memory** results
+                after fusion, the same knob knowledge search takes. `0`
+                disables it. Omitted, the deployment's
+                `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` applies.
             limit:
               type: integer
               description: >

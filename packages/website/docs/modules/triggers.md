@@ -41,6 +41,7 @@ firing record holds the outcome.
 | `target_id`    | string                                  | Public ID of the target; must exist in the same project at create/update time     |
 | `action`       | string \| null                          | Tool targets only: the action for `builtin`/`mcp` tools (required for those, rejected otherwise) |
 | `input`        | object \| null                          | Static input, shallow-merged under fire-time input (fire-time keys win)           |
+| `tool_context` | object \| null                          | Write-only. Caller context every firing forwards to the run it starts, so a context-dependent agent can be scheduled — see [Carrying tool context](#carrying-tool-context) |
 | `cron`         | string \| null                          | 5-field cron expression (UTC). Required iff `type=schedule`, rejected otherwise   |
 | `event_pattern`| string \| null                          | Internal-event subscription pattern. Required iff `type=event`, rejected otherwise |
 | `active`       | boolean                                 | Inactive triggers never fire                                                      |
@@ -323,6 +324,46 @@ resource type with properties `name`, `description`, `type`, `target_type`,
   }
 }
 ```
+
+### Carrying tool context
+
+A tool that authorizes per call reads its credential from the caller's
+[`tool_context`](../advanced/tool-context.md) through a `{{context:<key>}}`
+token. A firing has no caller, so the bag is stored on the trigger and
+forwarded to every run it starts:
+
+```json
+{
+  "name": "daily-advertiser-report",
+  "type": "schedule",
+  "cron": "0 9 * * *",
+  "target_type": "orchestration",
+  "target_id": "orch_V1StGXR8Z5jdHi6B",
+  "tool_context": {
+    "ocaToken": "{{secret:sec_V1StGXR8Z5jdHi6B}}",
+    "advertiserId": "adv_123"
+  }
+}
+```
+
+A value may be a [`{{secret:...}}`](./secrets.md) reference, which is what a
+credential should be: the plaintext stays in the secret store and the trigger
+holds only its name. References resolve **at fire time**, so rotating the
+secret changes what the next firing sends without touching the trigger, and a
+reference naming a secret that does not exist in the project is refused when
+the trigger is written rather than at 3am on a firing nobody is watching.
+
+The bag is **write-only** — accepted on create and update, never returned by a
+read — so the record cannot be used to recover a value. A manual
+[`fire`](/docs/api/triggers/fire-trigger) may pass its own `tool_context`,
+shallow-merged per key over the stored one, which is the one path that can
+supply a value without storing it. A fire-time value is forwarded exactly as
+written: only the stored bag resolves `{{secret:...}}`, so firing a trigger is
+not a way to read a secret the caller could not read already.
+
+The credential a firing sends is bounded by what the trigger's
+[run-as identity](#run-as-identity) may already do; `tool_context` decides what
+a tool is told, not what the firing is allowed to reach.
 
 ## Configuration
 

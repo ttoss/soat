@@ -24,6 +24,13 @@ export type KnowledgeConfig = {
    */
   tags?: Record<string, string>;
   minScore?: number;
+  /**
+   * The `k` in RRF's `1 / (k + rank)`. Tuning, not scope: on its own it turns
+   * no retrieval on, the way a filter does.
+   */
+  rrfK?: number;
+  /** Half-life in days of the recency decay over memory results. `0` is off. */
+  recencyHalfLifeDays?: number;
   limit?: number;
   /**
    * The store the `write_memory` tool may write to — a capability grant on the
@@ -107,6 +114,8 @@ export const readKnowledgeConfig = (
   set('documentPaths', readStringArray(value.document_paths));
   set('tags', readStringRecord(value.tags));
   set('minScore', readNumber(value.min_score));
+  set('rrfK', readNumber(value.rrf_k));
+  set('recencyHalfLifeDays', readNumber(value.recency_half_life_days));
   set('limit', readNumber(value.limit));
   set('writeMemoryStoreId', readString(value.write_memory_store_id));
 
@@ -304,6 +313,8 @@ export const buildKnowledgeMessages = async (args: {
     // The agent record spells the cosine floor `min_score`, which is exactly
     // what `minSimilarity` is.
     minSimilarity: config.minScore,
+    rrfK: config.rrfK,
+    recencyHalfLifeDays: config.recencyHalfLifeDays,
     limit: config.limit,
     includeDocuments,
     includeMemories,
