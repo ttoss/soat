@@ -18,6 +18,7 @@ import type {
 import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
+import { applyMetadataWhere } from './structuredFilter';
 import { liveDocumentWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
@@ -41,7 +42,15 @@ export type DocumentQueryConfig = {
   paths?: string[];
   documentIds?: string[];
   tags?: Record<string, string>;
+  /** Compiled by the caller, which is where the filter's project is known. */
+  metadataWhere?: unknown[];
 };
+
+/**
+ * The chunk query reaches the bag through its `document` include, so an
+ * ordering fragment names that alias rather than the query root.
+ */
+export const DOCUMENT_METADATA_COLUMN = '"document"."metadata"';
 
 export type QueryDocumentResult = {
   id: string;
@@ -408,12 +417,14 @@ const findChunksWithoutSearch = async (args: {
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
   tags: Record<string, string> | undefined;
+  metadataWhere: unknown[] | undefined;
 }): Record<string, unknown> => {
   const where: Record<string, unknown> = { ...liveDocumentWhere() };
   if (args.documentIds && args.documentIds.length > 0) {
     where.publicId = args.documentIds;
   }
   applyTagFilter({ where, tags: args.tags });
+  applyMetadataWhere({ where, fragments: args.metadataWhere ?? [] });
   return where;
 };
 
@@ -460,6 +471,7 @@ export const resolveDocumentSearchLists = async (args: {
   const docWhere = buildDocWhere({
     documentIds: config.documentIds,
     tags: config.tags,
+    metadataWhere: config.metadataWhere,
   });
 
   if (!config.search) {

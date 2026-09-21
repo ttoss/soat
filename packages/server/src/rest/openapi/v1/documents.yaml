@@ -59,6 +59,7 @@ paths:
             type: boolean
             default: false
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
+        - $ref: './metadata-filters.yaml#/components/parameters/MetadataQuery'
         - name: limit
           in: query
           required: false

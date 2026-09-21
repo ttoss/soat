@@ -310,6 +310,53 @@ export const deleteMetadataSchema = async (args: {
   await row.destroy();
 };
 
+/** The JSON types a declaration can give a field an ordering for. */
+export type OrderableJsonType = 'string' | 'number';
+
+const orderableTypeOf = (spec: unknown): OrderableJsonType | null => {
+  if (!isPlainObject(spec)) return null;
+  if (spec.type === 'string') return 'string';
+  if (spec.type === 'number' || spec.type === 'integer') return 'number';
+  return null;
+};
+
+/**
+ * The orderable type each field carries across a project's `document`
+ * declarations — what a structured range asks for before it compares.
+ *
+ * A field two declarations type differently is left out: the comparison a
+ * range means would then depend on which corner of the corpus a row came from,
+ * and one that silently picks a corner is worse than a refusal.
+ */
+export const declaredDocumentFieldTypes = async (args: {
+  projectId: number;
+}): Promise<Map<string, OrderableJsonType>> => {
+  const declarations = await db.MetadataSchema.findAll({
+    where: { projectId: args.projectId, resourceType: 'document' },
+    attributes: ['schema'],
+  });
+
+  const seen = new Map<string, OrderableJsonType | null>();
+  for (const declaration of declarations) {
+    const schema = declaration.schema;
+    const properties = isPlainObject(schema) ? schema.properties : null;
+    if (!isPlainObject(properties)) continue;
+    for (const [field, spec] of Object.entries(properties)) {
+      const type = orderableTypeOf(spec);
+      seen.set(
+        field,
+        seen.has(field) && seen.get(field) !== type ? null : type
+      );
+    }
+  }
+
+  const typed = new Map<string, OrderableJsonType>();
+  for (const [field, type] of seen) {
+    if (type) typed.set(field, type);
+  }
+  return typed;
+};
+
 /**
  * Whether a path is at or under a prefix. A boundary, never a substring, the
  * same rule `pathPrefixPattern` applies to a listing: `/reports` covers

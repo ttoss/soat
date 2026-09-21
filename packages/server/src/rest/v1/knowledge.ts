@@ -4,6 +4,11 @@ import { DomainError } from 'src/errors';
 import type { KnowledgePolicyWhere } from 'src/lib/knowledge';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import {
+  hasMetadataFilter,
+  type MetadataFilter,
+  readMetadataFilter,
+} from 'src/lib/structuredFilter';
 import { hasTagFilter, readTagBag } from 'src/lib/tags';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
@@ -23,6 +28,7 @@ type KnowledgeSearchBody = {
   document_paths?: string[] | string;
   document_ids?: string[] | string;
   tags?: unknown;
+  metadata?: unknown;
   include_documents?: boolean;
   include_memories?: boolean;
 };
@@ -42,11 +48,13 @@ const toStringArray = (
 
 const hasSearchFilters = (
   body: KnowledgeSearchBody,
-  tags: Record<string, string> | undefined
+  tags: Record<string, string> | undefined,
+  metadata: MetadataFilter | undefined
 ): boolean => {
   const hasDocumentFilters =
     (body.document_paths !== undefined && body.document_paths.length > 0) ||
-    (body.document_ids !== undefined && body.document_ids.length > 0);
+    (body.document_ids !== undefined && body.document_ids.length > 0) ||
+    hasMetadataFilter(metadata);
   const hasMemoryStoreFilters =
     body.memory_store_ids !== undefined && body.memory_store_ids.length > 0;
   return (
@@ -106,11 +114,12 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
 
   const body = ctx.request.body as KnowledgeSearchBody;
   const tags = readTagBag(body.tags);
+  const metadata = readMetadataFilter(body.metadata);
 
-  if (!hasSearchFilters(body, tags)) {
+  if (!hasSearchFilters(body, tags, metadata)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'At least one of query, tags, memory_store_ids, document_paths, or document_ids is required'
+      'At least one of query, tags, metadata, memory_store_ids, document_paths, or document_ids is required'
     );
   }
 
@@ -153,6 +162,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     documentIds: toStringArray(body.document_ids),
     memoryStoreIds: toStringArray(body.memory_store_ids),
     tags,
+    metadata,
     includeDocuments: body.include_documents,
     includeMemories: body.include_memories,
   });

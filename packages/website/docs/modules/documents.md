@@ -234,6 +234,25 @@ A write that stores metadata violating the declaration in force is refused with 
 
 [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers what a write would be told without writing, which is what a batch import wants before it starts.
 
+### Metadata filters
+
+[`GET /api/v1/documents`](/docs/api/documents/list-documents) narrows by the bag with `?metadata=`, a JSON object url-encoded into one parameter. [Knowledge search](./knowledge.md) reads the same object in its request body, so a filter written for one holds for the other.
+
+```
+?metadata={"quarter":"Q1","revision":{"gte":3,"lt":11},"status":{"in":["draft","final"]}}
+```
+
+| Form | Meaning |
+| --- | --- |
+| `"field": value` | The bag holds that field with exactly that value |
+| `{ "in": [...] }` | Any one of the listed values |
+| `{ "gt": v }`, `{ "gte": v }`, `{ "lt": v }`, `{ "lte": v }` | Ordering; bounds on one field combine |
+
+- **The match is exact.** `{"revision": 3}` and `{"revision": "3"}` are different filters, which is why the filter travels as JSON rather than as `key:value` pairs.
+- **Ordering needs a declared type.** `gt`/`gte`/`lt`/`lte` are served on fields a [metadata schema](./metadata-schemas.md) in the project declares as `string`, `number` or `integer`, and need `project_id`, because declarations are project-scoped. Any other field is `400 VALIDATION_FAILED` with `error.meta.field` naming it — which is also the answer to a misspelled field, rather than a page that reads as "nothing matched". Equality and `in` need no declaration.
+- **A range never matches another type.** A document whose field holds text is not below every number; it is not comparable, and is left out of both directions.
+- **A filter narrows what the caller may already see.** It is applied on top of the [IAM](./iam.md) policy, never instead of it.
+
 ### File Ingestion and Chunking
 
 [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) ingests a file uploaded via [`POST /api/v1/files/upload`](/docs/api/files/upload-file). Format is detected from `content_type`:
@@ -429,6 +448,44 @@ curl -X POST https://api.example.com/api/v1/documents/ingest \
     \"file_id\": \"$FILE_ID\",
     \"path_prefix\": \"/reports/\"
   }"
+```
+
+</TabItem>
+</Tabs>
+
+### Filter a listing by metadata
+
+[`GET /api/v1/documents`](/docs/api/documents/list-documents) takes the filter as one url-encoded JSON object. Ordering operators need the field's type, so `project_id` names the project whose [metadata schemas](./metadata-schemas.md) declare it.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-documents \
+  --project-id proj_V1StGXR8Z5jdHi6B \
+  --metadata '{"quarter":"Q1","revision":{"gte":3}}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data } = await soat.documents.listDocuments({
+  query: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    metadata: JSON.stringify({ quarter: 'Q1', revision: { gte: 3 } }),
+  },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -G "$SOAT_BASE_URL/api/v1/documents" \
+  -H "Authorization: Bearer $SOAT_TOKEN" \
+  --data-urlencode "project_id=proj_V1StGXR8Z5jdHi6B" \
+  --data-urlencode 'metadata={"quarter":"Q1","revision":{"gte":3}}'
 ```
 
 </TabItem>

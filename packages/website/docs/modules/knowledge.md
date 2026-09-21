@@ -115,7 +115,7 @@ with `query` without `document_paths`.
 
 ### Which stores a search reads
 
-`query` and `tags` name no store, so they reach **both**. The store-specific filters narrow *within* a store: `document_paths` and `document_ids` for documents, `memory_store_ids` for memories.
+`query` and `tags` name no store, so they reach **both**. The store-specific filters narrow *within* a store: `document_paths`, `document_ids` and `metadata` for documents, `memory_store_ids` for memories.
 
 | Request | Documents | Memories |
 | --- | --- | --- |
@@ -123,6 +123,7 @@ with `query` without `document_paths`.
 | `tags` alone | ✅ | ✅ |
 | `query` + `memory_store_ids` | ✅ (project-wide) | ✅ (those stores) |
 | `document_paths` alone | ✅ (those paths) | — |
+| `metadata` alone | ✅ (matching bags) | — |
 | `memory_store_ids` alone | — | ✅ (those stores) |
 
 `include_documents: false` and `include_memories: false` take a store out, and a filter naming the other store never overrides them — `{ document_paths, include_documents: false }` returns nothing rather than quietly re-enabling documents. Both `false` is `400 VALIDATION_FAILED`.
@@ -135,7 +136,13 @@ Results from both stores are ranked together before `limit` applies, so a search
 { "query": "quarterly revenue", "tags": { "team": "finance", "env": "prod" } }
 ```
 
-Against memories it matches at **memory granularity**: a memory is returned when its parent store's tags contain the pairs (store-level, every memory returned) or when the memory's own `tags` do (that memory only) — see [Memories — Memory-Level Tag Filtering](./memories.md#memory-level-tag-filtering).
+`metadata` is the structured question the document listing reads, in the same shape — one grammar, so a filter written for [`GET /api/v1/documents`](/docs/api/documents/list-documents) holds here. It narrows documents alone, because a memory carries no such bag. See [Documents — Metadata filters](./documents.md#metadata-filters) for the operators and for what an ordering needs.
+
+```json
+{ "query": "quarterly revenue", "metadata": { "quarter": "Q1", "revision": { "gte": 3 } } }
+```
+
+Against memories `tags` matches at **memory granularity**: a memory is returned when its parent store's tags contain the pairs (store-level, every memory returned) or when the memory's own `tags` do (that memory only) — see [Memories — Memory-Level Tag Filtering](./memories.md#memory-level-tag-filtering).
 
 ### Hybrid retrieval
 

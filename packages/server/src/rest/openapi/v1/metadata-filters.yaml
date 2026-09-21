@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: SOAT Metadata Filters
+  version: 1.0.0
+  description: >-
+    Shared components for the structured question a caller asks of a resource's
+    `metadata` bag. This file declares no paths: the grammar is defined once
+    rather than once per surface that reads it.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    MetadataFilter:
+      type: object
+      description: >-
+        Narrows results by the `metadata` bag. Each key is a field; its value is
+        either a value to match exactly, or an object naming one or more
+        operators.
+
+
+        Equality and `in` match the stored value exactly, so `3` and `"3"` are
+        different filters. `gt`, `gte`, `lt` and `lte` order the field, and
+        order only makes sense once a type is known: they are served on fields a
+        [metadata schema](/docs/modules/metadata-schemas) in the project
+        declares as `string`, `number` or `integer`, and need `project_id`,
+        because declarations are project-scoped. A range over any other field is
+        `400 VALIDATION_FAILED` naming it in `meta.field` — which is also the
+        answer to a misspelled field, rather than an empty page. A document
+        whose field holds another type is never matched by a range.
+      additionalProperties: true
+      example:
+        quarter: 'Q1'
+        revision: { gte: 3, lt: 11 }
+        status: { in: ['draft', 'final'] }
+  parameters:
+    MetadataQuery:
+      name: metadata
+      in: query
+      required: false
+      description: >-
+        A `MetadataFilter` as JSON, url-encoded. It travels as JSON rather than
+        as `key:value` pairs because the match is exact and a query string
+        cannot otherwise say whether `3` is the number or the string.
+      schema:
+        type: string
+      example: '{"quarter":"Q1","revision":{"gte":3}}'
