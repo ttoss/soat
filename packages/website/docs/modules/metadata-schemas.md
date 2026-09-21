@@ -2,6 +2,9 @@
 description: "Declare what a resource's metadata must satisfy in a project, enforced at every write path that stores it."
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Metadata Schemas
 
 A Metadata Schema declares what a resource's `metadata` must satisfy in a project. A write whose metadata violates the declaration in force is refused by the resource's own write path.
@@ -15,6 +18,11 @@ A declaration states the structure somewhere both of them see. It names the `res
 **The declarations are the contract; the resources' write paths are the enforcement.** [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) reports what a write would be told, and refuses nothing: a check a writer has to call is advisory, and the writer who skips it is the one the rule exists for.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
+## Related Tutorials
+
+- [Govern Metadata with Schemas - Step 2 (Declare what a report must carry)](/docs/tutorials/govern-metadata-with-schemas#step-2--declare-what-a-report-must-carry)
+- [Govern Metadata with Schemas - Step 5 (Check a batch before sending it)](/docs/tutorials/govern-metadata-with-schemas#step-5--check-a-batch-before-sending-it)
 
 ## Data Model
 
@@ -58,22 +66,116 @@ Documents already stored keep the metadata they hold: the rule governed the writ
 
 ### Declare what documents under a prefix must carry
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-metadata-schema \
-  --project_id proj_abc \
-  --resource_type document \
-  --path_prefix /reports \
+  --project-id proj_V1StGXR8Z5jdHi6B \
+  --resource-type document \
+  --path-prefix /reports \
   --schema '{"type":"object","required":["quarter"],"properties":{"quarter":{"type":"string","enum":["Q1","Q2","Q3","Q4"]}}}'
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data } = await soat.metadataSchemas.createMetadataSchema({
+  body: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    resource_type: 'document',
+    path_prefix: '/reports',
+    schema: {
+      type: 'object',
+      required: ['quarter'],
+      properties: {
+        quarter: { type: 'string', enum: ['Q1', 'Q2', 'Q3', 'Q4'] },
+      },
+    },
+  },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "$SOAT_BASE_URL/api/v1/metadata-schemas" \
+  -H "Authorization: Bearer $SOAT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_V1StGXR8Z5jdHi6B","resource_type":"document","path_prefix":"/reports","schema":{"type":"object","required":["quarter"],"properties":{"quarter":{"type":"string","enum":["Q1","Q2","Q3","Q4"]}}}}'
+```
+
+</TabItem>
+</Tabs>
+
+### Read what a project declares
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-metadata-schemas --project-id proj_V1StGXR8Z5jdHi6B --resource-type document
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data } = await soat.metadataSchemas.listMetadataSchemas({
+  query: { project_id: 'proj_V1StGXR8Z5jdHi6B', resource_type: 'document' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "$SOAT_BASE_URL/api/v1/metadata-schemas?project_id=proj_V1StGXR8Z5jdHi6B&resource_type=document" \
+  -H "Authorization: Bearer $SOAT_TOKEN"
+```
+
+</TabItem>
+</Tabs>
+
 ### Check a bag before writing it
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat validate-metadata \
-  --project_id proj_abc \
+  --project-id proj_V1StGXR8Z5jdHi6B \
   --path /reports/q1.txt \
   --metadata '{"owner":"finance"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data } = await soat.metadataSchemas.validateMetadata({
+  body: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    path: '/reports/q1.txt',
+    metadata: { owner: 'finance' },
+  },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "$SOAT_BASE_URL/api/v1/metadata-schemas/validate" \
+  -H "Authorization: Bearer $SOAT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_V1StGXR8Z5jdHi6B","path":"/reports/q1.txt","metadata":{"owner":"finance"}}'
+```
+
+</TabItem>
+</Tabs>
 
 ```json
 {
@@ -87,6 +189,29 @@ soat validate-metadata \
 
 ### Stop governing a prefix
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat delete-metadata-schema --metadata-schema-id mdschema_V1StGXR8Z5jdHi6B
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await soat.metadataSchemas.deleteMetadataSchema({
+  path: { metadata_schema_id: 'mdschema_V1StGXR8Z5jdHi6B' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X DELETE "$SOAT_BASE_URL/api/v1/metadata-schemas/mdschema_V1StGXR8Z5jdHi6B" \
+  -H "Authorization: Bearer $SOAT_TOKEN"
+```
+
+</TabItem>
+</Tabs>

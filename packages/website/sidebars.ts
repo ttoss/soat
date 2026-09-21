@@ -190,6 +190,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/agent-with-pdfs',
         'tutorials/ingest-images-and-audio',
         'tutorials/measure-retrieval-quality',
+        'tutorials/govern-metadata-with-schemas',
       ],
     },
     {
