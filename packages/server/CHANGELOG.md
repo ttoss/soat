@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.57.0](https://github.com/ttoss/soat/compare/v0.56.0...v0.57.0) (2026-09-21)
+
+### Bug Fixes
+
+* **orchestrations:** make a run's tool_context write-only ([#1384](https://github.com/ttoss/soat/issues/1384)) ([ffaf83d](https://github.com/ttoss/soat/commit/ffaf83d2f3b95b372984f5688a9c4f96ae6b16f0))
+
+### Features
+
+* **agents,triggers:** expose rrf tuning on knowledge_config and tool_context on a trigger ([#1383](https://github.com/ttoss/soat/issues/1383)) ([b98fb53](https://github.com/ttoss/soat/commit/b98fb5359525fb98dc20001712a93337cb8917f1)), closes [ttoss/soat#553](https://github.com/ttoss/soat/issues/553) [ttoss/soat#558](https://github.com/ttoss/soat/issues/558)
+* **projects:** refuse an unpriced model behind require_priced_model ([#1382](https://github.com/ttoss/soat/issues/1382)) ([1af27ff](https://github.com/ttoss/soat/commit/1af27ff10786913e168cf592ec5b8068ca07cac0))
+
 # [0.56.0](https://github.com/ttoss/soat/compare/v0.55.0...v0.56.0) (2026-09-20)
 
 ### Bug Fixes
