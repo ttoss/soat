@@ -1687,7 +1687,9 @@ describe('Orchestrations', () => {
 
       // A `tool` node calls the tool with the run's bag and no generation in
       // between, so a forged identity key has nothing to overwrite it: the
-      // write drops it instead.
+      // write drops it instead — proven by what reaches the generation call,
+      // never by the stored row once the run settles `succeeded`, since a
+      // terminal run has its whole bag cleared regardless of what it held.
       test('drops the reserved identity keys from the stored bag', async () => {
         const createRes = await authenticatedTestClient(userToken)
           .post('/api/v1/orchestrations')
@@ -1715,11 +1717,12 @@ describe('Orchestrations', () => {
               },
             });
           expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('succeeded');
 
           const stored = await db.OrchestrationRun.findOne({
             where: { publicId: runRes.body.id },
           });
-          expect(stored?.toolContext).toEqual({ tenant: 'acme' });
+          expect(stored?.toolContext).toBeNull();
           expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
             tenant: 'acme',
           });
