@@ -205,36 +205,34 @@ Withdrawal does not apply under `/.system/`: a [platform-written document](#plat
 
 ### Metadata schemas
 
-A project may declare what `metadata` must look like under a path prefix, so a corpus many writers share reads as structured data rather than as whatever each writer happened to attach:
+A project may declare what a document's `metadata` must satisfy under a path prefix, so a corpus many writers share reads as structured data rather than as whatever each writer happened to attach. The declaration is a [metadata schema](./metadata-schemas.md):
 
 ```json
-PATCH /api/v1/projects/proj_abc
+POST /api/v1/metadata-schemas
 {
-  "metadata_schemas": [
-    {
-      "path_prefix": "/reports",
-      "schema": {
-        "type": "object",
-        "required": ["quarter"],
-        "properties": {
-          "quarter": { "type": "string", "enum": ["Q1", "Q2", "Q3", "Q4"] },
-          "owner": { "type": "string" }
-        }
-      }
+  "project_id": "proj_abc",
+  "resource_type": "document",
+  "path_prefix": "/reports",
+  "schema": {
+    "type": "object",
+    "required": ["quarter"],
+    "properties": {
+      "quarter": { "type": "string", "enum": ["Q1", "Q2", "Q3", "Q4"] },
+      "owner": { "type": "string" }
     }
-  ]
+  }
 }
 ```
 
-A write that stores metadata violating the schema in force is refused with `400 VALIDATION_FAILED`, and `error.meta.path_prefix` names the declaration that refused it. Every door is judged the same way — [`POST /api/v1/documents`](/docs/api/documents/create-document), [`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document), a `document` resource in a [formation](./formations.md), and a [restore](#versioning), which is a write like any other and can be refused by a schema declared after the version it restores.
+A write that stores metadata violating the declaration in force is refused with `400 VALIDATION_FAILED`, and `error.meta` names the `metadata_schema_id`, the `resource_type` and the `path_prefix` that refused it. Every door is judged the same way — [`POST /api/v1/documents`](/docs/api/documents/create-document), [`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document), a `document` resource in a [formation](./formations.md), and a [restore](#versioning), which is a write like any other and can be refused by a declaration written after the version it restores.
 
 - **A prefix is a path boundary.** `/reports` governs `/reports/q1.txt` and never `/reports-archive/q1.txt`.
 - **The longest matching prefix decides**, and it decides alone: a nested prefix replaces the outer rule rather than adding to it, which is what lets one corner of a corpus be different.
 - **The schema governs the bag, not whether one exists.** A document with no metadata is never refused — [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) files a document before anyone can attach any. Clearing metadata with `"metadata": null` **is** a write of the bag, so a `required` field refuses it.
 - **A move is a write.** Repathing a document into a prefix whose schema its metadata does not satisfy is refused; a write that touches neither `path` nor `metadata` is not re-judged, so tightening a schema does not freeze the documents already stored.
-- **The reserved root cannot be governed.** `/.system` prefixes are refused at declaration — a [platform-written document](#platform-written-documents) carries no caller metadata.
+- **The reserved root cannot be governed.** A `/.system` prefix is refused at declaration — a [platform-written document](#platform-written-documents) carries no caller metadata.
 
-The declaration itself is validated when it is written: an entry that is not a `path_prefix` and a `schema`, a prefix declared twice, or a schema JSON Schema cannot compile is `400 VALIDATION_FAILED`. A schema that cannot compile is never stored, because a stored one would be a rule that silently governs nothing.
+[`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers what a write would be told without writing, which is what a batch import wants before it starts.
 
 ### File Ingestion and Chunking
 

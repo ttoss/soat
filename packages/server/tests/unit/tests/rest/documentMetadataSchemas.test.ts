@@ -1,21 +1,22 @@
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-const DOCUMENT_ACTIONS = [
+const ACTIONS = [
   'documents:CreateDocument',
   'documents:GetDocument',
   'documents:ListDocuments',
   'documents:UpdateDocument',
   'documents:RestoreDocumentVersion',
+  'metadata-schemas:ListMetadataSchemas',
+  'metadata-schemas:CreateMetadataSchema',
+  'metadata-schemas:DeleteMetadataSchema',
 ];
 
 /**
- * A project may declare what `metadata` must look like under a path prefix, so
- * a corpus many writers share can be read as structured data rather than as
- * whatever each writer happened to attach.
+ * The gate: a declared schema is what a document write is judged against, at
+ * every door a document's metadata is written through.
  */
-describe('Document metadata schemas', () => {
-  let adminToken: string;
+describe('Document metadata schema enforcement', () => {
   let userToken: string;
   let projectId: string;
   let seq = 0;
@@ -32,27 +33,46 @@ describe('Document metadata schemas', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'docmetaschema',
-      policyActions: DOCUMENT_ACTIONS,
+      policyActions: ACTIONS,
     });
 
-    adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
   }, 60_000);
 
-  /** Replaces the project's declared schemas; `null` clears them. */
-  const declare = (metadataSchemas: unknown) => {
-    return authenticatedTestClient(adminToken)
-      .patch(`/api/v1/projects/${projectId}`)
-      .send({ metadata_schemas: metadataSchemas });
+  const declare = (body: object) => {
+    return authenticatedTestClient(userToken)
+      .post('/api/v1/metadata-schemas')
+      .send({ project_id: projectId, resource_type: 'document', ...body });
   };
 
   const declareReportSchema = async () => {
-    const response = await declare([
-      { path_prefix: '/reports', schema: REPORT_SCHEMA },
-    ]);
-    expect(response.status).toBe(200);
+    const response = await declare({
+      path_prefix: '/reports',
+      schema: REPORT_SCHEMA,
+    });
+    expect(response.status).toBe(201);
   };
+
+  /**
+   * Every declaration in the project, cleared between tests: a rule left behind
+   * would govern the next test's writes.
+   */
+  const clearDeclarations = async () => {
+    const listed = await authenticatedTestClient(userToken).get(
+      `/api/v1/metadata-schemas?project_id=${projectId}&limit=100`
+    );
+    expect(listed.status).toBe(200);
+
+    for (const declaration of listed.body.data as { id: string }[]) {
+      const deleted = await authenticatedTestClient(userToken).delete(
+        `/api/v1/metadata-schemas/${declaration.id}`
+      );
+      expect(deleted.status).toBe(204);
+    }
+  };
+
+  afterEach(clearDeclarations);
 
   /**
    * `path` names the directory; the leaf is unique per call, because a project
@@ -72,85 +92,8 @@ describe('Document metadata schemas', () => {
       });
   };
 
-  afterEach(async () => {
-    expect((await declare(null)).status).toBe(200);
-  });
-
-  describe('PATCH /api/v1/projects/:project_id', () => {
-    test('stores the declared schemas and reads them back', async () => {
-      const response = await declare([
-        { path_prefix: '/reports', schema: REPORT_SCHEMA },
-      ]);
-
-      expect(response.status).toBe(200);
-      expect(response.body.metadata_schemas).toEqual([
-        { path_prefix: '/reports', schema: REPORT_SCHEMA },
-      ]);
-
-      const read = await authenticatedTestClient(adminToken).get(
-        `/api/v1/projects/${projectId}`
-      );
-      expect(read.body.metadata_schemas).toEqual([
-        { path_prefix: '/reports', schema: REPORT_SCHEMA },
-      ]);
-    });
-
-    test('clears them with null', async () => {
-      await declareReportSchema();
-
-      const response = await declare(null);
-
-      expect(response.status).toBe(200);
-      expect(response.body.metadata_schemas).toBeNull();
-    });
-
-    test('refuses a schema JSON Schema cannot compile', async () => {
-      const response = await declare([
-        { path_prefix: '/reports', schema: { type: 'nonsense' } },
-      ]);
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-    });
-
-    test('refuses an entry that is not a prefix and a schema', async () => {
-      expect((await declare('/reports')).status).toBe(400);
-      expect((await declare([{ schema: REPORT_SCHEMA }])).status).toBe(400);
-      expect((await declare([{ path_prefix: '/reports' }])).status).toBe(400);
-      expect(
-        (await declare([{ path_prefix: '', schema: REPORT_SCHEMA }])).status
-      ).toBe(400);
-      expect(
-        (await declare([{ path_prefix: '/reports', schema: 'object' }])).status
-      ).toBe(400);
-      // Resolves above the root, so it names no location to govern.
-      expect(
-        (await declare([{ path_prefix: '/..', schema: REPORT_SCHEMA }])).status
-      ).toBe(400);
-    });
-
-    test('refuses two schemas for one prefix', async () => {
-      const response = await declare([
-        { path_prefix: '/reports', schema: REPORT_SCHEMA },
-        { path_prefix: '/reports/', schema: { type: 'object' } },
-      ]);
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-    });
-
-    test('refuses a prefix under the reserved root', async () => {
-      const response = await declare([
-        { path_prefix: '/.system/traces', schema: REPORT_SCHEMA },
-      ]);
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-    });
-  });
-
   describe('POST /api/v1/documents', () => {
-    test('stores metadata that satisfies the prefix schema', async () => {
+    test('stores metadata that satisfies the declaration', async () => {
       await declareReportSchema();
 
       const response = await createDocument({
@@ -165,7 +108,7 @@ describe('Document metadata schemas', () => {
       });
     });
 
-    test('refuses metadata the prefix schema rejects', async () => {
+    test('refuses metadata the declaration rejects', async () => {
       await declareReportSchema();
 
       const response = await createDocument({
@@ -176,6 +119,8 @@ describe('Document metadata schemas', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.meta.path_prefix).toBe('/reports');
+      expect(response.body.error.meta.resource_type).toBe('document');
+      expect(response.body.error.meta.metadata_schema_id).toMatch(/^mdschema_/);
     });
 
     test('refuses metadata missing a required field', async () => {
@@ -222,18 +167,16 @@ describe('Document metadata schemas', () => {
     });
 
     test('the longest declared prefix decides', async () => {
-      const declared = await declare([
-        { path_prefix: '/reports', schema: REPORT_SCHEMA },
-        {
-          path_prefix: '/reports/legal',
-          schema: {
-            type: 'object',
-            properties: { counsel: { type: 'string' } },
-            required: ['counsel'],
-          },
+      await declareReportSchema();
+      const inner = await declare({
+        path_prefix: '/reports/legal',
+        schema: {
+          type: 'object',
+          properties: { counsel: { type: 'string' } },
+          required: ['counsel'],
         },
-      ]);
-      expect(declared.status).toBe(200);
+      });
+      expect(inner.status).toBe(201);
 
       // Satisfies the outer schema and not the inner one: the inner is the
       // schema in force, so this is refused.
@@ -252,10 +195,30 @@ describe('Document metadata schemas', () => {
       });
       expect(accepted.status).toBe(201);
     });
+
+    test('a deleted declaration governs nothing', async () => {
+      await declareReportSchema();
+      expect(
+        (
+          await createDocument({
+            path: '/reports',
+            metadata: { quarter: 'Q5' },
+          })
+        ).status
+      ).toBe(400);
+
+      await clearDeclarations();
+
+      const response = await createDocument({
+        path: '/reports',
+        metadata: { quarter: 'Q5' },
+      });
+      expect(response.status).toBe(201);
+    });
   });
 
   describe('PATCH /api/v1/documents/:document_id', () => {
-    test('refuses metadata the prefix schema rejects', async () => {
+    test('refuses metadata the declaration rejects', async () => {
       await declareReportSchema();
       const created = await createDocument({
         path: '/reports',
@@ -322,14 +285,14 @@ describe('Document metadata schemas', () => {
       });
     });
 
-    test('refuses restoring a version the schema no longer accepts', async () => {
+    test('refuses restoring a version the declaration no longer accepts', async () => {
       const created = await createDocument({
         path: '/reports',
         metadata: { quarter: 'Q9' },
       });
       expect(created.status).toBe(201);
 
-      // Tightened after the fact: the archived version holds metadata the
+      // Declared after the fact: the archived version holds metadata the
       // project no longer accepts, and a restore is a write like any other.
       await declareReportSchema();
 

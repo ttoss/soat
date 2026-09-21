@@ -1136,22 +1136,47 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toBe(projectId);
       expect(result.name).toBe('MCP Happy Path Renamed');
     });
+  });
 
-    test('update-project declares the metadata schemas of a path prefix', async () => {
+  // ── Metadata schemas ─────────────────────────────────────────────────────
+
+  describe('Metadata schema tools', () => {
+    test('the declaration governs what create-document may store', async () => {
       const schema = {
         type: 'object',
         required: ['quarter'],
         properties: { quarter: { type: 'string' } },
       };
 
-      const res = await mcpCall('update-project', {
-        project_id: projectId,
-        metadata_schemas: [{ path_prefix: '/mcp-reports', schema }],
-      });
-      expect(res.status).toBe(200);
-      expect(parseResult(res).metadata_schemas).toEqual([
-        { path_prefix: '/mcp-reports', schema },
-      ]);
+      const declared = parseResult(
+        await mcpCall('create-metadata-schema', {
+          project_id: projectId,
+          resource_type: 'document',
+          path_prefix: '/mcp-reports',
+          schema,
+        })
+      );
+      expect(declared.id).toMatch(/^mdschema_/);
+      expect(declared.schema).toEqual(schema);
+
+      const listed = parseResult(
+        await mcpCall('list-metadata-schemas', { project_id: projectId })
+      );
+      expect(
+        (listed.data as { id: string }[]).map((entry) => {
+          return entry.id;
+        })
+      ).toContain(declared.id);
+
+      const verdict = parseResult(
+        await mcpCall('validate-metadata', {
+          project_id: projectId,
+          path: '/mcp-reports/report.txt',
+          metadata: { owner: 'finance' },
+        })
+      );
+      expect(verdict.valid).toBe(false);
+      expect(verdict.metadata_schema_id).toBe(declared.id);
 
       const refused = await mcpCall('create-document', {
         project_id: projectId,
@@ -1165,11 +1190,10 @@ describe('MCP tools - happy path', () => {
         "schema declared for '/mcp-reports'"
       );
 
-      const cleared = await mcpCall('update-project', {
-        project_id: projectId,
-        metadata_schemas: null,
+      const deleted = await mcpCall('delete-metadata-schema', {
+        metadata_schema_id: declared.id,
       });
-      expect(cleared.status).toBe(200);
+      expect(deleted.status).toBe(200);
     });
   });
 

@@ -41,6 +41,7 @@ export const PUBLIC_ID_PREFIXES = {
   documentChunk: 'dchunk_',
   uploadToken: 'upt_',
   ingestionRule: 'igr_',
+  metadataSchema: 'mdschema_',
   ingestionAttempt: 'iat_',
   trigger: 'trg_',
   triggerFiring: 'trg_fire_',

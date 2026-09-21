@@ -978,22 +978,44 @@ echo "Restore brings a withdrawn document back: OK"
 
 $SOAT_CLI delete-document --document-id "$VER_DOC_ID" > /dev/null
 
-# 11b4. Metadata schemas per path prefix
-echo "--- Document metadata schemas: declare, refuse, accept ---"
-META_SCHEMA_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" \
-  --metadata_schemas '[{"path_prefix":"/smoke-reports","schema":{"type":"object","required":["quarter"],"properties":{"quarter":{"type":"string","enum":["Q1","Q2"]}}}}]')
-META_SCHEMA_PREFIX=$(printf '%s\n' "$META_SCHEMA_RESP" | jq -r '.metadata_schemas[0].path_prefix')
+# 11b4. Metadata schemas: declare, refuse, accept
+echo "--- Metadata schemas: declare, validate, enforce ---"
+META_SCHEMA_RESP=$($SOAT_CLI create-metadata-schema \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --resource_type document \
+  --path_prefix /smoke-reports \
+  --schema '{"type":"object","required":["quarter"],"properties":{"quarter":{"type":"string","enum":["Q1","Q2"]}}}')
+META_SCHEMA_ID=$(printf '%s\n' "$META_SCHEMA_RESP" | jq -r '.id')
+META_SCHEMA_PREFIX=$(printf '%s\n' "$META_SCHEMA_RESP" | jq -r '.path_prefix')
 if [ "$META_SCHEMA_PREFIX" != "/smoke-reports" ]; then
-  echo "ERROR: update-project did not store the metadata schema, got '$META_SCHEMA_PREFIX'" >&2
+  echo "ERROR: create-metadata-schema did not store the prefix, got '$META_SCHEMA_PREFIX'" >&2
+  exit 1
+fi
+
+META_SCHEMA_LISTED=$($SOAT_CLI list-metadata-schemas --project_id "$PROJECT_PUBLIC_ID" | jq -r "[.data[] | select(.id == \"$META_SCHEMA_ID\")] | length")
+if [ "$META_SCHEMA_LISTED" != "1" ]; then
+  echo "ERROR: the declaration should be listed, got $META_SCHEMA_LISTED" >&2
+  exit 1
+fi
+
+# The dry run reports what a write would be told, naming the declaration.
+META_VERDICT=$($SOAT_CLI validate-metadata \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --path /smoke-reports/report.txt \
+  --metadata '{"quarter":"Q9"}')
+META_VALID=$(printf '%s\n' "$META_VERDICT" | jq -r '.valid')
+META_VERDICT_ID=$(printf '%s\n' "$META_VERDICT" | jq -r '.metadata_schema_id')
+if [ "$META_VALID" != "false" ] || [ "$META_VERDICT_ID" != "$META_SCHEMA_ID" ]; then
+  echo "ERROR: validate-metadata expected a refusal naming $META_SCHEMA_ID, got valid=$META_VALID id=$META_VERDICT_ID" >&2
   exit 1
 fi
 
 # A schema JSON Schema cannot compile is refused rather than stored, so a
 # declaration never becomes a rule that silently governs nothing.
-BROKEN_SCHEMA_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID" \
+BROKEN_SCHEMA_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/metadata-schemas" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"metadata_schemas":[{"path_prefix":"/smoke-broken","schema":{"type":"nonsense"}}]}')
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"resource_type\":\"document\",\"path_prefix\":\"/smoke-broken\",\"schema\":{\"type\":\"nonsense\"}}")
 if [ "$BROKEN_SCHEMA_STATUS" != "400" ]; then
   echo "ERROR: an uncompilable schema expected 400, got $BROKEN_SCHEMA_STATUS" >&2
   exit 1
@@ -1004,7 +1026,7 @@ META_REFUSED_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_UR
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"Revenue is up.\",\"filename\":\"refused.txt\",\"path\":\"/smoke-reports/refused.txt\",\"metadata\":{\"quarter\":\"Q9\"}}")
 if [ "$META_REFUSED_STATUS" != "400" ]; then
-  echo "ERROR: metadata violating the prefix schema expected 400, got $META_REFUSED_STATUS" >&2
+  echo "ERROR: metadata violating the declaration expected 400, got $META_REFUSED_STATUS" >&2
   exit 1
 fi
 
@@ -1015,11 +1037,11 @@ META_DOC_ID=$($SOAT_CLI create-document \
   --path /smoke-reports/accepted.txt \
   --metadata '{"quarter":"Q1"}' | jq -r '.id')
 if [ -z "$META_DOC_ID" ] || [ "$META_DOC_ID" = "null" ]; then
-  echo "ERROR: metadata satisfying the prefix schema should have been stored" >&2
+  echo "ERROR: metadata satisfying the declaration should have been stored" >&2
   exit 1
 fi
 $SOAT_CLI delete-document --document-id "$META_DOC_ID" > /dev/null
-$SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --metadata_schemas '[]' > /dev/null
+$SOAT_CLI delete-metadata-schema --metadata-schema-id "$META_SCHEMA_ID" > /dev/null
 echo "Metadata schema refused the violation and stored the document that satisfied it: OK"
 
 # 11c. Search knowledge by path prefix

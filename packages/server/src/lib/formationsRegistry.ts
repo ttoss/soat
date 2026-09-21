@@ -14,6 +14,7 @@ import { ingestionRulesFormationModule } from './formation-modules/ingestionRule
 import { memoriesFormationModule } from './formation-modules/memoriesFormationModule';
 import { memoryRulesFormationModule } from './formation-modules/memoryRulesFormationModule';
 import { memoryStoresFormationModule } from './formation-modules/memoryStoresFormationModule';
+import { metadataSchemasFormationModule } from './formation-modules/metadataSchemasFormationModule';
 import { modelRoutesFormationModule } from './formation-modules/modelRoutesFormationModule';
 import { orchestrationsFormationModule } from './formation-modules/orchestrationsFormationModule';
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
@@ -61,6 +62,7 @@ registerFormationModule({ module: guardrailsFormationModule });
 registerFormationModule({ module: ingestionRulesFormationModule });
 registerFormationModule({ module: policiesFormationModule });
 registerFormationModule({ module: projectPricesFormationModule });
+registerFormationModule({ module: metadataSchemasFormationModule });
 registerFormationModule({ module: quotasFormationModule });
 registerFormationModule({ module: secretsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });

@@ -15,7 +15,10 @@ import { join } from 'node:path';
 const LIB_DIR = join(__dirname, '../../../../src/lib');
 
 /** The gate each write path states its half of the question to. */
-const GATES = ['assertCreatedMetadataValid', 'assertUpdatedMetadataValid'];
+const GATES = [
+  'assertCreatedDocumentMetadataValid',
+  'assertUpdatedDocumentMetadataValid',
+];
 
 /**
  * The modules that may write a `documents` row.

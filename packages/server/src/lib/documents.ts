@@ -29,8 +29,8 @@ import {
 import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import {
-  assertCreatedMetadataValid,
-  assertUpdatedMetadataValid,
+  assertCreatedDocumentMetadataValid,
+  assertUpdatedDocumentMetadataValid,
 } from './metadataSchemas';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
@@ -210,7 +210,7 @@ export const createDocument = async (
     publicId,
   });
 
-  await assertCreatedMetadataValid({
+  await assertCreatedDocumentMetadataValid({
     projectId: args.projectId,
     path: filing.normalizedPath,
     metadata: args.metadata,
@@ -353,7 +353,7 @@ export const updateDocument = async (
      always present in practice; without one there is no project to judge
      against and no path to judge under. */
   if (doc.file) {
-    await assertUpdatedMetadataValid({
+    await assertUpdatedDocumentMetadataValid({
       projectId: doc.file.projectId,
       currentPath: doc.file.path ?? null,
       path:

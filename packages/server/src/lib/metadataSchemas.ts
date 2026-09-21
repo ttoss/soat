@@ -4,94 +4,310 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { isSystemPath, normalizePath } from './filePaths';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
+import { paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
+import { registerResourceFieldMap } from './policyCompiler';
+import { makeResourceAccessor } from './resourceAccessor';
+import { isUniqueViolation } from './uniqueViolation';
 
-const log = createDebug('soat:metadata-schemas');
+const log = createDebug('soat:metadataSchemas');
 
 /**
- * What a project says `metadata` must look like under a path prefix.
+ * What a project says a resource's `metadata` must satisfy.
  *
  * A corpus many writers share is only readable as structured data if the
- * structure is stated somewhere both of them see. The project is that place:
- * one declaration, applied at every door a document's metadata is written
- * through, rather than each writer agreeing to a convention nothing checks.
+ * structure is stated somewhere all of them see. A declaration is that
+ * statement, and it is a row rather than an item in a list on the project: two
+ * operators governing different corners write independently, where a single
+ * column would make every change a whole-list replace and the second writer
+ * would silently drop the first one's rule.
+ *
+ * Every declaration names its `resource_type` and the selector that type is
+ * addressed by — a path prefix for a document, since a path is what a document
+ * is filed under. A type joins {@link METADATA_SCHEMA_RESOURCE_TYPES} in the
+ * change that gives it a gate, so a declaration always has a door that reads
+ * it: one that governs nothing is worse than none, because its author believes
+ * a rule is in force.
  *
  * The schema governs the bag, not whether one exists — a document with no
- * metadata is not refused, because `POST /documents/ingest` files a document
- * before anybody can attach any, and a prefix no document could be created
- * under would be a worse guarantee than none.
+ * metadata is not refused, because `POST /documents/ingest` files one before
+ * anybody can attach any, and a prefix nothing could be filed under would be a
+ * worse guarantee than none.
  */
 
-/** One declared rule, in the shape the column stores and the wire carries. */
-type DeclaredSchema = {
-  pathPrefix: string;
-  schema: Record<string, unknown>;
+registerResourceFieldMap({
+  resourceType: 'metadata_schema',
+  publicIdColumn: { column: 'publicId' },
+});
+
+/** The resource types the registry can enforce. */
+export const METADATA_SCHEMA_RESOURCE_TYPES = ['document'] as const;
+
+export type MetadataSchemaResourceType =
+  (typeof METADATA_SCHEMA_RESOURCE_TYPES)[number];
+
+/** The wire field each type's selector is written in. */
+const SELECTOR_FIELD: Record<MetadataSchemaResourceType, string> = {
+  document: 'path_prefix',
 };
 
-const DECLARATION_SHAPE =
-  'metadata_schemas must be a list of { path_prefix, schema } objects, or null to clear it.';
+type MetadataSchemaRow = InstanceType<typeof db.MetadataSchema> & {
+  project?: InstanceType<typeof db.Project>;
+};
 
-/** A declared prefix, normalized so `/reports/` and `reports` are one prefix. */
-const readPrefix = (value: unknown): string | null => {
-  if (typeof value !== 'string' || value.trim() === '') return null;
-  try {
-    return normalizePath(value);
-  } catch {
-    // `normalizePath` throws on a traversal above root, which is a prefix that
-    // names no location rather than one that matches nothing.
-    return null;
+const metadataSchemaIncludes = () => {
+  return [{ model: db.Project, as: 'project' }];
+};
+
+export const metadataSchemas = makeResourceAccessor<MetadataSchemaRow>({
+  model: () => {
+    return db.MetadataSchema;
+  },
+  includes: metadataSchemaIncludes,
+  label: 'Metadata schema',
+});
+
+const mapMetadataSchema = (row: MetadataSchemaRow) => {
+  return {
+    id: row.publicId,
+    project_id: row.project?.publicId,
+    resource_type: row.resourceType,
+    // Each type's selector is reported in the field it was written in, so a
+    // caller reads back the declaration it sent.
+    path_prefix: row.selector,
+    schema: row.schema,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+  };
+};
+
+export type MappedMetadataSchema = ReturnType<typeof mapMetadataSchema>;
+
+const isResourceType = (
+  value: unknown
+): value is MetadataSchemaResourceType => {
+  return (
+    typeof value === 'string' &&
+    (METADATA_SCHEMA_RESOURCE_TYPES as readonly string[]).includes(value)
+  );
+};
+
+/** The declared type, refused when it names one no write path reads. */
+const readResourceType = (value: unknown): MetadataSchemaResourceType => {
+  if (!isResourceType(value)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `resource_type must be one of: ${METADATA_SCHEMA_RESOURCE_TYPES.join(', ')}.`
+    );
+  }
+  return value;
+};
+
+/**
+ * The selector a declaration states, normalized.
+ *
+ * One reader per resource type, so adding a type is a case here plus a gate at
+ * its own write path — never a selector some other type has to learn to
+ * ignore. A document's is a path prefix, normalized so `/reports/` and
+ * `reports` are one declaration.
+ */
+const readSelector = (args: {
+  resourceType: MetadataSchemaResourceType;
+  pathPrefix?: unknown;
+}): string => {
+  const missing = (): never => {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `A ${args.resourceType} metadata schema is selected by ${SELECTOR_FIELD[args.resourceType]}.`
+    );
+  };
+
+  switch (args.resourceType) {
+    case 'document': {
+      if (
+        typeof args.pathPrefix !== 'string' ||
+        args.pathPrefix.trim() === ''
+      ) {
+        return missing();
+      }
+      let prefix: string;
+      try {
+        prefix = normalizePath(args.pathPrefix);
+      } catch {
+        // `normalizePath` throws on a traversal above root: a prefix that names
+        // no location rather than one that matches nothing.
+        return missing();
+      }
+      if (isSystemPath(prefix)) {
+        throw new DomainError(
+          'VALIDATION_FAILED',
+          `'${prefix}' cannot be governed: the reserved root holds documents the runtime writes, which carry no caller metadata.`
+        );
+      }
+      return prefix;
+    }
   }
 };
 
 /**
- * Validates a project's declared list. Returns an error message, or `null` when
- * the list is valid. Pure, so the REST handler and any other write path judge a
- * declaration the same way.
+ * The schema a declaration carries.
  *
  * A schema ajv cannot compile is refused **here**, which is what keeps a broken
- * schema out of the column: stored, it would be a rule that silently governs
- * nothing, and the writer who declared it would never learn it does not.
+ * one out of the table: stored, it would be a rule that silently governs
+ * nothing, and its author would never learn it does not.
  */
-export const validateMetadataSchemas = (value: unknown): string | null => {
-  if (value === null) return null;
-  if (!Array.isArray(value)) return DECLARATION_SHAPE;
-
-  const seen = new Set<string>();
-
-  for (const entry of value) {
-    if (!isPlainObject(entry)) return DECLARATION_SHAPE;
-
-    const prefix = readPrefix(entry.path_prefix);
-    if (prefix === null) return DECLARATION_SHAPE;
-
-    if (isSystemPath(prefix)) {
-      return `metadata_schemas cannot govern '${prefix}': the reserved root holds documents the runtime writes, which carry no caller metadata.`;
-    }
-
-    if (seen.has(prefix)) {
-      return `metadata_schemas declares '${prefix}' twice; one prefix has one schema.`;
-    }
-    seen.add(prefix);
-
-    if (!isPlainObject(entry.schema)) return DECLARATION_SHAPE;
-    if (!compileJsonSchema(entry.schema)) {
-      return `metadata_schemas declares a schema for '${prefix}' that is not a valid JSON Schema.`;
-    }
+const readSchema = (value: unknown): Record<string, unknown> => {
+  if (!isPlainObject(value)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'schema must be a JSON Schema object.'
+    );
   }
-
-  return null;
+  if (!compileJsonSchema(value)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'schema is not a valid JSON Schema.'
+    );
+  }
+  return value;
 };
 
-/** The stored list, read into the internal shape and skipping anything malformed. */
-const readDeclarations = (value: unknown): DeclaredSchema[] => {
-  if (!Array.isArray(value)) return [];
+/** The refusal a second declaration of one selector gets. */
+const selectorTaken = (args: {
+  resourceType: MetadataSchemaResourceType;
+  selector: string;
+}): DomainError => {
+  return new DomainError(
+    'NAME_CONFLICT',
+    `A metadata schema already governs '${args.selector}' for ${args.resourceType}; one selector has one schema.`,
+    { resource_type: args.resourceType, path_prefix: args.selector }
+  );
+};
 
-  return value.flatMap((entry) => {
-    if (!isPlainObject(entry)) return [];
-    const pathPrefix = readPrefix(entry.path_prefix);
-    if (pathPrefix === null || !isPlainObject(entry.schema)) return [];
-    return [{ pathPrefix, schema: entry.schema }];
+export const createMetadataSchema = async (args: {
+  projectId: number;
+  resourceType: unknown;
+  pathPrefix?: unknown;
+  schema: unknown;
+}): Promise<MappedMetadataSchema> => {
+  const resourceType = readResourceType(args.resourceType);
+  const selector = readSelector({ resourceType, pathPrefix: args.pathPrefix });
+  const schema = readSchema(args.schema);
+
+  log(
+    'createMetadataSchema: projectId=%d resourceType=%s selector=%s',
+    args.projectId,
+    resourceType,
+    selector
+  );
+
+  try {
+    const row = await db.MetadataSchema.create({
+      projectId: args.projectId,
+      resourceType,
+      selector,
+      schema,
+    });
+    return mapMetadataSchema(await metadataSchemas.reload(row));
+  } catch (error) {
+    // The unique index is the arbiter, so two concurrent declarations of one
+    // selector cannot both land.
+    if (isUniqueViolation(error)) {
+      throw selectorTaken({ resourceType, selector });
+    }
+    throw error;
+  }
+};
+
+export const listMetadataSchemas = async (args: {
+  projectIds?: number[];
+  resourceType?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  const where: Record<string, unknown> = {};
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  if (args.resourceType) where.resourceType = args.resourceType;
+
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.MetadataSchema.findAndCountAll({
+        where,
+        include: metadataSchemaIncludes(),
+        order: [['createdAt', 'ASC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapMetadataSchema,
   });
+};
+
+export const getMetadataSchema = async (args: {
+  id: string;
+  /** Absent for a caller that resolved the project before it got here. */
+  projectIds?: number[];
+}): Promise<MappedMetadataSchema> => {
+  return mapMetadataSchema(
+    await metadataSchemas.getByPublicId({
+      id: args.id,
+      projectIds: args.projectIds,
+    })
+  );
+};
+
+export const updateMetadataSchema = async (args: {
+  id: string;
+  projectIds?: number[];
+  pathPrefix?: unknown;
+  schema?: unknown;
+}): Promise<MappedMetadataSchema> => {
+  const row = await metadataSchemas.getByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
+  });
+
+  // The type decides the selector's spelling and which gate reads the row, so
+  // it is fixed at creation: changing it would silently repoint the
+  // declaration at a different door. Delete and declare again instead.
+  const resourceType = readResourceType(row.resourceType);
+
+  const updates: Record<string, unknown> = {};
+  if (args.pathPrefix !== undefined) {
+    updates.selector = readSelector({
+      resourceType,
+      pathPrefix: args.pathPrefix,
+    });
+  }
+  if (args.schema !== undefined) updates.schema = readSchema(args.schema);
+
+  try {
+    await row.update(updates);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw selectorTaken({
+        resourceType,
+        selector: String(updates.selector),
+      });
+    }
+    throw error;
+  }
+
+  return mapMetadataSchema(await metadataSchemas.reload(row));
+};
+
+export const deleteMetadataSchema = async (args: {
+  id: string;
+  projectIds?: number[];
+}): Promise<void> => {
+  const row = await metadataSchemas.getByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
+  });
+  await row.destroy();
 };
 
 /**
@@ -105,21 +321,25 @@ const covers = (args: { prefix: string; path: string }): boolean => {
 };
 
 /**
- * The schema governing a path: the longest declared prefix that covers it.
+ * The declaration governing a document at a path: the longest declared prefix
+ * that covers it.
  *
  * One schema, never the union of every prefix that matches. A nested prefix is
  * how an author says "this corner is different", and merging would make that
  * unsayable — the inner rule could only ever add to the outer one.
  */
-const schemaFor = (args: {
-  declarations: DeclaredSchema[];
+const documentDeclarationFor = async (args: {
+  projectId: number;
   path: string;
-}): DeclaredSchema | null => {
-  let winner: DeclaredSchema | null = null;
+}): Promise<MetadataSchemaRow | null> => {
+  const declarations = (await db.MetadataSchema.findAll({
+    where: { projectId: args.projectId, resourceType: 'document' },
+  })) as MetadataSchemaRow[];
 
-  for (const declared of args.declarations) {
-    if (!covers({ prefix: declared.pathPrefix, path: args.path })) continue;
-    if (!winner || declared.pathPrefix.length > winner.pathPrefix.length) {
+  let winner: MetadataSchemaRow | null = null;
+  for (const declared of declarations) {
+    if (!covers({ prefix: declared.selector, path: args.path })) continue;
+    if (!winner || declared.selector.length > winner.selector.length) {
       winner = declared;
     }
   }
@@ -128,48 +348,111 @@ const schemaFor = (args: {
 };
 
 /**
- * Refuses a document write whose metadata violates the schema in force for its
- * path.
- *
- * The project is read here rather than cached: the read is one primary key and
- * only happens for a write that states metadata, so the path that would make a
- * cache worth its staleness — a conversation turn, which files a document with
- * no metadata at all — never reaches it.
+ * The project a dry run asks about: the one it names, or the only one the
+ * caller's credential reaches. A caller that can read several and names none
+ * is asking about no project in particular, which has no answer.
  */
-const assertValid = async (args: {
+const resolveCheckedProjectId = async (args: {
+  projectPublicId?: string;
+  projectIds?: number[];
+}): Promise<number> => {
+  if (args.projectPublicId) {
+    const project = await db.Project.findOne({
+      where: { publicId: args.projectPublicId },
+      attributes: ['id'],
+    });
+    if (!project) {
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Project '${args.projectPublicId}' not found.`
+      );
+    }
+    return project.id as number;
+  }
+
+  if (args.projectIds?.length === 1) return args.projectIds[0];
+
+  throw new DomainError('VALIDATION_FAILED', 'project_id is required.');
+};
+
+/** What a judged write carries, and what a dry run asks about. */
+type DocumentMetadataCheck = {
   projectId: number;
   path: string | null;
   metadata: Record<string, unknown> | null;
-}): Promise<void> => {
-  // A document with no path is at no prefix, so no declaration reaches it.
-  if (!args.path) return;
+};
 
-  const project = await db.Project.findByPk(args.projectId, {
-    attributes: ['metadataSchemas'],
-  });
-  const declared = schemaFor({
-    declarations: readDeclarations(project?.metadataSchemas),
+/** A violation, or `null` when nothing governs the pair or it satisfies what does. */
+const findViolation = async (
+  args: DocumentMetadataCheck
+): Promise<{ declaration: MetadataSchemaRow; detail: string } | null> => {
+  // A document with no path is at no prefix, so no declaration reaches it.
+  if (!args.path) return null;
+
+  const declaration = await documentDeclarationFor({
+    projectId: args.projectId,
     path: normalizePath(args.path),
   });
-  if (!declared) return;
+  if (!declaration) return null;
 
-  const validate = compileJsonSchema(declared.schema);
+  const validate = compileJsonSchema(declaration.schema);
   /* istanbul ignore next -- a schema that does not compile is refused when it
      is declared, so a stored one always does. */
   if (!validate) {
     log(
-      'assertValid: stored schema for %s does not compile',
-      declared.pathPrefix
+      'findViolation: stored schema %s does not compile',
+      declaration.publicId
     );
-    return;
+    return null;
   }
 
-  if (validate(args.metadata ?? {})) return;
+  if (validate(args.metadata ?? {})) return null;
+
+  return { declaration, detail: describeSchemaErrors(validate.errors) };
+};
+
+/**
+ * Answers what a write would be told, without writing.
+ *
+ * The one place a caller can ask "would this be accepted?" — the gates below
+ * are what refuse, because a check a writer has to call itself is advisory and
+ * the writer who skips it is the one the rule exists for.
+ */
+export const checkDocumentMetadata = async (args: {
+  /** The project named by the request, when it named one. */
+  projectPublicId?: string;
+  /** The projects the caller may read, or `undefined` for every project. */
+  projectIds?: number[];
+  path: string | null;
+  metadata: Record<string, unknown> | null;
+}) => {
+  const violation = await findViolation({
+    projectId: await resolveCheckedProjectId(args),
+    path: args.path,
+    metadata: args.metadata,
+  });
+
+  return {
+    valid: violation === null,
+    resource_type: 'document',
+    metadata_schema_id: violation?.declaration.publicId ?? null,
+    path_prefix: violation?.declaration.selector ?? null,
+    error: violation?.detail ?? null,
+  };
+};
+
+const assertValid = async (args: DocumentMetadataCheck): Promise<void> => {
+  const violation = await findViolation(args);
+  if (!violation) return;
 
   throw new DomainError(
     'VALIDATION_FAILED',
-    `metadata does not satisfy the schema declared for '${declared.pathPrefix}': ${describeSchemaErrors(validate.errors)}`,
-    { path_prefix: declared.pathPrefix }
+    `metadata does not satisfy the schema declared for '${violation.declaration.selector}': ${violation.detail}`,
+    {
+      metadata_schema_id: violation.declaration.publicId,
+      resource_type: 'document',
+      path_prefix: violation.declaration.selector,
+    }
   );
 };
 
@@ -177,7 +460,7 @@ const assertValid = async (args: {
  * Judges a document create. Only a write that states metadata is judged: the
  * schema governs the bag, not whether the document carries one.
  */
-export const assertCreatedMetadataValid = async (args: {
+export const assertCreatedDocumentMetadataValid = async (args: {
   projectId: number;
   path: string | null;
   metadata?: Record<string, unknown> | null;
@@ -195,7 +478,7 @@ export const assertCreatedMetadataValid = async (args: {
  * write of the fields it governs, and does not retroactively freeze every
  * document already stored.
  */
-export const assertUpdatedMetadataValid = async (args: {
+export const assertUpdatedDocumentMetadataValid = async (args: {
   projectId: number;
   /** Where the document is filed now. */
   currentPath: string | null;

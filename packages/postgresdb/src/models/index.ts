@@ -34,6 +34,7 @@ export { MemoryAssertion } from './MemoryAssertion';
 export { MemoryContent } from './MemoryContent';
 export { MemoryRule } from './MemoryRule';
 export { MemoryStore } from './MemoryStore';
+export { MetadataSchema } from './MetadataSchema';
 export { ModelRoute } from './ModelRoute';
 export { OauthAuthCode } from './OauthAuthCode';
 export { OauthClient } from './OauthClient';

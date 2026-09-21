@@ -103,13 +103,6 @@ export class Project extends Model {
   })
   declare traceContentMode: string;
 
-  // What `metadata` must look like under a path prefix, as the wire shape
-  // `[{ path_prefix, schema }]`. Stored as sent: the `schema` half is a JSON
-  // Schema, whose keys are its own vocabulary and are never case-converted.
-  // `null` governs nothing.
-  @Column({ type: DataType.JSONB, allowNull: true })
-  declare metadataSchemas: object[] | null;
-
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

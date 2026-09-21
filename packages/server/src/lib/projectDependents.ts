@@ -71,6 +71,9 @@ export const PROJECT_CASCADE_ORDER = [
   // Must precede Tool/Agent, which its RESTRICT FKs point at.
   'IngestionRule',
 
+  // Declarations govern writes, so nothing points at them.
+  'MetadataSchema',
+
   'Generation',
   'Trace',
 
@@ -142,6 +145,7 @@ export const PROJECT_COUNTED_MODELS = [
   'GuardrailEvaluation',
   'IngestionRule',
   'MemoryStore',
+  'MetadataSchema',
   'ModelRoute',
   'Orchestration',
   'OrchestrationRun',

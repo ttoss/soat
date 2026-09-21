@@ -155,9 +155,8 @@ paths:
         (`default_model_route_id`), its read-auditing opt-in
         (`audit_reads_enabled`), its priced-model requirement
         (`require_priced_model`), its trace-content retention window
-        (`trace_content_retention_days`), its zero-retention setting
-        (`trace_content_mode`), and/or the metadata schemas governing its
-        documents (`metadata_schemas`). At least one field is required. Requires admin
+        (`trace_content_retention_days`), and/or its zero-retention setting
+        (`trace_content_mode`). At least one field is required. Requires admin
         role. Detaching a guardrail (removing an id) additionally requires
         guardrails:DetachGuardrail.
       operationId: updateProject
@@ -289,43 +288,6 @@ paths:
                     content is never written, for every agent in the project.
                     An agent may tighten this to `none` on its own but cannot
                     loosen a `none` project back to `full`.
-                metadata_schemas:
-                  type: array
-                  nullable: true
-                  description: >-
-                    What `metadata` must look like under a path prefix. Each
-                    entry declares a `path_prefix` and the JSON Schema every
-                    document at or under it is written against; a write whose
-                    metadata violates it is refused with `400
-                    VALIDATION_FAILED`. The longest matching prefix decides, so
-                    a nested prefix replaces the outer rule rather than adding
-                    to it. `null` clears every declaration. A schema that is not
-                    valid JSON Schema is refused here rather than stored, and
-                    the reserved root `/.system` cannot be governed.
-                  items:
-                    type: object
-                    additionalProperties: false
-                    required:
-                      - path_prefix
-                      - schema
-                    properties:
-                      path_prefix:
-                        type: string
-                        description: >-
-                          The directory the schema governs, matched on a path
-                          boundary: `/reports` covers `/reports/q1.txt` and
-                          never `/reports-archive/q1.txt`.
-                        example: /reports
-                      schema:
-                        type: object
-                        description: >-
-                          A JSON Schema. Its keywords are its own vocabulary and
-                          are stored as written.
-                        example:
-                          type: object
-                          required: [quarter]
-                          properties:
-                            quarter: { type: string }
       responses:
         '200':
           description: Project updated successfully
@@ -574,26 +536,6 @@ components:
             `none` is zero-retention — content is never written for any agent
             in this project.
           example: full
-        metadata_schemas:
-          type: array
-          nullable: true
-          description: >-
-            What `metadata` must look like under a path prefix. `null` (the
-            default) governs nothing. The longest matching prefix decides which
-            schema a document is written against.
-          items:
-            type: object
-            required:
-              - path_prefix
-              - schema
-            properties:
-              path_prefix:
-                type: string
-                example: /reports
-              schema:
-                type: object
-                description: A JSON Schema, stored as written.
-          example: null
         created_at:
           type: string
           format: date-time

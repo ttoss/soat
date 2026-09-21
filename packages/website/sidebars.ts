@@ -78,6 +78,7 @@ const sidebars: SidebarsConfig = {
             'modules/ingestion-rules',
             'modules/knowledge',
             'modules/memories',
+            'modules/metadata-schemas',
           ],
         },
         {
