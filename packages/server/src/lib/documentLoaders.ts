@@ -55,6 +55,10 @@ export const emitDocumentLifecycleEvent = (args: {
   data: Record<string, unknown>;
 }) => {
   const project = args.doc.file?.project;
+  /* istanbul ignore next -- `file_id` is NOT NULL on a document and
+     `project_id` NOT NULL on a file, and every caller loads both through
+     `fileAndProjectInclude`, so this narrows the association's optional type
+     rather than guarding a state a row can be in. */
   if (!project) return;
   emitResourceEvent({
     type: args.type,
