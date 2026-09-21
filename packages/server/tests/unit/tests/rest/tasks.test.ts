@@ -4619,7 +4619,13 @@ describe('Tasks', () => {
         `/api/v1/orchestration-runs/${routed.orchestration_run_id}`
       );
       expect(run.status).toBe(200);
-      expect(run.body.tool_context).toEqual({ ocaToken: 'tok_orch' });
+      // Read off the row: a run holds the bag the way a task does, and neither
+      // hands a credential back on a read.
+      expect(run.body.tool_context).toBeUndefined();
+      const runRow = await db.OrchestrationRun.findOne({
+        where: { publicId: routed.orchestration_run_id },
+      });
+      expect(runRow!.toolContext).toEqual({ ocaToken: 'tok_orch' });
     });
   });
 });

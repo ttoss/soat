@@ -212,10 +212,6 @@ export type MappedOrchestrationRun = {
   pause_reason: string | null;
   trace_id: string | null;
   input: Record<string, unknown> | null;
-  // The caller context the run carries for its whole lifetime, forwarded as
-  // `X-Soat-Context-*` headers on the tool calls of every agent generation the
-  // run spawns. An opaque bag: copied as a value, its keys never re-cased.
-  tool_context: Record<string, string> | null;
   // Caller-owned annotations supplied at run creation, returned verbatim and
   // never merged into `state`. An opaque bag: copied as a value, its keys never
   // re-cased, and no key reserved — the engine reads nothing from here.
@@ -352,7 +348,6 @@ export const mapOrchestrationRun = (
     pause_reason: run.pauseReason,
     trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
-    tool_context: run.toolContext ?? null,
     metadata: run.metadata ?? null,
     idempotency_key: run.idempotencyKey ?? null,
     output: run.output as Record<string, unknown> | null,
