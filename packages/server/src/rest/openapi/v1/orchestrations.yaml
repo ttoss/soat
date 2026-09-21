@@ -1669,7 +1669,9 @@ components:
             survives an `awaiting_input` pause, a `sleeping` wait, a background
             worker drive and a crash redrive. It is **write-only**: a run is a
             record every principal who may read runs can read, and a credential
-            in it is not theirs to see, so it is never returned on one. A key that is not a valid HTTP
+            in it is not theirs to see, so it is never returned on one. It also
+            does not outlive the run: reaching a terminal status (`succeeded`,
+            `failed`, `cancelled` or `expired`) clears it. A key that is not a valid HTTP
             header name, or two keys that map to the same header, are rejected
             with `400 INVALID_TOOL_CONTEXT_KEY` and no run is created.
 

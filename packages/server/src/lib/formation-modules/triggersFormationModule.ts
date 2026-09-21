@@ -4,6 +4,7 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { toStoredToolContext } from '../toolContext';
 import {
   createTrigger,
   deleteTrigger,
@@ -15,24 +16,6 @@ import {
 } from '../triggers';
 import { defineFormationModule } from './defineFormationModule';
 import { isFormationExpression } from './formationSpecLoader';
-
-/**
- * Narrows a template's `tool_context` to a string bag. Values are stringified
- * rather than dropped, so a number in a template reaches the header the same
- * way `parseToolContextBody` sends one from a request.
- */
-const toToolContext = (
-  value: unknown
-): Record<string, string> | undefined | null => {
-  if (value === null) return null;
-  if (typeof value !== 'object' || value === undefined || Array.isArray(value))
-    return undefined;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, item]) => {
-      return [key, String(item)];
-    })
-  );
-};
 
 /** Narrows an untyped template value to a plain input object, else undefined. */
 const toInputObject = (value: unknown): Record<string, unknown> | undefined => {
@@ -138,7 +121,7 @@ export const triggersFormationModule = defineFormationModule({
       targetId: properties.target_id as string,
       action: toOptionalString(properties.action) ?? undefined,
       input: toInputObject(properties.input),
-      toolContext: toToolContext(properties.tool_context),
+      toolContext: toStoredToolContext(properties.tool_context),
       cron: toOptionalString(properties.cron) ?? undefined,
       eventPattern: toOptionalString(properties.event_pattern) ?? undefined,
       active: toOptionalBoolean(properties.active),
@@ -160,7 +143,7 @@ export const triggersFormationModule = defineFormationModule({
       targetId: toOptionalString(properties.target_id),
       action: toNullableString(properties.action),
       input: toInputObject(properties.input),
-      toolContext: toToolContext(properties.tool_context),
+      toolContext: toStoredToolContext(properties.tool_context),
       cron: toNullableString(properties.cron),
       eventPattern: toNullableString(properties.event_pattern),
       active: toOptionalBoolean(properties.active),
@@ -180,4 +163,11 @@ export const triggersFormationModule = defineFormationModule({
   // `formations:GetFormation`. Naming it here is what makes the refusal say
   // which attribute and why, instead of "attribute not found".
   sensitiveAttributes: ['secret'],
+
+  // `findTrigger` never returns the bag, so a live-read diff can never confirm
+  // it matches the template: without this, `plan-formation` compares the
+  // declared value against a key that is always absent and reports `update`
+  // forever, and applying it a second time would silently keep the first
+  // apply's raw value in `lastAppliedProperties` to make that diff agree.
+  writeOnlyProperties: ['tool_context'],
 });

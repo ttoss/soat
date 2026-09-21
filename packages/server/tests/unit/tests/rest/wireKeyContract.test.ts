@@ -44,6 +44,49 @@ const isCamelCase = (key: string): boolean => {
  * blocks. Brace-matched rather than regex-captured so a nested type annotation
  * (`ctx.query as Record<string, string | undefined>`) cannot end the block early.
  */
+
+/** The index of the `}` matching the `{` at `braceStart`, or `-1` if unbalanced. */
+const findMatchingBrace = (source: string, braceStart: number): number => {
+  let depth = 0;
+  for (let i = braceStart; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+};
+
+/** Which request surface a `const { ... } = <tail>` destructures, or `null`. */
+const destructuredSurface = (tail: string): string | null => {
+  if (/^\s*=\s*ctx\.query/.test(tail)) return 'ctx.query';
+  if (/^\s*=\s*ctx\.request\.body/.test(tail)) return 'ctx.request.body';
+  return null;
+};
+
+/** The camelCase destructured keys between a block's braces, at `line`. */
+const camelCaseEntryKeys = (args: {
+  source: string;
+  braceStart: number;
+  end: number;
+  line: number;
+  surface: string;
+}): { key: string; line: number; surface: string }[] => {
+  const { source, braceStart, end, line, surface } = args;
+  const found: { key: string; line: number; surface: string }[] = [];
+
+  for (const entry of source.slice(braceStart + 1, end).split(',')) {
+    const cleaned = entry.split('//')[0].trim();
+    if (!cleaned || cleaned.startsWith('...')) continue;
+
+    const key = wireKey(cleaned);
+    if (isCamelCase(key)) found.push({ key, line, surface });
+  }
+
+  return found;
+};
+
 const collectWireKeys = (source: string) => {
   const found: { key: string; line: number; surface: string }[] = [];
   const opener = /const\s*\{/g;
@@ -52,43 +95,17 @@ const collectWireKeys = (source: string) => {
 
   while ((match = opener.exec(source)) !== null) {
     const braceStart = source.indexOf('{', match.index);
-    let depth = 0;
-    let end = -1;
-
-    for (let i = braceStart; i < source.length; i++) {
-      if (source[i] === '{') depth++;
-      if (source[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-
+    const end = findMatchingBrace(source, braceStart);
     if (end === -1) continue;
 
     // Only care when the destructuring target is the request itself.
-    const tail = source.slice(end + 1, end + 60);
-    const surface = /^\s*=\s*ctx\.query/.test(tail)
-      ? 'ctx.query'
-      : /^\s*=\s*ctx\.request\.body/.test(tail)
-        ? 'ctx.request.body'
-        : null;
-
+    const surface = destructuredSurface(source.slice(end + 1, end + 60));
     if (!surface) continue;
 
     const line = source.slice(0, braceStart).split('\n').length;
-
-    for (const entry of source.slice(braceStart + 1, end).split(',')) {
-      const cleaned = entry.split('//')[0].trim();
-
-      if (!cleaned || cleaned.startsWith('...')) continue;
-
-      const key = wireKey(cleaned);
-
-      if (isCamelCase(key)) found.push({ key, line, surface });
-    }
+    found.push(
+      ...camelCaseEntryKeys({ source, braceStart, end, line, surface })
+    );
   }
 
   return found;

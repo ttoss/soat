@@ -5,6 +5,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import * as orchestrationEngineModule from 'src/lib/orchestrationEngine';
 import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
 import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { flushTaskAutomations } from 'src/lib/tasks';
@@ -4590,6 +4591,16 @@ describe('Tasks', () => {
     });
 
     test('an orchestration dispatch inherits the task bag', async () => {
+      // The dispatched orchestration has only a `transform` node, so it
+      // settles `succeeded` synchronously with the dispatch — too fast to
+      // catch the inherited bag on the run row before its own terminal clear
+      // wipes it. `startOrchestrationRun` is where the task's bag becomes the
+      // run's, so that call is where inheritance is provable instead.
+      const startRunSpy = jest.spyOn(
+        orchestrationEngineModule,
+        'startOrchestrationRun'
+      );
+
       const created = await startCtxTask({
         workflow: orchWorkflowId,
         toolContext: { ocaToken: 'tok_orch' },
@@ -4605,6 +4616,12 @@ describe('Tasks', () => {
         },
       });
 
+      expect(startRunSpy).toHaveBeenCalledTimes(1);
+      expect(startRunSpy.mock.calls[0]![0].toolContext).toEqual({
+        ocaToken: 'tok_orch',
+      });
+      startRunSpy.mockRestore();
+
       const history = (
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
@@ -4619,13 +4636,14 @@ describe('Tasks', () => {
         `/api/v1/orchestration-runs/${routed.orchestration_run_id}`
       );
       expect(run.status).toBe(200);
-      // Read off the row: a run holds the bag the way a task does, and neither
-      // hands a credential back on a read.
+      expect(run.body.status).toBe('succeeded');
+      // Neither hands a credential back on a read, and a run clears its own
+      // bag once it settles the same way the dispatching task already did.
       expect(run.body.tool_context).toBeUndefined();
       const runRow = await db.OrchestrationRun.findOne({
         where: { publicId: routed.orchestration_run_id },
       });
-      expect(runRow!.toolContext).toEqual({ ocaToken: 'tok_orch' });
+      expect(runRow!.toolContext).toBeNull();
     });
   });
 });

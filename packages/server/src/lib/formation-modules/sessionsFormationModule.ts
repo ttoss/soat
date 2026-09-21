@@ -1,7 +1,6 @@
 import { db } from '../../db';
 import { lookupAgentInternalId } from '../formationsHelpers';
 import {
-  toNullableObject,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -11,6 +10,7 @@ import {
   getSession,
   updateSession,
 } from '../sessions';
+import { toStoredToolContext } from '../toolContext';
 import { defineFormationModule } from './defineFormationModule';
 
 const getSessionAgentInternalId = async (
@@ -53,11 +53,7 @@ export const sessionsFormationModule = defineFormationModule({
         typeof properties.inactivity_ttl_seconds === 'number'
           ? properties.inactivity_ttl_seconds
           : undefined,
-      toolContext:
-        (toNullableObject(properties.tool_context) as Record<
-          string,
-          string
-        > | null) ?? undefined,
+      toolContext: toStoredToolContext(properties.tool_context),
     });
   },
 
@@ -73,11 +69,7 @@ export const sessionsFormationModule = defineFormationModule({
         typeof properties.auto_generate === 'boolean'
           ? properties.auto_generate
           : undefined,
-      toolContext:
-        (toNullableObject(properties.tool_context) as Record<
-          string,
-          string
-        > | null) ?? undefined,
+      toolContext: toStoredToolContext(properties.tool_context),
     });
   },
 
@@ -92,4 +84,11 @@ export const sessionsFormationModule = defineFormationModule({
     const agentId = await getSessionAgentInternalId(physicalResourceId);
     return getSession({ agentId, sessionId: physicalResourceId });
   },
+
+  // `getSession` never returns the bag, so a live-read diff can never confirm
+  // it matches the template: without this, `plan-formation` compares the
+  // declared value against a key that is always absent and reports `update`
+  // forever, and applying it a second time would silently keep the first
+  // apply's raw value in `lastAppliedProperties` to make that diff agree.
+  writeOnlyProperties: ['tool_context'],
 });

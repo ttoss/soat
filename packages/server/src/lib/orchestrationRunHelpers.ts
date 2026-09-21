@@ -53,6 +53,20 @@ export const getTerminalOutput = (args: {
   return output;
 };
 
+/**
+ * The fields a settling run clears only when `isTerminal`: the completion
+ * timestamp, and the bag, which can never be dispatched to again once the run
+ * is terminal — possibly a resolved secret plaintext, if a trigger started
+ * it — so keeping it would only park a credential at rest.
+ */
+const terminalFields = (
+  isTerminal: boolean
+): { completedAt: Date | null; toolContext?: null } => {
+  return isTerminal
+    ? { completedAt: new Date(), toolContext: null }
+    : { completedAt: null };
+};
+
 export const updateRunRecord = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   runStatus: MappedOrchestrationRun['status'];
@@ -89,7 +103,7 @@ export const updateRunRecord = async (args: {
     wakeAt: null,
     wakeContext: null,
     leaseExpiresAt: null,
-    completedAt: isTerminal ? new Date() : null,
+    ...terminalFields(isTerminal),
     // Only fill once: the first trace produced by a traced node (e.g. an
     // `agent` node) becomes the run's trace_id and is never overwritten.
     ...(runRecord.traceId ? {} : traceId ? { traceId } : {}),

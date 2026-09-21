@@ -64,6 +64,20 @@ const collectSourceFiles = (dir: string): string[] => {
   return files;
 };
 
+/** The index just past the closing quote of a `quote`-delimited literal that opens at `start`, honoring `\` escapes. */
+const findQuoteEnd = (source: string, start: number, quote: string): number => {
+  let j = start;
+  while (j < source.length) {
+    if (source[j] === '\\') {
+      j += 2;
+      continue;
+    }
+    if (source[j] === quote) break;
+    j++;
+  }
+  return Math.min(j + 1, source.length);
+};
+
 /**
  * Blanks out comments, string bodies and template placeholders, keeping the
  * character count (and therefore every line number) intact. Braces inside a
@@ -99,16 +113,7 @@ const blankNonCode = (source: string): string => {
     const char = source[i];
 
     if (char === "'" || char === '"' || char === '`') {
-      let j = i + 1;
-      while (j < source.length) {
-        if (source[j] === '\\') {
-          j += 2;
-          continue;
-        }
-        if (source[j] === char) break;
-        j++;
-      }
-      blankUntil(Math.min(j + 1, source.length));
+      blankUntil(findQuoteEnd(source, i + 1, char));
       continue;
     }
 

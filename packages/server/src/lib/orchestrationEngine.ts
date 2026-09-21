@@ -850,6 +850,10 @@ const failRunOrchestrationGone = async (args: {
     wakeContext: null,
     leaseExpiresAt: null,
     completedAt: new Date(),
+    // A failed run can never dispatch another tool call, so keeping the bag
+    // would only park a credential — possibly a resolved secret plaintext, if
+    // a trigger started the run — at rest.
+    toolContext: null,
   });
 };
 

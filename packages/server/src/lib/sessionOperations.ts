@@ -119,7 +119,9 @@ const checkSessionExpiry = async (
   const elapsed = Date.now() - new Date(lastActivity).getTime();
   if (elapsed > ttl * 1000) {
     if (session.status !== 'expired') {
-      await session.update({ status: 'expired' });
+      // An expired session can never dispatch another tool call, so keeping
+      // the bag would only park a credential at rest.
+      await session.update({ status: 'expired', toolContext: null });
     }
     throw new DomainError(
       'SESSION_EXPIRED',

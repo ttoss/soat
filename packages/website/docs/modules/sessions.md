@@ -194,6 +194,8 @@ Sessions support the same `tool_context` mechanism as direct agent generations; 
 
 The bag is **write-only**: it is accepted on create and update, and no read of a session returns it. It is what the session's tools authorize with — often a per-user token — so reading a session is not a way to obtain one. The reserved identity keys below are dropped from a stored bag, in any casing.
 
+It does not outlive the session either: closing or expiring one — a caller-driven `PATCH .../status: "closed"`, or the [inactivity TTL](#inactivity-ttl) expiring it — clears the bag, since a closed session can never dispatch another tool call.
+
 When a generation is triggered through a session, the server injects these keys into `tool_context`:
 
 | Injected key      | Forwarded header                 | Value                                                  |

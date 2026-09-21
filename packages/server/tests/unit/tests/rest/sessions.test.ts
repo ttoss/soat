@@ -509,6 +509,29 @@ describe('Sessions', () => {
       expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
     });
 
+    // A closed session can never dispatch another tool call, so the bag is
+    // cleared rather than left resting on a row nothing will read again.
+    test('closing a session clears its stored tool_context', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          name: 'Close Clears Context',
+          tool_context: { tenant: 'acme' },
+        });
+      const closeTargetId = createRes.body.id;
+
+      const closeRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${closeTargetId}`)
+        .send({ status: 'closed' });
+      expect(closeRes.status).toBe(200);
+
+      const stored = await db.Session.findOne({
+        where: { publicId: closeTargetId },
+      });
+      expect(stored?.toolContext).toBeNull();
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .patch(`/api/v1/sessions/${sessionId}`)
@@ -2106,6 +2129,37 @@ describe('Sessions', () => {
       expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
       expect(msgRes.status).toBe(410);
       expect(msgRes.body.error.code).toBe('SESSION_EXPIRED');
+    });
+
+    // Auto-expiry is a background check triggered on the next call, not a
+    // caller-driven close — the bag is cleared the same way regardless of
+    // which path reaches a terminal status.
+    test('TTL auto-expiry clears the stored tool_context', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          inactivity_ttl_seconds: 1,
+          tool_context: { tenant: 'acme' },
+        });
+      expect(sessionRes.status).toBe(201);
+      const expiringId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${expiringId}/messages`)
+        .send({ message: 'hello' });
+
+      await withAdvancedClock(1500, async () => {
+        await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${expiringId}/generate?wait=true`)
+          .send({});
+      });
+
+      const stored = await db.Session.findOne({
+        where: { publicId: expiringId },
+      });
+      expect(stored?.status).toBe('expired');
+      expect(stored?.toolContext).toBeNull();
     });
 
     test('generate succeeds when within TTL window', async () => {

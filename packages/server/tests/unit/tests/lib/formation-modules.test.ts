@@ -1224,6 +1224,99 @@ describe('triggersFormationModule', () => {
     expect(errors?.length).toBeGreaterThan(0);
     expect(errors?.[0].message).toMatch(/action is only valid for tool/i);
   });
+
+  // `findTrigger`'s read contract never carries the bag (`toolContextCarrier.ts`),
+  // so this is the one property `read()` can never confirm — declaring it here
+  // is what keeps `plan-formation` and `applyUpdateChange` from persisting a
+  // raw credential into `lastAppliedProperties` to make their diffs agree.
+  test('tool_context is a write-only property', () => {
+    expect(readModule('trigger').writeOnlyProperties).toEqual(['tool_context']);
+    expect(
+      readModule('trigger').sanitizeLastAppliedProperties?.({
+        name: 'FM Trigger',
+        tool_context: { api_key: 'secret-value' },
+      })
+    ).toEqual({ name: 'FM Trigger' });
+  });
+
+  test('create stores a literal tool_context, never returned by read', async () => {
+    const id = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Trigger Context',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+        tool_context: { tenant: 'acme' },
+      },
+    });
+
+    const read = await readModule('trigger').read?.({
+      projectId: internalProjectId,
+      physicalResourceId: id,
+    });
+    expect(read).not.toHaveProperty('tool_context');
+
+    const stored = await db.Trigger.findOne({ where: { publicId: id } });
+    expect(stored?.toolContext).toEqual({ tenant: 'acme' });
+  });
+
+  test('update with tool_context omitted leaves the stored bag alone', async () => {
+    const id = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Trigger Context Keep',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+        tool_context: { tenant: 'acme' },
+      },
+    });
+
+    await applyUpdateResource({
+      actingUserId: internalUserId,
+      projectId: internalProjectId,
+      resourceType: 'trigger',
+      physicalResourceId: id,
+      resolvedProperties: { name: 'FM Trigger Context Keep' },
+    });
+
+    const stored = await db.Trigger.findOne({ where: { publicId: id } });
+    expect(stored?.toolContext).toEqual({ tenant: 'acme' });
+  });
+
+  test('update with tool_context: null clears the stored bag', async () => {
+    const id = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Trigger Context Clear',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+        tool_context: { tenant: 'acme' },
+      },
+    });
+
+    await applyUpdateResource({
+      actingUserId: internalUserId,
+      projectId: internalProjectId,
+      resourceType: 'trigger',
+      physicalResourceId: id,
+      resolvedProperties: {
+        name: 'FM Trigger Context Clear',
+        tool_context: null,
+      },
+    });
+
+    const stored = await db.Trigger.findOne({ where: { publicId: id } });
+    expect(stored?.toolContext).toBeNull();
+  });
 });
 
 // ── conversation actor link ─────────────────────────────────────────────────
@@ -1788,6 +1881,90 @@ describe('sessionsFormationModule', () => {
         physicalResourceId: 'sess_missing',
       })
     ).rejects.toThrow('Session not found: sess_missing');
+  });
+
+  // `getSession`'s read contract never carries the bag (`toolContextCarrier.ts`),
+  // so this is the one property `read()` can never confirm — declaring it here
+  // is what keeps `plan-formation` and `applyUpdateChange` from persisting a
+  // raw credential into `lastAppliedProperties` to make their diffs agree.
+  test('tool_context is a write-only property', () => {
+    expect(readModule('session').writeOnlyProperties).toEqual(['tool_context']);
+    expect(
+      readModule('session').sanitizeLastAppliedProperties?.({
+        name: 'FM Session',
+        tool_context: { api_key: 'secret-value' },
+      })
+    ).toEqual({ name: 'FM Session' });
+  });
+
+  test('create stores a literal tool_context, never returned by read', async () => {
+    const id = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'session',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        agent_id: agentId,
+        tool_context: { tenant: 'acme' },
+      },
+    });
+
+    const read = await readModule('session').read?.({
+      projectId: internalProjectId,
+      physicalResourceId: id,
+    });
+    expect(read).not.toHaveProperty('tool_context');
+
+    const stored = await db.Session.findOne({ where: { publicId: id } });
+    expect(stored?.toolContext).toEqual({ tenant: 'acme' });
+  });
+
+  test('update with tool_context omitted leaves the stored bag alone', async () => {
+    const id = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'session',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        agent_id: agentId,
+        tool_context: { tenant: 'acme' },
+      },
+    });
+
+    await applyUpdateResource({
+      actingUserId: internalUserId,
+      projectId: internalProjectId,
+      resourceType: 'session',
+      physicalResourceId: id,
+      resolvedProperties: { name: 'kept' },
+    });
+
+    const stored = await db.Session.findOne({ where: { publicId: id } });
+    expect(stored?.toolContext).toEqual({ tenant: 'acme' });
+  });
+
+  // A generic `toNullableObject(...) ?? undefined` collapsed an explicit clear
+  // into "leave unchanged" here — `toStoredToolContext` is what keeps `null`
+  // and `undefined` apart, the way `triggersFormationModule` already did.
+  test('update with tool_context: null clears the stored bag', async () => {
+    const id = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'session',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        agent_id: agentId,
+        tool_context: { tenant: 'acme' },
+      },
+    });
+
+    await applyUpdateResource({
+      actingUserId: internalUserId,
+      projectId: internalProjectId,
+      resourceType: 'session',
+      physicalResourceId: id,
+      resolvedProperties: { tool_context: null },
+    });
+
+    const stored = await db.Session.findOne({ where: { publicId: id } });
+    expect(stored?.toolContext).toBeNull();
   });
 });
 

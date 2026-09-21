@@ -28,7 +28,7 @@
     "db-dev:stop": "docker compose -f docker-compose.db.yml down",
     "dev": "tsx watch src/server.ts",
     "eval:knowledge": "node tests/eval/runEval.mjs",
-    "lint": "pnpm run lint-openapi && eslint src",
+    "lint": "pnpm run lint-openapi && eslint src tests",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
     "purge-formation-secret-outputs": "tsx scripts/purgeFormationSecretOutputs.ts",
     "queue-soak": "tsx scripts/orchestrationQueueSoak.ts",
