@@ -1388,12 +1388,13 @@ describe('Orchestrations', () => {
       }
     });
 
-    // A run carries `tool_context` for its whole lifetime, so a
+    // A run carries `tool_context` for as long as it is non-terminal, so a
     // scheduled/orchestrated flow can hand a per-user credential to the tools its
     // agents call. The bag lives on the run row rather than on the request, which
-    // is what makes it survive a pause and a background drive. What it carries is
-    // a credential, so every case here asserts on the `createGeneration` args and
-    // none on a run body: the bag is write-only.
+    // is what makes it survive a pause and a background drive; a settled run has
+    // it cleared instead, since nothing dispatches from it again. What it carries
+    // is a credential, so every case here asserts on the `createGeneration` args
+    // and none on a run body: the bag is write-only.
     describe('tool_context', () => {
       // One provider/agent pair for the whole block: every case here asserts on
       // the `createGeneration` args, never on a real provider call.
@@ -1504,9 +1505,49 @@ describe('Orchestrations', () => {
           );
           expect(getRunRes.status).toBe(200);
           expect(getRunRes.body.tool_context).toBeUndefined();
+
+          const stored = await db.OrchestrationRun.findOne({
+            where: { publicId: runRes.body.id },
+          });
+          expect(stored?.toolContext).toBeNull();
         } finally {
           generationSpy.mockRestore();
         }
+      });
+
+      // A settled run can never dispatch another tool call, so the bag is
+      // cleared instead of resting on a row nothing will read again — for a
+      // cancel the same way a normal completion clears it above.
+      test('cancelling a run clears its stored tool_context', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Tool Context Cancel Pipeline',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            orchestration_id: createRes.body.id,
+            input: { question: 'hello' },
+            tool_context: { ocaToken: 'tok_cancel' },
+          });
+        expect(runRes.status).toBe(201);
+
+        const cancelRes = await authenticatedTestClient(userToken).post(
+          `/api/v1/orchestration-runs/${runRes.body.id}/cancel`
+        );
+        expect(cancelRes.status).toBe(200);
+        expect(cancelRes.body.status).toBe('cancelled');
+
+        const stored = await db.OrchestrationRun.findOne({
+          where: { publicId: runRes.body.id },
+        });
+        expect(stored?.toolContext).toBeNull();
       });
 
       // A `tool` node is the run acting directly, so it must carry the run's

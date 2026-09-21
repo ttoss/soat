@@ -34,7 +34,9 @@ const checkAndExpireSession = async (
   session: InstanceType<(typeof db)['Session']>
 ) => {
   if (isSessionExpired(session)) {
-    await session.update({ status: 'expired' });
+    // An expired session can never dispatch another tool call, so keeping
+    // the bag would only park a credential at rest.
+    await session.update({ status: 'expired', toolContext: null });
   }
 };
 
@@ -310,6 +312,27 @@ export const getSession = async (args: {
   return mapSession(session, usage);
 };
 
+/** The plain optional-field assignments {@link updateSession} applies verbatim. */
+const applySessionFieldUpdates = (args: {
+  session: InstanceType<(typeof db)['Session']>;
+  name?: string | null;
+  status?: string;
+  autoGenerate?: boolean;
+  inactivityTtlSeconds?: number;
+  messageDelaySeconds?: number | null;
+}): void => {
+  const { session } = args;
+  if (args.name !== undefined) session.name = args.name;
+  if (args.status !== undefined) session.status = args.status;
+  if (args.autoGenerate !== undefined) session.autoGenerate = args.autoGenerate;
+  if (args.inactivityTtlSeconds !== undefined) {
+    session.inactivityTtlSeconds = args.inactivityTtlSeconds;
+  }
+  if (args.messageDelaySeconds !== undefined) {
+    session.messageDelaySeconds = args.messageDelaySeconds;
+  }
+};
+
 export const updateSession = async (args: {
   agentId: number;
   sessionId: string;
@@ -336,28 +359,19 @@ export const updateSession = async (args: {
     );
   }
 
-  if (args.name !== undefined) {
-    session.name = args.name;
-  }
+  const closesSession = args.status === 'closed' || args.status === 'expired';
 
-  if (args.status !== undefined) {
-    session.status = args.status;
-  }
-
-  if (args.autoGenerate !== undefined) {
-    session.autoGenerate = args.autoGenerate;
-  }
+  applySessionFieldUpdates({ session, ...args });
 
   if (toolContext !== undefined) {
     session.toolContext = toolContext;
   }
 
-  if (args.inactivityTtlSeconds !== undefined) {
-    session.inactivityTtlSeconds = args.inactivityTtlSeconds;
-  }
-
-  if (args.messageDelaySeconds !== undefined) {
-    session.messageDelaySeconds = args.messageDelaySeconds;
+  // A closed or expired session can never dispatch another tool call, so
+  // keeping the bag would only park a credential at rest; last writer wins
+  // over whatever this same request just set above.
+  if (closesSession) {
+    session.toolContext = null;
   }
 
   await session.save();
@@ -365,7 +379,7 @@ export const updateSession = async (args: {
   // When a session is closed, cancel any pending delay timers and abort any
   // in-flight LLM call for this session. This prevents a closed session from
   // replaying its message history and re-executing tool calls via a stale timer.
-  if (args.status === 'closed' || args.status === 'expired') {
+  if (closesSession) {
     const sessionKey = `${args.agentId}#${args.sessionId}`;
     cancelDelayTimer(sessionKey);
     abortSessionGeneration(sessionKey);

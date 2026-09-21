@@ -49,7 +49,7 @@ The [auto-populated identity keys](#auto-populated-keys-sessions) are always for
 
 When a generation pauses with `status: "requires_action"`, the original `tool_context` is reapplied on resume. An orchestration run's bag lives on its own row and survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive. A [task](../modules/workflows.md#dispatch-tool-context) stores its bag the same way, across an approval gate, a retry and an automated hop.
 
-A session's and a run's bag is readable; a **task's and a trigger's are write-only**: both are read by more principals than the one who wrote them, so a stored bag is never returned by a read. A task's is cleared when the task closes; a trigger's persists, because it has to survive until the next firing.
+Every stored bag is write-only — a session's, an orchestration or eval run's, a task's and a trigger's are all read by more principals than the one who wrote them, so none is ever returned by a read. A session, an orchestration run and an eval run clear theirs when they reach a terminal state, and a task clears its when it closes; a trigger's persists, because it has to survive until the next firing.
 
 ## Placing a value in a real header
 

@@ -63,7 +63,14 @@ export const cancelOrchestrationRun = async (args: {
     );
   }
 
-  await run.update({ status: 'cancelled', completedAt: new Date() });
+  // A cancelled run can never dispatch another tool call, so keeping the bag
+  // would only park a credential — possibly a resolved secret plaintext, if a
+  // trigger started the run — at rest.
+  await run.update({
+    status: 'cancelled',
+    completedAt: new Date(),
+    toolContext: null,
+  });
 
   return mapOrchestrationRun(run);
 };
