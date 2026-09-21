@@ -155,6 +155,45 @@ describe('Document withdrawal', () => {
       expect(newest.label).toBe('withdrawn');
     });
 
+    test('a version_label tags the tombstone', async () => {
+      const id = await createDocument('Labelled withdrawal.');
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/withdraw`)
+        .send({ version_label: 'superseded-by-q2' });
+
+      expect(response.status).toBe(200);
+
+      const versions = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}/versions`
+      );
+      expect(versions.body.data[0].label).toBe('superseded-by-q2');
+    });
+
+    /**
+     * A withdrawal is a write like any other, so it takes the same precondition
+     * — a caller that read the document two versions ago is refused rather than
+     * withdrawing something it has not seen.
+     */
+    test('a stale expected_version is refused', async () => {
+      const id = await createDocument('Moving target.');
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${id}`)
+        .send({ content: 'Moved.' });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/withdraw`)
+        .send({ expected_version: 1 });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('VERSION_CONFLICT');
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}`
+      );
+      expect(read.body.status).toBe('ready');
+    });
+
     test('withdrawing twice is refused', async () => {
       const id = await createDocument('Only once.');
       await withdraw(id);
@@ -234,6 +273,17 @@ describe('Document withdrawal', () => {
      * The tombstone holds no content, so it is not a state to go back to. The
      * refusal names the alternative rather than restoring an empty document.
      */
+    test('user without permission returns 403', async () => {
+      const id = await createDocument('Guarded.');
+      await withdraw(id);
+
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+
+      expect(response.status).toBe(403);
+    });
+
     test('restoring the tombstone itself is refused', async () => {
       const id = await createDocument('Has a tombstone.');
       await withdraw(id);

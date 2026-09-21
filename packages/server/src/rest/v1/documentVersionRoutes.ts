@@ -50,20 +50,24 @@ const parseVersionParam = (raw: string): number => {
 export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
   const { documentsRouter, checkDocumentPermission } = args;
 
-  /** Loads the document a history route names, or throws the module's 404. */
+  /**
+   * Loads the document a history route names and checks the caller may act on
+   * it. Both halves throw — `404` when it is gone, `403` when the action is
+   * not allowed — so a caller reaching the line after this has been cleared.
+   */
   const requireDocument = async (ctx: Context, action: string) => {
     const doc = await getDocument({ id: ctx.params.document_id });
     if (!doc) {
       throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
     }
-    return (await checkDocumentPermission(ctx, doc, action)) ? doc : null;
+    await checkDocumentPermission(ctx, doc, action);
   };
 
   documentsRouter.post(
     '/documents/:document_id/withdraw',
     async (ctx: Context) => {
       requireAuth(ctx);
-      if (!(await requireDocument(ctx, 'documents:WithdrawDocument'))) return;
+      await requireDocument(ctx, 'documents:WithdrawDocument');
 
       const body = ctx.request.body as { version_label?: unknown };
 
@@ -83,9 +87,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
     '/documents/:document_id/versions',
     async (ctx: Context) => {
       requireAuth(ctx);
-      if (!(await requireDocument(ctx, 'documents:ListDocumentVersions'))) {
-        return;
-      }
+      await requireDocument(ctx, 'documents:ListDocumentVersions');
 
       ctx.body = await listDocumentVersions({
         documentId: ctx.params.document_id,
@@ -103,7 +105,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
     '/documents/:document_id/versions/:version',
     async (ctx: Context) => {
       requireAuth(ctx);
-      if (!(await requireDocument(ctx, 'documents:GetDocumentVersion'))) return;
+      await requireDocument(ctx, 'documents:GetDocumentVersion');
 
       ctx.body = await getDocumentVersion({
         documentId: ctx.params.document_id,
@@ -116,9 +118,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
     '/documents/:document_id/versions/:version/restore',
     async (ctx: Context) => {
       requireAuth(ctx);
-      if (!(await requireDocument(ctx, 'documents:RestoreDocumentVersion'))) {
-        return;
-      }
+      await requireDocument(ctx, 'documents:RestoreDocumentVersion');
 
       const body = ctx.request.body as { label?: unknown };
 

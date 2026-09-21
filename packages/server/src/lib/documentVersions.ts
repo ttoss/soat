@@ -9,7 +9,6 @@ import {
   clearWithdrawnStatus,
   emitDocumentRestored,
   isWithdrawn,
-  lastContentVersion,
 } from './documentWithdrawal';
 import {
   type ArchivedVersionRow,
@@ -49,6 +48,9 @@ const loadDocumentRef = async (args: { id: string }) => {
     where: { publicId: args.id },
   });
 
+  /* istanbul ignore next -- every history route loads the document through
+     `getDocument` and answers `404` before reaching here, so this guards the
+     lib function's own contract rather than a path a request takes. */
   if (!document) {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
@@ -178,24 +180,12 @@ export const getDocumentVersion = async (args: {
 
 export const restoreDocumentVersion = async (args: {
   documentId: string;
-  /** Defaults to the last version that held content, which is what a withdrawal undoes. */
-  version?: number;
+  version: number;
   label?: string | null;
   createdByUserId?: number | null;
 }) => {
   const document = await loadDocumentRef({ id: args.documentId });
   const withdrawn = await isWithdrawn({ documentDbId: document.dbId });
-
-  const version =
-    args.version ?? (await lastContentVersion({ documentDbId: document.dbId }));
-
-  if (version === null) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `Document '${args.documentId}' has no version holding content to restore.`,
-      { document_id: args.documentId }
-    );
-  }
 
   // Cleared before the content is written, so the write that re-chunks it does
   // not archive a version describing a document still marked withdrawn.
@@ -207,7 +197,7 @@ export const restoreDocumentVersion = async (args: {
   // any version in between still resolves.
   const restored = await documentVersionArchive.restoreVersion({
     resourceId: args.documentId,
-    version,
+    version: args.version,
     label: args.label,
     createdByUserId: args.createdByUserId,
   });

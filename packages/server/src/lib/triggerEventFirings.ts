@@ -116,6 +116,8 @@ export const reserveEventFiring = async (args: {
 
     return firing;
   } catch (error) {
+    /* istanbul ignore next -- any other insert failure is a database fault
+       the caller's own error handling owns, not a duplicate to fold into. */
     if (!isUniqueViolation(error)) throw error;
 
     log('reserveEventFiring: already enqueued key=%s', idempotencyKey);

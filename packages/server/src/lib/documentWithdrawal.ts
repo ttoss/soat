@@ -66,6 +66,8 @@ export const withdrawDocument = async (
   log('withdrawDocument: id=%s', args.id);
 
   const doc = await loadDocument(args.id);
+  /* istanbul ignore next -- the route loads the document through `getDocument`
+     and answers `404` before reaching here. */
   if (!doc) return null;
 
   // Platform-written documents keep the owning module's lifecycle: a trace or
@@ -109,31 +111,6 @@ export const withdrawDocument = async (
   });
 
   return mapped;
-};
-
-/**
- * The version a restore brings back when the caller names none: the last one
- * that held content.
- *
- * A withdrawal is followed by nothing, so it is always the tombstone's
- * predecessor — but it is read rather than computed, because a document may be
- * withdrawn, restored and withdrawn again, and `version - 1` would then name
- * whichever of those the arithmetic landed on.
- */
-export const lastContentVersion = async (args: {
-  documentDbId: number;
-}): Promise<number | null> => {
-  const rows = await documentVersionStore.versionModel().findAll({
-    where: { documentId: args.documentDbId },
-    order: [['version', 'DESC']],
-    limit: 2,
-  });
-
-  const previous = rows.find((row) => {
-    return !(row.config as Record<string, unknown>).withdrawn;
-  });
-
-  return previous?.version ?? null;
 };
 
 /** Whether the document's current version is a tombstone. */

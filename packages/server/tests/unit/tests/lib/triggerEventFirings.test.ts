@@ -167,6 +167,25 @@ describe('durable event firings', () => {
       expect(rows).toHaveLength(1);
     });
 
+    test('the lease is taken from the clock the caller holds', async () => {
+      const trigger = await createEventTrigger();
+      const now = new Date('2030-01-01T00:00:00.000Z');
+
+      const firing = await reserveEventFiring({
+        triggerDbId: trigger.id as number,
+        triggerPublicId: trigger.publicId as string,
+        projectId: trigger.projectId as number,
+        eventId: 'evt-clock',
+        input: {},
+        causationChain: [],
+        now,
+      });
+
+      expect(firing!.leaseExpiresAt).toEqual(
+        new Date(now.getTime() + EVENT_FIRING_LEASE_MS)
+      );
+    });
+
     test('one event reaching two triggers reserves for each', async () => {
       const first = await createEventTrigger();
       const second = await createEventTrigger();
@@ -228,6 +247,35 @@ describe('durable event firings', () => {
 
       const settled = await waitForTerminal(firing.id as number);
       expect(settled.attempts).toBe(2);
+    }, 60_000);
+
+    /**
+     * A firing written before the chain was stored has none. It is still owed
+     * a dispatch, and an absent chain is an empty one rather than a reason to
+     * leave the firing stranded.
+     */
+    test('a firing with no stored chain is still redelivered', async () => {
+      const trigger = await createEventTrigger();
+      const firing = await db.TriggerFiring.create({
+        triggerId: trigger.id as number,
+        projectId: trigger.projectId as number,
+        source: 'event',
+        status: 'pending',
+        input: {},
+        result: null,
+        error: null,
+        idempotencyKey: `evt-nochain:${trigger.publicId as string}`,
+        causationChain: null,
+        attempts: 1,
+        leaseExpiresAt: new Date(Date.now() - EVENT_FIRING_LEASE_MS),
+        startedAt: null,
+        completedAt: null,
+      });
+
+      expect(await sweepDueEventFirings()).toBe(1);
+
+      const settled = await waitForTerminal(firing.id as number);
+      expect(settled.status).toBe('succeeded');
     }, 60_000);
 
     test('a firing whose lease is still live is left alone', async () => {
