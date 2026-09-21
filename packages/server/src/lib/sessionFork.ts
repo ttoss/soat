@@ -21,7 +21,7 @@ import { emitResourceEvent } from './eventBus';
 import { paginatedList } from './pagination';
 import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
 import { mapSession } from './sessionMapper';
-import { acceptStoredToolContext } from './toolContextCarrier';
+import { acceptStoredToolContextUpdate } from './toolContextCarrier';
 
 const log = createDebug('soat:session-fork');
 
@@ -204,7 +204,9 @@ export const forkSession = async (args: {
     args.agentPublicId
   );
 
-  const toolContext = await acceptStoredToolContext({
+  // `undefined` is the only value that inherits: an explicit bag overrides the
+  // parent's, and an explicit empty one overrides it with nothing.
+  const toolContext = await acceptStoredToolContextUpdate({
     toolContext: args.toolContext,
     secretRefs: 'verbatim',
   });
@@ -250,7 +252,10 @@ export const forkSession = async (args: {
         // Inert by construction: creating a branch and running it are separate
         // acts, so `POST /fork` never triggers a generation.
         autoGenerate: false,
-        toolContext: toolContext ?? parent.toolContext ?? null,
+        toolContext:
+          toolContext === undefined
+            ? (parent.toolContext ?? null)
+            : toolContext,
         inactivityTtlSeconds: parent.inactivityTtlSeconds ?? 0,
         messageDelaySeconds: parent.messageDelaySeconds ?? null,
         lastActivityAt: null,

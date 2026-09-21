@@ -242,6 +242,28 @@ describe('Session forking', () => {
       expect(overriddenRow?.toolContext).toEqual({ tenant: 'globex' });
     });
 
+    // Omitting the field is the only thing that inherits. An explicit empty bag
+    // is an override, so a branch can be run without the parent's credential.
+    test('an explicit empty bag overrides the parent instead of inheriting', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          name: 'Fork Tool Context Cleared',
+          tool_context: { tenant: 'acme' },
+        });
+
+      const forked = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${created.body.id}/fork`)
+        .send({ tool_context: {} });
+
+      expect(forked.status).toBe(201);
+      const stored = await db.Session.findOne({
+        where: { publicId: forked.body.id },
+      });
+      expect(stored?.toolContext).toBeNull();
+    });
+
     test('tags are set on the fork', async () => {
       const parentId = await seedSession({ name: 'Fork Tags', count: 1 });
 

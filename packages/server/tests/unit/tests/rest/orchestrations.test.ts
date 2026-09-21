@@ -2095,7 +2095,7 @@ describe('Orchestrations', () => {
               toolContext: { ocaToken: 'tok_secret', tenant: 'acme' },
             });
 
-            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({});
+            expect(generationSpy.mock.calls[0]![0].toolContext).toBeUndefined();
           } finally {
             generationSpy.mockRestore();
           }
@@ -2224,8 +2224,9 @@ describe('Orchestrations', () => {
             });
 
             // Nothing caller-supplied survives `[]`, and the identity keys are
-            // stamped downstream rather than carried here.
-            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({});
+            // stamped downstream rather than carried here. A child left with
+            // nothing carries no bag at all — "no context" has one shape.
+            expect(generationSpy.mock.calls[0]![0].toolContext).toBeUndefined();
           } finally {
             generationSpy.mockRestore();
           }
