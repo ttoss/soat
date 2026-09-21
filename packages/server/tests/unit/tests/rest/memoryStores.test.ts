@@ -763,6 +763,75 @@ describe('MemoryStores', () => {
         expect(response.status).toBe(400);
         expect(response.body.error.message).toMatch(/tags/);
       });
+
+      describe('write precondition', () => {
+        const createMemory = async (): Promise<string> => {
+          const memId = await createTestMemoryStore();
+          const created = await authenticatedTestClient(userToken)
+            .post('/api/v1/memories')
+            .send({ memory_store_id: memId, content: 'Precondition source' });
+          expect(created.status).toBe(201);
+          return created.body.id;
+        };
+
+        test('a write naming the current version is applied', async () => {
+          const id = await createMemory();
+
+          const response = await authenticatedTestClient(userToken)
+            .put(`/api/v1/memories/${id}`)
+            .send({ content: 'v2', expected_version: 1 });
+
+          expect(response.status).toBe(200);
+          expect(response.body.version).toBe(2);
+        });
+
+        test('a write naming a stale version is refused with the current one', async () => {
+          const id = await createMemory();
+
+          await authenticatedTestClient(userToken)
+            .put(`/api/v1/memories/${id}`)
+            .send({ content: 'v2' });
+
+          const response = await authenticatedTestClient(userToken)
+            .put(`/api/v1/memories/${id}`)
+            .send({ content: 'v3', expected_version: 1 });
+
+          expect(response.status).toBe(409);
+          expect(response.body.error.code).toBe('VERSION_CONFLICT');
+          expect(response.body.error.meta.current_version).toBe(2);
+          expect(response.body.error.meta.expected_version).toBe(1);
+        });
+
+        test('If-Match carries the same precondition', async () => {
+          const id = await createMemory();
+
+          const response = await authenticatedTestClient(userToken)
+            .put(`/api/v1/memories/${id}`)
+            .set('If-Match', '1')
+            .send({ content: 'v2' });
+
+          expect(response.status).toBe(200);
+          expect(response.body.version).toBe(2);
+        });
+
+        test('a refused write leaves the memory untouched', async () => {
+          const id = await createMemory();
+
+          await authenticatedTestClient(userToken)
+            .put(`/api/v1/memories/${id}`)
+            .send({ content: 'v2' });
+
+          await authenticatedTestClient(userToken)
+            .put(`/api/v1/memories/${id}`)
+            .send({ content: 'refused', expected_version: 1 });
+
+          const after = await authenticatedTestClient(userToken).get(
+            `/api/v1/memories/${id}`
+          );
+          expect(after.body.content).toBe('v2');
+          expect(after.body.version).toBe(2);
+        });
+      });
     });
 
     describe('DELETE /api/v1/memories/:memory_id', () => {

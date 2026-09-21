@@ -361,6 +361,7 @@ export const updateDocument = async (
   let refreshed = doc;
   await documentVersionStore.commitConfigChange({
     resource: toResourceRef(doc),
+    expectedVersion: args.expectedVersion,
     before,
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,

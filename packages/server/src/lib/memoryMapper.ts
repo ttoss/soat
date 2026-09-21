@@ -54,6 +54,7 @@ export const mapMemory = (instance: MemoryRow) => {
     metadata: instance.metadata ?? null,
     invalidated_at: instance.invalidatedAt ?? null,
     superseded_by_memory_id: linkedPublicId(instance.supersededByMemory),
+    version: instance.version,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };

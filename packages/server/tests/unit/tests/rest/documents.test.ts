@@ -613,6 +613,63 @@ describe('Documents', () => {
 
       expect(response.status).toBe(200);
     });
+
+    describe('write precondition', () => {
+      let precondCounter = 0;
+
+      const createDocument = async (): Promise<string> => {
+        precondCounter += 1;
+        const created = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents')
+          .send({
+            project_id: projectId,
+            content: 'Precondition source.',
+            filename: `precond-${precondCounter}.txt`,
+          });
+        expect(created.status).toBe(201);
+        return created.body.id;
+      };
+
+      test('a write naming the current version is applied', async () => {
+        const id = await createDocument();
+
+        const response = await authenticatedTestClient(userToken)
+          .patch(`/api/v1/documents/${id}`)
+          .send({ title: 'v2', expected_version: 1 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.version).toBe(2);
+      });
+
+      test('a write naming a stale version is refused with the current one', async () => {
+        const id = await createDocument();
+
+        await authenticatedTestClient(userToken)
+          .patch(`/api/v1/documents/${id}`)
+          .send({ title: 'v2' });
+
+        const response = await authenticatedTestClient(userToken)
+          .patch(`/api/v1/documents/${id}`)
+          .send({ title: 'v3', expected_version: 1 });
+
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('VERSION_CONFLICT');
+        expect(response.body.error.meta.current_version).toBe(2);
+        expect(response.body.error.meta.expected_version).toBe(1);
+      });
+
+      test('If-Match carries the same precondition', async () => {
+        const id = await createDocument();
+
+        const response = await authenticatedTestClient(userToken)
+          .patch(`/api/v1/documents/${id}`)
+          .set('If-Match', '1')
+          .send({ title: 'v2' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.version).toBe(2);
+      });
+    });
   });
 
   describe('GET/PUT/PATCH /api/v1/documents/:id/tags', () => {

@@ -29,6 +29,7 @@ import {
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
+  writePreconditionOf,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -265,6 +266,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     path: body.path,
     metadata: body.metadata,
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
+    expectedVersion: writePreconditionOf(ctx),
   });
   ctx.body = updated;
 });

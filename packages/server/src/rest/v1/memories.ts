@@ -32,6 +32,7 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
+  writePreconditionOf,
 } from './helpers';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -468,6 +469,7 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
       body.metadata === undefined
         ? undefined
         : (body.metadata as Record<string, unknown> | null),
+    expectedVersion: writePreconditionOf(ctx),
   });
 });
 

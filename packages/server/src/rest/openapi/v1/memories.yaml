@@ -276,6 +276,7 @@ paths:
           schema:
             type: string
             example: mem_V1StGXR8Z5jdHi6B
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
         content:
@@ -298,6 +299,11 @@ paths:
                   nullable: true
                   additionalProperties: true
                   description: Replaces the memory's metadata. Pass null to clear.
+                expected_version:
+                  description: >-
+                    Refuses the write unless the memory is at this version.
+                  allOf:
+                    - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
       responses:
         '200':
           description: Memory updated
@@ -587,6 +593,13 @@ components:
           nullable: true
           description: The memory that replaced this one, when it was superseded. Null for valid memories.
           example: mem_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          description: >-
+            The memory's write version, starting at 1 and incremented on every
+            update. States a precondition against it with `expected_version`
+            or `If-Match` on `PUT /memories/{memory_id}`.
+          example: 1
         created_at:
           type: string
           format: date-time

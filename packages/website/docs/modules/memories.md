@@ -58,6 +58,7 @@ When a memory is created or updated, its `content` is embedded for semantic simi
 | `metadata`   | `object \| null`   | Arbitrary structured metadata attached to the memory    |
 | `invalidated_at` | `string \| null` | When the memory was superseded; `null` means currently valid — see [Temporal invalidation](#temporal-invalidation) |
 | `superseded_by_memory_id` | `string \| null` | The memory that replaced this one, when superseded |
+| `version`    | `integer` | Write version, starting at 1 and incremented on every update — see [Concurrent writes](#concurrent-writes) |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp                         |
 
@@ -240,6 +241,14 @@ with their original text and their own [assertions](#assertions), for audit.
 Superseding is the write outcome that produces an invalidation, whether the thresholds chose the
 memory or the caller [declared it](#declaring-the-supersede). `DELETE` remains the way to
 remove a memory outright.
+
+### Concurrent writes
+
+[`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) may name the version it is
+changing, either `expected_version` in the body or an `If-Match` header, and is refused with
+`409 VERSION_CONFLICT` when the memory has moved on since — see [Concurrent Writes](../advanced/concurrent-writes.md).
+A caller that states nothing still gets the version bump: two writers racing on the same memory
+serialize, and the loser sees the conflict rather than silently overwriting the winner.
 
 ### Tag Filtering
 

@@ -120,6 +120,18 @@ export class Memory extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare invalidatedAt: Date | null;
 
+  /**
+   * Claimed by a conditional `UPDATE … WHERE version = :expected`
+   * (`lib/writePrecondition.ts`), so two writers racing on one memory
+   * serialize instead of the second silently overwriting the first.
+   */
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+  })
+  declare version: number;
+
   @ForeignKey(() => {
     return Memory;
   })
