@@ -10,6 +10,7 @@ export const PUBLIC_ID_PREFIXES = {
   policy: 'pol_',
   apiKey: 'key_',
   document: 'doc_',
+  documentVersion: 'doc_ver_',
   actor: 'actor_',
   conversation: 'conv_',
   secret: 'sec_',

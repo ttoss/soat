@@ -593,6 +593,11 @@ export const ERROR_CODES = {
     description:
       "A task create request's `state` does not name a declared state of the workflow.",
   },
+  DOCUMENT_ALREADY_WITHDRAWN: {
+    httpStatus: 409,
+    description:
+      'The document is already withdrawn, so there is nothing to take out. Restore an earlier version to bring it back.',
+  },
   TRIGGER_FIRING_ABANDONED: {
     httpStatus: 500,
     description:

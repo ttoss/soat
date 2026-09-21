@@ -10,6 +10,7 @@ import { orchestrationRunIdempotencyKey } from './2026-09-18-orchestrationRunIde
 import { orchestrationNodeExecutionDispatches } from './2026-09-20-orchestrationNodeExecutionDispatches';
 import { triggerToolContext } from './2026-09-20-triggerToolContext';
 import { documentMetadataJsonb } from './2026-09-21-documentMetadataJsonb';
+import { documentVersions } from './2026-09-21-documentVersions';
 import { durableEventFirings } from './2026-09-21-durableEventFirings';
 
 /**
@@ -43,4 +44,5 @@ export const MIGRATIONS: Migration[] = [
   triggerToolContext,
   durableEventFirings,
   documentMetadataJsonb,
+  documentVersions,
 ];

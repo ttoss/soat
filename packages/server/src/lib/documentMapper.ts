@@ -41,7 +41,8 @@ export const mapDocument = (doc: MappableDocument) => {
     tags: doc.tags ?? undefined,
     ...mapDocumentChunkConfig(doc),
     status: doc.status as
-      'pending' | 'processing' | 'ready' | 'failed' | undefined,
+      'pending' | 'processing' | 'ready' | 'failed' | 'withdrawn' | undefined,
+    version: doc.version,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
   };

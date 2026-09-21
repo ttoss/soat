@@ -66,6 +66,7 @@ describe('webhook delivery outbox', () => {
 
   const emitFileCreated = (resourceId: string) => {
     emitEvent({
+      id: crypto.randomUUID(),
       type: 'files.created',
       projectId: 1,
       projectPublicId: projectId,

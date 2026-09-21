@@ -38,6 +38,13 @@ const VERSIONED_RESOURCES: Record<string, { module: string; update: string }> =
       update: 'updateOrchestration',
     },
     'Workflow.ts': { module: 'workflows.ts', update: 'updateWorkflow' },
+    // A document's write routes live on the documents router, but the write
+    // that states a precondition is the withdrawal, which is registered from
+    // `documentVersionRoutes.ts`.
+    'Document.ts': {
+      module: 'documentVersionRoutes.ts',
+      update: 'withdrawDocument',
+    },
   };
 
 /** The one place a route is allowed to read a precondition off a request. */
@@ -147,7 +154,11 @@ describe('write precondition contract', () => {
     '%s: the request body declares expected_version',
     (_model, { module }) => {
       const spec = readFileSync(
-        join(V1_DIR, '../openapi/v1', module.replace('.ts', '.yaml')),
+        join(
+          V1_DIR,
+          '../openapi/v1',
+          module.replace('VersionRoutes.ts', 's.ts').replace('.ts', '.yaml')
+        ),
         'utf-8'
       );
 

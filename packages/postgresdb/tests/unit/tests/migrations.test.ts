@@ -897,12 +897,69 @@ describe('2026-09-21-document-metadata-jsonb', () => {
       sql: `SELECT public_id FROM documents WHERE metadata @> '{"source":"crm"}'`,
     });
 
-    expect(rows.map((row) => row.public_id)).toEqual(['doc_object']);
+    expect(
+      rows.map((row) => {
+        return row.public_id;
+      })
+    ).toEqual(['doc_object']);
   });
 
   test('re-running it is a no-op', async () => {
     const result = await runnerFor({ client }).run({
       names: ['2026-09-21-document-metadata-jsonb'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});
+
+describe('2026-09-21-document-versions', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await client.query(`
+      CREATE TABLE documents (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL
+      );
+
+      INSERT INTO documents (public_id) VALUES ('doc_existing');
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-21-document-versions'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('the counter column exists', async () => {
+    expect(
+      await columnType({ client, table: 'documents', column: 'version' })
+    ).toBe('integer');
+  });
+
+  /**
+   * A document that existed before the archive did is at version 1 with no
+   * archived row, because there is nothing to archive: what it holds now is
+   * all it has ever been recorded as holding.
+   */
+  test('an existing document starts at version 1', async () => {
+    const [row] = await selectRows<{ version: number }>({
+      client,
+      sql: `SELECT version FROM documents WHERE public_id = 'doc_existing'`,
+    });
+
+    expect(row.version).toBe(1);
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-21-document-versions'],
     });
 
     expect(result.applied).toEqual([]);

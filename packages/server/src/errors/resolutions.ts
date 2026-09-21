@@ -75,6 +75,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Open a new session; an expired one cannot be revived. Raise the agent's session TTL if this happens sooner than the workload needs.",
   SESSION_CLOSED:
     'The session is closed and accepts no further messages. Open a new one, or fork this one to keep its history.',
+  DOCUMENT_ALREADY_WITHDRAWN:
+    'The document is already out of every default read. To bring it back, restore the version before the withdrawal.',
   TRIGGER_FIRING_ABANDONED:
     'The dispatch did not survive long enough to record an outcome. Check the target named by the trigger for work that ends the process, then re-fire the trigger manually.',
   VERSION_CONFLICT:

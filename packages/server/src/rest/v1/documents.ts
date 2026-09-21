@@ -23,6 +23,7 @@ import {
   readTagQuery,
 } from 'src/lib/tags';
 
+import { registerDocumentVersionRoutes } from './documentVersionRoutes';
 import type { AuthenticatedContext, ProjectOwned } from './helpers';
 import {
   requireAuth,
@@ -110,6 +111,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     : undefined;
   const pathPrefix = ctx.query.path_prefix as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
+  const includeWithdrawn = ctx.query.include_withdrawn === 'true';
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -141,6 +143,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       policyWhere,
       pathPrefix,
       tags,
+      includeWithdrawn,
       limit,
       offset,
     });
@@ -151,6 +154,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     projectIds,
     pathPrefix,
     tags,
+    includeWithdrawn,
     limit,
     offset,
   });
@@ -390,6 +394,7 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   ctx.body = result;
 });
 
+registerDocumentVersionRoutes({ documentsRouter, checkDocumentPermission });
 registerIngestionCallbackRoute({ documentsRouter });
 
 export { documentsRouter };

@@ -41,7 +41,8 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `filename`   | string         | Original filename                                                                                                  |
 | `content_type` | string       | Media type of the source file the document was ingested from (e.g. `application/pdf`). Absent when the underlying file is gone. |
 | `size`       | number         | File size in bytes                                                                                                 |
-| `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`. Plain-text documents are always `ready`. |
+| `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`, plus `withdrawn`. Plain-text documents are always `ready`. |
+| `version`    | number         | Content version, starting at `1` — see [Versioning](#versioning)                                                   |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
 | `metadata`   | object \| null | Arbitrary caller-supplied JSON metadata — never written or read by the server. Stored as JSON, so the structure written is the structure held; `null` on an update clears it. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) instead — see [Polling Ingestion Status](#polling-ingestion-status). |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
@@ -167,10 +168,40 @@ A document left in `processing` (or `pending`) by a dead worker is **self-recove
 | `processing` | Actively extracting pages, chunking, and generating embeddings                    |
 | `ready`      | Fully indexed; content and chunk embeddings are available for search              |
 | `failed`     | Processing encountered an error. The `error` field on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) describes it |
+| `withdrawn`  | Taken out of listings and knowledge search, with its chunks dropped — see [Withdrawal](#withdrawal) |
 
 `error` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)); with an [Ingestion Rule](./ingestion-rules.md), also `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT`.
 
 Embedding concurrency is bounded (default 5 simultaneous requests).
+
+### Versioning
+
+A document's content and annotations are versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create; every write that **changes** the content, `title`, `path`, `metadata`, `tags` or chunk configuration increments `version` and archives the state it replaced. Re-writing the state the document already holds archives nothing, so two version numbers never denote the same content — which is what lets a run cite a version to say what it read.
+
+A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the document has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
+
+| Operation | Endpoint |
+| --- | --- |
+| List versions, newest first | [`GET /api/v1/documents/{document_id}/versions`](/docs/api/documents/list-document-versions) |
+| Fetch one version | [`GET /api/v1/documents/{document_id}/versions/{version}`](/docs/api/documents/get-document-version) |
+| Roll back to a version | [`POST /api/v1/documents/{document_id}/versions/{version}/restore`](/docs/api/documents/restore-document-version) |
+
+**Restore appends.** Restoring v1 of a document at v2 writes v1's content as **v3**, so a run citing v2 still resolves. It runs through the ordinary update path, so the content is re-chunked and re-embedded; restoring the state the document already holds is a no-op.
+
+A snapshot is the whole state, not a diff. What a restore has to reproduce is what a run read, which is a read *by version*, and a diff chain would have to be replayed to answer that.
+
+### Withdrawal
+
+[`POST /api/v1/documents/{document_id}/withdraw`](/docs/api/documents/withdraw-document) takes a document out of every default read while keeping its history. The withdrawal is archived as a **tombstone version** carrying no content, so one mechanism answers what a document holds now and there is no second lifecycle flag for a reader to miss.
+
+- It leaves [`GET /api/v1/documents`](/docs/api/documents/list-documents); `?include_withdrawn=true` shows it again.
+- Its chunks are **dropped from the index**, so it leaves knowledge search entirely. A withdrawn document therefore costs a live search nothing, and `include_withdrawn` has no meaning there.
+- It stays readable by id, which is what makes its history readable and its restore possible.
+- Withdrawing an already-withdrawn document is `409 DOCUMENT_ALREADY_WITHDRAWN`.
+
+Restoring any content version brings it back: the content is re-chunked, the document returns to listings and search, and a `documents.restored` event fires. Restoring the tombstone itself is `400` — it holds no content, so restore the version before it.
+
+Withdrawal does not apply under `/.system/`: a [platform-written document](#platform-written-documents) keeps the owning module's lifecycle. `DELETE` stays what it is — permanent, and it removes the backing file.
 
 ### File Ingestion and Chunking
 

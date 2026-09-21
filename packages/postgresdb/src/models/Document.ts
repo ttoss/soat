@@ -104,12 +104,33 @@ export class Document extends Model {
   })
   declare chunkOverlap: number | null;
 
+  /**
+   * `withdrawn` is not a fifth ingestion state but the projection of one: it
+   * says the document's current version is a tombstone, so that "is this
+   * document live" is one indexed predicate rather than a correlated lookup
+   * into `document_versions` on every listing row and every knowledge hit.
+   *
+   * The version is still the record — it is what a restore reads and what says
+   * when and by whom — and `documentWithdrawal.ts` is the only writer of this
+   * value, so the two cannot disagree.
+   */
   @Column({
     type: DataType.STRING(16),
     allowNull: false,
     defaultValue: 'ready',
   })
-  declare status: 'pending' | 'processing' | 'ready' | 'failed';
+  declare status: 'pending' | 'processing' | 'ready' | 'failed' | 'withdrawn';
+
+  /**
+   * The document's content version, starting at 1. Every write that changes
+   * the content or its annotations archives a `DocumentVersion` and bumps it.
+   */
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+  })
+  declare version: number;
 
   /**
    * Set while `status = 'processing'` and a converter has deferred with

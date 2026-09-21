@@ -166,6 +166,7 @@ export const PROJECT_PARENT_SCOPED_MODELS = [
   'OrchestrationRunTask',
   'ConversationMessage',
   'AgentVersion',
+  'DocumentVersion',
   'Document',
 ] as const satisfies readonly (keyof typeof db)[];
 
@@ -300,8 +301,16 @@ const PROJECT_CASCADE_PRE_STEPS: Partial<
   },
 
   // Document.fileId is RESTRICT; DocumentChunk cascades from Document.
+  // DocumentVersion has no projectId of its own and its FK to Document is
+  // RESTRICT, so archived states go by parent document id before the
+  // documents do.
   File: async ({ ids, transaction }) => {
     if (ids.documentIds.length === 0) return;
+
+    await db.DocumentVersion.destroy({
+      where: { documentId: ids.documentIds },
+      transaction,
+    });
 
     await db.Document.destroy({
       where: { id: ids.documentIds },

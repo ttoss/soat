@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
@@ -398,6 +400,7 @@ describe('Exceptions', () => {
       data: Record<string, unknown>
     ) => {
       emitEvent({
+        id: randomUUID(),
         type,
         projectId: projectInternalId,
         projectPublicId: projectId,
@@ -544,6 +547,7 @@ describe('Exceptions', () => {
       process.on('unhandledRejection', onUnhandled);
       try {
         emitEvent({
+          id: randomUUID(),
           type: 'orchestration_runs.failed',
           projectId: 999999999,
           projectPublicId: 'proj_does_not_exist',

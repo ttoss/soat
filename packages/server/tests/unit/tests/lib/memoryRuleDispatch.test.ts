@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -154,6 +155,7 @@ describe('memory rule dispatch', () => {
   }): SoatEvent => {
     const where = args.where ?? scope;
     return {
+      id: randomUUID(),
       type: 'agents.generation.completed',
       projectId: where.internalProjectId,
       projectPublicId: where.projectId,
@@ -365,6 +367,7 @@ describe('memory rule dispatch', () => {
       });
 
       await dispatchMemoryRules({
+        id: randomUUID(),
         type: 'conversations.message.generated',
         projectId: where.internalProjectId,
         projectPublicId: where.projectId,
@@ -598,6 +601,7 @@ describe('memory rule dispatch', () => {
       });
 
       await dispatchMemoryRules({
+        id: randomUUID(),
         type: 'conversations.message.generated',
         projectId: where.internalProjectId,
         projectPublicId: where.projectId,
@@ -673,6 +677,7 @@ describe('memory rule dispatch', () => {
       });
 
       await dispatchMemoryRules({
+        id: randomUUID(),
         type: 'conversations.message.generated',
         projectId: where.internalProjectId,
         projectPublicId: where.projectId,
