@@ -3,6 +3,7 @@ import type { AuthUser, Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { fireTriggerNow } from 'src/lib/triggerDispatch';
 import { getTriggerFiring, listTriggerFirings } from 'src/lib/triggerFirings';
 import {
@@ -307,7 +308,13 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     triggerPublicId: ctx.params.trigger_id,
     source: 'manual',
     fireInput: body.input,
-    fireToolContext: parseToolContextBody(body.tool_context),
+    // The fired half is caller data on a live request, and a firing whose
+    // target is a tool reaches it with no generation in between — so the
+    // reserved identity keys are stripped here, where the caller's bytes
+    // arrive, rather than trusted.
+    fireToolContext: sanitizeCallerToolContext(
+      parseToolContextBody(body.tool_context)
+    ),
   });
 
   ctx.status = 200;

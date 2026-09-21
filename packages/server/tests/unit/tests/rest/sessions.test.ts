@@ -164,15 +164,15 @@ describe('Sessions', () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.tool_context).toEqual({
-        user_id: 'u1',
-        env: 'test',
+      const stored = await db.Session.findOne({
+        where: { publicId: response.body.id },
       });
+      expect(stored?.toolContext).toEqual({ user_id: 'u1', env: 'test' });
     });
 
     // Its keys are HTTP header names, not SOAT field names, so every shape is
     // stored as sent and the outbound header is predictable from the request
-    // body alone. Pinned in all three places it could drift.
+    // body alone.
     test('stores tool_context keys verbatim, whatever their case', async () => {
       const toolContext = {
         tenant_external_id: 'snake',
@@ -191,30 +191,54 @@ describe('Sessions', () => {
         where: { publicId: response.body.id },
       });
       expect(stored?.toolContext).toEqual(toolContext);
-      expect(response.body.tool_context).toEqual(toolContext);
     });
 
-    // A leading-uppercase key coming back as `_pascal_key` would mean reading a
-    // session and re-sending its `tool_context` changes which header goes out.
-    test('tool_context survives a read-modify-write round-trip', async () => {
+    // The bag is what a session's tools authorize with — a per-user token as
+    // much as a value the project would call public — so reading a session is
+    // never a way to obtain one.
+    test('no read returns the bag', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/sessions')
         .send({
           agent_id: agentId,
-          tool_context: { PascalKey: 'a', snake_key: 'b' },
+          tool_context: { ocaToken: 'tok_never_read' },
+        });
+      expect(created.status).toBe(201);
+      expect(JSON.stringify(created.body)).not.toContain('tok_never_read');
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${created.body.id}`
+      );
+      expect(read.status).toBe(200);
+      expect(JSON.stringify(read.body)).not.toContain('tok_never_read');
+
+      const listed = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}`
+      );
+      expect(listed.status).toBe(200);
+      expect(JSON.stringify(listed.body)).not.toContain('tok_never_read');
+    });
+
+    // Where a generation runs, the chokepoint stamps the trusted identity over
+    // the caller's. A session's stored bag also reaches a `builtin` tool call,
+    // so a forged key is dropped on the write rather than carried by the row.
+    test('strips the reserved identity keys from the stored bag', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: {
+            Session_ID: 'ses_forged',
+            actor_id: 'act_forged',
+            tenant: 'acme',
+          },
         });
 
-      const echoed = created.body.tool_context;
-
-      const updated = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/sessions/${created.body.id}`)
-        .send({ tool_context: echoed });
-
-      expect(updated.status).toBe(200);
-      expect(updated.body.tool_context).toEqual({
-        PascalKey: 'a',
-        snake_key: 'b',
+      expect(response.status).toBe(201);
+      const stored = await db.Session.findOne({
+        where: { publicId: response.body.id },
       });
+      expect(stored?.toolContext).toEqual({ tenant: 'acme' });
     });
 
     // Keys an inbound normalizer would collapse into one (`user_id` → `userId`)
@@ -229,9 +253,33 @@ describe('Sessions', () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.tool_context).toEqual({
+      const stored = await db.Session.findOne({
+        where: { publicId: response.body.id },
+      });
+      expect(stored?.toolContext).toEqual({
         user_id: 'snake',
         userId: 'camel',
+      });
+    });
+
+    // A session forwards its values as written, so a `{{secret:...}}` in one is
+    // a literal, not a reference: it is stored as typed and never held to a
+    // secret that exists. A trigger, whose firing resolves them, is the carrier
+    // that refuses a dangling one.
+    test('stores a ref-shaped value as written', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: { ocaToken: '{{secret:sec_doesnotexist}}' },
+        });
+
+      expect(response.status).toBe(201);
+      const stored = await db.Session.findOne({
+        where: { publicId: response.body.id },
+      });
+      expect(stored?.toolContext).toEqual({
+        ocaToken: '{{secret:sec_doesnotexist}}',
       });
     });
 
@@ -427,7 +475,29 @@ describe('Sessions', () => {
         .send({ tool_context: { env: 'prod' } });
 
       expect(response.status).toBe(200);
-      expect(response.body.tool_context).toEqual({ env: 'prod' });
+      expect(response.body.tool_context).toBeUndefined();
+      const stored = await db.Session.findOne({
+        where: { publicId: sessionId },
+      });
+      expect(stored?.toolContext).toEqual({ env: 'prod' });
+    });
+
+    // One representation for "no context": an explicit empty bag clears the
+    // stored one rather than persisting a bag with nothing in it.
+    test('an empty bag clears the stored one', async () => {
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${sessionId}`)
+        .send({ tool_context: { env: 'prod' } });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${sessionId}`)
+        .send({ tool_context: {} });
+
+      expect(response.status).toBe(200);
+      const stored = await db.Session.findOne({
+        where: { publicId: sessionId },
+      });
+      expect(stored?.toolContext).toBeNull();
     });
 
     test('rejects an invalid tool_context key on update', async () => {

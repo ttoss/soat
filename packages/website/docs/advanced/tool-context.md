@@ -13,7 +13,7 @@ A value is never interpolated into a URL or into arguments the model chooses. Th
 | Surface | Field |
 | --- | --- |
 | [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) | `tool_context` in the body |
-| [`POST /api/v1/sessions`](/docs/api/sessions/create-session) / [`PATCH /api/v1/sessions/{session_id}`](/docs/api/sessions/update-session) | `tool_context` — persisted on the session, applied to every generation in it |
+| [`POST /api/v1/sessions`](/docs/api/sessions/create-session) / [`PATCH /api/v1/sessions/{session_id}`](/docs/api/sessions/update-session) | `tool_context` — persisted on the session, applied to every generation in it. Write-only (see [Tool context](../modules/sessions.md#tool-context)) |
 | [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and `.../generate` | `tool_context` — per-request, this generation only |
 | [`POST /api/v1/conversations/{conversation_id}/generate`](/docs/api/conversations/generate-conversation-message) | `tool_context` in the body |
 | [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, to the tool call of every `tool` and `poll` node, and inherited by `loop`/`sub_orchestration` child runs. Write-only — narrowable per node with [`context_keys`](../modules/orchestrations.md#narrowing-what-a-child-run-inherits) (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
@@ -140,7 +140,7 @@ The header name is the context prefix (`X-Soat-Context-` unless your deployment 
 
 `tenant_external_id` and `tenantExternalId` are two different keys and produce two different headers.
 
-**Keys are never case-converted.** Unlike every other REST field, `tool_context` keys are not rewritten between snake_case and camelCase: they are stored, echoed in responses, and forwarded exactly as written, on REST, in formation templates, and over MCP.
+**Keys are never case-converted.** Unlike every other REST field, `tool_context` keys are not rewritten between snake_case and camelCase: they are stored and forwarded exactly as written, on REST, in formation templates, and over MCP.
 
 ### Read the header case-insensitively
 
@@ -172,6 +172,8 @@ session tool_context  <  per-request tool_context
 ```
 
 The three auto-populated keys (`session_id`, `actor_id`, `actor_external_id`) are always taken from the session and its actor; a caller-supplied value for one of them, stored or per-request, is ignored. A tool endpoint can rely on these three headers reflecting the real session/actor.
+
+Where no generation runs — an orchestration `tool` or `poll` node, a trigger whose target is a tool, a task dispatch, [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) — the three keys are dropped from the caller's bag instead, in any casing, and no value replaces them. So a `X-Soat-Context-session_id` header is always server-derived: it is present only when a session is behind the call.
 
 ## Validation
 

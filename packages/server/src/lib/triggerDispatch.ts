@@ -8,7 +8,7 @@ import type { GenerationInputMessage } from './generationInputMessages';
 import { buildSrn } from './iam';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { createJwtIsAllowed } from './permissions';
-import { resolveSecretRefsInString } from './secrets';
+import { resolveStoredToolContext } from './toolContextCarrier';
 import { callTool } from './tools';
 import {
   createFiringRecord,
@@ -300,44 +300,6 @@ const resolveRunAsAuthHeader = async (args: {
   })}`;
 };
 
-/**
- * The context bag a firing forwards: the trigger's stored bag, overridden per
- * key by a manual fire's, with every `{{secret:...}}` resolved.
- *
- * Resolved here rather than stored resolved, so rotating the secret changes
- * what the next firing sends without touching the trigger, and the plaintext
- * never rests outside the secret store.
- */
-/**
- * Only the stored bag is secret-resolved. A stored value is a declaration whose
- * refs were checked against this project when it was written; a firing's own
- * bag is caller data on a live request, and resolving it would let anyone who
- * may fire a trigger name any secret in the project and have the server hand
- * the plaintext to the target. A fired key still wins, forwarded as written.
- */
-const resolveFiringToolContext = async (args: {
-  stored: Record<string, string> | null;
-  fired?: Record<string, string> | null;
-  projectId: number;
-}): Promise<Record<string, string> | undefined> => {
-  const resolvedStored = await Promise.all(
-    Object.entries(args.stored ?? {}).map(
-      async ([key, value]): Promise<[string, string]> => {
-        return [
-          key,
-          await resolveSecretRefsInString({ value, projectId: args.projectId }),
-        ];
-      }
-    )
-  );
-
-  const merged = {
-    ...Object.fromEntries(resolvedStored),
-    ...(args.fired ?? {}),
-  };
-  return Object.keys(merged).length === 0 ? undefined : merged;
-};
-
 /** Pre-flight input validation per target type (throws 400 before any record). */
 const assertFireInputValid = async (args: {
   trigger: InstanceType<(typeof db)['Trigger']>;
@@ -413,9 +375,9 @@ export const prepareFiring = async (args: {
   };
   await assertFireInputValid({ trigger, input: effectiveInput });
 
-  const effectiveToolContext = await resolveFiringToolContext({
+  const effectiveToolContext = await resolveStoredToolContext({
     stored: trigger.toolContext,
-    fired: args.fireToolContext,
+    supplied: args.fireToolContext,
     projectId: trigger.projectId as number,
   });
 

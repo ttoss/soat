@@ -1708,7 +1708,9 @@ components:
           type: object
           additionalProperties: true
           nullable: true
-          description: Optional context object passed to tool calls
+          description: >-
+            Optional context object passed to tool calls. Write-only: no read
+            of a session returns it.
 
     IngestionRuleResourceProperties:
       description: >-

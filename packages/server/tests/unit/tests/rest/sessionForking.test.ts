@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -225,13 +227,19 @@ describe('Session forking', () => {
         .post(`/api/v1/sessions/${parentId}/fork`)
         .send({});
       expect(inherited.status).toBe(201);
-      expect(inherited.body.tool_context).toEqual({ tenant: 'acme' });
+      const inheritedRow = await db.Session.findOne({
+        where: { publicId: inherited.body.id },
+      });
+      expect(inheritedRow?.toolContext).toEqual({ tenant: 'acme' });
 
       const overridden = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${parentId}/fork`)
         .send({ tool_context: { tenant: 'globex' } });
       expect(overridden.status).toBe(201);
-      expect(overridden.body.tool_context).toEqual({ tenant: 'globex' });
+      const overriddenRow = await db.Session.findOne({
+        where: { publicId: overridden.body.id },
+      });
+      expect(overriddenRow?.toolContext).toEqual({ tenant: 'globex' });
     });
 
     test('tags are set on the fork', async () => {

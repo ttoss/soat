@@ -62,7 +62,7 @@ import {
 } from './orchestrationStartRun';
 import { kickWorker } from './orchestrationWorker';
 import type { RequestPrincipal } from './principals';
-import { assertValidToolContextKeys } from './toolContext';
+import { acceptStoredToolContext } from './toolContextCarrier';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:orchestrations');
@@ -714,7 +714,13 @@ export const startOrchestrationRun = async (
     wait: args.wait,
   });
 
-  assertValidToolContextKeys(args.toolContext);
+  // A `tool` node calls the tool with the run's bag and no generation in
+  // between, so the reserved identity keys are stripped before the row is
+  // written rather than at a chokepoint this path does not pass.
+  const toolContext = await acceptStoredToolContext({
+    toolContext: args.toolContext,
+    secretRefs: 'verbatim',
+  });
 
   const orch = await findOrchestrationForStartRun({
     orchestrationPublicId: args.orchestrationPublicId,
@@ -736,7 +742,7 @@ export const startOrchestrationRun = async (
       state,
       artifacts,
       input: args.input,
-      toolContext: args.toolContext,
+      toolContext,
       metadata: args.metadata,
       triggerId: args.triggerId,
       principal: args.principal,

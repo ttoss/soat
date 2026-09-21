@@ -1237,6 +1237,47 @@ describe('Triggers', () => {
       );
     });
 
+    // A firing whose target is a tool reaches it with no generation in
+    // between, so nothing downstream would overwrite a forged identity key:
+    // both halves of the bag drop them instead.
+    test('drops the reserved identity keys from the stored and the fired bag', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-reserved-${Date.now()}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { message: 'go' },
+          tool_context: { Session_ID: 'ses_forged', locale: 'pt-BR' },
+        });
+      expect(created.status).toBe(201);
+
+      const stored = await db.Trigger.findOne({
+        where: { publicId: created.body.id },
+      });
+      expect(stored?.toolContext).toEqual({ locale: 'pt-BR' });
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx_reserved',
+        traceId: 'trc_ctx_reserved',
+        status: 'completed',
+        output: { model: 'llama3.2', content: 'done', finishReason: 'stop' },
+      });
+
+      const fired = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({ tool_context: { actor_id: 'act_forged', tenant: 'acme' } });
+      expect(fired.status).toBe(200);
+
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolContext: { locale: 'pt-BR', tenant: 'acme' },
+        })
+      );
+    });
+
     test('a fire-time bag overrides the stored one per key', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')

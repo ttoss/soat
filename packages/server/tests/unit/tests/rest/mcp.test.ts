@@ -1695,16 +1695,18 @@ describe('MCP tools - happy path', () => {
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(result.tool_context).toEqual({ userId: 'u1' });
+      const stored = await db.Session.findOne({
+        where: { publicId: result.id },
+      });
+      expect(stored?.toolContext).toEqual({ userId: 'u1' });
     });
 
     // A `toolContext` key is an HTTP header name, not a SOAT field name, so
-    // rewriting it on read breaks the round-trip and changes which header the
-    // tool receives.
+    // rewriting it on the way in changes which header the tool receives.
     test('create-session preserves non-camelCase toolContext keys verbatim', async () => {
       const toolContext = {
-        actor_external_id: 'snake',
-        'actor-external-id': 'kebab',
+        tenant_external_id: 'snake',
+        'tenant-external-id': 'kebab',
         PascalKey: 'pascal',
       };
 
@@ -1713,13 +1715,32 @@ describe('MCP tools - happy path', () => {
         tool_context: toolContext,
       });
       expect(created.status).toBe(200);
-      expect(parseResult(created).tool_context).toEqual(toolContext);
+
+      const stored = await db.Session.findOne({
+        where: { publicId: parseResult(created).id },
+      });
+      expect(stored?.toolContext).toEqual(toolContext);
+    });
+
+    // Over MCP as over REST: the bag is what the session's tools authorize
+    // with, so no read hands it back.
+    test('no session read returns the bag', async () => {
+      const created = await mcpCall('create-session', {
+        agent_id: sessionAgentId,
+        tool_context: { ocaToken: 'tok_never_read' },
+      });
+      expect(created.status).toBe(200);
+      expect(JSON.stringify(parseResult(created))).not.toContain(
+        'tok_never_read'
+      );
 
       const fetched = await mcpCall('get-session', {
         session_id: parseResult(created).id,
       });
       expect(fetched.status).toBe(200);
-      expect(parseResult(fetched).tool_context).toEqual(toolContext);
+      expect(JSON.stringify(parseResult(fetched))).not.toContain(
+        'tok_never_read'
+      );
     });
 
     test('list-sessions filtered by agentId returns sessions', async () => {
