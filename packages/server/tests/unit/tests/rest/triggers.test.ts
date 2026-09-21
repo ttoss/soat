@@ -41,6 +41,7 @@ describe('Triggers', () => {
         'triggers:GetTriggerFiring',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
+        'orchestrations:GetRun',
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
         'tools:CreateTool',
@@ -1151,6 +1152,45 @@ describe('Triggers', () => {
       expect(mockCreateGeneration).toHaveBeenCalledWith(
         expect.objectContaining({ toolContext: { ocaToken: 'the-real-token' } })
       );
+    });
+
+    // The secret store's guarantee is that a value never comes back on a read:
+    // even `GET /secrets/{id}` reports `has_value` and not the value. A run
+    // carries the bag it was started with on its own read, so resolving a
+    // stored reference into one hands the plaintext to every principal holding
+    // `orchestrations:GetRun`.
+    test('a resolved {{secret:...}} does not surface on an orchestration run read', async () => {
+      const secret = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: `trigger-ctx-run-${Date.now()}`,
+          value: 'must-not-surface',
+        });
+      expect(secret.status).toBe(201);
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-run-secret-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { ocaToken: `{{secret:${secret.body.id}}}` },
+        });
+      expect(created.status).toBe(201);
+
+      const fired = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({});
+      expect(fired.status).toBe(200);
+
+      const run = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${fired.body.result.result_id}`
+      );
+      expect(run.status).toBe(200);
+      expect(JSON.stringify(run.body)).not.toContain('must-not-surface');
     });
 
     // The stored bag is a declaration its author is validated against; a

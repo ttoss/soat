@@ -191,6 +191,12 @@ export class OrchestrationRun extends Model {
   // Forwarded as `X-Soat-Context-*` headers on the tool calls of every
   // generation the run spawns. Persisted rather than threaded from the
   // request because the resume/wake/redrive paths carry no request body.
+  //
+  // **Write-only** — absent from `mapOrchestrationRun`. The bag carries
+  // credentials, a trigger's `{{secret:...}}` among them resolved to its
+  // plaintext, and a run is a record every principal who may read runs can
+  // read. Echoing it would make reading a run the one way to read a secret the
+  // secret store itself never returns.
   @Column({
     type: DataType.JSONB,
     allowNull: true,

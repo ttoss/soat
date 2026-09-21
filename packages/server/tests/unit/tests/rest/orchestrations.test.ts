@@ -1391,7 +1391,9 @@ describe('Orchestrations', () => {
     // A run carries `tool_context` for its whole lifetime, so a
     // scheduled/orchestrated flow can hand a per-user credential to the tools its
     // agents call. The bag lives on the run row rather than on the request, which
-    // is what makes it survive a pause and a background drive.
+    // is what makes it survive a pause and a background drive. What it carries is
+    // a credential, so every case here asserts on the `createGeneration` args and
+    // none on a run body: the bag is write-only.
     describe('tool_context', () => {
       // One provider/agent pair for the whole block: every case here asserts on
       // the `createGeneration` args, never on a real provider call.
@@ -1489,10 +1491,7 @@ describe('Orchestrations', () => {
             });
           expect(runRes.status).toBe(201);
           expect(runRes.body.status).toBe('succeeded');
-          expect(runRes.body.tool_context).toEqual({
-            ocaToken: 'tok_abc',
-            tenant: 'acme',
-          });
+          expect(runRes.body.tool_context).toBeUndefined();
 
           expect(generationSpy).toHaveBeenCalledTimes(1);
           expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
@@ -1504,10 +1503,7 @@ describe('Orchestrations', () => {
             `/api/v1/orchestration-runs/${runRes.body.id}`
           );
           expect(getRunRes.status).toBe(200);
-          expect(getRunRes.body.tool_context).toEqual({
-            ocaToken: 'tok_abc',
-            tenant: 'acme',
-          });
+          expect(getRunRes.body.tool_context).toBeUndefined();
         } finally {
           generationSpy.mockRestore();
         }
@@ -1600,7 +1596,55 @@ describe('Orchestrations', () => {
         }
       });
 
-      test('a run started without tool_context reports null and forwards nothing', async () => {
+      // The bag holds what a tool authorizes with, and a trigger-started run
+      // resolves a `{{secret:...}}` reference into it. A run is readable by
+      // every principal holding `orchestrations:GetRun`, so returning the bag
+      // would make reading a run the one way to read a value the secret store
+      // itself never returns.
+      test('a run read never returns the bag', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run With Write Only Context',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { question: 'hello' },
+              tool_context: { ocaToken: 'tok_never_read' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(JSON.stringify(runRes.body)).not.toContain('tok_never_read');
+
+          const getRunRes = await authenticatedTestClient(userToken).get(
+            `/api/v1/orchestration-runs/${runRes.body.id}`
+          );
+          expect(getRunRes.status).toBe(200);
+          expect(JSON.stringify(getRunRes.body)).not.toContain(
+            'tok_never_read'
+          );
+
+          const listRes = await authenticatedTestClient(userToken).get(
+            `/api/v1/orchestration-runs?orchestration_id=${createRes.body.id}`
+          );
+          expect(listRes.status).toBe(200);
+          expect(JSON.stringify(listRes.body)).not.toContain('tok_never_read');
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
+      test('a run started without tool_context forwards nothing', async () => {
         const createRes = await authenticatedTestClient(userToken)
           .post('/api/v1/orchestrations')
           .send({
@@ -1622,7 +1666,6 @@ describe('Orchestrations', () => {
               input: { question: 'hello' },
             });
           expect(runRes.status).toBe(201);
-          expect(runRes.body.tool_context).toBeNull();
           expect(generationSpy.mock.calls[0]![0].toolContext).toBeUndefined();
         } finally {
           generationSpy.mockRestore();
@@ -1671,9 +1714,7 @@ describe('Orchestrations', () => {
             .send({ node_id: 'gate', output: { decision: 'yes' } });
           expect(resumeRes.status).toBe(200);
           expect(resumeRes.body.status).toBe('succeeded');
-          expect(resumeRes.body.tool_context).toEqual({
-            ocaToken: 'tok_paused',
-          });
+          expect(resumeRes.body.tool_context).toBeUndefined();
 
           expect(generationSpy).toHaveBeenCalledTimes(1);
           expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({

@@ -66,7 +66,6 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `pause_reason`     | string \| null | The reason supplied with the pause, when one was               |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
-| `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of the run — every `agent` node's generation, and every `tool` / `poll` node's call (see [Run Tool Context](#run-tool-context)) |
 | `metadata`         | object \| null | Caller-owned annotations supplied at run creation and returned verbatim; never merged into `state` (see [Run Metadata](#run-metadata)) |
 | `idempotency_key`  | string \| null | Deduplication key supplied at run creation, unique within the project (see [Starting a run at most once](#starting-a-run-at-most-once)) |
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
@@ -553,7 +552,9 @@ Each generation carries its own `trace_id` for the full [trace](./traces.md) of 
 
 `start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair becomes one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes, so a per-user credential reaches the tools without living in the graph.
 
-The bag is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
+The bag is **write-only**: it is accepted at run start and never returned on a run read, because what it carries is a credential and a run is a record every principal who may read runs can read.
+
+It is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
 
 ```bash
 soat start-orchestration-run \

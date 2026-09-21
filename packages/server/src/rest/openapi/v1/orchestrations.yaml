@@ -1375,15 +1375,6 @@ components:
           type: object
           nullable: true
           description: Initial input provided at run creation.
-        tool_context:
-          type: object
-          additionalProperties:
-            type: string
-          nullable: true
-          description: >-
-            The `tool_context` supplied at run creation, forwarded as
-            `X-Soat-Context-<key>` headers on every tool call the run's agent
-            nodes make. Null when the run was started without one.
         metadata:
           type: object
           additionalProperties: true
@@ -1676,7 +1667,9 @@ components:
 
             The bag is stored on the run and re-read on every step, so it
             survives an `awaiting_input` pause, a `sleeping` wait, a background
-            worker drive and a crash redrive. A key that is not a valid HTTP
+            worker drive and a crash redrive. It is **write-only**: a run is a
+            record every principal who may read runs can read, and a credential
+            in it is not theirs to see, so it is never returned on one. A key that is not a valid HTTP
             header name, or two keys that map to the same header, are rejected
             with `400 INVALID_TOOL_CONTEXT_KEY` and no run is created.
 

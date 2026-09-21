@@ -2062,8 +2062,10 @@ ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-r
   --tool-context '{"ocaToken":"smoke-run-token"}' \
   --metadata '{"tenant_account_id":"smoke-tenant-42"}' \
   --input '{"theme":"worker-fleet"}')
-if [ "$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
-  echo "ERROR: start-orchestration-run did not persist tool_context" >&2
+# The bag is write-only: accepted above, never handed back, so a run cannot be
+# read to recover the credential its tool calls carry.
+if ! printf '%s\n' "$ORCH_ASYNC_RESP" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: start-orchestration-run returned tool_context, which is write-only" >&2
   printf '%s\n' "$ORCH_ASYNC_RESP" >&2
   exit 1
 fi
@@ -2106,9 +2108,8 @@ if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.state.title')" != "worker-flee
   printf '%s\n' "$ORCH_ASYNC_GET" >&2
   exit 1
 fi
-# The bag survived the enqueue → claim → drive → settle round trip.
-if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
-  echo "ERROR: worker-drained run lost its tool_context" >&2
+if ! printf '%s\n' "$ORCH_ASYNC_GET" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: get-orchestration-run returned tool_context, which is write-only" >&2
   printf '%s\n' "$ORCH_ASYNC_GET" >&2
   exit 1
 fi
@@ -6907,10 +6908,10 @@ fi
 echo "Automated transition attribution: OK"
 
 # The dispatched run carries the task's tool_context, so its agent nodes call
-# tools with the credential the task was moved with. The run is where the
-# bag is readable; the task never returns it. The run id comes from the run list,
-# not the task history — this flow's `finish` row is recorded as the user that
-# started the chain with no run id attached.
+# tools with the credential the task was moved with — and holds it the way the
+# task does, without handing it back on a read. The run id comes from the run
+# list, not the task history — this flow's `finish` row is recorded as the user
+# that started the chain with no run id attached.
 SELF_RUNS=$($SOAT_CLI list-orchestration-runs --orchestration-id "$SELF_ORCH_ID")
 SELF_RUN_ID=$(printf '%s\n' "$SELF_RUNS" | jq -r '.data[0].id // empty')
 if [ -z "$SELF_RUN_ID" ]; then
@@ -6919,13 +6920,12 @@ if [ -z "$SELF_RUN_ID" ]; then
   exit 1
 fi
 SELF_RUN_GET=$($SOAT_CLI get-orchestration-run --orchestration-run-id "$SELF_RUN_ID")
-if ! printf '%s\n' "$SELF_RUN_GET" | jq -e \
-  '.tool_context.ocaToken == "smoke-task-token" and .tool_context.tenant == "acme"' >/dev/null 2>&1; then
-  echo "ERROR: the task-dispatched run did not inherit the task's tool_context" >&2
+if ! printf '%s\n' "$SELF_RUN_GET" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: the task-dispatched run echoed tool_context back" >&2
   printf '%s\n' "$SELF_RUN_GET" >&2
   exit 1
 fi
-echo "Task tool_context reached the dispatched run: OK"
+echo "Task-dispatched run keeps its tool_context unreadable: OK"
 
 # Write-only: a task never echoes the bag back, on create or on read.
 if ! printf '%s\n' "$SELF_TASK_RESP" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
