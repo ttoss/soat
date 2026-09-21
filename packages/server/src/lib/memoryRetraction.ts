@@ -6,10 +6,7 @@ import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { mapMemory, memories } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
-import {
-  assertWritePrecondition,
-  versionConflict,
-} from 'src/lib/writePrecondition';
+import { versionConflict } from 'src/lib/writePrecondition';
 
 const log = createDebug('soat:memories');
 
@@ -40,40 +37,37 @@ export const retractMemory = async (args: {
      answers `404` before reaching here. */
   if (!entry) return null;
 
-  assertWritePrecondition({
-    expectedVersion: args.expectedVersion,
-    currentVersion: entry.version,
-    resourceLabel: 'Memory',
-    resourceId: entry.publicId,
-  });
+  if (entry.invalidatedAt) {
+    throw new DomainError(
+      'MEMORY_ALREADY_INVALIDATED',
+      `Memory '${entry.publicId}' no longer holds.`,
+      { memory_id: entry.publicId }
+    );
+  }
 
-  // Validity is part of the claim, not a check before it: a supersede retires
-  // its target without touching the counter, so a `where` naming the version
-  // alone would let a retraction land on a memory that a concurrent write had
-  // already replaced — leaving a row both superseded and retracted.
+  // One conditional `UPDATE` carries both halves of the precondition. It claims
+  // the version the caller named, falling back to the one just read, so a stale
+  // claim and a lost race are refused by the same statement. Validity is in the
+  // `where` too: a supersede retires its target without touching the counter,
+  // so a claim on the version alone would land a retraction on a memory a
+  // concurrent write had already replaced — a row both superseded and
+  // retracted.
   const currentVersion = entry.version;
   const [claimed] = await db.Memory.update(
     { invalidatedAt: new Date(), version: currentVersion + 1 },
     {
       where: {
         id: entry.id,
-        version: currentVersion,
+        version: args.expectedVersion ?? currentVersion,
         ...validMemoryWhere(),
       },
     }
   );
 
   if (claimed === 0) {
-    const live = await db.Memory.findOne({ where: { id: entry.id } });
-    if (live?.invalidatedAt) {
-      throw new DomainError(
-        'MEMORY_ALREADY_INVALIDATED',
-        `Memory '${entry.publicId}' no longer holds.`,
-        { memory_id: entry.publicId }
-      );
-    }
+    await entry.reload();
     throw versionConflict({
-      currentVersion: live?.version ?? currentVersion,
+      currentVersion: entry.version,
       expectedVersion: args.expectedVersion ?? null,
       resourceLabel: 'Memory',
       resourceId: entry.publicId,
