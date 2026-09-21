@@ -12,6 +12,7 @@ import { triggerToolContext } from './2026-09-20-triggerToolContext';
 import { documentMetadataJsonb } from './2026-09-21-documentMetadataJsonb';
 import { documentVersions } from './2026-09-21-documentVersions';
 import { durableEventFirings } from './2026-09-21-durableEventFirings';
+import { memoryVersion } from './2026-09-21-memoryVersion';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -45,4 +46,5 @@ export const MIGRATIONS: Migration[] = [
   durableEventFirings,
   documentMetadataJsonb,
   documentVersions,
+  memoryVersion,
 ];

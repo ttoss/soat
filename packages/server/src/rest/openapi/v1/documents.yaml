@@ -395,6 +395,7 @@ paths:
           schema:
             type: string
             example: 'doc_V1StGXR8Z5jdHi6B'
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
         content:
@@ -424,6 +425,11 @@ paths:
                     converted between snake_case and camelCase.
                 tags:
                   $ref: './tags.yaml#/components/schemas/TagBag'
+                expected_version:
+                  description: >-
+                    Refuses the write unless the document is at this version.
+                  allOf:
+                    - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
       responses:
         '200':
           description: Document updated

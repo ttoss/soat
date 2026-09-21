@@ -9,6 +9,10 @@ import { registerResourceFieldMap } from 'src/lib/policyCompiler';
 import { hasPolicyConstraints } from 'src/lib/policyWhere';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { applyTagFilter } from 'src/lib/tags';
+import {
+  assertWritePrecondition,
+  versionConflict,
+} from 'src/lib/writePrecondition';
 
 // A memory is addressed as `srn:<project>:memory:<id>`; its store is a
 // separate resource type (`memory_store`), so a policy can govern the two
@@ -173,11 +177,25 @@ export const updateMemory = async (args: {
   content?: string;
   tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
+  /** `null`/absent states no precondition; see {@link readWritePrecondition}. */
+  expectedVersion?: number | null;
 }) => {
   const entry = await db.Memory.findOne({
     where: { publicId: args.id },
   });
   if (!entry) return null;
+
+  // Checked before any field is touched: a caller writing against a version
+  // that has already moved is refused whether or not its change would have
+  // altered anything.
+  assertWritePrecondition({
+    expectedVersion: args.expectedVersion,
+    currentVersion: entry.version,
+    resourceLabel: 'Memory',
+    resourceId: entry.publicId,
+  });
+
+  const updates: Record<string, unknown> = {};
 
   if (args.content !== undefined) {
     // Re-points at the store's row for the new text rather than rewriting the
@@ -191,18 +209,35 @@ export const updateMemory = async (args: {
         memoryStoreId: entry.memoryStoreId,
       }),
     });
-    entry.contentId = content.id as number;
+    updates.contentId = content.id as number;
   }
 
   if (args.tags !== undefined) {
-    entry.tags = args.tags;
+    updates.tags = args.tags;
   }
 
   if (args.metadata !== undefined) {
-    entry.metadata = args.metadata;
+    updates.metadata = args.metadata;
   }
 
-  await entry.save();
+  // A conditional `UPDATE`, never a read-then-write: the loser of a race
+  // learns it lost from the statement's own row count rather than from a
+  // comparison against a value that may already be stale.
+  const currentVersion = entry.version;
+  const [claimed] = await db.Memory.update(
+    { ...updates, version: currentVersion + 1 },
+    { where: { id: entry.id, version: currentVersion } }
+  );
+
+  if (claimed === 0) {
+    const live = await db.Memory.findOne({ where: { id: entry.id } });
+    throw versionConflict({
+      currentVersion: live?.version ?? currentVersion,
+      expectedVersion: args.expectedVersion ?? null,
+      resourceLabel: 'Memory',
+      resourceId: entry.publicId,
+    });
+  }
 
   return mapMemory(await memories.reload(entry));
 };

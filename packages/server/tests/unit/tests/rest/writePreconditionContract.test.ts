@@ -21,31 +21,44 @@ const MODELS_DIR = join(__dirname, '../../../../../postgresdb/src/models');
 const HELPERS = join(V1_DIR, 'helpers.ts');
 
 /**
- * Parent resources carrying a config version, mapped to the REST module whose
- * write routes must state a precondition against it.
+ * Parent resources carrying a config version, mapped to every REST call site
+ * whose write must state a precondition against it — a resource may have more
+ * than one, so the value is a list.
  *
  * An archive table (`AgentVersion`) carries a `version` too, but it is the
  * archived number rather than a counter anything writes against, and its rows
  * are never updated — so the set below is the parents only, and the first test
  * is what keeps that distinction from silently absorbing a new parent.
  */
-const VERSIONED_RESOURCES: Record<string, { module: string; update: string }> =
-  {
-    'Agent.ts': { module: 'agents.ts', update: 'updateAgent' },
-    'Guardrail.ts': { module: 'guardrails.ts', update: 'updateGuardrail' },
-    'Orchestration.ts': {
-      module: 'orchestrations.ts',
-      update: 'updateOrchestration',
-    },
-    'Workflow.ts': { module: 'workflows.ts', update: 'updateWorkflow' },
-    // A document's write routes live on the documents router, but the write
-    // that states a precondition is the withdrawal, which is registered from
-    // `documentVersionRoutes.ts`.
-    'Document.ts': {
-      module: 'documentVersionRoutes.ts',
-      update: 'withdrawDocument',
-    },
-  };
+const VERSIONED_RESOURCES: Record<
+  string,
+  { module: string; update: string }[]
+> = {
+  'Agent.ts': [{ module: 'agents.ts', update: 'updateAgent' }],
+  'Guardrail.ts': [{ module: 'guardrails.ts', update: 'updateGuardrail' }],
+  'Orchestration.ts': [
+    { module: 'orchestrations.ts', update: 'updateOrchestration' },
+  ],
+  'Workflow.ts': [{ module: 'workflows.ts', update: 'updateWorkflow' }],
+  // A document's config write is `PATCH /documents/{id}`, registered on the
+  // documents router; its withdrawal — a config write to a tombstone — is
+  // registered from `documentVersionRoutes.ts`. Both claim the same counter.
+  'Document.ts': [
+    { module: 'documents.ts', update: 'updateDocument' },
+    { module: 'documentVersionRoutes.ts', update: 'withdrawDocument' },
+  ],
+  // A memory has no archived-config table: its counter only separates two
+  // writers racing on one memory, so its only call site is the update.
+  'Memory.ts': [{ module: 'memories.ts', update: 'updateMemory' }],
+};
+
+const callSites = Object.entries(VERSIONED_RESOURCES).flatMap(
+  ([model, sites]) => {
+    return sites.map((site) => {
+      return [`${model} (${site.module})`, site] as const;
+    });
+  }
+);
 
 /** The one place a route is allowed to read a precondition off a request. */
 const PRECONDITION_READER = 'writePreconditionOf';
@@ -127,9 +140,9 @@ describe('write precondition contract', () => {
     expect(read(HELPERS)).toMatch(/readWritePrecondition\(/);
   });
 
-  test.each(Object.entries(VERSIONED_RESOURCES))(
+  test.each(callSites)(
     '%s: every write states a precondition',
-    (_model, { module, update }) => {
+    (_label, { module, update }) => {
       const source = read(join(V1_DIR, module));
       const withoutPrecondition = callArguments(source, update).filter(
         (args) => {
@@ -141,18 +154,18 @@ describe('write precondition contract', () => {
     }
   );
 
-  test.each(Object.entries(VERSIONED_RESOURCES))(
+  test.each(callSites)(
     '%s: the precondition comes from the shared reader',
-    (_model, { module }) => {
+    (_label, { module }) => {
       expect(read(join(V1_DIR, module))).toContain(
         `expectedVersion: ${PRECONDITION_READER}(ctx)`
       );
     }
   );
 
-  test.each(Object.entries(VERSIONED_RESOURCES))(
+  test.each(callSites)(
     '%s: the request body declares expected_version',
-    (_model, { module }) => {
+    (_label, { module }) => {
       const spec = readFileSync(
         join(
           V1_DIR,

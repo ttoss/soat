@@ -4,7 +4,7 @@ description: 'Optimistic concurrency on versioned resources: expected_version or
 
 # Concurrent Writes
 
-Every resource that carries a `version` counter — [agents](../modules/agents.md), [guardrails](../modules/guardrails.md), [orchestrations](../modules/orchestrations.md), [workflows](../modules/workflows.md) — accepts a **write precondition**:
+Every resource that carries a `version` counter — [agents](../modules/agents.md), [guardrails](../modules/guardrails.md), [orchestrations](../modules/orchestrations.md), [workflows](../modules/workflows.md), [documents](../modules/documents.md), [memories](../modules/memories.md) — accepts a **write precondition**:
 
 **A write may name the version it believes the resource holds. If the resource is at any other version the write is refused whole, and nothing is written.**
 
