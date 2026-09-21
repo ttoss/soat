@@ -31,7 +31,7 @@ const LIB_DIR = join(SRC_DIR, 'lib');
  * not an earlier generation.
  */
 const ROOT_SPAWNERS: Record<string, string> = {
-  'lib/triggerDispatch.ts': 'a trigger firing is an external event',
+  'lib/triggerTargets.ts': 'a trigger firing is an external event',
   'lib/tasksDispatch.ts':
     'a task transition is driven by its own state machine',
   'lib/orchestrationNodeExecutors.ts':

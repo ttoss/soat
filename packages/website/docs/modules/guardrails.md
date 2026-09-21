@@ -211,6 +211,8 @@ The policy uses the append-only archive that backs [agent versions](./agents.md#
 
 Three writes archive nothing: a metadata-only edit (`name`, `description`, `context_tool_id`, `context_mode`); re-writing the document already held (compared structurally); restoring the version already live. `version_label` on a create or update annotates the version that write archives and is not itself a change.
 
+A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
+
 | Operation | Endpoint |
 | --- | --- |
 | List versions, newest first | [`GET /api/v1/guardrails/{guardrail_id}/versions`](#list-archived-versions) |

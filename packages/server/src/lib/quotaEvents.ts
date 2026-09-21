@@ -3,7 +3,7 @@ import createDebug from 'debug';
 import type { db } from '../db';
 import { enqueueAuditWrite } from './auditQueue';
 import type { PricingCoverage } from './costEnforceability';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { fileException } from './exceptions';
 
 const log = createDebug('soat:quotas');
@@ -111,7 +111,7 @@ export const fireQuotaExceeded = async (args: {
     args.observedValue
   );
 
-  emitEvent({
+  emitResourceEvent({
     type: QUOTA_EXCEEDED_EVENT,
     projectId: quota.projectId,
     projectPublicId,

@@ -18,7 +18,6 @@ import {
   toWireToolBinding,
 } from './agentToolBindings';
 import {
-  type AgentConfigSnapshot,
   agentVersionStore,
   buildAgentConfigSnapshot,
 } from './agentVersionSnapshot';
@@ -35,8 +34,10 @@ import { validateOutputSchema } from './outputSchema';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { assertValidPromptCaching } from './promptCaching';
 import { parseActiveRelease } from './releaseAssignment';
+import { toResourceRef } from './resourceVersions';
 import { type InlineToolDefinition } from './tools';
 import { invalidateTraceContentModeCache } from './traceContentPolicy';
+import type { VersionedWrite } from './writePrecondition';
 
 export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 
@@ -111,10 +112,7 @@ type AgentUpdateFields = {
  * Accepted by both write paths so history records an author regardless of
  * whether the change arrived through REST or a formation apply.
  */
-type AgentVersionAuthorship = {
-  createdByUserId?: number | null;
-  versionLabel?: string | null;
-};
+type AgentVersionAuthorship = VersionedWrite;
 
 // `toolBindings` is handled by the binding-normalization path, not copied
 // verbatim.
@@ -340,31 +338,6 @@ const applyModelBindingUpdates = async (args: {
   }
 };
 
-/**
- * Archives the post-write config as a new version, but only when the write
- * actually changed it. The change detection and the archive write live in the
- * shared engine; what stays here is bumping the counter on the agent row, which
- * the engine deliberately never touches.
- */
-const archiveConfigChange = async (args: {
-  agent: AgentRow;
-  before: AgentConfigSnapshot;
-  after: AgentConfigSnapshot;
-  authorship: AgentVersionAuthorship;
-}): Promise<void> => {
-  await agentVersionStore.archiveConfigChange({
-    resourceDbId: args.agent.id as number,
-    currentVersion: args.agent.version,
-    before: args.before,
-    after: args.after,
-    label: args.authorship.versionLabel,
-    createdByUserId: args.authorship.createdByUserId,
-    bumpVersion: async (nextVersion) => {
-      await args.agent.update({ version: nextVersion });
-    },
-  });
-};
-
 export const updateAgent = async (
   args: {
     projectIds?: number[];
@@ -417,7 +390,27 @@ export const updateAgent = async (
 
   await applyModelBindingUpdates({ agent, args, updates });
 
-  await agent.update(updates);
+  // The field write, the version bump and the archive row are one transaction,
+  // conditional on nobody else having taken this version. A write that loses
+  // that race leaves nothing behind.
+  let updated = agent;
+  await agentVersionStore.commitConfigChange({
+    resource: toResourceRef(agent),
+    expectedVersion: args.expectedVersion,
+    before: beforeConfig,
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+    applyWrite: async ({ transaction }) => {
+      await agent.update(updates, { transaction });
+      // Reloaded because an update may have repointed associations the mapper
+      // reads, and the config being archived is the mapped one.
+      updated = await agents.reload(agent, { transaction });
+      return {
+        row: updated,
+        after: buildAgentConfigSnapshot(mapAgent(updated)),
+      };
+    },
+  });
 
   // Tightening an agent to `none` must stop content writes on its next
   // generation, not once the 30s cache entry expires.
@@ -427,16 +420,7 @@ export const updateAgent = async (
     agentPublicId: args.id,
   });
 
-  const updated = await agents.reload(agent);
-
-  await archiveConfigChange({
-    agent: updated,
-    before: beforeConfig,
-    after: buildAgentConfigSnapshot(mapAgent(updated)),
-    authorship: args,
-  });
-
-  // Mapped after the archive so the response carries the bumped version.
+  // Mapped after the commit so the response carries the bumped version.
   const mapped = mapAgent(updated);
 
   emitResourceEvent({

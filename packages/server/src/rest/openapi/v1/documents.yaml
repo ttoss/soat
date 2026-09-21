@@ -47,6 +47,17 @@ paths:
           schema:
             type: string
             example: '/reports/'
+        - name: include_withdrawn
+          in: query
+          required: false
+          description: >-
+            Include withdrawn documents. A withdrawn document leaves every
+            default read and is not in the knowledge index at all — its chunks
+            are dropped when it is withdrawn — so this shows it in the listing
+            but never in a search.
+          schema:
+            type: boolean
+            default: false
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
@@ -405,10 +416,12 @@ paths:
                   example: '/reports/q1.txt'
                 metadata:
                   type: object
+                  nullable: true
                   description: >-
-                    Arbitrary metadata object. Unlike other body fields, keys
-                    are stored and returned verbatim in the casing supplied —
-                    they are not converted between snake_case and camelCase.
+                    Arbitrary metadata object, replacing the stored bag; `null`
+                    clears it. Unlike other body fields, keys are stored and
+                    returned verbatim in the casing supplied — they are not
+                    converted between snake_case and camelCase.
                 tags:
                   $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
@@ -483,6 +496,301 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/documents/{document_id}/withdraw:
+    post:
+      tags:
+        - Documents
+      summary: Withdraw a document
+      description: >
+        Takes a document out of every default read while keeping its history.
+        The withdrawal is archived as a **tombstone version**, so one mechanism
+        answers what a document holds now and there is no second lifecycle flag
+        for a reader to miss.
+
+
+        Its chunks are dropped from the knowledge index, so a withdrawn
+        document costs a live search nothing. The content is not lost with
+        them: it is in the version before the tombstone, which
+        [`POST /api/v1/documents/{document_id}/versions/{version}/restore`](/docs/api/documents/restore-document-version)
+        re-chunks from.
+
+
+        `DELETE` stays what it is — permanent, and it removes the backing file.
+        Withdrawal is the reversible act. It does not apply under `/.system/`:
+        a platform-written document keeps the owning module's lifecycle.
+      operationId: withdrawDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                version_label:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Optional tag for the tombstone version this write archives.
+                  example: superseded-by-q2
+                expected_version:
+                  description: >-
+                    Refuses the withdrawal unless the document is at this
+                    version.
+                  allOf:
+                    - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
+      responses:
+        '200':
+          description: The withdrawn document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRecord'
+        '400':
+          description: Bad Request — the document is filed under the reserved root
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — already withdrawn, or the version moved
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/documents/{document_id}/versions:
+    get:
+      tags:
+        - Documents
+      summary: List a document's content versions
+      description: >
+        Returns the document's archived states, newest first. A version is
+        written on create and on every subsequent write that changes the
+        content or its annotations, and a withdrawal is archived as a version
+        carrying no content.
+      operationId: listDocumentVersions
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of document versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentVersion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/documents/{document_id}/versions/{version}:
+    get:
+      tags:
+        - Documents
+      summary: Fetch an archived document version
+      description: >
+        Returns the exact content and annotations the document held at a given
+        version, which is what lets a run that cited a version read what it
+        read.
+      operationId: getDocumentVersion
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Archived document version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersion'
+        '400':
+          description: Bad Request — version is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/documents/{document_id}/versions/{version}/restore:
+    post:
+      tags:
+        - Documents
+      summary: Restore an archived document version
+      description: >
+        Writes an archived version's content and annotations back as the
+        document's live state, which archives them again as a **new** version
+        rather than rewinding the counter — so a run citing any version in
+        between still resolves.
+
+
+        The restore runs through the ordinary update path, so the content is
+        re-chunked and re-embedded; restoring the state the document already
+        holds is a no-op and archives nothing. Restoring any content version of
+        a withdrawn document brings it back into listings and search.
+
+
+        A tombstone version has no content, so naming one is
+        `400 VALIDATION_FAILED`: restore the version before it instead.
+      operationId: restoreDocumentVersion
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                label:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Optional tag for the version this restore archives.
+                    Defaults to `restored from v<version>`.
+                  example: reinstated
+      responses:
+        '200':
+          description: The document, at its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRecord'
+        '400':
+          description: Bad Request — invalid version, or the version is a withdrawal
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Document or version not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
   /api/v1/documents/{document_id}/ingest:
     post:
       tags:
@@ -809,6 +1117,64 @@ components:
       scheme: bearer
       description: JWT token or sk_ api key
   schemas:
+    DocumentVersion:
+      type: object
+      description: >-
+        An immutable archive of a document's content and annotations at one
+        version.
+      properties:
+        id:
+          type: string
+          description: Public ID of the archived version
+          example: doc_ver_V1StGXR8Z5jdHi6B
+        document_id:
+          x-soat-ref: documents
+          type: string
+          description: Public ID of the document this version belongs to
+          example: doc_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          description: The archived version number
+          example: 1
+        config:
+          type: object
+          additionalProperties: true
+          description: >-
+            The document's versioned surface as it stood at this version: its
+            `content`, `title`, `path`, `metadata`, `tags` and chunk
+            configuration. A full snapshot rather than a diff, because what a
+            restore has to reproduce is what a run read — which is a read by
+            version, and a diff chain would have to be replayed to answer it.
+
+
+            A withdrawal is archived as a version too, carrying `withdrawn:
+            true` and no content. Restoring one is refused; restore the version
+            before it.
+
+
+            Deliberately open rather than a fixed schema: an archive written by
+            an earlier release of SOAT reflects the document surface **of its
+            own time**, so it may carry fields the current API no longer
+            documents.
+        label:
+          type: string
+          nullable: true
+          description: >-
+            Optional human tag for this version, e.g. `pre-correction`. Set from
+            the `version_label` of the write that archived it, or generated for
+            a restore or a withdrawal.
+          example: pre-correction
+        created_by:
+          type: string
+          nullable: true
+          description: >-
+            Public ID of the user whose write produced this version; null for a
+            write with no request user behind it.
+          example: user_V1StGXR8Z5jdHi6B
+        created_at:
+          type: string
+          format: date-time
+
     DocumentRecord:
       type: object
       properties:
@@ -845,9 +1211,16 @@ components:
           example: 42
         status:
           type: string
-          enum: [pending, processing, ready, failed]
-          description: Ingestion lifecycle state. `pending` — enqueued; `processing` — chunks being extracted and embedded; `ready` — fully indexed; `failed` — processing error (see the `error` field on `GET /documents/{id}/status`).
+          enum: [pending, processing, ready, failed, withdrawn]
+          description: Ingestion lifecycle state. `pending` — enqueued; `processing` — chunks being extracted and embedded; `ready` — fully indexed; `failed` — processing error (see the `error` field on `GET /documents/{id}/status`); `withdrawn` — taken out of listings and search, with its chunks dropped, and restorable from an earlier version.
           example: 'ready'
+        version:
+          type: integer
+          description: >-
+            The document's content version, starting at 1. Every write that
+            changes the content or its annotations archives the state it
+            replaced and increments this.
+          example: 1
         content:
           type: string
           nullable: true

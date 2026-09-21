@@ -11,8 +11,16 @@ import {
   readFileContent,
 } from './documentContent';
 import { type DocumentFiling, resolveDocumentFiling } from './documentFiling';
+import {
+  emitDocumentLifecycleEvent,
+  fetchDocumentByIdWithContext,
+  fetchDocumentWithContext,
+} from './documentLoaders';
 import { mapDocument } from './documentMapper';
-import { emitResourceEvent } from './eventBus';
+import {
+  buildDocumentConfigSnapshot,
+  documentVersionStore,
+} from './documentVersionSnapshot';
 import {
   assertCallerPath,
   normalizePath,
@@ -23,9 +31,10 @@ import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
-import type { SoatEventTypeFor } from './soatEvents';
-import { nonSystemPathWhere } from './systemPathScope';
+import { toResourceRef } from './resourceVersions';
+import { liveDocumentWhere, nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter, mergeTags } from './tags';
+import type { VersionedWrite } from './writePrecondition';
 
 export {
   enqueueDocumentIngestion,
@@ -46,47 +55,13 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
-type LoadedDoc = InstanceType<(typeof db)['Document']> & {
-  file?: InstanceType<(typeof db)['File']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-  };
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fileAndProjectInclude = (): any[] => {
-  return [
-    {
-      model: db.File,
-      as: 'file',
-      include: [{ model: db.Project, as: 'project' }],
-    },
-  ];
-};
-
-const fetchDocumentWithContext = (
-  publicId: string
-): Promise<LoadedDoc | null> => {
-  return db.Document.findOne({
-    where: { publicId },
-    include: fileAndProjectInclude(),
-  }) as Promise<LoadedDoc | null>;
-};
-
-const fetchDocumentByIdWithContext = (
-  id: number
-): Promise<LoadedDoc | null> => {
-  return db.Document.findOne({
-    where: { id },
-    include: fileAndProjectInclude(),
-  }) as Promise<LoadedDoc | null>;
-};
-
 const buildDocumentQueryOptions = (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
   pathPrefix?: string;
   tags?: Record<string, string>;
+  includeWithdrawn?: boolean;
   limit: number;
   offset: number;
 }) => {
@@ -96,6 +71,7 @@ const buildDocumentQueryOptions = (args: {
   )
     ? { ...args.policyWhere }
     : {};
+  if (!args.includeWithdrawn) Object.assign(topLevelWhere, liveDocumentWhere());
   applyTagFilter({ where: topLevelWhere, tags: args.tags });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const file: Record<string, any> = {};
@@ -113,23 +89,6 @@ const buildDocumentQueryOptions = (args: {
   };
 };
 
-const emitDocumentLifecycleEvent = (args: {
-  type: SoatEventTypeFor<'document'>;
-  doc: LoadedDoc;
-  data: Record<string, unknown>;
-}) => {
-  const project = args.doc.file?.project;
-  if (!project) return;
-  emitResourceEvent({
-    type: args.type,
-    projectId: project.id,
-    projectPublicId: project.publicId,
-    resourceType: 'document',
-    resourceId: args.doc.publicId,
-    data: args.data,
-  });
-};
-
 export const listDocuments = async (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,6 +96,8 @@ export const listDocuments = async (args: {
   /** Only documents filed under this directory (see `pathPrefixPattern`). */
   pathPrefix?: string;
   tags?: Record<string, string>;
+  /** Withdrawn documents are left out unless the request asks for them. */
+  includeWithdrawn?: boolean;
   limit?: number;
   offset?: number;
 }) => {
@@ -153,13 +114,15 @@ export const listDocuments = async (args: {
         policyWhere: args.policyWhere,
         pathPrefix: args.pathPrefix,
         tags: args.tags,
+        includeWithdrawn: args.includeWithdrawn,
         limit,
         offset,
       });
 
       return db.Document.findAndCountAll({
         distinct: true,
-        where: hasPolicyConstraints(topLevelWhere) ? topLevelWhere : undefined,
+        where:
+          Reflect.ownKeys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
         include: [
           {
             model: db.File,
@@ -175,77 +138,6 @@ export const listDocuments = async (args: {
     },
     map: mapDocument,
   });
-};
-
-/**
- * Compute an ingestion progress percentage (0–100) from the live chunk count
- * and the planned total. `null` when progress is not meaningful (failed, or
- * processing before the total is known). Capped at 99 while still `processing`
- * so it only reads 100 once the document is `ready`.
- */
-const computeIngestionProgress = (args: {
-  status: string;
-  chunkCount: number;
-  totalChunks?: number;
-}): number | null => {
-  if (args.status === 'ready') return 100;
-  if (args.status === 'pending') return 0;
-  if (args.status !== 'processing') return null; // failed / unknown
-  if (typeof args.totalChunks !== 'number' || args.totalChunks <= 0)
-    return null;
-  const pct = Math.floor((args.chunkCount / args.totalChunks) * 100);
-  return Math.max(0, Math.min(99, pct));
-};
-
-/**
- * Lightweight ingestion status for polling (#5, #6) — the lifecycle fields
- * only, never the multi-megabyte chunk content `getDocument` assembles.
- * Self-recovers a stalled document to `failed` so a poller reaches a terminal
- * state (#4).
- *
- * - `chunk_count` — chunks currently indexed; grows during `processing`.
- * - `total_chunks` — planned total, `null` until chunking starts.
- * - `total_pages` — source pages, `null` until extraction has run (not zero).
- * - `progress` — percentage, capped at 99 while `processing`, `null` when
- *   `failed` or not yet computable.
- */
-export const getDocumentStatus = async (args: { id: string }) => {
-  const doc = await fetchDocumentWithContext(args.id);
-
-  if (!doc) return null;
-
-  await recoverStaleDocument(doc);
-
-  const mapped = mapDocument(doc);
-
-  // Always report the live count so the value is meaningful while processing,
-  // not just after the total is persisted on completion.
-  const chunkCount = await db.DocumentChunk.count({
-    where: { documentId: doc.id },
-  });
-
-  const totalChunks = doc.totalChunks ?? undefined;
-
-  return {
-    id: mapped.id,
-    status: doc.status,
-    chunk_count: chunkCount,
-    total_chunks: totalChunks ?? null,
-    total_pages: doc.totalPages ?? null,
-    progress: computeIngestionProgress({
-      status: doc.status,
-      chunkCount,
-      totalChunks,
-    }),
-    error:
-      doc.status === 'failed' ? (doc.failureReason ?? undefined) : undefined,
-    // For the route's permission check, not the public response shape. Named
-    // snake_case like every lib return — a camelCase twin here silently
-    // resolves to `undefined`.
-    project_id: mapped.project_id,
-    path: mapped.path,
-    tags: mapped.tags,
-  };
 };
 
 export const getDocumentSourceContent = async (args: {
@@ -284,22 +176,24 @@ export const getDocument = async (args: { id: string }) => {
   return { ...mapped, content };
 };
 
-export const createDocument = async (args: {
-  projectId: number;
-  content: string;
-  path?: string;
-  filename?: string;
-  title?: string;
-  metadata?: Record<string, unknown>;
-  tags?: Record<string, string>;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
-  /** Files the document under the reserved root. See {@link DocumentFiling}. */
-  system?: DocumentFiling;
-  /** Off stores the chunks without vectors. See `persistChunks`. */
-  embed?: boolean;
-}) => {
+export const createDocument = async (
+  args: {
+    projectId: number;
+    content: string;
+    path?: string;
+    filename?: string;
+    title?: string;
+    metadata?: Record<string, unknown>;
+    tags?: Record<string, string>;
+    chunkStrategy?: ChunkStrategy;
+    chunkSize?: number;
+    chunkOverlap?: number;
+    /** Files the document under the reserved root. See {@link DocumentFiling}. */
+    system?: DocumentFiling;
+    /** Off stores the chunks without vectors. See `persistChunks`. */
+    embed?: boolean;
+  } & VersionedWrite
+) => {
   log('createDocument: projectId=%d', args.projectId);
 
   // Minted here rather than by the model hook: the reserved-root key contains
@@ -323,7 +217,7 @@ export const createDocument = async (args: {
     publicId,
     fileId: file.id,
     title: args.title ?? null,
-    metadata: args.metadata ? JSON.stringify(args.metadata) : null,
+    metadata: args.metadata ? args.metadata : null,
     tags: args.tags ?? null,
     chunkStrategy: args.chunkStrategy ?? null,
     chunkSize: args.chunkSize ?? null,
@@ -342,6 +236,20 @@ export const createDocument = async (args: {
 
   const created = await fetchDocumentByIdWithContext(doc.id as number);
   const mapped = mapDocument(created!);
+
+  // Version 1 is the state the document was created in, archived so a later
+  // restore has something to go back to and a withdrawal has content to
+  // restore from.
+  await documentVersionStore.writeVersion({
+    resourceDbId: doc.id as number,
+    version: 1,
+    config: buildDocumentConfigSnapshot({
+      document: mapped,
+      content: args.content,
+    }),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+  });
 
   emitDocumentLifecycleEvent({
     type: 'documents.created',
@@ -364,6 +272,10 @@ export const deleteDocument = async (args: { id: string }) => {
   }
 
   const docPublicId = doc.publicId;
+  // Archives are owned by their document, so they go first and no orphan row
+  // is left behind. `DELETE` is the permanent act; withdrawal is the one that
+  // keeps the history.
+  await documentVersionStore.deleteVersions({ resourceDbId: doc.id as number });
   await doc.destroy();
   if (doc.file) {
     await doc.file.destroy();
@@ -381,17 +293,16 @@ export const deleteDocument = async (args: { id: string }) => {
 // Build the set of Document column updates from the (partial) update args.
 // Only fields that are explicitly provided are written.
 const buildDocumentColumnUpdates = (args: {
-  title?: string;
-  metadata?: Record<string, unknown>;
-  tags?: Record<string, string>;
+  title?: string | null;
+  metadata?: Record<string, unknown> | null;
+  tags?: Record<string, string> | null;
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   if (args.title !== undefined) updates.title = args.title;
-  if (args.metadata !== undefined)
-    updates.metadata = JSON.stringify(args.metadata);
+  if (args.metadata !== undefined) updates.metadata = args.metadata;
   if (args.tags !== undefined) updates.tags = args.tags;
   if (args.chunkStrategy !== undefined)
     updates.chunkStrategy = args.chunkStrategy;
@@ -400,17 +311,20 @@ const buildDocumentColumnUpdates = (args: {
   return updates;
 };
 
-export const updateDocument = async (args: {
-  id: string;
-  content?: string;
-  title?: string;
-  path?: string | null;
-  metadata?: Record<string, unknown>;
-  tags?: Record<string, string>;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
-}) => {
+export const updateDocument = async (
+  args: {
+    id: string;
+    content?: string;
+    /** `null` clears the field; absent leaves it as it is. */
+    title?: string | null;
+    path?: string | null;
+    metadata?: Record<string, unknown> | null;
+    tags?: Record<string, string> | null;
+    chunkStrategy?: ChunkStrategy;
+    chunkSize?: number;
+    chunkOverlap?: number;
+  } & VersionedWrite
+) => {
   const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) return null;
@@ -420,6 +334,15 @@ export const updateDocument = async (args: {
   // history behind its back.
   assertCallerPath(doc.file?.path);
 
+  const before = buildDocumentConfigSnapshot({
+    document: mapDocument(doc),
+    content: await readFileContent(doc.file),
+  });
+
+  // Re-chunking and the storage rewrite happen before the commit rather than
+  // inside it. Neither is transactional — one calls the embedding provider and
+  // the other writes an object store — so the transaction is scoped to what it
+  // can actually cover: the row's columns, the version bump and the archive.
   await applyDocumentChunkChanges({
     doc,
     content: args.content,
@@ -435,17 +358,39 @@ export const updateDocument = async (args: {
     await doc.file.update({ path: normalizedPath });
   }
 
-  const updates = buildDocumentColumnUpdates(args);
-  if (Object.keys(updates).length > 0) {
-    await doc.update(updates);
-  }
+  let refreshed = doc;
+  await documentVersionStore.commitConfigChange({
+    resource: toResourceRef(doc),
+    before,
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+    applyWrite: async ({ transaction }) => {
+      const updates = buildDocumentColumnUpdates(args);
+      if (Object.keys(updates).length > 0) {
+        await doc.update(updates, { transaction });
+      }
 
-  const refreshed = await fetchDocumentByIdWithContext(doc.id as number);
-  const mapped = mapDocument(refreshed!);
+      refreshed = (await fetchDocumentByIdWithContext(
+        doc.id as number,
+        transaction
+      ))!;
+
+      return {
+        row: refreshed,
+        after: buildDocumentConfigSnapshot({
+          document: mapDocument(refreshed),
+          content: await readFileContent(refreshed.file),
+        }),
+      };
+    },
+  });
+
+  // Mapped after the commit so the response carries the bumped version.
+  const mapped = mapDocument(refreshed);
 
   emitDocumentLifecycleEvent({
     type: 'documents.updated',
-    doc: refreshed!,
+    doc: refreshed,
     data: mapped,
   });
 
@@ -491,3 +436,5 @@ export const updateDocumentTags = async (args: {
   // The tag routes' contract is the tag map itself, not the document.
   return newTags;
 };
+
+export { getDocumentStatus } from './documentStatus';

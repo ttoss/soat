@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 
 import { db } from '../db';
@@ -97,6 +98,15 @@ export const retryOrRecordDrop = (args: {
 
 export interface SoatEvent {
   /**
+   * This emission's identity, minted once at the emit site.
+   *
+   * It exists so a subscriber that persists what it received can recognise the
+   * same emission twice. `(type, resource_id, timestamp)` cannot: the stamp is
+   * millisecond-resolution, so two events of one type on one resource in the
+   * same millisecond are indistinguishable.
+   */
+  id: string;
+  /**
    * A registered platform event name, or — for an orchestration `emit_event`
    * node — the name the template author wrote. See `soatEvents.ts`.
    */
@@ -195,14 +205,26 @@ const emitEnvelope = (args: {
   resourceType: SoatResourceType;
   resourceId: string;
   data: object;
+  /**
+   * The moment the event describes, when that is not the moment it is emitted.
+   * A threshold crossing and a quota breach are both detected against a clock
+   * their caller holds, and stamping the wall clock instead would date them by
+   * when the bus happened to be reached.
+   */
+  timestamp?: string;
 }): void => {
   // Captured here rather than inside `emit`, so the deferred branch below
   // stamps the chain in scope at the emit *site* even if the store were ever
   // to differ by the time the project lookup resolves.
   const causationChain = currentCausationChain();
 
+  // Minted alongside the chain, for the same reason: the deferred branch must
+  // carry the id this emission had at its site, not one per resolution.
+  const id = randomUUID();
+
   const emit = (projectPublicId: string) => {
     emitEvent({
+      id,
       type: args.type,
       projectId: args.projectId,
       projectPublicId,
@@ -212,7 +234,7 @@ const emitEnvelope = (args: {
       // signature even though every key is a string. Asserted once here so the
       // call sites carry no `as unknown` double casts; nothing reads a key.
       data: args.data as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
+      timestamp: args.timestamp ?? new Date().toISOString(),
       causationChain,
     });
   };
@@ -258,6 +280,8 @@ export const emitResourceEvent = <R extends SoatResourceType>(args: {
   resourceType: R;
   resourceId: string;
   data: object;
+  /** Pass when the event's moment is not the emit's; see {@link emitEnvelope}. */
+  timestamp?: string;
 }): void => {
   emitEnvelope(args);
 };

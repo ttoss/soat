@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { db } from 'src/db';
 import {
   droppedEventCount,
@@ -91,6 +93,7 @@ describe('event delivery resilience', () => {
 
   const emitFileCreated = (resourceId: string) => {
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId,
       projectPublicId: projectId,
@@ -330,6 +333,7 @@ describe('event delivery resilience', () => {
         .mockRejectedValueOnce(new Error('deadlock detected'));
 
       emitEvent({
+        id: randomUUID(),
         type: 'exceptions.created',
         projectId: projectInternalId,
         projectPublicId: projectId,
@@ -366,6 +370,7 @@ describe('event delivery resilience', () => {
       const before = droppedEventCount({ stage: 'activity_write' });
 
       emitEvent({
+        id: randomUUID(),
         type: 'exceptions.created',
         projectId: projectInternalId,
         projectPublicId: projectId,
@@ -392,6 +397,7 @@ describe('event delivery resilience', () => {
   describe('the exception file write', () => {
     const emitRunFailed = (resourceId: string) => {
       emitEvent({
+        id: randomUUID(),
         type: 'orchestration_runs.failed',
         projectId: projectInternalId,
         projectPublicId: projectId,

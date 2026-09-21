@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { emptyPage, paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
@@ -382,7 +382,7 @@ const emitThresholdCrossed = (args: {
   now: Date;
 }): void => {
   const { threshold } = args;
-  emitEvent({
+  emitResourceEvent({
     type: USAGE_THRESHOLD_CROSSED_EVENT,
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,

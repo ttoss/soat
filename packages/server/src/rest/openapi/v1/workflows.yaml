@@ -146,6 +146,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
         content:
@@ -629,6 +630,11 @@ components:
             Ignored when the write changes no definition field, since no version
             is archived.
           example: pre-rewire
+        expected_version:
+          description: >-
+            Refuses the write unless the resource is at this version.
+          allOf:
+            - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
     WorkflowVersion:
       type: object
       description: >-

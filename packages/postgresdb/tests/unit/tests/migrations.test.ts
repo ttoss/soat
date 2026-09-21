@@ -710,3 +710,258 @@ describe('a database `sync` has just built', () => {
     expect(report.unknown).toEqual([]);
   });
 });
+
+describe('2026-09-21-durable-event-firings', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    // The firing table as it stands before the change: a row that records what
+    // happened, with nothing that says who owns finishing it.
+    await client.query(`
+      CREATE TABLE trigger_firings (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        trigger_id integer NOT NULL,
+        project_id integer NOT NULL,
+        source varchar(255) NOT NULL,
+        status varchar(255) NOT NULL,
+        input jsonb,
+        result jsonb,
+        error jsonb,
+        started_at timestamp with time zone,
+        completed_at timestamp with time zone,
+        created_at timestamp with time zone NOT NULL DEFAULT now(),
+        updated_at timestamp with time zone NOT NULL DEFAULT now()
+      );
+
+      INSERT INTO trigger_firings (public_id, trigger_id, project_id, source, status)
+        VALUES ('trg_fire_old', 1, 1, 'event', 'succeeded');
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-21-durable-event-firings'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('the durability columns exist', async () => {
+    expect(
+      await columnType({
+        client,
+        table: 'trigger_firings',
+        column: 'idempotency_key',
+      })
+    ).toBe('character varying');
+    expect(
+      await columnType({
+        client,
+        table: 'trigger_firings',
+        column: 'causation_chain',
+      })
+    ).toBe('jsonb');
+    expect(
+      await columnType({ client, table: 'trigger_firings', column: 'attempts' })
+    ).toBe('integer');
+    expect(
+      await columnType({
+        client,
+        table: 'trigger_firings',
+        column: 'lease_expires_at',
+      })
+    ).toBe('timestamp with time zone');
+  });
+
+  /**
+   * A firing written before the change had no key, no stored chain and nothing
+   * holding it — which is what those values say, so it is left as it is rather
+   * than backfilled into a shape it never had.
+   */
+  test('a firing written before the change reads as unclaimed', async () => {
+    const [row] = await selectRows<{
+      idempotency_key: string | null;
+      causation_chain: unknown;
+      attempts: number;
+      lease_expires_at: Date | null;
+    }>({
+      client,
+      sql: `SELECT idempotency_key, causation_chain, attempts, lease_expires_at
+              FROM trigger_firings WHERE public_id = 'trg_fire_old'`,
+    });
+
+    expect(row.idempotency_key).toBeNull();
+    expect(row.causation_chain).toBeNull();
+    expect(row.attempts).toBe(0);
+    expect(row.lease_expires_at).toBeNull();
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-21-durable-event-firings'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});
+
+describe('2026-09-21-document-metadata-jsonb', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    // The column as it stands before the change, holding every shape a read
+    // of it distinguishes today.
+    await client.query(`
+      CREATE TABLE documents (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        metadata text
+      );
+
+      INSERT INTO documents (public_id, metadata) VALUES
+        ('doc_object', '{"source":"crm","reviewed":true}'),
+        ('doc_nested', '{"a":{"b":[1,2]}}'),
+        ('doc_scalar', '42'),
+        ('doc_quoted', '"a string"'),
+        ('doc_broken', 'not json at all'),
+        ('doc_truncated', '{"a":'),
+        ('doc_empty', ''),
+        ('doc_literal_null', 'null'),
+        ('doc_absent', NULL);
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-21-document-metadata-jsonb'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  const metadataOf = async (publicId: string) => {
+    const [row] = await selectRows<{ metadata: unknown }>({
+      client,
+      sql: `SELECT metadata FROM documents WHERE public_id = '${publicId}'`,
+    });
+    return row.metadata;
+  };
+
+  test('the column becomes jsonb', async () => {
+    expect(
+      await columnType({ client, table: 'documents', column: 'metadata' })
+    ).toBe('jsonb');
+  });
+
+  test('a bag becomes the object a read of it already returned', async () => {
+    expect(await metadataOf('doc_object')).toEqual({
+      source: 'crm',
+      reviewed: true,
+    });
+    expect(await metadataOf('doc_nested')).toEqual({ a: { b: [1, 2] } });
+  });
+
+  /**
+   * The column is typed for a bag but nothing validated what reached it, so a
+   * scalar could be stored. It parsed then and it parses now.
+   */
+  test('a stored scalar keeps its parsed value', async () => {
+    expect(await metadataOf('doc_scalar')).toBe(42);
+    expect(await metadataOf('doc_quoted')).toBe('a string');
+  });
+
+  /**
+   * The read already fell back to the raw text rather than failing, so text
+   * that is not JSON becomes the JSON string of itself and reads identically.
+   * `doc_truncated` is the case no pattern match separates from valid JSON.
+   */
+  test('text that is not JSON becomes the string a read of it already returned', async () => {
+    expect(await metadataOf('doc_broken')).toBe('not json at all');
+    expect(await metadataOf('doc_truncated')).toBe('{"a":');
+  });
+
+  test('an empty or null-literal value reads as an absent bag', async () => {
+    expect(await metadataOf('doc_empty')).toBeNull();
+    expect(await metadataOf('doc_literal_null')).toBeNull();
+    expect(await metadataOf('doc_absent')).toBeNull();
+  });
+
+  test('the converted column is queryable by containment', async () => {
+    const rows = await selectRows<{ public_id: string }>({
+      client,
+      sql: `SELECT public_id FROM documents WHERE metadata @> '{"source":"crm"}'`,
+    });
+
+    expect(
+      rows.map((row) => {
+        return row.public_id;
+      })
+    ).toEqual(['doc_object']);
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-21-document-metadata-jsonb'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});
+
+describe('2026-09-21-document-versions', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await client.query(`
+      CREATE TABLE documents (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL
+      );
+
+      INSERT INTO documents (public_id) VALUES ('doc_existing');
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-21-document-versions'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('the counter column exists', async () => {
+    expect(
+      await columnType({ client, table: 'documents', column: 'version' })
+    ).toBe('integer');
+  });
+
+  /**
+   * A document that existed before the archive did is at version 1 with no
+   * archived row, because there is nothing to archive: what it holds now is
+   * all it has ever been recorded as holding.
+   */
+  test('an existing document starts at version 1', async () => {
+    const [row] = await selectRows<{ version: number }>({
+      client,
+      sql: `SELECT version FROM documents WHERE public_id = 'doc_existing'`,
+    });
+
+    expect(row.version).toBe(1);
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-21-document-versions'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});

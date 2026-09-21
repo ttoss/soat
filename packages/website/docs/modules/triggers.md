@@ -63,6 +63,8 @@ firing record holds the outcome.
 | `input`        | object \| null                                      | Effective (post-merge) input snapshot                                 |
 | `result`       | object \| null                                      | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated |
 | `error`        | object \| null                                      | `{ code, message, meta }` when the firing failed                      |
+| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing, null otherwise — one firing per pair |
+| `attempts`     | number                                              | Dispatch starts. Above 1 means an interrupted start was redelivered ([Delivery Guarantees](#delivery-guarantees)) |
 | `started_at`   | string \| null                                      | ISO 8601 timestamp when execution began                               |
 | `completed_at` | string \| null                                      | ISO 8601 timestamp when the firing reached a terminal status          |
 
@@ -250,17 +252,27 @@ apply; the firing arrives on no API key, and an `api_key`-scope cap is a cap on 
 
 #### Delivery Guarantees
 
-An event trigger inherits the bus's guarantees:
+A matched event is written as a `pending` firing before the trigger's
+credentials are resolved and before its target is touched. From that point the
+firing belongs to the database, so a process that dies mid-dispatch leaves a
+row another process redelivers.
 
-- **Best-effort, in-process.** Events are not persisted before dispatch; a
-  process dying between emit and firing record loses that firing (a schedule is
-  recovered from the database on the next tick).
+- **At-least-once.** A firing whose dispatch was interrupted is retried once
+  its lease lapses, up to three starts. A firing interrupted *after* its target
+  started runs that target again, so an event target must be idempotent.
+- **Deduplicated per (event, trigger).** Each event firing carries an
+  `idempotency_key` of `<event_id>:<trigger_id>`, so the same event reaching
+  the same trigger twice produces one firing.
 - **Unordered.** Sequential events may fire in either order; triggers on the
   same event fire independently.
-- **At-most-once**, per emitting process.
 
-When work must not be lost, keep a `schedule` trigger over the same condition as
-a backstop; an idempotent target makes the overlap harmless.
+`attempts` above 1 means a start was interrupted. A target that *refused* the
+work is different: that firing is `failed` with the reason in `error`, and is
+never retried.
+
+A firing interrupted three times without reaching a result is closed `failed`
+with `error.code = TRIGGER_FIRING_ABANDONED`, so it does not sit `pending` with
+nothing coming for it.
 
 ### Schedules and Misfire Coalescing
 
@@ -295,7 +307,7 @@ Inbound webhook endpoint errors: see the [table above](#inbound-webhook-endpoint
 
 **A `schedule` trigger never fires:** confirm `active` is `true`, `next_fire_at` is set, and the server was not started with `SOAT_TRIGGER_SCHEDULER_DISABLED=true`.
 
-**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings are fire-and-forget; poll [`GET /trigger-firings/{id}`](/docs/api/triggers/get-trigger-firing). There is no automatic retry; inspect `error.code`/`error.message` and re-fire manually.
+**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings are fire-and-forget; poll [`GET /trigger-firings/{id}`](/docs/api/triggers/get-trigger-firing). Only `event` firings are redelivered ([Delivery Guarantees](#delivery-guarantees)); for the others, inspect `error.code`/`error.message` and re-fire manually.
 
 ### Formation Support
 

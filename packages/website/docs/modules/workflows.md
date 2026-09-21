@@ -232,6 +232,8 @@ GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
 
 The state machine is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout), [guardrail versions](./guardrails.md#versioning) and [orchestration versions](./orchestrations.md#versioning). Version 1 is written on create; every write that **changes** the definition increments `version` and archives a `WorkflowVersion`. Versioned surface: `states`, `transitions`, `payload_schema`.
 
+A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
+
 **A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps `version` onto the task as `workflow_version`; validating a transition, parking an approval gate and validating a payload patch all read that version. Editing never re-shapes a task in flight; the live definition is a draft for tasks created from now on.
 
 Archive nothing: a metadata-only edit (`name`, `description`); re-writing the definition already held (compared structurally); restoring the live version. `version_label` on a create or update annotates the archived version and is never itself a change.

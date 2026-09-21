@@ -27,6 +27,9 @@ export const agentVersionStore = makeVersionStore({
   versionModel: () => {
     return db.AgentVersion;
   },
+  resourceModel: () => {
+    return db.Agent;
+  },
   foreignKey: 'agentId',
   // Loaded so a version response can name the eval run that promoted it
   // (the agents module doc — Versioning and Staged Rollout). The archive engine has no concept of

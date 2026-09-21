@@ -891,6 +891,93 @@ if [ "$PREFIX_LIST_TOTAL" != "1" ] || [ "$PREFIX_LIST_ID" != "$DOC1_ID" ]; then
 fi
 echo "Path-prefix list returned only the document under /animals/: OK"
 
+# 11b3. Content versions, withdrawal and restore
+echo "--- Document versions: create, edit, withdraw, restore ---"
+VER_DOC_RESP=$($SOAT_CLI create-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --content "Pangolins are covered in keratin scales." \
+  --filename pangolin.txt \
+  --path /versioned/pangolin.txt)
+VER_DOC_ID=$(printf '%s\n' "$VER_DOC_RESP" | jq -r '.id')
+VER_DOC_V=$(printf '%s\n' "$VER_DOC_RESP" | jq -r '.version')
+if [ "$VER_DOC_V" != "1" ]; then
+  echo "ERROR: created document expected version 1, got $VER_DOC_V" >&2
+  exit 1
+fi
+
+# A content write archives the state it replaced.
+EDIT_RESP=$($SOAT_CLI update-document \
+  --document-id "$VER_DOC_ID" \
+  --content "Pangolins are the most trafficked wild mammal.")
+EDIT_V=$(printf '%s\n' "$EDIT_RESP" | jq -r '.version')
+if [ "$EDIT_V" != "2" ]; then
+  echo "ERROR: edited document expected version 2, got $EDIT_V" >&2
+  exit 1
+fi
+
+VERSIONS_RESP=$($SOAT_CLI list-document-versions --document-id "$VER_DOC_ID")
+VERSIONS_TOTAL=$(printf '%s\n' "$VERSIONS_RESP" | jq -r '.total')
+if [ "$VERSIONS_TOTAL" != "2" ]; then
+  echo "ERROR: expected 2 archived versions, got $VERSIONS_TOTAL" >&2
+  exit 1
+fi
+
+V1_RESP=$($SOAT_CLI get-document-version --document-id "$VER_DOC_ID" --version 1)
+V1_CONTENT=$(printf '%s\n' "$V1_RESP" | jq -r '.config.content')
+if [ "$V1_CONTENT" != "Pangolins are covered in keratin scales." ]; then
+  echo "ERROR: version 1 did not carry the content it archived, got '$V1_CONTENT'" >&2
+  exit 1
+fi
+echo "Document versions archived and readable: OK"
+
+# Withdrawal leaves the listing but stays addressable by id.
+WITHDRAW_RESP=$($SOAT_CLI withdraw-document --document-id "$VER_DOC_ID")
+WITHDRAW_STATUS=$(printf '%s\n' "$WITHDRAW_RESP" | jq -r '.status')
+if [ "$WITHDRAW_STATUS" != "withdrawn" ]; then
+  echo "ERROR: withdraw expected status withdrawn, got '$WITHDRAW_STATUS'" >&2
+  exit 1
+fi
+
+HIDDEN_LIST=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --path-prefix /versioned/)
+HIDDEN_TOTAL=$(printf '%s\n' "$HIDDEN_LIST" | jq -r '.total')
+if [ "$HIDDEN_TOTAL" != "0" ]; then
+  echo "ERROR: withdrawn document still listed, total=$HIDDEN_TOTAL" >&2
+  exit 1
+fi
+
+SHOWN_LIST=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --path-prefix /versioned/ \
+  --include-withdrawn true)
+SHOWN_TOTAL=$(printf '%s\n' "$SHOWN_LIST" | jq -r '.total')
+if [ "$SHOWN_TOTAL" != "1" ]; then
+  echo "ERROR: include_withdrawn expected 1 document, got $SHOWN_TOTAL" >&2
+  exit 1
+fi
+echo "Withdrawal leaves the listing and include_withdrawn shows it: OK"
+
+# Restoring a content version brings it back, re-chunked.
+RESTORE_RESP=$($SOAT_CLI restore-document-version \
+  --document-id "$VER_DOC_ID" \
+  --version 1)
+RESTORE_STATUS=$(printf '%s\n' "$RESTORE_RESP" | jq -r '.status')
+if [ "$RESTORE_STATUS" != "ready" ]; then
+  echo "ERROR: restore expected status ready, got '$RESTORE_STATUS'" >&2
+  exit 1
+fi
+
+RESTORED_DOC=$($SOAT_CLI get-document --document-id "$VER_DOC_ID")
+RESTORED_CONTENT=$(printf '%s\n' "$RESTORED_DOC" | jq -r '.content')
+if [ "$RESTORED_CONTENT" != "Pangolins are covered in keratin scales." ]; then
+  echo "ERROR: restore did not bring back v1 content, got '$RESTORED_CONTENT'" >&2
+  exit 1
+fi
+echo "Restore brings a withdrawn document back: OK"
+
+$SOAT_CLI delete-document --document-id "$VER_DOC_ID" > /dev/null
+
 # 11c. Search knowledge by path prefix
 echo "--- Search knowledge by path prefix ---"
 PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \

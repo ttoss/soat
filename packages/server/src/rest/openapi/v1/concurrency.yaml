@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info:
+  title: SOAT Concurrency
+  version: 1.0.0
+  description: >-
+    Shared components for the write precondition every versioned resource
+    accepts. This file declares no paths: it exists so a resource that gains a
+    `version` counter gains optimistic concurrency in the same shape as every
+    other, rather than re-deciding how to spell it.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    ExpectedVersion:
+      type: integer
+      minimum: 1
+      nullable: true
+      description: >-
+        The version the caller believes the resource holds. When the resource
+        is at any other version the write is refused with
+        `409 VERSION_CONFLICT` and nothing is written; `meta.current_version`
+        on that response names the version in force.
+
+
+        Omit it to write unconditionally. Omitting it does not make the write
+        unordered: two writes that reach the server together are still
+        serialized, and the one whose version was taken first is refused the
+        same way. What the field adds is refusing a write whose author read the
+        resource some time ago and has not seen what happened since.
+
+
+        The `If-Match` header carries the same precondition for a client that
+        prefers the HTTP spelling. Sending both with different versions is
+        `400 VALIDATION_FAILED`.
+      example: 3
+  parameters:
+    IfMatchVersion:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        The version the caller believes the resource holds, as an entity tag
+        (`3` or `"3"`). Equivalent to `expected_version` in the request body;
+        `*` states no precondition beyond the resource existing. A mismatch is
+        `409 VERSION_CONFLICT`.
+      schema:
+        type: string
+      example: '3'

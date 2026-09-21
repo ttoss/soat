@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError, type ErrorCode } from '../errors';
+import type { Transaction } from './dbTransaction';
 import type { ResourceIncludes } from './modelIncludes';
 import { isStringRecord } from './tags';
 
@@ -14,6 +15,7 @@ type FinderModel = {
   findOne: (options: {
     where?: Record<string, unknown>;
     include?: ResourceIncludes;
+    transaction?: Transaction;
   }) => Promise<unknown>;
 };
 
@@ -99,7 +101,10 @@ export type ResourceAccessor<TRow> = {
     errorCode?: ErrorCode;
   }) => Promise<TRow>;
   notFound: (id: string, errorCode?: ErrorCode) => DomainError;
-  reload: (row: { id?: unknown }) => Promise<TRow>;
+  reload: (
+    row: { id?: unknown },
+    options?: { transaction?: Transaction }
+  ) => Promise<TRow>;
   scopedWhere: typeof scopedWhere;
 };
 
@@ -225,10 +230,14 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
    * the step after a `create` or `update`, whose result the module's mapper
    * needs the associations of.
    */
-  const reload = async (row: { id?: unknown }): Promise<TRow> => {
+  const reload = async (
+    row: { id?: unknown },
+    options?: { transaction?: Transaction }
+  ): Promise<TRow> => {
     const reloaded = await config.model().findOne({
       where: { id: row.id },
       include: config.includes?.(),
+      transaction: options?.transaction,
     });
     return reloaded as TRow;
   };

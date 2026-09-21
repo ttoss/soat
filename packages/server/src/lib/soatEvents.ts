@@ -51,6 +51,10 @@ export const SOAT_EVENTS = {
     'documents.created': 'A document was created.',
     'documents.updated': 'A document was updated.',
     'documents.deleted': 'A document was deleted.',
+    'documents.withdrawn':
+      'A document was withdrawn: it leaves listings and knowledge search, its chunks are dropped from the index, and the withdrawal is recorded as a version. It stays readable by id and can be restored.',
+    'documents.restored':
+      'A withdrawn document was restored from an earlier version: its content is re-chunked and re-indexed, and it returns to listings and knowledge search.',
     'documents.ingested':
       'A document finished ingestion and is indexed (`status=ready`); the payload carries the document plus its final `chunk_count`.',
     'documents.ingest_failed':

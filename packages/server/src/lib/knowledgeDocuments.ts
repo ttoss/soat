@@ -18,6 +18,7 @@ import type {
 import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
+import { liveDocumentWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
@@ -199,7 +200,7 @@ const toLexicalCandidate = (
 // ── Query engine ─────────────────────────────────────────────────────────
 
 const buildDocumentInclude = (args: {
-  docWhere: Record<string, unknown> | undefined;
+  docWhere: Record<string, unknown>;
   fileInclude: ReturnType<typeof buildFileInclude>;
 }): ChunkIncludes => {
   const fileRequired = args.fileInclude.where !== undefined;
@@ -207,8 +208,11 @@ const buildDocumentInclude = (args: {
     {
       model: db.Document,
       as: 'document',
-      where: args.docWhere as ChunkWhere | undefined,
-      required: args.docWhere !== undefined || fileRequired,
+      where: args.docWhere as ChunkWhere,
+      // Always an inner join: the document predicate now always carries the
+      // live-document exclusion, so a chunk whose document does not match is
+      // a chunk this search must not answer with.
+      required: true,
       include: [{ ...args.fileInclude, required: fileRequired }],
     },
   ];
@@ -331,7 +335,7 @@ const findChunksWithSearch = async (args: {
   config: DocumentQueryConfig;
   /** The query vector, or `undefined` where the search degraded to lexical. */
   embedding: number[] | undefined;
-  docWhere: Record<string, unknown> | undefined;
+  docWhere: Record<string, unknown>;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -372,7 +376,7 @@ const findChunksWithSearch = async (args: {
 };
 
 const findChunksWithoutSearch = async (args: {
-  docWhere: Record<string, unknown> | undefined;
+  docWhere: Record<string, unknown>;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -392,16 +396,25 @@ const findChunksWithoutSearch = async (args: {
   });
 };
 
+/**
+ * The document predicate every chunk query carries.
+ *
+ * A withdrawn document has no chunks — they are dropped when it is withdrawn,
+ * which is what keeps this scan's budget from being spent on rows it would
+ * then discard. The exclusion is here anyway, through the same helper the
+ * listing uses, because a document withdrawn while a search is in flight
+ * would otherwise be answered from chunks that are on their way out.
+ */
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
   tags: Record<string, string> | undefined;
-}): Record<string, unknown> | undefined => {
-  const where: Record<string, unknown> = {};
+}): Record<string, unknown> => {
+  const where: Record<string, unknown> = { ...liveDocumentWhere() };
   if (args.documentIds && args.documentIds.length > 0) {
     where.publicId = args.documentIds;
   }
   applyTagFilter({ where, tags: args.tags });
-  return Object.keys(where).length > 0 ? where : undefined;
+  return where;
 };
 
 /**

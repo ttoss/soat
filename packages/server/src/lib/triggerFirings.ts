@@ -21,6 +21,8 @@ export const mapTriggerFiring = (instance: TriggerFiringInstance) => {
     input: instance.input,
     result: instance.result,
     error: instance.error,
+    idempotency_key: instance.idempotencyKey,
+    attempts: instance.attempts,
     started_at: instance.startedAt,
     completed_at: instance.completedAt,
     created_at: instance.createdAt,
@@ -45,6 +47,16 @@ export const createFiringRecord = async (args: {
   projectId: number;
   source: string;
   input: Record<string, unknown> | null;
+  /** Set only by the event path; see `TriggerFiring.idempotencyKey`. */
+  idempotencyKey?: string | null;
+  /** Set only by the event path; see `TriggerFiring.causationChain`. */
+  causationChain?: readonly string[] | null;
+  /**
+   * How long the writer claims the firing for. Taken at insert because the
+   * writer attempts the dispatch immediately, so a concurrent sweep must not
+   * pick the same row up for a second, parallel run.
+   */
+  leaseExpiresAt?: Date | null;
 }): Promise<InstanceType<(typeof db)['TriggerFiring']>> => {
   const firing = await db.TriggerFiring.create({
     triggerId: args.triggerId,
@@ -54,6 +66,10 @@ export const createFiringRecord = async (args: {
     input: args.input,
     result: null,
     error: null,
+    idempotencyKey: args.idempotencyKey ?? null,
+    causationChain: args.causationChain ? [...args.causationChain] : null,
+    attempts: 0,
+    leaseExpiresAt: args.leaseExpiresAt ?? null,
     startedAt: null,
     completedAt: null,
   });
@@ -68,6 +84,9 @@ export const finalizeFiringSucceeded = async (args: {
   args.firing.status = 'succeeded';
   args.firing.result = args.result;
   args.firing.completedAt = new Date();
+  // Released explicitly: a sweep may have taken the lease with a conditional
+  // UPDATE this instance never saw, and a terminal firing is never redelivered.
+  args.firing.leaseExpiresAt = null;
   await args.firing.save();
 };
 
@@ -78,6 +97,7 @@ export const finalizeFiringFailed = async (args: {
   args.firing.status = 'failed';
   args.firing.error = args.error;
   args.firing.completedAt = new Date();
+  args.firing.leaseExpiresAt = null;
   await args.firing.save();
 };
 

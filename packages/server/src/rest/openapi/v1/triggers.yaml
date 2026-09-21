@@ -646,6 +646,21 @@ components:
           type: object
           nullable: true
           description: '{ code, message, meta }'
+        idempotency_key:
+          type: string
+          nullable: true
+          description: >-
+            `<event_id>:<trigger_id>` for an `event` firing, null for every
+            other source. The same event reaching the same trigger twice
+            produces one firing under this key, so a consumer reading firings
+            can recognise a redelivery.
+        attempts:
+          type: integer
+          description: >-
+            Dispatch attempts started. Above 1 means an earlier attempt was
+            interrupted before it recorded a result and the firing was
+            redelivered — not that the target refused it, which is recorded
+            terminally in `error` and never retried.
         started_at:
           type: string
           format: date-time

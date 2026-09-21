@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 import { asCustomEventName } from 'src/lib/soatEvents';
@@ -138,6 +140,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -173,6 +176,7 @@ describe('webhookDispatcher', () => {
     const timestamp = new Date().toISOString();
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -211,6 +215,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'agents.generation.completed',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -301,6 +306,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'agents.generation.requires_action',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -334,6 +340,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'agents.generation.completed',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -357,6 +364,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'agents.generation.completed', // does not start with 'files.'
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -383,6 +391,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -428,6 +437,7 @@ describe('webhookDispatcher', () => {
     await row!.update({ secret: 'not-valid-ciphertext' });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -474,6 +484,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -518,6 +529,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -592,6 +604,7 @@ describe('webhookDispatcher', () => {
       });
 
       emitEvent({
+        id: randomUUID(),
         type: 'files.created',
         projectId: projectInternalId ?? 1,
         projectPublicId: projectId,
@@ -669,6 +682,7 @@ describe('webhookDispatcher', () => {
       });
 
       emitEvent({
+        id: randomUUID(),
         type: 'files.created',
         projectId: projectInternalId ?? 1,
         projectPublicId: projectId,
@@ -718,6 +732,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -759,6 +774,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -787,6 +803,7 @@ describe('webhookDispatcher', () => {
     });
 
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -854,6 +871,7 @@ describe('webhookDispatcher', () => {
       name: `files.created.${'x'.repeat(300)}`,
     });
     emitEvent({
+      id: randomUUID(),
       type: overLongType,
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
@@ -868,6 +886,7 @@ describe('webhookDispatcher', () => {
     // loop and dispatch keeps working.
     const baseline = callsToUrl(SENTINEL_URL).length;
     emitEvent({
+      id: randomUUID(),
       type: 'files.created',
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,

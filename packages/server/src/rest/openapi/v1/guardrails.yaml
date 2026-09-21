@@ -217,6 +217,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
         content:
@@ -877,3 +878,9 @@ components:
             never itself a change. Ignored when the write changes no policy, since
             no version is created.
           example: pre-tightening
+
+        expected_version:
+          description: >-
+            Refuses the write unless the resource is at this version.
+          allOf:
+            - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'

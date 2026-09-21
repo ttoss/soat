@@ -13,6 +13,7 @@ export { Dataset } from './Dataset';
 export { DatasetItem } from './DatasetItem';
 export { Document } from './Document';
 export { DocumentChunk } from './DocumentChunk';
+export { DocumentVersion } from './DocumentVersion';
 export { Eval } from './Eval';
 export { EvalResult } from './EvalResult';
 export { EvalRun } from './EvalRun';

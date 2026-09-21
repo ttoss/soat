@@ -2,15 +2,6 @@ import type { db } from '../db';
 
 // ── Shared document mapper ───────────────────────────────────────────────
 
-const parseMetadata = (metadata: string | null | undefined): unknown => {
-  if (!metadata) return undefined;
-  try {
-    return JSON.parse(metadata);
-  } catch {
-    return metadata;
-  }
-};
-
 type MappableDocument = InstanceType<(typeof db)['Document']> & {
   file?: InstanceType<(typeof db)['File']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -46,11 +37,12 @@ export const mapDocument = (doc: MappableDocument) => {
     id: doc.publicId,
     ...mapDocumentFileFields(doc),
     title: doc.title ?? undefined,
-    metadata: parseMetadata(doc.metadata),
+    metadata: doc.metadata ?? undefined,
     tags: doc.tags ?? undefined,
     ...mapDocumentChunkConfig(doc),
     status: doc.status as
-      'pending' | 'processing' | 'ready' | 'failed' | undefined,
+      'pending' | 'processing' | 'ready' | 'failed' | 'withdrawn' | undefined,
+    version: doc.version,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
   };

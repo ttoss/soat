@@ -200,6 +200,28 @@ describe('event triggers', () => {
     expect(result.status).toBe('succeeded');
   }, 60_000);
 
+  test('the firing is durable before it is dispatched', async () => {
+    const triggerId = await createEventTrigger({
+      targetId: inertOrchestrationId,
+    });
+
+    await emitOnce();
+
+    const [firing] = await waitForFirings({ triggerId, count: 1 });
+
+    // The key is what a redelivery of the same event dedupes against, and the
+    // chain is what the loop guard reads when the sweep runs a firing outside
+    // the request that caused it.
+    expect(firing.idempotencyKey).toBe(
+      `${(firing.idempotencyKey as string).split(':')[0]}:${triggerId}`
+    );
+    expect(firing.causationChain).toEqual([triggerId]);
+    expect(firing.attempts).toBe(1);
+
+    // Released on the terminal write, so the sweep never reclaims it.
+    expect(firing.leaseExpiresAt).toBeNull();
+  }, 60_000);
+
   test('a pattern that does not match the event does not fire', async () => {
     const triggerId = await createEventTrigger({
       targetId: inertOrchestrationId,

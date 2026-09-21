@@ -9,6 +9,9 @@ import { activityEntryGenerationId } from './2026-09-18-activityEntryGenerationI
 import { orchestrationRunIdempotencyKey } from './2026-09-18-orchestrationRunIdempotencyKey';
 import { orchestrationNodeExecutionDispatches } from './2026-09-20-orchestrationNodeExecutionDispatches';
 import { triggerToolContext } from './2026-09-20-triggerToolContext';
+import { documentMetadataJsonb } from './2026-09-21-documentMetadataJsonb';
+import { documentVersions } from './2026-09-21-documentVersions';
+import { durableEventFirings } from './2026-09-21-durableEventFirings';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -39,4 +42,7 @@ export const MIGRATIONS: Migration[] = [
   orchestrationRunIdempotencyKey,
   orchestrationNodeExecutionDispatches,
   triggerToolContext,
+  durableEventFirings,
+  documentMetadataJsonb,
+  documentVersions,
 ];

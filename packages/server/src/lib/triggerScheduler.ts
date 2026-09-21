@@ -4,6 +4,10 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { emitActivityEntry } from './activity';
 import { createScheduler, createSweep } from './scheduler';
+import {
+  failExhaustedEventFirings,
+  sweepDueEventFirings,
+} from './triggerEventFirings';
 import { computeNextFireAt } from './triggerValidation';
 
 const log = createDebug('soat:triggers');
@@ -91,7 +95,7 @@ const scheduler = createScheduler({
   defaultIntervalMs: 30000,
   envVar: 'SOAT_TRIGGER_SCHEDULER_INTERVAL_MS',
   disabledEnvVar: 'SOAT_TRIGGER_SCHEDULER_DISABLED',
-  sweeps: [fireDueTriggers],
+  sweeps: [fireDueTriggers, sweepDueEventFirings, failExhaustedEventFirings],
 });
 
 /**

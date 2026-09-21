@@ -55,6 +55,26 @@
       "operationId": "mergeDocumentTags",
       "action": "documents:UpdateDocument",
       "description": "Merge a document's tags"
+    },
+    {
+      "operationId": "withdrawDocument",
+      "action": "documents:WithdrawDocument",
+      "description": "Withdraw a document from listings and knowledge search, keeping its history"
+    },
+    {
+      "operationId": "listDocumentVersions",
+      "action": "documents:ListDocumentVersions",
+      "description": "List a document\u2019s archived content versions"
+    },
+    {
+      "operationId": "getDocumentVersion",
+      "action": "documents:GetDocumentVersion",
+      "description": "Fetch one archived document version"
+    },
+    {
+      "operationId": "restoreDocumentVersion",
+      "action": "documents:RestoreDocumentVersion",
+      "description": "Restore an archived document version"
     }
   ],
   "srnPatterns": [

@@ -13,6 +13,7 @@ import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { fileException } from './exceptions';
 import { evaluateRequestQuotas, quotaBreachError } from './quotaEnforcement';
 import { retryTransient } from './transientRetry';
+import { reserveEventFiring } from './triggerEventFirings';
 import { createFiringRecord, finalizeFiringFailed } from './triggerFirings';
 
 const log = createDebug('soat:triggers');
@@ -205,8 +206,10 @@ const dispatchTrigger = async (args: {
     return;
   }
 
+  const causationChain = [...chain, trigger.publicId as string];
+
   await runWithCausationChain({
-    chain: [...chain, trigger.publicId as string],
+    chain: causationChain,
     fn: async () => {
       const rejected = await admitFiring({ trigger });
       if (rejected) {
@@ -216,14 +219,34 @@ const dispatchTrigger = async (args: {
 
       // Imported lazily so this module — subscribed from `app.ts` — stays off
       // the orchestrations↔engine import cycle, matching `triggerScheduler.ts`.
-      const { prepareFiring, runFiringDispatch } =
+      const { assertFireInputValid, mergeFiringInput } =
         await import('./triggerDispatch');
-      const prepared = await prepareFiring({
+
+      // Settled before the row is written, so `input` records what was
+      // dispatched. A trigger whose input cannot satisfy its target is a
+      // configuration defect rather than a firing that happened, so it is
+      // raised here and leaves no row — nothing is lost if this never runs.
+      const effectiveInput = mergeFiringInput({ trigger, fireInput: input });
+      await assertFireInputValid({ trigger, input: effectiveInput });
+
+      // Written before the trigger's credentials are resolved and before its
+      // target is touched: from here the firing is owned by the database, and
+      // a process that dies mid-dispatch leaves the sweep something to find.
+      const firing = await reserveEventFiring({
+        triggerDbId: trigger.id as number,
         triggerPublicId: trigger.publicId as string,
-        source: 'event',
-        fireInput: input,
+        projectId: trigger.projectId as number,
+        eventId: event.id,
+        input: effectiveInput,
+        causationChain,
       });
-      await runFiringDispatch(prepared);
+
+      // Another process holds this (event, trigger) already; it, or the sweep,
+      // runs it.
+      if (!firing) return;
+
+      const { runReservedFiring } = await import('./triggerDispatch');
+      await runReservedFiring({ firing });
     },
   });
 };
