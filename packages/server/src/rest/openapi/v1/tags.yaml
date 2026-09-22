@@ -30,6 +30,14 @@ components:
         record which conversation, actor, agent and role a row came from, and a
         write naming one is refused with `400 RESERVED_TAG_KEY`. They are read
         and filtered like any other tag.
+
+
+        The bag is bounded, because every pair reaches the IAM context of every
+        access check on the resource: at most 50 keys, each key at most 128
+        characters and each value at most 256. A write past a bound — including
+        a merge that would grow the stored bag past the key count — is
+        `400 VALIDATION_FAILED` with `meta.limit` naming the bound it crossed.
+        `system.*` keys are the platform's and do not count against the 50.
       example: { team: 'finance', env: 'prod' }
     NullableTagBag:
       type: object

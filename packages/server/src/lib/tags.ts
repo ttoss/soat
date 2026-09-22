@@ -8,6 +8,91 @@ import { applyFilterWhere, containment } from './structuredFilter';
 const TAGS_ATTRIBUTE = 'tags';
 
 /**
+ * The runtime's half of every tag bag.
+ *
+ * A `system.*` pair says which conversation, actor, agent and role a row came
+ * from. It is what a knowledge search filters an actor's turns by and what an
+ * IAM `soat:ResourceTag/system.actor` condition fences them with, so a caller
+ * who could write one could make their own rows answer to another actor's
+ * filter. Callers therefore read these keys and never write them.
+ *
+ * A dot rather than a colon: `parseTagPairs` splits a `?tags=` pair on the
+ * first colon, so `system:actor:actor_1` would parse as the key `system`.
+ */
+export const SYSTEM_TAG_PREFIX = 'system.';
+
+export const isSystemTagKey = (key: string): boolean => {
+  return key.startsWith(SYSTEM_TAG_PREFIX);
+};
+
+/**
+ * What a tag bag may hold.
+ *
+ * Every pair reaches the IAM evaluation context of every `isAllowed` call on
+ * the resource, and every `soat:ResourceTag/<key>` condition compiled into a
+ * listing, so the bag is a cost on the request path rather than a column that
+ * merely grows. Bounding it where it is written is what keeps that cost
+ * knowable; bounding it on a read would be too late for the write that already
+ * landed.
+ *
+ * The counts are the caller's. A `system.*` key is written by the platform and
+ * refused on a caller write, so a caller cannot shed one — counting them would
+ * let a conversation's provenance decide whether a caller may still label
+ * their own row.
+ */
+export const TAG_BAG_LIMITS = {
+  keys: 50,
+  keyLength: 128,
+  valueLength: 256,
+} as const;
+
+const refuseTagLimit = (args: { message: string; limit: number }): never => {
+  throw new DomainError('VALIDATION_FAILED', args.message, {
+    limit: args.limit,
+  });
+};
+
+/**
+ * Holds a bag to {@link TAG_BAG_LIMITS}, returning it unchanged. Both the bag a
+ * caller sends and the bag a merge produces go through here, because a bounded
+ * incoming bag merged onto a full one is still an unbounded stored bag.
+ */
+export const assertTagBagLimits = <
+  T extends Record<string, string> | null | undefined,
+>(
+  tags: T
+): T => {
+  const callerKeys = Object.keys(tags ?? {}).filter((key) => {
+    return !isSystemTagKey(key);
+  });
+
+  if (callerKeys.length > TAG_BAG_LIMITS.keys) {
+    refuseTagLimit({
+      message: `a tag bag holds at most ${TAG_BAG_LIMITS.keys} keys; this one has ${callerKeys.length}`,
+      limit: TAG_BAG_LIMITS.keys,
+    });
+  }
+
+  for (const key of callerKeys) {
+    if (key.length > TAG_BAG_LIMITS.keyLength) {
+      refuseTagLimit({
+        message: `a tag key is at most ${TAG_BAG_LIMITS.keyLength} characters: '${key.slice(0, 32)}…' is ${key.length}`,
+        limit: TAG_BAG_LIMITS.keyLength,
+      });
+    }
+    const value = tags?.[key] ?? '';
+    if (value.length > TAG_BAG_LIMITS.valueLength) {
+      refuseTagLimit({
+        message: `a tag value is at most ${TAG_BAG_LIMITS.valueLength} characters: '${key}' holds ${value.length}`,
+        limit: TAG_BAG_LIMITS.valueLength,
+      });
+    }
+  }
+
+  return tags;
+};
+
+/**
  * Resolves the new tag bag for a tag write: a shallow merge over the current
  * tags when `merge` is set, a full replacement otherwise.
  *
@@ -24,9 +109,9 @@ export const mergeTags = (args: {
   incoming: Record<string, string>;
   merge?: boolean;
 }): Record<string, string> => {
-  return args.merge
-    ? { ...(args.current ?? {}), ...args.incoming }
-    : args.incoming;
+  return assertTagBagLimits(
+    args.merge ? { ...(args.current ?? {}), ...args.incoming } : args.incoming
+  );
 };
 
 /**
@@ -112,7 +197,7 @@ export const readTagBag = (
       'tags must be an object of string values'
     );
   }
-  return value;
+  return assertTagBagLimits(value);
 };
 
 /** `readTagBag` for update bodies where `null` means "clear the bag". */
@@ -174,24 +259,6 @@ export const applyTagFilter = (args: {
     where: args.where,
     fragments: [tagContainment(args.tags)],
   });
-};
-
-/**
- * The runtime's half of every tag bag.
- *
- * A `system.*` pair says which conversation, actor, agent and role a row came
- * from. It is what a knowledge search filters an actor's turns by and what an
- * IAM `soat:ResourceTag/system.actor` condition fences them with, so a caller
- * who could write one could make their own rows answer to another actor's
- * filter. Callers therefore read these keys and never write them.
- *
- * A dot rather than a colon: `parseTagPairs` splits a `?tags=` pair on the
- * first colon, so `system:actor:actor_1` would parse as the key `system`.
- */
-export const SYSTEM_TAG_PREFIX = 'system.';
-
-export const isSystemTagKey = (key: string): boolean => {
-  return key.startsWith(SYSTEM_TAG_PREFIX);
 };
 
 /**

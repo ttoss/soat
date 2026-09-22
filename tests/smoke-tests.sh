@@ -678,6 +678,17 @@ if [ "$ACTOR_BAD_TAGS_STATUS" != "400" ]; then
   exit 1
 fi
 expect_cli_error_status 400 list-actors --project_id "$PROJECT_PUBLIC_ID" --tags smoke
+# The bag is bounded where it is written, and the refusal names the bound it
+# crossed: every pair reaches the IAM context of every check on the resource.
+LONG_TAG_VALUE=$(awk 'BEGIN { while (i++ < 257) printf "v" }')
+LONG_TAG_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"env\":\"$LONG_TAG_VALUE\"}")
+if ! printf '%s\n' "$LONG_TAG_RESP" | jq -e '.error.meta.limit == 256' >/dev/null 2>&1; then
+  echo "ERROR: an over-long tag value expected 400 naming the 256 limit" >&2
+  echo "$LONG_TAG_RESP" >&2
+  exit 1
+fi
 echo "Actor tags: OK"
 
 $SOAT_CLI get-actor --actor-id "$ACTOR_ID"
