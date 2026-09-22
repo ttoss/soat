@@ -139,6 +139,42 @@ describe('Document versions', () => {
     });
   });
 
+  /**
+   * Content lives in the backing file, so a content-only write updates no
+   * document column; the timestamp moves with the version claim alone.
+   */
+  describe('write responses', () => {
+    const readUpdatedAt = async (id: string) => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}`
+      );
+      expect(response.status).toBe(200);
+      return response.body.updated_at as string;
+    };
+
+    test('update, restore and withdraw answer the updated_at a read returns', async () => {
+      const id = await createDocument({ content: 'First state.' });
+
+      const updated = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${id}`)
+        .send({ content: 'Second state.' });
+      expect(updated.status).toBe(200);
+      expect(updated.body.updated_at).toBe(await readUpdatedAt(id));
+
+      const restored = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+      expect(restored.status).toBe(200);
+      expect(restored.body.updated_at).toBe(await readUpdatedAt(id));
+
+      const withdrawn = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/withdraw`)
+        .send({});
+      expect(withdrawn.status).toBe(200);
+      expect(withdrawn.body.updated_at).toBe(await readUpdatedAt(id));
+    });
+  });
+
   describe('GET /api/v1/documents/:document_id/versions/:version', () => {
     test('returns the content the document held at that version', async () => {
       const id = await createDocument({

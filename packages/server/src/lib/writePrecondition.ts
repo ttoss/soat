@@ -37,7 +37,7 @@ const ANY_VERSION = '*';
 const invalid = (raw: string): never => {
   throw new DomainError(
     'VALIDATION_FAILED',
-    `'${raw}' is not a version. A write precondition is the integer version the resource is expected to hold, or '*' for any.`
+    `'${raw}' is not a version. If-Match is the integer version the resource is expected to hold, or '*' for any.`
   );
 };
 
@@ -108,7 +108,10 @@ const bodyPrecondition = (body: unknown): number | null => {
   if (raw === undefined || raw === null) return null;
 
   if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
-    return invalid(String(raw));
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `${PRECONDITION_FIELD} must be an integer of at least 1, not ${JSON.stringify(raw)}. Omit it to state no precondition.`
+    );
   }
 
   return raw;

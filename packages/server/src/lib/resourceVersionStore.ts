@@ -288,8 +288,8 @@ const makeWriteVersion = (args: VersionTable) => {
  * A conditional `UPDATE`, never a read-then-write: it is the point at which
  * two writers that read the same version are separated, and the loser has to
  * learn it lost from the statement itself rather than from a comparison made
- * against a value that may already be stale. `false` means another write
- * took this version first.
+ * against a value that may already be stale. `null` means another write
+ * took this version first; otherwise the claimed row as the statement left it.
  */
 const makeClaimVersion = (args: VersionTable) => {
   const { resourceModel } = args;
@@ -299,15 +299,16 @@ const makeClaimVersion = (args: VersionTable) => {
     expected: number;
     next: number;
     transaction: Transaction;
-  }): Promise<boolean> => {
-    const [claimed] = await resourceModel().update(
+  }): Promise<VersionedResourceRow | null> => {
+    const [, claimed] = await resourceModel().update(
       { version: a.next },
       {
         where: { id: a.resourceDbId, version: a.expected },
         transaction: a.transaction,
+        returning: true,
       }
     );
-    return claimed > 0;
+    return claimed[0] ?? null;
   };
 };
 
@@ -402,7 +403,13 @@ const makeCommitConfigChange = (args: {
         nextVersion
       );
 
+      // The claim stamps `updatedAt` too, and it is the only column a write
+      // whose change lives outside the row (a document's file) touches. `raw`
+      // because Sequelize silently drops a set on a timestamp attribute.
       row.set('version', nextVersion);
+      const updatedAt = claimed.get('updatedAt');
+      if (updatedAt !== undefined)
+        row.set('updatedAt', updatedAt, { raw: true });
     });
   };
 };
