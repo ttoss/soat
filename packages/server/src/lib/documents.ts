@@ -125,13 +125,9 @@ export const listDocuments = async (args: {
     return emptyPage(args);
   }
 
-  // Compiled once, before the page query: resolving a range's declared type
-  // reads the registry, and a refusal is this request's answer rather than
-  // something a caller discovers per page.
-  const metadataWhere = await compileMetadataWhere({
+  const metadataWhere = compileMetadataWhere({
     filter: args.metadata,
     column: DOCUMENT_METADATA_COLUMN,
-    projectIds: args.projectIds,
   });
 
   return paginatedList({

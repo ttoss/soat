@@ -53,13 +53,15 @@ describe('Knowledge search metadata filters', () => {
       expect(response.status).toBe(201);
     };
 
+    // `pages` is in no declaration: an ordering reads the operand, not the
+    // registry.
     await create({
       path: '/handbook/support.md',
-      metadata: { audience: 'support', revision: 4 },
+      metadata: { audience: 'support', revision: 4, pages: 3 },
     });
     await create({
       path: '/handbook/legal.md',
-      metadata: { audience: 'legal', revision: 12 },
+      metadata: { audience: 'legal', revision: 12, pages: 30 },
     });
   }, 90_000);
 
@@ -111,11 +113,11 @@ describe('Knowledge search metadata filters', () => {
     expect(response.body.error.meta.field).toBe('audience');
   });
 
-  test('refuses a range over a field no declaration types', async () => {
-    const response = await search({ revisionn: { gte: 1 } });
+  test('orders an undeclared number numerically', async () => {
+    const response = await search({ pages: { gte: 10 } });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error.meta.field).toBe('revisionn');
+    expect(response.status).toBe(200);
+    expect(pathsOf(response.body)).toEqual(['/handbook/legal.md']);
   });
 
   test('narrows a query rather than replacing it', async () => {

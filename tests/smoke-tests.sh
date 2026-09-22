@@ -1035,7 +1035,7 @@ META_DOC_ID=$($SOAT_CLI create-document \
   --content "Revenue is up." \
   --filename accepted.txt \
   --path /smoke-reports/accepted.txt \
-  --metadata '{"quarter":"Q1"}' | jq -r '.id')
+  --metadata '{"quarter":"Q1","pages":3}' | jq -r '.id')
 if [ -z "$META_DOC_ID" ] || [ "$META_DOC_ID" = "null" ]; then
   echo "ERROR: metadata satisfying the declaration should have been stored" >&2
   exit 1
@@ -1045,7 +1045,7 @@ META_DOC2_ID=$($SOAT_CLI create-document \
   --content "Revenue held." \
   --filename second.txt \
   --path /smoke-reports/second.txt \
-  --metadata '{"quarter":"Q2"}' | jq -r '.id')
+  --metadata '{"quarter":"Q2","pages":30}' | jq -r '.id')
 
 # 11b5. Metadata filters: equality anywhere, ordering over a declared field
 echo "--- Metadata filters: equality, ordering, refusal ---"
@@ -1066,14 +1066,23 @@ if [ "$META_RANGE_PATHS" != "/smoke-reports/second.txt" ]; then
   exit 1
 fi
 
-# No declaration types this field, so an ordering over it has no comparison to
-# make and is refused rather than answered with an empty page.
+# No declaration types `pages`; the operand does. An ordering reads the bag, not
+# the registry.
+META_UNDECLARED_PATHS=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --metadata '{"pages":{"gte":10}}' | jq -r '[.data[].path] | join(",")')
+if [ "$META_UNDECLARED_PATHS" != "/smoke-reports/second.txt" ]; then
+  echo "ERROR: undeclared range expected /smoke-reports/second.txt, got '$META_UNDECLARED_PATHS'" >&2
+  exit 1
+fi
+
+# A boolean has no ordering, so it is refused rather than compared.
 META_RANGE_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -G "$SERVER_URL/api/v1/documents" \
   -H "Authorization: Bearer $TOKEN" \
   --data-urlencode "project_id=$PROJECT_PUBLIC_ID" \
-  --data-urlencode 'metadata={"undeclared":{"gte":1}}')
+  --data-urlencode 'metadata={"pages":{"gte":true}}')
 if [ "$META_RANGE_STATUS" != "400" ]; then
-  echo "ERROR: a range over an undeclared field expected 400, got $META_RANGE_STATUS" >&2
+  echo "ERROR: a non-orderable operand expected 400, got $META_RANGE_STATUS" >&2
   exit 1
 fi
 

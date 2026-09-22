@@ -99,12 +99,57 @@ describe('Document metadata filters', () => {
       path: '/notes/draft.txt',
       metadata: { quarter: 'Q1', revision: 'n/a' },
     });
+
+    /** A project that declares nothing, so nothing here is typed by a schema. */
+    const createUngoverned = async (args: {
+      path: string;
+      metadata: unknown;
+    }) => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: otherProjectId,
+          content: 'Held steady.',
+          filename: args.path.split('/').pop(),
+          path: args.path,
+          metadata: args.metadata,
+        });
+      expect(response.status).toBe(201);
+    };
+
+    await createUngoverned({
+      path: '/data/a.txt',
+      metadata: { revision: 2 },
+    });
+    await createUngoverned({
+      path: '/data/b.txt',
+      metadata: { revision: 7 },
+    });
+    await createUngoverned({
+      path: '/data/c.txt',
+      metadata: { revision: 11 },
+    });
+    await createUngoverned({
+      path: '/typed/number.txt',
+      metadata: { revision: 3 },
+    });
+    await createUngoverned({
+      path: '/typed/string.txt',
+      metadata: { revision: '3' },
+    });
   }, 90_000);
 
   const list = (metadata: unknown, query = '') => {
     const filter = encodeURIComponent(JSON.stringify(metadata));
     return authenticatedTestClient(userToken).get(
       `/api/v1/documents?project_id=${projectId}&metadata=${filter}${query}`
+    );
+  };
+
+  const listUngoverned = (metadata: unknown, query = '') => {
+    const filter = encodeURIComponent(JSON.stringify(metadata));
+    return authenticatedTestClient(userToken).get(
+      `/api/v1/documents?project_id=${otherProjectId}&metadata=${filter}${query}`
     );
   };
 
@@ -183,7 +228,7 @@ describe('Document metadata filters', () => {
   });
 
   describe('range', () => {
-    test('compares a declared number numerically, not as text', async () => {
+    test('compares a number numerically, not as text', async () => {
       const response = await list({ revision: { gte: 7 } });
 
       expect(response.status).toBe(200);
@@ -210,58 +255,61 @@ describe('Document metadata filters', () => {
       expect(pathsOf(response.body)).toEqual(['/reports/q1.txt']);
     });
 
-    test('compares a declared string', async () => {
+    test('compares a string', async () => {
       const response = await list({ quarter: { gt: 'Q2' } });
 
       expect(response.status).toBe(200);
       expect(pathsOf(response.body)).toEqual(['/reports/q3.txt']);
     });
 
-    test('refuses a field no declaration types', async () => {
-      const response = await list({ revisionn: { gte: 3 } });
+    test('orders an undeclared number numerically', async () => {
+      const response = await listUngoverned({ revision: { gte: 7 } });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.meta.field).toBe('revisionn');
+      expect(response.status).toBe(200);
+      // The project declares nothing, so the operand alone says what the
+      // comparison is.
+      expect(pathsOf(response.body)).toEqual(['/data/b.txt', '/data/c.txt']);
     });
 
-    test('refuses an operand of a different type than the field is declared', async () => {
-      const response = await list({ revision: { gte: '3' } });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.meta.field).toBe('revision');
-    });
-
-    test('refuses a field declared as a type with no ordering', async () => {
-      const response = await list({ approved: { gte: true } });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-    });
-
-    test('refuses a range when no single project is in scope', async () => {
+    test('orders across projects for a JWT caller', async () => {
       const filter = encodeURIComponent(
-        JSON.stringify({ revision: { gte: 3 } })
+        JSON.stringify({ revision: { gte: 11 } })
       );
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents?metadata=${filter}`
+        `/api/v1/documents?metadata=${filter}&limit=100`
       );
 
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.status).toBe(200);
+      expect(pathsOf(response.body)).toEqual([
+        '/data/c.txt',
+        '/reports/q2.txt',
+      ]);
     });
 
-    test('a declaration in another project does not type the field', async () => {
-      const filter = encodeURIComponent(
-        JSON.stringify({ revision: { gte: 3 } })
+    test('an operand of one type never matches a row holding another', async () => {
+      const numeric = await listUngoverned(
+        { revision: { gte: 1 } },
+        '&path_prefix=/typed'
       );
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents?project_id=${otherProjectId}&metadata=${filter}`
-      );
+      expect(numeric.status).toBe(200);
+      expect(pathsOf(numeric.body)).toEqual(['/typed/number.txt']);
 
-      expect(response.status).toBe(400);
-      expect(response.body.error.meta.field).toBe('revision');
+      const textual = await listUngoverned(
+        { revision: { gte: '1' } },
+        '&path_prefix=/typed'
+      );
+      expect(textual.status).toBe(200);
+      expect(pathsOf(textual.body)).toEqual(['/typed/string.txt']);
+    });
+
+    test('refuses a non-orderable operand', async () => {
+      for (const operand of [true, null, [1], {}]) {
+        const response = await list({ flag: { gt: operand } });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.meta.field).toBe('flag');
+      }
     });
   });
 

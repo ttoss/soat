@@ -2,8 +2,6 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { OrderableJsonType } from './metadataSchemas';
-import { declaredDocumentFieldTypes } from './metadataSchemas';
 import { isPlainObject } from './plainObject';
 
 /**
@@ -14,20 +12,17 @@ import { isPlainObject } from './plainObject';
  * its string spelling.
  *
  * Ordering cannot be asked that way. It compares the stored value to a JSON
- * operand and is guarded by the value's own type, because JSONB orders every
- * string below every number: without the guard a `lt` would return each row
- * whose field holds unrelated text. The guard and the comparison are one
- * expression per bound, so neither can be evaluated without the other.
- *
- * An ordering also has to know which comparison is meant, and only a metadata
- * schema says. A range over a field no declaration types is refused rather
- * than guessed — which is also what answers a misspelled field, where the
- * alternative is an empty page that reads as "nothing matched".
+ * operand, and the operand says which comparison is meant: a number orders
+ * numerically, a string lexicographically. The guard is what keeps that honest
+ * — JSONB orders every string below every number, so without it a `lt` would
+ * return each row whose field holds unrelated text. The guard and the
+ * comparison are one expression per bound, so neither can be evaluated without
+ * the other.
  */
 
 type Scalar = string | number | boolean | null;
 
-/** Operands an ordering can be asked about: the JSON types a schema orders. */
+/** Operands an ordering can be asked about: the JSON types that order. */
 type Orderable = string | number;
 
 type RangeOperator = 'gt' | 'gte' | 'lt' | 'lte';
@@ -190,7 +185,7 @@ const containment = (bag: Record<string, Scalar>) => {
   return { metadata: { [Op.contains]: bag } };
 };
 
-const jsonTypeOf = (value: Orderable): OrderableJsonType => {
+const jsonTypeOf = (value: Orderable): 'string' | 'number' => {
   return typeof value === 'number' ? 'number' : 'string';
 };
 
@@ -231,51 +226,6 @@ const boundWhere = (args: {
 };
 
 /**
- * The project whose declarations type a range. Declarations are project-scoped,
- * so a query spanning several — or every one a JWT reaches — has no single
- * answer to what a field is, and is told so rather than served one project's.
- */
-const onlyProject = (projectIds: number[] | undefined): number => {
-  if (projectIds?.length !== 1) {
-    return refuse(
-      'A metadata range needs project_id: the declaration that types the field is project-scoped.'
-    );
-  }
-  return projectIds[0];
-};
-
-const compileRanges = async (args: {
-  ranges: [string, { operator: RangeOperator; value: Orderable }[]][];
-  column: string;
-  projectIds?: number[];
-}): Promise<unknown[]> => {
-  const declared = await declaredDocumentFieldTypes({
-    projectId: onlyProject(args.projectIds),
-  });
-
-  const fragments: unknown[] = [];
-  for (const [field, bounds] of args.ranges) {
-    const type = declared.get(field);
-    if (!type) {
-      refuse(
-        `metadata filter '${field}': no metadata schema in this project declares an orderable type for it, so gt/gte/lt/lte have no comparison to make.`,
-        field
-      );
-    }
-    for (const bound of bounds) {
-      if (jsonTypeOf(bound.value) !== type) {
-        refuse(
-          `metadata filter '${field}' is declared as ${type}, so ${bound.operator} compares against a ${type}.`,
-          field
-        );
-      }
-      fragments.push(boundWhere({ ...bound, column: args.column, field }));
-    }
-  }
-  return fragments;
-};
-
-/**
  * ANDs compiled fragments into a where a caller is already building.
  *
  * Appends rather than assigns: a compiled IAM policy lands under the same
@@ -304,16 +254,13 @@ export const applyMetadataWhere = (args: {
  *   the document at — a raw comparison names the column itself, where the
  *   containment halves let Sequelize qualify it.
  */
-export const compileMetadataWhere = async (args: {
+export const compileMetadataWhere = (args: {
   filter: MetadataFilter | undefined;
   column: string;
-  projectIds?: number[];
-}): Promise<unknown[]> => {
+}): unknown[] => {
   if (!hasMetadataFilter(args.filter)) return [];
 
   const equality: Record<string, Scalar> = {};
-  const ranges: [string, { operator: RangeOperator; value: Orderable }[]][] =
-    [];
   const fragments: unknown[] = [];
 
   for (const [field, filter] of Object.entries(args.filter)) {
@@ -329,21 +276,14 @@ export const compileMetadataWhere = async (args: {
         });
         break;
       case 'range':
-        ranges.push([field, filter.bounds]);
+        for (const bound of filter.bounds) {
+          fragments.push(boundWhere({ ...bound, column: args.column, field }));
+        }
         break;
     }
   }
 
   if (Object.keys(equality).length > 0) fragments.push(containment(equality));
-  if (ranges.length > 0) {
-    fragments.push(
-      ...(await compileRanges({
-        ranges,
-        column: args.column,
-        projectIds: args.projectIds,
-      }))
-    );
-  }
 
   return fragments;
 };
