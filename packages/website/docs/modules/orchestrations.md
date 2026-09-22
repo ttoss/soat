@@ -66,7 +66,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `pause_reason`     | string \| null | The reason supplied with the pause, when one was               |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
-| `metadata`         | object \| null | Caller-owned annotations supplied at run creation and returned verbatim; never merged into `state` (see [Run Metadata](#run-metadata)) |
+| `metadata`         | object \| null | Caller-owned annotations supplied at run creation; never merged into `state` (see [Run Metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `idempotency_key`  | string \| null | Deduplication key supplied at run creation, unique within the project (see [Starting a run at most once](#starting-a-run-at-most-once)) |
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |

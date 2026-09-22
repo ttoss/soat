@@ -79,7 +79,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
 | `payload`           | object           | Caller-owned task data; input to guards and dispatch `input_mapping`s. The engine never writes into it except declared `payload_writes` |
-| `metadata`          | object \| null   | Caller-owned annotations supplied at creation and returned verbatim; invisible to guards and to `payload_writes` (see [Task metadata](#task-metadata)) |
+| `metadata`          | object \| null   | Caller-owned annotations supplied at creation; invisible to guards and to `payload_writes` (see [Task metadata](#task-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect. `kind` is `generation`, `orchestration_run` or `tool_call`; a `tool_call` always carries a null `id`, since a direct tool call leaves no addressable record |

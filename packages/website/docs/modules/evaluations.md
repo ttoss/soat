@@ -54,7 +54,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `dataset_id` | string | ID of the owning dataset |
 | `input` | array | `{ role, content }` messages, replayed verbatim as the generation's input |
 | `expected_output` | string | Reference answer for `exact_match` and `llm_judge`; may be `null` |
-| `metadata` | object | Free-form tags (e.g. `{"topic": "billing"}`), opaque to the platform and readable from `json_logic` scorers |
+| `metadata` | object | Annotations on the item (e.g. `{"topic": "billing"}`), stored as written and readable from a `json_logic` scorer — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `source_generation_id` | string | The generation this item was curated from (see [Curating items from production](#curating-items-from-production)); `null` for a hand-authored item, and `null` again once that generation is deleted |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
@@ -86,7 +86,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
-| `metadata` | object \| null | Caller-owned annotations supplied when the run was started and returned verbatim (see [Run metadata](#run-metadata)) |
+| `metadata` | object \| null | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
 | `created_at` | string | ISO 8601 creation timestamp |
 

@@ -55,7 +55,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 | `filename`    | `string`       | Original filename                                        |
 | `size`        | `number`       | File size in bytes                                       |
 | `title`       | `string\|null` | Document title (if set)                                  |
-| `metadata`    | `object\|null` | Arbitrary JSON metadata, returned with keys in the exact casing they were written with — not converted between `snake_case` and `camelCase` like other fields |
+| `metadata`    | `object\|null` | The document's annotation bag, returned with keys in the exact casing they were written with — not converted between `snake_case` and `camelCase` like other fields. See [Tags and metadata](iam.md#tags-and-metadata) |
 | `tags`        | `object`       | Key-value tags associated with the document              |
 
 #### Memory result (`source_type: "memory"`)
