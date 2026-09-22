@@ -1382,9 +1382,6 @@ components:
           nullable: true
           description: Initial input provided at run creation.
         metadata:
-          type: object
-          additionalProperties: true
-          nullable: true
           description: >-
             The caller-owned key/value metadata supplied at run creation,
             returned verbatim. Null when the run was started without any. The
@@ -1393,6 +1390,8 @@ components:
           example:
             tenant_account_id: '42'
             dispatch_batch: nightly-2026-08-25
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         idempotency_key:
           type: string
           nullable: true
@@ -1688,8 +1687,6 @@ components:
           example:
             ocaToken: eyJhbGciOiJIUzI1NiJ9.abc
         metadata:
-          type: object
-          additionalProperties: true
           description: >-
             Caller-supplied key/value metadata attached to the run record for
             per-run attribution (e.g. which of your own tenants this run belongs
@@ -1712,6 +1709,8 @@ components:
           example:
             tenant_account_id: '42'
             dispatch_batch: nightly-2026-08-25
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         idempotency_key:
           type: string
           maxLength: 255

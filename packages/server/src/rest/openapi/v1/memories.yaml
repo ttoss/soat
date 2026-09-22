@@ -147,10 +147,10 @@ paths:
                   allOf:
                     - $ref: './tags.yaml#/components/schemas/TagBag'
                 metadata:
-                  type: object
-                  additionalProperties: true
                   description: Arbitrary structured metadata attached to the memory
                   example: { evidence: high, quarter: Q3 }
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/MetadataBag'
                 supersedes:
                   type: string
                   description: >-
@@ -295,10 +295,9 @@ paths:
                   allOf:
                     - $ref: './tags.yaml#/components/schemas/NullableTagBag'
                 metadata:
-                  type: object
-                  nullable: true
-                  additionalProperties: true
                   description: Replaces the memory's metadata. Pass null to clear.
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
                 expected_version:
                   description: >-
                     Refuses the write unless the memory is at this version.
@@ -639,11 +638,10 @@ components:
           allOf:
             - $ref: './tags.yaml#/components/schemas/NullableTagBag'
         metadata:
-          type: object
-          nullable: true
-          additionalProperties: true
           description: Arbitrary structured metadata attached to the memory
           example: { evidence: high }
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         invalidated_at:
           type: string
           format: date-time

@@ -152,11 +152,12 @@ paths:
                   type: string
                   description: Document title
                 metadata:
-                  type: object
                   description: >-
                     Arbitrary metadata object. Unlike other body fields, keys
                     are stored and returned verbatim in the casing supplied —
                     they are not converted between snake_case and camelCase.
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/MetadataBag'
                 tags:
                   $ref: './tags.yaml#/components/schemas/TagBag'
                 chunk_strategy:
@@ -474,13 +475,13 @@ paths:
                   description: Logical path within the project (e.g. /reports/q1.txt). Pass null to clear.
                   example: '/reports/q1.txt'
                 metadata:
-                  type: object
-                  nullable: true
                   description: >-
                     Arbitrary metadata object, replacing the stored bag; `null`
                     clears it. Unlike other body fields, keys are stored and
                     returned verbatim in the casing supplied — they are not
                     converted between snake_case and camelCase.
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
                 tags:
                   $ref: './tags.yaml#/components/schemas/TagBag'
                 expected_version:

@@ -422,18 +422,17 @@ paths:
                   description: Zero-based position. Defaults to MAX+1 (append).
                   example: 0
                 metadata:
-                  type: object
                   description: >-
                     Caller-owned annotations on the message (e.g. a phone
                     number, a channel), stored as sent and returned verbatim.
                     The platform does not read the bag, so nothing in it
                     reaches the model: a value the model should see belongs in
                     `message`.
-                  nullable: true
-                  additionalProperties: true
                   example:
                     phone: '5511999998888'
                     channel: 'whatsapp'
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
       responses:
         '201':
           description: Message added
@@ -851,13 +850,12 @@ components:
           description: Zero-based position in the conversation
           example: 0
         metadata:
-          type: object
           description: Optional structured metadata attached to the message
-          nullable: true
-          additionalProperties: true
           example:
             phone: '5511999998888'
             channel: 'whatsapp'
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         content:
           type: string
           nullable: true

@@ -458,9 +458,6 @@ components:
             dispatch mappings. The engine never writes into it except the
             workflow's declared `payload_writes`.
         metadata:
-          type: object
-          additionalProperties: true
-          nullable: true
           description: >-
             The caller-owned key/value metadata supplied when the task was
             created, returned verbatim. Null when the task was created without
@@ -470,6 +467,8 @@ components:
           example:
             tenant_account_id: '42'
             source: zendesk
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         last_result:
           description: >-
             Server-owned. The result of the current state's last completed
@@ -650,8 +649,6 @@ components:
             Write-only: the stored bag is never returned by any task read, and it
             is cleared when the task reaches a terminal state.
         metadata:
-          type: object
-          additionalProperties: true
           description: >-
             Caller-supplied key/value metadata attached to the task record for
             attribution — which of your own tenants the task belongs to, the
@@ -676,6 +673,8 @@ components:
           example:
             tenant_account_id: '42'
             source: zendesk
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
     UpdateTaskRequest:
       type: object
       additionalProperties: false
