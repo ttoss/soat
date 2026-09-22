@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { streamDocumentsNdjson } from 'src/lib/documentExport';
 import {
   createDocument,
   deleteDocument,
@@ -33,6 +34,7 @@ import {
   writePreconditionOf,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
+import { sendNdjson } from './ndjsonResponse';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const documentsRouter = new Router<Context>();
@@ -162,6 +164,47 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     includeWithdrawn,
     limit,
     offset,
+  });
+});
+
+// Registered before `/documents/:document_id` so `export` is read as a path
+// segment rather than swallowed as a document id.
+documentsRouter.get('/documents/export', async (ctx: Context) => {
+  requireAuth(ctx);
+
+  const projectPublicId = ctx.query.project_id as string | undefined;
+
+  // Per-project, as the audit-log export is: an unbounded cross-project dump
+  // is a different egress surface than this endpoint offers.
+  if (!projectPublicId) {
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
+  }
+
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    projectPublicId,
+    action: 'documents:ExportDocuments',
+    resourceType: 'document',
+  });
+
+  const policies = await ctx.authUser!.getPolicies(projectPublicId);
+  const { where: policyWhere, hasAccess } = compilePolicy({
+    policies,
+    action: 'documents:ExportDocuments',
+    resourceType: 'document',
+    projectPublicId,
+  });
+
+  sendNdjson({
+    ctx,
+    filename: `documents-${projectPublicId}.ndjson`,
+    lines: streamDocumentsNdjson({
+      // A policy that grants nothing exports nothing, rather than refusing:
+      // the scope a caller has is the scope the file describes.
+      projectIds: hasAccess ? (projectIds ?? []) : [],
+      policyWhere,
+      pathPrefix: ctx.query.path_prefix as string | undefined,
+    }),
   });
 });
 

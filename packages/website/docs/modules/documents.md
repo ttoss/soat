@@ -236,6 +236,17 @@ A write that stores metadata violating the declaration in force is refused with 
 
 [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers what a write would be told without writing, which is what a batch import wants before it starts.
 
+### NDJSON export
+
+[`GET /api/v1/documents/export`](/docs/api/documents/export-documents) streams a project's documents as newline-delimited JSON, oldest first, one document object per line — the corpus as a file, for archiving it or moving it into another system.
+
+- `project_id` is **required**; `path_prefix` narrows it exactly as it narrows the listing.
+- The rows are the rows [`GET /api/v1/documents`](/docs/api/documents/list-documents) returns for the same caller: a policy that hides a document hides it here, and withdrawn documents and the reserved `/.system/` root are left out.
+- The response streams and pages internally, so a project's size is not the request's size.
+- Authorized by `documents:ExportDocuments`, separate from `documents:ListDocuments`.
+
+The export is not an MCP tool (an unbounded stream has no JSON projection); tools use the paged `list-documents`.
+
 ### Metadata filters
 
 [`GET /api/v1/documents`](/docs/api/documents/list-documents) narrows by the bag with `?metadata=`, a JSON object url-encoded into one parameter. [Knowledge search](./knowledge.md) reads the same object in its request body, so a filter written for one holds for the other.

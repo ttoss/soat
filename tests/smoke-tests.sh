@@ -1544,6 +1544,27 @@ $SOAT_CLI delete-tool --tool-id "$ASYNC_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$ASYNC_HTTP_TOOL_ID"
 echo "Async ingestion rule resources cleaned up."
 
+# 12d. NDJSON export: the corpus as a file, one JSON object per line, and the
+# same rows the listing returns for this caller.
+echo "--- Documents: NDJSON export ---"
+DOC_EXPORT_RESP=$($SOAT_CLI export-documents --project_id "$PROJECT_PUBLIC_ID")
+DOC_EXPORT_IDS=$(printf '%s\n' "$DOC_EXPORT_RESP" | grep '"path"' \
+  | jq -r '.id' | sort -u | wc -l)
+if [ "$DOC_EXPORT_IDS" -lt 2 ]; then
+  echo "ERROR: expected the export to carry the project's documents" >&2
+  printf '%s\n' "$DOC_EXPORT_RESP" >&2
+  exit 1
+fi
+# `path_prefix` narrows the file exactly as it narrows the listing.
+DOC_EXPORT_PREFIXED=$($SOAT_CLI export-documents \
+  --project_id "$PROJECT_PUBLIC_ID" --path_prefix /smoke-reports \
+  | grep '"path"' | jq -r '.path' | grep -cv '^/smoke-reports/' || true)
+if [ "$DOC_EXPORT_PREFIXED" != "0" ]; then
+  echo "ERROR: path_prefix export returned a document outside /smoke-reports" >&2
+  exit 1
+fi
+echo "Documents export: OK"
+
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
@@ -1636,6 +1657,19 @@ if [ "$ME1_ACTION" != "created" ]; then
   exit 1
 fi
 echo "Memory created: $ME1_ID"
+
+# The store as a file: one JSON object per line, what the store currently
+# asserts (an invalidated fact is left out unless asked for).
+echo "--- Memories: NDJSON export ---"
+MEM_EXPORT_RESP=$($SOAT_CLI export-memories --memory-store-id "$MEM_ID")
+MEM_EXPORT_IDS=$(printf '%s\n' "$MEM_EXPORT_RESP" | grep '"content"' \
+  | jq -r '.id' | sort -u | wc -l)
+if [ "$MEM_EXPORT_IDS" -lt 1 ]; then
+  echo "ERROR: expected the memory export to carry the store's memories" >&2
+  printf '%s\n' "$MEM_EXPORT_RESP" >&2
+  exit 1
+fi
+echo "Memories export: OK"
 
 echo "--- Memories: duplicate write (skipped) ---"
 ME_SKIP_RESP=$($SOAT_CLI create-memory \
@@ -2460,6 +2494,18 @@ if [ -z "$ACT_ID" ]; then
   exit 1
 fi
 echo "Activity feed coverage: OK ($ACT_ID)"
+
+# The feed as a file: oldest first, where the feed itself reads newest first.
+echo "--- Activity: NDJSON export ---"
+ACT_EXPORT_RESP=$($SOAT_CLI export-activity --project_id "$PROJECT_PUBLIC_ID")
+ACT_EXPORT_KINDS=$(printf '%s\n' "$ACT_EXPORT_RESP" | grep '"kind"' \
+  | jq -r '.kind' | sort -u | wc -l)
+if [ "$ACT_EXPORT_KINDS" -lt 1 ]; then
+  echo "ERROR: expected the activity export to carry the project's entries" >&2
+  printf '%s\n' "$ACT_EXPORT_RESP" >&2
+  exit 1
+fi
+echo "Activity export: OK"
 
 echo "--- Run input is visible to node logic via the input namespace ---"
 # A snake_case input key must round-trip verbatim; it resolves only through the

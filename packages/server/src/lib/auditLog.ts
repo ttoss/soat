@@ -8,6 +8,7 @@ import {
 } from 'src/lib/resource-inputs/normalizers';
 
 import { emitResourceEvent } from './eventBus';
+import { afterCursorWhere, EXPORT_ORDER, streamNdjson } from './ndjsonExport';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:audit');
@@ -369,47 +370,29 @@ export const listAuditEntries = async (
 };
 
 /**
- * Number of rows fetched per round trip while streaming an export. Bounds the
- * exporter's memory to one batch regardless of how many entries a project has.
+ * Streams a project's audit entries as NDJSON, through the one exporter every
+ * export uses. Filters mirror {@link listAuditEntries}.
  */
-const EXPORT_BATCH_SIZE = 500;
-
-/**
- * Streams a project's audit entries as NDJSON — one snake_case JSON object per
- * line, oldest first. Ordering is ascending by `(created_at, id)` so a row that
- * arrives mid-export is appended after the cursor rather than shifting rows the
- * consumer already read (a `DESC` order would push every new row to the front
- * and duplicate a page boundary). Pages internally, so the whole log is never
- * held in memory. Filters mirror {@link listAuditEntries}.
- */
-export async function* streamAuditEntriesNdjson(
+export const streamAuditEntriesNdjson = (
   args: AuditListFilters
-): AsyncGenerator<string> {
+): AsyncGenerator<string> => {
   const where = buildListWhere(args);
-  let offset = 0;
 
-  for (;;) {
-    const rows = await db.AuditEntry.findAll({
-      where,
-      include: [{ model: db.Project, as: 'project' }],
-      order: [
-        ['createdAt', 'ASC'],
-        ['id', 'ASC'],
-      ],
-      limit: EXPORT_BATCH_SIZE,
-      offset,
-    });
-
-    if (rows.length === 0) return;
-
-    for (const row of rows) {
-      yield `${JSON.stringify(toSnakeAuditEntry(mapAuditEntry(row)))}\n`;
-    }
-
-    if (rows.length < EXPORT_BATCH_SIZE) return;
-    offset += rows.length;
-  }
-}
+  return streamNdjson({
+    findBatch: ({ after, limit }) => {
+      const resume = afterCursorWhere(after);
+      return db.AuditEntry.findAll({
+        where: resume ? { [Op.and]: [where, resume] } : where,
+        include: [{ model: db.Project, as: 'project' }],
+        order: EXPORT_ORDER,
+        limit,
+      });
+    },
+    map: (row) => {
+      return toSnakeAuditEntry(mapAuditEntry(row));
+    },
+  });
+};
 
 /**
  * Fetches one entry by public id, scoped to the projects the caller may access

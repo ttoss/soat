@@ -397,6 +397,52 @@ paths:
           description: Memory store not found
         '500':
           description: Internal server error
+  /api/v1/memory-stores/{memory_store_id}/export:
+    get:
+      tags:
+        - Memory Stores
+      summary: Export a memory store's memories as NDJSON
+      description: >-
+        Streams one store's memories as newline-delimited JSON — one memory
+        object per line, oldest first. Invalidated memories (retracted or
+        superseded) are left out unless `include_invalidated` asks for them, so
+        the file holds what the store currently asserts. The rows are the rows
+        the listing returns for the same caller.
+      operationId: exportMemories
+      # Not a tool: the response is a stream with no JSON projection, and an
+      # export is deliberately unbounded, so the callable form of "read the
+      # memories" is `listMemories`, which is paged.
+      x-soat-mcp-exclude: true
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          description: Memory store whose memories are exported
+          schema:
+            type: string
+            example: mem_store_V1StGXR8Z5jdHi6B
+        - name: include_invalidated
+          in: query
+          description: Include memories that were retracted or superseded
+          schema:
+            type: boolean
+            default: false
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
+      responses:
+        '200':
+          description: >-
+            A newline-delimited stream of memories. Each line is a JSON object
+            with the same fields as `Memory`.
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
   /api/v1/memory-stores/{memory_store_id}/tags:
     get:
       tags:

@@ -91,6 +91,15 @@ Severity defaults per kind, and a producer may override it:
 
 [`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor`; pass it back as `cursor`. `null` means no more data. The cursor is an opaque keyset token over `(created_at, id)`, so a page never shifts as entries arrive.
 
+### NDJSON export
+
+[`GET /api/v1/activity/export`](/docs/api/activity/export-activity) streams a project's entries as newline-delimited JSON, one entry object per line, for archiving the feed before the retention window expires.
+
+- **Oldest first**, where the feed itself reads newest first: a feed answers what just happened, and a file is read start to end.
+- `project_id` is **required**; every list filter (`kind`, `severity`, `agent_id`, `generation_id`, `orchestration_run_id`) applies identically.
+- The response streams and pages internally.
+- Authorized by `activity:ExportActivity`, separate from `activity:ListActivity`.
+
 ### Retention
 
 Entries are kept **indefinitely**: no delete endpoint and, unlike the [audit log](./audit-log.md#append-only--retention), no pruning sweep, so `activity_entries` grows with execution volume.

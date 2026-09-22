@@ -307,6 +307,54 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/documents/export:
+    get:
+      tags:
+        - Documents
+      summary: Export documents as NDJSON
+      description: >-
+        Streams a project's documents as newline-delimited JSON — one document
+        object per line, oldest first — for archiving the corpus or shipping it
+        into another system. `project_id` is required: the export is
+        per-project by design. The rows are the rows the listing returns for
+        the same caller, so a policy that hides a document hides it here too,
+        and withdrawn documents and the reserved `/.system/` root are left out.
+      operationId: exportDocuments
+      # Not a tool: the response is a stream with no JSON projection, and an
+      # export is deliberately unbounded, so the callable form of "read the
+      # documents" is `listDocuments`, which is paged.
+      x-soat-mcp-exclude: true
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          description: Project whose documents are exported
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: path_prefix
+          in: query
+          description: >-
+            Only documents filed under this directory. The prefix is a path
+            boundary, not a substring, exactly as on the listing.
+          schema:
+            type: string
+            example: '/reports'
+      responses:
+        '200':
+          description: >-
+            A newline-delimited stream of documents. Each line is a JSON object
+            with the same fields as `Document`.
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '400':
+          description: '`project_id` is required'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /api/v1/documents/{document_id}:
     get:
       tags:

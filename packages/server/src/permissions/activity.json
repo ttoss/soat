@@ -5,6 +5,11 @@
       "operationId": "listActivity",
       "action": "activity:ListActivity",
       "description": "List activity feed entries in a project"
+    },
+    {
+      "operationId": "exportActivity",
+      "action": "activity:ExportActivity",
+      "description": "Export a project's activity feed as NDJSON"
     }
   ]
 }

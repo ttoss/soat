@@ -71,7 +71,13 @@ registerResourceFieldMap({
  */
 const DOCUMENT_METADATA_COLUMN = '"Document"."metadata"';
 
-const buildDocumentQueryOptions = (args: {
+/**
+ * The rows a caller may see, as Sequelize options: the compiled policy, the
+ * live-document and reserved-path exclusions, and the caller's own filters.
+ * Shared with the export so a listing and a file of the same project never
+ * disagree about which documents exist.
+ */
+export const buildDocumentQueryOptions = (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;

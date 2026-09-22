@@ -75,6 +75,11 @@
       "operationId": "restoreDocumentVersion",
       "action": "documents:RestoreDocumentVersion",
       "description": "Restore an archived document version"
+    },
+    {
+      "operationId": "exportDocuments",
+      "action": "documents:ExportDocuments",
+      "description": "Export a project's documents as NDJSON"
     }
   ],
   "srnPatterns": [
