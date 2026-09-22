@@ -23,6 +23,15 @@ export type MemorySource = (typeof MEMORY_SOURCES)[number];
       fields: ['public_id'],
     },
     {
+      // Containment (`@>`) is the only way a tag bag is matched, by the
+      // `?tags=` filter, knowledge search and a `soat:ResourceTag/<key>`
+      // condition alike. `jsonb_path_ops` indexes whole key/value paths,
+      // which is exactly what that match asks about.
+      name: 'memories_tags_gin_idx',
+      using: 'gin',
+      fields: [{ name: 'tags', operator: 'jsonb_path_ops' }],
+    },
+    {
       // Every read joins the shared content row for the text and the vector.
       name: 'memories_content_id_idx',
       fields: ['content_id'],

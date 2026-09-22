@@ -13,6 +13,7 @@ import { documentMetadataJsonb } from './2026-09-21-documentMetadataJsonb';
 import { documentVersions } from './2026-09-21-documentVersions';
 import { durableEventFirings } from './2026-09-21-durableEventFirings';
 import { memoryVersion } from './2026-09-21-memoryVersion';
+import { tagBagGinIndexes } from './2026-09-22-tagBagGinIndexes';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -47,4 +48,5 @@ export const MIGRATIONS: Migration[] = [
   documentMetadataJsonb,
   documentVersions,
   memoryVersion,
+  tagBagGinIndexes,
 ];

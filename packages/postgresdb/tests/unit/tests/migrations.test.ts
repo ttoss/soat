@@ -965,3 +965,98 @@ describe('2026-09-21-document-versions', () => {
     expect(result.applied).toEqual([]);
   });
 });
+
+describe('2026-09-22-tag-bag-gin-indexes', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    // Two of the seven tagged tables, so the run is observed both indexing a
+    // table it finds and leaving alone one this database has not got.
+    await client.query(`
+      CREATE TABLE documents (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        tags jsonb
+      );
+
+      CREATE TABLE sessions (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        tags jsonb
+      );
+
+      INSERT INTO documents (public_id, tags) VALUES
+        ('doc_finance', '{"team":"finance"}'),
+        ('doc_ops', '{"team":"ops"}');
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-22-tag-bag-gin-indexes'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('each tagged table the database holds gains the index', async () => {
+    expect(await indexNames({ client, table: 'documents' })).toContain(
+      'documents_tags_gin_idx'
+    );
+    expect(await indexNames({ client, table: 'sessions' })).toContain(
+      'sessions_tags_gin_idx'
+    );
+  });
+
+  test('the index is GIN over the tags column with `jsonb_path_ops`', async () => {
+    const [row] = await selectRows<{ definition: string }>({
+      client,
+      sql: `SELECT indexdef AS definition FROM pg_indexes
+             WHERE indexname = 'documents_tags_gin_idx'`,
+    });
+
+    expect(row.definition).toContain('USING gin');
+    expect(row.definition).toContain('jsonb_path_ops');
+  });
+
+  test('containment still answers the same rows', async () => {
+    // An index is only correct if it changes nothing but the plan.
+    const rows = await selectRows<{ public_id: string }>({
+      client,
+      sql: `SELECT public_id FROM documents WHERE tags @> '{"team":"finance"}'`,
+    });
+
+    expect(
+      rows.map((row) => {
+        return row.public_id;
+      })
+    ).toEqual(['doc_finance']);
+  });
+
+  /**
+   * A table absent from this database is not a table missing its index: `sync`
+   * creates the table and the index together from the model, so the migration
+   * has nothing to do and must still record itself as done.
+   */
+  test('a tagged table the database has not got is skipped, not failed', async () => {
+    expect(await tableExists({ client, table: 'actors' })).toBe(false);
+
+    const report = await runnerFor({ client }).status();
+
+    const entry = report.migrations.find((migration) => {
+      return migration.name === '2026-09-22-tag-bag-gin-indexes';
+    });
+
+    expect(entry?.applied).not.toBeNull();
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-22-tag-bag-gin-indexes'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});
