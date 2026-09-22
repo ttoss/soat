@@ -15,7 +15,7 @@ A memory store is a namespace for text content that agents read and write during
 
 Agents retrieve relevant memories via `knowledge_config` and write new facts with the built-in `write_memory` tool; a store also decides for itself what completed turns may contribute to it, through its [memory rules](#memory-rules). See [Agent Integration](#agent-integration) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the write funnel, embedding, the [assertion ledger](#assertions) and invalidation are the **engine**; the [write algorithm](#write-algorithm) and a rule's [handler](#handlers) are the **algorithms**, with customization seams in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
 
-A memory is **state**. Every write that produced or changed it is an **assertion**: some principal, through some mechanism, claimed a fact. The two are separate records, which is what lets a write that changed nothing still leave a trace.
+A memory is **state**. Every write that produced or changed it is an **assertion**: some principal, through some mechanism, claimed a fact. The two are separate records, which is what lets a write that changed nothing still leave a trace. How memories and documents together serve as one record for many writers: [Single Source of Truth](../advanced/single-source-of-truth.md).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

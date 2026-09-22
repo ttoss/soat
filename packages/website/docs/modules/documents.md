@@ -20,6 +20,8 @@ Two creation paths:
 
 Ids are prefixed `doc_`; the internal primary key is never returned.
 
+A corpus many agents write into is covered end to end in [Single Source of Truth](../advanced/single-source-of-truth.md).
+
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials
