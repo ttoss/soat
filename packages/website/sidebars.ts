@@ -146,6 +146,7 @@ const sidebars: SidebarsConfig = {
         'advanced/expressions-and-templating',
         'advanced/sync-and-async',
         'advanced/concurrent-writes',
+        'advanced/single-source-of-truth',
         'advanced/memory-and-knowledge-engine',
         'advanced/retrieval-quality',
         'advanced/tool-context',
@@ -191,6 +192,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/ingest-images-and-audio',
         'tutorials/measure-retrieval-quality',
         'tutorials/govern-metadata-with-schemas',
+        'tutorials/single-source-of-truth',
       ],
     },
     {
@@ -231,6 +233,7 @@ const sidebars: SidebarsConfig = {
       label: 'Governance & Safety',
       items: [
         'tutorials/agent-boundary-policy',
+        'tutorials/tag-based-access-control',
         'tutorials/build-an-agent-harness',
         'tutorials/gate-a-tool-with-guardrails',
         'tutorials/per-user-credentials-with-tool-context',

@@ -48,7 +48,7 @@ Ingestion path: [Files](/docs/modules/files) → [Documents](/docs/modules/docum
 
 ### What survives between runs
 
-[Sessions](/docs/modules/sessions): one user ↔ one agent with managed history. [Conversations](/docs/modules/conversations): the multi-party layer underneath. [Actors](/docs/modules/actors): the participants. Durable facts belong in [Memories](/docs/modules/memories), read through `knowledge_config` and written through the built-in `write_memory` tool. See [Agent with Persistent Memory](/docs/tutorials/memories-agent).
+[Sessions](/docs/modules/sessions): one user ↔ one agent with managed history. [Conversations](/docs/modules/conversations): the multi-party layer underneath. [Actors](/docs/modules/actors): the participants. Durable facts belong in [Memories](/docs/modules/memories), read through `knowledge_config` and written through the built-in `write_memory` tool. See [Agent with Persistent Memory](/docs/tutorials/memories-agent). When many agents write the same documents and memories, [Single Source of Truth](/docs/advanced/single-source-of-truth) maps what the shared record needs to the module that provides it.
 
 ### What it must never touch
 

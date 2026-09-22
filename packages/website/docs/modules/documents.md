@@ -20,6 +20,8 @@ Two creation paths:
 
 Ids are prefixed `doc_`; the internal primary key is never returned.
 
+A corpus many agents write into is covered end to end in [Single Source of Truth](../advanced/single-source-of-truth.md).
+
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials
@@ -27,6 +29,9 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 - [Agent SOAT Tools and Preset Parameters - Step 4 (Create documents)](/docs/tutorials/agent-soat-tools#step-4--create-documents)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 4 (Create a shared document)](/docs/tutorials/multi-agent-orchestration#step-4--create-a-shared-document-for-the-poem)
 - [Orchestrate a Sonnet - Step 4 (Create the poem document)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool)
+- [Single Source of Truth - Step 4 (A stale write is refused)](/docs/tutorials/single-source-of-truth#step-4--the-second-writer-is-refused-re-reads-and-lands)
+- [Single Source of Truth - Step 6 (Withdraw and restore)](/docs/tutorials/single-source-of-truth#step-6--withdraw-the-report-then-bring-it-back)
+- [Single Source of Truth - Step 7 (Relate two reports)](/docs/tutorials/single-source-of-truth#step-7--say-what-a-report-was-produced-from)
 
 ## Data Model
 
