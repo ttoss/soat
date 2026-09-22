@@ -26,6 +26,7 @@ A memory is **state**. Every write that produced or changed it is an **assertion
 - [Agent with Persistent Memory - Step 10 (Observe the agent writing to memory)](/docs/tutorials/memories-agent#step-10--observe-the-agent-writing-to-memory)
 - [Agent with Persistent Memory - Step 11 (Add a memory rule)](/docs/tutorials/memories-agent#step-11--add-a-memory-rule)
 - [Agent with Persistent Memory - Step 13 (Trace a fact back to the conversation it came from)](/docs/tutorials/memories-agent#step-13--trace-a-fact-back-to-the-conversation-it-came-from)
+- [Single Source of Truth - Step 8 (Retract a fact)](/docs/tutorials/single-source-of-truth#step-8--retract-a-fact)
 
 ## Data Model
 

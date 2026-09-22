@@ -192,6 +192,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/ingest-images-and-audio',
         'tutorials/measure-retrieval-quality',
         'tutorials/govern-metadata-with-schemas',
+        'tutorials/single-source-of-truth',
       ],
     },
     {
@@ -232,6 +233,7 @@ const sidebars: SidebarsConfig = {
       label: 'Governance & Safety',
       items: [
         'tutorials/agent-boundary-policy',
+        'tutorials/tag-based-access-control',
         'tutorials/build-an-agent-harness',
         'tutorials/gate-a-tool-with-guardrails',
         'tutorials/per-user-credentials-with-tool-context',

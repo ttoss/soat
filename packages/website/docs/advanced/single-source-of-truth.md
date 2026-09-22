@@ -14,7 +14,7 @@ keywords:
 
 One SOAT project can be the record for a system where many orchestrations, triggers and agents write reports as [documents](../modules/documents.md) and facts as [memories](../modules/memories.md), and read each other's, with no external store beside it.
 
-This page maps what such a record needs to the module that provides it. The module pages hold the definitions; nothing is re-defined here.
+This page maps what such a record needs to the module that provides it. The module pages hold the definitions; nothing is re-defined here. [Single Source of Truth](../tutorials/single-source-of-truth.md) walks the write half against one project.
 
 ## What the record needs
 
