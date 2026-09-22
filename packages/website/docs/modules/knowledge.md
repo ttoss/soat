@@ -136,7 +136,7 @@ Results from both stores are ranked together before `limit` applies, so a search
 { "query": "quarterly revenue", "tags": { "team": "finance", "env": "prod" } }
 ```
 
-`metadata` is the structured question the document listing reads, in the same shape — one grammar, so a filter written for [`GET /api/v1/documents`](/docs/api/documents/list-documents) holds here. It narrows documents alone, because a memory carries no such bag. See [Documents — Metadata filters](./documents.md#metadata-filters) for the operators and for what an ordering needs.
+`metadata` is the structured question the document listing reads, in the same shape — one grammar, so a filter written for [`GET /api/v1/documents`](/docs/api/documents/list-documents) holds here. It narrows documents alone, because a memory carries no such bag. See [Documents — Metadata filters](./documents.md#metadata-filters) for the operators; an ordering compares by the operand's own type.
 
 ```json
 { "query": "quarterly revenue", "metadata": { "quarter": "Q1", "revision": { "gte": 3 } } }

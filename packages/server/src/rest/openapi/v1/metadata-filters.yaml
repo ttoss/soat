@@ -21,14 +21,18 @@ components:
 
 
         Equality and `in` match the stored value exactly, so `3` and `"3"` are
-        different filters. `gt`, `gte`, `lt` and `lte` order the field, and
-        order only makes sense once a type is known: they are served on fields a
-        [metadata schema](/docs/modules/metadata-schemas) in the project
-        declares as `string`, `number` or `integer`, and need `project_id`,
-        because declarations are project-scoped. A range over any other field is
-        `400 VALIDATION_FAILED` naming it in `meta.field` — which is also the
-        answer to a misspelled field, rather than an empty page. A document
-        whose field holds another type is never matched by a range.
+        different filters.
+
+
+        `gt`, `gte`, `lt` and `lte` order the field against the operand, and the
+        operand's own JSON type says which comparison is meant: a number orders
+        numerically, a string lexicographically. They work on any field, in any
+        scope. A document whose field holds another type is excluded from the
+        comparison rather than erroring on it, so a range never fails on a bag
+        that happens to hold text where another holds a number. An operand that
+        is neither a number nor a string — a boolean, `null`, a list, an object
+        — has no ordering and is `400 VALIDATION_FAILED`, naming the field in
+        `meta.field`.
       additionalProperties: true
       example:
         quarter: 'Q1'

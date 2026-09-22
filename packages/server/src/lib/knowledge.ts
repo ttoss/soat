@@ -244,13 +244,9 @@ export const searchKnowledge = async (
   // and let the halves disagree: one call failing would leave documents with a
   // `similarity_score` and memory stores without, which the contract reserves for a
   // search that answered from the lexical channel alone.
-  // Before the embedding call: a filter the registry refuses is this request's
-  // answer, and paying for a query vector first would bill a search that is
-  // never run.
-  const metadataWhere = await compileMetadataWhere({
+  const metadataWhere = compileMetadataWhere({
     filter: args.metadata,
     column: DOCUMENT_METADATA_COLUMN,
-    projectIds: args.projectIds,
   });
 
   const embedding = args.query

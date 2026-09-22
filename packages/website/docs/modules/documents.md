@@ -110,6 +110,8 @@ The prefix is a **path boundary, not a substring**: `/reports` matches `/reports
 
 Key-value string pairs set at creation or ingestion, or via the tag sub-endpoints, and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/documents`](/docs/api/documents/list-documents) filters by pair with `?tags=key:value` (repeatable, all must match); [Knowledge search](./knowledge.md) applies the same pairs to chunks. See [IAM — Tags](iam.md#tags).
 
+Put a field in `tags` if a policy should read it or it identifies the row; otherwise put it in `metadata`.
+
 ### Polling Ingestion Status
 
 [`GET /documents/:id`](/docs/api/documents/get-document) returns the full chunk content, which can be megabytes. [`GET /api/v1/documents/:id/status`](/docs/api/documents/get-document-status) returns only the lifecycle fields:
@@ -249,8 +251,8 @@ A write that stores metadata violating the declaration in force is refused with 
 | `{ "gt": v }`, `{ "gte": v }`, `{ "lt": v }`, `{ "lte": v }` | Ordering; bounds on one field combine |
 
 - **The match is exact.** `{"revision": 3}` and `{"revision": "3"}` are different filters, which is why the filter travels as JSON rather than as `key:value` pairs.
-- **Ordering needs a declared type.** `gt`/`gte`/`lt`/`lte` are served on fields a [metadata schema](./metadata-schemas.md) in the project declares as `string`, `number` or `integer`, and need `project_id`, because declarations are project-scoped. Any other field is `400 VALIDATION_FAILED` with `error.meta.field` naming it — which is also the answer to a misspelled field, rather than a page that reads as "nothing matched". Equality and `in` need no declaration.
-- **A range never matches another type.** A document whose field holds text is not below every number; it is not comparable, and is left out of both directions.
+- **Ordering compares by the operand's type.** `gt`/`gte`/`lt`/`lte` order the field against the value given: a number orders numerically, a string lexicographically. Any field, any scope. An operand with no ordering — a boolean, `null`, a list, an object — is `400 VALIDATION_FAILED` with `error.meta.field` naming it.
+- **A range never matches another type.** A document whose field holds text is not below every number; it is not comparable, so it is left out of both directions rather than failing the query.
 - **A filter narrows what the caller may already see.** It is applied on top of the [IAM](./iam.md) policy, never instead of it.
 
 ### File Ingestion and Chunking

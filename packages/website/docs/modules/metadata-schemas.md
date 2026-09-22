@@ -52,12 +52,6 @@ One selector has one schema per resource type, held by a unique index, so two op
 
 The schema is compiled when it is declared, and one JSON Schema cannot parse is refused. A stored one would be a rule that silently governs nothing, and the author would never learn it does not.
 
-### A declaration is what makes the corpus orderable
-
-A declaration types its fields, and a type is what an ordering needs: `gt`, `gte`, `lt` and `lte` in a [metadata filter](./documents.md#metadata-filters) are served on fields some declaration in the project types as `string`, `number` or `integer`. Equality and `in` need no declaration — they match the stored value exactly, which takes no type.
-
-Two declarations typing one field differently leave it unorderable: the comparison would otherwise depend on which corner of the corpus a row came from.
-
 ### Deleting a declaration changes writes, not rows
 
 Documents already stored keep the metadata they hold: the rule governed the writes that stored it. Tightening a schema behaves the same way — it refuses the next write of the fields it governs rather than freezing what is already there.
