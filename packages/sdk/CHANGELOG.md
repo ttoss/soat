@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.58.0](https://github.com/ttoss/soat/compare/v0.57.0...v0.58.0) (2026-09-22)
+
+### Bug Fixes
+
+* **metadata,cli,specs:** one reader, one declaration, and a checked manifest ([#1402](https://github.com/ttoss/soat/issues/1402)) ([6196579](https://github.com/ttoss/soat/commit/6196579d32640967dd6b5e43bd2d0d42d6d15b4b)), closes [#1398](https://github.com/ttoss/soat/issues/1398) [#1398](https://github.com/ttoss/soat/issues/1398)
+
+### Features
+
+* **metadata-schemas:** declare what a resource's metadata must satisfy ([#1394](https://github.com/ttoss/soat/issues/1394)) ([4535228](https://github.com/ttoss/soat/commit/453522877692bcfc9ed8dce411ac94b1c1bd35f2)), closes [#1389](https://github.com/ttoss/soat/issues/1389)
+
 # [0.57.0](https://github.com/ttoss/soat/compare/v0.56.0...v0.57.0) (2026-09-21)
 
 **Note:** Version bump only for package @soat/sdk
