@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.58.2](https://github.com/ttoss/soat/compare/v0.58.1...v0.58.2) (2026-09-22)
+
+### Bug Fixes
+
+* **server:** versioned write responses carry the committed updated_at ([#1407](https://github.com/ttoss/soat/issues/1407)) ([47c8bae](https://github.com/ttoss/soat/commit/47c8baeccd382a7791baac00c317af281858a695))
+
 ## [0.58.1](https://github.com/ttoss/soat/compare/v0.58.0...v0.58.1) (2026-09-22)
 
 ### Bug Fixes
