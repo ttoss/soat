@@ -936,7 +936,7 @@ describe('Sessions', () => {
       expect(nonSystemMessages[1].content).toContain('Message 4');
     });
 
-    test('a message with non-responseMessages metadata is annotated in model history', async () => {
+    test('a message bag stays out of model history', async () => {
       const sessionRes = await authenticatedTestClient(userToken)
         .post('/api/v1/sessions')
         .send({ agent_id: contextAgentId, name: 'Metadata Annotation Test' });
@@ -967,10 +967,15 @@ describe('Sessions', () => {
       const callArgs = mockCreateGeneration.mock.calls[0][0] as {
         messages: Array<{ role: string; content: string }>;
       };
-      const annotated = callArgs.messages.find((m) => {
-        return m.content.includes('channel: slack');
+      const carrying = callArgs.messages.find((m) => {
+        return m.content.includes('slack');
       });
-      expect(annotated).toBeDefined();
+      expect(carrying).toBeUndefined();
+
+      const turn = callArgs.messages.find((m) => {
+        return m.content.includes('Message with metadata');
+      });
+      expect(turn).toBeDefined();
     });
   });
 

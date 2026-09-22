@@ -1,6 +1,9 @@
 import type { EmbeddingBillingProjectId } from './embedding';
 import type { QueryDocumentResult } from './knowledgeDocuments';
-import { resolveDocumentSearchLists } from './knowledgeDocuments';
+import {
+  DOCUMENT_METADATA_COLUMN,
+  resolveDocumentSearchLists,
+} from './knowledgeDocuments';
 import { embedQueryOrDegrade } from './knowledgeEmbedding';
 import type {
   MemoryKnowledgeResult,
@@ -14,6 +17,11 @@ import type {
 } from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
 import { clampKnowledgeSearchLimit } from './requestBounds';
+import {
+  compileMetadataWhere,
+  hasMetadataFilter,
+  type MetadataFilter,
+} from './structuredFilter';
 import { hasTagFilter } from './tags';
 
 /**
@@ -84,6 +92,12 @@ type SearchKnowledgeArgs = {
    */
   tags?: Record<string, string>;
   /**
+   * Structured question about a document's `metadata` bag. A document-store
+   * filter: memories carry no such bag, so it names that store the way
+   * `document_paths` does rather than narrowing both.
+   */
+  metadata?: MetadataFilter;
+  /**
    * Switches the document store off even when the request would otherwise
    * reach it. Default `true`.
    *
@@ -136,7 +150,9 @@ const getSearchFlags = (
   const everyStore = args.query !== undefined || hasTagFilter(args.tags);
   const hasDocumentSearch =
     args.includeDocuments !== false &&
-    (everyStore || namesAny(args.paths, args.documentIds));
+    (everyStore ||
+      namesAny(args.paths, args.documentIds) ||
+      hasMetadataFilter(args.metadata));
   const hasMemoryStoreSearch =
     args.includeMemories !== false &&
     (everyStore || namesAny(args.memoryStoreIds));
@@ -228,6 +244,11 @@ export const searchKnowledge = async (
   // and let the halves disagree: one call failing would leave documents with a
   // `similarity_score` and memory stores without, which the contract reserves for a
   // search that answered from the lexical channel alone.
+  const metadataWhere = compileMetadataWhere({
+    filter: args.metadata,
+    column: DOCUMENT_METADATA_COLUMN,
+  });
+
   const embedding = args.query
     ? await embedQueryOrDegrade({
         text: args.query,
@@ -248,6 +269,7 @@ export const searchKnowledge = async (
             paths: args.paths,
             documentIds: args.documentIds,
             tags: args.tags,
+            metadataWhere,
           },
         })
       : Promise.resolve(emptyCandidates<QueryDocumentResult>(args.query)),

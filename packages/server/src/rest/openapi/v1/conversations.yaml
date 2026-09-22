@@ -423,7 +423,12 @@ paths:
                   example: 0
                 metadata:
                   type: object
-                  description: Optional structured metadata to attach to the message (e.g. phone number, channel). Stored as-is and injected into the AI prompt context.
+                  description: >-
+                    Caller-owned annotations on the message (e.g. a phone
+                    number, a channel), stored as sent and returned verbatim.
+                    The platform does not read the bag, so nothing in it
+                    reaches the model: a value the model should see belongs in
+                    `message`.
                   nullable: true
                   additionalProperties: true
                   example:

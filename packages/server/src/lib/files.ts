@@ -55,7 +55,7 @@ const mapFile = (file: InstanceType<(typeof db)['File']>) => {
     path: file.path ?? undefined,
     content_type: file.contentType,
     size: file.size,
-    metadata: file.metadata,
+    metadata: file.metadata ?? undefined,
     tags: file.tags ?? undefined,
     created_at: file.createdAt,
     updated_at: file.updatedAt,
@@ -143,7 +143,7 @@ export const uploadFile = async (args: {
    * Takes precedence over prefix/filename. */
   path?: string;
   contentType?: string;
-  metadata?: string;
+  metadata?: Record<string, unknown>;
 }) => {
   await assertStorageQuota({
     projectId: args.projectId,
@@ -296,7 +296,8 @@ export const downloadFile = async (args: { id: string }) => {
 
 export const updateFileMetadata = async (args: {
   id: string;
-  metadata?: string;
+  /** Replaces the stored bag; `null` clears it, `undefined` leaves it. */
+  metadata?: Record<string, unknown> | null;
   /** New directory prefix — moves the file (the key's directory changes). */
   prefix?: string;
   /** New filename — renames the key's leaf and the download name. */
@@ -351,7 +352,7 @@ export const createFile = async (args: {
   filename?: string;
   contentType?: string;
   size?: number;
-  metadata?: string;
+  metadata?: Record<string, unknown>;
 }) => {
   // Metadata-only, but the declared `size` is what the storage meter sums for
   // this row, so the cap has to see it like any other byte.

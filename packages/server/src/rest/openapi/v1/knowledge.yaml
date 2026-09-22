@@ -149,6 +149,14 @@ paths:
                     its parent memory store's tags match or its own do.
                   allOf:
                     - $ref: './tags.yaml#/components/schemas/TagBag'
+                metadata:
+                  description: >-
+                    Filter document results by their `metadata` bag. A
+                    document-store filter: a memory carries no such bag, so
+                    passing it alone searches documents, as `document_paths`
+                    does.
+                  allOf:
+                    - $ref: './metadata-filters.yaml#/components/schemas/MetadataFilter'
       responses:
         '200':
           description: Search results

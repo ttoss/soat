@@ -9,6 +9,7 @@ import {
   updateFileMetadata,
   updateFileTags,
 } from 'src/lib/files';
+import { readNullableMetadataBag } from 'src/lib/metadataBag';
 
 import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
@@ -207,13 +208,13 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
       file,
     });
     const body = ctx.request.body as {
-      metadata?: string;
+      metadata?: unknown;
       prefix?: string;
       filename?: string;
     };
     ctx.body = await updateFileMetadata({
       id: ctx.params.file_id,
-      metadata: body.metadata,
+      metadata: readNullableMetadataBag(body.metadata),
       prefix: body.prefix,
       filename: body.filename,
     });

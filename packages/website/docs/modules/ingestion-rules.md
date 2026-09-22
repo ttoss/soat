@@ -43,7 +43,7 @@ The same shape applied to turns instead of files is a [memory rule](./memories.m
 | `chunk_strategy` | string \| null | Optional default chunk strategy (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for the `size` strategy |
 | `chunk_overlap` | number \| null | Optional default for the `size` strategy |
-| `metadata` | object \| null | Arbitrary JSON metadata |
+| `metadata` | object \| null | Caller-owned annotations on the rule — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `created_at` | string | ISO 8601 creation timestamp |
 | `updated_at` | string | ISO 8601 last-updated timestamp |
 

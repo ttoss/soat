@@ -1559,9 +1559,12 @@ components:
           nullable: true
           description: File size in bytes
         metadata:
-          type: string
+          type: object
           nullable: true
-          description: JSON string with additional metadata
+          description: >-
+            Caller-owned annotations on the file, stored as the object they
+            were written as; `null` clears the bag. Keys are stored and
+            returned verbatim in the casing supplied.
 
     PolicyResourceProperties:
       description: >-

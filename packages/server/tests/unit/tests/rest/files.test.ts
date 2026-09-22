@@ -285,7 +285,7 @@ describe('Files', () => {
     });
 
     test('user with permission can update file metadata', async () => {
-      const newMetadata = JSON.stringify({ author: 'Alice', version: 2 });
+      const newMetadata = { author: 'Alice', version: 2 };
 
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
@@ -293,13 +293,13 @@ describe('Files', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(fileId);
-      expect(response.body.metadata).toBe(newMetadata);
+      expect(response.body.metadata).toEqual(newMetadata);
     });
 
     test('unauthenticated request cannot update metadata', async () => {
       const response = await testClient
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ metadata: '{}' });
+        .send({ metadata: {} });
 
       expect(response.status).toBe(401);
     });
@@ -307,7 +307,7 @@ describe('Files', () => {
     test('returns 404 for non-existent file', async () => {
       const response = await authenticatedTestClient(adminToken)
         .patch('/api/v1/files/nonexistent-file-id/metadata')
-        .send({ metadata: '{}' });
+        .send({ metadata: {} });
 
       expect(response.status).toBe(404);
     });
@@ -315,7 +315,7 @@ describe('Files', () => {
     test('user without UpdateFileMetadata permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ metadata: '{}' });
+        .send({ metadata: {} });
 
       expect(response.status).toBe(403);
     });
@@ -940,7 +940,7 @@ describe('Files', () => {
     });
 
     test('user can update prefix and metadata together', async () => {
-      const newMetadata = JSON.stringify({ version: 3 });
+      const newMetadata = { version: 3 };
 
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
@@ -948,7 +948,7 @@ describe('Files', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.path).toBe('/reports/friendly-name.txt');
-      expect(response.body.metadata).toBe(newMetadata);
+      expect(response.body.metadata).toEqual(newMetadata);
     });
 
     test('moving onto an existing key returns 409', async () => {

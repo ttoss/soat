@@ -36,6 +36,11 @@ import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { toResourceRef } from './resourceVersions';
+import {
+  applyFilterWhere,
+  compileMetadataWhere,
+  type MetadataFilter,
+} from './structuredFilter';
 import { liveDocumentWhere, nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter, mergeTags } from './tags';
 import type { VersionedWrite } from './writePrecondition';
@@ -59,12 +64,20 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
+/**
+ * The listing roots at `Document`, so a raw comparison on the bag names that
+ * alias. Sequelize qualifies the containment halves itself; only the ordering
+ * fragments spell the column.
+ */
+const DOCUMENT_METADATA_COLUMN = '"Document"."metadata"';
+
 const buildDocumentQueryOptions = (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
   pathPrefix?: string;
   tags?: Record<string, string>;
+  metadataWhere: unknown[];
   includeWithdrawn?: boolean;
   limit: number;
   offset: number;
@@ -77,6 +90,7 @@ const buildDocumentQueryOptions = (args: {
     : {};
   if (!args.includeWithdrawn) Object.assign(topLevelWhere, liveDocumentWhere());
   applyTagFilter({ where: topLevelWhere, tags: args.tags });
+  applyFilterWhere({ where: topLevelWhere, fragments: args.metadataWhere });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const file: Record<string, any> = {};
   if (args.projectIds !== undefined) file.projectId = args.projectIds;
@@ -100,6 +114,8 @@ export const listDocuments = async (args: {
   /** Only documents filed under this directory (see `pathPrefixPattern`). */
   pathPrefix?: string;
   tags?: Record<string, string>;
+  /** Structured question about the bag; see {@link compileMetadataWhere}. */
+  metadata?: MetadataFilter;
   /** Withdrawn documents are left out unless the request asks for them. */
   includeWithdrawn?: boolean;
   limit?: number;
@@ -108,6 +124,11 @@ export const listDocuments = async (args: {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return emptyPage(args);
   }
+
+  const metadataWhere = compileMetadataWhere({
+    filter: args.metadata,
+    column: DOCUMENT_METADATA_COLUMN,
+  });
 
   return paginatedList({
     limit: args.limit,
@@ -118,6 +139,7 @@ export const listDocuments = async (args: {
         policyWhere: args.policyWhere,
         pathPrefix: args.pathPrefix,
         tags: args.tags,
+        metadataWhere,
         includeWithdrawn: args.includeWithdrawn,
         limit,
         offset,

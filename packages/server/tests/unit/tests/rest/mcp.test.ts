@@ -538,6 +538,16 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toBe(fileId);
     });
 
+    test('update-file-metadata stores the bag as an object', async () => {
+      const res = await mcpCall('update-file-metadata', {
+        file_id: fileId,
+        metadata: { stage: 'mcp', revision: 2 },
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.metadata).toEqual({ stage: 'mcp', revision: 2 });
+    });
+
     test('create-file registers a file record', async () => {
       const res = await mcpCall('create-file', {
         project_id: projectId,
@@ -1051,6 +1061,44 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(Array.isArray(result.data)).toBe(true);
+    });
+
+    test('list-documents narrows by a metadata filter', async () => {
+      const created = await mcpCall('create-document', {
+        project_id: projectId,
+        content: 'Filtered through the tool surface.',
+        filename: 'mcp-metadata.txt',
+        path: '/mcp-metadata/doc.txt',
+        metadata: { mcp_probe: 'yes' },
+      });
+      expect(created.status).toBe(200);
+
+      const res = await mcpCall('list-documents', {
+        project_id: projectId,
+        metadata: JSON.stringify({ mcp_probe: 'yes' }),
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(
+        result.data.map((doc: { path?: string }) => {
+          return doc.path;
+        })
+      ).toEqual(['/mcp-metadata/doc.txt']);
+    });
+
+    test('search-knowledge narrows by a metadata filter', async () => {
+      const res = await mcpCall('search-knowledge', {
+        project_id: projectId,
+        metadata: { mcp_probe: 'yes' },
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(
+        result.results.every((hit: { path?: string }) => {
+          return hit.path === '/mcp-metadata/doc.txt';
+        })
+      ).toBe(true);
+      expect(result.results.length).toBeGreaterThan(0);
     });
 
     test('update-document updates content', async () => {

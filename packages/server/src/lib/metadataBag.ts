@@ -1,4 +1,5 @@
 import { DomainError } from 'src/errors';
+import { isObjectRecord } from 'src/lib/openapiSchemaFields';
 
 /**
  * Validates a caller-owned `metadata` bag. Shared by every entry point that
@@ -44,4 +45,52 @@ export const parseMetadataBag = (
   }
 
   return raw as Record<string, unknown>;
+};
+
+/** `parseMetadataBag` for update bodies where `null` means "clear the bag". */
+export const readNullableMetadataBag = (
+  raw: unknown
+): Record<string, unknown> | null | undefined => {
+  if (raw === null) return null;
+  return parseMetadataBag(raw);
+};
+
+/**
+ * The same bag off a surface whose wire has only text: a multipart field
+ * carries the object serialized, so it is parsed here and then judged by the
+ * one rule above. A JSON body on the same route sends the object itself and
+ * reaches that rule directly.
+ *
+ * Text that is not JSON at all is refused rather than stored as a string: the
+ * caller wrote an object and a stored string is not one, which is the two
+ * contracts for one field this exists to keep from coming back.
+ */
+export const parseMetadataBagField = (
+  raw: unknown
+): Record<string, unknown> | undefined => {
+  if (typeof raw !== 'string') return parseMetadataBag(raw);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'metadata must be a JSON object, sent as JSON text in a multipart field'
+    );
+  }
+  return parseMetadataBag(parsed);
+};
+
+/**
+ * The bag as a formation template carries it: `null` clears it, an object
+ * replaces it, and anything else leaves the stored bag alone rather than
+ * throwing — a template's field types are refused by the spec loader before a
+ * property reaches a module, so a non-object here is not a caller error to
+ * report a second time.
+ */
+export const toNullableMetadataBag = (
+  value: unknown
+): Record<string, unknown> | null | undefined => {
+  if (value === null) return null;
+  return isObjectRecord(value) ? value : undefined;
 };

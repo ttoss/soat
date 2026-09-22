@@ -779,10 +779,18 @@ echo "Content matches."
 
 # 7. Update metadata
 echo "--- Updating metadata ---"
-PATCH_RESP=$($SOAT_CLI update-file-metadata --file-id "$FILE_ID" --metadata smoke-tested)
+PATCH_RESP=$($SOAT_CLI update-file-metadata --file-id "$FILE_ID" \
+  --metadata '{"stage":"smoke","revision":2}')
 PATCH_ID=$(printf '%s\n' "$PATCH_RESP" | jq -r '.id')
 if [ "$PATCH_ID" != "$FILE_ID" ]; then
   echo "ERROR: PATCH metadata did not update expected file" >&2
+  exit 1
+fi
+# The bag is stored as the object it was written as, so the number comes back a
+# number rather than the string a serialized bag would return.
+PATCH_REVISION=$(printf '%s\n' "$PATCH_RESP" | jq -r '.metadata.revision | tojson')
+if [ "$PATCH_REVISION" != "2" ]; then
+  echo "ERROR: file metadata expected the number 2, got $PATCH_REVISION" >&2
   exit 1
 fi
 echo "PATCH status: 200"
@@ -1035,11 +1043,67 @@ META_DOC_ID=$($SOAT_CLI create-document \
   --content "Revenue is up." \
   --filename accepted.txt \
   --path /smoke-reports/accepted.txt \
-  --metadata '{"quarter":"Q1"}' | jq -r '.id')
+  --metadata '{"quarter":"Q1","pages":3}' | jq -r '.id')
 if [ -z "$META_DOC_ID" ] || [ "$META_DOC_ID" = "null" ]; then
   echo "ERROR: metadata satisfying the declaration should have been stored" >&2
   exit 1
 fi
+META_DOC2_ID=$($SOAT_CLI create-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --content "Revenue held." \
+  --filename second.txt \
+  --path /smoke-reports/second.txt \
+  --metadata '{"quarter":"Q2","pages":30}' | jq -r '.id')
+
+# 11b5. Metadata filters: equality anywhere, ordering over a declared field
+echo "--- Metadata filters: equality, ordering, refusal ---"
+META_EQ_PATHS=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --metadata '{"quarter":"Q2"}' | jq -r '[.data[].path] | join(",")')
+if [ "$META_EQ_PATHS" != "/smoke-reports/second.txt" ]; then
+  echo "ERROR: equality filter expected /smoke-reports/second.txt, got '$META_EQ_PATHS'" >&2
+  exit 1
+fi
+
+# `quarter` is declared as a string, so it can be ordered.
+META_RANGE_PATHS=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --metadata '{"quarter":{"gt":"Q1"}}' | jq -r '[.data[].path] | join(",")')
+if [ "$META_RANGE_PATHS" != "/smoke-reports/second.txt" ]; then
+  echo "ERROR: range filter expected /smoke-reports/second.txt, got '$META_RANGE_PATHS'" >&2
+  exit 1
+fi
+
+# No declaration types `pages`; the operand does. An ordering reads the bag, not
+# the registry.
+META_UNDECLARED_PATHS=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --metadata '{"pages":{"gte":10}}' | jq -r '[.data[].path] | join(",")')
+if [ "$META_UNDECLARED_PATHS" != "/smoke-reports/second.txt" ]; then
+  echo "ERROR: undeclared range expected /smoke-reports/second.txt, got '$META_UNDECLARED_PATHS'" >&2
+  exit 1
+fi
+
+# A boolean has no ordering, so it is refused rather than compared.
+META_RANGE_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -G "$SERVER_URL/api/v1/documents" \
+  -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode "project_id=$PROJECT_PUBLIC_ID" \
+  --data-urlencode 'metadata={"pages":{"gte":true}}')
+if [ "$META_RANGE_STATUS" != "400" ]; then
+  echo "ERROR: a non-orderable operand expected 400, got $META_RANGE_STATUS" >&2
+  exit 1
+fi
+
+META_SEARCH_PATHS=$($SOAT_CLI search-knowledge \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --metadata '{"quarter":"Q2"}' | jq -r '[.results[].path] | unique | join(",")')
+if [ "$META_SEARCH_PATHS" != "/smoke-reports/second.txt" ]; then
+  echo "ERROR: knowledge search metadata filter expected /smoke-reports/second.txt, got '$META_SEARCH_PATHS'" >&2
+  exit 1
+fi
+echo "Metadata filters narrowed the listing and the search: OK"
+
+$SOAT_CLI delete-document --document-id "$META_DOC2_ID" > /dev/null
 $SOAT_CLI delete-document --document-id "$META_DOC_ID" > /dev/null
 $SOAT_CLI delete-metadata-schema --metadata-schema-id "$META_SCHEMA_ID" > /dev/null
 echo "Metadata schema refused the violation and stored the document that satisfied it: OK"

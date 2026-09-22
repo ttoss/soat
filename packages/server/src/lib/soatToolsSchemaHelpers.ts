@@ -157,7 +157,9 @@ export const resolveParameter = (
 } => {
   if (!param) return {};
   if (typeof param.$ref === 'string') {
-    const refName = param.$ref.replace('#/components/parameters/', '');
+    // The pointer's last segment, so a reference into a sibling file resolves
+    // against the components the loader brought in under that same name.
+    const refName = param.$ref.split('#/components/parameters/').pop() ?? '';
     const resolved = spec.components?.parameters?.[refName];
     return resolved || {};
   }
