@@ -48,7 +48,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
 | `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
-| `metadata`    | object \| null | Optional structured key-value data attached to the message (e.g. `phone`, `channel`). Injected into the AI prompt context. |
+| `metadata`    | object \| null | Caller-owned annotations on the message (e.g. `phone`, `channel`), stored as sent. Never read by the platform and never part of the model's input — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `content`     | string         | Full text content of the message (read from the underlying document)                                                       |
 
 The pair `(conversation_id, position)` is uniquely indexed. See [Message ordering](#message-ordering) for insertion semantics.
@@ -160,7 +160,7 @@ Flow (with `?wait=true`):
 
 1. Load messages ordered by `position`.
 2. Compose the system prompt from the agent's `instructions`.
-3. Map `role: 'assistant'` messages to assistant turns; all others to user turns.
+3. Map `role: 'assistant'` messages to assistant turns; all others to user turns, prefixed with the speaker's name. A message's `metadata` is not part of the turn — the model sees `message` and nothing else the caller attached.
 4. Dispatch to the Agents module, including agent tools and the `requires_action` client-tool flow.
 5. On `completed`, a new Document is attached as the next message with `role: 'assistant'`. The response includes:
    - **`content`** — the generated text (always a `string`).

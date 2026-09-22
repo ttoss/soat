@@ -113,6 +113,24 @@ describe('the metadata boundary', () => {
   });
 
   /**
+   * The modules that build a model's input. A message, a session turn and an
+   * agent's retrieved context all reach the model through these, and a bag
+   * rendered into a prompt is the platform reading it — with a caller's own
+   * values, which is also how a forged turn would get in.
+   */
+  test('the modules that build the prompt never name the bag', () => {
+    const naming = [
+      'conversationGeneration.ts',
+      'generationInputMessages.ts',
+      'agentGenerationContext.ts',
+    ].filter((module) => {
+      return /metadata/i.test(code(path.join(libDir, module)));
+    });
+
+    assert.deepEqual(naming, []);
+  });
+
+  /**
    * `registerResourceFieldMap` is how a module tells the compiler which of its
    * columns a policy may be compiled against. A `metadataColumn` role is the
    * whole boundary in one field, so the registry declares none — and a module
