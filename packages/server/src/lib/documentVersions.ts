@@ -111,8 +111,8 @@ const documentVersionArchive = makeVersionArchive({
     if (isWithdrawnConfig(args.config)) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        `Document '${args.id}' version names a withdrawal, which has no content to restore. Restore the version before it instead.`,
-        { document_id: args.id }
+        `Document '${args.id}' version ${args.version} is a withdrawal, which has no content to restore. Restore version ${args.version - 1} instead.`,
+        { document_id: args.id, version: args.version }
       );
     }
 

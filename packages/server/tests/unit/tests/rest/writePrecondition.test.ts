@@ -140,6 +140,18 @@ describe('Write preconditions', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
+    test('a string version on the body is refused as the wrong type, without offering `*`', async () => {
+      const id = await createGuardrail('precond-string-field');
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/guardrails/${id}`)
+        .send({ document: documentAllowing(600), expected_version: '1' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toContain('integer');
+      expect(response.body.error.message).not.toContain("'*'");
+    });
   });
 
   describe('If-Match on the request', () => {

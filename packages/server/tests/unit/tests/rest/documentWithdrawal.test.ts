@@ -269,10 +269,6 @@ describe('Document withdrawal', () => {
       expect(JSON.stringify(search.body)).toContain(id);
     }, 60_000);
 
-    /**
-     * The tombstone holds no content, so it is not a state to go back to. The
-     * refusal names the alternative rather than restoring an empty document.
-     */
     test('user without permission returns 403', async () => {
       const id = await createDocument('Guarded.');
       await withdraw(id);
@@ -284,6 +280,10 @@ describe('Document withdrawal', () => {
       expect(response.status).toBe(403);
     });
 
+    /**
+     * The tombstone holds no content, so it is not a state to go back to. The
+     * refusal names the alternative rather than restoring an empty document.
+     */
     test('restoring the tombstone itself is refused', async () => {
       const id = await createDocument('Has a tombstone.');
       await withdraw(id);
@@ -294,6 +294,8 @@ describe('Document withdrawal', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toContain('version 2');
+      expect(response.body.error.message).toContain('version 1');
     });
   });
 });

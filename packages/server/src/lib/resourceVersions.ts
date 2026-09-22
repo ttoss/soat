@@ -191,6 +191,8 @@ type ArchiveAdapter<TMappedVersion, TMappedResource> = {
   applyConfig: (a: {
     projectIds?: number[];
     id: string;
+    /** The archived version being written back. */
+    version: number;
     config: ConfigSnapshot;
     label: string | null;
     createdByUserId?: number | null;
@@ -299,6 +301,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
     return args.applyConfig({
       projectIds: a.projectIds,
       id: a.resourceId,
+      version: a.version,
       config: store.readArchivedConfig(row),
       label: a.label,
       createdByUserId: a.createdByUserId,
