@@ -1,10 +1,9 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { mapDocument } from './documentMapper';
 import { buildDocumentQueryOptions } from './documents';
-import { afterCursorWhere, EXPORT_ORDER, streamNdjson } from './ndjsonExport';
+import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
 
 const log = createDebug('soat:documents');
 
@@ -40,10 +39,8 @@ export const streamDocumentsNdjson = (args: {
         offset: 0,
       });
 
-      const resume = afterCursorWhere(after);
-
       return db.Document.findAll({
-        where: resume ? { [Op.and]: [topLevelWhere, resume] } : topLevelWhere,
+        where: whereAfterCursor({ where: topLevelWhere, after }),
         include: [
           {
             model: db.File,

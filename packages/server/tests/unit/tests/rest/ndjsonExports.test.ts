@@ -5,6 +5,7 @@ import { emitActivityEntry } from 'src/lib/activity';
 import { EXPORT_BATCH_SIZE } from 'src/lib/ndjsonExport';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { isolateMemory } from '../../fixtures/memoryWrites';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -65,6 +66,7 @@ describe('NDJSON exports', () => {
         'memories:CreateMemoryStore',
         'memories:CreateMemory',
         'memories:ListMemories',
+        'memories:RetractMemory',
         'memories:ExportMemories',
         'activity:ListActivity',
         'activity:ExportActivity',
@@ -220,6 +222,38 @@ describe('NDJSON exports', () => {
 
       expect(res.status).toBe(200);
       expect(parseLines(res.body)).toHaveLength(0);
+    });
+
+    test('a retracted memory is left out, and include_invalidated asks for it', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/memories')
+        .send({
+          memory_store_id: memoryStoreId,
+          content: 'The customer moved to a new address.',
+        });
+      await isolateMemory({ memoryId: created.body.id as string });
+      await authenticatedTestClient(userToken).post(
+        `/api/v1/memories/${created.body.id}/retract`
+      );
+
+      const current = await exportNdjson({
+        token: userToken,
+        path: `/api/v1/memory-stores/${memoryStoreId}/export`,
+      });
+      const withInvalidated = await exportNdjson({
+        token: userToken,
+        path: `/api/v1/memory-stores/${memoryStoreId}/export`,
+        query: { include_invalidated: 'true' },
+      });
+
+      const idOf = (lines: Array<Record<string, unknown>>) => {
+        return lines.map((line) => {
+          return String(line.id);
+        });
+      };
+
+      expect(idOf(parseLines(current.body))).not.toContain(created.body.id);
+      expect(idOf(parseLines(withInvalidated.body))).toContain(created.body.id);
     });
 
     test('unauthenticated request returns 401', async () => {

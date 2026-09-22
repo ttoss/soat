@@ -128,6 +128,29 @@ describe('Document relations', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test('an unknown asserting document is not found', async () => {
+      const to = await createDocument({ filename: 'unknown-source-to.txt' });
+
+      const response = await relate({
+        from: 'doc_doesnotexist',
+        type: 'cites',
+        to,
+      });
+
+      expect(response.status).toBe(404);
+    });
+
+    test('a target that is not an id is refused', async () => {
+      const from = await createDocument({ filename: 'nonstring-target.txt' });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${from}/relations`)
+        .send({ type: 'cites', to_document_id: 42 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('an unknown target is not found', async () => {
       const from = await createDocument({ filename: 'unknown-target.txt' });
 

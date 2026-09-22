@@ -602,8 +602,8 @@ paths:
                 $ref: '#/components/schemas/DocumentRelation'
         '400':
           description: >-
-            An undeclared `type`, a document relating to itself, or a target in
-            another project
+            An undeclared `type`, a `to_document_id` that is not a document id,
+            a document relating to itself, or a target in another project
         '401':
           description: Unauthorized
         '403':

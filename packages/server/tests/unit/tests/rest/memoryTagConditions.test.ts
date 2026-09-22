@@ -97,6 +97,7 @@ describe('Tag conditions on memoryStores and memories', () => {
                 'memories:ListMemoryStores',
                 'memories:GetMemoryStore',
                 'memories:ListMemories',
+                'memories:ExportMemories',
                 'memories:GetMemory',
                 'knowledge:SearchKnowledge',
               ],
@@ -184,6 +185,35 @@ describe('Tag conditions on memoryStores and memories', () => {
         .query({ memory_store_id: financeMemoryStoreId });
 
       expect(response.status).toBe(403);
+    });
+  });
+
+  describe('GET /api/v1/memory-stores/:memory_store_id/export', () => {
+    test('the file holds the rows the listing holds, not the store', async () => {
+      const response = await authenticatedTestClient(restrictedToken)
+        .get(`/api/v1/memory-stores/${engMemoryStoreId}/export`)
+        .buffer(true)
+        .parse((raw, callback) => {
+          let text = '';
+          raw.on('data', (chunk: Buffer) => {
+            text += chunk.toString('utf8');
+          });
+          raw.on('end', () => {
+            callback(null, text);
+          });
+        });
+
+      expect(response.status).toBe(200);
+      const ids = String(response.body)
+        .split('\n')
+        .filter((line) => {
+          return line.trim().length > 0;
+        })
+        .map((line) => {
+          return (JSON.parse(line) as { id: string }).id;
+        });
+      expect(ids).toContain(engEntryId);
+      expect(ids).not.toContain(financeTaggedEntryId);
     });
   });
 

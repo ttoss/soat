@@ -1,4 +1,3 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import {
@@ -7,9 +6,9 @@ import {
   mapActivityEntry,
 } from 'src/lib/activity';
 import {
-  afterCursorWhere,
   EXPORT_ORDER,
   streamNdjson,
+  whereAfterCursor,
 } from 'src/lib/ndjsonExport';
 
 const log = createDebug('soat:activity');
@@ -31,9 +30,8 @@ export const streamActivityNdjson = (
 
   return streamNdjson({
     findBatch: ({ after, limit }) => {
-      const resume = afterCursorWhere(after);
       return db.ActivityEntry.findAll({
-        where: resume ? { [Op.and]: [where, resume] } : where,
+        where: whereAfterCursor({ where, after }),
         include: [{ model: db.Project, as: 'project' }],
         order: EXPORT_ORDER,
         limit,

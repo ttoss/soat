@@ -8,7 +8,7 @@ import {
 } from 'src/lib/resource-inputs/normalizers';
 
 import { emitResourceEvent } from './eventBus';
-import { afterCursorWhere, EXPORT_ORDER, streamNdjson } from './ndjsonExport';
+import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:audit');
@@ -380,9 +380,8 @@ export const streamAuditEntriesNdjson = (
 
   return streamNdjson({
     findBatch: ({ after, limit }) => {
-      const resume = afterCursorWhere(after);
       return db.AuditEntry.findAll({
-        where: resume ? { [Op.and]: [where, resume] } : where,
+        where: whereAfterCursor({ where, after }),
         include: [{ model: db.Project, as: 'project' }],
         order: EXPORT_ORDER,
         limit,

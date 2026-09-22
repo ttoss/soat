@@ -1,12 +1,11 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { mapMemory, memoryIncludes } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
 import {
-  afterCursorWhere,
   EXPORT_ORDER,
   streamNdjson,
+  whereAfterCursor,
 } from 'src/lib/ndjsonExport';
 import { hasPolicyConstraints } from 'src/lib/policyWhere';
 import { applyTagFilter } from 'src/lib/tags';
@@ -31,7 +30,7 @@ export const streamMemoriesNdjson = (args: {
   log(
     'streamMemoriesNdjson: memoryStoreId=%d includeInvalidated=%o',
     args.memoryStoreId,
-    args.includeInvalidated ?? false
+    args.includeInvalidated
   );
 
   const where: Record<string, unknown> = {
@@ -45,9 +44,8 @@ export const streamMemoriesNdjson = (args: {
 
   return streamNdjson({
     findBatch: ({ after, limit }) => {
-      const resume = afterCursorWhere(after);
       return db.Memory.findAll({
-        where: resume ? { [Op.and]: [where, resume] } : where,
+        where: whereAfterCursor({ where, after }),
         include: memoryIncludes(),
         order: EXPORT_ORDER,
         limit,

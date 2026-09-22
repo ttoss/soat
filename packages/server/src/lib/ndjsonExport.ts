@@ -40,22 +40,31 @@ export const EXPORT_ORDER: [string, 'ASC'][] = [
 ];
 
 /**
- * The `where` fragment that resumes after a cursor, in `(created_at, id)`
- * order. `undefined` for the first batch, which starts at the beginning.
+ * A module's own `where`, narrowed to the rows after the cursor in
+ * `(created_at, id)` order. The first batch has no cursor and is the `where`
+ * unchanged.
  *
- * Two arms rather than one: rows sharing a timestamp are ordered by `id`, so
- * resuming on `created_at` alone would re-emit every row written in the same
- * millisecond as the cursor, and resuming on `id` alone would skip rows whose
- * ids were assigned out of timestamp order.
+ * Every exporter resumes through this, so how a batch boundary is drawn is one
+ * answer rather than one per module: a site writing its own would be the site
+ * that resumes on `created_at` alone and re-emits every row written in the same
+ * millisecond as the cursor, or on `id` alone and skips rows whose ids were
+ * assigned out of timestamp order.
  */
-export const afterCursorWhere = (
-  after: ExportCursor | undefined
-): Record<symbol, unknown> | undefined => {
-  if (!after) return undefined;
+export const whereAfterCursor = <Where extends Record<string, unknown>>(args: {
+  where: Where;
+  after: ExportCursor | undefined;
+}): Record<string | symbol, unknown> => {
+  const { where, after } = args;
+  if (!after) return where;
   return {
-    [Op.or]: [
-      { createdAt: { [Op.gt]: after.createdAt } },
-      { createdAt: after.createdAt, id: { [Op.gt]: after.id } },
+    [Op.and]: [
+      where,
+      {
+        [Op.or]: [
+          { createdAt: { [Op.gt]: after.createdAt } },
+          { createdAt: after.createdAt, id: { [Op.gt]: after.id } },
+        ],
+      },
     ],
   };
 };

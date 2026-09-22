@@ -24,19 +24,40 @@ import { requireAuth, resolveReadProjectIds } from './helpers';
  * `GetDocument` and `UpdateDocument` — the same pair its tag sub-resource
  * uses, rather than a second vocabulary for the same authority.
  */
+
 /**
- * The document an edge is asserted by, gated for `action`. Returns null when
- * the gate already answered `403`, which the caller returns on.
+ * The document an edge is asserted by, gated for `action`. Both refusals are
+ * thrown rather than returned: a caller that forgot to read a returned verdict
+ * would answer `201` to a request the gate denied.
  */
 const gateDocument = async (args: {
   ctx: Context;
   action: string;
-}): Promise<boolean> => {
+}): Promise<void> => {
   const doc = await getDocument({ id: args.ctx.params.document_id });
   if (!doc) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
-  return checkDocumentPermission(args.ctx, doc, args.action);
+  await checkDocumentPermission(args.ctx, doc, args.action);
+};
+
+/**
+ * The document an edge points at, off a request body.
+ *
+ * The spec declares it a required string, which holds a missing one at the
+ * request boundary but not a number or an object: those would otherwise reach
+ * the lookup as some coerced id and come back `404`, reporting a malformed
+ * request as a document that does not exist.
+ */
+const readTargetDocumentId = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'to_document_id must be a document id',
+      { to_document_id: value }
+    );
+  }
+  return value;
 };
 
 /** The caller's document scope, for resolving the other end of an edge. */
@@ -58,9 +79,7 @@ export const registerDocumentRelationRoutes = (args: {
     async (ctx: Context) => {
       requireAuth(ctx);
 
-      if (!(await gateDocument({ ctx, action: 'documents:GetDocument' }))) {
-        return;
-      }
+      await gateDocument({ ctx, action: 'documents:GetDocument' });
 
       ctx.body = await listDocumentRelations({
         documentId: ctx.params.document_id,
@@ -79,16 +98,13 @@ export const registerDocumentRelationRoutes = (args: {
         to_document_id?: unknown;
       };
 
-      if (!(await gateDocument({ ctx, action: 'documents:UpdateDocument' }))) {
-        return;
-      }
+      await gateDocument({ ctx, action: 'documents:UpdateDocument' });
 
       ctx.status = 201;
       ctx.body = await createDocumentRelation({
         fromDocumentId: ctx.params.document_id,
         type: readRelationType(body.type),
-        toDocumentId:
-          typeof body.to_document_id === 'string' ? body.to_document_id : '',
+        toDocumentId: readTargetDocumentId(body.to_document_id),
         projectIds: await documentScope(ctx),
       });
     }
@@ -99,9 +115,7 @@ export const registerDocumentRelationRoutes = (args: {
     async (ctx: Context) => {
       requireAuth(ctx);
 
-      if (!(await gateDocument({ ctx, action: 'documents:UpdateDocument' }))) {
-        return;
-      }
+      await gateDocument({ ctx, action: 'documents:UpdateDocument' });
 
       await deleteDocumentRelation({
         documentId: ctx.params.document_id,

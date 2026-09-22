@@ -12,10 +12,11 @@ const srcDir = path.join(repoRoot, 'packages/server/src');
  * it, `rest/v1/ndjsonResponse.ts` answers with it, and each module supplies
  * only the query and the mapper its own listing already uses.
  *
- * A route that sets the media type for itself is how that stops being true: it
- * is the site that then picks its own batch size, its own ordering and its own
- * answer to what a concurrent write does to a page boundary. The media type is
- * the cheap thing to hold, and holding it holds the rest.
+ * A site that answers any of that for itself is how that stops being true: it
+ * is the site that picks its own batch size, its own ordering, or its own
+ * answer to what a concurrent write does to a page boundary — and a cursor
+ * drawn on `created_at` alone re-emits every row written in the same
+ * millisecond, which no test of one export would catch.
  */
 describe('NDJSON exports', () => {
   /** Source with comments dropped, so prose naming the type is not a hit. */
@@ -32,6 +33,29 @@ describe('NDJSON exports', () => {
 
   /** The module that declares the media type, for everything else to import. */
   const DECLARES_THE_TYPE = 'lib/ndjsonExport.ts';
+
+  /** Files that stream an export, by the call that makes them one. */
+  const exporters = () => {
+    return fs
+      .readdirSync(srcDir, { recursive: true })
+      .filter((entry) => {
+        return (
+          typeof entry === 'string' &&
+          entry.endsWith('.ts') &&
+          entry !== DECLARES_THE_TYPE &&
+          /\bstreamNdjson\(/.test(code(path.join(srcDir, entry)))
+        );
+      })
+      .sort();
+  };
+
+  test('every exporter resumes through the shared cursor', () => {
+    const rolledTheirOwn = exporters().filter((entry) => {
+      return !/\bwhereAfterCursor\(/.test(code(path.join(srcDir, entry)));
+    });
+
+    assert.deepEqual(rolledTheirOwn, []);
+  });
 
   test('one module spells the media type', () => {
     const spelling = fs
