@@ -13,6 +13,7 @@ import { documentMetadataJsonb } from './2026-09-21-documentMetadataJsonb';
 import { documentVersions } from './2026-09-21-documentVersions';
 import { durableEventFirings } from './2026-09-21-durableEventFirings';
 import { memoryVersion } from './2026-09-21-memoryVersion';
+import { fileMetadataJsonb } from './2026-09-22-fileMetadataJsonb';
 import { tagBagGinIndexes } from './2026-09-22-tagBagGinIndexes';
 
 /**
@@ -48,5 +49,6 @@ export const MIGRATIONS: Migration[] = [
   documentMetadataJsonb,
   documentVersions,
   memoryVersion,
+  fileMetadataJsonb,
   tagBagGinIndexes,
 ];

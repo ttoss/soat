@@ -1430,6 +1430,42 @@ describe('Conversations', () => {
       expect(renderedAsUserContent).toBe(true);
     });
 
+    test('a message bag never reaches the model input', async () => {
+      const bagRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/messages`)
+        .send({
+          role: 'user',
+          message: 'Book me a table.',
+          metadata: { phone: '5511999998888', channel: 'whatsapp' },
+        });
+      expect(bagRes.status).toBe(201);
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_reg_4',
+        traceId: 'trc_reg_4',
+        status: 'completed',
+        output: {
+          model: 'gpt-4o',
+          content: 'Done.',
+          finishReason: 'stop',
+        },
+      });
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
+        .send({ agent_id: agentId });
+
+      const sentMessages: Array<{ role: string; content: unknown }> =
+        mockCreateGeneration.mock.calls[
+          mockCreateGeneration.mock.calls.length - 1
+        ][0].messages;
+
+      const input = JSON.stringify(sentMessages);
+      expect(input).toContain('Book me a table.');
+      expect(input).not.toContain('5511999998888');
+      expect(input).not.toContain('whatsapp');
+    });
+
     test('does not leak server-recorded tool-call chain through GET messages metadata', async () => {
       const leakConvRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')

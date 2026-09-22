@@ -44,20 +44,14 @@ const buildMessageEntry = async (args: {
   if (args.msg.role === 'assistant') {
     return { role: 'assistant', content };
   }
+  // The speaker's name is the only thing prefixed onto a turn. A message's
+  // `metadata` is a caller-owned bag the platform stores and does not read, so
+  // it does not reach the model: a caller who wants the model to see a field
+  // writes it into the message.
   const speakerName = args.msg.actor?.name ?? 'participant';
-  const meta = (args.msg as { metadata?: Record<string, unknown> | null })
-    .metadata;
-  const metadataStr =
-    meta && Object.keys(meta).length > 0
-      ? ` [${Object.entries(meta)
-          .map(([k, v]) => {
-            return `${k}: ${v}`;
-          })
-          .join(', ')}]`
-      : '';
   return {
     role: 'user',
-    content: `[${speakerName}]${metadataStr}: ${content}`,
+    content: `[${speakerName}]: ${content}`,
   };
 };
 

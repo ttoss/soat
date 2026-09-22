@@ -1,0 +1,47 @@
+openapi: 3.0.3
+info:
+  title: SOAT Metadata
+  version: 1.0.0
+  description: >-
+    Shared components for the `metadata` bag a resource carries. This file
+    declares no paths: it exists so the shape of a caller-owned bag is defined
+    once rather than once per module.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    MetadataBag:
+      type: object
+      description: >-
+        Caller-owned annotations on a resource, stored as the object they were
+        written as: the types a value was written with are the types a read
+        returns, so a filter can ask an ordering question about a number.
+        Unlike other body fields, keys are stored and returned verbatim in the
+        casing supplied — they are not converted between snake_case and
+        camelCase.
+
+
+        No key is reserved, and that is the point: every piece of state the
+        platform owns lives in its own typed column, so nothing written here
+        reaches platform state. The platform never reads the bag — it is not an
+        IAM context, not a policy input and not part of a prompt — which is
+        what separates it from a tag bag.
+      example: { author: 'John', revision: 2 }
+    NullableMetadataBag:
+      type: object
+      nullable: true
+      description: >-
+        A `MetadataBag` on a field where `null` is meaningful — a
+        full-replacement update that clears the bag, or a record whose bag was
+        never set.
+      example: { author: 'John', revision: 2 }
+    MetadataBagText:
+      type: string
+      description: >-
+        A `MetadataBag` as JSON text. A multipart field carries text, so the
+        object travels serialized on those surfaces and is parsed on arrival;
+        a JSON body carries the object itself. Text that is not a JSON object
+        is `400 VALIDATION_FAILED`.
+      example: '{"author":"John","revision":2}'

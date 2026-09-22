@@ -326,6 +326,22 @@ A tag key is an opaque label, **never case-converted**: stored, returned, and ma
 - `cost_center` and `costCenter` are **two different tags**; a policy naming one does not match a resource carrying only the other.
 - `GET .../tags` returns the stored key verbatim; copy it into `soat:ResourceTag/<key>`.
 
+## Tags and metadata
+
+A resource carries two annotation bags, and only one of them is an authorization input.
+
+|                       | `tags`                                                                                     | `metadata`                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Shape                 | A flat object of string values                                                               | Any JSON object, nested, with the types it was written with                                                        |
+| Governed by           | One mechanism for the write, `?tags=`, knowledge search and `soat:ResourceTag/<key>`         | A [metadata schema](metadata-schemas.md) per resource type and selector, which governs the write only              |
+| Read by the platform  | Yes: the IAM context of every access check, containment filters, `system.*` provenance       | Never: not in an IAM context, not in a policy condition, not in a prompt                                           |
+| Filtered by           | `?tags=key:value`, by containment                                                            | The [structured filter grammar](documents.md#metadata-filters) — equality, `in`, ordering — through the same containment |
+| Reserved keys         | `system.*`, refused on a caller write                                                        | None, and that is the point: nothing in the bag reaches platform state                                             |
+
+A label is a string, and a record's fields have types. A report's `revision` is an integer, its `published_at` a date, its `reviewers` a list; stored as strings, `3`, `03` and `3.0` are three values to containment and every consumer parses by convention. So `tags` carry the labels the platform matches on, and `metadata` carries the record, typed at rest.
+
+Which bag a rule may read follows from who writes it. Any caller who may write a resource may put any JSON in its `metadata`, so a policy condition on that bag would let that caller decide what their own rows match — including out of a `Deny`. `tags` are bounded and their `system.*` keys are refused on a caller write, which is what makes them safe to condition on. A policy therefore names `soat:ResourceTag/<key>` and has no spelling for the other bag.
+
 ## Examples
 
 ### Full Access Policy

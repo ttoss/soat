@@ -124,9 +124,7 @@ paths:
                   description: File size in bytes
                   example: 1024
                 metadata:
-                  type: string
-                  description: JSON string with additional metadata
-                  example: '{"author":"John"}'
+                  $ref: './metadata.yaml#/components/schemas/MetadataBag'
       responses:
         '201':
           description: File created successfully
@@ -184,9 +182,7 @@ paths:
                   description: Original / download name. Optional; defaults to the uploaded file's name.
                   example: 'logo.png'
                 metadata:
-                  type: string
-                  description: Additional metadata as a JSON string
-                  example: '{"author":"John"}'
+                  $ref: './metadata.yaml#/components/schemas/MetadataBagText'
       responses:
         '201':
           description: File uploaded successfully
@@ -335,9 +331,7 @@ paths:
                   format: binary
                   description: File content
                 metadata:
-                  type: string
-                  description: Additional metadata as a JSON string
-                  example: '{"author":"John"}'
+                  $ref: './metadata.yaml#/components/schemas/MetadataBagText'
           application/json:
             schema:
               $ref: '#/components/schemas/UploadFileWithTokenRequest'
@@ -518,9 +512,9 @@ paths:
               additionalProperties: false
               properties:
                 metadata:
-                  type: string
-                  description: New metadata as a JSON string
-                  example: '{"author":"Jane","tags":["report"]}'
+                  description: Replaces the stored bag; `null` clears it.
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
                 prefix:
                   type: string
                   description: New directory — moves the file. The resulting path (prefix + filename) must be unique within the project.
@@ -743,9 +737,7 @@ components:
           description: MIME type of the file
           example: 'text/plain'
         metadata:
-          type: string
-          description: JSON string with additional metadata
-          example: '{"author":"John"}'
+          $ref: './metadata.yaml#/components/schemas/MetadataBag'
     PresignedUrlRequest:
       type: object
       required:
@@ -803,9 +795,7 @@ components:
           description: MIME type of the file (overrides the token's content type)
           example: 'text/plain'
         metadata:
-          type: string
-          description: JSON string with additional metadata
-          example: '{"author":"John"}'
+          $ref: './metadata.yaml#/components/schemas/MetadataBag'
     FileRecord:
       type: object
       description: Stored file metadata
@@ -840,10 +830,7 @@ components:
           description: File size in bytes
           example: 1024
         metadata:
-          type: string
-          nullable: true
-          description: JSON string with additional metadata
-          example: '{"author":"John"}'
+          $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         tags:
           $ref: './tags.yaml#/components/schemas/TagBag'
         created_at:

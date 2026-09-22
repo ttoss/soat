@@ -72,7 +72,7 @@ One template replaces the separate API calls that create an AI provider, memory 
 | `template`   | object   | The last applied template (raw — substitution expressions preserved)          |
 | `outputs`    | object   | Resolved output values                                                         |
 | `status`     | string   | `creating` \| `active` \| `updating` \| `failed` \| `deleting` \| `deleted` \| `delete_failed` |
-| `metadata`   | object   | Static annotations stored on the record (supplied at create/update). Not a substitution site — `sub`/`param`/`ref` expressions are rejected (use `template.metadata` instead) |
+| `metadata`   | object   | Static annotations stored on the record (supplied at create/update), per [Tags and metadata](iam.md#tags-and-metadata). Not a substitution site — `sub`/`param`/`ref` expressions are rejected (use `template.metadata` instead) |
 | `resolved_metadata`   | object   | The template's top-level `metadata` after `sub`/`param`/`ref` substitution at the last deploy (null when the template declares no metadata) |
 | `resolved_parameters` | object   | Parameter values applied at the last deploy, for auditability (`no_echo` values masked as `***`; null when the template declares no parameters) |
 | `error`      | object   | Why the formation is `failed` / `delete_failed`, as `{ code, message, meta }` — the same shape an error response uses. Null in every other status, and cleared by the next successful deploy |

@@ -55,7 +55,7 @@ When a memory is created or updated, its `content` is embedded for semantic simi
 | `source_type` | `string` | Whether there is a source to point at: `manual` (default) or `conversation` — see [Provenance](#provenance) |
 | `source_id`  | `string \| null` | The [conversation](./conversations.md) this fact was learned in when `source_type` is `conversation`; `null` when `manual` |
 | `tags`       | `object \| null`   | Per-memory key-value labels for memory-granularity tag filtering in [Knowledge search](./knowledge.md) |
-| `metadata`   | `object \| null`   | Arbitrary structured metadata attached to the memory    |
+| `metadata`   | `object \| null`   | Caller-owned annotations on the memory — see [Tags and metadata](iam.md#tags-and-metadata)    |
 | `invalidated_at` | `string \| null` | When the memory stopped holding, superseded or retracted; `null` means currently valid — see [Temporal invalidation](#temporal-invalidation) |
 | `superseded_by_memory_id` | `string \| null` | The memory that replaced this one, when superseded; `null` when a retraction withdrew it |
 | `version`    | `integer` | Write version, starting at 1 and incremented on every update — see [Concurrent writes](#concurrent-writes) |

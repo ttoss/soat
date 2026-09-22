@@ -77,8 +77,11 @@ export class File extends Model {
   @Column({ type: DataType.STRING })
   declare storagePath: string;
 
-  @Column({ type: DataType.TEXT })
-  declare metadata?: string; // JSON string
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare metadata: Record<string, unknown> | null;
 
   @Column({
     type: DataType.JSONB,

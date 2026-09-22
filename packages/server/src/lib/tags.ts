@@ -1,6 +1,11 @@
-import { Op } from '@ttoss/postgresdb';
-
 import { DomainError } from '../errors';
+import { applyFilterWhere, containment } from './structuredFilter';
+
+/**
+ * The attribute every tagged model spells its bag as, so one containment
+ * fragment serves a listing, a joined chunk scan and a memory selection alike.
+ */
+const TAGS_ATTRIBUTE = 'tags';
 
 /**
  * Resolves the new tag bag for a tag write: a shallow merge over the current
@@ -138,27 +143,37 @@ export const readTagQuery = (
 };
 
 /**
- * JSONB containment: every requested pair present with exactly that value.
+ * The where-fragment that matches a tag bag: every requested pair present with
+ * exactly that value.
+ *
  * The one matching rule shared by `?tags=`, knowledge search and the
- * `soat:ResourceTag/<key>` fragments `policyCompiler` emits.
+ * `soat:ResourceTag/<key>` fragments `policyCompiler` emits, and the same
+ * containment a `metadata` equality compiles to — `?tags=key:value` is the
+ * query-string spelling of that equality on the other bag, so both go through
+ * `containment` rather than each spelling `@>` for itself.
  */
-export const tagContainment = (
-  tags: Record<string, string>
-): Record<symbol, Record<string, string>> => {
-  return { [Op.contains]: tags };
+export const tagContainment = (tags: Record<string, string>) => {
+  return containment({ attribute: TAGS_ATTRIBUTE, bag: tags });
 };
 
 /**
  * Narrows a list query by tags. A missing or empty bag leaves `where` alone:
  * containment against `{}` matches every row, so it must never reach a query
  * as though it were a filter.
+ *
+ * ANDed beside what the caller already has rather than assigned onto the bag's
+ * attribute: a compiled IAM policy carries its own containment on the same
+ * column, and a filter is a question about rows the caller may already see.
  */
 export const applyTagFilter = (args: {
   where: Record<string, unknown>;
   tags: Record<string, string> | undefined;
 }): void => {
   if (!hasTagFilter(args.tags)) return;
-  args.where.tags = tagContainment(args.tags);
+  applyFilterWhere({
+    where: args.where,
+    fragments: [tagContainment(args.tags)],
+  });
 };
 
 /**
