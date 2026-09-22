@@ -524,9 +524,6 @@ paths:
         document claims — use `?related_to=` on the listing to find what
         claims something about it.
       operationId: listDocumentRelations
-      x-soat-resource:
-        kind: document
-        from: document_id
       parameters:
         - name: document_id
           in: path
@@ -567,9 +564,6 @@ paths:
         which is what lets an agent record what its own report derives from
         without being able to make another report claim anything.
       operationId: createDocumentRelation
-      x-soat-resource:
-        kind: document
-        from: document_id
       parameters:
         - name: document_id
           in: path
@@ -627,9 +621,6 @@ paths:
         Removes an edge this document asserts. Both documents are left as they
         are — retracting a claim is not a change to what it was about.
       operationId: deleteDocumentRelation
-      x-soat-resource:
-        kind: document
-        from: document_id
       parameters:
         - name: document_id
           in: path

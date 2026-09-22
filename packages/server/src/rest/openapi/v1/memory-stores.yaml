@@ -400,7 +400,7 @@ paths:
   /api/v1/memory-stores/{memory_store_id}/export:
     get:
       tags:
-        - Memory Stores
+        - MemoryStores
       summary: Export a memory store's memories as NDJSON
       description: >-
         Streams one store's memories as newline-delimited JSON — one memory
@@ -409,6 +409,9 @@ paths:
         the file holds what the store currently asserts. The rows are the rows
         the listing returns for the same caller.
       operationId: exportMemories
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       # Not a tool: the response is a stream with no JSON projection, and an
       # export is deliberately unbounded, so the callable form of "read the
       # memories" is `listMemories`, which is paged.
