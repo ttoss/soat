@@ -269,6 +269,15 @@ A caller that states nothing still gets the version bump: two writers racing on 
 serialize, and the loser sees the conflict rather than silently overwriting the winner. A
 [retraction](#retraction) claims the same counter, so it is refused the same way.
 
+### NDJSON export
+
+[`GET /api/v1/memory-stores/{memory_store_id}/export`](/docs/api/memory-stores/export-memories) streams one store's memories as newline-delimited JSON, oldest first, one memory object per line.
+
+- Invalidated memories — retracted or superseded — are left out unless `include_invalidated=true`, so the file holds what the store currently asserts.
+- `?tags=` narrows it exactly as it narrows the listing, and a policy condition on a memory's own tags applies the same way.
+- The response streams and pages internally.
+- Authorized by `memories:ExportMemories`, separate from `memories:ListMemories`.
+
 ### Tag Filtering
 
 Tags are free-form strings attached to a memory store at creation or update time.

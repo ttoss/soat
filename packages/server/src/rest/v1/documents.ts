@@ -1,6 +1,11 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { streamDocumentsNdjson } from 'src/lib/documentExport';
+import {
+  relatedDocumentRowIds,
+  relationsForDocument,
+} from 'src/lib/documentRelations';
 import {
   createDocument,
   deleteDocument,
@@ -24,6 +29,7 @@ import {
   readTagQuery,
 } from 'src/lib/tags';
 
+import { registerDocumentRelationRoutes } from './documentRelationRoutes';
 import { registerDocumentVersionRoutes } from './documentVersionRoutes';
 import type { AuthenticatedContext, ProjectOwned } from './helpers';
 import {
@@ -33,6 +39,7 @@ import {
   writePreconditionOf,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
+import { sendNdjson } from './ndjsonResponse';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const documentsRouter = new Router<Context>();
@@ -78,7 +85,7 @@ const buildDocumentResources = (
  * Check if user is allowed to perform action on document
  * Returns false if not allowed (after setting ctx.status to 403)
  */
-const checkDocumentPermission = async (
+export const checkDocumentPermission = async (
   ctx: Context,
   doc: {
     id: string;
@@ -112,6 +119,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
   const pathPrefix = ctx.query.path_prefix as string | undefined;
+  const relatedTo = ctx.query.related_to as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
   const metadata = readMetadataQuery(ctx.query.metadata);
   const includeWithdrawn = ctx.query.include_withdrawn === 'true';
@@ -122,6 +130,13 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     action: 'documents:ListDocuments',
     resourceType: 'document',
   });
+
+  // A neighbour filter resolves to row ids once, here, so the listing stays
+  // one query: an empty list is a document with no neighbours, which narrows
+  // to nothing rather than to everything.
+  const relatedRowIds = relatedTo
+    ? await relatedDocumentRowIds({ documentId: relatedTo, projectIds })
+    : undefined;
 
   // Compile SQL-level policy filter when a specific project is requested
   if (projectPublicId) {
@@ -145,6 +160,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       projectIds,
       policyWhere,
       pathPrefix,
+      relatedRowIds,
       tags,
       metadata,
       includeWithdrawn,
@@ -157,11 +173,53 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   ctx.body = await listDocuments({
     projectIds,
     pathPrefix,
+    relatedRowIds,
     tags,
     metadata,
     includeWithdrawn,
     limit,
     offset,
+  });
+});
+
+// Registered before `/documents/:document_id` so `export` is read as a path
+// segment rather than swallowed as a document id.
+documentsRouter.get('/documents/export', async (ctx: Context) => {
+  requireAuth(ctx);
+
+  const projectPublicId = ctx.query.project_id as string | undefined;
+
+  // Per-project, as the audit-log export is: an unbounded cross-project dump
+  // is a different egress surface than this endpoint offers.
+  if (!projectPublicId) {
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
+  }
+
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    projectPublicId,
+    action: 'documents:ExportDocuments',
+    resourceType: 'document',
+  });
+
+  const policies = await ctx.authUser!.getPolicies(projectPublicId);
+  const { where: policyWhere, hasAccess } = compilePolicy({
+    policies,
+    action: 'documents:ExportDocuments',
+    resourceType: 'document',
+    projectPublicId,
+  });
+
+  sendNdjson({
+    ctx,
+    filename: `documents-${projectPublicId}.ndjson`,
+    lines: streamDocumentsNdjson({
+      // A policy that grants nothing exports nothing, rather than refusing:
+      // the scope a caller has is the scope the file describes.
+      projectIds: hasAccess ? (projectIds ?? []) : [],
+      policyWhere,
+      pathPrefix: ctx.query.path_prefix as string | undefined,
+    }),
   });
 });
 
@@ -177,8 +235,13 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = doc;
+  ctx.body = {
+    ...doc,
+    relations: await relationsForDocument({ documentId: doc.id }),
+  };
 });
+
+registerDocumentRelationRoutes({ documentsRouter });
 
 documentsRouter.post('/documents', async (ctx: Context) => {
   requireAuth(ctx);

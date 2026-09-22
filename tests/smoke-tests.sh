@@ -678,6 +678,17 @@ if [ "$ACTOR_BAD_TAGS_STATUS" != "400" ]; then
   exit 1
 fi
 expect_cli_error_status 400 list-actors --project_id "$PROJECT_PUBLIC_ID" --tags smoke
+# The bag is bounded where it is written, and the refusal names the bound it
+# crossed: every pair reaches the IAM context of every check on the resource.
+LONG_TAG_VALUE=$(awk 'BEGIN { while (i++ < 257) printf "v" }')
+LONG_TAG_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"env\":\"$LONG_TAG_VALUE\"}")
+if ! printf '%s\n' "$LONG_TAG_RESP" | jq -e '.error.meta.limit == 256' >/dev/null 2>&1; then
+  echo "ERROR: an over-long tag value expected 400 naming the 256 limit" >&2
+  echo "$LONG_TAG_RESP" >&2
+  exit 1
+fi
 echo "Actor tags: OK"
 
 $SOAT_CLI get-actor --actor-id "$ACTOR_ID"
@@ -1533,6 +1544,67 @@ $SOAT_CLI delete-tool --tool-id "$ASYNC_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$ASYNC_HTTP_TOOL_ID"
 echo "Async ingestion rule resources cleaned up."
 
+# 12c5. Typed relations: an edge is asserted by one document about another,
+# read back on the document, and found from either side.
+echo "--- Documents: typed relations ---"
+DOC_REL_RESP=$(curl -s -X POST "$SERVER_URL/api/v1/documents/$DOC1_ID/relations" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"type\":\"derived_from\",\"to_document_id\":\"$DOC2_ID\"}")
+DOC_REL_ID=$(printf '%s\n' "$DOC_REL_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DOC_REL_ID" | grep -q '^doc_rel_'; then
+  echo "ERROR: relation id expected to start with 'doc_rel_', got '$DOC_REL_ID'" >&2
+  printf '%s\n' "$DOC_REL_RESP" >&2
+  exit 1
+fi
+# The read carries what the document asserts.
+DOC_REL_READ=$($SOAT_CLI get-document --document-id "$DOC1_ID" \
+  | jq -r '[.relations[].to_document_id] | join(",")')
+if [ "$DOC_REL_READ" != "$DOC2_ID" ]; then
+  echo "ERROR: document read expected relation to $DOC2_ID, got '$DOC_REL_READ'" >&2
+  exit 1
+fi
+# `related_to` finds the neighbour from the other end of the edge.
+DOC_REL_NEIGHBOUR=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" --related_to "$DOC2_ID" \
+  | jq -r '[.data[].id] | join(",")')
+if [ "$DOC_REL_NEIGHBOUR" != "$DOC1_ID" ]; then
+  echo "ERROR: related_to expected $DOC1_ID, got '$DOC_REL_NEIGHBOUR'" >&2
+  exit 1
+fi
+# Re-asserting the same edge is the same fact.
+DOC_REL_DUP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+  -X POST "$SERVER_URL/api/v1/documents/$DOC1_ID/relations" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"type\":\"derived_from\",\"to_document_id\":\"$DOC2_ID\"}")
+if [ "$DOC_REL_DUP_STATUS" != "409" ]; then
+  echo "ERROR: re-asserting a relation expected 409, got $DOC_REL_DUP_STATUS" >&2
+  exit 1
+fi
+$SOAT_CLI delete-document-relation --document-id "$DOC1_ID" \
+  --relation-id "$DOC_REL_ID"
+echo "Document relations: OK"
+
+# 12d. NDJSON export: the corpus as a file, one JSON object per line, and the
+# same rows the listing returns for this caller.
+echo "--- Documents: NDJSON export ---"
+DOC_EXPORT_RESP=$($SOAT_CLI export-documents --project_id "$PROJECT_PUBLIC_ID")
+DOC_EXPORT_IDS=$(printf '%s\n' "$DOC_EXPORT_RESP" | grep '"path"' \
+  | jq -r '.id' | sort -u | wc -l)
+if [ "$DOC_EXPORT_IDS" -lt 2 ]; then
+  echo "ERROR: expected the export to carry the project's documents" >&2
+  printf '%s\n' "$DOC_EXPORT_RESP" >&2
+  exit 1
+fi
+# `path_prefix` narrows the file exactly as it narrows the listing.
+DOC_EXPORT_PREFIXED=$($SOAT_CLI export-documents \
+  --project_id "$PROJECT_PUBLIC_ID" --path_prefix /smoke-reports \
+  | grep '"path"' | jq -r '.path' | grep -cv '^/smoke-reports/' || true)
+if [ "$DOC_EXPORT_PREFIXED" != "0" ]; then
+  echo "ERROR: path_prefix export returned a document outside /smoke-reports" >&2
+  exit 1
+fi
+echo "Documents export: OK"
+
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
@@ -1625,6 +1697,19 @@ if [ "$ME1_ACTION" != "created" ]; then
   exit 1
 fi
 echo "Memory created: $ME1_ID"
+
+# The store as a file: one JSON object per line, what the store currently
+# asserts (an invalidated fact is left out unless asked for).
+echo "--- Memories: NDJSON export ---"
+MEM_EXPORT_RESP=$($SOAT_CLI export-memories --memory-store-id "$MEM_ID")
+MEM_EXPORT_IDS=$(printf '%s\n' "$MEM_EXPORT_RESP" | grep '"content"' \
+  | jq -r '.id' | sort -u | wc -l)
+if [ "$MEM_EXPORT_IDS" -lt 1 ]; then
+  echo "ERROR: expected the memory export to carry the store's memories" >&2
+  printf '%s\n' "$MEM_EXPORT_RESP" >&2
+  exit 1
+fi
+echo "Memories export: OK"
 
 echo "--- Memories: duplicate write (skipped) ---"
 ME_SKIP_RESP=$($SOAT_CLI create-memory \
@@ -2449,6 +2534,18 @@ if [ -z "$ACT_ID" ]; then
   exit 1
 fi
 echo "Activity feed coverage: OK ($ACT_ID)"
+
+# The feed as a file: oldest first, where the feed itself reads newest first.
+echo "--- Activity: NDJSON export ---"
+ACT_EXPORT_RESP=$($SOAT_CLI export-activity --project_id "$PROJECT_PUBLIC_ID")
+ACT_EXPORT_KINDS=$(printf '%s\n' "$ACT_EXPORT_RESP" | grep '"kind"' \
+  | jq -r '.kind' | sort -u | wc -l)
+if [ "$ACT_EXPORT_KINDS" -lt 1 ]; then
+  echo "ERROR: expected the activity export to carry the project's entries" >&2
+  printf '%s\n' "$ACT_EXPORT_RESP" >&2
+  exit 1
+fi
+echo "Activity export: OK"
 
 echo "--- Run input is visible to node logic via the input namespace ---"
 # A snake_case input key must round-trip verbatim; it resolves only through the

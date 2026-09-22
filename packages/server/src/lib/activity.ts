@@ -231,25 +231,39 @@ export type ListActivityResult = {
  * mean together: an entry carries one agent, one generation and one run, so a
  * caller naming two of them is asking for the rows where both hold.
  */
-export const listActivity = async (args: {
+/** What narrows a feed read: the scope, and the filters a caller may add. */
+export type ActivityFilters = {
   projectIds: number[];
   kind?: string;
   severity?: string;
   agentId?: string;
   generationId?: string;
   orchestrationRunId?: string;
-  cursor?: string;
-  limit?: number;
-}): Promise<ListActivityResult> => {
-  const limit = resolveActivityLimit(args.limit);
-  const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.kind) where.kind = args.kind;
-  if (args.severity) where.severity = args.severity;
-  if (args.agentId) where.agentId = args.agentId;
-  if (args.generationId) where.generationId = args.generationId;
-  if (args.orchestrationRunId) {
-    where.orchestrationRunId = args.orchestrationRunId;
+};
+
+/**
+ * The `where` those filters compile to. One expression for the feed and its
+ * export, so a filter narrows both the same way.
+ */
+export const buildActivityWhere = (
+  filters: ActivityFilters
+): Record<string, unknown> => {
+  const where: Record<string, unknown> = { projectId: filters.projectIds };
+  if (filters.kind) where.kind = filters.kind;
+  if (filters.severity) where.severity = filters.severity;
+  if (filters.agentId) where.agentId = filters.agentId;
+  if (filters.generationId) where.generationId = filters.generationId;
+  if (filters.orchestrationRunId) {
+    where.orchestrationRunId = filters.orchestrationRunId;
   }
+  return where;
+};
+
+export const listActivity = async (
+  args: ActivityFilters & { cursor?: string; limit?: number }
+): Promise<ListActivityResult> => {
+  const limit = resolveActivityLimit(args.limit);
+  const where = buildActivityWhere(args);
 
   let finalWhere: Record<string, unknown> = where;
   if (args.cursor) {

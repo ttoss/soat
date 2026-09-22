@@ -15,6 +15,7 @@ import {
   writeMemory,
 } from 'src/lib/memories';
 import { listMemoryAssertions } from 'src/lib/memoryAssertions';
+import { streamMemoriesNdjson } from 'src/lib/memoryExport';
 import { retractMemory } from 'src/lib/memoryRetraction';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { getMemoryTags, updateMemoryTags } from 'src/lib/memoryTags';
@@ -40,6 +41,7 @@ import {
   readThreshold,
   validateTagsMetadata,
 } from './memoriesRequestBody';
+import { sendNdjson } from './ndjsonResponse';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
@@ -213,6 +215,42 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
     ...parsePagination(ctx),
   });
 });
+
+// A store's memories, as a file. The path names the store, and the route lives
+// beside the listing because both resolve the store the same way and narrow by
+// each memory's own tags afterwards.
+memoriesRouter.get(
+  '/memory-stores/:memory_store_id/export',
+  async (ctx: Context) => {
+    requireAuth(ctx);
+
+    const { memoryStore, memoryStoreRowId } = await resolveMemoryStoreForAction(
+      ctx,
+      ctx.params.memory_store_id,
+      'memories:ExportMemories'
+    );
+
+    const projectPublicId = memoryStore.project_id!;
+    const policies = await ctx.authUser.getPolicies(projectPublicId);
+    const { where: policyWhere, hasAccess } = compilePolicy({
+      policies,
+      action: 'memories:ExportMemories',
+      resourceType: 'memory',
+      projectPublicId,
+    });
+
+    sendNdjson({
+      ctx,
+      filename: `memories-${memoryStore.id}.ndjson`,
+      lines: streamMemoriesNdjson({
+        memoryStoreId: hasAccess ? memoryStoreRowId : NO_MEMORY,
+        includeInvalidated: ctx.query.include_invalidated === 'true',
+        tags: readTagQuery(ctx.query.tags),
+        policyWhere,
+      }),
+    });
+  }
+);
 
 memoriesRouter.post('/memories', async (ctx: Context) => {
   requireAuth(ctx);

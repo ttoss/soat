@@ -278,6 +278,7 @@ Tags are key-value pairs on resources, enabling ABAC via conditions. One mechani
 | Surface | Rule |
 |---|---|
 | Write (`tags` on create/update, `PUT`/`PATCH …/tags`) | A flat object of string values; anything else (an array, a nested object, a number) is `400 VALIDATION_FAILED`, never coerced |
+| Bounds | At most 50 keys, 128-character keys and 256-character values. A write past a bound is `400 VALIDATION_FAILED` with `meta.limit`, and so is a `PATCH` whose merge would grow the stored bag past the key count. `system.*` keys are the platform's and do not count |
 | List filter (`?tags=key:value`, repeatable) | JSONB containment: every pair present with exactly that value; split on the first colon; a pair without a colon is `400` |
 | Knowledge search (`tags` in the body) | Same containment rule across documents and memory entries |
 | Policy condition (`soat:ResourceTag/<key>`) | Same pairs, read from the same column |
@@ -332,7 +333,7 @@ A resource carries two annotation bags, and only one of them is an authorization
 
 |                       | `tags`                                                                                     | `metadata`                                                                                                      |
 | --------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Shape                 | A flat object of string values                                                               | Any JSON object, nested, with the types it was written with                                                        |
+| Shape                 | A flat object of string values, bounded (50 keys, 128-character keys, 256-character values)   | Any JSON object, nested, with the types it was written with; bounded by the project's storage quota, not by a count |
 | Governed by           | One mechanism for the write, `?tags=`, knowledge search and `soat:ResourceTag/<key>`         | A [metadata schema](metadata-schemas.md) per resource type and selector, which governs the write only              |
 | Read by the platform  | Yes: the IAM context of every access check, containment filters, `system.*` provenance       | Never: not in an IAM context, not in a policy condition, not in a prompt                                           |
 | Filtered by           | `?tags=key:value`, by containment                                                            | The [structured filter grammar](documents.md#metadata-filters) — equality, `in`, ordering — through the same containment |

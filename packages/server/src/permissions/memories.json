@@ -120,6 +120,11 @@
       "operationId": "deleteMemoryRule",
       "action": "memories:DeleteMemoryRule",
       "description": "Delete a memory rule"
+    },
+    {
+      "operationId": "exportMemories",
+      "action": "memories:ExportMemories",
+      "description": "Export a memory store's memories as NDJSON"
     }
   ]
 }

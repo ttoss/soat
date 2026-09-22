@@ -71,11 +71,19 @@ registerResourceFieldMap({
  */
 const DOCUMENT_METADATA_COLUMN = '"Document"."metadata"';
 
-const buildDocumentQueryOptions = (args: {
+/**
+ * The rows a caller may see, as Sequelize options: the compiled policy, the
+ * live-document and reserved-path exclusions, and the caller's own filters.
+ * Shared with the export so a listing and a file of the same project never
+ * disagree about which documents exist.
+ */
+export const buildDocumentQueryOptions = (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
   pathPrefix?: string;
+  /** Row ids of the neighbours a `?related_to=` filter resolved to. */
+  relatedRowIds?: number[];
   tags?: Record<string, string>;
   metadataWhere: unknown[];
   includeWithdrawn?: boolean;
@@ -89,6 +97,7 @@ const buildDocumentQueryOptions = (args: {
     ? { ...args.policyWhere }
     : {};
   if (!args.includeWithdrawn) Object.assign(topLevelWhere, liveDocumentWhere());
+  if (args.relatedRowIds !== undefined) topLevelWhere.id = args.relatedRowIds;
   applyTagFilter({ where: topLevelWhere, tags: args.tags });
   applyFilterWhere({ where: topLevelWhere, fragments: args.metadataWhere });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,6 +122,8 @@ export const listDocuments = async (args: {
   policyWhere?: Record<string, any>;
   /** Only documents filed under this directory (see `pathPrefixPattern`). */
   pathPrefix?: string;
+  /** Only the documents these row ids name; an empty list narrows to nothing. */
+  relatedRowIds?: number[];
   tags?: Record<string, string>;
   /** Structured question about the bag; see {@link compileMetadataWhere}. */
   metadata?: MetadataFilter;
@@ -138,6 +149,7 @@ export const listDocuments = async (args: {
         projectIds: args.projectIds,
         policyWhere: args.policyWhere,
         pathPrefix: args.pathPrefix,
+        relatedRowIds: args.relatedRowIds,
         tags: args.tags,
         metadataWhere,
         includeWithdrawn: args.includeWithdrawn,

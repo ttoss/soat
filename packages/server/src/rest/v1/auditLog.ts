@@ -1,5 +1,3 @@
-import { Readable } from 'node:stream';
-
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
@@ -11,6 +9,7 @@ import {
 } from 'src/lib/auditLog';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
+import { sendNdjson } from './ndjsonResponse';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const auditLogRouter = new Router<Context>();
@@ -111,13 +110,11 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
     resourceType: 'audit',
   });
 
-  const filename = `audit-log-${projectPublicId}.ndjson`;
-  ctx.set('Content-Type', 'application/x-ndjson');
-  ctx.set('Content-Disposition', `attachment; filename="${filename}"`);
-  ctx.status = 200;
   // The generator emits the snake_case read contract directly.
-  ctx.body = Readable.from(
-    streamAuditEntriesNdjson({
+  sendNdjson({
+    ctx,
+    filename: `audit-log-${projectPublicId}.ndjson`,
+    lines: streamAuditEntriesNdjson({
       projectIds,
       action: ctx.query.action as string | undefined,
       principalId: ctx.query.principal_id as string | undefined,
@@ -125,8 +122,8 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
       resourceSrn: ctx.query.resource_srn as string | undefined,
       from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
       to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
-    })
-  );
+    }),
+  });
 });
 
 auditLogRouter.get('/audit-log/:entry_id', async (ctx: Context) => {

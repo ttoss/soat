@@ -77,6 +77,11 @@ export const ERROR_CODES = {
     description:
       'An actor cannot have both an agent_id and a chat_id assigned simultaneously. Set one or the other, not both.',
   },
+  DOCUMENT_RELATION_EXISTS: {
+    httpStatus: 409,
+    description:
+      'That relation is already asserted between the two documents. Re-asserting the same edge is the same fact, so there is nothing to add.',
+  },
   NAME_CONFLICT: {
     httpStatus: 409,
     description:
