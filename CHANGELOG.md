@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.58.0](https://github.com/ttoss/soat/compare/v0.57.0...v0.58.0) (2026-09-22)
+
+### Bug Fixes
+
+* **metadata,cli,specs:** one reader, one declaration, and a checked manifest ([#1402](https://github.com/ttoss/soat/issues/1402)) ([6196579](https://github.com/ttoss/soat/commit/6196579d32640967dd6b5e43bd2d0d42d6d15b4b)), closes [#1398](https://github.com/ttoss/soat/issues/1398) [#1398](https://github.com/ttoss/soat/issues/1398)
+* **server:** formation plan/apply agreement, run/session tool_context clearing, test module ceiling ([#1388](https://github.com/ttoss/soat/issues/1388)) ([77d2ddd](https://github.com/ttoss/soat/commit/77d2ddda5967feac81bea920e9ad13eb256c61b7))
+
+### Features
+
+* **documents,files,conversations:** phase 1 of the two bags — the line, structured filters, one wire shape ([#1398](https://github.com/ttoss/soat/issues/1398)) ([12ac52b](https://github.com/ttoss/soat/commit/12ac52bca56f7eaad54688375aa603ff57cab9e9)), closes [#1389](https://github.com/ttoss/soat/issues/1389)
+* **documents,memories:** conditional writes at the call sites ([#1392](https://github.com/ttoss/soat/issues/1392)) ([4b02c1c](https://github.com/ttoss/soat/commit/4b02c1c1051959baea9782509a34b9e6f5f7772d))
+* **memories:** retract a fact that stopped holding ([#1393](https://github.com/ttoss/soat/issues/1393)) ([5529d39](https://github.com/ttoss/soat/commit/5529d39c59cf5fd4ba965dac22e18f83bf2338bb)), closes [#1389](https://github.com/ttoss/soat/issues/1389)
+* **metadata-schemas:** declare what a resource's metadata must satisfy ([#1394](https://github.com/ttoss/soat/issues/1394)) ([4535228](https://github.com/ttoss/soat/commit/453522877692bcfc9ed8dce411ac94b1c1bd35f2)), closes [#1389](https://github.com/ttoss/soat/issues/1389)
+* **server:** single source of truth — the [Opus] roadmap items of [#1389](https://github.com/ttoss/soat/issues/1389) ([#1390](https://github.com/ttoss/soat/issues/1390)) ([41e08cd](https://github.com/ttoss/soat/commit/41e08cdef4fccb39dd210d476d2059a155634e33))
+* **tags,exports,documents:** phase 2 of the two bags — a bounded bag, one exporter, typed relations ([#1400](https://github.com/ttoss/soat/issues/1400)) ([9644c53](https://github.com/ttoss/soat/commit/9644c539870ebdd26b3603fec54d15159e78bf2d))
+
+### Performance Improvements
+
+* **postgresdb:** index every tag bag for containment ([#1399](https://github.com/ttoss/soat/issues/1399)) ([6afe259](https://github.com/ttoss/soat/commit/6afe25997c53b7bd7b4aed228861955fa0243c0e))
+
 # [0.57.0](https://github.com/ttoss/soat/compare/v0.56.0...v0.57.0) (2026-09-21)
 
 ### Bug Fixes
