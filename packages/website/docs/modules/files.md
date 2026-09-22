@@ -31,7 +31,7 @@ Files belong to a project and are persisted through the configured backend (loca
 | `path`         | string \| null           | **Read-only.** Full key = `prefix` + `/` + `filename` (e.g. `/assets/logo.png`). Unique per project; the file's identity and the resource ID segment in path-based SRNs. |
 | `content_type` | string                   | MIME type                                                                                                           |
 | `size`         | number                   | File size in bytes                                                                                                  |
-| `metadata`     | string                   | Arbitrary JSON string for custom metadata                                                                           |
+| `metadata`     | object \| null           | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `project_id`   | string                   | ID of the owning project                                                                                            |
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
@@ -43,6 +43,12 @@ Files belong to a project and are persisted through the configured backend (loca
 ### Tags
 
 Key-value string pairs managed via the tag sub-endpoints and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/files`](/docs/api/files/list-files) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
+
+### Metadata
+
+`metadata` is a JSON object, stored as the object it was written as: the types a value was written with are the types a read returns, and keys keep the casing they were supplied in. The platform never reads the bag — [Tags and metadata](iam.md#tags-and-metadata) draws that line — so nothing in it reaches an access decision.
+
+Every surface carries the same object. [`PATCH /api/v1/files/{file_id}/metadata`](/docs/api/files/update-file-metadata) replaces the stored bag, and `null` clears it. A multipart upload is the one exception on the wire, not in the store: a form field carries text, so [`POST /api/v1/files/upload`](/docs/api/files/upload-file) and a multipart [`POST /api/v1/files/upload/{token}`](/docs/api/files/upload-file-with-token) take the object as JSON text and parse it on arrival. Text that is not a JSON object is `400 VALIDATION_FAILED`, as a body field that is not an object is.
 
 ### Storage Backends
 

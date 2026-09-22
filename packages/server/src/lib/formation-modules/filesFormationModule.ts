@@ -1,4 +1,5 @@
 import { createFile, deleteFile, getFile, updateFileMetadata } from '../files';
+import { toNullableMetadataBag } from '../metadataBag';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 
@@ -20,7 +21,7 @@ export const filesFormationModule = defineFormationModule({
       filename: toOptionalString(properties.filename) ?? undefined,
       contentType: toOptionalString(properties.content_type) ?? undefined,
       size: typeof properties.size === 'number' ? properties.size : undefined,
-      metadata: toOptionalString(properties.metadata) ?? undefined,
+      metadata: toNullableMetadataBag(properties.metadata) ?? undefined,
     });
   },
 
@@ -29,7 +30,7 @@ export const filesFormationModule = defineFormationModule({
       id: physicalResourceId,
       prefix: toOptionalString(properties.prefix) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
-      metadata: toOptionalString(properties.metadata) ?? undefined,
+      metadata: toNullableMetadataBag(properties.metadata),
     });
   },
 

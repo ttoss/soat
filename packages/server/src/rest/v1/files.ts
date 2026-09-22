@@ -5,6 +5,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
+import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
 import { readTagQuery } from 'src/lib/tags';
@@ -136,7 +137,7 @@ filesRouter.post('/files', async (ctx: Context) => {
     filename?: string;
     content_type?: string;
     size?: number;
-    metadata?: string;
+    metadata?: unknown;
   };
 
   const targetProjectId = await resolveWriteProjectId({
@@ -154,7 +155,7 @@ filesRouter.post('/files', async (ctx: Context) => {
     filename: body.filename,
     contentType: body.content_type,
     size: body.size,
-    metadata: body.metadata,
+    metadata: parseMetadataBag(body.metadata),
   });
   ctx.status = 201;
   ctx.body = file;
@@ -168,7 +169,7 @@ filesRouter.post(
     requireAuth(ctx);
     const body = ctx.request.body as {
       project_id?: string;
-      metadata?: string;
+      metadata?: unknown;
       prefix?: string;
       filename?: string;
     };
@@ -194,7 +195,7 @@ filesRouter.post(
       // The uploaded file's name is the default filename unless overridden.
       filename: body.filename ?? file.originalname,
       contentType: file.mimetype,
-      metadata: body.metadata,
+      metadata: parseMetadataBagField(body.metadata),
     });
 
     ctx.status = 201;
@@ -210,7 +211,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     prefix?: string;
     filename?: string;
     content_type?: string;
-    metadata?: string;
+    metadata?: unknown;
   };
 
   const targetProjectId = await resolveWriteProjectId({
@@ -227,7 +228,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     prefix: body.prefix,
     filename: body.filename,
     contentType: body.content_type,
-    metadata: body.metadata,
+    metadata: parseMetadataBag(body.metadata),
   });
 
   ctx.status = 201;
@@ -291,7 +292,7 @@ filesRouter.post(
       content?: string;
       filename?: string;
       content_type?: string;
-      metadata?: string;
+      metadata?: unknown;
     };
 
     if (!multipartFile && !body.content) {
@@ -318,7 +319,7 @@ filesRouter.post(
         tokenData.filename ?? multipartFile?.originalname ?? body.filename,
       contentType:
         multipartFile?.mimetype ?? body.content_type ?? tokenData.contentType,
-      metadata: body.metadata,
+      metadata: parseMetadataBagField(body.metadata),
     });
 
     ctx.status = 201;

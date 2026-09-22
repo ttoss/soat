@@ -538,6 +538,16 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toBe(fileId);
     });
 
+    test('update-file-metadata stores the bag as an object', async () => {
+      const res = await mcpCall('update-file-metadata', {
+        file_id: fileId,
+        metadata: { stage: 'mcp', revision: 2 },
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.metadata).toEqual({ stage: 'mcp', revision: 2 });
+    });
+
     test('create-file registers a file record', async () => {
       const res = await mcpCall('create-file', {
         project_id: projectId,

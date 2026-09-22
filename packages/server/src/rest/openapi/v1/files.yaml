@@ -124,9 +124,8 @@ paths:
                   description: File size in bytes
                   example: 1024
                 metadata:
-                  type: string
-                  description: JSON string with additional metadata
-                  example: '{"author":"John"}'
+                  allOf:
+                    - $ref: '#/components/schemas/FileMetadataBag'
       responses:
         '201':
           description: File created successfully
@@ -185,7 +184,11 @@ paths:
                   example: 'logo.png'
                 metadata:
                   type: string
-                  description: Additional metadata as a JSON string
+                  description: >-
+                    The bag as JSON text. A multipart field carries text, so
+                    the object travels serialized here and is parsed on
+                    arrival; a JSON body carries the object itself. Text that
+                    is not a JSON object is `400 VALIDATION_FAILED`.
                   example: '{"author":"John"}'
       responses:
         '201':
@@ -336,7 +339,11 @@ paths:
                   description: File content
                 metadata:
                   type: string
-                  description: Additional metadata as a JSON string
+                  description: >-
+                    The bag as JSON text. A multipart field carries text, so
+                    the object travels serialized here and is parsed on
+                    arrival; a JSON body carries the object itself. Text that
+                    is not a JSON object is `400 VALIDATION_FAILED`.
                   example: '{"author":"John"}'
           application/json:
             schema:
@@ -518,9 +525,9 @@ paths:
               additionalProperties: false
               properties:
                 metadata:
-                  type: string
-                  description: New metadata as a JSON string
-                  example: '{"author":"Jane","tags":["report"]}'
+                  description: Replaces the stored bag; `null` clears it.
+                  allOf:
+                    - $ref: '#/components/schemas/NullableFileMetadataBag'
                 prefix:
                   type: string
                   description: New directory — moves the file. The resulting path (prefix + filename) must be unique within the project.
@@ -743,9 +750,8 @@ components:
           description: MIME type of the file
           example: 'text/plain'
         metadata:
-          type: string
-          description: JSON string with additional metadata
-          example: '{"author":"John"}'
+          allOf:
+            - $ref: '#/components/schemas/FileMetadataBag'
     PresignedUrlRequest:
       type: object
       required:
@@ -803,9 +809,33 @@ components:
           description: MIME type of the file (overrides the token's content type)
           example: 'text/plain'
         metadata:
-          type: string
-          description: JSON string with additional metadata
-          example: '{"author":"John"}'
+          allOf:
+            - $ref: '#/components/schemas/FileMetadataBag'
+    FileMetadataBag:
+      type: object
+      description: >-
+        Caller-owned annotations on the file, stored as the object they were
+        written as: the types a value was written with are the types a read
+        returns. Unlike other body fields, keys are stored and returned
+        verbatim in the casing supplied — they are not converted between
+        snake_case and camelCase. The platform never reads the bag; see the IAM
+        module on tags and metadata.
+      example:
+        author: 'John'
+        revision: 2
+    NullableFileMetadataBag:
+      type: object
+      nullable: true
+      description: >-
+        Caller-owned annotations on the file, stored as the object they were
+        written as: the types a value was written with are the types a read
+        returns. Unlike other body fields, keys are stored and returned
+        verbatim in the casing supplied — they are not converted between
+        snake_case and camelCase. The platform never reads the bag; see the IAM
+        module on tags and metadata.
+      example:
+        author: 'John'
+        revision: 2
     FileRecord:
       type: object
       description: Stored file metadata
@@ -840,10 +870,8 @@ components:
           description: File size in bytes
           example: 1024
         metadata:
-          type: string
-          nullable: true
-          description: JSON string with additional metadata
-          example: '{"author":"John"}'
+          allOf:
+            - $ref: '#/components/schemas/NullableFileMetadataBag'
         tags:
           $ref: './tags.yaml#/components/schemas/TagBag'
         created_at:

@@ -779,10 +779,18 @@ echo "Content matches."
 
 # 7. Update metadata
 echo "--- Updating metadata ---"
-PATCH_RESP=$($SOAT_CLI update-file-metadata --file-id "$FILE_ID" --metadata smoke-tested)
+PATCH_RESP=$($SOAT_CLI update-file-metadata --file-id "$FILE_ID" \
+  --metadata '{"stage":"smoke","revision":2}')
 PATCH_ID=$(printf '%s\n' "$PATCH_RESP" | jq -r '.id')
 if [ "$PATCH_ID" != "$FILE_ID" ]; then
   echo "ERROR: PATCH metadata did not update expected file" >&2
+  exit 1
+fi
+# The bag is stored as the object it was written as, so the number comes back a
+# number rather than the string a serialized bag would return.
+PATCH_REVISION=$(printf '%s\n' "$PATCH_RESP" | jq -r '.metadata.revision | tojson')
+if [ "$PATCH_REVISION" != "2" ]; then
+  echo "ERROR: file metadata expected the number 2, got $PATCH_REVISION" >&2
   exit 1
 fi
 echo "PATCH status: 200"
