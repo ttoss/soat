@@ -126,6 +126,36 @@ const vectorColumns = modelEntries.flatMap(
   }
 );
 
+/**
+ * The bags a query matches by JSONB containment.
+ *
+ * Every `tags` column qualifies, structurally: a tag bag has exactly one
+ * matching rule and `@>` is it — the `?tags=` filter, knowledge search and a
+ * `soat:ResourceTag/<key>` policy condition all read the column that way — so
+ * a `tags` column nothing contains does not exist.
+ *
+ * A `metadata` bag is caller-owned and read back with its row, so it is not
+ * discovered here. One joins this rule in the change that gives it a filter.
+ */
+const bagColumns = modelEntries.flatMap(
+  ({ model, table, attributes, indexes }) => {
+    return attributes
+      .filter(([name, attribute]) => {
+        return attributeTypeKey(attribute) === 'JSONB' && name === 'tags';
+      })
+      .map(([name, attribute]) => {
+        return {
+          model,
+          table,
+          // Models are `underscored`, so the column an index names is `field`
+          // when Sequelize derived one, and the attribute name otherwise.
+          column: typeof attribute.field === 'string' ? attribute.field : name,
+          indexes,
+        };
+      });
+  }
+);
+
 const uniqueIndexes = modelEntries.flatMap(({ model, table, indexes }) => {
   return indexes
     .filter((index) => {
@@ -380,6 +410,58 @@ describe('vector columns carry an ANN index', () => {
             indexFieldsOf(index).some((field) => {
               return (
                 field.name === column && field.operator === 'vector_cosine_ops'
+              );
+            })
+          );
+        });
+      })
+      .map(({ table, column }) => {
+        return `${table}.${column}`;
+      });
+
+    expect(missing).toEqual([]);
+  });
+});
+
+describe('containment-matched bags carry a GIN index', () => {
+  test('the tag columns are the ones the models declare', () => {
+    // Proves the discriminator still recognizes a bag column: an empty list
+    // would make the assertion below pass by finding nothing.
+    expect(
+      bagColumns
+        .map(({ table, column }) => {
+          return `${table}.${column}`;
+        })
+        .sort()
+    ).toEqual([
+      'actors.tags',
+      'conversations.tags',
+      'documents.tags',
+      'files.tags',
+      'memories.tags',
+      'memory_stores.tags',
+      'sessions.tags',
+    ]);
+  });
+
+  test('every containment-matched bag is indexed `USING gin` with `jsonb_path_ops`', () => {
+    // A tag bag is only ever matched by containment — the `?tags=` filter,
+    // knowledge search and the `soat:ResourceTag/<key>` policy condition all
+    // read the column through `@>`. Without a GIN index that match is a
+    // sequential scan of every row in scope, and the cost grows with the
+    // project rather than with the answer.
+    //
+    // `jsonb_path_ops` rather than the default operator class: it indexes
+    // whole key/value paths instead of each key and each value separately,
+    // which is what `@>` asks about, and it is the smaller index for it.
+    const missing = bagColumns
+      .filter(({ column, indexes }) => {
+        return !indexes.some((index) => {
+          return (
+            index.using?.toLowerCase() === 'gin' &&
+            indexFieldsOf(index).some((field) => {
+              return (
+                field.name === column && field.operator === 'jsonb_path_ops'
               );
             })
           );

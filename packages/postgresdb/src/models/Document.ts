@@ -19,6 +19,15 @@ import { File } from './File';
       fields: ['public_id'],
     },
     {
+      // Containment (`@>`) is the only way a tag bag is matched, by the
+      // `?tags=` filter, knowledge search and a `soat:ResourceTag/<key>`
+      // condition alike. `jsonb_path_ops` indexes whole key/value paths,
+      // which is exactly what that match asks about.
+      name: 'documents_tags_gin_idx',
+      using: 'gin',
+      fields: [{ name: 'tags', operator: 'jsonb_path_ops' }],
+    },
+    {
       name: 'documents_file_id_unique',
       unique: true,
       fields: ['file_id'],

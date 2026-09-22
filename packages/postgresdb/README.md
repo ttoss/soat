@@ -66,6 +66,7 @@ The flow they follow is
 | `2026-09-16-memory-rules-from-agent-extraction` | `memory_rules` added, `memory_assertions.rule_id` made a foreign key into it, and each agent's `knowledge_config.extraction` moved to a rule on its write store |
 | `2026-09-18-activity-entry-generation-id` | `activity_entries.generation_id` promoted from the `detail` blob to an indexed column |
 | `2026-09-18-orchestration-run-idempotency-key` | `orchestration_runs.idempotency_key`, unique per project |
+| `2026-09-22-tag-bag-gin-indexes` | a GIN index with `jsonb_path_ops` over every `tags` column, so a containment match is a lookup rather than a scan |
 
 Run them from the server package, which owns the entrypoint:
 
