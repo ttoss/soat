@@ -124,22 +124,6 @@ export const isWithdrawn = async (args: {
   return document?.status === WITHDRAWN_STATUS;
 };
 
-/**
- * Marks a withdrawn document live again once its content has been restored.
- *
- * Called by the restore path rather than exposed on its own: a document whose
- * status said `ready` while its chunks were still gone would be listed and
- * searched as though it had content.
- */
-export const clearWithdrawnStatus = async (args: {
-  documentDbId: number;
-}): Promise<void> => {
-  await db.Document.update(
-    { status: 'ready' },
-    { where: { id: args.documentDbId, status: WITHDRAWN_STATUS } }
-  );
-};
-
 /** Emitted once a withdrawn document's content is back in the index. */
 export const emitDocumentRestored = async (args: {
   id: string;
