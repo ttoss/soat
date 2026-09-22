@@ -18,7 +18,7 @@ import type {
 import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
-import { applyMetadataWhere } from './structuredFilter';
+import { applyFilterWhere } from './structuredFilter';
 import { liveDocumentWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
@@ -424,7 +424,7 @@ const buildDocWhere = (args: {
     where.publicId = args.documentIds;
   }
   applyTagFilter({ where, tags: args.tags });
-  applyMetadataWhere({ where, fragments: args.metadataWhere ?? [] });
+  applyFilterWhere({ where, fragments: args.metadataWhere ?? [] });
   return where;
 };
 

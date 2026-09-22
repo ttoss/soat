@@ -56,7 +56,7 @@ const resolveMemoryStoreIdsByTags = async (args: {
   tags: Record<string, string>;
   projectIds?: number[];
 }): Promise<string[]> => {
-  const where: Record<string, unknown> = { tags: tagContainment(args.tags) };
+  const where: Record<string, unknown> = { ...tagContainment(args.tags) };
   if (args.projectIds && args.projectIds.length > 0) {
     where.projectId = args.projectIds;
   }
@@ -362,7 +362,7 @@ const buildEntrySelection = async (args: {
     selectionClauses.push({ memoryStoreId: memoryStoreInternalIds });
   }
   if (hasTags) {
-    selectionClauses.push({ tags: tagContainment(config.tags!) });
+    selectionClauses.push(tagContainment(config.tags!));
   }
 
   if (selectionClauses.length === 0) {

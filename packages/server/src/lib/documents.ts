@@ -37,7 +37,7 @@ import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { toResourceRef } from './resourceVersions';
 import {
-  applyMetadataWhere,
+  applyFilterWhere,
   compileMetadataWhere,
   type MetadataFilter,
 } from './structuredFilter';
@@ -90,7 +90,7 @@ const buildDocumentQueryOptions = (args: {
     : {};
   if (!args.includeWithdrawn) Object.assign(topLevelWhere, liveDocumentWhere());
   applyTagFilter({ where: topLevelWhere, tags: args.tags });
-  applyMetadataWhere({ where: topLevelWhere, fragments: args.metadataWhere });
+  applyFilterWhere({ where: topLevelWhere, fragments: args.metadataWhere });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const file: Record<string, any> = {};
   if (args.projectIds !== undefined) file.projectId = args.projectIds;

@@ -181,8 +181,28 @@ export const hasMetadataFilter = (
   return filter !== undefined && Object.keys(filter).length > 0;
 };
 
-const containment = (bag: Record<string, Scalar>) => {
-  return { metadata: { [Op.contains]: bag } };
+/**
+ * JSONB containment: the bag holds every requested pair with exactly that
+ * value, read as it is stored.
+ *
+ * The one matching rule both bags are asked equality with — `?tags=` through
+ * `tagContainment`, and the `metadata` filter's equality and `in` — so a
+ * number never answers to its string spelling on either, and both can use the
+ * column's index. The attribute is named rather than qualified: Sequelize
+ * resolves it against the model the query is rooted at, which is what lets one
+ * fragment serve a listing and a joined chunk scan alike.
+ */
+export const containment = (args: {
+  attribute: string;
+  bag: Record<string, Scalar>;
+}): Record<string, Record<symbol, Record<string, Scalar>>> => {
+  return { [args.attribute]: { [Op.contains]: args.bag } };
+};
+
+const METADATA_ATTRIBUTE = 'metadata';
+
+const metadataContainment = (bag: Record<string, Scalar>) => {
+  return containment({ attribute: METADATA_ATTRIBUTE, bag });
 };
 
 const jsonTypeOf = (value: Orderable): 'string' | 'number' => {
@@ -226,13 +246,14 @@ const boundWhere = (args: {
 };
 
 /**
- * ANDs compiled fragments into a where a caller is already building.
+ * ANDs compiled fragments — either bag's — into a where a caller is already
+ * building.
  *
  * Appends rather than assigns: a compiled IAM policy lands under the same
  * `Op.and`, and replacing it would drop the constraint that decides which rows
  * the caller may see at all.
  */
-export const applyMetadataWhere = (args: {
+export const applyFilterWhere = (args: {
   where: Record<string, unknown>;
   fragments: unknown[];
 }): void => {
@@ -271,7 +292,7 @@ export const compileMetadataWhere = (args: {
       case 'in':
         fragments.push({
           [Op.or]: filter.values.map((value) => {
-            return containment({ [field]: value });
+            return metadataContainment({ [field]: value });
           }),
         });
         break;
@@ -283,7 +304,9 @@ export const compileMetadataWhere = (args: {
     }
   }
 
-  if (Object.keys(equality).length > 0) fragments.push(containment(equality));
+  if (Object.keys(equality).length > 0) {
+    fragments.push(metadataContainment(equality));
+  }
 
   return fragments;
 };
