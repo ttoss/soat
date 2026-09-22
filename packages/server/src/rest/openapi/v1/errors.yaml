@@ -11,6 +11,34 @@ info:
     url: https://github.com/ttoss/soat
 paths: {}
 components:
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: 'FORBIDDEN'
+              message: 'Forbidden'
+              hint: >-
+                The credential authenticated but is not allowed this action.
+                Attach an IAM policy granting the action to the caller, or use a
+                credential that has it.
+              docs_url: 'https://soat.ttoss.dev/docs/error-codes#forbidden'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
     ErrorResponse:
       type: object

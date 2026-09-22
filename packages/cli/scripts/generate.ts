@@ -6,53 +6,20 @@
  * Run via: pnpm generate
  */
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
 import {
   generateCliRouteManifest,
   renderCliRoutesSource,
-  type Route,
 } from '@ttoss/openapi-codegen';
 import * as yaml from 'js-yaml';
 
-import { localizeSpecs } from './localizeSpecs';
-
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const SOURCE_SPECS_DIR = path.resolve(
-  __dirname,
-  '../../server/src/rest/openapi/v1'
-);
-
-/**
- * The generator resolves a `$ref` only within one file, so every spec is first
- * rewritten to carry the shared components and reference them locally. Reading
- * the source directory directly would silently drop each `$ref`'d query
- * parameter and mistype each `$ref`'d body property — see `localizeSpecs`.
- */
-const SPECS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-cli-specs-'));
-localizeSpecs({ specsDir: SOURCE_SPECS_DIR, outDir: SPECS_DIR });
+const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
 const OUT_FILE = path.resolve(__dirname, '../src/generated/routes.ts');
 const MODULE_DOCS_BASE_URL = 'https://soat.ttoss.dev/docs/modules';
-
-/**
- * The manifest type for a property the specs leave **typeless**.
- *
- * OpenAPI 3.0 has no union `type`, so a property accepting more than one shape
- * omits it — `tool_choice` takes `"auto"` *or* `{ type: 'tool', … }`.
- * `generateCliRouteManifest` defaults a missing type to `"string"`, and
- * `parseFlagValue` never JSON-coerces a declared-string flag (deliberately, so
- * a JSON key file survives `create-secret --value "$(cat key.json)"`), so the
- * object form would reach the server as literal text, with forcing silently
- * dropped at every layer.
- *
- * `'any'` puts these flags on the permissive path, where a `{`/`[` value is
- * parsed as JSON and a bare word stays a string. In JSON Schema an absent
- * `type` means exactly that.
- */
-const UNION_FLAG_TYPE = 'any';
 
 /**
  * The prefix every REST operation shares.
@@ -104,139 +71,6 @@ const nonRestOperationIds = (specsDir: string): Set<string> => {
   return ids;
 };
 
-/**
- * Keys that delegate a property's shape elsewhere. A property carrying one of
- * these is not "typeless" in the sense that matters here — its schema is
- * defined by the referenced/composed schema, not absent.
- */
-const DELEGATING_KEYS = ['$ref', 'allOf', 'oneOf', 'anyOf', 'enum'];
-
-/** Files one property under `stringTyped`, `typeless`, or neither. */
-const classifyProperty = (args: {
-  name: string;
-  schema: unknown;
-  typeless: Set<string>;
-  stringTyped: Set<string>;
-}): void => {
-  const { name, schema, typeless, stringTyped } = args;
-
-  if (!isRecord(schema)) return;
-
-  if (schema.type === 'string') {
-    stringTyped.add(name);
-    return;
-  }
-  // Any other declared type: neither a union nor a string — nothing to record.
-  if (typeof schema.type === 'string') return;
-
-  const delegates = DELEGATING_KEYS.some((key) => {
-    return key in schema;
-  });
-  if (!delegates) typeless.add(name);
-};
-
-/**
- * Walks every schema in a spec, classifying each property it finds.
- *
- * Deliberately structure-blind — it recurses through the whole document rather
- * than resolving request bodies the way the codegen does. Mirroring the
- * codegen's `$ref` + `oneOf` merge would duplicate another package's logic and
- * could drift from it; collecting names and subtracting the string-typed ones
- * needs no such knowledge.
- */
-const collectPropertyTypes = (args: {
-  node: unknown;
-  typeless: Set<string>;
-  stringTyped: Set<string>;
-  seen: Set<object>;
-}): void => {
-  const { node, typeless, stringTyped, seen } = args;
-
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      collectPropertyTypes({ node: item, typeless, stringTyped, seen });
-    }
-    return;
-  }
-
-  if (!isRecord(node) || seen.has(node)) return;
-  seen.add(node);
-
-  if (isRecord(node.properties)) {
-    for (const [name, schema] of Object.entries(node.properties)) {
-      classifyProperty({ name, schema, typeless, stringTyped });
-    }
-  }
-
-  for (const value of Object.values(node)) {
-    collectPropertyTypes({ node: value, typeless, stringTyped, seen });
-  }
-};
-
-/**
- * Property names some schema leaves typeless and **no** schema declares
- * `type: string`.
- *
- * Excluding string-typed names keeps this conservative: `value` (a secret's) is
- * never widened, so the behavior `stringFlags.test.ts` pins is untouched — that
- * carve-out exists because a GCP key file passed to `create-secret --value` was
- * being parsed into an object.
- *
- * A *non*-string type elsewhere does not disqualify a name, which matters
- * because the specs already disagree about this field: a step rule's
- * `tool_choice` is `type: object` in `formations.yaml` while describing the same
- * string-or-object union.
- *
- * Known gap: a name typeless in one schema and `type: string` in another stays
- * unwidened. No such case exists today, and resolving each body's `$ref`/`oneOf`
- * chain would duplicate the codegen's logic and could drift from it silently.
- */
-const findUnionPropertyNames = (specsDir: string): Set<string> => {
-  const typeless = new Set<string>();
-  const stringTyped = new Set<string>();
-  const seen = new Set<object>();
-
-  const specFiles = fs.readdirSync(specsDir).filter((file) => {
-    return file.endsWith('.yaml') || file.endsWith('.yml');
-  });
-
-  for (const file of specFiles) {
-    const doc: unknown = yaml.load(
-      fs.readFileSync(path.join(specsDir, file), 'utf8')
-    );
-    collectPropertyTypes({ node: doc, typeless, stringTyped, seen });
-  }
-
-  return new Set(
-    [...typeless].filter((name) => {
-      return !stringTyped.has(name);
-    })
-  );
-};
-
-/** Retypes body flags whose spec property is a union. Returns what changed. */
-const widenUnionBodyFlags = (args: {
-  routes: Record<string, Route>;
-  unionNames: Set<string>;
-}): string[] => {
-  const widened: string[] = [];
-
-  for (const [command, route] of Object.entries(args.routes)) {
-    for (const flag of route.flags) {
-      if (
-        flag.in === 'body' &&
-        flag.type === 'string' &&
-        args.unionNames.has(flag.name)
-      ) {
-        flag.type = UNION_FLAG_TYPE;
-        widened.push(`${command} --${flag.name}`);
-      }
-    }
-  }
-
-  return widened;
-};
-
 const routes = generateCliRouteManifest({
   specsDir: SPECS_DIR,
   moduleDocsUrl: (moduleSlug) => {
@@ -261,17 +95,6 @@ if (dropped.length > 0) {
   );
 }
 
-const widened = widenUnionBodyFlags({
-  routes,
-  unionNames: findUnionPropertyNames(SPECS_DIR),
-});
-
 fs.writeFileSync(OUT_FILE, renderCliRoutesSource(routes));
 // eslint-disable-next-line no-console
 console.log(`Generated ${Object.keys(routes).length} routes → ${OUT_FILE}`);
-// eslint-disable-next-line no-console
-console.log(
-  `Widened ${widened.length} union body flag(s) to \`${UNION_FLAG_TYPE}\`${
-    widened.length > 0 ? `: ${widened.join(', ')}` : ''
-  }`
-);

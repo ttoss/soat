@@ -49,7 +49,7 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
     "@ttoss/config": "^1.38.0",
-    "@ttoss/openapi-codegen": "^0.3.0",
+    "@ttoss/openapi-codegen": "^0.4.0",
     "@types/node": "^26.5.1",
     "tsdown": "^0.23.0",
     "tsx": "^4.23.13",

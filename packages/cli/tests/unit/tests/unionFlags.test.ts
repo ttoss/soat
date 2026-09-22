@@ -34,6 +34,34 @@ describe('union-typed flags (no `type` in the spec) accept both shapes', () => {
     });
   });
 
+  test('an object formation template reaches the server as an object', async () => {
+    const requests = await cli.call([
+      'validate-formation',
+      '--project_id',
+      'proj_1',
+      '--template',
+      '{"resources":{"assistant":{"type":"agent","properties":{}}}}',
+    ]);
+
+    const body = requests[0]?.body as { template?: unknown };
+    expect(body.template).toEqual({
+      resources: { assistant: { type: 'agent', properties: {} } },
+    });
+  });
+
+  test('a YAML-string formation template still reaches the server as a string', async () => {
+    const requests = await cli.call([
+      'validate-formation',
+      '--project_id',
+      'proj_1',
+      '--template',
+      'resources:\n  assistant:\n    type: agent\n',
+    ]);
+
+    const body = requests[0]?.body as { template?: unknown };
+    expect(typeof body.template).toBe('string');
+  });
+
   test('a string tool_choice still reaches the server as a string', async () => {
     const requests = await cli.call([
       'create-agent',

@@ -133,7 +133,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationResult'
+                $ref: '#/components/schemas/OrchestrationValidationResult'
         '401':
           description: Unauthorized
 
@@ -1761,7 +1761,7 @@ components:
           nullable: true
           description: Optional JSON Schema for run inputs; its top-level properties seed state.
 
-    ValidationError:
+    OrchestrationValidationError:
       type: object
       properties:
         path:
@@ -1771,7 +1771,7 @@ components:
           type: string
           description: Human-readable description of the issue.
 
-    ValidationResult:
+    OrchestrationValidationResult:
       type: object
       required:
         - valid
@@ -1784,8 +1784,8 @@ components:
         errors:
           type: array
           items:
-            $ref: '#/components/schemas/ValidationError'
+            $ref: '#/components/schemas/OrchestrationValidationError'
         warnings:
           type: array
           items:
-            $ref: '#/components/schemas/ValidationError'
+            $ref: '#/components/schemas/OrchestrationValidationError'

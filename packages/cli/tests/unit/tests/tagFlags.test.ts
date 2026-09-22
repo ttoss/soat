@@ -2,14 +2,14 @@ import { routes } from '../../../src/generated/routes';
 
 /**
  * The tag bag is declared once, in `tags.yaml`, and every tagged resource
- * `$ref`s it. `@ttoss/openapi-codegen` resolves a `$ref` only within one file,
- * so `scripts/localizeSpecs.ts` inlines the shared components on the way in.
+ * `$ref`s it across files.
  *
- * Both failure modes that guard against are silent — the manifest generates
- * either way. Without it a `$ref`'d query parameter is dropped from the
- * manifest entirely (`--tags` becomes an unknown flag), and a `$ref`'d body
- * property falls back to `type: string`, so `--tags '{"team":"finance"}'`
- * reaches the server as the literal text rather than an object.
+ * Both failure modes this guards against are silent — the manifest generates
+ * either way. A query parameter the generator cannot resolve is dropped from
+ * the manifest entirely (`--tags` becomes an unknown flag), and a body
+ * property it cannot resolve falls back to `type: string`, so
+ * `--tags '{"team":"finance"}'` reaches the server as literal text rather than
+ * an object.
  */
 const flagOf = (command: string, name: string) => {
   const route = routes[command as keyof typeof routes];

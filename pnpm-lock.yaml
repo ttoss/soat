@@ -331,8 +331,8 @@ importers:
         specifier: ^1.38.0
         version: 1.38.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.4.0
+        version: 0.4.0
       '@ttoss/test-utils':
         specifier: ^4.2.19
         version: 4.2.19(@types/jest@30.0.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(encoding@0.1.13)(jest@30.5.1(@types/node@26.5.1)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.5.1)(typescript@6.0.3)))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)
@@ -401,8 +401,8 @@ importers:
         specifier: ^1.38.0
         version: 1.38.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.4.0
+        version: 0.4.0
       '@types/node':
         specifier: ^26.5.1
         version: 26.5.1
@@ -4456,8 +4456,8 @@ packages:
     resolution: {integrity: sha512-Va8rL3SZ08yLrNQS8FQOJzcihz8QQET5BR+ePS52wbwf5pZAHWaMZoxwv5Uo7EzG8LVvl5++p+LrxoWBTBUnGg==}
     hasBin: true
 
-  '@ttoss/openapi-codegen@0.3.0':
-    resolution: {integrity: sha512-r773OJGJIonQUfHAxdnpPr3hZp8lSP2puO9u/oyYIcL7MkLnSR4IA9Lh9t6w8XYmtXjDHTTmpIS9q2sW2/UdUg==}
+  '@ttoss/openapi-codegen@0.4.0':
+    resolution: {integrity: sha512-8+PwO0B9hW3OZgM+vuDG6n9lTiDkBDIlTM3duhzFPrDwQwtJMBKBBrQyO3xQ66+n8OErvEbksdoZ0zI/IHWyGA==}
 
   '@ttoss/postgresdb-cli@0.3.0':
     resolution: {integrity: sha512-89eIZx8WgouNjVRE20tMVEzCpedIHNGt1OApr6BnhrW3/gkdae5hALVW2CG1zqlroE7+9Zhjj2vKlxqS/AksOQ==}
@@ -18470,7 +18470,7 @@ snapshots:
     dependencies:
       commander: 14.0.3
 
-  '@ttoss/openapi-codegen@0.3.0':
+  '@ttoss/openapi-codegen@0.4.0':
     dependencies:
       js-yaml: 4.3.2
 
