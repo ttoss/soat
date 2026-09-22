@@ -6,6 +6,7 @@
  * within a module rather than across layers.
  */
 import { DomainError } from '../errors';
+import { validateMetadataBag } from './metadataBag';
 import { isPlainObject } from './plainObject';
 
 export const requireName = (name: unknown): string => {
@@ -60,7 +61,7 @@ export const validateDatasetItemInput = (input: unknown): string | null => {
 /** Free-form tag bag: an object or null, never inspected further. */
 export const validateItemMetadata = (metadata: unknown): string | null => {
   if (metadata === null || metadata === undefined) return null;
-  return isPlainObject(metadata) ? null : 'metadata must be an object or null.';
+  return validateMetadataBag(metadata);
 };
 
 /** 0–1 inclusive, or null to leave the eval ungated. */

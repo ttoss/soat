@@ -19,6 +19,7 @@ import { streamMemoriesNdjson } from 'src/lib/memoryExport';
 import { retractMemory } from 'src/lib/memoryRetraction';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { getMemoryTags, updateMemoryTags } from 'src/lib/memoryTags';
+import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import {
   assertNoSystemTagKeys,
@@ -35,11 +36,10 @@ import {
   writePreconditionOf,
 } from './helpers';
 import {
-  isPlainObject,
   readSourcePair,
   readSupersedes,
   readThreshold,
-  validateTagsMetadata,
+  validateTagsBag,
 } from './memoriesRequestBody';
 import { sendNdjson } from './ndjsonResponse';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -267,7 +267,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     supersedes?: unknown;
   };
 
-  const validationError = validateTagsMetadata(body, { allowNull: false });
+  const validationError = validateTagsBag(body, { allowNull: false });
   if (validationError) {
     throw new DomainError('VALIDATION_FAILED', validationError);
   }
@@ -319,7 +319,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     tags: assertNoSystemTagKeys(
       isStringRecord(body.tags) ? body.tags : undefined
     ),
-    metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
+    metadata: parseMetadataBag(body.metadata),
     // This is the only door that takes per-request thresholds: a caller
     // addressing the corpus directly may tune one write, an agent or a rule
     // may not.
@@ -391,7 +391,7 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
     metadata?: unknown;
   };
 
-  const validationError = validateTagsMetadata(body, { allowNull: true });
+  const validationError = validateTagsBag(body, { allowNull: true });
   if (validationError) {
     throw new DomainError('VALIDATION_FAILED', validationError);
   }
@@ -404,10 +404,7 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
         ? undefined
         : (body.tags as Record<string, string> | null)
     ),
-    metadata:
-      body.metadata === undefined
-        ? undefined
-        : (body.metadata as Record<string, unknown> | null),
+    metadata: readNullableMetadataBag(body.metadata),
     expectedVersion: writePreconditionOf(ctx),
   });
 });

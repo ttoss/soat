@@ -19,6 +19,7 @@ import {
   updateDocumentTags,
 } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
+import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { readMetadataQuery } from 'src/lib/structuredFilter';
@@ -251,7 +252,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     path?: string;
     filename?: string;
     title?: string;
-    metadata?: Record<string, unknown>;
+    metadata?: unknown;
     tags?: unknown;
     chunk_strategy?: 'page' | 'whole' | 'size';
     chunk_size?: number;
@@ -276,7 +277,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     path: body.path,
     filename: body.filename,
     title: body.title,
-    metadata: body.metadata,
+    metadata: parseMetadataBag(body.metadata),
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
@@ -322,7 +323,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     content?: string;
     title?: string;
     path?: string | null;
-    metadata?: Record<string, unknown>;
+    metadata?: unknown;
     tags?: unknown;
   };
 
@@ -331,7 +332,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     content: body.content,
     title: body.title,
     path: body.path,
-    metadata: body.metadata,
+    metadata: readNullableMetadataBag(body.metadata),
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     expectedVersion: writePreconditionOf(ctx),
   });

@@ -10,6 +10,7 @@ import {
   listIngestionRules,
   updateIngestionRule,
 } from 'src/lib/ingestionRules';
+import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -46,7 +47,7 @@ type CreateBody = {
   chunk_strategy?: string | null;
   chunk_size?: number | null;
   chunk_overlap?: number | null;
-  metadata?: object | null;
+  metadata?: unknown;
 };
 
 type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
@@ -116,7 +117,7 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
-    metadata: body.metadata,
+    metadata: parseMetadataBag(body.metadata),
   });
 
   ctx.status = 201;
@@ -151,7 +152,7 @@ ingestionRulesRouter.patch(
       chunkStrategy: body.chunk_strategy,
       chunkSize: body.chunk_size,
       chunkOverlap: body.chunk_overlap,
-      metadata: body.metadata,
+      metadata: readNullableMetadataBag(body.metadata),
     });
   }
 );
