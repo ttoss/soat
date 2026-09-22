@@ -19,6 +19,7 @@ import {
 import { mapDocument } from './documentMapper';
 import {
   buildDocumentConfigSnapshot,
+  buildWithdrawnConfigSnapshot,
   documentVersionStore,
 } from './documentVersionSnapshot';
 import {
@@ -372,6 +373,8 @@ export const updateDocument = async (
     chunkStrategy?: ChunkStrategy;
     chunkSize?: number;
     chunkOverlap?: number;
+    /** Brings a withdrawn document back: the tombstone is the state replaced. */
+    revivesWithdrawn?: boolean;
   } & VersionedWrite
 ) => {
   const doc = await fetchDocumentWithContext(args.id);
@@ -397,10 +400,14 @@ export const updateDocument = async (
     });
   }
 
-  const before = buildDocumentConfigSnapshot({
-    document: mapDocument(doc),
-    content: await readFileContent(doc.file),
-  });
+  // Compared against the tombstone, not the content it hid: restoring the
+  // version just before a withdrawal changes no content yet is a new state.
+  const before = args.revivesWithdrawn
+    ? buildWithdrawnConfigSnapshot()
+    : buildDocumentConfigSnapshot({
+        document: mapDocument(doc),
+        content: await readFileContent(doc.file),
+      });
 
   // Re-chunking and the storage rewrite happen before the commit rather than
   // inside it. Neither is transactional — one calls the embedding provider and
@@ -427,6 +434,9 @@ export const updateDocument = async (
     createdByUserId: args.createdByUserId,
     applyWrite: async ({ transaction }) => {
       const updates = buildDocumentColumnUpdates(args);
+      // In the version's transaction, so the status and the version that
+      // revives it commit together.
+      if (args.revivesWithdrawn) updates.status = 'ready';
       if (Object.keys(updates).length > 0) {
         await doc.update(updates, { transaction });
       }

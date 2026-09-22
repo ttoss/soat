@@ -5,11 +5,7 @@ import {
   documentVersionStore,
   isWithdrawnConfig,
 } from './documentVersionSnapshot';
-import {
-  clearWithdrawnStatus,
-  emitDocumentRestored,
-  isWithdrawn,
-} from './documentWithdrawal';
+import { emitDocumentRestored, isWithdrawn } from './documentWithdrawal';
 import {
   type ArchivedVersionRow,
   configNumber,
@@ -127,8 +123,10 @@ const documentVersionArchive = makeVersionArchive({
       );
     }
 
+    const document = await loadDocumentRef({ id: args.id });
     const restored = await updateDocument({
       id: args.id,
+      revivesWithdrawn: await isWithdrawn({ documentDbId: document.dbId }),
       content,
       title: configString(args.config.title),
       path: configString(args.config.path),
@@ -186,12 +184,6 @@ export const restoreDocumentVersion = async (args: {
 }) => {
   const document = await loadDocumentRef({ id: args.documentId });
   const withdrawn = await isWithdrawn({ documentDbId: document.dbId });
-
-  // Cleared before the content is written, so the write that re-chunks it does
-  // not archive a version describing a document still marked withdrawn.
-  if (withdrawn) {
-    await clearWithdrawnStatus({ documentDbId: document.dbId });
-  }
 
   // Appends a new version rather than rewinding the counter, so a run citing
   // any version in between still resolves.

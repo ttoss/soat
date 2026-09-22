@@ -281,6 +281,36 @@ describe('Document withdrawal', () => {
     });
 
     /**
+     * The live content equals the version before the tombstone, so a restore
+     * compared against the content would be a no-op and leave the tombstone's
+     * number naming a live state.
+     */
+    test('restoring the version just before the tombstone archives a new version', async () => {
+      const id = await createDocument('Back from the tombstone.');
+      await withdraw(id);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('ready');
+      expect(response.body.version).toBe(3);
+
+      const versions = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}/versions`
+      );
+      expect(
+        versions.body.data.map((v: { version: number }) => {
+          return v.version;
+        })
+      ).toEqual([3, 2, 1]);
+      expect(versions.body.data[0].config).toMatchObject({
+        content: 'Back from the tombstone.',
+      });
+    });
+
+    /**
      * The tombstone holds no content, so it is not a state to go back to. The
      * refusal names the alternative rather than restoring an empty document.
      */
