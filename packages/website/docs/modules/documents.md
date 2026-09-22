@@ -236,6 +236,24 @@ A write that stores metadata violating the declaration in force is refused with 
 
 [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers what a write would be told without writing, which is what a batch import wants before it starts.
 
+### Relations
+
+A document can say what it is to another document: [`POST /api/v1/documents/{document_id}/relations`](/docs/api/documents/create-document-relation) asserts a typed edge, and a single-document read carries the edges that document asserts.
+
+| Type | What the asserting document claims |
+| --- | --- |
+| `derived_from` | It was produced from the other document |
+| `supersedes` | It replaces the other document |
+| `cites` | It refers to the other document |
+
+The kinds are a declared set, not free text: a corpus many agents write into is read by consumers that act on an edge, and `derived-from`, `derivedFrom` and `derived from` are three edges to a reader and one to whoever typed them.
+
+- **An edge is owned by the document it leaves.** Asserting one is a write of that document (`documents:UpdateDocument`) and leaves the other untouched, so an agent can record what its own report derives from without making another report claim anything.
+- **Both documents live in one project.** An edge that left the project would be visible from one end and invisible from the other, since every surface that reads it is project-scoped.
+- **Asserting the same edge twice is `409`.** An edge is a fact; the second assertion is the same fact.
+- **`?related_to=doc_…` finds neighbours on either side** — what a document points at, and what points at it. A document with no relations narrows the listing to nothing.
+- [`DELETE /api/v1/documents/{document_id}/relations/{relation_id}`](/docs/api/documents/delete-document-relation) retracts an edge; both documents stay as they are.
+
 ### NDJSON export
 
 [`GET /api/v1/documents/export`](/docs/api/documents/export-documents) streams a project's documents as newline-delimited JSON, oldest first, one document object per line — the corpus as a file, for archiving it or moving it into another system.

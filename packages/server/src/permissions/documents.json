@@ -80,6 +80,21 @@
       "operationId": "exportDocuments",
       "action": "documents:ExportDocuments",
       "description": "Export a project's documents as NDJSON"
+    },
+    {
+      "operationId": "listDocumentRelations",
+      "action": "documents:GetDocument",
+      "description": "List the typed relations a document asserts"
+    },
+    {
+      "operationId": "createDocumentRelation",
+      "action": "documents:UpdateDocument",
+      "description": "Assert a typed relation from a document to another"
+    },
+    {
+      "operationId": "deleteDocumentRelation",
+      "action": "documents:UpdateDocument",
+      "description": "Retract a typed relation a document asserts"
     }
   ],
   "srnPatterns": [

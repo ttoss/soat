@@ -82,6 +82,8 @@ export const buildDocumentQueryOptions = (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
   pathPrefix?: string;
+  /** Row ids of the neighbours a `?related_to=` filter resolved to. */
+  relatedRowIds?: number[];
   tags?: Record<string, string>;
   metadataWhere: unknown[];
   includeWithdrawn?: boolean;
@@ -95,6 +97,7 @@ export const buildDocumentQueryOptions = (args: {
     ? { ...args.policyWhere }
     : {};
   if (!args.includeWithdrawn) Object.assign(topLevelWhere, liveDocumentWhere());
+  if (args.relatedRowIds !== undefined) topLevelWhere.id = args.relatedRowIds;
   applyTagFilter({ where: topLevelWhere, tags: args.tags });
   applyFilterWhere({ where: topLevelWhere, fragments: args.metadataWhere });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,6 +122,8 @@ export const listDocuments = async (args: {
   policyWhere?: Record<string, any>;
   /** Only documents filed under this directory (see `pathPrefixPattern`). */
   pathPrefix?: string;
+  /** Only the documents these row ids name; an empty list narrows to nothing. */
+  relatedRowIds?: number[];
   tags?: Record<string, string>;
   /** Structured question about the bag; see {@link compileMetadataWhere}. */
   metadata?: MetadataFilter;
@@ -144,6 +149,7 @@ export const listDocuments = async (args: {
         projectIds: args.projectIds,
         policyWhere: args.policyWhere,
         pathPrefix: args.pathPrefix,
+        relatedRowIds: args.relatedRowIds,
         tags: args.tags,
         metadataWhere,
         includeWithdrawn: args.includeWithdrawn,

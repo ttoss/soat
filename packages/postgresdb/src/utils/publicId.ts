@@ -11,6 +11,7 @@ export const PUBLIC_ID_PREFIXES = {
   apiKey: 'key_',
   document: 'doc_',
   documentVersion: 'doc_ver_',
+  documentRelation: 'doc_rel_',
   actor: 'actor_',
   conversation: 'conv_',
   secret: 'sec_',

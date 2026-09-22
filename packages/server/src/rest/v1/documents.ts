@@ -3,6 +3,10 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
 import {
+  relatedDocumentRowIds,
+  relationsForDocument,
+} from 'src/lib/documentRelations';
+import {
   createDocument,
   deleteDocument,
   enqueueDocumentIngestion,
@@ -25,6 +29,7 @@ import {
   readTagQuery,
 } from 'src/lib/tags';
 
+import { registerDocumentRelationRoutes } from './documentRelationRoutes';
 import { registerDocumentVersionRoutes } from './documentVersionRoutes';
 import type { AuthenticatedContext, ProjectOwned } from './helpers';
 import {
@@ -80,7 +85,7 @@ const buildDocumentResources = (
  * Check if user is allowed to perform action on document
  * Returns false if not allowed (after setting ctx.status to 403)
  */
-const checkDocumentPermission = async (
+export const checkDocumentPermission = async (
   ctx: Context,
   doc: {
     id: string;
@@ -114,6 +119,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
   const pathPrefix = ctx.query.path_prefix as string | undefined;
+  const relatedTo = ctx.query.related_to as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
   const metadata = readMetadataQuery(ctx.query.metadata);
   const includeWithdrawn = ctx.query.include_withdrawn === 'true';
@@ -124,6 +130,13 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     action: 'documents:ListDocuments',
     resourceType: 'document',
   });
+
+  // A neighbour filter resolves to row ids once, here, so the listing stays
+  // one query: an empty list is a document with no neighbours, which narrows
+  // to nothing rather than to everything.
+  const relatedRowIds = relatedTo
+    ? await relatedDocumentRowIds({ documentId: relatedTo, projectIds })
+    : undefined;
 
   // Compile SQL-level policy filter when a specific project is requested
   if (projectPublicId) {
@@ -147,6 +160,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       projectIds,
       policyWhere,
       pathPrefix,
+      relatedRowIds,
       tags,
       metadata,
       includeWithdrawn,
@@ -159,6 +173,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   ctx.body = await listDocuments({
     projectIds,
     pathPrefix,
+    relatedRowIds,
     tags,
     metadata,
     includeWithdrawn,
@@ -220,8 +235,13 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = doc;
+  ctx.body = {
+    ...doc,
+    relations: await relationsForDocument({ documentId: doc.id }),
+  };
 });
+
+registerDocumentRelationRoutes({ documentsRouter });
 
 documentsRouter.post('/documents', async (ctx: Context) => {
   requireAuth(ctx);

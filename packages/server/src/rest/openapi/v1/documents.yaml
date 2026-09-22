@@ -58,6 +58,15 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: related_to
+          in: query
+          description: >-
+            Only documents related to this one, on either side of the edge:
+            what it points at, and what points at it. An id with no relations
+            narrows the listing to nothing.
+          schema:
+            type: string
+            example: doc_V1StGXR8Z5jdHi6B
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - $ref: './metadata-filters.yaml#/components/parameters/MetadataQuery'
         - name: limit
@@ -504,6 +513,145 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/documents/{document_id}/relations:
+    get:
+      tags:
+        - Documents
+      summary: List a document's relations
+      description: >-
+        Returns the typed edges this document asserts about others, oldest
+        first. An edge is owned by the document it leaves, so this is what the
+        document claims — use `?related_to=` on the listing to find what
+        claims something about it.
+      operationId: listDocumentRelations
+      x-soat-resource:
+        kind: document
+        from: document_id
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: doc_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The document's relations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentRelation'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Document not found
+    post:
+      tags:
+        - Documents
+      summary: Assert a relation
+      description: >-
+        Asserts a typed edge from this document to another in the same project.
+        Asserting the same edge twice is `409`: an edge is a fact, and the
+        second assertion is the same fact.
+
+
+        Writing an edge is a write of the asserting document
+        (`documents:UpdateDocument`); the document it points at is unchanged,
+        which is what lets an agent record what its own report derives from
+        without being able to make another report claim anything.
+      operationId: createDocumentRelation
+      x-soat-resource:
+        kind: document
+        from: document_id
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: doc_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - type
+                - to_document_id
+              properties:
+                type:
+                  type: string
+                  enum: [derived_from, supersedes, cites]
+                  description: What this document claims about the other
+                  example: cites
+                to_document_id:
+                  type: string
+                  description: >-
+                    The document the edge points at. Must be in the same
+                    project, and visible to the caller.
+                  example: doc_9Kp2mQxZ7bT4rN6W
+      responses:
+        '201':
+          description: The asserted relation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRelation'
+        '400':
+          description: >-
+            An undeclared `type`, a document relating to itself, or a target in
+            another project
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Either document was not found
+        '409':
+          description: That relation is already asserted
+  /api/v1/documents/{document_id}/relations/{relation_id}:
+    delete:
+      tags:
+        - Documents
+      summary: Retract a relation
+      description: >-
+        Removes an edge this document asserts. Both documents are left as they
+        are — retracting a claim is not a change to what it was about.
+      operationId: deleteDocumentRelation
+      x-soat-resource:
+        kind: document
+        from: document_id
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: doc_V1StGXR8Z5jdHi6B
+        - name: relation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: doc_rel_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Relation retracted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Document or relation not found
   /api/v1/documents/{document_id}/status:
     get:
       tags:
@@ -1294,10 +1442,44 @@ components:
           type: integer
           description: Overlap in characters between consecutive windows used when `chunk_strategy=size`. Absent otherwise.
           example: 120
+        relations:
+          type: array
+          description: >-
+            The typed edges this document asserts about others, on a single
+            document read. Absent from a listing, which is a page of documents
+            rather than of edges.
+          items:
+            $ref: '#/components/schemas/DocumentRelation'
         created_at:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+    DocumentRelation:
+      type: object
+      description: >-
+        A typed edge one document asserts about another, within one project.
+      properties:
+        id:
+          type: string
+          example: doc_rel_V1StGXR8Z5jdHi6B
+        type:
+          type: string
+          enum: [derived_from, supersedes, cites]
+          description: >-
+            What the asserting document claims: it was `derived_from` the
+            other, `supersedes` it, or `cites` it.
+          example: cites
+        from_document_id:
+          type: string
+          description: The document that asserts the edge
+          example: doc_V1StGXR8Z5jdHi6B
+        to_document_id:
+          type: string
+          description: The document the edge points at
+          example: doc_9Kp2mQxZ7bT4rN6W
+        created_at:
           type: string
           format: date-time
     IngestedDocumentRecord:

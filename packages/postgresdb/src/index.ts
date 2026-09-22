@@ -2,6 +2,8 @@ export { MIGRATIONS } from './migrations';
 export * as models from './models';
 export type { AiProviderSlug } from './models/AiProvider';
 export { AI_PROVIDER_SLUGS } from './models/AiProvider';
+export type { DocumentRelationType } from './models/DocumentRelation';
+export { DOCUMENT_RELATION_TYPES } from './models/DocumentRelation';
 export type { MemorySource } from './models/Memory';
 export { MEMORY_SOURCES } from './models/Memory';
 export type {

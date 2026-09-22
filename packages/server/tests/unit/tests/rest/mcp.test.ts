@@ -1118,6 +1118,41 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toBe(documentId);
     });
 
+    test('a relation is asserted, read back and retracted', async () => {
+      const target = await mcpCall('create-document', {
+        project_id: projectId,
+        content: 'The report this one derives from',
+        filename: 'mcp-relation-source.txt',
+      });
+      const targetId = parseResult(target).id as string;
+
+      const created = await mcpCall('create-document-relation', {
+        document_id: documentId,
+        type: 'derived_from',
+        to_document_id: targetId,
+      });
+      expect(created.status).toBe(200);
+      const relation = parseResult(created);
+      expect(relation.type).toBe('derived_from');
+      expect(relation.to_document_id).toBe(targetId);
+
+      const listed = await mcpCall('list-document-relations', {
+        document_id: documentId,
+      });
+      expect(listed.status).toBe(200);
+      expect(
+        (parseResult(listed).data as Array<{ id: string }>).map((row) => {
+          return row.id;
+        })
+      ).toEqual([relation.id]);
+
+      const deleted = await mcpCall('delete-document-relation', {
+        document_id: documentId,
+        relation_id: relation.id as string,
+      });
+      expect(deleted.status).toBe(200);
+    });
+
     test('get-document-status returns a lightweight status payload', async () => {
       const res = await mcpCall('get-document-status', {
         document_id: documentId,

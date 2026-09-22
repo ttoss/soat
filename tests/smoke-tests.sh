@@ -1544,6 +1544,46 @@ $SOAT_CLI delete-tool --tool-id "$ASYNC_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$ASYNC_HTTP_TOOL_ID"
 echo "Async ingestion rule resources cleaned up."
 
+# 12c5. Typed relations: an edge is asserted by one document about another,
+# read back on the document, and found from either side.
+echo "--- Documents: typed relations ---"
+DOC_REL_RESP=$(curl -s -X POST "$SERVER_URL/api/v1/documents/$DOC1_ID/relations" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"type\":\"derived_from\",\"to_document_id\":\"$DOC2_ID\"}")
+DOC_REL_ID=$(printf '%s\n' "$DOC_REL_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DOC_REL_ID" | grep -q '^doc_rel_'; then
+  echo "ERROR: relation id expected to start with 'doc_rel_', got '$DOC_REL_ID'" >&2
+  printf '%s\n' "$DOC_REL_RESP" >&2
+  exit 1
+fi
+# The read carries what the document asserts.
+DOC_REL_READ=$($SOAT_CLI get-document --document-id "$DOC1_ID" \
+  | jq -r '[.relations[].to_document_id] | join(",")')
+if [ "$DOC_REL_READ" != "$DOC2_ID" ]; then
+  echo "ERROR: document read expected relation to $DOC2_ID, got '$DOC_REL_READ'" >&2
+  exit 1
+fi
+# `related_to` finds the neighbour from the other end of the edge.
+DOC_REL_NEIGHBOUR=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" --related_to "$DOC2_ID" \
+  | jq -r '[.data[].id] | join(",")')
+if [ "$DOC_REL_NEIGHBOUR" != "$DOC1_ID" ]; then
+  echo "ERROR: related_to expected $DOC1_ID, got '$DOC_REL_NEIGHBOUR'" >&2
+  exit 1
+fi
+# Re-asserting the same edge is the same fact.
+DOC_REL_DUP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+  -X POST "$SERVER_URL/api/v1/documents/$DOC1_ID/relations" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"type\":\"derived_from\",\"to_document_id\":\"$DOC2_ID\"}")
+if [ "$DOC_REL_DUP_STATUS" != "409" ]; then
+  echo "ERROR: re-asserting a relation expected 409, got $DOC_REL_DUP_STATUS" >&2
+  exit 1
+fi
+$SOAT_CLI delete-document-relation --document-id "$DOC1_ID" \
+  --relation-id "$DOC_REL_ID"
+echo "Document relations: OK"
+
 # 12d. NDJSON export: the corpus as a file, one JSON object per line, and the
 # same rows the listing returns for this caller.
 echo "--- Documents: NDJSON export ---"
