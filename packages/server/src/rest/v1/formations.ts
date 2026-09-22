@@ -18,6 +18,7 @@ import {
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
 import { buildSrn } from 'src/lib/iam';
+import { readNullableMetadataBag } from 'src/lib/metadataBag';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
@@ -178,7 +179,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     project_id?: string;
     name: string;
     template?: unknown;
-    metadata?: Record<string, unknown>;
+    metadata?: unknown;
     parameters?: Record<string, string>;
   };
 
@@ -197,13 +198,14 @@ formationsRouter.post('/formations', async (ctx: Context) => {
   }
 
   assertNoMissingParams(parsedTemplate as FormationTemplate, body.parameters);
-  assertStaticMetadata(body.metadata);
+  const metadata = readNullableMetadataBag(body.metadata);
+  assertStaticMetadata(metadata);
 
   const result = await createFormation({
     projectId: Number(targetProjectId),
     name: body.name,
     template: parsedTemplate as FormationTemplate,
-    metadata: body.metadata,
+    metadata: metadata ?? undefined,
     parameters: body.parameters,
     authorize: formationAuthorizer({
       ctx,
@@ -278,11 +280,12 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     template?: unknown;
-    metadata?: Record<string, unknown> | null;
+    metadata?: unknown;
     parameters?: Record<string, string>;
   };
 
-  assertStaticMetadata(body.metadata);
+  const metadata = readNullableMetadataBag(body.metadata);
+  assertStaticMetadata(metadata);
 
   let parsedTemplate: unknown = undefined;
   if (body.template !== undefined) {
@@ -304,7 +307,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const updated = await updateFormation({
     id: ctx.params.formation_id,
     template: parsedTemplate as FormationTemplate | undefined,
-    metadata: body.metadata,
+    metadata,
     parameters: body.parameters,
     authorize: formationAuthorizer({
       ctx,

@@ -16,6 +16,7 @@ import {
   listConversationMessages,
   updateConversationTags,
 } from 'src/lib/conversations';
+import { readNullableMetadataBag } from 'src/lib/metadataBag';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { type AuthenticatedContext, requireAuth } from './helpers';
@@ -74,7 +75,7 @@ conversationSubResourcesRouter.post(
       role: string;
       actor_id?: string | null;
       position?: number;
-      metadata?: Record<string, unknown>;
+      metadata?: unknown;
     };
 
     assertNotSystemRole({
@@ -107,7 +108,7 @@ conversationSubResourcesRouter.post(
       role: body.role,
       actorId: body.actor_id ?? null,
       position: body.position,
-      metadata: body.metadata,
+      metadata: readNullableMetadataBag(body.metadata) ?? undefined,
     });
 
     if (!message) {

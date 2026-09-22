@@ -1066,6 +1066,16 @@ META_DOC2_ID=$($SOAT_CLI create-document \
   --path /smoke-reports/second.txt \
   --metadata '{"quarter":"Q2","pages":30}' | jq -r '.id')
 
+# The bag has one reader, so a bag that is not an object is refused wherever
+# one is stored rather than landing in the JSONB column as a bare string.
+META_BAD_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/documents" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"x\",\"filename\":\"refused.txt\",\"metadata\":\"not an object\"}")
+if [ "$META_BAD_STATUS" != "400" ]; then
+  echo "ERROR: a non-object metadata bag expected 400, got $META_BAD_STATUS" >&2
+  exit 1
+fi
+
 # 11b5. Metadata filters: equality anywhere, ordering over a declared field
 echo "--- Metadata filters: equality, ordering, refusal ---"
 META_EQ_PATHS=$($SOAT_CLI list-documents \

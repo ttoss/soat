@@ -693,9 +693,6 @@ components:
                       absent on a deterministic failure (which fails the
                       generation instead of failing over).
         metadata:
-          type: object
-          nullable: true
-          additionalProperties: true
           description: >
             Caller-owned key/value annotations, attached at create time (via the
             `metadata` field on the create-agent-generation request) or
@@ -708,6 +705,8 @@ components:
           example:
             team: payments
             ticket_id: OPS-4821
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         content_redacted_at:
           type: string
           format: date-time
@@ -742,8 +741,6 @@ components:
       additionalProperties: false
       properties:
         metadata:
-          type: object
-          additionalProperties: true
           description: >
             Caller-supplied key/value metadata to shallow-merge into the
             generation record's caller-owned `metadata` bag. No key is reserved:
@@ -752,6 +749,8 @@ components:
           example:
             team: payments
             ticket_id: OPS-4821
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
 
     TranscriptToolCall:
       type: object

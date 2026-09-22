@@ -227,11 +227,10 @@ paths:
                     which declaration governs it.
                   example: /reports/q1.txt
                 metadata:
-                  type: object
-                  nullable: true
-                  additionalProperties: true
                   description: The bag to judge. Absent or `null` is judged as an empty bag.
                   example: { quarter: Q1 }
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
       responses:
         '200':
           description: The verdict

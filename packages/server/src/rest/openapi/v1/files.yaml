@@ -197,9 +197,9 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '409':
           description: >-
             The project's `storage_bytes` quota is exceeded
@@ -247,9 +247,9 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '409':
           description: >-
             The project's `storage_bytes` quota is exceeded
@@ -294,9 +294,9 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
   /api/v1/files/upload/{token}:
     post:
       tags:
@@ -479,9 +479,9 @@ paths:
                 type: string
                 format: binary
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
@@ -531,9 +531,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/FileRecord'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
@@ -590,9 +590,9 @@ paths:
                     nullable: true
                     description: File size in bytes
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
@@ -621,9 +621,9 @@ paths:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
@@ -657,9 +657,9 @@ paths:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
@@ -693,9 +693,9 @@ paths:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
@@ -841,25 +841,3 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
-  responses:
-    Unauthorized:
-      description: Authentication required
-      content:
-        application/json:
-          schema:
-            $ref: './errors.yaml#/components/schemas/ErrorResponse'
-    Forbidden:
-      description: Insufficient permissions
-      content:
-        application/json:
-          schema:
-            $ref: './errors.yaml#/components/schemas/ErrorResponse'
-          example:
-            error:
-              code: 'FORBIDDEN'
-              message: 'Forbidden'
-              hint: >-
-                The credential authenticated but is not allowed this action.
-                Attach an IAM policy granting the action to the caller, or use a
-                credential that has it.
-              docs_url: 'https://soat.ttoss.dev/docs/error-codes#forbidden'

@@ -341,6 +341,8 @@ A resource carries two annotation bags, and only one of them is an authorization
 
 A label is a string, and a record's fields have types. A report's `revision` is an integer, its `published_at` a date, its `reviewers` a list; stored as strings, `3`, `03` and `3.0` are three values to containment and every consumer parses by convention. So `tags` carry the labels the platform matches on, and `metadata` carries the record, typed at rest.
 
+A `metadata` bag is refused unless it is a JSON object, with `400 VALIDATION_FAILED`, at every endpoint that stores one — the column is JSONB and would keep a bare string as readily as an object, and a stored string then answers no structured filter, so an accepted bad write reads back as a row that simply matches nothing. The two endpoints that take a bag without storing one are not bound by this: knowledge search reads a filter over bags, and the metadata-schema validator answers with a verdict on a bag rather than keeping it.
+
 Which bag a rule may read follows from who writes it. Any caller who may write a resource may put any JSON in its `metadata`, so a policy condition on that bag would let that caller decide what their own rows match — including out of a `Deny`. `tags` are bounded and their `system.*` keys are refused on a caller write, which is what makes them safe to condition on. A policy therefore names `soat:ResourceTag/<key>` and has no spelling for the other bag.
 
 ## Examples

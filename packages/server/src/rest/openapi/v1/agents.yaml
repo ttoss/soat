@@ -1867,9 +1867,6 @@ components:
             never interpreted by the platform; a guardrail may combine it with a
             `context_tool` per its `context_mode`. See the guardrails module.
         metadata:
-          type: object
-          additionalProperties: true
-          nullable: true
           description: >-
             Caller-supplied key/value metadata attached to the generation
             record for per-run audit attribution (e.g. the knowledge-corpus
@@ -1880,6 +1877,8 @@ components:
             extraction summary) lives in its own top-level generation fields and
             cannot be written from here. Use the request's own `action_id` field
             to set the usage-attribution label.
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         knowledge_config:
           type: object
           nullable: true

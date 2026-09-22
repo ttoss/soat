@@ -83,37 +83,23 @@ export const readSupersedes = (value: unknown): string | undefined => {
   return value;
 };
 
-export const isPlainObject = (
-  value: unknown
-): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
 /**
- * Validates optional `tags` / `metadata` on a request body. `allowNull` permits
- * an explicit null (used by the update route to clear a field). Returns an error
- * message, or null when the fields are valid or absent.
+ * Validates an optional `tags` bag on a request body. `allowNull` permits an
+ * explicit null, which the update route uses to clear the field. Returns an
+ * error message, or null when the field is valid or absent.
+ *
+ * The `metadata` bag beside it is read by `lib/metadataBag.ts` instead, which
+ * both refuses a non-object and narrows it — one reader for the bag, wherever
+ * it is accepted.
  */
-export const validateTagsMetadata = (
-  body: { tags?: unknown; metadata?: unknown },
+export const validateTagsBag = (
+  body: { tags?: unknown },
   opts: { allowNull: boolean }
 ): string | null => {
-  const nullable = (v: unknown) => {
-    return opts.allowNull && v === null;
-  };
-  if (
-    body.tags !== undefined &&
-    !nullable(body.tags) &&
-    !isStringRecord(body.tags)
-  ) {
+  if (body.tags === undefined) return null;
+  if (opts.allowNull && body.tags === null) return null;
+  if (!isStringRecord(body.tags)) {
     return 'tags must be an object of string values';
-  }
-  if (
-    body.metadata !== undefined &&
-    !nullable(body.metadata) &&
-    !isPlainObject(body.metadata)
-  ) {
-    return 'metadata must be an object';
   }
   return null;
 };

@@ -261,13 +261,14 @@ components:
           description: Document title
           example: 'Sales Communication Policy'
         metadata:
-          type: object
           description: >-
             Arbitrary metadata attached to the document, returned verbatim in
             the casing it was written with at create/update time (e.g. a key
             written as `strapiDocumentId` is returned as `strapiDocumentId`,
             not `strapi_document_id`) — it is not converted between
             snake_case and camelCase like other response fields.
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         tags:
           $ref: './tags.yaml#/components/schemas/TagBag'
         content:

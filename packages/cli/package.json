@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@ttoss/config": "^1.38.0",
-    "@ttoss/openapi-codegen": "^0.3.0",
+    "@ttoss/openapi-codegen": "^0.4.0",
     "@ttoss/test-utils": "^4.2.19",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.5.1",

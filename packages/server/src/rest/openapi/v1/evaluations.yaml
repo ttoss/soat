@@ -339,12 +339,11 @@ paths:
                   description: Reference answer for exact_match / embedding_similarity / llm_judge scorers
                   example: Your invoice is issued on the first of each month.
                 metadata:
-                  type: object
-                  nullable: true
-                  additionalProperties: true
                   description: Free-form tags, opaque to the platform
                   example:
                     topic: billing
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
       responses:
         '201':
           description: Dataset item created successfully
@@ -433,12 +432,11 @@ paths:
                     pass `null` to store the item with no reference answer.
                   example: Your invoice is issued on the first of each month.
                 metadata:
-                  type: object
-                  nullable: true
-                  additionalProperties: true
                   description: Free-form tags, opaque to the platform
                   example:
                     topic: billing
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
       responses:
         '201':
           description: Dataset item created from the generation
@@ -505,11 +503,10 @@ paths:
                   nullable: true
                   example: Your invoice is issued on the first of each month.
                 metadata:
-                  type: object
-                  nullable: true
-                  additionalProperties: true
                   example:
                     topic: billing
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
       responses:
         '200':
           description: Dataset item updated successfully
@@ -949,8 +946,6 @@ paths:
                     is rejected with 400.
                   example: evrun_V1StGXR8Z5jdHi6B
                 metadata:
-                  type: object
-                  additionalProperties: true
                   description: >-
                     Caller-supplied key/value metadata attached to the run
                     record for attribution — what this measurement was of (the
@@ -968,6 +963,8 @@ paths:
                   example:
                     commit_sha: 9f2c1ab
                     ci_job: nightly-evals
+                  allOf:
+                    - $ref: './metadata.yaml#/components/schemas/MetadataBag'
                 tool_context:
                   type: object
                   additionalProperties:
@@ -1477,9 +1474,7 @@ components:
           type: string
           nullable: true
         metadata:
-          type: object
-          nullable: true
-          additionalProperties: true
+          $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         source_generation_id:
           type: string
           nullable: true
@@ -1634,9 +1629,6 @@ components:
         errored_count:
           type: integer
         metadata:
-          type: object
-          additionalProperties: true
-          nullable: true
           description: >-
             The caller-owned key/value metadata supplied when the run was
             started, returned verbatim. Null when the run was started without
@@ -1645,6 +1637,8 @@ components:
           example:
             commit_sha: 9f2c1ab
             ci_job: nightly-evals
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         started_at:
           type: string
           format: date-time
