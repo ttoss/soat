@@ -10,3 +10,17 @@ overrides:
   - files: ["src/rest/openapi/v1/formations.yaml"]
     rules:
       oas3-unused-component: "off"
+  # Shared component libraries: each declares no paths of its own (consumed
+  # by `$ref` from sibling specs), so linted alone every component reads
+  # unused and `servers` has nothing to describe.
+  - files:
+      - "src/rest/openapi/v1/concurrency.yaml"
+      - "src/rest/openapi/v1/errors.yaml"
+      - "src/rest/openapi/v1/memory-assertions.yaml"
+      - "src/rest/openapi/v1/metadata-filters.yaml"
+      - "src/rest/openapi/v1/metadata.yaml"
+      - "src/rest/openapi/v1/tags.yaml"
+      - "src/rest/openapi/v1/usage-totals.yaml"
+    rules:
+      oas3-api-servers: "off"
+      oas3-unused-component: "off"

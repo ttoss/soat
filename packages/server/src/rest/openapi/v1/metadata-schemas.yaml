@@ -288,6 +288,7 @@ paths:
       tags:
         - Metadata Schemas
       summary: Get a metadata schema
+      description: Returns one declaration by id.
       operationId: getMetadataSchema
       x-soat-resource:
         kind: metadata_schema
