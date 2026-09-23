@@ -1,8 +1,16 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
+import {
+  chunkPages,
+  type ChunkStrategy,
+  embedChunks,
+  type EmbeddedChunk,
+  persistChunks,
+} from './chunking';
+import type { Transaction } from './dbTransaction';
 import { resolveProjectPublicId } from './eventBus';
+import { rethrowAsPathConflict } from './filePathConflict';
 import {
   getActiveStorageProvider,
   getStorageProvider,
@@ -39,15 +47,20 @@ export const createDocumentTextFile = async (args: {
   filename?: string;
 }): Promise<InstanceType<(typeof db)['File']>> => {
   const provider = getActiveStorageProvider();
-  const file = await db.File.create({
-    projectId: args.projectId,
-    path: args.normalizedPath,
-    filename: args.filename ?? 'document.txt',
-    contentType: 'text/plain',
-    size: Buffer.byteLength(args.content, 'utf-8'),
-    storageType: provider.storageType,
-    storagePath: '',
-  });
+  let file: InstanceType<(typeof db)['File']>;
+  try {
+    file = await db.File.create({
+      projectId: args.projectId,
+      path: args.normalizedPath,
+      filename: args.filename ?? 'document.txt',
+      contentType: 'text/plain',
+      size: Buffer.byteLength(args.content, 'utf-8'),
+      storageType: provider.storageType,
+      storagePath: '',
+    });
+  } catch (error) {
+    throw rethrowAsPathConflict(error);
+  }
 
   await persistFileBytes({
     provider,
@@ -109,50 +122,6 @@ export const chunkDocumentText = async (args: {
   });
 };
 
-/**
- * Overwrite the stored source text (when new content is supplied) and re-chunk
- * the document with the given strategy.
- */
-const rechunkDocument = async (args: {
-  doc: DocWithFile;
-  content: string;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
-  rewriteStorage: boolean;
-}) => {
-  const file = args.doc.file;
-  // A document's project is its file's, and a re-chunk meters the embeddings it
-  // makes — so without the association loaded there is nothing to charge and
-  // nothing to rewrite. Returning before the destroy keeps the existing chunks.
-  if (!file) return;
-
-  if (args.rewriteStorage && file.storagePath && holdsDocumentText(file)) {
-    await persistFileBytes({
-      provider: getStorageProvider({ storageType: file.storageType }),
-      file,
-      projectPublicId: await resolveProjectPublicId({
-        projectId: file.projectId,
-      }),
-      category: categoryFromPath(file.path),
-      buffer: Buffer.from(args.content, 'utf-8'),
-      contentType: 'text/plain',
-      extension: DOCUMENT_TEXT_EXTENSION,
-    });
-  }
-
-  await db.DocumentChunk.destroy({ where: { documentId: args.doc.id } });
-
-  await chunkDocumentText({
-    documentId: args.doc.id as number,
-    projectId: file.projectId,
-    content: args.content,
-    chunkStrategy: args.chunkStrategy,
-    chunkSize: args.chunkSize,
-    chunkOverlap: args.chunkOverlap,
-  });
-};
-
 // Effective chunk config for a re-chunk: an explicitly-supplied value wins;
 // otherwise the document keeps what it was last chunked with (null → default).
 const resolveEffectiveChunkConfig = (args: {
@@ -168,33 +137,99 @@ const resolveEffectiveChunkConfig = (args: {
   };
 };
 
+/** What an update re-chunks to, computed before its transaction opens. */
+export type PreparedChunkChange = {
+  content: string;
+  rewriteStorage: boolean;
+  /** Where the text is stored, read from the path before the update moves it. */
+  category: string;
+  rows: EmbeddedChunk[];
+};
+
 /**
- * Apply chunk-related changes on update: re-chunk when any chunk field changes,
- * or rewrite content + re-chunk when new content is supplied. A strategy-only
- * change re-chunks the existing stored source text. No-op when neither the
- * content nor any chunk field is provided.
+ * The half of an update's chunk change that calls out: reads the stored text
+ * when only the chunk config changes, splits it and embeds it. Writes nothing,
+ * so a writer that loses the version claim has nothing to undo. `null` when
+ * neither the content nor any chunk field is supplied.
  */
-export const applyDocumentChunkChanges = async (args: {
+export const prepareDocumentChunkChanges = async (args: {
   doc: DocWithFile;
   content?: string;
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
-}) => {
+}): Promise<PreparedChunkChange | null> => {
   const chunkConfigChanged =
     args.chunkStrategy !== undefined ||
     args.chunkSize !== undefined ||
     args.chunkOverlap !== undefined;
-  if (args.content === undefined && !chunkConfigChanged) return;
+  if (args.content === undefined && !chunkConfigChanged) return null;
 
-  const content = args.content ?? (await readFileContent(args.doc.file));
-  if (content === null) return;
+  // A document's project is its file's, and a re-chunk meters the embeddings
+  // it makes, so without the association loaded there is nothing to charge.
+  const file = args.doc.file;
+  if (!file) return null;
 
-  log('applyDocumentChunkChanges: re-chunking docId=%s', args.doc.id);
-  await rechunkDocument({
-    doc: args.doc,
-    content,
-    ...resolveEffectiveChunkConfig(args),
-    rewriteStorage: args.content !== undefined,
+  const content = args.content ?? (await readFileContent(file));
+  if (content === null) return null;
+
+  log('prepareDocumentChunkChanges: re-chunking docId=%s', args.doc.id);
+  const config = resolveEffectiveChunkConfig(args);
+  const chunks = chunkPages({
+    pages: [{ text: content }],
+    strategy: config.chunkStrategy ?? 'whole',
+    chunkSize: config.chunkSize,
+    chunkOverlap: config.chunkOverlap,
   });
+
+  return {
+    content,
+    rewriteStorage: args.content !== undefined,
+    category: categoryFromPath(file.path),
+    rows: await embedChunks({ projectId: file.projectId, chunks }),
+  };
+};
+
+/**
+ * The half that writes, inside the update's transaction: swaps the chunks and,
+ * last, rewrites the stored text — the one write the transaction cannot roll
+ * back.
+ */
+export const commitDocumentChunkChanges = async (args: {
+  doc: DocWithFile;
+  change: PreparedChunkChange;
+  transaction: Transaction;
+}): Promise<void> => {
+  const { doc, change, transaction } = args;
+  const documentId = doc.id as number;
+
+  await db.DocumentChunk.destroy({ where: { documentId }, transaction });
+  for (const row of change.rows) {
+    await db.DocumentChunk.create(
+      {
+        documentId,
+        content: row.content,
+        chunkIndex: row.chunkIndex,
+        pageNumber: row.pageNumber ?? null,
+        embedding: row.embedding,
+      },
+      { transaction }
+    );
+  }
+
+  const file = doc.file;
+  if (change.rewriteStorage && file?.storagePath && holdsDocumentText(file)) {
+    await persistFileBytes({
+      provider: getStorageProvider({ storageType: file.storageType }),
+      file,
+      projectPublicId: await resolveProjectPublicId({
+        projectId: file.projectId,
+      }),
+      category: change.category,
+      buffer: Buffer.from(change.content, 'utf-8'),
+      contentType: 'text/plain',
+      extension: DOCUMENT_TEXT_EXTENSION,
+      transaction,
+    });
+  }
 };

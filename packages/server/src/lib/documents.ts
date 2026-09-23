@@ -5,9 +5,9 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { ChunkStrategy } from './chunking';
 import {
-  applyDocumentChunkChanges,
   chunkDocumentText,
   createDocumentTextFile,
+  prepareDocumentChunkChanges,
   readFileContent,
 } from './documentContent';
 import { type DocumentFiling, resolveDocumentFiling } from './documentFiling';
@@ -17,15 +17,13 @@ import {
   fetchDocumentWithContext,
 } from './documentLoaders';
 import { mapDocument } from './documentMapper';
+import { writeDocumentUpdate } from './documentUpdateWrite';
 import {
   buildDocumentConfigSnapshot,
   buildWithdrawnConfigSnapshot,
   documentVersionStore,
 } from './documentVersionSnapshot';
-import {
-  assertDocumentUpdatable,
-  normalizeStatedPath,
-} from './documentWriteGuard';
+import { assertDocumentUpdatable } from './documentWriteGuard';
 import { assertCallerPath, pathPrefixPattern } from './filePaths';
 import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
@@ -332,27 +330,6 @@ export const deleteDocument = async (args: { id: string }) => {
   return true;
 };
 
-// Build the set of Document column updates from the (partial) update args.
-// Only fields that are explicitly provided are written.
-const buildDocumentColumnUpdates = (args: {
-  title?: string | null;
-  metadata?: Record<string, unknown> | null;
-  tags?: Record<string, string> | null;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
-}): Record<string, unknown> => {
-  const updates: Record<string, unknown> = {};
-  if (args.title !== undefined) updates.title = args.title;
-  if (args.metadata !== undefined) updates.metadata = args.metadata;
-  if (args.tags !== undefined) updates.tags = args.tags;
-  if (args.chunkStrategy !== undefined)
-    updates.chunkStrategy = args.chunkStrategy;
-  if (args.chunkSize !== undefined) updates.chunkSize = args.chunkSize;
-  if (args.chunkOverlap !== undefined) updates.chunkOverlap = args.chunkOverlap;
-  return updates;
-};
-
 export const updateDocument = async (
   args: {
     id: string;
@@ -389,21 +366,15 @@ export const updateDocument = async (
         content: await readFileContent(doc.file),
       });
 
-  // Re-chunking and the storage rewrite happen before the commit rather than
-  // inside it. Neither is transactional — one calls the embedding provider and
-  // the other writes an object store — so the transaction is scoped to what it
-  // can actually cover: the row's columns, the version bump and the archive.
-  await applyDocumentChunkChanges({
+  // Embedding calls out, so it runs before the transaction; every write runs
+  // inside it, after the version is locked (`commitConfigChange`).
+  const chunkChange = await prepareDocumentChunkChanges({
     doc,
     content: args.content,
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
   });
-
-  if (args.path !== undefined && doc.file) {
-    await doc.file.update({ path: normalizeStatedPath(args.path) });
-  }
 
   let refreshed = doc;
   await documentVersionStore.commitConfigChange({
@@ -413,13 +384,7 @@ export const updateDocument = async (
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,
     applyWrite: async ({ transaction }) => {
-      const updates = buildDocumentColumnUpdates(args);
-      // In the version's transaction, so the status and the version that
-      // revives it commit together.
-      if (args.revivesWithdrawn) updates.status = 'ready';
-      if (Object.keys(updates).length > 0) {
-        await doc.update(updates, { transaction });
-      }
+      await writeDocumentUpdate({ doc, args, chunkChange, transaction });
 
       refreshed = (await fetchDocumentByIdWithContext(
         doc.id as number,

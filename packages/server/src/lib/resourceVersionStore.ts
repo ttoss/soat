@@ -334,12 +334,12 @@ const makeClaimVersion = (args: VersionTable) => {
  * is a history that lies about what the resource held, and the reader who
  * finds out is a later run replaying a version that was never current.
  *
- * The ordering is what makes the claim meaningful. `applyWrite` runs first
- * and takes the row lock Postgres puts on any `UPDATE`, so a second writer
- * queues behind it rather than interleaving; the claim then runs against the
- * version this write read, and the loser's whole transaction — its field
- * write included — rolls back. Nothing partial survives a conflict, which is
- * why the caller may answer `409` without having to undo anything.
+ * The ordering is what makes the claim meaningful. The row is locked and its
+ * version re-read before `applyWrite`, so a second writer queues behind the
+ * first and is refused before its write runs; the conditional claim then
+ * separates any writer the lock did not. Nothing partial survives a conflict,
+ * which is why the caller may answer `409` without having to undo anything —
+ * provided every write it makes happens inside `applyWrite`.
  *
  * Change detection runs on the serialized config rather than on the incoming
  * fields, so a request that sets a field to the value it already held is a
@@ -356,6 +356,33 @@ const makeAssertWritable = (args: VersionTable) => {
       resourceId: a.resource.publicId,
     });
   };
+};
+
+/**
+ * Locks the row before `applyWrite`, so a writer that read the same version
+ * queues here and is refused before its write runs, rather than after a write
+ * that reaches past the row (a document's stored text) has landed.
+ */
+const lockAtVersion = async (args: {
+  table: VersionTable;
+  resource: VersionedResourceRef;
+  expectedVersion?: number | null;
+  transaction: Transaction;
+}): Promise<void> => {
+  const { dbId, publicId, version } = args.resource;
+  const locked = await args.table.resourceModel().findOne({
+    where: { id: dbId },
+    attributes: ['id', 'version'],
+    lock: args.transaction.LOCK.UPDATE,
+    transaction: args.transaction,
+  });
+  if (locked?.version === version) return;
+  throw versionConflict({
+    currentVersion: locked?.version ?? version,
+    expectedVersion: args.expectedVersion ?? null,
+    resourceLabel: args.table.resourceLabel,
+    resourceId: publicId,
+  });
 };
 
 const makeCommitConfigChange = (args: {
@@ -379,6 +406,13 @@ const makeCommitConfigChange = (args: {
     });
 
     await db.sequelize.transaction(async (transaction) => {
+      await lockAtVersion({
+        table: args.table,
+        resource: a.resource,
+        expectedVersion: a.expectedVersion,
+        transaction,
+      });
+
       const { row, after } = await a.applyWrite({ transaction });
 
       if (isSameConfig(a.before, after)) return;

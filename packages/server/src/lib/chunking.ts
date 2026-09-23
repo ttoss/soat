@@ -120,6 +120,49 @@ const runBounded = async (
  * progress while the document is still `processing`. `onProgress` is invoked
  * after every successful insert with the number of chunks persisted so far.
  */
+const embedChunk = async (args: {
+  chunk: PreparedChunk;
+  projectId: number;
+  embed?: boolean;
+}): Promise<number[] | null> => {
+  if (args.embed === false) return null;
+  try {
+    return await getEmbedding({
+      text: args.chunk.content,
+      projectId: args.projectId,
+    });
+  } catch {
+    // embedding is optional — continue without it
+    return null;
+  }
+};
+
+export type EmbeddedChunk = PreparedChunk & { embedding: number[] | null };
+
+/**
+ * Embeds chunks without writing them, so a caller can compute the vectors
+ * outside a transaction and insert the rows inside one.
+ */
+export const embedChunks = async (args: {
+  projectId: number;
+  chunks: PreparedChunk[];
+  concurrency?: number;
+}): Promise<EmbeddedChunk[]> => {
+  const embedded: EmbeddedChunk[] = [];
+  await runBounded(
+    args.chunks.length,
+    args.concurrency ?? DEFAULT_EMBEDDING_CONCURRENCY,
+    async (i) => {
+      const chunk = args.chunks[i];
+      embedded[i] = {
+        ...chunk,
+        embedding: await embedChunk({ chunk, projectId: args.projectId }),
+      };
+    }
+  );
+  return embedded;
+};
+
 export const persistChunks = async (args: {
   documentId: number;
   projectId: number;
@@ -145,17 +188,11 @@ export const persistChunks = async (args: {
 
   await runBounded(args.chunks.length, concurrency, async (i) => {
     const chunk = args.chunks[i];
-    let embedding: number[] | null = null;
-    if (args.embed !== false) {
-      try {
-        embedding = await getEmbedding({
-          text: chunk.content,
-          projectId: args.projectId,
-        });
-      } catch {
-        // embedding is optional — continue without it
-      }
-    }
+    const embedding = await embedChunk({
+      chunk,
+      projectId: args.projectId,
+      embed: args.embed,
+    });
 
     await db.DocumentChunk.create({
       documentId: args.documentId,

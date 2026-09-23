@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { db } from '../db';
+import type { Transaction } from './dbTransaction';
 import type { FileStorageProvider } from './fileStorage';
 
 declare const storageObjectPathBrand: unique symbol;
@@ -65,6 +66,7 @@ export const persistFileBytes = async (args: {
   buffer: Buffer;
   contentType?: string;
   extension?: string;
+  transaction?: Transaction;
 }) => {
   const { storagePath } = await args.provider.write({
     objectPath: buildObjectPath({
@@ -77,11 +79,14 @@ export const persistFileBytes = async (args: {
     buffer: args.buffer,
     contentType: args.contentType,
   });
-  await args.file.update({
-    storagePath,
-    size: args.buffer.length,
-    ...(args.contentType !== undefined
-      ? { contentType: args.contentType }
-      : {}),
-  });
+  await args.file.update(
+    {
+      storagePath,
+      size: args.buffer.length,
+      ...(args.contentType !== undefined
+        ? { contentType: args.contentType }
+        : {}),
+    },
+    { transaction: args.transaction }
+  );
 };
