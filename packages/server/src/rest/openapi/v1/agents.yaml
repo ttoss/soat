@@ -206,6 +206,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
         content:
@@ -237,6 +238,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
     patch:
       tags:
         - Agents
@@ -284,6 +287,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
     delete:
       tags:
         - Agents
@@ -752,6 +757,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
 
   /api/v1/agents/{agent_id}/release:
     put:

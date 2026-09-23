@@ -784,7 +784,10 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: Conflict — already withdrawn, or the version moved
+          description: >-
+            The document is already withdrawn (`DOCUMENT_ALREADY_WITHDRAWN`),
+            or it has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`).
           content:
             application/json:
               schema:
