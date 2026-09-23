@@ -5,6 +5,7 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import { rethrowAsPathConflict } from './filePathConflict';
 import {
   assertCallerPath,
   buildPath,
@@ -27,7 +28,6 @@ import { hasPolicyConstraints } from './policyWhere';
 import { assertStorageQuota } from './quotaStorage';
 import { nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, mergeTags } from './tags';
-import { rethrowAsConflict } from './uniqueViolation';
 
 export type { CompiledPolicy };
 // Re-export the path helpers so existing importers (`from './files'`) keep
@@ -40,9 +40,6 @@ registerResourceFieldMap({
   pathColumn: { column: 'path' },
   tagsColumn: { column: 'tags' },
 });
-
-const FILE_PATH_CONFLICT_MESSAGE =
-  'A file already exists at that path in this project.';
 
 const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
@@ -180,7 +177,7 @@ export const uploadFile = async (args: {
       metadata: args.metadata,
     });
   } catch (error) {
-    throw rethrowAsConflict(error, FILE_PATH_CONFLICT_MESSAGE);
+    throw rethrowAsPathConflict(error);
   }
 
   await persistFileBytes({
@@ -331,7 +328,7 @@ export const updateFileMetadata = async (args: {
   try {
     await file.update(updates);
   } catch (error) {
-    throw rethrowAsConflict(error, FILE_PATH_CONFLICT_MESSAGE);
+    throw rethrowAsPathConflict(error);
   }
   const mapped = mapFile(file);
 
@@ -380,7 +377,7 @@ export const createFile = async (args: {
       storagePath: '',
     });
   } catch (error) {
-    throw rethrowAsConflict(error, FILE_PATH_CONFLICT_MESSAGE);
+    throw rethrowAsPathConflict(error);
   }
   const mapped = mapFile(file);
 

@@ -4,6 +4,7 @@ import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
 import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
+import { rethrowAsPathConflict } from './filePathConflict';
 import type { MappedIngestionRule } from './ingestionRules';
 
 const log = createDebug('soat:documents');
@@ -198,7 +199,7 @@ export const finalizeIngestedPages = async (
 
   const file = await db.File.findByPk(doc.fileId);
   if (file) {
-    await file.update({ path: args.docPath });
+    await file.update({ path: args.docPath }).catch(rethrowAsPathConflict);
   }
 
   await doc.update({

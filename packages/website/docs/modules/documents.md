@@ -75,6 +75,8 @@ Chunks are not exposed directly; they are returned joined with newlines as `cont
 
 Paths are absolute (start with `/`) and normalized (`.` and `..` resolved); `project_id + path` is unique. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts `path` to move a document, and `null` to clear it — a cleared document is reachable by id alone.
 
+A path another file in the project holds is `409 NAME_CONFLICT` on create, on ingest and on a move, the same answer the files API gives. A refused move changes nothing, content included.
+
 ### Platform-written documents
 
 A document the platform writes on your behalf — today, each
@@ -185,7 +187,7 @@ Embedding concurrency is bounded (default 5 simultaneous requests).
 
 A document's content and annotations are versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create; every write that **changes** the content, `title`, `path`, `metadata`, `tags` or chunk configuration increments `version` and archives the state it replaced. Re-writing the state the document already holds archives nothing, so two version numbers never denote the same content — which is what lets a run cite a version to say what it read.
 
-A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the document has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
+A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the document has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md). A refused write leaves the document exactly as it was — stored text, search chunks and path — and so does the loser of two concurrent writes that read the same version.
 
 | Operation | Endpoint |
 | --- | --- |

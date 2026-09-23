@@ -14,6 +14,7 @@ import {
   resolveChunkConfig,
 } from './documentIngestionCore';
 import { mapDocument } from './documentMapper';
+import { assertFilePathFree } from './filePathConflict';
 import { normalizePath } from './filePaths';
 import { resolveIngestionRule } from './ingestionRules';
 import { assertStorageQuota } from './quotaStorage';
@@ -299,6 +300,14 @@ export const enqueueDocumentIngestion = async (args: {
       ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
       : `/${filename}`
   );
+
+  // Filed only once the source converts, which may be long after this answer:
+  // a path taken now is refused now rather than as a failed document later.
+  await assertFilePathFree({
+    projectId: file.projectId,
+    path: docPath,
+    exceptFileId: file.id as number,
+  });
 
   const doc = await createDocumentOrThrowConflict({
     file,

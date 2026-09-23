@@ -299,7 +299,7 @@ const makeWriteVersion = (args: VersionTable) => {
  * A conditional `UPDATE`, never a read-then-write: it is the point at which
  * two writers that read the same version are separated, and the loser has to
  * learn it lost from the statement itself rather than from a comparison made
- * against a value that may already be stale. `null` means another write
+ * against a value that may already be stale. `undefined` means another write
  * took this version first; otherwise the claimed row as the statement left it.
  */
 const makeClaimVersion = (args: VersionTable) => {
@@ -310,7 +310,7 @@ const makeClaimVersion = (args: VersionTable) => {
     expected: number;
     next: number;
     transaction: Transaction;
-  }): Promise<VersionedResourceRow | null> => {
+  }): Promise<VersionedResourceRow | undefined> => {
     const [, claimed] = await resourceModel().update(
       { version: a.next },
       {
@@ -319,7 +319,7 @@ const makeClaimVersion = (args: VersionTable) => {
         returning: true,
       }
     );
-    return claimed[0] ?? null;
+    return claimed[0];
   };
 };
 
@@ -334,12 +334,12 @@ const makeClaimVersion = (args: VersionTable) => {
  * is a history that lies about what the resource held, and the reader who
  * finds out is a later run replaying a version that was never current.
  *
- * The ordering is what makes the claim meaningful. `applyWrite` runs first
- * and takes the row lock Postgres puts on any `UPDATE`, so a second writer
- * queues behind it rather than interleaving; the claim then runs against the
- * version this write read, and the loser's whole transaction — its field
- * write included — rolls back. Nothing partial survives a conflict, which is
- * why the caller may answer `409` without having to undo anything.
+ * The ordering is what makes the claim meaningful. The row is locked and its
+ * version re-read before `applyWrite`, so a second writer queues behind the
+ * first and is refused before its write runs; the conditional claim then
+ * separates any writer the lock did not. Nothing partial survives a conflict,
+ * which is why the caller may answer `409` without having to undo anything —
+ * provided every write it makes happens inside `applyWrite`.
  *
  * Change detection runs on the serialized config rather than on the incoming
  * fields, so a request that sets a field to the value it already held is a
@@ -358,13 +358,40 @@ const makeAssertWritable = (args: VersionTable) => {
   };
 };
 
+/**
+ * Locks the row before `applyWrite`, so a writer that read the same version
+ * queues here and is refused before its write runs, rather than after a write
+ * that reaches past the row (a document's stored text) has landed.
+ */
+const lockAtVersion = async (args: {
+  table: VersionTable;
+  resource: VersionedResourceRef;
+  expectedVersion?: number | null;
+  transaction: Transaction;
+}): Promise<void> => {
+  const { dbId, publicId, version } = args.resource;
+  const locked = await args.table.resourceModel().findOne({
+    where: { id: dbId },
+    attributes: ['id', 'version'],
+    lock: args.transaction.LOCK.UPDATE,
+    transaction: args.transaction,
+  });
+  if (locked?.version === version) return;
+  throw versionConflict({
+    currentVersion: locked?.version ?? version,
+    expectedVersion: args.expectedVersion ?? null,
+    resourceLabel: args.table.resourceLabel,
+    resourceId: publicId,
+  });
+};
+
 const makeCommitConfigChange = (args: {
   table: VersionTable;
   assertWritable: ReturnType<typeof makeAssertWritable>;
   claimVersion: ReturnType<typeof makeClaimVersion>;
   writeVersion: ReturnType<typeof makeWriteVersion>;
 }) => {
-  const { resourceLabel, resourceModel } = args.table;
+  const { resourceLabel } = args.table;
   const { assertWritable, claimVersion, writeVersion } = args;
 
   return async (a: CommitConfigChangeArgs): Promise<void> => {
@@ -379,6 +406,13 @@ const makeCommitConfigChange = (args: {
     });
 
     await db.sequelize.transaction(async (transaction) => {
+      await lockAtVersion({
+        table: args.table,
+        resource: a.resource,
+        expectedVersion: a.expectedVersion,
+        transaction,
+      });
+
       const { row, after } = await a.applyWrite({ transaction });
 
       if (isSameConfig(a.before, after)) return;
@@ -392,20 +426,12 @@ const makeCommitConfigChange = (args: {
         transaction,
       });
 
+      // `lockAtVersion` holds the row at `currentVersion`, so the claim cannot
+      // lose; a lost one is a broken invariant, not a conflict to report.
       if (!claimed) {
-        // Read inside the transaction that is about to roll back, so the
-        // version reported is the one the winner committed rather than the one
-        // this writer started from.
-        const live = await resourceModel().findOne({
-          where: { id: dbId },
-          transaction,
-        });
-        throw versionConflict({
-          currentVersion: live?.version ?? currentVersion,
-          expectedVersion: a.expectedVersion ?? null,
-          resourceLabel,
-          resourceId: publicId,
-        });
+        throw new Error(
+          `${resourceLabel} '${publicId}' lost its version claim under lock.`
+        );
       }
 
       await writeVersion({

@@ -1,5 +1,6 @@
 import type { LoadedDoc } from './documentLoaders';
 import { documentVersionStore } from './documentVersionSnapshot';
+import { assertFilePathFree } from './filePathConflict';
 import { assertCallerPath, normalizePath } from './filePaths';
 import { assertUpdatedDocumentMetadataValid } from './metadataSchemas';
 import { toResourceRef } from './resourceVersions';
@@ -10,9 +11,9 @@ export const normalizeStatedPath = (path: string | null): string | null => {
 };
 
 /**
- * Every refusal a document update can meet, checked before it changes
- * anything. The update rewrites storage and re-chunks outside the version's
- * transaction, so a refusal raised later would leave those changes behind.
+ * Every refusal a document update can meet, checked before it embeds
+ * anything: a refused update should not have paid for its vectors. The
+ * transaction re-checks the version and the path constraint decides a race.
  */
 export const assertDocumentUpdatable = async (args: {
   doc: LoadedDoc;
@@ -45,4 +46,12 @@ export const assertDocumentUpdatable = async (args: {
     resource: toResourceRef(doc),
     expectedVersion: args.expectedVersion,
   });
+
+  if (args.path !== undefined && doc.file) {
+    await assertFilePathFree({
+      projectId: doc.file.projectId,
+      path: normalizeStatedPath(args.path),
+      exceptFileId: doc.file.id as number,
+    });
+  }
 };
