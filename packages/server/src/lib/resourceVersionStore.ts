@@ -299,7 +299,7 @@ const makeWriteVersion = (args: VersionTable) => {
  * A conditional `UPDATE`, never a read-then-write: it is the point at which
  * two writers that read the same version are separated, and the loser has to
  * learn it lost from the statement itself rather than from a comparison made
- * against a value that may already be stale. `null` means another write
+ * against a value that may already be stale. `undefined` means another write
  * took this version first; otherwise the claimed row as the statement left it.
  */
 const makeClaimVersion = (args: VersionTable) => {
@@ -310,7 +310,7 @@ const makeClaimVersion = (args: VersionTable) => {
     expected: number;
     next: number;
     transaction: Transaction;
-  }): Promise<VersionedResourceRow | null> => {
+  }): Promise<VersionedResourceRow | undefined> => {
     const [, claimed] = await resourceModel().update(
       { version: a.next },
       {
@@ -319,7 +319,7 @@ const makeClaimVersion = (args: VersionTable) => {
         returning: true,
       }
     );
-    return claimed[0] ?? null;
+    return claimed[0];
   };
 };
 
@@ -391,7 +391,7 @@ const makeCommitConfigChange = (args: {
   claimVersion: ReturnType<typeof makeClaimVersion>;
   writeVersion: ReturnType<typeof makeWriteVersion>;
 }) => {
-  const { resourceLabel, resourceModel } = args.table;
+  const { resourceLabel } = args.table;
   const { assertWritable, claimVersion, writeVersion } = args;
 
   return async (a: CommitConfigChangeArgs): Promise<void> => {
@@ -426,20 +426,12 @@ const makeCommitConfigChange = (args: {
         transaction,
       });
 
+      // `lockAtVersion` holds the row at `currentVersion`, so the claim cannot
+      // lose; a lost one is a broken invariant, not a conflict to report.
       if (!claimed) {
-        // Read inside the transaction that is about to roll back, so the
-        // version reported is the one the winner committed rather than the one
-        // this writer started from.
-        const live = await resourceModel().findOne({
-          where: { id: dbId },
-          transaction,
-        });
-        throw versionConflict({
-          currentVersion: live?.version ?? currentVersion,
-          expectedVersion: a.expectedVersion ?? null,
-          resourceLabel,
-          resourceId: publicId,
-        });
+        throw new Error(
+          `${resourceLabel} '${publicId}' lost its version claim under lock.`
+        );
       }
 
       await writeVersion({
