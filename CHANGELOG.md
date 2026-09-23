@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.58.7](https://github.com/ttoss/soat/compare/v0.58.6...v0.58.7) (2026-09-23)
+
+**Note:** Version bump only for package ttoss-soat
+
 ## [0.58.6](https://github.com/ttoss/soat/compare/v0.58.5...v0.58.6) (2026-09-23)
 
 ### Bug Fixes
