@@ -284,8 +284,14 @@ describe('Memory retraction', () => {
         expect((await retract({ id })).status).toBe(200);
 
         // The envelope resolves the project's public id with a real read, so
-        // the event can land a tick or two after the request returned.
-        for (let i = 0; i < 100 && events.length === 0; i += 1) {
+        // the event can land a tick or two after the request returned — and
+        // after events this test's own setup emitted, so wait for this one.
+        const retracted = () => {
+          return events.some((event) => {
+            return event.type === 'memories.retracted';
+          });
+        };
+        for (let i = 0; i < 100 && !retracted(); i += 1) {
           await new Promise((resolve) => {
             return setTimeout(resolve, 20);
           });
