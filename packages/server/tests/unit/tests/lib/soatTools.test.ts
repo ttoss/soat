@@ -1,9 +1,11 @@
-import type { ToolDefinition } from 'src/lib/soatToolsHelpers';
+import type * as NodeFs from 'node:fs';
+
+import type { ToolDefinition } from 'src/lib/soatTools';
 
 // `soatTools` loads OpenAPI specs from disk at import time. Only the external
-// I/O it depends on — `node:fs` and `js-yaml` — is mocked here; the real
-// `processPath`/`processOperation` pipeline runs against the fake specs, so the
-// assertions exercise genuine tool derivation (no internal-module mock).
+// I/O it depends on — the three `node:fs` calls and `js-yaml` — is mocked here;
+// the real derivation runs against the fake specs, so the assertions exercise
+// genuine tool derivation (no internal-module mock).
 
 describe('soatTools', () => {
   beforeEach(() => {
@@ -27,6 +29,7 @@ describe('soatTools', () => {
   test('returns empty list when OpenAPI spec directory does not exist', async () => {
     jest.doMock('node:fs', () => {
       return {
+        ...jest.requireActual<typeof NodeFs>('node:fs'),
         existsSync: jest.fn(() => {
           return false;
         }),
@@ -41,6 +44,7 @@ describe('soatTools', () => {
   test('loads only yaml files, sorts filenames, and flattens path tools', async () => {
     jest.doMock('node:fs', () => {
       return {
+        ...jest.requireActual<typeof NodeFs>('node:fs'),
         existsSync: jest.fn(() => {
           return true;
         }),
@@ -72,7 +76,7 @@ describe('soatTools', () => {
       };
     });
 
-    // The real processPath/processOperation pipeline turns each operation into
+    // The real derivation turns each operation into
     // a tool named after its operationId (camelCase → kebab-case). `ignore.json`
     // is not a `.yaml` file, so it is never read; `a.yaml` sorts before `b.yaml`.
     const names = loadSoatTools().map((tool) => {
@@ -84,6 +88,7 @@ describe('soatTools', () => {
   test('ignores a malformed yaml file and continues with other files', async () => {
     jest.doMock('node:fs', () => {
       return {
+        ...jest.requireActual<typeof NodeFs>('node:fs'),
         existsSync: jest.fn(() => {
           return true;
         }),

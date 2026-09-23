@@ -17,8 +17,7 @@ import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { resolveSoatActionBoundaryScope } from './soatActionBoundary';
 import { withoutAgentExcludedActions } from './soatAgentActions';
-import { soatTools } from './soatTools';
-import { buildSoatActionTarget } from './soatToolsHelpers';
+import { buildSoatActionTarget, soatTools } from './soatTools';
 import {
   mergePresetParameters,
   stripPresetKeysFromSchema,

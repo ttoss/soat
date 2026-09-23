@@ -8,11 +8,10 @@ import {
 
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
-import { soatTools } from '../lib/soatTools';
-import { buildSoatActionTarget } from '../lib/soatToolsHelpers';
+import { buildSoatActionTarget, soatTools } from '../lib/soatTools';
 import { verifyApiKeyToken } from '../middleware/auth';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
-import { dispatchMcpApiRequest, mcpAuthorizationStore } from './dispatchApi';
+import { dispatchMcpApiRequest } from './dispatchApi';
 import { toMcpText } from './toMcpText';
 
 const mcpServer = new McpServer({
@@ -88,11 +87,9 @@ const mcpRouter = createMcpRouter(mcpServer, {
   // here calls the API over HTTP any more. Leaving a loopback URL in
   // place would be a live-looking template for the next tool someone adds.
   getApiHeaders: (ctx) => {
+    // Read back inside each tool handler through `getApiHeaders()`
+    // (`dispatchMcpApiRequest`); the handlers receive only tool arguments.
     const authorization = (ctx.headers.authorization as string) ?? '';
-    // Populates the AsyncLocalStorage that dispatchMcpApiRequest reads, for the
-    // remainder of this request's async chain — including the tool handlers
-    // above, which receive tool arguments and no context of their own.
-    mcpAuthorizationStore.enterWith(authorization);
     return { authorization };
   },
   auth: {

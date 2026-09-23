@@ -59,19 +59,21 @@ describe('generated tool schema integrity (real OpenAPI specs)', () => {
     }
   });
 
-  test('a cross-file $ref resolves to an empty schema, staying discoverable', () => {
-    // This cross-file `$ref` cannot be followed, so resolving it to `{}` keeps
-    // the field discoverable rather than hiding one the API does accept.
+  test('a cross-file $ref resolves to the schema it names', () => {
     const patchAgent = soatTools.find((tool) => {
       return tool.name === 'patch-agent';
     });
     const properties = patchAgent?.inputSchema.properties as Record<
       string,
-      { items?: { properties?: Record<string, unknown> } }
+      {
+        items?: {
+          properties?: Record<string, { properties?: Record<string, unknown> }>;
+        };
+      }
     >;
     const bindingProperties = properties?.tool_bindings?.items?.properties;
 
-    expect(bindingProperties).toHaveProperty('tool', {});
+    expect(bindingProperties?.tool?.properties).toHaveProperty('actions');
     expect(bindingProperties?.tool_id).toEqual(
       expect.objectContaining({ type: 'string' })
     );

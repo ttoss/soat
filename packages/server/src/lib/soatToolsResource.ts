@@ -21,10 +21,10 @@ export type SoatResourceRef = { kind: string; from: string };
  * never silently downgrades an annotated operation to `*`.
  */
 export const readResourceRef = (
-  value: { kind?: string; from?: string } | undefined
+  value: unknown
 ): SoatResourceRef | undefined => {
-  if (!value) return undefined;
-  const { kind, from } = value;
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { kind, from } = value as { kind?: unknown; from?: unknown };
   if (typeof kind !== 'string' || typeof from !== 'string') return undefined;
   if (!kind || !from) return undefined;
   return { kind, from };

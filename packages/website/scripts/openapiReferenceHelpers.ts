@@ -136,8 +136,8 @@ export const resolveSchemaRef = (args: {
 
 /**
  * Label for the JSON Schema shape the MCP `inputSchema` actually advertises for
- * a property, mirroring `buildTypedProperty`/`getJsonSchemaType` in the
- * server's `soatToolsHelpers.ts`. This is the type an MCP client actually
+ * a property, mirroring `buildTypedProperty`/`getJsonSchemaType` in
+ * `@ttoss/http-server-mcp-openapi`. This is the type an MCP client actually
  * sees, so the MCP docs report it rather than the richer OpenAPI label:
  *
  * - `oneOf`/`anyOf` are forwarded as a union of their member types rather than

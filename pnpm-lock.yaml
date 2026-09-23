@@ -467,8 +467,11 @@ importers:
         specifier: ^0.6.4
         version: 0.6.4(@ttoss/http-server@0.8.1(supports-color@8.1.1))
       '@ttoss/http-server-mcp':
-        specifier: ^0.28.2
-        version: 0.28.2(hono@4.12.30)(supports-color@8.1.1)
+        specifier: ^0.29.0
+        version: 0.29.0(hono@4.12.30)(supports-color@8.1.1)
+      '@ttoss/http-server-mcp-openapi':
+        specifier: ^0.4.0
+        version: 0.4.0(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/postgresdb':
         specifier: ^0.12.0
         version: 0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
@@ -4443,8 +4446,11 @@ packages:
     peerDependencies:
       '@ttoss/http-server': ^0.8.1
 
-  '@ttoss/http-server-mcp@0.28.2':
-    resolution: {integrity: sha512-VOmTN0o1S/2mGU/fkHsEjNCbDCY8a323B6m0iqCO9aopouKgXDbFkeyEyoIegq1UKAAaVDrCt6K7hkxGlGfR4A==}
+  '@ttoss/http-server-mcp-openapi@0.4.0':
+    resolution: {integrity: sha512-6beg2imXco1H9SOkFnO583QEc2QPB+nrF+yuivzKg5bcPv4wlSHoDre8bpwPp0ZiGyHMOAxSK2xGmvdQqhMXOQ==}
+
+  '@ttoss/http-server-mcp@0.29.0':
+    resolution: {integrity: sha512-vYrbn3hr/b4jjK5Mjk7fDRWPMdCW1nY9D7vHU9VRYfWpunxbe22hDqAP9xWaGzS+FoWc5I2jpc3WEgQlZRjtWQ==}
 
   '@ttoss/http-server@0.8.1':
     resolution: {integrity: sha512-S9292TxfvzdQ1hnzhYOMLa2emHBZoYGgDxB+5F5uwrqJ6QPQ7wHwcZYdbWfPQvRblpmjsFc/soP9i894L5ylcw==}
@@ -18440,7 +18446,14 @@ snapshots:
       '@ttoss/auth-core': 0.14.1
       '@ttoss/http-server': 0.8.1(supports-color@8.1.1)
 
-  '@ttoss/http-server-mcp@0.28.2(hono@4.12.30)(supports-color@8.1.1)':
+  '@ttoss/http-server-mcp-openapi@0.4.0(hono@4.12.30)(supports-color@8.1.1)':
+    dependencies:
+      '@ttoss/http-server-mcp': 0.29.0(hono@4.12.30)(supports-color@8.1.1)
+    transitivePeerDependencies:
+      - hono
+      - supports-color
+
+  '@ttoss/http-server-mcp@0.29.0(hono@4.12.30)(supports-color@8.1.1)':
     dependencies:
       '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.30)
       '@modelcontextprotocol/server': 2.0.0
