@@ -117,4 +117,26 @@ describe('Document path conflicts', () => {
       expect(res.body.path).toBe(path);
     });
   });
+
+  describe('POST /api/v1/documents/:document_id/versions/:version/restore', () => {
+    test('to a path another file now holds is 409 and changes nothing', async () => {
+      const original = takenPath();
+      const id = await createAt(original, 'First.');
+      const moved = await client()
+        .patch(`/api/v1/documents/${id}`)
+        .send({ path: takenPath() });
+      expect(moved.status).toBe(200);
+      await createAt(original);
+      const before = await client().get(`/api/v1/documents/${id}`);
+
+      const res = await client()
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('NAME_CONFLICT');
+      const after = await client().get(`/api/v1/documents/${id}`);
+      expect(after.body).toEqual(before.body);
+    });
+  });
 });
