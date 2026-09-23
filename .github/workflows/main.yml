@@ -10,10 +10,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # `pr.yml` skips every job on a `chore(release):` PR, so this workflow is the
+  # only one to see the release commit. That commit is usually the previous
+  # PR's tree plus version bumps, tested a minute earlier. The gate proves that
+  # (see `scripts/releaseTestGate.mjs`) and, when it can, skips the test jobs
+  # below; when it cannot, or errors, they run as before.
+  release-test-gate:
+    name: Release Test Gate
+    runs-on: ubuntu-latest
+    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      tested: ${{ steps.gate.outputs.tested }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The release commit and its parent.
+          fetch-depth: 2
+
+      - name: Check whether the release tree was already tested
+        id: gate
+        run: node scripts/releaseTestGate.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
+    needs: release-test-gate
+    if: needs.release-test-gate.outputs.tested != 'true'
 
     steps:
       - uses: actions/checkout@v6
@@ -45,7 +74,8 @@ jobs:
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
+    needs: release-test-gate
+    if: needs.release-test-gate.outputs.tested != 'true'
 
     steps:
       - uses: actions/checkout@v6
@@ -85,8 +115,15 @@ jobs:
   push-release-tag:
     name: Push Release Tag
     runs-on: ubuntu-latest
-    needs: [build-and-test, smoke-test, tutorials-test]
-    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
+    needs: [release-test-gate, build-and-test, smoke-test, tutorials-test]
+    # The test jobs are skipped when the gate proved the tree tested, and a
+    # skipped need would skip this job too — so require the gate itself to
+    # pass and no test job to have failed or been cancelled instead.
+    if: >-
+      !cancelled()
+      && needs.release-test-gate.result == 'success'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
     permissions:
       contents: write
     steps:
@@ -220,7 +257,8 @@ jobs:
   tutorials-test:
     name: Tutorials Tests
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
+    needs: release-test-gate
+    if: needs.release-test-gate.outputs.tested != 'true'
 
     steps:
       - uses: actions/checkout@v6
