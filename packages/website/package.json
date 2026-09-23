@@ -1,6 +1,6 @@
 {
   "name": "@soat/website",
-  "version": "0.58.2",
+  "version": "0.58.3",
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
