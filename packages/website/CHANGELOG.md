@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.58.6](https://github.com/ttoss/soat/compare/v0.58.5...v0.58.6) (2026-09-23)
+
+### Bug Fixes
+
+* **server:** serialize versioned writes and answer a taken document path with 409 ([#1419](https://github.com/ttoss/soat/issues/1419)) ([7d5fc35](https://github.com/ttoss/soat/commit/7d5fc35e3c41cbf4b757a4a856cecc031c64ece4)), closes [#1416](https://github.com/ttoss/soat/issues/1416) [#1418](https://github.com/ttoss/soat/issues/1418)
+
 ## [0.58.5](https://github.com/ttoss/soat/compare/v0.58.4...v0.58.5) (2026-09-23)
 
 **Note:** Version bump only for package @soat/website
