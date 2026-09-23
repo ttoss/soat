@@ -9,8 +9,12 @@
    `startsWith(head_commit.message, 'chore(release):')`; a default merge commit
    (`Merge pull request …`) silently skips the whole release. After merging,
    confirm the `main.yml` run actually ran.
-3. `main.yml`: `push-release-tag` → `release` (npm publish via OIDC trusted
-   publishing + website deploy) → `publish-docker`.
+3. `main.yml`: `release-test-gate` → build/smoke/tutorials → `push-release-tag`
+   → `release` (npm publish via OIDC trusted publishing + website deploy) →
+   `publish-docker`. The gate skips the three test jobs when the release commit
+   is only version bumps and changelogs on top of a tree whose PR run passed
+   every job; anything else (a lockfile change, a `package.json` edit beyond
+   `version`, a last PR merged while behind `main`) runs them.
 
 ### npm trusted publishing
 
