@@ -318,6 +318,8 @@ paths:
           description: Memory store or memory not found
         '500':
           description: Internal server error
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
     delete:
       tags:
         - Memories
@@ -408,7 +410,9 @@ paths:
           description: Memory store or memory not found
         '409':
           description: >-
-            Conflict — the memory is already invalidated, or the version moved
+            The memory is already invalidated (`MEMORY_ALREADY_INVALIDATED`),
+            or it has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`).
         '500':
           description: Internal server error
   /api/v1/memories/{memory_id}/assertions:

@@ -231,6 +231,8 @@ paths:
           description: Forbidden
         '404':
           description: Not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
 
     delete:
       tags:
@@ -408,6 +410,8 @@ paths:
           description: Forbidden
         '404':
           description: Not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
 
   /api/v1/orchestration-runs:
     post:

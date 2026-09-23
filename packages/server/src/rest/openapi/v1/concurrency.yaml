@@ -48,3 +48,14 @@ components:
       schema:
         type: string
       example: '3'
+  responses:
+    VersionConflict:
+      description: >-
+        The resource has moved past the version this write read
+        (`VERSION_CONFLICT`): a stated `expected_version` or `If-Match` no
+        longer matches, or a concurrent write took the version first.
+        `meta.current_version` names the version in force. Nothing is written.
+      content:
+        application/json:
+          schema:
+            $ref: './errors.yaml#/components/schemas/ErrorResponse'

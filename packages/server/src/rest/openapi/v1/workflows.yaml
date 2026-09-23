@@ -168,6 +168,8 @@ paths:
           description: Forbidden
         '404':
           description: Workflow not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
     delete:
       description: Deletes a workflow. Rejected while open tasks exist.
       tags:
@@ -352,6 +354,8 @@ paths:
           description: Forbidden
         '404':
           description: Not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
 components:
   securitySchemes:
     bearerAuth:

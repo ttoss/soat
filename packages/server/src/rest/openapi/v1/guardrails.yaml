@@ -255,6 +255,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
     delete:
       tags:
         - Guardrails
@@ -495,6 +497,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
 
   /api/v1/guardrails/{guardrail_id}/evaluate:
     post:

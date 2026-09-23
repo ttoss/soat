@@ -200,7 +200,8 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            The project's `storage_bytes` quota is exceeded
+            `path` is held by another file in the project (`NAME_CONFLICT`),
+            or the project's `storage_bytes` quota is exceeded
             (`QUOTA_STORAGE_EXCEEDED`). Delete stored content, or raise the
             quota — no window reset clears a stored total, so no `Retry-After`
             is sent.
@@ -306,7 +307,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: The file already backs a Document (a file can only be ingested once — use `POST /documents/{document_id}/ingest` to re-process the existing document, or upload a new copy of the file to ingest it separately), or the project's `storage_bytes` quota is exceeded (`QUOTA_STORAGE_EXCEEDED`; delete stored content or raise the quota — no `Retry-After` is sent, since no window reset clears a stored total).
+          description: The file already backs a Document (a file can only be ingested once — use `POST /documents/{document_id}/ingest` to re-process the existing document, or upload a new copy of the file to ingest it separately), the path it would be filed at is held by another file in the project (`NAME_CONFLICT`), or the project's `storage_bytes` quota is exceeded (`QUOTA_STORAGE_EXCEEDED`; delete stored content or raise the quota — no `Retry-After` is sent, since no window reset clears a stored total).
           content:
             application/json:
               schema:
@@ -510,6 +511,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The document has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`), or `path` is held
+            by another file in the project (`NAME_CONFLICT`). Nothing is
+            written.
           content:
             application/json:
               schema:
@@ -773,7 +784,10 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: Conflict — already withdrawn, or the version moved
+          description: >-
+            The document is already withdrawn (`DOCUMENT_ALREADY_WITHDRAWN`),
+            or it has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`).
           content:
             application/json:
               schema:
@@ -981,6 +995,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document or version not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            Another write took the document's version first
+            (`VERSION_CONFLICT`, with `meta.current_version`), or the restored
+            `path` is held by another file in the project (`NAME_CONFLICT`).
+            Nothing is written.
           content:
             application/json:
               schema:
