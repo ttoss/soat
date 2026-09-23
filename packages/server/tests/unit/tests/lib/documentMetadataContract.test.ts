@@ -7,7 +7,8 @@ import { join } from 'node:path';
  * nothing judged, and the corpus would hold rows that cannot be read as the
  * schema says they can.
  *
- * So every caller-facing write goes through `documents.ts`, where the gate is.
+ * So every caller-facing write goes through `documents.ts`, which applies the
+ * gate (the update's through `documentWriteGuard.ts`).
  * Static because the defect is an absent call: a module writing its own row
  * passes every test that does not happen to declare a schema first.
  */
@@ -91,8 +92,20 @@ describe('document metadata contract', () => {
     ).toEqual([]);
   });
 
-  test.each(GATES)('%s is applied in the document module', (gate) => {
-    expect(code(join(LIB_DIR, 'documents.ts'))).toContain(`${gate}(`);
+  test('the create gate is applied in the document module', () => {
+    expect(code(join(LIB_DIR, 'documents.ts'))).toContain(
+      'assertCreatedDocumentMetadataValid('
+    );
+  });
+
+  // The update is judged in the guard it runs before any storage write.
+  test('the update gate is applied by the guard the document update calls', () => {
+    expect(code(join(LIB_DIR, 'documentWriteGuard.ts'))).toContain(
+      'assertUpdatedDocumentMetadataValid('
+    );
+    expect(code(join(LIB_DIR, 'documents.ts'))).toContain(
+      'assertDocumentUpdatable('
+    );
   });
 
   test('the gate lives in one module', () => {

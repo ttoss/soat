@@ -96,6 +96,11 @@ type CommitConfigChangeArgs = {
   createdByUserId?: number | null;
 };
 
+type AssertWritableArgs = {
+  resource: VersionedResourceRef;
+  expectedVersion?: number | null;
+};
+
 type AssertVersionsExistArgs = {
   resource: VersionedResourceRef;
   versions: number[];
@@ -111,6 +116,12 @@ type DeleteVersionsArgs = {
  * parent resource beyond its row id.
  */
 export type VersionStore = {
+  /**
+   * The precondition `commitConfigChange` checks first, for a write path that
+   * changes state outside the row (a document's stored content and chunks)
+   * before it commits: a refused write must not have touched anything.
+   */
+  assertWritable: (args: AssertWritableArgs) => void;
   assertVersionsExist: (args: AssertVersionsExistArgs) => Promise<void>;
   commitConfigChange: (args: CommitConfigChangeArgs) => Promise<void>;
   deleteVersions: (args: DeleteVersionsArgs) => Promise<void>;
@@ -336,13 +347,25 @@ const makeClaimVersion = (args: VersionTable) => {
  * why restoring the live config is a genuine no-op instead of an endless
  * version chain. A no-op takes no version, so it cannot conflict either.
  */
+const makeAssertWritable = (args: VersionTable) => {
+  return (a: AssertWritableArgs): void => {
+    assertWritePrecondition({
+      expectedVersion: a.expectedVersion,
+      currentVersion: a.resource.version,
+      resourceLabel: args.resourceLabel,
+      resourceId: a.resource.publicId,
+    });
+  };
+};
+
 const makeCommitConfigChange = (args: {
   table: VersionTable;
+  assertWritable: ReturnType<typeof makeAssertWritable>;
   claimVersion: ReturnType<typeof makeClaimVersion>;
   writeVersion: ReturnType<typeof makeWriteVersion>;
 }) => {
   const { resourceLabel, resourceModel } = args.table;
-  const { claimVersion, writeVersion } = args;
+  const { assertWritable, claimVersion, writeVersion } = args;
 
   return async (a: CommitConfigChangeArgs): Promise<void> => {
     const { dbId, publicId, version: currentVersion } = a.resource;
@@ -350,11 +373,9 @@ const makeCommitConfigChange = (args: {
     // Checked before any work: a caller writing against a version that has
     // already moved is refused whether or not its change would have altered
     // anything.
-    assertWritePrecondition({
+    assertWritable({
+      resource: a.resource,
       expectedVersion: a.expectedVersion,
-      currentVersion,
-      resourceLabel,
-      resourceId: publicId,
     });
 
     await db.sequelize.transaction(async (transaction) => {
@@ -417,11 +438,14 @@ const makeCommitConfigChange = (args: {
 export const makeVersionStore = (args: VersionTable): VersionStore => {
   const writeVersion = makeWriteVersion(args);
   const claimVersion = makeClaimVersion(args);
+  const assertWritable = makeAssertWritable(args);
 
   return {
     ...makeVersionRows(args),
+    assertWritable,
     commitConfigChange: makeCommitConfigChange({
       table: args,
+      assertWritable,
       claimVersion,
       writeVersion,
     }),
