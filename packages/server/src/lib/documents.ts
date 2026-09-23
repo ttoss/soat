@@ -23,16 +23,13 @@ import {
   documentVersionStore,
 } from './documentVersionSnapshot';
 import {
-  assertCallerPath,
-  normalizePath,
-  pathPrefixPattern,
-} from './filePaths';
+  assertDocumentUpdatable,
+  normalizeStatedPath,
+} from './documentWriteGuard';
+import { assertCallerPath, pathPrefixPattern } from './filePaths';
 import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
-import {
-  assertCreatedDocumentMetadataValid,
-  assertUpdatedDocumentMetadataValid,
-} from './metadataSchemas';
+import { assertCreatedDocumentMetadataValid } from './metadataSchemas';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
@@ -356,11 +353,6 @@ const buildDocumentColumnUpdates = (args: {
   return updates;
 };
 
-/** A stated `path`, normalized and refused when it names the reserved root. */
-const normalizeStatedPath = (path: string | null): string | null => {
-  return assertCallerPath(path === null ? null : normalizePath(path));
-};
-
 export const updateDocument = async (
   args: {
     id: string;
@@ -381,24 +373,12 @@ export const updateDocument = async (
 
   if (!doc) return null;
 
-  // Runtime-written documents are read-only for callers: their content is the
-  // record another module keeps, and editing it would rewrite that module's
-  // history behind its back.
-  assertCallerPath(doc.file?.path);
-
-  /* istanbul ignore else -- the backing file is optional in the loaded type and
-     always present in practice; without one there is no project to judge
-     against and no path to judge under. */
-  if (doc.file) {
-    await assertUpdatedDocumentMetadataValid({
-      projectId: doc.file.projectId,
-      currentPath: doc.file.path ?? null,
-      path:
-        args.path === undefined ? undefined : normalizeStatedPath(args.path),
-      metadata: args.metadata,
-      currentMetadata: doc.metadata ?? null,
-    });
-  }
+  await assertDocumentUpdatable({
+    doc,
+    path: args.path,
+    metadata: args.metadata,
+    expectedVersion: args.expectedVersion,
+  });
 
   // Compared against the tombstone, not the content it hid: restoring the
   // version just before a withdrawal changes no content yet is a new state.

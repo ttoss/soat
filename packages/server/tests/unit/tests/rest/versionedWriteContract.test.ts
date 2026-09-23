@@ -13,7 +13,11 @@ import { authenticatedTestClient } from '../../testClient';
  * history row.
  */
 
-type Write = { name: string; send: (id: string) => Test };
+type Write = {
+  name: string;
+  /** `extra` is merged into the body, so a write can carry a precondition. */
+  send: (id: string, extra?: Record<string, unknown>) => Test;
+};
 
 type Driver = {
   path: string;
@@ -28,6 +32,11 @@ describe('versioned write contract', () => {
   let userToken: string;
   let projectId: string;
   let aiProviderId: string;
+  let seq = 0;
+  const unique = (base: string) => {
+    seq += 1;
+    return `${base}-${seq}`;
+  };
 
   const client = () => {
     return authenticatedTestClient(userToken);
@@ -61,10 +70,10 @@ describe('versioned write contract', () => {
       writes: [
         {
           name: 'updateAgent',
-          send: (id) => {
+          send: (id, extra) => {
             return client()
               .put(`/api/v1/agents/${id}`)
-              .send({ instructions: 'second' });
+              .send({ ...{ instructions: 'second' }, ...extra });
           },
         },
         {
@@ -86,10 +95,10 @@ describe('versioned write contract', () => {
       writes: [
         {
           name: 'updateGuardrail',
-          send: (id) => {
+          send: (id, extra) => {
             return client()
               .patch(`/api/v1/guardrails/${id}`)
-              .send({ document: { class: 'B' } });
+              .send({ ...{ document: { class: 'B' } }, ...extra });
           },
         },
         {
@@ -112,12 +121,13 @@ describe('versioned write contract', () => {
       writes: [
         {
           name: 'updateOrchestration',
-          send: (id) => {
+          send: (id, extra) => {
             return client()
               .patch(`/api/v1/orchestrations/${id}`)
               .send({
                 nodes: [{ id: 'a', type: 'transform', expression: 'v2' }],
                 edges: [],
+                ...extra,
               });
           },
         },
@@ -133,7 +143,7 @@ describe('versioned write contract', () => {
       create: () => {
         return createIn('/api/v1/workflows', {
           project_id: projectId,
-          name: 'contract-workflow',
+          name: unique('contract-workflow'),
           states: [
             { name: 'triage', initial: true },
             { name: 'done', terminal: true },
@@ -144,10 +154,10 @@ describe('versioned write contract', () => {
       writes: [
         {
           name: 'updateWorkflow',
-          send: (id) => {
+          send: (id, extra) => {
             return client()
               .patch(`/api/v1/workflows/${id}`)
-              .send({ payload_schema: { type: 'object' } });
+              .send({ ...{ payload_schema: { type: 'object' } }, ...extra });
           },
         },
         {
@@ -164,22 +174,24 @@ describe('versioned write contract', () => {
           project_id: projectId,
           content: 'First state.',
           filename: 'contract.txt',
-          path: '/contract/doc.txt',
+          path: `/contract/${unique('doc')}.txt`,
         });
       },
       writes: [
         {
           name: 'updateDocument',
-          send: (id) => {
+          send: (id, extra) => {
             return client()
               .patch(`/api/v1/documents/${id}`)
-              .send({ content: 'Second state.' });
+              .send({ ...{ content: 'Second state.' }, ...extra });
           },
         },
         {
           name: 'withdrawDocument',
-          send: (id) => {
-            return client().post(`/api/v1/documents/${id}/withdraw`).send({});
+          send: (id, extra) => {
+            return client()
+              .post(`/api/v1/documents/${id}/withdraw`)
+              .send({ ...extra });
           },
         },
         {
@@ -205,16 +217,18 @@ describe('versioned write contract', () => {
       writes: [
         {
           name: 'updateMemory',
-          send: (id) => {
+          send: (id, extra) => {
             return client()
               .put(`/api/v1/memories/${id}`)
-              .send({ content: 'The office is in Porto' });
+              .send({ ...{ content: 'The office is in Porto' }, ...extra });
           },
         },
         {
           name: 'retractMemory',
-          send: (id) => {
-            return client().post(`/api/v1/memories/${id}/retract`).send({});
+          send: (id, extra) => {
+            return client()
+              .post(`/api/v1/memories/${id}/retract`)
+              .send({ ...extra });
           },
         },
       ],
@@ -316,6 +330,39 @@ describe('versioned write contract', () => {
           });
         }
         previous = current;
+      }
+    }
+  );
+
+  /**
+   * A refused write must leave nothing behind, including state kept outside
+   * the row (a document's stored content, its chunks, its path): the `409`
+   * tells the caller nothing changed.
+   */
+  test.each(Object.keys(VERSIONED_RESOURCES).sort())(
+    '%s: a write refused by its precondition changes nothing',
+    async (model) => {
+      const driver = drivers[model];
+      const guarded = VERSIONED_RESOURCES[model].map((site) => {
+        return site.update;
+      });
+
+      for (const write of driver.writes) {
+        if (!guarded.includes(write.name)) continue;
+        const id = await driver.create();
+        const before = await client().get(`${driver.path}/${id}`);
+
+        const res = await write.send(id, { expected_version: 99 });
+        expect({ write: write.name, status: res.status }).toEqual({
+          write: write.name,
+          status: 409,
+        });
+
+        const after = await client().get(`${driver.path}/${id}`);
+        expect({ write: write.name, body: after.body }).toEqual({
+          write: write.name,
+          body: before.body,
+        });
       }
     }
   );
