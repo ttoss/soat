@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.58.5](https://github.com/ttoss/soat/compare/v0.58.4...v0.58.5) (2026-09-23)
+
+### Bug Fixes
+
+* **server:** a document update refused by its precondition changes nothing ([#1415](https://github.com/ttoss/soat/issues/1415)) ([d15ced7](https://github.com/ttoss/soat/commit/d15ced702f93d75ab784e2c95dc3bf0937bb731c))
+
 ## [0.58.4](https://github.com/ttoss/soat/compare/v0.58.3...v0.58.4) (2026-09-23)
 
 **Note:** Version bump only for package ttoss-soat
