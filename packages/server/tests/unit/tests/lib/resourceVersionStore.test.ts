@@ -6,12 +6,13 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * The commit engine's conditional claim, driven at the lib level because the
+ * The commit engine's serialization, driven at the lib level because the
  * interleaving it exists for cannot be produced deterministically over HTTP:
  * two concurrent requests may simply serialize, in which case both succeed and
  * the test proves nothing. `commitConfigChange` takes the field write as a
- * callback, so a test can hold one writer inside its own transaction while the
- * other commits, and the race becomes an ordering the test chooses.
+ * callback, so a test can hold one writer inside its own transaction — past
+ * the row lock — while the other queues, and the race becomes an ordering the
+ * test chooses.
  *
  * The guardrail store is used because its config is one field, so "did this
  * write take a version" has one answer. The engine is shared, so what holds
@@ -71,76 +72,96 @@ describe('resource version store', () => {
     });
   };
 
-  test('a write whose version was taken while it ran is refused', async () => {
-    const held = await createGuardrail('store-held');
-    const winner = await db.Guardrail.findOne({ where: { id: held.id } });
-
-    // Both writers read version 1. The held one is released only once the
-    // other has committed, so it reaches its claim against a version that has
-    // already moved — the interleaving the conditional update exists for.
-    let releaseHeld = (): void => {};
-    const heldMayProceed = new Promise<void>((resolve) => {
-      releaseHeld = resolve;
+  /**
+   * Holds one writer inside its field write — past the row lock — until
+   * released, and resolves `entered` once it is there, so the second writer is
+   * started only after the first holds the row.
+   */
+  const holdWriter = () => {
+    let release = (): void => {};
+    const mayProceed = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    let signalEntered = (): void => {};
+    const entered = new Promise<void>((resolve) => {
+      signalEntered = resolve;
+    });
+    return {
+      release,
+      entered,
+      onWrite: () => {
+        signalEntered();
+        return mayProceed;
+      },
+    };
+  };
 
+  test('a writer that read a version another writer holds is refused before its write runs', async () => {
+    const held = await createGuardrail('store-held');
+    const queued = await db.Guardrail.findOne({ where: { id: held.id } });
+    const hold = holdWriter();
+
+    // Both writers read version 1. The held one takes the row first; the other
+    // queues on the lock and, once the first commits, finds version 2.
     const heldWrite = commit({
       row: held,
       document: documentAllowing(600),
       before: documentAllowing(500),
-      onWrite: () => {
-        return heldMayProceed;
+      onWrite: hold.onWrite,
+    });
+    await hold.entered;
+
+    let queuedWrote = false;
+    const queuedWrite = commit({
+      row: queued!,
+      document: documentAllowing(700),
+      before: documentAllowing(500),
+      onWrite: async () => {
+        queuedWrote = true;
       },
     });
 
-    await commit({
-      row: winner!,
-      document: documentAllowing(700),
-      before: documentAllowing(500),
-    });
+    hold.release();
+    await heldWrite;
 
-    releaseHeld();
-
-    await expect(heldWrite).rejects.toMatchObject({
+    await expect(queuedWrite).rejects.toMatchObject({
       code: 'VERSION_CONFLICT',
       meta: { current_version: 2 },
     });
+    expect(queuedWrote).toBe(false);
   });
 
   test('the refused write leaves neither its field nor a version behind', async () => {
     const held = await createGuardrail('store-rollback');
-    const winner = await db.Guardrail.findOne({ where: { id: held.id } });
-
-    let releaseHeld = (): void => {};
-    const heldMayProceed = new Promise<void>((resolve) => {
-      releaseHeld = resolve;
-    });
+    const queued = await db.Guardrail.findOne({ where: { id: held.id } });
+    const hold = holdWriter();
 
     const heldWrite = commit({
       row: held,
       document: documentAllowing(600),
       before: documentAllowing(500),
-      onWrite: () => {
-        return heldMayProceed;
-      },
+      onWrite: hold.onWrite,
     });
+    await hold.entered;
 
-    await commit({
-      row: winner!,
+    const queuedWrite = commit({
+      row: queued!,
       document: documentAllowing(700),
       before: documentAllowing(500),
     });
 
-    releaseHeld();
-    await heldWrite.catch(() => {
+    hold.release();
+    await heldWrite;
+    await queuedWrite.catch(() => {
       return undefined;
     });
 
     const settled = await db.Guardrail.findOne({ where: { id: held.id } });
     expect(settled!.version).toBe(2);
-    expect(settled!.document).toEqual(documentAllowing(700));
+    expect(settled!.document).toEqual(documentAllowing(600));
 
-    // v1 is the create; v2 is the winner. The refused write archives nothing,
-    // so the chain has no gap and no repeat.
+    // v1 is the create; v2 is the held writer. The refused write archives
+    // nothing, so the chain has no gap and no repeat.
     const archived = await db.GuardrailVersion.findAll({
       where: { guardrailId: held.id as number },
       order: [['version', 'ASC']],
