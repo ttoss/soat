@@ -1,22 +1,6 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { getApiHeaders } from '@ttoss/http-server-mcp';
 
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
-
-/**
- * Tracks the caller's bearer token for the lifetime of a single MCP request so
- * a tool handler can forward it without threading it through every registration.
- * Populated via `enterWith` from `getApiHeaders` in `mcp/server.ts`, which runs
- * synchronously before the tool handler's async chain, so the store scopes
- * correctly per request.
- *
- * A handler registered through `registerToolFromSchema` receives only the tool's
- * arguments — there is no Koa context to read the credential from — so this
- * store is the seam that carries it. Note what it deliberately does **not** do:
- * supply a default. A tool call that arrives without a credential dispatches
- * without one and is refused by the same auth middleware that refused it over
- * the wire. Sharing a process never implies sharing authority.
- */
-export const mcpAuthorizationStore = new AsyncLocalStorage<string>();
 
 /**
  * Extracts a human-readable message from a REST API error response body.
@@ -68,7 +52,10 @@ export const dispatchMcpApiRequest = async (args: {
   return dispatchApiRequestOrThrow({
     method: args.method,
     path: args.url,
-    headers: { authorization: mcpAuthorizationStore.getStore() ?? '' },
+    // The caller's credential for this MCP request, with no default: a call
+    // that arrives without one is refused by the same auth middleware that
+    // refuses it over the wire. Sharing a process never implies sharing authority.
+    headers: { authorization: getApiHeaders().authorization ?? '' },
     body: args.body,
     wrapError: (response) => {
       return new Error(

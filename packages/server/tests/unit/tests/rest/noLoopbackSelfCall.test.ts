@@ -39,7 +39,6 @@ const TOOL_SURFACE_FILES = [
   'mcp/dispatchApi.ts',
   'mcp/toMcpText.ts',
   'lib/soatTools.ts',
-  'lib/soatToolsHelpers.ts',
   'lib/toolsCall.ts',
   'lib/inProcessApi.ts',
 ];

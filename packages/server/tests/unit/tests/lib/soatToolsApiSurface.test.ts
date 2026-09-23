@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { operationIdToToolName } from '@ttoss/http-server-mcp-openapi';
 import { load } from 'js-yaml';
 import { soatTools } from 'src/lib/soatTools';
-import { operationIdToToolName } from 'src/lib/soatToolsHelpers';
 
 /**
  * The generated client surfaces — MCP tools, the SDK, the CLI — wrap the REST
