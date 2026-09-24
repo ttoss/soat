@@ -513,12 +513,13 @@ components:
             so the record cannot be used to recover a value.
 
 
-            A value may be a `{{secret:...}}` reference, which keeps the
+            A value may be a `{{secret:sec_...}}` reference, which keeps the
             credential in the [secret](/docs/modules/secrets) store and leaves
-            only its name on the trigger; it is resolved at fire time, so
+            only its id on the trigger; it is resolved at fire time, so
             rotating the secret changes the next firing without touching the
-            trigger. A reference naming a secret that does not exist in this
-            project is refused here rather than at fire time.
+            trigger. A reference is refused here rather than at fire time when
+            it is not in that id form (a secret's name does not resolve) or
+            names a secret that does not exist in this project.
         cron:
           type: string
           description: 5-field cron expression (UTC). Required when type is schedule

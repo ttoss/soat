@@ -44,7 +44,7 @@ A string field supporting secret references may embed:
 {{secret:sec_01HXYZ...}}
 ```
 
-The token, not the value, is stored and echoed by `GET`/`LIST`; it is resolved at the point of use (e.g. before an outbound HTTP request). The secret must belong to the same project as the resource, else `400 SECRET_NOT_FOUND` at create/update.
+The token, not the value, is stored and echoed by `GET`/`LIST`; it is resolved at the point of use (e.g. before an outbound HTTP request). The token names the secret by id; any other form, such as the secret's name, is `400 INVALID_TEMPLATE_TOKEN` at create/update. The secret must belong to the same project as the resource, else `400 SECRET_NOT_FOUND` at create/update.
 
 Supported fields:
 
@@ -52,6 +52,7 @@ Supported fields:
 | --- | --- | --- |
 | [Tool](./tools.md) (`http`) | `execute.url`, `execute.headers` values | The tool is called |
 | [Tool](./tools.md) (`mcp`) | `mcp.url`, `mcp.headers` values | The MCP server is contacted (tool listing and calls) |
+| [Trigger](./triggers.md) | `tool_context` values | The trigger fires |
 
 ```json
 {

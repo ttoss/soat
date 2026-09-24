@@ -358,12 +358,14 @@ forwarded to every run it starts:
 }
 ```
 
-A value may be a [`{{secret:...}}`](./secrets.md) reference, which is what a
-credential should be: the plaintext stays in the secret store and the trigger
-holds only its name. References resolve **at fire time**, so rotating the
-secret changes what the next firing sends without touching the trigger, and a
-reference naming a secret that does not exist in the project is refused when
-the trigger is written rather than at 3am on a firing nobody is watching.
+A value may be a [`{{secret:sec_...}}`](./secrets.md) reference, which is what
+a credential should be: the plaintext stays in the secret store and the trigger
+holds only its id. References resolve **at fire time**, so rotating the secret
+changes what the next firing sends without touching the trigger. A reference
+that is not in the id form (`400 INVALID_TEMPLATE_TOKEN` — a secret's name does
+not resolve) or names a secret that does not exist in the project
+(`400 SECRET_NOT_FOUND`) is refused when the trigger is written rather than at
+3am on a firing nobody is watching.
 
 The bag is **write-only** — accepted on create and update, never returned by a
 read — so the record cannot be used to recover a value. A manual

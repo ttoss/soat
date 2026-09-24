@@ -1437,9 +1437,11 @@ components:
           description: >-
             Caller context every firing forwards to the run it starts, so an
             agent whose tools authorize through `{{context:<key>}}` can be
-            scheduled. Write-only. A value may be a `{{secret:...}}` reference,
-            which is what a template should carry — the credential stays in the
-            secret store and only its name is checked in
+            scheduled. Write-only. A value may be a `{{secret:sec_...}}`
+            reference, which is what a template should carry — the credential
+            stays in the secret store and only its id is checked in (a `sub`
+            such as `{{secret:${MySecret}}}` for a template secret); a secret's
+            name does not resolve and is refused
         cron:
           type: string
           nullable: true

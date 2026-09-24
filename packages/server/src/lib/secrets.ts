@@ -182,25 +182,57 @@ export const updateSecret = async (args: {
 // is what gets stored and echoed back; it resolves to the decrypted value
 // server-side at the point of use only.
 
-const SECRET_REF_RE = /\{\{secret:(sec_[A-Za-z0-9]+)\}\}/g;
+/**
+ * The only form a secret reference resolves in: the secret's public id. Every
+ * resolver and write-time check builds on this, so what a write accepts is
+ * exactly what a use resolves.
+ */
+export const SECRET_ID_PATTERN = 'sec_[A-Za-z0-9]+';
+
+const SECRET_REF_RE = new RegExp(
+  `\\{\\{secret:(${SECRET_ID_PATTERN})\\}\\}`,
+  'g'
+);
+const RESOLVABLE_SECRET_TOKEN_RE = new RegExp(
+  `^\\{\\{secret:${SECRET_ID_PATTERN}\\}\\}$`
+);
+// Any token claiming to be a secret reference, including a `${...}` body.
+const SECRET_TOKEN_RE = /\{\{secret:(?:[^{}]|\$\{[^}]*\})*\}\}/g;
+
+const collectStrings = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(collectStrings);
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value as Record<string, unknown>).flatMap(
+      collectStrings
+    );
+  }
+  return [];
+};
 
 /**
  * Collects the public IDs of all secrets referenced by `{{secret:...}}`
  * tokens anywhere inside a value (deep-walks strings, arrays, and objects).
  */
 const collectSecretRefs = (value: unknown): string[] => {
-  if (typeof value === 'string') {
-    return [...value.matchAll(SECRET_REF_RE)].map((m) => {
+  return collectStrings(value).flatMap((text) => {
+    return [...text.matchAll(SECRET_REF_RE)].map((m) => {
       return m[1];
     });
-  }
-  if (Array.isArray(value)) return value.flatMap(collectSecretRefs);
-  if (typeof value === 'object' && value !== null) {
-    return Object.values(value as Record<string, unknown>).flatMap(
-      collectSecretRefs
-    );
-  }
-  return [];
+  });
+};
+
+/** `{{secret:...}}` tokens no resolver would substitute, e.g. a name form. */
+const collectUnresolvableSecretTokens = (value: unknown): string[] => {
+  return collectStrings(value).flatMap((text) => {
+    return [...text.matchAll(SECRET_TOKEN_RE)]
+      .map((m) => {
+        return m[0];
+      })
+      .filter((token) => {
+        return !RESOLVABLE_SECRET_TOKEN_RE.test(token);
+      });
+  });
 };
 
 const loadReferencedSecrets = async (args: {
@@ -231,13 +263,30 @@ const loadReferencedSecrets = async (args: {
 
 /**
  * Validates that every `{{secret:...}}` token inside a value references a
- * secret that exists in the given project. Throws `SECRET_NOT_FOUND` (400)
- * otherwise. Use at create/update time to fail fast instead of at first call.
+ * secret that exists in the given project. Throws `INVALID_TEMPLATE_TOKEN`
+ * (400) for a token not in the id form — it would reach its target as a
+ * literal — and `SECRET_NOT_FOUND` (400) for an id naming nothing. Use at
+ * create/update time to fail fast instead of at first call.
  */
 export const assertSecretRefsExist = async (args: {
   value: unknown;
   projectId: number;
 }): Promise<void> => {
+  const unresolvable = [
+    ...new Set(collectUnresolvableSecretTokens(args.value)),
+  ];
+  if (unresolvable.length > 0) {
+    const quoted = unresolvable
+      .map((token) => {
+        return `'${token}'`;
+      })
+      .join(', ');
+    throw new DomainError(
+      'INVALID_TEMPLATE_TOKEN',
+      `Invalid secret reference(s) ${quoted} — a {{secret:...}} reference names a secret by its id ({{secret:sec_...}}), not its name.`,
+      { tokens: unresolvable }
+    );
+  }
   const ids = [...new Set(collectSecretRefs(args.value))];
   if (ids.length === 0) return;
   log(
