@@ -344,7 +344,7 @@ Pausing is **idempotent** (a second pause answers with the run unchanged); a set
 
 ### Listing the runs still driving
 
-[`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**; values are ORed:
+[`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `project_id`, `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**; values are ORed:
 
 ```
 GET /api/v1/orchestration-runs?status=queued&status=running&status=sleeping&status=awaiting_input
