@@ -157,15 +157,16 @@ export const listApiKeys = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.ApiKey.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
         include: [
           { model: db.User, as: 'user' },
           { model: db.Project, as: 'project' },
         ],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

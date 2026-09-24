@@ -58,11 +58,29 @@ export const emptyPage = <T = never>(args: {
   return { data: [], total: 0, limit, offset };
 };
 
+/** One sort key of a list: a column of the listed model and its direction. */
+export type ListOrderItem = [column: string, direction: 'ASC' | 'DESC'];
+
+/**
+ * `order` made total by appending the primary key in the direction of the last
+ * key. Rows that tie on the caller's keys otherwise come back in scan order,
+ * which two queries need not share, so a page boundary between them repeats
+ * one row and drops another.
+ */
+export const totalListOrder = (order: ListOrderItem[]): ListOrderItem[] => {
+  const last = order[order.length - 1];
+  if (last?.[0] === 'id') return order;
+  return [...order, ['id', last?.[1] ?? 'ASC']];
+};
+
 /**
  * The single place the paginated list envelope is produced. `query` performs
- * the `findAndCountAll` with the bounded `limit`/`offset` resolved here, so the
+ * the `findAndCountAll` with the bounded `limit`/`offset` resolved here and the
+ * total `order` built from the caller's (see {@link totalListOrder}), so the
  * fully-typed model call stays at the call site; `map` turns each row into a
- * plain response object.
+ * plain response object. `order` is required: a list that states none is
+ * sorted by nothing. `paginatedListOrderContract.test.ts` holds every `query`
+ * to the order it is handed.
  *
  * Call sites that `include` associations should pass `distinct: true` so `count`
  * reflects top-level rows rather than the inflated join cardinality.
@@ -70,9 +88,11 @@ export const emptyPage = <T = never>(args: {
 export const paginatedList = async <M, T>(args: {
   limit?: number;
   offset?: number;
+  order: ListOrderItem[];
   query: (pagination: {
     limit: number;
     offset: number;
+    order: ListOrderItem[];
   }) => Promise<{ count: number; rows: M[] }>;
   map: (row: M) => T | Promise<T>;
 }): Promise<PaginatedResult<T>> => {
@@ -80,7 +100,11 @@ export const paginatedList = async <M, T>(args: {
 
   log('paginatedList: limit=%d offset=%d', limit, offset);
 
-  const { count, rows } = await args.query({ limit, offset });
+  const { count, rows } = await args.query({
+    limit,
+    offset,
+    order: totalListOrder(args.order),
+  });
   // `Promise.all` handles both sync and async row mappers uniformly.
   const data = await Promise.all(
     rows.map((row) => {

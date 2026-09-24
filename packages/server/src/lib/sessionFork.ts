@@ -297,14 +297,15 @@ export const listSessionForks = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Session.findAndCountAll({
         where: { forkedFromSessionId: parent.id },
         include: sessionIncludes(),
         distinct: true,
+        order,
         limit,
         offset,
-        order: [['createdAt', 'DESC']],
       });
     },
     map: (session: SessionRow) => {

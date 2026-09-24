@@ -443,12 +443,13 @@ export const listOrchestrations = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Orchestration.findAndCountAll({
         where: { projectId: args.projectIds },
         include: [{ model: db.Project, as: 'project' }],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -699,7 +700,8 @@ export const listOrchestrationRuns = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.OrchestrationRun.findAndCountAll({
         where,
         include: [
@@ -707,8 +709,8 @@ export const listOrchestrationRuns = async (args: {
           { model: db.Orchestration, as: 'orchestration' },
           nodeExecutionsInclude(),
         ],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

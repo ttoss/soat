@@ -185,12 +185,13 @@ export const listMemoryRules = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.MemoryRule.findAndCountAll({
         where,
         include: memoryRuleIncludes(args.projectIds),
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

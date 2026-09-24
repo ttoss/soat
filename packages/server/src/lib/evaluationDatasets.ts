@@ -125,12 +125,13 @@ export const listDatasets = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Dataset.findAndCountAll({
         where,
         include: datasetIncludes(),
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -424,12 +425,13 @@ export const listDatasetItems = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.DatasetItem.findAndCountAll({
         where: { datasetId: dataset.id as number },
         include: datasetItemIncludes(),
-        order: [['createdAt', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

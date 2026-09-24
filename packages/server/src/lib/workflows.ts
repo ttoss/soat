@@ -91,12 +91,13 @@ export const listWorkflows = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Workflow.findAndCountAll({
         where: { projectId: args.projectIds },
         include: workflowIncludes(),
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

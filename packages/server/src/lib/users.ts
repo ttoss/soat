@@ -21,8 +21,9 @@ export const listUsers = async (args?: { limit?: number; offset?: number }) => {
   return paginatedList({
     limit: args?.limit,
     offset: args?.offset,
-    query: ({ limit, offset }) => {
-      return db.User.findAndCountAll({ limit, offset });
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
+      return db.User.findAndCountAll({ order, limit, offset });
     },
     map: mapUser,
   });

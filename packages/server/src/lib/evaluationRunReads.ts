@@ -153,17 +153,13 @@ export const listEvalRuns = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.EvalRun.findAndCountAll({
         where: { evalId: evaluation.id as number },
         include: evalRunIncludes(),
-        // `id` breaks a `created_at` tie, which rows written in one millisecond
-        // share; without it Postgres returns them in scan order.
-        order: [
-          ['createdAt', 'DESC'],
-          ['id', 'DESC'],
-        ],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -201,15 +197,13 @@ export const listEvalResults = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.EvalResult.findAndCountAll({
         where: { evalRunId: run.id as number },
         include: evalResultIncludes(),
-        order: [
-          ['createdAt', 'ASC'],
-          ['id', 'ASC'],
-        ],
         distinct: true,
+        order,
         limit,
         offset,
       });

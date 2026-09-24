@@ -81,12 +81,13 @@ export const listMemoryStores = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.MemoryStore.findAndCountAll({
         where,
         include: [{ model: db.Project, as: 'project' }],
-        order: [['createdAt', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

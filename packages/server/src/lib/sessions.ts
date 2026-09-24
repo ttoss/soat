@@ -222,14 +222,15 @@ export const listSessions = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: async ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: async ({ limit, offset, order }) => {
       const page = await db.Session.findAndCountAll({
         where,
         include: sessionIncludes(),
         distinct: true,
+        order,
         limit,
         offset,
-        order: [['createdAt', 'DESC']],
       });
       // Expiry is applied to the rows this page returns before they are mapped,
       // so a session that timed out is reported as expired rather than active.

@@ -130,7 +130,7 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
 - `limit` — results per page. Default `50`, clamped to `100` (a larger value is capped, not rejected).
 - `offset` — results to skip (default `0`).
 - Items are in `response.data`, never the top-level body.
-- No `cursor`, `page`, or `sort`/`order` parameter. Sort order, when defined, is fixed per endpoint (see the module doc).
+- No `cursor`, `page`, or `sort`/`order` parameter. Sort order is fixed per endpoint (see the module doc), and rows that tie on it are broken by creation order, so a tie never reorders between pages.
 
 The server enforces no per-project or per-API-key request-rate limits or throttling; every authenticated request is processed immediately, bounded only by the limits above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 

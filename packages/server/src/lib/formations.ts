@@ -249,12 +249,13 @@ export const listFormations = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.Formation.findAndCountAll({
         where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
         include: getFormationIncludes(),
-        order: [['createdAt', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -362,12 +363,13 @@ export const listFormationEvents = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: (pagination) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.FormationOperation.findAndCountAll({
         where: { formationId: formation.id as number },
-        order: [['createdAt', 'ASC']],
-        limit: pagination.limit,
-        offset: pagination.offset,
+        order,
+        limit,
+        offset,
       });
     },
     map: (op) => {

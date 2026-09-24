@@ -165,12 +165,13 @@ export const listChats = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Chat.findAndCountAll({
         where: { projectId: args.projectIds },
         include: getChatIncludes(),
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

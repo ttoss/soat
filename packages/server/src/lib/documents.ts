@@ -140,7 +140,8 @@ export const listDocuments = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
         projectIds: args.projectIds,
         policyWhere: args.policyWhere,
@@ -166,6 +167,7 @@ export const listDocuments = async (args: {
           },
         ],
         subQuery,
+        order,
         limit,
         offset,
       });

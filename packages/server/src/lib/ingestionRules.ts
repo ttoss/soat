@@ -245,12 +245,13 @@ export const listIngestionRules = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.IngestionRule.findAndCountAll({
         where,
         include: ingestionRuleIncludes(),
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

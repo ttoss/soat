@@ -44,8 +44,9 @@ export const listPolicies = async (args?: {
   return paginatedList({
     limit: args?.limit,
     offset: args?.offset,
-    query: ({ limit, offset }) => {
-      return db.Policy.findAndCountAll({ where, limit, offset });
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
+      return db.Policy.findAndCountAll({ where, order, limit, offset });
     },
     map: (p: InstanceType<(typeof db)['Policy']>) => {
       return mapPolicy(p);
