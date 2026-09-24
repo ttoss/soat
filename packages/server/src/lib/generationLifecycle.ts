@@ -182,6 +182,8 @@ export const recordContinuationFailure = async (args: {
     traceId: args.pending.traceId,
     error: args.error,
     model: args.pending.resolvedModel,
+    projectId: args.pending.projectId,
+    projectPublicId: args.pending.projectPublicId,
     // The continuation fails on the model's answer the same way the initial
     // turn does, and its tokens were billed the same way.
     usage: usageFromFailure(args.error),

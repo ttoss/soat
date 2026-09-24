@@ -29,6 +29,8 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
   let agentId: string;
   let toolAgentId: string;
   let zeroRetentionAgentId: string;
+  let structuredToolAgentId: string;
+  let structuredClientToolAgentId: string;
   let stubServer: Server;
 
   /** Queued completions; the last one repeats once the queue drains. */
@@ -60,7 +62,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     };
   };
 
-  const toolCallCompletion = () => {
+  const toolCallCompletion = (toolName: string = 'get_weather') => {
     return {
       id: 'chatcmpl-stub-tool',
       object: 'chat.completion',
@@ -77,7 +79,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
                 id: 'call_stub_1',
                 type: 'function',
                 function: {
-                  name: 'get_weather',
+                  name: toolName,
                   arguments: '{"cityName":"Paris"}',
                 },
               },
@@ -223,6 +225,55 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
       });
     expect(toolAgentRes.status).toBe(201);
     toolAgentId = toolAgentRes.body.id;
+
+    const reportSchema = {
+      type: 'object',
+      properties: {
+        summary: { type: 'string' },
+        detail: { type: 'string' },
+      },
+      required: ['summary', 'detail'],
+    };
+
+    const structuredToolAgentRes = await asUser()
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectId,
+        ai_provider_id: providerRes.body.id,
+        name: 'Transcript Structured Tool Agent',
+        tool_bindings: [{ tool_id: toolRes.body.id }],
+        output_schema: reportSchema,
+        max_steps: 3,
+      });
+    expect(structuredToolAgentRes.status).toBe(201);
+    structuredToolAgentId = structuredToolAgentRes.body.id;
+
+    const clientToolRes = await asUser()
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'confirm_city',
+        type: 'client',
+        description: 'Asks the caller to confirm a city.',
+        parameters: {
+          type: 'object',
+          properties: { cityName: { type: 'string' } },
+        },
+      });
+    expect(clientToolRes.status).toBe(201);
+
+    const structuredClientToolAgentRes = await asUser()
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectId,
+        ai_provider_id: providerRes.body.id,
+        name: 'Transcript Structured Client Tool Agent',
+        tool_bindings: [{ tool_id: clientToolRes.body.id }],
+        output_schema: reportSchema,
+        max_steps: 3,
+      });
+    expect(structuredClientToolAgentRes.status).toBe(201);
+    structuredClientToolAgentId = structuredClientToolAgentRes.body.id;
 
     // Can read the generation but not the trace — the pair the route checks
     // separately, and the reason a single action would silently widen.
@@ -491,6 +542,84 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     const traceRes = await asUser().get(`/api/v1/traces/${first.trace_id}`);
     expect(traceRes.status).toBe(200);
     expect(traceRes.body.step_count).toBe(2);
+  });
+
+  describe('a turn whose final answer fails output_schema', () => {
+    // The steps before the rejected answer ran for real — tools executed and
+    // tokens were billed — so the transcript is the only record of them.
+    const INCOMPLETE_ANSWER = '{"summary":"Mild in Paris."}';
+
+    test('keeps the steps that ran before the answer was rejected', async () => {
+      stubResponses = [toolCallCompletion(), textCompletion(INCOMPLETE_ANSWER)];
+      const failed = await asUser()
+        .post(`/api/v1/agents/${structuredToolAgentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: USER_QUESTION }] });
+      expect(failed.status).toBe(502);
+      expect(failed.body.error.code).toBe('OUTPUT_SCHEMA_VALIDATION_FAILED');
+      const generationId = failed.body.error.meta.generation_id as string;
+
+      const res = await transcript(generationId);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.code).toBe('OUTPUT_SCHEMA_VALIDATION_FAILED');
+      expect(res.body.step_count).toBe(2);
+      expect(res.body.steps[0].tool_calls).toEqual([
+        {
+          id: 'call_stub_1',
+          tool_name: 'get_weather',
+          args: { cityName: 'Paris' },
+        },
+      ]);
+      expect(res.body.steps[0].tool_results[0].result).toMatchObject({
+        tempC: 18,
+      });
+      expect(res.body.steps[1].text).toBe(INCOMPLETE_ANSWER);
+
+      const traceRes = await asUser().get(
+        `/api/v1/traces/${failed.body.error.meta.trace_id}`
+      );
+      expect(traceRes.status).toBe(200);
+      expect(traceRes.body.step_count).toBe(2);
+      expect(traceRes.body.error.code).toBe('OUTPUT_SCHEMA_VALIDATION_FAILED');
+    });
+
+    test('keeps both sides of a pause when the resumed answer is rejected', async () => {
+      stubResponses = [
+        toolCallCompletion('confirm_city'),
+        textCompletion(INCOMPLETE_ANSWER),
+      ];
+      const started = await asUser()
+        .post(
+          `/api/v1/agents/${structuredClientToolAgentId}/generate?wait=true`
+        )
+        .send({ messages: [{ role: 'user', content: USER_QUESTION }] });
+      expect(started.status).toBe(200);
+      expect(started.body.status).toBe('requires_action');
+
+      const resumed = await asUser()
+        .post(
+          `/api/v1/agents/${structuredClientToolAgentId}/generate/${started.body.id}/tool-outputs`
+        )
+        .send({
+          tool_outputs: [
+            {
+              tool_call_id: started.body.required_action.tool_calls[0].id,
+              output: 'confirmed',
+            },
+          ],
+        });
+      expect(resumed.status).toBe(502);
+      expect(resumed.body.error.code).toBe('OUTPUT_SCHEMA_VALIDATION_FAILED');
+
+      const res = await transcript(started.body.id);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.steps).toHaveLength(2);
+      expect(res.body.steps[0].tool_calls[0].tool_name).toBe('confirm_city');
+      expect(res.body.steps[1].text).toBe(INCOMPLETE_ANSWER);
+    });
   });
 
   // `RESOURCE_NOT_FOUND`, the code this module's other routes answer for a

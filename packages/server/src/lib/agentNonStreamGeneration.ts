@@ -32,7 +32,6 @@ import { isTurnBudgetSpent, resolveStopWhen } from './agentStopConditions';
 import {
   fireCompletionSideEffects,
   recordContinuationFailure,
-  recordGenerationFailure,
 } from './generationLifecycle';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
@@ -42,12 +41,12 @@ import {
 } from './modelMessages';
 import { routedAiProviderId, routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
-import { toProviderDomainError, usageFromFailure } from './providerError';
+import { toProviderDomainError } from './providerError';
 import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
 } from './textEncodedToolCall';
-import { serializeSteps } from './traces';
+import { saveTrace, serializeSteps } from './traces';
 
 // Bounds the auto-resume loop: a model re-proposing a blocked client tool every
 // turn would otherwise resume forever.
@@ -124,6 +123,7 @@ const callGenerateText = async (args: {
   toolChoice: TurnToolChoice;
   prepareStep: ReturnType<typeof buildPrepareStep>;
   abortSignal?: AbortSignal;
+  onStepEnd: (step: unknown) => void;
 }) => {
   const hasTools = Object.keys(args.resolvedTools).length > 0;
 
@@ -142,6 +142,7 @@ const callGenerateText = async (args: {
       // non-routed model keeps the SDK default.
       maxRetries: routedMaxRetries(args.model),
       output: buildStructuredOutput(args.typedAgent.outputSchema),
+      onStepEnd: args.onStepEnd,
     });
   } catch (error) {
     log(
@@ -325,6 +326,41 @@ const resolveGenerationResult = async (args: {
   });
 };
 
+const callWithToolFallback = async (args: {
+  callArgs: Omit<Parameters<typeof callGenerateText>[0], 'resolvedTools'>;
+  resolvedTools: Record<string, Tool>;
+  ranSteps: unknown[];
+}) => {
+  try {
+    return await callGenerateText({
+      ...args.callArgs,
+      resolvedTools: args.resolvedTools,
+    });
+  } catch (error) {
+    if (Object.keys(args.resolvedTools).length === 0) {
+      throw error;
+    }
+    // The fallback is for a provider that chokes on our tool *definitions*. A
+    // schema violation is the model's output, so retrying without tools would
+    // burn a call to hit the same schema — or worse, succeed, answering without
+    // the tool the agent was required to use.
+    if (
+      error instanceof DomainError &&
+      error.code === 'OUTPUT_SCHEMA_VALIDATION_FAILED'
+    ) {
+      throw error;
+    }
+    log(
+      'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
+      args.callArgs.agentId,
+      error instanceof Error ? error.message : String(error)
+    );
+    // The retry replaces the abandoned attempt, as its result does on success.
+    args.ranSteps.splice(0);
+    return callGenerateText({ ...args.callArgs, resolvedTools: {} });
+  }
+};
+
 export const runNonStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
@@ -355,6 +391,9 @@ export const runNonStreamGeneration = async (args: {
     args.typedAgent.maxSteps
   );
 
+  // `generateText` discards its steps when it throws — a final answer that
+  // fails `output_schema` included — so each is kept as it finishes.
+  const ranSteps: unknown[] = [];
   const callArgs = {
     agentId: args.agentId,
     model: args.model,
@@ -364,34 +403,34 @@ export const runNonStreamGeneration = async (args: {
     toolChoice: args.toolChoice,
     prepareStep,
     abortSignal: args.abortSignal,
+    onStepEnd: (step: unknown) => {
+      ranSteps.push(step);
+    },
   };
 
   let result;
   try {
-    result = await callGenerateText({
-      ...callArgs,
+    result = await callWithToolFallback({
+      callArgs,
       resolvedTools: args.resolvedTools,
+      ranSteps,
     });
   } catch (error) {
-    if (Object.keys(args.resolvedTools).length === 0) {
-      throw error;
+    if (ranSteps.length > 0) {
+      await Promise.allSettled([
+        saveTrace({
+          traceId: args.traceId,
+          projectId: args.typedAgent.project.id as number,
+          projectPublicId: args.typedAgent.project.publicId,
+          agentId: args.agentId,
+          generationId: args.generationId,
+          steps: serializeSteps(ranSteps),
+          parentTraceId: args.parentTraceId ?? null,
+          rootTraceId: args.rootTraceId ?? null,
+        }),
+      ]);
     }
-    // The fallback is for a provider that chokes on our tool *definitions*. A
-    // schema violation is the model's output, so retrying without tools would
-    // burn a call to hit the same schema — or worse, succeed, answering without
-    // the tool the agent was required to use.
-    if (
-      error instanceof DomainError &&
-      error.code === 'OUTPUT_SCHEMA_VALIDATION_FAILED'
-    ) {
-      throw error;
-    }
-    log(
-      'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
-      args.agentId,
-      error instanceof Error ? error.message : String(error)
-    );
-    result = await callGenerateText({ ...callArgs, resolvedTools: {} });
+    throw error;
   }
 
   return resolveGenerationResult({
@@ -443,6 +482,7 @@ export const runToolOutputsGeneration = async (args: {
     stepRules: args.pending.agentConfig.stepRules,
     projectId: args.pending.projectId,
   });
+  const ranSteps: unknown[] = [];
   try {
     return await generateText({
       model: args.pending.resolvedModel,
@@ -470,17 +510,16 @@ export const runToolOutputsGeneration = async (args: {
       temperature: args.pending.agentConfig.temperature ?? undefined,
       maxRetries: routedMaxRetries(args.pending.resolvedModel),
       output: buildStructuredOutput(args.pending.agentConfig.outputSchema),
+      onStepEnd: (step) => {
+        ranSteps.push(step);
+      },
     });
   } catch (error) {
-    throw await recordGenerationFailure({
+    throw await recordContinuationFailure({
       generationId: args.generationId,
-      traceId: args.pending.traceId,
+      pending: args.pending,
+      steps: ranSteps,
       error: toProviderDomainError(error) ?? error,
-      model: args.pending.resolvedModel,
-      projectId: args.pending.projectId,
-      projectPublicId: args.pending.projectPublicId,
-      // Read off the *raw* error: the mapped DomainError carries no counts.
-      usage: usageFromFailure(error),
     });
   }
 };
