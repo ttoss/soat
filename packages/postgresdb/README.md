@@ -50,7 +50,10 @@ To alter the schema, add the flag `--alter`. Check the [@ttoss/postgresdb sync d
 ### Migrations `sync` cannot perform
 
 `sequelize.sync()` creates missing tables and never alters an existing one: it
-will not change a column's type, rename a table, or backfill a value. Those
+will not change a column's type, rename a table, or backfill a value. Even
+with `alter`, a foreign-key column keeps its nullability: the models' set of
+`NOT NULL` foreign keys is pinned by `tests/unit/tests/foreignKeyNullability.test.ts`,
+so changing one fails until a migration makes the same change. Those
 changes are **versioned migrations** in `src/migrations/`, run by the ledger
 runner in [`@ttoss/postgresdb`](https://ttoss.dev/docs/modules/packages/postgresdb/)
 and recorded in a `schema_migrations` table it maintains itself.
@@ -69,6 +72,7 @@ The flow they follow is
 | `2026-09-22-tag-bag-gin-indexes` | a GIN index with `jsonb_path_ops` over every `tags` column, so a containment match is a lookup rather than a scan |
 | `2026-09-24-generation-idempotency-key` | `generations.idempotency_key`, unique per project, and `generations.idempotency_digest` |
 | `2026-09-24-api-key-sha256` | `api_keys.key_hash_sha256`, unique, the SHA-256 a key is verified by; `api_keys.key_hash` nullable |
+| `2026-09-24-foreign-key-nullability` | `agents.ai_provider_id`, `chats.ai_provider_id`, `api_keys.project_id` and `conversation_messages.actor_id` nullable, as their models declare |
 
 Run them from the server package, which owns the entrypoint:
 
