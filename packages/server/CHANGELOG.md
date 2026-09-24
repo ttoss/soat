@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.59.1](https://github.com/ttoss/soat/compare/v0.59.0...v0.59.1) (2026-09-24)
+
+### Performance Improvements
+
+* **server:** verify API keys by SHA-256 lookup, not bcrypt on every request ([#1429](https://github.com/ttoss/soat/issues/1429)) ([2d9c2c5](https://github.com/ttoss/soat/commit/2d9c2c50f812b67b21f1fbfea41742952c181a88)), closes [#1428](https://github.com/ttoss/soat/issues/1428)
+
 # [0.59.0](https://github.com/ttoss/soat/compare/v0.58.7...v0.59.0) (2026-09-24)
 
 ### Bug Fixes
