@@ -63,7 +63,10 @@ describe('paginatedList order', () => {
     })
     .flatMap((file) => {
       return paginatedListCalls(readFileSync(file, 'utf-8')).map((call) => {
-        return { ...call, at: `${file.slice(SRC_DIR.length + 1)}:${call.line}` };
+        return {
+          ...call,
+          at: `${file.slice(SRC_DIR.length + 1)}:${call.line}`,
+        };
       });
     });
 
@@ -74,7 +77,9 @@ describe('paginatedList order', () => {
   test('every call states its order to paginatedList', () => {
     const offenders = calls
       .filter((call) => {
-        return !/\n\s*order:/.test(call.body.replace(queryCallback(call.body), ''));
+        return !/\n\s*order:/.test(
+          call.body.replace(queryCallback(call.body), '')
+        );
       })
       .map((call) => {
         return call.at;
