@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { loadSecretValues } from './secrets';
+import { loadSecretValues, SECRET_ID_PATTERN } from './secrets';
 import { TOOL_CONTEXT_KEY_CHARS } from './toolContext';
 import { coercePresetParametersToSchema } from './toolPresetParameters';
 
@@ -36,7 +36,9 @@ const DOUBLE_CURLY_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
 // An unresolved `secret:${...}` placeholder is as valid as a resolved
 // `secret:sec_...`: a formation template is statically validated before `${...}`
 // tokens resolve, so it is legitimate source, not an authoring mistake.
-const VALID_SECRET_TOKEN_RE = /^secret:(sec_[A-Za-z0-9]+|\$\{[^}]+\})$/;
+const VALID_SECRET_TOKEN_RE = new RegExp(
+  `^secret:(${SECRET_ID_PATTERN}|\\$\\{[^}]+\\})$`
+);
 
 // A context key reaches an outbound header name via `tool_context`, so the same
 // key grammar applies here. `${...}` is accepted for the same formation reason
@@ -229,7 +231,7 @@ export const assertValidToolTemplateTokens = (args: {
  * row is written — so this grammar is the strict one.
  */
 const RESOLVABLE_TOKEN_RE = new RegExp(
-  `\\{\\{(secret:sec_[A-Za-z0-9]+|context:[${TOOL_CONTEXT_KEY_CHARS}]+)\\}\\}`,
+  `\\{\\{(secret:${SECRET_ID_PATTERN}|context:[${TOOL_CONTEXT_KEY_CHARS}]+)\\}\\}`,
   'g'
 );
 

@@ -51,6 +51,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `node_attempt`              | number \| null | The node's 1-based retry attempt, so a retried node's generations are told apart (see [Finding an orchestration run's generations](#finding-an-orchestration-runs-generations)) |
 | `agent_version`             | number \| null | Agent config version that served the generation                                                      |
 | `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation; `null` for ordinary traffic     |
+| `idempotency_key`           | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once)) |
 | `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
 | `extraction`                | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))  |
 | `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |

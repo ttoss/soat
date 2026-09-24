@@ -300,7 +300,7 @@ Two more things this refuses, for the same reason:
 - **Clearing the bag.** `"metadata": null` on [`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document) is a write of the metadata, so a `required` field refuses it.
 - **Moving a document in.** Repathing a document into `/reports` is judged against `/reports`, because the move is what changed which rule applies.
 
-A document that carries **no** metadata at all is never refused — [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) files a document before anyone can attach any, so a prefix nothing could be filed under would be a worse guarantee than none.
+A document that carries **no** metadata is judged as carrying an empty bag, so under `/reports` it is refused for the missing `quarter`. [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) carries no bag at all: the document it files is judged when metadata is first written to it.
 
 ---
 
@@ -597,7 +597,7 @@ A corpus whose structure is stated once and enforced everywhere it is written:
 |---|---|
 | A prefix is a path boundary | `/reports` covers `/reports/q1.txt`, never `/reports-archive/q1.txt` |
 | The longest matching prefix decides, alone | `/reports/legal` replaces `/reports` for what it covers |
-| The schema governs the bag, not its existence | A document with no metadata is never refused; clearing one is |
+| No bag is an empty bag | A create without metadata and a clearing `null` are both judged as `{}` |
 | Tightening applies forward | Stored documents are untouched; the next write of those fields is judged |
 | The check is not the enforcement | `validate` reports; the document write path refuses |
 

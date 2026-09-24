@@ -86,7 +86,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   NAME_CONFLICT:
     'A resource with this name already exists in the project. Pick another name, or update the existing resource instead of creating a second one.',
   IDEMPOTENCY_KEY_REUSED:
-    'Send the changed request under a new `idempotency_key`; repeating the original body under this key replays the run it already names.',
+    'Send the changed request under a new `idempotency_key`; repeating the original body under this key replays what it already names.',
   ORCHESTRATION_VALIDATION_FAILED:
     'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `POST /api/v1/orchestrations/{orchestration_id}/validate` reports every problem at once.',
   ORCHESTRATION_CYCLE_DETECTED:

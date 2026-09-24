@@ -243,7 +243,7 @@ export const createDocument = async (
   await assertCreatedDocumentMetadataValid({
     projectId: args.projectId,
     path: filing.normalizedPath,
-    metadata: args.metadata,
+    metadata: args.metadata ?? null,
   });
 
   const file = await createDocumentTextFile({

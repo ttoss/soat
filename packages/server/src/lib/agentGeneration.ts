@@ -15,6 +15,12 @@ import { type GenerationResult } from './agentGenerationTypes';
 import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
+import {
+  claimKeyedGeneration,
+  type GenerationIdempotency,
+  type ReplayedGeneration,
+  type RequestedGenerationArgs,
+} from './generationIdempotency';
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
@@ -23,6 +29,7 @@ import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { assertValidToolContextKeys } from './toolContext';
+import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:generation');
 
@@ -96,6 +103,7 @@ const resolveContextAndRecord = async (args: {
   guardrailContext?: Record<string, unknown> | null;
   pinnedAgentVersion?: number | null;
   source?: string | null;
+  idempotency?: GenerationIdempotency;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -164,7 +172,11 @@ const resolveContextAndRecord = async (args: {
     // eval dataset item long after the request that produced it is gone.
     inputMessages: ctx.inputMessages,
     toolSurface: ctx.toolSurface,
+    idempotency: args.idempotency,
   }).catch((error) => {
+    // The one write failure that must not be swallowed: a claimed key means
+    // another request already owns this generation.
+    if (args.idempotency && isUniqueViolation(error)) throw error;
     log(
       'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',
       ctx.generationId,
@@ -248,6 +260,8 @@ export type CreateGenerationArgs = {
   // Copied onto the usage event at the metering choke point, so verification
   // spend stays separable from production spend.
   source?: string | null;
+  // Written only by `claimKeyedGeneration`, which checks the key first.
+  idempotency?: GenerationIdempotency;
 };
 
 /**
@@ -331,9 +345,18 @@ const prepareGeneration = async (
     guardrailContext: args.guardrailContext,
     pinnedAgentVersion: args.pinnedAgentVersion,
     source: args.source,
+    idempotency: args.idempotency,
   });
 
   return { kind: 'ready', ctx, traceId, ...lineage };
+};
+
+/**
+ * The prep for a new generation, or the replay of the one the request's key
+ * already names.
+ */
+const claimGeneration = (args: RequestedGenerationArgs) => {
+  return claimKeyedGeneration({ request: args, prepare: prepareGeneration });
 };
 
 /**
@@ -349,24 +372,29 @@ const failureProject = (ctx: GenerationContext) => {
     : {};
 };
 
-export const createGeneration = async (
-  args: CreateGenerationArgs
-): Promise<GenerationResult | ReadableStream> => {
-  const prep = await prepareGeneration(args);
+const runPreparedGeneration = async (args: {
+  request: CreateGenerationArgs;
+  prep: GenerationPrep;
+}): Promise<GenerationResult | ReadableStream> => {
+  const { request, prep } = args;
   if (prep.kind === 'short_circuit') return prep.result;
   const { ctx, traceId, parentTraceId, rootTraceId } = prep;
 
-  log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
+  log(
+    'createGeneration: agentId=%s stream=%s',
+    request.agentId,
+    request.stream
+  );
 
   try {
     return await dispatchGeneration({
-      stream: args.stream,
+      stream: request.stream,
       ctx,
       traceId,
-      agentId: args.agentId,
+      agentId: request.agentId,
       parentTraceId,
       rootTraceId,
-      abortSignal: args.abortSignal,
+      abortSignal: request.abortSignal,
     });
   } catch (error) {
     throw await recordGenerationFailure({
@@ -377,6 +405,28 @@ export const createGeneration = async (
       ...failureProject(ctx),
     });
   }
+};
+
+export const createGeneration = async (
+  args: CreateGenerationArgs
+): Promise<GenerationResult | ReadableStream> => {
+  return runPreparedGeneration({
+    request: args,
+    prep: await prepareGeneration(args),
+  });
+};
+
+/**
+ * `createGeneration` under a caller's idempotency key: a request whose key is
+ * already claimed answers the handle of the generation it names and runs
+ * nothing.
+ */
+export const createIdempotentGeneration = async (
+  args: RequestedGenerationArgs & { idempotencyKey: string }
+): Promise<GenerationResult | ReadableStream | ReplayedGeneration> => {
+  const prep = await claimGeneration(args);
+  if (prep.kind === 'replay') return prep.replayed;
+  return runPreparedGeneration({ request: args, prep });
 };
 
 /** The handle a background generation hands back in place of a result. */
@@ -398,9 +448,10 @@ export type AcceptedGeneration = {
  * receive it.
  */
 export const startGeneration = async (
-  args: CreateGenerationArgs
+  args: RequestedGenerationArgs
 ): Promise<AcceptedGeneration> => {
-  const prep = await prepareGeneration(args);
+  const prep = await claimGeneration(args);
+  if (prep.kind === 'replay') return prep.replayed;
   if (prep.kind === 'short_circuit') {
     // The depth guard already produced a terminal record; hand back its ids so
     // the caller polls the same generation it would have received inline.

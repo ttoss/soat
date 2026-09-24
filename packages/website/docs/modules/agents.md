@@ -104,6 +104,7 @@ One agent execution; its steps are on its [trace](./traces.md).
 | `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)            |
 | `started_by_principal_type` | string/null | Type of the principal that triggered the generation                   |
 | `started_by_principal_id`   | string/null | Public id of that principal                                           |
+| `idempotency_key`           | string/null | Key the generation was started under — see [Running a generation at most once](#running-a-generation-at-most-once) |
 | `created_at`                | string      | ISO 8601 creation timestamp                                           |
 
 #### Generation Status
@@ -325,6 +326,21 @@ Validated on write: an unknown `type`, a `has_tool_call` without `tool_name`, or
 `?wait=true` returns the result inline. `requires_action` (client tools) is observable only in a waited response, so client-tool flows must pass it. `stream` and `builtin` tool calls always wait; platform-wide contract in [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md).
 
 The inline result's `ai_provider_id` is the [AI provider](./ai-providers.md) that served `output.model` (a [model route](./model-routes.md)'s picked target, or the pinned provider; two providers in a project can serve one model name), `null` when none was resolved. The [`tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) result carries the same field.
+
+#### Running a generation at most once
+
+Pass `idempotency_key` in the body so a redelivered or retried request (an at-least-once webhook, a gateway `RESUME`, a timeout) does not run the agent twice:
+
+```json
+{
+  "messages": [{ "role": "user", "content": "File this ticket." }],
+  "idempotency_key": "discord-1287654321098765432"
+}
+```
+
+The first request under a key runs as usual. Every later request carrying it runs nothing and answers `202` with the handle of the generation the key names, in whatever state it has reached — whether the request is background, `?wait=true` or `stream: true`, and including a retry that arrives while the original is still running. Read the result through [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) and [`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript).
+
+The key is scoped to the project and claimed by the generation record for as long as the record exists. Every other body field except `stream` is the request a key names: reusing a key with any of them changed, or on another agent of the project, is `409 IDEMPOTENCY_KEY_REUSED` and runs nothing. `stream` and `wait` are not compared. [Session messages](./sessions.md#idempotency) dedupe the same way per session; [orchestration runs](./orchestrations.md#starting-a-run-at-most-once) per project.
 
 #### Tool Output Message Content
 

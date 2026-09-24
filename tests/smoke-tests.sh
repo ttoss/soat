@@ -3478,8 +3478,10 @@ echo "Prompt caching toggle OK"
 
 # 21. Run the agent — ask it to list projects (non-streaming)
 echo "--- Running agent generation ---"
+GEN_IDEM_KEY="smoke-gen-$$"
 GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
-  --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' | sanitize_json)
+  --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' \
+  --idempotency-key "$GEN_IDEM_KEY" | sanitize_json)
 echo "Generation response:"
 printf '%s\n' "$GEN_RESP" | jq .
 
@@ -3521,6 +3523,17 @@ if ! printf '%s\n' "$GEN_GET_RESP" | jq -e '.metadata.team == "payments" and .me
   exit 1
 fi
 echo "Generation metadata round-trip: OK"
+
+echo "--- Idempotent generation retry ---"
+GEN_IDEM_RETRY=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' \
+  --idempotency-key "$GEN_IDEM_KEY" | sanitize_json)
+if [ "$(printf '%s\n' "$GEN_IDEM_RETRY" | jq -r '.generation_id')" != "$GEN_ID" ]; then
+  echo "ERROR: a retry under the same idempotency_key did not replay generation $GEN_ID" >&2
+  printf '%s\n' "$GEN_IDEM_RETRY" >&2
+  exit 1
+fi
+echo "Idempotent generation retry: OK"
 
 # 22a3. output_schema is enforced on the way back, not just sent to the provider.
 # A generation that completes here means enforcement is off.

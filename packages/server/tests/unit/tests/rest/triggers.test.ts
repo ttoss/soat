@@ -1078,6 +1078,76 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
     });
 
+    // A firing resolves only the id form; any other `{{secret:...}}` reaches
+    // the target as a literal, so it is refused on the write that declared it.
+    test('a {{secret:...}} naming a secret by name is refused at create', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-secret-name-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { ocaToken: '{{secret:probe-no-such-secret}}' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+      expect(res.body.error.meta.tokens).toEqual([
+        '{{secret:probe-no-such-secret}}',
+      ]);
+    });
+
+    test('a name reference is refused even when a secret of that name exists', async () => {
+      const secretName = `trigger-ctx-by-name-${Date.now()}`;
+      const secret = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: secretName, value: 'v' });
+      expect(secret.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-secret-existing-name-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { ocaToken: `Bearer {{secret:${secretName}}}` },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('a name reference is refused on update and the stored bag is kept', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-secret-name-update-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { advertiserId: 'adv_123' },
+        });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${created.body.id}`)
+        .send({
+          tool_context: { ocaToken: '{{secret:probe-no-such-secret}}' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+      const stored = await db.Trigger.findOne({
+        where: { publicId: created.body.id },
+      });
+      expect(stored?.toolContext).toEqual({ advertiserId: 'adv_123' });
+    });
+
     test('a firing forwards the stored bag to the run it starts', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
@@ -1112,7 +1182,7 @@ describe('Triggers', () => {
     });
 
     // The point of allowing a stored bag: the credential lives in the secret
-    // store and the trigger holds only its name, resolved per firing so a
+    // store and the trigger holds only its id, resolved per firing so a
     // rotation takes effect without touching the trigger.
     test('a {{secret:...}} value is resolved at fire time', async () => {
       const secret = await authenticatedTestClient(userToken)
@@ -1371,6 +1441,79 @@ describe('Triggers', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       expect(res.body.resources[0].status).toBe('failed');
+    });
+
+    test('a formation-declared bag is held to the same secret reference rule', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ctx-formation-secret-name-${Date.now()}`,
+          template: {
+            resources: {
+              CtxNameTrigger: {
+                type: 'trigger',
+                properties: {
+                  name: `ctx-tpl-secret-name-${Date.now()}`,
+                  type: 'manual',
+                  target_type: 'agent',
+                  target_id: agentId,
+                  tool_context: { ocaToken: '{{secret:probe-no-such-secret}}' },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.resources[0].status).toBe('failed');
+    });
+
+    // A `${...}` placeholder is substituted before the trigger is written, so
+    // the stored bag holds the id form a firing resolves.
+    test('a formation-declared bag may reference a template secret by sub', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ctx-formation-secret-sub-${Date.now()}`,
+          template: {
+            resources: {
+              CtxSecret: {
+                type: 'secret',
+                properties: {
+                  name: `ctx-tpl-secret-${Date.now()}`,
+                  value: 'v',
+                },
+              },
+              CtxSubTrigger: {
+                type: 'trigger',
+                properties: {
+                  name: `ctx-tpl-secret-sub-${Date.now()}`,
+                  type: 'manual',
+                  target_type: 'agent',
+                  target_id: agentId,
+                  tool_context: {
+                    ocaToken: { sub: '{{secret:${CtxSecret}}}' },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      const triggerId = res.body.resources.find((r: { logical_id: string }) => {
+        return r.logical_id === 'CtxSubTrigger';
+      }).physical_resource_id;
+      const stored = await db.Trigger.findOne({
+        where: { publicId: triggerId },
+      });
+      expect(stored?.toolContext).toEqual({
+        ocaToken: expect.stringMatching(/^\{\{secret:sec_[A-Za-z0-9]+\}\}$/),
+      });
     });
   });
 

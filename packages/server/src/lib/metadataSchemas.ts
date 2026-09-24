@@ -379,10 +379,14 @@ const resolveCheckedProjectId = async (args: {
 type DocumentMetadataCheck = {
   projectId: number;
   path: string | null;
+  /** `null` when the document carries no bag. */
   metadata: Record<string, unknown> | null;
 };
 
-/** A violation, or `null` when nothing governs the pair or it satisfies what does. */
+/**
+ * A violation, or `null` when nothing governs the pair or it satisfies what
+ * does. The one verdict the dry run and every gate read; no bag is an empty one.
+ */
 const findViolation = async (
   args: DocumentMetadataCheck
 ): Promise<{ declaration: MetadataSchemaRow; detail: string } | null> => {
@@ -456,27 +460,17 @@ const assertValid = async (args: DocumentMetadataCheck): Promise<void> => {
   );
 };
 
-/**
- * Judges a document create. Only a write that states metadata is judged: the
- * schema governs the bag, not whether the document carries one.
- */
-export const assertCreatedDocumentMetadataValid = async (args: {
-  projectId: number;
-  path: string | null;
-  metadata?: Record<string, unknown> | null;
-}): Promise<void> => {
-  if (args.metadata === undefined) return;
-  return assertValid({ ...args, metadata: args.metadata });
-};
+/** Judges a document create, which states its bag even by omitting it. */
+export const assertCreatedDocumentMetadataValid = assertValid;
 
 /**
  * Judges a document update against the pair it leaves behind.
  *
  * A move is judged too, because it changes which schema applies — a document
- * carrying metadata cannot be walked into a prefix it does not satisfy. A write
- * touching neither half is not re-judged: tightening a schema refuses the next
- * write of the fields it governs, and does not retroactively freeze every
- * document already stored.
+ * cannot be walked into a prefix its bag, or its lack of one, does not satisfy.
+ * A write touching neither half is not re-judged: tightening a schema refuses
+ * the next write of the fields it governs, and does not retroactively freeze
+ * every document already stored.
  */
 export const assertUpdatedDocumentMetadataValid = async (args: {
   projectId: number;
@@ -489,19 +483,12 @@ export const assertUpdatedDocumentMetadataValid = async (args: {
   /** What the document holds now. */
   currentMetadata: Record<string, unknown> | null;
 }): Promise<void> => {
-  const statesMetadata = args.metadata !== undefined;
-  const moves = args.path !== undefined;
-
-  if (!statesMetadata && !moves) return;
-
-  const metadata =
-    args.metadata !== undefined ? args.metadata : args.currentMetadata;
-  // A move carries nothing to judge when the document holds no metadata.
-  if (!statesMetadata && metadata === null) return;
+  if (args.metadata === undefined && args.path === undefined) return;
 
   return assertValid({
     projectId: args.projectId,
     path: args.path !== undefined ? args.path : args.currentPath,
-    metadata,
+    metadata:
+      args.metadata !== undefined ? args.metadata : args.currentMetadata,
   });
 };

@@ -55,6 +55,14 @@ import { Trace } from './Trace';
       name: 'generations_orchestration_run_id_node_id_idx',
       fields: ['orchestration_run_id', 'node_id'],
     },
+    // Settles the race a retried request runs against its own first attempt.
+    // Null keys do not conflict in Postgres, so an unkeyed generation claims
+    // nothing.
+    {
+      name: 'generations_project_id_idempotency_key_unique',
+      unique: true,
+      fields: ['project_id', 'idempotency_key'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: Generation) => {
@@ -293,6 +301,16 @@ export class Generation extends Model {
   // zero-retention never writes it and a purge clears it.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare inputMessages: unknown[] | null;
+
+  // The caller's deduplication key, claimed for as long as this row exists.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare idempotencyKey: string | null;
+
+  // SHA-256 of the request the key names, so a key reused for a different
+  // request is refused. A digest, not the fields: the request carries values
+  // (`tool_context`, `guardrail_context`) no other column stores.
+  @Column({ type: DataType.STRING(64), allowNull: true })
+  declare idempotencyDigest: string | null;
 
   // Set once the content fields are cleared. The skeleton the billing/audit
   // ledger depends on survives.

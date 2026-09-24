@@ -1060,3 +1060,63 @@ describe('2026-09-22-tag-bag-gin-indexes', () => {
     expect(result.applied).toEqual([]);
   });
 });
+
+describe('2026-09-24-generation-idempotency-key', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await client.query(`
+      CREATE TABLE generations (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        project_id integer NOT NULL
+      );
+
+      INSERT INTO generations (public_id, project_id) VALUES ('gen_existing', 1);
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-24-generation-idempotency-key'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('the key and digest columns exist', async () => {
+    expect(
+      await columnType({
+        client,
+        table: 'generations',
+        column: 'idempotency_key',
+      })
+    ).toBe('character varying');
+    expect(
+      await columnType({
+        client,
+        table: 'generations',
+        column: 'idempotency_digest',
+      })
+    ).toBe('character varying');
+  });
+
+  test('an existing generation claims no key', async () => {
+    const [row] = await selectRows<{ idempotency_key: string | null }>({
+      client,
+      sql: `SELECT idempotency_key FROM generations WHERE public_id = 'gen_existing'`,
+    });
+
+    expect(row.idempotency_key).toBeNull();
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-24-generation-idempotency-key'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});

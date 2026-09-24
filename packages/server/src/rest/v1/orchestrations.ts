@@ -31,6 +31,7 @@ import {
   resolveReadProjectIds,
   writePreconditionOf,
 } from './helpers';
+import { parseIdempotencyKey } from './idempotencyKey';
 import {
   authorizeOrchestrationRead,
   authorizeOrchestrationWrite,
@@ -42,7 +43,6 @@ import {
   resolveStartRunScope,
 } from './orchestrationAuth';
 import {
-  parseIdempotencyKey,
   parseRunInput,
   parseUpdateBody,
   parseVersionLabel,

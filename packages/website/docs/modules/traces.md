@@ -43,7 +43,7 @@ Every agent generation records a trace: the model's steps, tool invocations, inp
 
 ### Generation Failures
 
-When a generation fails (e.g. a provider error), the structured error is recorded on the trace's `error` field and on the generation record, distinguishing failed runs from not-yet-started ones (both `step_count: 0`).
+When a generation fails (e.g. a provider error), the structured error is recorded on the trace's `error` field and on the generation record, distinguishing failed runs from not-yet-started ones. The steps the turn completed before failing are kept, so a turn whose final answer fails `output_schema` still shows the tool calls it made; a failure before the first step leaves `step_count: 0`.
 
 ### Step Serialization and File Linkage
 
