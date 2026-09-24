@@ -978,6 +978,18 @@ components:
         parallelism:
           type: integer
           description: For loop nodes — number of items to process in parallel.
+        on_item_error:
+          type: string
+          enum: [fail, collect]
+          description: >-
+            For loop nodes — what a failed item does. `fail` (the default)
+            fails the node on the first item whose child run settles
+            `failed`, `cancelled` or `expired`. `collect` keeps going: that
+            item's entry in `results` becomes `{ "error": { "code",
+            "message" }, "orchestration_run_id" }`, in its original position.
+            Either way the artifact carries `failed_count`. A child run that
+            could not be started (for example past the nesting depth bound)
+            fails the node in both modes.
         context_keys:
           type: array
           nullable: true

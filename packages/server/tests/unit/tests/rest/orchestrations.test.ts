@@ -3711,6 +3711,138 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('succeeded');
     });
 
+    describe('loop node on_item_error', () => {
+      let flakyChildId: string;
+
+      // A multi-key `map` mapper is invalid JSON Logic, but it is only
+      // evaluated per element: an empty item succeeds, a non-empty one fails.
+      const createFlakyChild = async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Flaky Loop Child',
+            nodes: [
+              {
+                id: 'read',
+                type: 'transform',
+                expression: {
+                  map: [{ var: 'input.item' }, { a: { var: '' }, b: 1 }],
+                },
+              },
+            ],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(res.status).toBe(201);
+        return res.body.id as string;
+      };
+
+      const createLoop = async (onItemError?: string) => {
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Loop Item Errors',
+            nodes: [
+              {
+                id: 'fan',
+                type: 'loop',
+                orchestration_id: flakyChildId,
+                collection: 'state.input.items',
+                item_variable: 'item',
+                ...(onItemError === undefined
+                  ? {}
+                  : { on_item_error: onItemError }),
+                state_mapping: {
+                  'state.results': { var: 'output.results' },
+                  'state.failed_count': { var: 'output.failed_count' },
+                },
+              },
+            ],
+            edges: [],
+            project_id: projectId,
+          });
+      };
+
+      const runLoop = async (orchestrationId: string) => {
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: orchestrationId,
+            input: { items: [[], ['bad'], []] },
+          });
+      };
+
+      beforeAll(async () => {
+        flakyChildId = await createFlakyChild();
+      });
+
+      test('one failed item fails the run by default', async () => {
+        const createRes = await createLoop();
+        expect(createRes.status).toBe(201);
+
+        const runRes = await runLoop(createRes.body.id);
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('failed');
+      });
+
+      test('collect keeps every succeeded item and records the failed one in place', async () => {
+        const createRes = await createLoop('collect');
+        expect(createRes.status).toBe(201);
+        expect(createRes.body.nodes[0].on_item_error).toBe('collect');
+
+        const runRes = await runLoop(createRes.body.id);
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('succeeded');
+
+        const results = runRes.body.state.results;
+        expect(results).toHaveLength(3);
+        expect(results[0]).toEqual({ read: { result: [] } });
+        expect(results[2]).toEqual({ read: { result: [] } });
+        // The child fails with an unregistered code, so the entry carries the
+        // same fallback the default mode would have failed the run with.
+        expect(results[1]).toEqual({
+          error: {
+            code: 'ORCHESTRATION_NESTED_RUN_FAILED',
+            message: expect.any(String),
+          },
+          orchestration_run_id: expect.any(String),
+        });
+        expect(runRes.body.state.failed_count).toBe(1);
+
+        const childRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs/${results[1].orchestration_run_id}`
+        );
+        expect(childRes.status).toBe(200);
+        expect(childRes.body.status).toBe('failed');
+        expect(childRes.body.error.message).toBe(results[1].error.message);
+      });
+
+      test('failed_count is zero when every item succeeds', async () => {
+        const createRes = await createLoop('fail');
+        expect(createRes.status).toBe(201);
+
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: createRes.body.id,
+            input: { items: [[], []] },
+          });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('succeeded');
+        expect(runRes.body.state.failed_count).toBe(0);
+      });
+
+      test('an unknown value is rejected at create', async () => {
+        const createRes = await createLoop('ignore');
+        expect(createRes.status).toBe(400);
+        expect(createRes.body.error.code).toBe(
+          'ORCHESTRATION_VALIDATION_FAILED'
+        );
+      });
+    });
+
     // Regression: https://github.com/ttoss/soat/issues/379 — a `loop` node
     // anywhere in the graph blanket-exempted cycle detection, so a totally
     // unrelated cycle between non-loop nodes (`a -> b -> a`) slipped through

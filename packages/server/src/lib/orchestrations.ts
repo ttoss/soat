@@ -66,6 +66,10 @@ export type NodeRetryPolicy = {
   };
 };
 
+export const LOOP_ITEM_ERROR_MODES = ['fail', 'collect'] as const;
+
+export type LoopItemErrorMode = (typeof LOOP_ITEM_ERROR_MODES)[number];
+
 export type OrchestrationNode = {
   id: string;
   type: OrchestratorNodeType;
@@ -94,6 +98,10 @@ export type OrchestrationNode = {
   collection?: string;
   itemVariable?: string;
   parallelism?: number;
+  // loop node — `collect` records a failed item's run in `results` instead of
+  // failing the node. Only a child run that settled; a refusal to start one
+  // still fails the node.
+  onItemError?: LoopItemErrorMode;
   // loop / sub_orchestration node — narrows the run's `tool_context` before it
   // is handed to the child run, the way a tool's `contextKeys` narrows what
   // egresses to it. `undefined`/`null` inherits everything.
