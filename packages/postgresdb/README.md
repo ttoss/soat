@@ -68,6 +68,7 @@ The flow they follow is
 | `2026-09-18-orchestration-run-idempotency-key` | `orchestration_runs.idempotency_key`, unique per project |
 | `2026-09-22-tag-bag-gin-indexes` | a GIN index with `jsonb_path_ops` over every `tags` column, so a containment match is a lookup rather than a scan |
 | `2026-09-24-generation-idempotency-key` | `generations.idempotency_key`, unique per project, and `generations.idempotency_digest` |
+| `2026-09-24-api-key-sha256` | `api_keys.key_hash_sha256`, unique, the SHA-256 a key is verified by; `api_keys.key_hash` nullable |
 
 Run them from the server package, which owns the entrypoint:
 

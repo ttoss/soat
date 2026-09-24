@@ -15,6 +15,7 @@ import { durableEventFirings } from './2026-09-21-durableEventFirings';
 import { memoryVersion } from './2026-09-21-memoryVersion';
 import { fileMetadataJsonb } from './2026-09-22-fileMetadataJsonb';
 import { tagBagGinIndexes } from './2026-09-22-tagBagGinIndexes';
+import { apiKeySha256 } from './2026-09-24-apiKeySha256';
 import { generationIdempotencyKey } from './2026-09-24-generationIdempotencyKey';
 
 /**
@@ -53,4 +54,5 @@ export const MIGRATIONS: Migration[] = [
   fileMetadataJsonb,
   tagBagGinIndexes,
   generationIdempotencyKey,
+  apiKeySha256,
 ];

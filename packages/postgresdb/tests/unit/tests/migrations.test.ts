@@ -1120,3 +1120,75 @@ describe('2026-09-24-generation-idempotency-key', () => {
     expect(result.applied).toEqual([]);
   });
 });
+
+describe('2026-09-24-api-key-sha256', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await client.query(`
+      CREATE TABLE api_keys (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        key_prefix varchar(8) NOT NULL,
+        key_hash varchar(255) NOT NULL
+      );
+
+      INSERT INTO api_keys (public_id, key_prefix, key_hash)
+        VALUES ('key_legacy', 'sk_abcde', '$2b$10$legacy');
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-24-api-key-sha256'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('the SHA-256 column exists', async () => {
+    expect(
+      await columnType({
+        client,
+        table: 'api_keys',
+        column: 'key_hash_sha256',
+      })
+    ).toBe('character varying');
+  });
+
+  test('a key can be stored without a bcrypt hash', async () => {
+    await client.query(`
+      INSERT INTO api_keys (public_id, key_prefix, key_hash_sha256)
+        VALUES ('key_new', 'sk_12345', '${'0'.repeat(64)}');
+    `);
+
+    expect(
+      await countRows({
+        client,
+        sql: `SELECT count(*) FROM api_keys WHERE key_hash IS NULL`,
+      })
+    ).toBe(1);
+  });
+
+  test('an existing key keeps its bcrypt hash and has no SHA-256 yet', async () => {
+    const [row] = await selectRows<{
+      key_hash: string | null;
+      key_hash_sha256: string | null;
+    }>({
+      client,
+      sql: `SELECT key_hash, key_hash_sha256 FROM api_keys WHERE public_id = 'key_legacy'`,
+    });
+
+    expect(row).toEqual({ key_hash: '$2b$10$legacy', key_hash_sha256: null });
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-24-api-key-sha256'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});
