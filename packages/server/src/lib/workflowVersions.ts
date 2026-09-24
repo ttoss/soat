@@ -153,7 +153,7 @@ export const restoreWorkflowVersion = async (args: {
   workflowId: string;
   version: number;
   label?: string | null;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }): Promise<MappedWorkflow> => {
   // Appends rather than rewinding the counter, so a task pinned to any version
   // in between still resolves the machine it entered on. A restore is an

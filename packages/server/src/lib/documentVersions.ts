@@ -180,7 +180,7 @@ export const restoreDocumentVersion = async (args: {
   documentId: string;
   version: number;
   label?: string | null;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }) => {
   const document = await loadDocumentRef({ id: args.documentId });
   const withdrawn = await isWithdrawn({ documentDbId: document.dbId });

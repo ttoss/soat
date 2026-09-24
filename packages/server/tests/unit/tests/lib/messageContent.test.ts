@@ -187,6 +187,7 @@ describe('resolveMessageContent', () => {
 
   test('resolves document content', async () => {
     const doc = await createDocument({
+      createdByUserId: null,
       projectId,
       content: 'document content',
       path: '/docs/spec.md',
@@ -328,6 +329,7 @@ describe('resolveMessageContent', () => {
 
   test('rejects document content when caller lacks document permission', async () => {
     const doc = await createDocument({
+      createdByUserId: null,
       projectId,
       content: 'restricted',
       path: '/docs/restricted.md',
@@ -346,6 +348,7 @@ describe('resolveMessageContent', () => {
 
   test('rejects document content when agent boundary denies document access', async () => {
     const doc = await createDocument({
+      createdByUserId: null,
       projectId,
       content: 'boundary-blocked',
       path: '/docs/boundary.md',

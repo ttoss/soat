@@ -110,6 +110,7 @@ const seed = async (): Promise<Fixtures> => {
   const projectId = projectRow!.id as number;
 
   const document = await createDocument({
+    createdByUserId: null,
     projectId,
     content: CONTENT.document,
     path: '/yard/handbook.txt',

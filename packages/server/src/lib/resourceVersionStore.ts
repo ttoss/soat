@@ -60,7 +60,8 @@ type WriteVersionArgs = {
   version: number;
   config: ConfigSnapshot;
   label?: string | null;
-  createdByUserId?: number | null;
+  /** Required so a write path states its author; `null` is a platform write. */
+  createdByUserId: number | null;
   transaction?: Transaction;
 };
 
@@ -93,7 +94,8 @@ type CommitConfigChangeArgs = {
     after: ConfigSnapshot;
   }>;
   label?: string | null;
-  createdByUserId?: number | null;
+  /** Required so a write path states its author; `null` is a platform write. */
+  createdByUserId: number | null;
 };
 
 type AssertWritableArgs = {

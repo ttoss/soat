@@ -57,6 +57,7 @@ describe('client-tool guardrail gate (requires_action handoff)', () => {
 
   const makeGuardrail = async (document: object): Promise<string> => {
     const guardrail = await createGuardrail({
+      createdByUserId: null,
       projectId,
       name: `client-guard-${Math.abs(JSON.stringify(document).length)}-${Math.random()}`,
       document,

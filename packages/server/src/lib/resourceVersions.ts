@@ -195,7 +195,7 @@ type ArchiveAdapter<TMappedVersion, TMappedResource> = {
     version: number;
     config: ConfigSnapshot;
     label: string | null;
-    createdByUserId?: number | null;
+    createdByUserId: number | null;
   }) => Promise<TMappedResource>;
 };
 
@@ -214,7 +214,7 @@ type GetVersionArgs = {
 
 type RestoreVersionArgs = GetVersionArgs & {
   label?: string | null;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 };
 
 /** The archive's read side: list and fetch, no writes. */
@@ -290,7 +290,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
    * and a config identical to the live one is recognised as a no-op.
    */
   const applyArchivedVersion = async (
-    a: GetVersionArgs & { label: string; createdByUserId?: number | null }
+    a: GetVersionArgs & { label: string; createdByUserId: number | null }
   ): Promise<TMappedResource> => {
     const resource = await args.loadResource({
       projectIds: a.projectIds,

@@ -105,7 +105,7 @@ export const restoreGuardrailVersion = async (args: {
   guardrailId: string;
   version: number;
   label?: string | null;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }): Promise<MappedGuardrail> => {
   // Appends a new version rather than rewinding the counter, so an evaluation
   // record citing any version in between still resolves.

@@ -10,7 +10,7 @@ import { authenticatedTestClient } from '../../testClient';
  * read after it is a defect in all of them at once. Each write here must answer
  * the `version` and `updated_at` the next `GET` returns, bump the version by
  * exactly one, and, where the resource archives its config, add exactly one
- * history row.
+ * history row naming the caller as its author.
  */
 
 type Write = {
@@ -30,6 +30,7 @@ type Driver = {
 
 describe('versioned write contract', () => {
   let userToken: string;
+  let userId: string;
   let projectId: string;
   let aiProviderId: string;
   let seq = 0;
@@ -248,6 +249,7 @@ describe('versioned write contract', () => {
       ],
     });
     userToken = setup.userToken;
+    userId = setup.userId;
     projectId = setup.projectId;
 
     const provider = await authenticatedTestClient(setup.adminToken)
@@ -292,6 +294,9 @@ describe('versioned write contract', () => {
       version: res.body.version as number,
       updated_at: res.body.updated_at as string,
       history: history ? (history.body.data as unknown[]).length : undefined,
+      author: history
+        ? (history.body.data as { created_by: string | null }[])[0]?.created_by
+        : undefined,
     };
   };
 
@@ -301,6 +306,12 @@ describe('versioned write contract', () => {
       const driver = drivers[model];
       const id = await driver.create();
       let previous = await readState(driver, id);
+      if (driver.archived) {
+        expect({ write: 'create', author: previous.author }).toEqual({
+          write: 'create',
+          author: userId,
+        });
+      }
 
       for (const write of driver.writes) {
         const res = await write.send(id);
@@ -327,6 +338,10 @@ describe('versioned write contract', () => {
           expect({ write: write.name, history: current.history }).toEqual({
             write: write.name,
             history: (previous.history as number) + 1,
+          });
+          expect({ write: write.name, author: current.author }).toEqual({
+            write: write.name,
+            author: userId,
           });
         }
         previous = current;

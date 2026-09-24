@@ -198,7 +198,8 @@ export const assertWritePrecondition = (args: {
  * accept one.
  */
 export type VersionedWrite = {
-  createdByUserId?: number | null;
+  /** Required so every write path states its author; `null` is a platform write. */
+  createdByUserId: number | null;
   versionLabel?: string | null;
   /** `null`/absent states no precondition; see {@link readWritePrecondition}. */
   expectedVersion?: number | null;

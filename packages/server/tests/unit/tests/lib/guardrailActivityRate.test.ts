@@ -139,6 +139,7 @@ describe('guardrail activity-rate context', () => {
 
   const makeGuardrail = async (document: object): Promise<string> => {
     const guardrail = await createGuardrail({
+      createdByUserId: null,
       projectId,
       name: `activity-rate-${Math.random().toString(36).slice(2, 10)}`,
       document,

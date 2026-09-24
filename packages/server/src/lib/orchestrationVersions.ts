@@ -131,7 +131,7 @@ export const restoreOrchestrationVersion = async (args: {
   orchestrationId: string;
   version: number;
   label?: string | null;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }): Promise<MappedOrchestration> => {
   // Appends rather than rewinding the counter, so a run pinned to any version
   // in between still resolves the graph it started on. A restore is an ordinary

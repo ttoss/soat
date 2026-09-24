@@ -88,16 +88,19 @@ const seed = async (): Promise<Fixtures> => {
   const projectId = projectRow!.id as number;
 
   const lexicalOnly = await createDocument({
+    createdByUserId: null,
     projectId,
     content: CONTENT.lexicalOnlyDocument,
     path: '/parts/lexical-only.txt',
   });
   const vectorOnly = await createDocument({
+    createdByUserId: null,
     projectId,
     content: CONTENT.vectorOnlyDocument,
     path: '/parts/vector-only.txt',
   });
   const bothSignals = await createDocument({
+    createdByUserId: null,
     projectId,
     content: CONTENT.bothSignalsDocument,
     path: '/parts/both-signals.txt',
@@ -590,6 +593,7 @@ describe('ranking does not allocate result slots by store', () => {
 
     for (let index = 0; index < DOCUMENT_COSINES.length; index += 1) {
       const created = await createDocument({
+        createdByUserId: null,
         projectId,
         content: documentContent(index),
         path: `/reviews/section-${index}.txt`,

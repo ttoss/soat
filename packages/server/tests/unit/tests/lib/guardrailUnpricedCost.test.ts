@@ -156,6 +156,7 @@ describe('guardrail cost ceiling over an unpriced window', () => {
     document: object;
   }): Promise<string> => {
     const guardrail = await createGuardrail({
+      createdByUserId: null,
       projectId: args.projectId,
       name: `unpriced-cost-${Math.random().toString(36).slice(2, 10)}`,
       document: args.document,

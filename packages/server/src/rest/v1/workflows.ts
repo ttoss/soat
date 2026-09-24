@@ -95,7 +95,7 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
       workflowCollectionToCamel<WorkflowTransition>(body.transitions) ?? [],
     payloadSchema: body.payload_schema,
     versionLabel: parseVersionLabel(body.version_label),
-    createdByUserId: ctx.authUser?.id,
+    createdByUserId: ctx.authUser.id,
   });
 
   ctx.status = 201;
@@ -139,7 +139,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     payloadSchema: body.payload_schema,
     versionLabel: parseVersionLabel(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
-    createdByUserId: ctx.authUser?.id,
+    createdByUserId: ctx.authUser.id,
   });
 });
 

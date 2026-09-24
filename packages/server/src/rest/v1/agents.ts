@@ -150,7 +150,7 @@ const parseModelBinding = (body: CreateAgentBody) => {
 const buildCreateAgentArgs = (args: {
   projectId: number;
   body: CreateAgentBody;
-  createdByUserId?: number;
+  createdByUserId: number | null;
 }): Parameters<typeof createAgent>[0] => {
   const { projectId, body, createdByUserId } = args;
   return {
@@ -198,6 +198,7 @@ const runAgentUpdate = async (args: {
   projectIds: number[] | undefined;
 }) => {
   const { ctx, projectIds } = args;
+  requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
 
   const parsed = parseUpdateAgentBody(body);
@@ -218,7 +219,7 @@ const runAgentUpdate = async (args: {
     ...parsed,
     expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
-    createdByUserId: ctx.authUser?.id,
+    createdByUserId: ctx.authUser.id,
   });
 };
 
