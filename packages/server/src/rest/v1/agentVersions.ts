@@ -94,7 +94,7 @@ agentVersionsRouter.post(
       agentId: ctx.params.agent_id,
       version: parseVersionParam(ctx.params.version),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser?.id,
+      createdByUserId: ctx.authUser?.id ?? null,
     });
   }
 );
@@ -145,7 +145,7 @@ agentVersionsRouter.post(
     ctx.body = await promoteAgentRelease({
       projectIds,
       agentId: ctx.params.agent_id,
-      createdByUserId: ctx.authUser?.id,
+      createdByUserId: ctx.authUser?.id ?? null,
     });
   }
 );
@@ -166,7 +166,7 @@ agentVersionsRouter.post(
     ctx.body = await abortAgentRelease({
       projectIds,
       agentId: ctx.params.agent_id,
-      createdByUserId: ctx.authUser?.id,
+      createdByUserId: ctx.authUser?.id ?? null,
     });
   }
 );

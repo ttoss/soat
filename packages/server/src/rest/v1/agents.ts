@@ -150,7 +150,7 @@ const parseModelBinding = (body: CreateAgentBody) => {
 const buildCreateAgentArgs = (args: {
   projectId: number;
   body: CreateAgentBody;
-  createdByUserId?: number;
+  createdByUserId: number | null;
 }): Parameters<typeof createAgent>[0] => {
   const { projectId, body, createdByUserId } = args;
   return {
@@ -218,7 +218,7 @@ const runAgentUpdate = async (args: {
     ...parsed,
     expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
-    createdByUserId: ctx.authUser?.id,
+    createdByUserId: ctx.authUser?.id ?? null,
   });
 };
 
@@ -242,7 +242,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     buildCreateAgentArgs({
       projectId: targetProjectId,
       body: reqBody,
-      createdByUserId: ctx.authUser.id,
+      createdByUserId: ctx.authUser?.id ?? null,
     })
   );
 

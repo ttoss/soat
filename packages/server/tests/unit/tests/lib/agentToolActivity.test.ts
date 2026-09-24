@@ -196,6 +196,7 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
 
   test('a call blocked by a guardrail records no entry', async () => {
     const guardrail = await createGuardrail({
+      createdByUserId: null,
       projectId,
       name: `tool-activity-deny-${Math.random().toString(36).slice(2, 10)}`,
       document: { class: 'D' },

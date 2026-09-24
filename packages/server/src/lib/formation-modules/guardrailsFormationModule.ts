@@ -75,9 +75,10 @@ export const guardrailsFormationModule = defineFormationModule({
     }
   },
 
-  create: ({ properties, projectId }) => {
+  create: ({ properties, projectId, actingUserId }) => {
     return createGuardrail({
       projectId,
+      createdByUserId: actingUserId,
       name: properties.name as string,
       description: toOptionalString(properties.description),
       document: buildGuardrailDocument(properties)!,
@@ -86,9 +87,10 @@ export const guardrailsFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actingUserId }) => {
     await updateGuardrail({
       id: physicalResourceId,
+      createdByUserId: actingUserId,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       document: buildGuardrailDocument(properties),

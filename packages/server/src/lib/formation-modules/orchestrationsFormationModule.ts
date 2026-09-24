@@ -46,9 +46,10 @@ export const orchestrationsFormationModule = defineFormationModule({
     delete: 'orchestrations:DeleteOrchestration',
   },
 
-  create: ({ properties, projectId }) => {
+  create: ({ properties, projectId, actingUserId }) => {
     return createOrchestration({
       projectId,
+      createdByUserId: actingUserId,
       name: properties.name as string,
       description: toNullableString(properties.description),
       nodes: convertCollectionKeys(
@@ -64,9 +65,10 @@ export const orchestrationsFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actingUserId }) => {
     await updateOrchestration({
       id: physicalResourceId,
+      createdByUserId: actingUserId,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       nodes:

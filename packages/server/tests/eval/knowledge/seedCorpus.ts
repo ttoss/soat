@@ -124,6 +124,7 @@ export const seedGoldenCorpus = async (args: {
 
   for (const fixture of args.golden.corpus.documents) {
     const created = await createDocument({
+      createdByUserId: null,
       projectId,
       content: fixture.content,
       path: fixture.path,

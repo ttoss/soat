@@ -33,7 +33,7 @@ export const documentsFormationModule = defineFormationModule({
     delete: 'documents:DeleteDocument',
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actingUserId }) => {
     const content = properties.content as string;
     await assertStorageQuota({
       projectId,
@@ -42,6 +42,7 @@ export const documentsFormationModule = defineFormationModule({
 
     return createDocument({
       projectId,
+      createdByUserId: actingUserId,
       content,
       path: toOptionalString(properties.path) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
@@ -61,9 +62,10 @@ export const documentsFormationModule = defineFormationModule({
   // Re-chunk when the strategy (or content) changes so the deployed document
   // reflects the template instead of keeping its original chunking until an
   // out-of-band reingest.
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actingUserId }) => {
     await updateDocument({
       id: physicalResourceId,
+      createdByUserId: actingUserId,
       content: toOptionalString(properties.content) ?? undefined,
       path: toOptionalString(properties.path) ?? undefined,
       title: toOptionalString(properties.title) ?? undefined,

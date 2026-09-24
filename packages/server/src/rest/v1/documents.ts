@@ -282,6 +282,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
+    createdByUserId: ctx.authUser.id,
   });
   ctx.status = 201;
   ctx.body = doc;
@@ -335,6 +336,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     metadata: readNullableMetadataBag(body.metadata),
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     expectedVersion: writePreconditionOf(ctx),
+    createdByUserId: ctx.authUser.id,
   });
   ctx.body = updated;
 });

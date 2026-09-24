@@ -116,7 +116,7 @@ workflowVersionsRouter.post(
       workflowId,
       version: parseVersionParam(ctx.params['version'] as string),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser?.id,
+      createdByUserId: ctx.authUser?.id ?? null,
     });
   }
 );

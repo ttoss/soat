@@ -207,6 +207,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     });
 
     const guardrail = await createGuardrail({
+      createdByUserId: null,
       projectId,
       name: `${name}-route-to-approval`,
       document: { class: 'C' },

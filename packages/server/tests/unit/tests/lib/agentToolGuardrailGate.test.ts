@@ -150,6 +150,7 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
     opts?: { contextToolId?: string; contextMode?: string }
   ): Promise<string> => {
     const guardrail = await createGuardrail({
+      createdByUserId: null,
       projectId,
       name: `guard-${Math.abs(JSON.stringify(document).length)}-${toolRequests.length}`,
       document,

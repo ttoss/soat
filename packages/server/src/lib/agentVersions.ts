@@ -199,7 +199,7 @@ export const restoreAgentVersion = async (args: {
   agentId: string;
   version: number;
   label?: string | null;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }): Promise<MappedAgent> => {
   return agentVersionArchive.restoreVersion({
     projectIds: args.projectIds,
@@ -339,7 +339,7 @@ const settleRelease = async (args: {
   agentId: string;
   version: number;
   label: string;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
   evalRunDbId?: number | null;
 }): Promise<MappedAgent> => {
   await agentVersionArchive.applyArchivedVersion({
@@ -372,7 +372,7 @@ const settleRelease = async (args: {
 export const promoteAgentRelease = async (args: {
   projectIds?: number[];
   agentId: string;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }): Promise<MappedAgent> => {
   const agent = await findAgentInstance({
     projectIds: args.projectIds,
@@ -410,7 +410,7 @@ export const promoteAgentRelease = async (args: {
 export const abortAgentRelease = async (args: {
   projectIds?: number[];
   agentId: string;
-  createdByUserId?: number | null;
+  createdByUserId: number | null;
 }): Promise<MappedAgent> => {
   const agent = await findAgentInstance({
     projectIds: args.projectIds,

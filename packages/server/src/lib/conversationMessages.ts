@@ -275,6 +275,8 @@ export const addConversationMessage = async (args: {
     projectId: conversation.projectId,
     content: args.message,
     system: { module: 'conversations', dir: args.conversationId },
+    // The turn's author is an actor or agent, recorded in its tags.
+    createdByUserId: null,
     tags: conversationMessageTags({
       conversationPublicId: args.conversationId,
       ownerActorPublicId: ownerActorPublicId(conversation),
