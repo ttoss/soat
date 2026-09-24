@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.59.4](https://github.com/ttoss/soat/compare/v0.59.3...v0.59.4) (2026-09-24)
+
+### Bug Fixes
+
+* **quotas:** never meter or refuse the control-plane key; filter runs by project ([#1437](https://github.com/ttoss/soat/issues/1437)) ([b97399c](https://github.com/ttoss/soat/commit/b97399c2c4e0750de8715ec8a61cc27ff2accbd2))
+
 ## [0.59.3](https://github.com/ttoss/soat/compare/v0.59.2...v0.59.3) (2026-09-24)
 
 ### Bug Fixes
