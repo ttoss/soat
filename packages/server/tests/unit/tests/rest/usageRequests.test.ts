@@ -14,6 +14,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // sanctioned no-entry-point path) and read back through the meters listing.
 
 describe('Usage — API-request metering', () => {
+  let adminToken: string;
   let userToken: string;
   let userPublicId: string;
   let projectId: string;
@@ -26,6 +27,7 @@ describe('Usage — API-request metering', () => {
       prefix: 'usagereq',
       policyActions: ['usage:ListEvents'],
     });
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     userPublicId = setup.userId;
     projectId = setup.projectId;
@@ -175,6 +177,85 @@ describe('Usage — API-request metering', () => {
       return event.idempotencyKey?.includes(unscopedKeyId);
     });
     expect(attributed).toHaveLength(1);
+  });
+
+  /** An API key the runtime admin mints, bound to `project` when one is given. */
+  const adminKey = async (project?: string): Promise<string> => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: project ? 'admin scoped key' : 'admin control-plane key',
+        ...(project ? { project_id: project } : {}),
+      });
+    expect(res.status).toBe(201);
+    return res.body.key as string;
+  };
+
+  // The deployment's own control plane, reading a tenant's project for itself:
+  // operator traffic, not the tenant's.
+  test('an admin’s unscoped key is not counted against the project it reads', async () => {
+    resetRequestCounters();
+    const key = await adminKey();
+
+    const res = await authenticatedTestClient(key).get(
+      `/api/v1/agents?project_id=${projectId}`
+    );
+    expect(res.status).toBe(200);
+
+    const written = await flushRequestCounters({ now: new Date() });
+    expect(written).toBe(0);
+  });
+
+  // A key bound to one project is that project's traffic whoever minted it: a
+  // gateway mints every tenant's key as the admin.
+  test('a project key the admin minted is still counted', async () => {
+    resetRequestCounters();
+    const key = await adminKey(projectId);
+
+    const res = await authenticatedTestClient(key).get(
+      '/api/v1/usage/events?meter_type=api_request'
+    );
+    expect(res.status).toBe(200);
+
+    const written = await flushRequestCounters({ now: new Date() });
+    expect(written).toBe(1);
+  });
+
+  test('an admin’s unscoped key is not refused by a project’s exhausted request quota', async () => {
+    // A project of its own, so the exhausted quota blocks no other spec.
+    const project = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'usagereq quota project' });
+    expect(project.status).toBe(201);
+    const otherProjectId = project.body.id as string;
+
+    const quota = await authenticatedTestClient(adminToken)
+      .post('/api/v1/quotas')
+      .send({
+        project_id: otherProjectId,
+        scope: 'project',
+        metric: 'requests',
+        window: 'rolling_1h',
+        limit: 1,
+        mode: 'enforce',
+      });
+    expect(quota.status).toBe(201);
+
+    const tenantKey = await adminKey(otherProjectId);
+    const path = `/api/v1/usage/events?meter_type=api_request`;
+    expect((await authenticatedTestClient(tenantKey).get(path)).status).toBe(
+      200
+    );
+    // The quota is live: the project's own next request is refused.
+    expect((await authenticatedTestClient(tenantKey).get(path)).status).toBe(
+      429
+    );
+
+    const operator = await adminKey();
+    const res = await authenticatedTestClient(operator).get(
+      `/api/v1/agents?project_id=${otherProjectId}`
+    );
+    expect(res.status).toBe(200);
   });
 
   test('prices the api_request event from an effective global soat/request SKU and flushes with the default window', async () => {

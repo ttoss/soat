@@ -47,6 +47,12 @@ export type AuthUser = {
   apiKeyProjectId?: number;
   /** Public string id of the project the API key is scoped to. */
   apiKeyProjectPublicId?: string;
+  /**
+   * True for an admin's API key bound to no project and narrowed by no policy
+   * of its own: the deployment's control plane, whose requests are operator
+   * traffic rather than any project's (`requestAttribution.ts`).
+   */
+  isControlPlaneKey?: boolean;
   /** Public string id of the project an OAuth token is scoped to. */
   oauthProjectPublicId?: string;
   /**

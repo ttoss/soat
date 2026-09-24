@@ -33,7 +33,8 @@ A `requests` quota is always project-scoped (see [Scope × metric validity](#sco
 Unscoped attribution waits for authorization so a caller cannot burn an unrelated project's quota by naming its public id; a denied request increments nothing. One request counts once, however many permission checks the handler makes.
 
 - **Background drives are exempt.** Self-calls a durable run or a workflow-dispatched agent makes with a [run-as token](./orchestrations.md#durable-background-execution) are not counted, even though the token names the starting API key; they continue a request already counted on arrival.
-- **Residual exemption.** A request resolving to *no single* project is not counted: an unscoped key listing across every project it can reach (no `project_id` filter, several projects accessible, or an unscoped admin key with no attached policies). Pass a `project_id`, bind the key to a project, or use `tokens`/`cost_usd` quotas, which aggregate from the usage meter.
+- **The control-plane key is exempt.** A request made with an admin's API key that is bound to no project and carries no policies of its own is operator traffic: it is neither counted against the project it reads nor refused by that project's quota. A key bound to a project is counted whoever minted it, and so is an admin key with attached policies.
+- **Residual exemption.** A request resolving to *no single* project is not counted: an unscoped key listing across every project it can reach (no `project_id` filter, or several projects accessible). Pass a `project_id`, bind the key to a project, or use `tokens`/`cost_usd` quotas, which aggregate from the usage meter.
 - **Capping one specific unscoped key** is not possible: an `api_key`-scope `scope_ref` must name a key in the quota's project. Use a null-`scope_ref` `api_key` quota (or a `project` quota).
 
 Counting scope mirrors [API-request metering](./usage.md#api-request-metering) exactly.

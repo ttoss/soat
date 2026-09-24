@@ -176,6 +176,14 @@ const deferAttributionUntilAuthorized = (args: {
  * mid-flight. The `isRunToken` marker states the exemption outright, so it
  * does not rest on `apiKeyPublicId` happening to be unset and needs no token
  * decoding here.
+ *
+ * **The control-plane key is exempt too** (`isControlPlaneKey`: an admin's
+ * key bound to no project and narrowed by no policy). It spans every project,
+ * so a read it makes of one is the operator's traffic, not that project's, and
+ * must neither fill its meter nor be refused by its quota. A key *bound* to a
+ * project is that project's traffic whoever minted it — a gateway mints every
+ * tenant's key as the admin — and a key with its own policies is a restricted
+ * credential, counted like any other.
  */
 export const requestAttributionMiddleware = async (
   ctx: Context,
@@ -188,7 +196,8 @@ export const requestAttributionMiddleware = async (
     !ctx.path.startsWith('/api/v1') ||
     !authUser ||
     apiKeyPublicId == null ||
-    authUser.isRunToken
+    authUser.isRunToken ||
+    authUser.isControlPlaneKey
   ) {
     await next();
     return;
