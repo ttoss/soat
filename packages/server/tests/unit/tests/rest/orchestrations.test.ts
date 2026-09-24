@@ -2880,6 +2880,31 @@ describe('Orchestrations', () => {
       expect(response.body.data.length).toBeGreaterThan(0);
     });
 
+    // An operator reading one project's runs on a key that spans every
+    // project: the same `project_id` selector its sibling listings take.
+    test('project_id narrows the listing to that project', async () => {
+      const own = await authenticatedTestClient(adminToken).get(
+        `/api/v1/orchestration-runs?project_id=${projectId}&limit=100`
+      );
+      expect(own.status).toBe(200);
+      expect(own.body.data.length).toBeGreaterThan(0);
+      expect(
+        own.body.data.every((r: { project_id: string }) => {
+          return r.project_id === projectId;
+        })
+      ).toBe(true);
+
+      const other = await authenticatedTestClient(adminToken).get(
+        `/api/v1/orchestration-runs?project_id=${otherProjectId}&limit=100`
+      );
+      expect(other.status).toBe(200);
+      expect(
+        other.body.data.some((r: { project_id: string }) => {
+          return r.project_id === projectId;
+        })
+      ).toBe(false);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
         `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`

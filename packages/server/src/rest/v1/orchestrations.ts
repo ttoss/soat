@@ -314,6 +314,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
 orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
   const projectIds = await requireProjectAccess({
     ctx,
+    projectPublicId: ctx.query['project_id'] as string | undefined,
     action: 'orchestrations:ListRuns',
     resourceType: 'orchestration',
   });

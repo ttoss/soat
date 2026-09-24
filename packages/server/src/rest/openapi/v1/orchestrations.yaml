@@ -483,6 +483,12 @@ paths:
         runs a caller started.
       operationId: listOrchestrationRuns
       parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: Narrow the listing to one project (proj_...). A project-scoped key lists its own project without it.
+          schema:
+            type: string
         - name: orchestration_id
           in: query
           required: false
