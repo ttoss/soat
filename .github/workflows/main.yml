@@ -144,6 +144,9 @@ jobs:
   release:
     name: Release Packages and Website
     needs: push-release-tag
+    # The implicit `success()` reads every ancestor, so the test jobs the gate
+    # skipped would skip this job too; the tag job has already judged them.
+    if: "!cancelled() && needs.push-release-tag.result == 'success'"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -206,6 +209,9 @@ jobs:
   publish-docker:
     name: Publish Docker Image
     needs: push-release-tag
+    # The implicit `success()` reads every ancestor, so the test jobs the gate
+    # skipped would skip this job too; the tag job has already judged them.
+    if: "!cancelled() && needs.push-release-tag.result == 'success'"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
