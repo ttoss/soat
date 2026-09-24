@@ -1,16 +1,13 @@
 /**
- * At-most-once run starts.
- *
- * Starting a run is the most expensive mutating POST in the API — it spends
- * model tokens — so an ambiguous timeout on it is the one a caller most needs
- * to be able to retry. The key is claimed by the run row itself and stays
- * claimed for as long as that row exists: a window that expired would put back
- * exactly the doubt this removes.
+ * At-most-once run starts; the claim itself is `idempotencyClaim.ts`. Starting
+ * a run is the most expensive mutating POST in the API — it spends model
+ * tokens — so an ambiguous timeout on it is the one a caller most needs to be
+ * able to retry.
  */
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
+import { idempotencyKeyReused } from './idempotencyClaim';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from './orchestrations';
 
@@ -52,11 +49,7 @@ export const findRunByIdempotencyKey = async (args: {
   });
 };
 
-/**
- * Refuses a key reused for a different request. Replaying the original run
- * under a body the caller did not send would hand back a run that does not do
- * what they just asked for, which is worse than refusing.
- */
+/** Refuses a key reused for a different request. */
 export const assertIdempotentRequestMatches = (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
   request: IdempotentRunRequest;
@@ -76,11 +69,10 @@ export const assertIdempotentRequestMatches = (args: {
     args.idempotencyKey,
     run.publicId
   );
-  throw new DomainError(
-    'IDEMPOTENCY_KEY_REUSED',
-    `Idempotency key '${args.idempotencyKey}' is already claimed by a run started from a different request.`,
-    { idempotency_key: args.idempotencyKey }
-  );
+  throw idempotencyKeyReused({
+    idempotencyKey: args.idempotencyKey,
+    claimedBy: 'run',
+  });
 };
 
 /**

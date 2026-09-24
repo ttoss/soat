@@ -7,9 +7,11 @@ import type { ServerResponse } from 'node:http';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import type { GenerationResult } from 'src/lib/agentGeneration';
 import {
+  type AcceptedGeneration,
   createGeneration,
+  createIdempotentGeneration,
+  type GenerationResult,
   startGeneration,
   submitToolOutputs,
 } from 'src/lib/agentGeneration';
@@ -18,6 +20,7 @@ import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import { authorizeAgentWrite } from './agentAccess';
+import { parseIdempotencyKey } from './idempotencyKey';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
 const pipeStreamToResponse = async (
@@ -122,6 +125,7 @@ type GenerateRequestBody = {
   action_id?: string;
   metadata?: unknown;
   guardrail_context?: unknown;
+  idempotency_key?: unknown;
 };
 
 /**
@@ -152,7 +156,37 @@ const buildGenerationArgs = (args: {
     guardrailContext: isRecord(body.guardrail_context)
       ? body.guardrail_context
       : undefined,
+    idempotencyKey: parseIdempotencyKey(body.idempotency_key),
   };
+};
+
+/** A background start, and every replay: the generation is read by polling. */
+const respondAccepted = (args: {
+  ctx: Context;
+  accepted: AcceptedGeneration;
+}): void => {
+  const { ctx, accepted } = args;
+  ctx.status = 202;
+  ctx.body = {
+    status: accepted.status,
+    generation_id: accepted.id,
+    trace_id: accepted.traceId,
+  };
+};
+
+/**
+ * The blocking run. An unkeyed request calls `createGeneration` itself: it is
+ * the provider boundary the test suite's sanctioned spy sits on.
+ */
+const runWaitedGeneration = (args: {
+  generationArgs: ReturnType<typeof buildGenerationArgs>;
+  stream: boolean;
+}) => {
+  const { generationArgs, stream } = args;
+  const { idempotencyKey } = generationArgs;
+  return idempotencyKey
+    ? createIdempotentGeneration({ ...generationArgs, idempotencyKey, stream })
+    : createGeneration({ ...generationArgs, stream });
 };
 
 /**
@@ -197,20 +231,18 @@ agentGenerationRouter.post(
     const generationArgs = buildGenerationArgs({ ctx, body, projectIds });
 
     if (!resolveWait({ ctx, stream: body.stream })) {
-      const accepted = await startGeneration(generationArgs);
-      ctx.status = 202;
-      ctx.body = {
-        status: accepted.status,
-        generation_id: accepted.id,
-        trace_id: accepted.traceId,
-      };
+      respondAccepted({ ctx, accepted: await startGeneration(generationArgs) });
       return;
     }
 
-    const result = await createGeneration({
-      ...generationArgs,
+    const result = await runWaitedGeneration({
+      generationArgs,
       stream: body.stream === true,
     });
+    if ('idempotent' in result) {
+      respondAccepted({ ctx, accepted: result });
+      return;
+    }
 
     await handleGenerationResult(ctx, result, body.stream);
   }

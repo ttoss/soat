@@ -358,7 +358,9 @@ paths:
         `generation_id` to poll via `GET /api/v1/generations/{generation_id}`.
         Pass `?wait=true` to block and receive the result inline, where client
         tools pause the generation and return `requires_action`. Streaming
-        (`stream: true`) implies waiting.
+        (`stream: true`) implies waiting. Pass `idempotency_key` to make a retry
+        safe: a request whose key is already claimed runs nothing and answers
+        `202` with the generation the key names.
       operationId: createAgentGeneration
       x-soat-resource:
         kind: agent
@@ -436,13 +438,21 @@ paths:
                   produced before the failure are still delivered, and the
                   generation is recorded as `failed`.
         '202':
-          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). Poll `GET /api/v1/generations/{generation_id}` for the result.
+          description: >-
+            Generation accepted and running in the background (default, when
+            `wait` is omitted or `false`), or — in every mode, streamed
+            included — a duplicate request: the generation the
+            `idempotency_key` already names is returned in whatever state it
+            has reached and nothing runs. Poll
+            `GET /api/v1/generations/{generation_id}` for the result.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AcceptedGenerationResponse'
         '400':
-          description: Bad Request
+          description: >-
+            Bad Request (e.g. an `idempotency_key` that is not a non-empty
+            string of at most 255 characters)
           content:
             application/json:
               schema:
@@ -461,6 +471,14 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent or AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            `IDEMPOTENCY_KEY_REUSED` — the key is already claimed by a
+            generation started from a different request. Nothing runs.
           content:
             application/json:
               schema:
@@ -1886,6 +1904,25 @@ components:
             to set the usage-attribution label.
           allOf:
             - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+        idempotency_key:
+          type: string
+          maxLength: 255
+          description: >-
+            Deduplication key, unique within the project, that makes a retry of
+            an at-least-once delivery or an ambiguous failure safe. The first
+            request under a key runs the generation; any later request carrying
+            it runs nothing and answers `202` with the generation the key
+            names, whatever state it has reached — including a retry that
+            arrives while the original is still running. The key is claimed by
+            the generation record for as long as the record exists.
+
+
+            Every other body field except `stream` is the request the key
+            names: reusing a key with any of them changed, or on another agent
+            of the project, is `409 IDEMPOTENCY_KEY_REUSED`. `stream` and
+            `wait` say how the caller receives the generation, not what it is,
+            so a retry may flip them.
+          example: discord-1287654321098765432
         knowledge_config:
           type: object
           nullable: true

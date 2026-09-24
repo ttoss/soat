@@ -3090,6 +3090,14 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
     expect(generate?.inputSchema?.properties?.wait).toBeUndefined();
   });
 
+  test('create-agent-generation is offered with its idempotency_key field', () => {
+    const generate = tools.find((t) => {
+      return t.name === 'create-agent-generation';
+    });
+
+    expect(generate?.inputSchema?.properties?.idempotency_key).toBeDefined();
+  });
+
   test('generate-conversation-message is offered without its wait field', () => {
     const generate = tools.find((t) => {
       return t.name === 'generate-conversation-message';

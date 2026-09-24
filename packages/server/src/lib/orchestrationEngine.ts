@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { DecisionOutput, MappedApproval } from './approvals';
 import { emitApproval, registerApprovalResumeHandler } from './approvals';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
+import { claimIdempotencyKey } from './idempotencyClaim';
 import { getOrchestrationQueueDriver } from './orchestration-queue-drivers';
 import {
   emitRunLifecycleEvent,
@@ -63,7 +64,6 @@ import {
 import { kickWorker } from './orchestrationWorker';
 import type { RequestPrincipal } from './principals';
 import { acceptStoredToolContext } from './toolContextCarrier';
-import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:orchestrations');
 
@@ -632,21 +632,15 @@ const createRunRecord = async (args: {
   });
 };
 
-/**
- * The run row to drive, or the replay of the one this key already names.
- *
- * The insert is attempted even after the read finds nothing, because only the
- * unique index settles the race the key exists for: a retry provoked by a
- * timeout arrives while the original insert is still in flight.
- */
+/** The run row to drive, or the replay of the one this key already names. */
 const claimRunRecord = async (args: {
   create: Parameters<typeof createRunRecord>[0];
 }): Promise<
-  | { record: InstanceType<typeof db.OrchestrationRun> }
-  | { replay: StartedOrchestrationRun }
+  | { created: InstanceType<typeof db.OrchestrationRun> }
+  | { replayed: StartedOrchestrationRun }
 > => {
   const { idempotencyKey, projectId } = args.create;
-  if (!idempotencyKey) return { record: await createRunRecord(args.create) };
+  if (!idempotencyKey) return { created: await createRunRecord(args.create) };
 
   const claim = {
     projectId,
@@ -659,17 +653,14 @@ const claimRunRecord = async (args: {
     },
   };
 
-  const replayed = await replayIdempotentRun(claim);
-  if (replayed) return { replay: replayed };
-
-  try {
-    return { record: await createRunRecord(args.create) };
-  } catch (error) {
-    if (!isUniqueViolation(error)) throw error;
-    const raced = await replayIdempotentRun(claim);
-    if (!raced) throw error;
-    return { replay: raced };
-  }
+  return claimIdempotencyKey({
+    replay: () => {
+      return replayIdempotentRun(claim);
+    },
+    create: () => {
+      return createRunRecord(args.create);
+    },
+  });
 };
 
 export type StartOrchestrationRunArgs = {
@@ -752,8 +743,8 @@ export const startOrchestrationRun = async (
       idempotencyKey: args.idempotencyKey,
     },
   });
-  if ('replay' in claimed) return claimed.replay;
-  const runRecord = claimed.record;
+  if ('replayed' in claimed) return claimed.replayed;
+  const runRecord = claimed.created;
 
   const startMapped = await mapRunWithIncludes(runRecord.id as number);
   emitRunLifecycleEvent({

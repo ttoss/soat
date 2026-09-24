@@ -14,6 +14,7 @@ import {
   buildCreateContentColumns,
   suppressContentWrites,
 } from './generationContentSuppression';
+import type { GenerationIdempotency } from './generationIdempotency';
 import { applyGenerationScopeFilters } from './generationListFilters';
 import {
   mapGeneration,
@@ -107,6 +108,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
     toolSurface?: Record<string, unknown> | null;
+    idempotency?: GenerationIdempotency;
   };
   agentDbId: number;
   initiatorDbId: number | null;
@@ -163,6 +165,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         // Not a content column: three integers describing the request, which a
         // purge and zero-retention both leave standing.
         toolSurface: args.toolSurface ?? null,
+        idempotencyKey: args.idempotency?.key ?? null,
+        idempotencyDigest: args.idempotency?.digest ?? null,
         ...attributionColumns(args),
         ...contentColumns,
       },
@@ -198,6 +202,8 @@ export const createGenerationRecord = async (
     inputMessages?: unknown[] | null;
     // Measured, never caller-supplied. Not content — see the column.
     toolSurface?: Record<string, unknown> | null;
+    // A unique violation on it is the caller's retry losing the race.
+    idempotency?: GenerationIdempotency;
   }
 ) => {
   const [agent, initiatorGeneration] = await Promise.all([

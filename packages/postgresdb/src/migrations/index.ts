@@ -15,6 +15,7 @@ import { durableEventFirings } from './2026-09-21-durableEventFirings';
 import { memoryVersion } from './2026-09-21-memoryVersion';
 import { fileMetadataJsonb } from './2026-09-22-fileMetadataJsonb';
 import { tagBagGinIndexes } from './2026-09-22-tagBagGinIndexes';
+import { generationIdempotencyKey } from './2026-09-24-generationIdempotencyKey';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -51,4 +52,5 @@ export const MIGRATIONS: Migration[] = [
   memoryVersion,
   fileMetadataJsonb,
   tagBagGinIndexes,
+  generationIdempotencyKey,
 ];

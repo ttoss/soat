@@ -264,7 +264,7 @@ export const ERROR_CODES = {
   IDEMPOTENCY_KEY_REUSED: {
     httpStatus: 409,
     description:
-      'The idempotency key is already claimed by a run started from a different request. A key names one request, so a caller that changed the body and kept the key has a bug; send the new request under a new key, or repeat the original body to replay the run the key already names.',
+      'The idempotency key is already claimed by a run or generation started from a different request. A key names one request, so a caller that changed the body and kept the key has a bug; send the new request under a new key, or repeat the original body to replay what the key already names.',
   },
   ORCHESTRATION_RUN_NOT_AWAITING_INPUT: {
     httpStatus: 409,

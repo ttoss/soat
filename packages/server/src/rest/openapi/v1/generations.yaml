@@ -635,6 +635,14 @@ components:
                 `bytes` over a measured bytes-per-token ratio. An estimate, and
                 named one.
               example: 45148
+        idempotency_key:
+          type: string
+          nullable: true
+          description: >-
+            The deduplication key the generation was started under, unique
+            within the project and claimed for as long as the generation record
+            exists. Null for a generation started without one.
+          example: discord-1287654321098765432
         usage:
           allOf:
             - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'

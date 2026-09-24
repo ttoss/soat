@@ -1,6 +1,5 @@
-import crypto from 'node:crypto';
-
 import { isPlainObject } from './plainObject';
+import { stableDigest } from './stableDigest';
 
 // Used solely by the guardrail interceptor when a class-C guardrail files an
 // approval — guardrails are the single tool-call gating mechanism.
@@ -103,23 +102,6 @@ export const resolvedActionName = (args: {
 
 // ── Dedup ───────────────────────────────────────────────────────────────────
 
-// Stable JSON: object keys sorted at every depth so semantically equal argument
-// objects hash identically regardless of key order.
-const stableStringify = (value: unknown): string => {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`;
-  }
-  if (isPlainObject(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys
-      .map((key) => {
-        return `${JSON.stringify(key)}:${stableStringify(value[key])}`;
-      })
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
-};
-
 /**
  * The dedup key for a tool-call proposal: while a matching item is `pending`, a
  * re-proposal returns the existing item instead of filing a second (§3 Phase 2).
@@ -132,12 +114,11 @@ export const computeToolCallDedupKey = (args: {
   action: string;
   arguments: Record<string, unknown>;
 }): string => {
-  const canonical = stableStringify({
+  return stableDigest({
     projectId: args.projectId,
     agentId: args.agentId,
     toolId: args.toolId,
     action: args.action,
     arguments: args.arguments,
   });
-  return crypto.createHash('sha256').update(canonical).digest('hex');
 };
