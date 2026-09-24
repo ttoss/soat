@@ -1281,6 +1281,42 @@ describe('Tasks', () => {
       expect(settled.payload).toEqual({ topic: 'spring' });
     });
 
+    test('an agent dispatch names the provider that served its model', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_lr_2',
+        traceId: 'trc_lr_2',
+        status: 'completed',
+        aiProviderId: 'aip_served',
+        output: { model: 'm', content: 'a haiku', finishReason: 'stop' },
+      });
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: lrWorkflowId,
+          title: 'lr provider card',
+        });
+      expect(created.status).toBe(201);
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId: created.body.id,
+        predicate: (t) => {
+          return t.state === 'review';
+        },
+      });
+
+      // `model` alone does not identify its provider, so a gateway mapping it
+      // to a public name reads the provider beside it.
+      expect(settled.last_result).toEqual({
+        model: 'm',
+        content: 'a haiku',
+        finishReason: 'stop',
+        ai_provider_id: 'aip_served',
+      });
+    });
+
     test('a caller-written payload.last_result cannot satisfy a guard on task.last_result', async () => {
       // A workflow whose task never dispatched: last_result is unset, and the
       // caller tries to forge it through the one write path they own.

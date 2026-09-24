@@ -474,7 +474,10 @@ components:
             Server-owned. The result of the current state's last completed
             dispatch, overwritten on every dispatch. Read-only — exposed to
             transition guards and `on_complete`/`payload_writes` expressions as
-            `task.last_result`, a namespace a caller cannot write.
+            `task.last_result`, a namespace a caller cannot write. An `agent`
+            dispatch's result is the generation's output plus `ai_provider_id`,
+            the provider that served its `model` (null when the route that ran
+            named no serving target).
         assignee:
           type: string
           nullable: true
