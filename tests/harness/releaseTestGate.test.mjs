@@ -254,4 +254,19 @@ describe('main.yml wiring', () => {
     assert.match(block, /!contains\(needs\.\*\.result, 'failure'\)/);
     assert.match(block, /!contains\(needs\.\*\.result, 'cancelled'\)/);
   });
+
+  /**
+   * The implicit `success()` reads every ancestor, so a job downstream of the
+   * tag inherits the skipped test jobs and is skipped with them. Each one has
+   * to state its condition on the tag job alone.
+   */
+  test('every job after the tag runs whenever the tag was pushed', () => {
+    for (const job of ['release', 'publish-docker']) {
+      const block = jobBlock(job);
+
+      assert.match(block, /needs: push-release-tag/, job);
+      assert.match(block, /!cancelled\(\)/, job);
+      assert.match(block, /needs\.push-release-tag\.result == 'success'/, job);
+    }
+  });
 });
