@@ -61,16 +61,20 @@ export const emptyPage = <T = never>(args: {
 /** One sort key of a list: a column of the listed model and its direction. */
 export type ListOrderItem = [column: string, direction: 'ASC' | 'DESC'];
 
+/** A list's sort keys, most significant first; never empty. */
+export type ListOrder = [ListOrderItem, ...ListOrderItem[]];
+
 /**
  * `order` made total by appending the primary key in the direction of the last
  * key. Rows that tie on the caller's keys otherwise come back in scan order,
  * which two queries need not share, so a page boundary between them repeats
  * one row and drops another.
  */
-export const totalListOrder = (order: ListOrderItem[]): ListOrderItem[] => {
-  const last = order[order.length - 1];
-  if (last?.[0] === 'id') return order;
-  return [...order, ['id', last?.[1] ?? 'ASC']];
+export const totalListOrder = (order: ListOrder): ListOrderItem[] => {
+  const direction = order.reduce<ListOrderItem[1]>((_, item) => {
+    return item[1];
+  }, order[0][1]);
+  return [...order, ['id', direction]];
 };
 
 /**
@@ -88,7 +92,7 @@ export const totalListOrder = (order: ListOrderItem[]): ListOrderItem[] => {
 export const paginatedList = async <M, T>(args: {
   limit?: number;
   offset?: number;
-  order: ListOrderItem[];
+  order: ListOrder;
   query: (pagination: {
     limit: number;
     offset: number;
