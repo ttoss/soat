@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.59.0](https://github.com/ttoss/soat/compare/v0.58.7...v0.59.0) (2026-09-24)
+
+### Bug Fixes
+
+* **server:** keep failed-turn transcripts, refuse name secret refs, judge absent metadata, dedupe generations ([#1426](https://github.com/ttoss/soat/issues/1426)) ([a3d25e3](https://github.com/ttoss/soat/commit/a3d25e382dfe6ab5c5b73859366acbb6d1e3529e)), closes [TriangulosTecnologia/naturali.ai#592](https://github.com/TriangulosTecnologia/naturali.ai/issues/592) [TriangulosTecnologia/naturali.ai#589](https://github.com/TriangulosTecnologia/naturali.ai/issues/589) [TriangulosTecnologia/naturali.ai#585](https://github.com/TriangulosTecnologia/naturali.ai/issues/585) [TriangulosTecnologia/naturali.ai#570](https://github.com/TriangulosTecnologia/naturali.ai/issues/570)
+
+### Features
+
+* **orchestrations:** let a loop node collect failed items ([#1424](https://github.com/ttoss/soat/issues/1424)) ([f4efebb](https://github.com/ttoss/soat/commit/f4efebb1e9aa69541074a8f497763606429949ad)), closes [TriangulosTecnologia/naturali.ai#594](https://github.com/TriangulosTecnologia/naturali.ai/issues/594)
+
 ## [0.58.7](https://github.com/ttoss/soat/compare/v0.58.6...v0.58.7) (2026-09-23)
 
 **Note:** Version bump only for package @soat/website
