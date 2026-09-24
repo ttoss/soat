@@ -104,6 +104,7 @@ workflowVersionsRouter.get(
 workflowVersionsRouter.post(
   '/workflows/:workflow_id/versions/:version/restore',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const workflowId = await authorizeWorkflow(
       ctx,
       'workflows:RestoreWorkflowVersion'
@@ -116,7 +117,7 @@ workflowVersionsRouter.post(
       workflowId,
       version: parseVersionParam(ctx.params['version'] as string),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
   }
 );

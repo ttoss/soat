@@ -198,6 +198,7 @@ const runAgentUpdate = async (args: {
   projectIds: number[] | undefined;
 }) => {
   const { ctx, projectIds } = args;
+  requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
 
   const parsed = parseUpdateAgentBody(body);
@@ -218,7 +219,7 @@ const runAgentUpdate = async (args: {
     ...parsed,
     expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
-    createdByUserId: ctx.authUser?.id ?? null,
+    createdByUserId: ctx.authUser.id,
   });
 };
 
@@ -242,7 +243,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     buildCreateAgentArgs({
       projectId: targetProjectId,
       body: reqBody,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     })
   );
 

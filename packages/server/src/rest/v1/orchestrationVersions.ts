@@ -7,7 +7,7 @@ import {
   restoreOrchestrationVersion,
 } from 'src/lib/orchestrationVersions';
 
-import { parsePagination } from './helpers';
+import { parsePagination, requireAuth } from './helpers';
 import {
   authorizeOrchestrationRead,
   authorizeOrchestrationWrite,
@@ -89,6 +89,7 @@ orchestrationVersionsRouter.get(
 orchestrationVersionsRouter.post(
   '/orchestrations/:orchestration_id/versions/:version/restore',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const { projectIds } = await authorizeOrchestrationWrite({
       ctx,
       action: 'orchestrations:RestoreOrchestrationVersion',
@@ -100,7 +101,7 @@ orchestrationVersionsRouter.post(
       orchestrationId: ctx.params['orchestration_id'] as string,
       version: parseVersionParam(ctx.params['version'] as string),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
   }
 );

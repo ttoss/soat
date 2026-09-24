@@ -11,7 +11,7 @@ import {
 } from 'src/lib/agentVersions';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
-import { parsePagination } from './helpers';
+import { parsePagination, requireAuth } from './helpers';
 
 /**
  * Agent version history and staged rollout (the agents module doc — Versioning and Staged Rollout).
@@ -83,6 +83,7 @@ agentVersionsRouter.get(
 agentVersionsRouter.post(
   '/agents/:agent_id/versions/:version/restore',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:RestoreAgentVersion',
@@ -94,7 +95,7 @@ agentVersionsRouter.post(
       agentId: ctx.params.agent_id,
       version: parseVersionParam(ctx.params.version),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
   }
 );
@@ -138,6 +139,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
 agentVersionsRouter.post(
   '/agents/:agent_id/release/promote',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:SetAgentRelease',
@@ -145,7 +147,7 @@ agentVersionsRouter.post(
     ctx.body = await promoteAgentRelease({
       projectIds,
       agentId: ctx.params.agent_id,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
   }
 );
@@ -159,6 +161,7 @@ agentVersionsRouter.post(
 agentVersionsRouter.post(
   '/agents/:agent_id/release/abort',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:SetAgentRelease',
@@ -166,7 +169,7 @@ agentVersionsRouter.post(
     ctx.body = await abortAgentRelease({
       projectIds,
       agentId: ctx.params.agent_id,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
   }
 );

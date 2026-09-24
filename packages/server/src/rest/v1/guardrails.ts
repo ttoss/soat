@@ -95,6 +95,7 @@ const resolveGuardrailProjectId = async (
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails/post'
  */
 guardrailsRouter.post('/guardrails', async (ctx: Context) => {
+  requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
   const { name, description } = body;
   const projectPublicId = body.project_id as string | undefined;
@@ -128,7 +129,7 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
     contextToolId: parseNullableString(body.context_tool_id),
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),
-    createdByUserId: ctx.authUser?.id ?? null,
+    createdByUserId: ctx.authUser.id,
   });
 
   ctx.status = 201;
@@ -180,6 +181,7 @@ guardrailsRouter.get('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/patch'
  */
 guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
+  requireAuth(ctx);
   const { projectIds } = await guardrailAccess.authorizeWrite({
     ctx,
     action: 'guardrails:UpdateGuardrail',
@@ -203,7 +205,7 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
-    createdByUserId: ctx.authUser?.id ?? null,
+    createdByUserId: ctx.authUser.id,
   });
 });
 
@@ -323,6 +325,7 @@ guardrailsRouter.get(
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/versions/:version/restore',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const { projectIds } = await guardrailAccess.authorizeWrite({
       ctx,
       action: 'guardrails:RestoreGuardrailVersion',
@@ -334,7 +337,7 @@ guardrailsRouter.post(
       guardrailId: ctx.params.guardrail_id,
       version: parseVersionParam(ctx.params.version),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
   }
 );

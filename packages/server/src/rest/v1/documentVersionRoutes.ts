@@ -78,7 +78,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
             ? body.version_label
             : undefined,
         expectedVersion: writePreconditionOf(ctx),
-        createdByUserId: ctx.authUser?.id ?? null,
+        createdByUserId: ctx.authUser.id,
       });
     }
   );
@@ -126,7 +126,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
         documentId: ctx.params.document_id,
         version: parseVersionParam(ctx.params.version),
         label: typeof body?.label === 'string' ? body.label : undefined,
-        createdByUserId: ctx.authUser?.id ?? null,
+        createdByUserId: ctx.authUser.id,
       });
     }
   );

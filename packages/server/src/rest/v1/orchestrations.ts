@@ -83,6 +83,7 @@ const resolveAuth = async (
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations/post'
  */
 orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
+  requireAuth(ctx);
   const body = ctx.request.body as RawCreateBody;
 
   const validated = validateCreateBody(body);
@@ -117,7 +118,7 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
         ? body.input_schema
         : undefined,
     versionLabel: parseVersionLabel(body.version_label),
-    createdByUserId: ctx.authUser?.id ?? null,
+    createdByUserId: ctx.authUser.id,
   });
 
   ctx.status = 201;
@@ -202,6 +203,7 @@ orchestrationsRouter.get(
 orchestrationsRouter.patch(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
+    requireAuth(ctx);
     const { projectIds } = await authorizeOrchestrationWrite({
       ctx,
       action: 'orchestrations:UpdateOrchestration',
@@ -214,7 +216,7 @@ orchestrationsRouter.patch(
       projectIds: projectIds ?? undefined,
       ...parseUpdateBody(body),
       expectedVersion: writePreconditionOf(ctx),
-      createdByUserId: ctx.authUser?.id ?? null,
+      createdByUserId: ctx.authUser.id,
     });
 
     ctx.body = result;
