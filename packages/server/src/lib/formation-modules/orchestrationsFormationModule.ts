@@ -1,3 +1,4 @@
+import { parseOutputMapping } from '../orchestrationGraphWire';
 import type { OrchestrationEdge, OrchestrationNode } from '../orchestrations';
 import {
   createOrchestration,
@@ -62,6 +63,7 @@ export const orchestrationsFormationModule = defineFormationModule({
       ) as OrchestrationEdge[],
       stateSchema: toNullableObject(properties.state_schema),
       inputSchema: toNullableObject(properties.input_schema),
+      outputMapping: parseOutputMapping(properties.output_mapping),
     });
   },
 
@@ -87,6 +89,7 @@ export const orchestrationsFormationModule = defineFormationModule({
           : undefined,
       stateSchema: toNullableObject(properties.state_schema),
       inputSchema: toNullableObject(properties.input_schema),
+      outputMapping: parseOutputMapping(properties.output_mapping),
     });
   },
 
@@ -106,6 +109,7 @@ export const orchestrationsFormationModule = defineFormationModule({
       edges: convertCollectionKeys(orch.edges, camelToSnakeKey),
       state_schema: orch.state_schema,
       input_schema: orch.input_schema,
+      output_mapping: orch.output_mapping,
     };
   },
 });

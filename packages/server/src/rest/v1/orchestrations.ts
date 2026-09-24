@@ -2,7 +2,10 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { parseMetadataBag } from 'src/lib/metadataBag';
-import { parseOrchestrationGraph } from 'src/lib/orchestrationGraphWire';
+import {
+  parseOrchestrationGraph,
+  parseOutputMapping,
+} from 'src/lib/orchestrationGraphWire';
 import {
   cancelOrchestrationRun,
   createOrchestration,
@@ -117,6 +120,7 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
       body.input_schema != null && typeof body.input_schema === 'object'
         ? body.input_schema
         : undefined,
+    outputMapping: parseOutputMapping(body.output_mapping) ?? undefined,
     versionLabel: parseVersionLabel(body.version_label),
     createdByUserId: ctx.authUser.id,
   });

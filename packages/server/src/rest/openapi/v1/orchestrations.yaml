@@ -1158,12 +1158,31 @@ components:
           type: object
           nullable: true
           description: Schema for run inputs (initial state).
+        output_mapping:
+          $ref: '#/components/schemas/OrchestrationOutputMapping'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+
+    OrchestrationOutputMapping:
+      type: object
+      nullable: true
+      additionalProperties: true
+      description: >-
+        The shape of a succeeded run's `output`, owned by the orchestration
+        rather than by its terminal node ids. Each key is an output field (a
+        dotted key such as `summary.title` builds a nested object); each value
+        is JSON Logic (https://jsonlogic.com) evaluated against
+        `{ "state": <final run state> }`, which includes `state.input` and
+        `state.nodes.<id>`. A missing path maps to `null`; a mapping that
+        throws fails the run. Null (or omitted) keys `output` by terminal node
+        id. Versioned with the graph; `null` on update clears it.
+      example:
+        summary: { var: state.summary }
+        answer: { var: state.nodes.answer.content }
 
     CreateOrchestrationRequest:
       type: object
@@ -1197,6 +1216,8 @@ components:
         input_schema:
           type: object
           nullable: true
+        output_mapping:
+          $ref: '#/components/schemas/OrchestrationOutputMapping'
         version_label:
           type: string
           description: >-
@@ -1226,6 +1247,8 @@ components:
         input_schema:
           type: object
           nullable: true
+        output_mapping:
+          $ref: '#/components/schemas/OrchestrationOutputMapping'
         version_label:
           type: string
           description: >-
@@ -1286,6 +1309,8 @@ components:
             input_schema:
               type: object
               nullable: true
+            output_mapping:
+              $ref: '#/components/schemas/OrchestrationOutputMapping'
         label:
           type: string
           nullable: true
@@ -1449,7 +1474,11 @@ components:
         output:
           type: object
           nullable: true
-          description: Terminal node artifact(s) when the run has succeeded.
+          description: >-
+            What a succeeded run returns: the orchestration's `output_mapping`
+            evaluated over the final state, or, when it declares none, the
+            terminal node artifacts keyed by node id. Null unless the run
+            succeeded.
         node_executions:
           type: array
           description: >-

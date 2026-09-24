@@ -1,6 +1,7 @@
 import {
   parseOrchestrationEdges,
   parseOrchestrationNodes,
+  parseOutputMapping,
 } from 'src/lib/orchestrationGraphWire';
 
 /**
@@ -19,6 +20,7 @@ export type RawCreateBody = {
   edges?: unknown;
   state_schema?: unknown;
   input_schema?: unknown;
+  output_mapping?: unknown;
   version_label?: unknown;
 };
 
@@ -29,6 +31,7 @@ export type RawUpdateBody = {
   edges?: unknown;
   state_schema?: unknown;
   input_schema?: unknown;
+  output_mapping?: unknown;
   version_label?: unknown;
 };
 
@@ -71,6 +74,7 @@ export const parseUpdateBody = (body: RawUpdateBody) => {
       body.input_schema !== undefined
         ? (body.input_schema as object | null)
         : undefined,
+    outputMapping: parseOutputMapping(body.output_mapping),
     versionLabel: parseVersionLabel(body.version_label),
   };
 };
