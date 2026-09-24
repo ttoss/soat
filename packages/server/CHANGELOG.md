@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.59.3](https://github.com/ttoss/soat/compare/v0.59.2...v0.59.3) (2026-09-24)
+
+### Bug Fixes
+
+* **evaluations:** refuse an llm_judge that resolves no model; name a task dispatch's provider ([#1434](https://github.com/ttoss/soat/issues/1434)) ([e843167](https://github.com/ttoss/soat/commit/e84316739ea5bac4e76f50af6cab1c85da238d14))
+
 ## [0.59.2](https://github.com/ttoss/soat/compare/v0.59.1...v0.59.2) (2026-09-24)
 
 **Note:** Version bump only for package @soat/server

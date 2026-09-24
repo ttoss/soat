@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.59.3](https://github.com/ttoss/soat/compare/v0.59.2...v0.59.3) (2026-09-24)
+
+### Bug Fixes
+
+* **postgresdb:** relax the foreign keys sync cannot alter ([#1433](https://github.com/ttoss/soat/issues/1433)) ([a8a3ee9](https://github.com/ttoss/soat/commit/a8a3ee9b64b28e20db26d3b982ff89bb16290f01))
+
 ## [0.59.2](https://github.com/ttoss/soat/compare/v0.59.1...v0.59.2) (2026-09-24)
 
 **Note:** Version bump only for package @soat/postgresdb
