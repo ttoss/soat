@@ -110,7 +110,7 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
 | `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |
-| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `parallelism`, and `context_keys`. See [Loops](#loops-collection-iteration). |
+| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `parallelism`, `on_item_error`, and `context_keys`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. See [Emitting events](#emitting-events). |
@@ -130,7 +130,7 @@ Every completed node produces an **artifact**: what `state_mapping` reads as `ou
 | `knowledge` | `{ results }` — the matched entries. |
 | `human`, `webhook` (`mode: "receive"`) | The payload submitted to `submit-human-input`, verbatim. |
 | `approval` | `{ decision, approvalId, resolvedBy, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
-| `loop` | `{ results }` — one entry per item, each the sub-run's `output`. See [Loops](#loops-collection-iteration). |
+| `loop` | `{ results, failed_count }` — one entry per item, each the sub-run's `output`. See [Loops](#loops-collection-iteration). |
 | `poll` | `{ result, attempts, conditionMet, timedOut }`. See [Polling](#polling). |
 | `delay` | `{ waited }` — the `duration` as declared. |
 | `emit_event` | `{ emitted, eventType }`. See [Emitting events](#emitting-events). |
@@ -168,9 +168,18 @@ A `loop` node runs a **sub-orchestration once per item** of an array in run stat
 | `collection` | `state.items` | State path to the array to iterate; a path without the `state.` prefix is normalised to one. A missing or non-array value yields zero iterations |
 | `item_variable` | `item` | Each element is passed as the sub-run's **input** under this key; run input is seeded under the `input` namespace, so the sub-graph reads it with `{"var": "input.item"}` |
 | `parallelism` | `5` | Items are processed in batches of this size |
+| `on_item_error` | `fail` | `fail` fails the node on the first item whose run settles `failed`, `cancelled` or `expired`. `collect` records that item in `results` and carries on |
 | `context_keys` | `null` | Allowlist of the run's `tool_context` keys each child inherits; `null` hands down the whole bag, `[]` none. See [Narrowing what a child run inherits](#narrowing-what-a-child-run-inherits) |
 
-Artifact: `{ results: [...] }`, one entry per item in order, each the sub-run's `output`. A graph with a `loop` node is exempt from [cycle detection](#static-validation).
+Artifact: `{ results: [...], failed_count }`, one entry per item in order, each the sub-run's `output`. A graph with a `loop` node is exempt from [cycle detection](#static-validation).
+
+With `on_item_error: "collect"`, a failed item's entry is an error in its original position, and `failed_count` counts them, so a following `condition` node can decide what a failure means:
+
+```json
+{ "error": { "code": "ORCHESTRATION_NESTED_RUN_FAILED", "message": "..." }, "orchestration_run_id": "..." }
+```
+
+A child run that could not be started at all, such as one past the [nesting depth bound](#nesting-depth), fails the node in either mode.
 
 ```json
 {

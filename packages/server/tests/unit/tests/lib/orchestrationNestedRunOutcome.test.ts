@@ -1,5 +1,8 @@
 import { DomainError } from 'src/errors';
-import { assertNestedRunCompleted } from 'src/lib/orchestrationNestedRunOutcome';
+import {
+  assertNestedRunCompleted,
+  readNestedRunFailure,
+} from 'src/lib/orchestrationNestedRunOutcome';
 
 /**
  * A pure decision over a settled child run. Tested directly because two of its
@@ -110,5 +113,37 @@ describe('assertNestedRunCompleted', () => {
       );
       expect((error as DomainError).message).toMatch(/settled 'failed'/);
     }
+  });
+});
+
+describe('readNestedRunFailure', () => {
+  test('reads no failure from a succeeded child', () => {
+    expect(
+      readNestedRunFailure({
+        run: { id: 'orch_run_child', status: 'succeeded', error: null },
+        nodeId: 'fan',
+      })
+    ).toBeNull();
+  });
+
+  test('reads the failure assertNestedRunCompleted would throw', () => {
+    expect(
+      readNestedRunFailure({
+        run: {
+          id: 'orch_run_child',
+          status: 'failed',
+          error: { code: 'ORCHESTRATION_RUN_DEPTH_LIMIT', message: 'too deep' },
+        },
+        nodeId: 'fan',
+      })
+    ).toEqual({
+      code: 'ORCHESTRATION_RUN_DEPTH_LIMIT',
+      message: 'too deep',
+      meta: {
+        nodeId: 'fan',
+        orchestrationRunId: 'orch_run_child',
+        status: 'failed',
+      },
+    });
   });
 });

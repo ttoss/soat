@@ -10,10 +10,13 @@
  */
 import { applyInputMapping } from './jsonLogicMapping';
 import { type NestedRunParent, startNestedRun } from './orchestrationNestedRun';
-import { assertNestedRunCompleted } from './orchestrationNestedRunOutcome';
+import {
+  assertNestedRunCompleted,
+  readNestedRunFailure,
+} from './orchestrationNestedRunOutcome';
 import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
-import type { OrchestrationNode } from './orchestrations';
+import type { LoopItemErrorMode, OrchestrationNode } from './orchestrations';
 import { filterToolContext } from './toolContext';
 
 const resolveLoopCollection = (args: {
@@ -37,16 +40,18 @@ const runLoopBatches = async (args: {
   items: unknown[];
   parallelism: number;
   itemVariable: string;
+  onItemError: LoopItemErrorMode;
   orchestrationId: string;
   projectIds: number[];
   authHeader?: string;
   toolContext?: Record<string, string>;
   parent: NestedRunParent;
-}): Promise<unknown[]> => {
+}): Promise<{ results: unknown[]; failedCount: number }> => {
   const {
     items,
     parallelism,
     itemVariable,
+    onItemError,
     orchestrationId,
     projectIds,
     authHeader,
@@ -54,6 +59,7 @@ const runLoopBatches = async (args: {
     parent,
   } = args;
   const results: unknown[] = [];
+  let failedCount = 0;
   for (let i = 0; i < items.length; i += parallelism) {
     const batch = items.slice(i, i + parallelism);
     const batchResults = await Promise.all(
@@ -78,12 +84,21 @@ const runLoopBatches = async (args: {
     );
     results.push(
       ...batchResults.map((run) => {
-        assertNestedRunCompleted({ run, nodeId: parent.nodeId });
-        return run.output;
+        if (onItemError === 'fail') {
+          assertNestedRunCompleted({ run, nodeId: parent.nodeId });
+          return run.output;
+        }
+        const failure = readNestedRunFailure({ run, nodeId: parent.nodeId });
+        if (!failure) return run.output;
+        failedCount += 1;
+        return {
+          error: { code: failure.code, message: failure.message },
+          orchestration_run_id: run.id,
+        };
       })
     );
   }
-  return results;
+  return { results, failedCount };
 };
 
 export const executeLoopNode = async (args: {
@@ -104,10 +119,11 @@ export const executeLoopNode = async (args: {
   const itemVariable = node.itemVariable ?? 'item';
   const parallelism = node.parallelism ?? 5;
   const items = resolveLoopCollection({ collectionPath, state });
-  const results = await runLoopBatches({
+  const { results, failedCount } = await runLoopBatches({
     items,
     parallelism,
     itemVariable,
+    onItemError: node.onItemError ?? 'fail',
     orchestrationId,
     projectIds,
     authHeader,
@@ -118,7 +134,10 @@ export const executeLoopNode = async (args: {
     parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
   });
 
-  return { kind: 'artifact', artifact: { results } };
+  return {
+    kind: 'artifact',
+    artifact: { results, failed_count: failedCount },
+  };
 };
 
 export const executeSubOrchestrationNode = async (args: {

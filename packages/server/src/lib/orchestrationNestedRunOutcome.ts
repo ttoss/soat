@@ -37,24 +37,43 @@ const isErrorCode = (code: string | null): code is ErrorCode => {
   return code !== null && Object.hasOwn(ERROR_CODES, code);
 };
 
-export const assertNestedRunCompleted = (args: {
+export type NestedRunFailure = {
+  code: ErrorCode;
+  message: string;
+  meta: { nodeId: string; orchestrationRunId: string; status: string };
+};
+
+/**
+ * The failure a settled child run stands for, or `null` when it does not stand
+ * for one. The single reading both outcomes share: a `loop` collecting item
+ * errors records exactly what the node would otherwise have thrown.
+ */
+export const readNestedRunFailure = (args: {
   run: { id: string; status: string; error: object | null };
   nodeId: string;
-}): void => {
+}): NestedRunFailure | null => {
   const { run, nodeId } = args;
-  if (!NON_SUCCESS_TERMINAL_STATUSES.includes(run.status)) return;
+  if (!NON_SUCCESS_TERMINAL_STATUSES.includes(run.status)) return null;
 
   const childCode = readErrorField(run.error, 'code');
   const childMessage = readErrorField(run.error, 'message');
 
-  throw new DomainError(
-    isErrorCode(childCode) ? childCode : 'ORCHESTRATION_NESTED_RUN_FAILED',
-    childMessage ??
+  return {
+    code: isErrorCode(childCode)
+      ? childCode
+      : 'ORCHESTRATION_NESTED_RUN_FAILED',
+    message:
+      childMessage ??
       `Child run '${run.id}' started by node '${nodeId}' settled '${run.status}'.`,
-    {
-      nodeId,
-      orchestrationRunId: run.id,
-      status: run.status,
-    }
-  );
+    meta: { nodeId, orchestrationRunId: run.id, status: run.status },
+  };
+};
+
+export const assertNestedRunCompleted = (args: {
+  run: { id: string; status: string; error: object | null };
+  nodeId: string;
+}): void => {
+  const failure = readNestedRunFailure(args);
+  if (!failure) return;
+  throw new DomainError(failure.code, failure.message, failure.meta);
 };
