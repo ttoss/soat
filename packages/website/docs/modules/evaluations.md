@@ -179,7 +179,9 @@ re-run the baseline when the embedding model changes.
 An `llm_judge` scorer grades the output with a tool-less model completion through the
 ordinary [AI providers](./ai-providers.md) path: the scorer's `ai_provider_id` must belong
 to the eval's project, and the project's default [model route](./model-routes.md) applies
-when the scorer pins none. The `prompt` carries three slots, filled in **one pass** (a slot
+when the scorer pins none. A scorer that pins none in a project with no default is refused
+with `400 VALIDATION_FAILED` on eval create, update and run start, and the project's
+default cannot be cleared while such an eval inherits it. The `prompt` carries three slots, filled in **one pass** (a slot
 value containing `{{output}}` is never re-expanded; an unrecognised `{{…}}` is left as
 written):
 

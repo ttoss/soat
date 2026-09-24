@@ -33,6 +33,10 @@ const ACTIONS = [
   'chats:GetChat',
   'chats:DeleteChat',
   'chats:CreateChatCompletion',
+  'evaluations:CreateDataset',
+  'evaluations:CreateEval',
+  'evaluations:DeleteEval',
+  'evaluations:RunEval',
 ];
 
 type LlmStub = {
@@ -159,6 +163,32 @@ describe('Project default model route', () => {
     expect(res.status).toBe(200);
   };
 
+  /** A judge that pins no provider resolves through the project default. */
+  const UNBOUND_JUDGE = {
+    type: 'llm_judge',
+    model: 'judge-model',
+    prompt: 'Rate {{output}} against {{expected}}.',
+    pass_threshold: 0.5,
+  };
+
+  let evalAgentId: string;
+  let judgeProviderId: string;
+  let evalDatasetId: string;
+
+  let evalCount = 0;
+  const postEval = (scorers: unknown[]) => {
+    evalCount += 1;
+    return authenticatedTestClient(userToken)
+      .post('/api/v1/evals')
+      .send({
+        project_id: projectId,
+        name: `judged-${evalCount}`,
+        agent_id: evalAgentId,
+        dataset_id: evalDatasetId,
+        scorers,
+      });
+  };
+
   /**
    * Polls for the fire-and-forget metering write rather than sleeping, then
    * returns the row so the served target can be asserted. `source` is only
@@ -272,6 +302,29 @@ describe('Project default model route', () => {
       attributes: ['id'],
     });
     healthyProviderDbId = (healthyProvider as unknown as { id: number }).id;
+
+    const evalAgent = await authenticatedTestClient(userToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectId,
+        ai_provider_id: healthyProviderId,
+        name: 'Evaluated Agent',
+      });
+    expect(evalAgent.status).toBe(201);
+    evalAgentId = evalAgent.body.id;
+    judgeProviderId = healthyProviderId;
+    const dataset = await authenticatedTestClient(userToken)
+      .post('/api/v1/datasets')
+      .send({ project_id: projectId, name: 'judged-dataset' });
+    expect(dataset.status).toBe(201);
+    evalDatasetId = dataset.body.id;
+    const item = await authenticatedTestClient(userToken)
+      .post(`/api/v1/datasets/${evalDatasetId}/items`)
+      .send({
+        input: [{ role: 'user', content: 'Capital of France?' }],
+        expected_output: 'Paris',
+      });
+    expect(item.status).toBe(201);
 
     defaultRouteId = await createRoute({
       name: 'project-default',
@@ -440,6 +493,69 @@ describe('Project default model route', () => {
       await clearDefault();
     });
 
+    test('an llm_judge scorer returns 400 without a default and 201 with one', async () => {
+      await setDefault(null);
+
+      const rejected = await postEval([UNBOUND_JUDGE]);
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.error.code).toBe('VALIDATION_FAILED');
+      expect(rejected.body.error.message).toMatch(
+        /scorers\.0 \(llm_judge\) pins no ai_provider_id/
+      );
+
+      await setDefault(defaultRouteId);
+
+      const accepted = await postEval([UNBOUND_JUDGE]);
+      expect(accepted.status).toBe(201);
+      trackInheritor('evals', accepted.body.id);
+
+      await clearDefault();
+    });
+
+    test('an update to an unbound llm_judge scorer returns 400 without a default', async () => {
+      await setDefault(null);
+
+      const created = await postEval([
+        { ...UNBOUND_JUDGE, ai_provider_id: judgeProviderId },
+      ]);
+      expect(created.status).toBe(201);
+
+      const updated = await authenticatedTestClient(userToken)
+        .put(`/api/v1/evals/${created.body.id}`)
+        .send({ scorers: [UNBOUND_JUDGE] });
+      expect(updated.status).toBe(400);
+      expect(updated.body.error.message).toMatch(/pins no ai_provider_id/);
+
+      const deleted = await authenticatedTestClient(userToken).delete(
+        `/api/v1/evals/${created.body.id}`
+      );
+      expect(deleted.status).toBe(204);
+    });
+
+    test('an unbound llm_judge stored before the guard is refused at run start', async () => {
+      await setDefault(null);
+      const created = await postEval([
+        { ...UNBOUND_JUDGE, ai_provider_id: judgeProviderId },
+      ]);
+      expect(created.status).toBe(201);
+      // Written past the guards, as a row stored before they existed.
+      await db.Eval.update(
+        { scorers: [UNBOUND_JUDGE] },
+        { where: { publicId: created.body.id } }
+      );
+
+      const run = await authenticatedTestClient(userToken)
+        .post(`/api/v1/evals/${created.body.id}/runs`)
+        .send({ wait: true });
+      expect(run.status).toBe(400);
+      expect(run.body.error.message).toMatch(/pins no ai_provider_id/);
+
+      const deleted = await authenticatedTestClient(userToken).delete(
+        `/api/v1/evals/${created.body.id}`
+      );
+      expect(deleted.status).toBe(204);
+    });
+
     test('a chat declaring model without a provider returns 400', async () => {
       await setDefault(defaultRouteId);
 
@@ -508,6 +624,19 @@ describe('Project default model route', () => {
       expect(record.body.routing.route_id).toBe(secondRouteId);
 
       trackInheritor('agents', agent.body.id);
+      await clearDefault();
+    });
+
+    test('an eval whose llm_judge inherits the default counts as an inheritor', async () => {
+      await setDefault(defaultRouteId);
+      const judged = await postEval([UNBOUND_JUDGE]);
+      expect(judged.status).toBe(201);
+      trackInheritor('evals', judged.body.id);
+
+      const cleared = await patchProject({ default_model_route_id: null });
+      expect(cleared.status).toBe(409);
+      expect(cleared.body.error.meta.sample).toContain(judged.body.id);
+
       await clearDefault();
     });
   });

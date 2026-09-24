@@ -26,8 +26,8 @@ import {
   TERMINAL_EVAL_RUN_STATUSES,
 } from './evaluationRunReads';
 import { getEvalRow } from './evaluations';
+import { validateScorerReferences } from './evaluationScorerReferences';
 import { scorerList, validateScorers } from './evaluationScorers';
-import { validateToolScorerRefs } from './evaluationToolScorer';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { parseActiveRelease } from './releaseAssignment';
@@ -221,7 +221,7 @@ const planRun = async (args: {
     agentHasOutputSchema: isPlainObject(agent.outputSchema),
   });
   if (scorerError) throw new DomainError('VALIDATION_FAILED', scorerError);
-  await validateToolScorerRefs({
+  await validateScorerReferences({
     scorers: evaluation.scorers,
     projectId: evaluation.projectId as number,
   });
