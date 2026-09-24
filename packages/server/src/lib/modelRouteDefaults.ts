@@ -2,9 +2,11 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { JUDGE_SCORER_TYPE } from './evaluationScorers';
 import type { ModelRouteConfig } from './modelRouteMapper';
 import { loadModelRouteConfig } from './modelRouteResolution';
 import { hasModelBinding } from './modelRouteValidation';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:model-routes');
 
@@ -84,20 +86,57 @@ export const assertModelBindingResolvable = async (args: {
   );
 };
 
+/**
+ * An `llm_judge` scorer that pins no provider resolves its judge through the
+ * project default (`projectScopedModel.ts`).
+ */
+const judgeInheritsProjectDefault = (scorer: unknown): boolean => {
+  return (
+    isPlainObject(scorer) &&
+    scorer.type === JUDGE_SCORER_TYPE &&
+    !hasModelBinding(scorer.ai_provider_id)
+  );
+};
+
+/**
+ * The same guard for an eval's `llm_judge` scorers, whose only binding is
+ * `ai_provider_id`: one that pins none inherits the project default, so it is
+ * representable only while that default exists.
+ */
+export const assertJudgeScorersResolvable = async (args: {
+  projectId: number;
+  scorers: unknown;
+}): Promise<void> => {
+  if (!Array.isArray(args.scorers)) return;
+  const index = args.scorers.findIndex(judgeInheritsProjectDefault);
+  if (index === -1) return;
+
+  const defaultRouteId = await findProjectDefaultModelRouteId({
+    projectId: args.projectId,
+  });
+  if (defaultRouteId) return;
+
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    `scorers.${index} (llm_judge) pins no ai_provider_id, and its project has no default_model_route_id to inherit; set one of them.`
+  );
+};
+
 const MAX_INHERITOR_SAMPLE = 5;
 
 /**
  * Consumers in the project that resolve their model through the project default
  * — i.e. that bind neither a provider nor a route. Chats have no
  * `model_route_id` column (the amendment routes them through the default
- * instead), so for them "binds nothing" is simply a null `aiProviderId`.
+ * instead), so for them "binds nothing" is simply a null `aiProviderId`; an
+ * eval inherits through any `llm_judge` scorer that pins no provider.
  */
 export const findProjectDefaultInheritors = async (args: {
   projectId: number;
 }): Promise<{ total: number; sample: string[] }> => {
   const { projectId } = args;
 
-  const [agents, chats] = await Promise.all([
+  const [agents, chats, evals] = await Promise.all([
     db.Agent.findAll({
       where: { projectId, aiProviderId: null, modelRouteId: null },
       attributes: ['publicId'],
@@ -106,9 +145,20 @@ export const findProjectDefaultInheritors = async (args: {
       where: { projectId, aiProviderId: null },
       attributes: ['publicId'],
     }),
+    db.Eval.findAll({
+      where: { projectId },
+      attributes: ['publicId', 'scorers'],
+    }),
   ]);
 
-  const publicIds = [...agents, ...chats].map((row) => {
+  const judgedEvals = evals.filter((row) => {
+    return (
+      Array.isArray(row.scorers) &&
+      row.scorers.some(judgeInheritsProjectDefault)
+    );
+  });
+
+  const publicIds = [...agents, ...chats, ...judgedEvals].map((row) => {
     return row.publicId;
   });
 

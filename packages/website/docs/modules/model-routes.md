@@ -88,7 +88,7 @@ Repointing it to another route is free and changes behavior for every inheriting
 
 Two write-time guards keep "no model at all" unrepresentable:
 
-1. Creating or updating a consumer that binds **neither** field returns `400 VALIDATION_FAILED` unless the project has a `default_model_route_id`.
+1. Creating or updating a consumer that binds **neither** field returns `400 VALIDATION_FAILED` unless the project has a `default_model_route_id`. An eval's [`llm_judge` scorer](./evaluations.md#llm-judge) is such a consumer when it pins no `ai_provider_id`.
 2. **Clearing** `default_model_route_id` returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, naming the count and a sample. Bind those consumers explicitly first, or repoint the default instead.
 
 The route must belong to the project (`400`). The field is on the project update surface, governed by `projects:UpdateProject`.

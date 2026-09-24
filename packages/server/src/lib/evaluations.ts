@@ -11,8 +11,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { validateScorerReferences } from './evaluationScorerReferences';
 import { validateScorers } from './evaluationScorers';
-import { validateToolScorerRefs } from './evaluationToolScorer';
 import {
   assertValid,
   requireName,
@@ -154,7 +154,7 @@ export const createEval = async (args: {
       agentHasOutputSchema: isPlainObject(agent.outputSchema),
     })
   );
-  await validateToolScorerRefs({
+  await validateScorerReferences({
     scorers: args.scorers,
     projectId: args.projectId,
   });
@@ -295,7 +295,7 @@ export const updateEval = async (args: {
         agentHasOutputSchema: isPlainObject(agentOutputSchema),
       })
     );
-    await validateToolScorerRefs({
+    await validateScorerReferences({
       scorers,
       projectId: evaluation.projectId as number,
     });

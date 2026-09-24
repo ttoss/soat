@@ -139,8 +139,16 @@ const runAgentDispatch = async (args: {
     stream: false,
   })) as GenerationResult;
 
+  // `output.model` alone does not identify its provider, so the serving one is
+  // kept beside it: a gateway in front of this runtime maps the model back to
+  // the name it publishes only once it knows who served it.
   return {
-    result: gen.output ?? {},
+    result: {
+      ...(gen.output ?? {}),
+      ...(gen.aiProviderId === undefined
+        ? {}
+        : { ai_provider_id: gen.aiProviderId }),
+    },
     generationId: gen.id,
     orchestrationRunId: null,
     toolId: null,
