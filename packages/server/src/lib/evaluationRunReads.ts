@@ -157,7 +157,12 @@ export const listEvalRuns = async (args: {
       return db.EvalRun.findAndCountAll({
         where: { evalId: evaluation.id as number },
         include: evalRunIncludes(),
-        order: [['createdAt', 'DESC']],
+        // `id` breaks a `created_at` tie, which rows written in one millisecond
+        // share; without it Postgres returns them in scan order.
+        order: [
+          ['createdAt', 'DESC'],
+          ['id', 'DESC'],
+        ],
         distinct: true,
         limit,
         offset,
@@ -200,7 +205,10 @@ export const listEvalResults = async (args: {
       return db.EvalResult.findAndCountAll({
         where: { evalRunId: run.id as number },
         include: evalResultIncludes(),
-        order: [['createdAt', 'ASC']],
+        order: [
+          ['createdAt', 'ASC'],
+          ['id', 'ASC'],
+        ],
         distinct: true,
         limit,
         offset,
