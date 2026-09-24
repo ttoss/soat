@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
-import { db } from '../db';
+import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
 import type { PolicyDocument } from '../lib/iam';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
 import type { IsAllowedFn } from './authProjectResolvers';
@@ -39,16 +39,6 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 };
 
 type Next = () => Promise<void>;
-
-const USER_ATTRIBUTES = [
-  'id',
-  'publicId',
-  'username',
-  'role',
-  'policyIds',
-  'createdAt',
-  'updatedAt',
-];
 
 const ADMIN_WILDCARD_POLICY: PolicyDocument = {
   statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
@@ -94,82 +84,65 @@ const createApiKeyGetPolicies = (args: {
 };
 
 const resolveProjectKey = async (ctx: Context, rawKey: string) => {
-  const keyPrefix = rawKey.substring(0, 8);
+  const verified = await verifyApiKey({ rawKey });
+  if (!verified) return;
+  const { apiKey: row, user: keyUser } = verified;
+  const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
+  const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
+  const role = keyUser.role as 'admin' | 'user';
 
-  const candidates = await ctx.db.ApiKey.findAll({
-    where: { keyPrefix },
-    include: [
-      {
-        model: ctx.db.User,
-        attributes: USER_ATTRIBUTES,
-      },
-    ],
-  });
-
-  for (const row of candidates) {
-    const match = await bcrypt.compare(rawKey, row.keyHash as string);
-    if (match) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const keyUser = (row as any).user;
-      const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
-      const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
-      const role = keyUser.role as 'admin' | 'user';
-
-      // `projectId` is nullable: a null value means the key is unscoped (spans
-      // projects). Only resolve the project public ID when the key is scoped.
-      const rawProjectId = row.projectId as number | null;
-      let apiKeyProjectId: number | undefined;
-      let apiKeyProjectPublicId: string | undefined;
-      if (rawProjectId != null) {
-        const proj = await ctx.db.Project.findOne({
-          where: { id: rawProjectId },
-        });
-        if (proj) {
-          apiKeyProjectId = rawProjectId;
-          apiKeyProjectPublicId = proj.publicId as string;
-        }
-      }
-
-      const apiKeyIsAllowed = createApiKeyIsAllowed({
-        apiKeyProjectPublicId,
-        userRole: role,
-        userPolicyIds,
-        apiKeyPolicyIds,
-        db: ctx.db,
-      });
-
-      ctx.authUser = {
-        id: keyUser.id as number,
-        publicId: keyUser.publicId as string,
-        username: keyUser.username as string,
-        role,
-        apiKeyPublicId: row.publicId as string,
-        apiKeyProjectId,
-        apiKeyProjectPublicId,
-        isAllowed: apiKeyIsAllowed,
-        resolveProjectIds: apiKeyProjectPublicId
-          ? createApiKeyResolveProjectIds({
-              apiKeyProjectPublicId,
-              apiKeyIsAllowed,
-              db: ctx.db,
-            })
-          : createUnscopedApiKeyResolveProjectIds({
-              userRole: role,
-              hasKeyBoundary: apiKeyPolicyIds.length > 0,
-              apiKeyIsAllowed,
-              db: ctx.db,
-            }),
-        getPolicies: createApiKeyGetPolicies({
-          apiKeyProjectPublicId,
-          apiKeyPolicyIds,
-          userPolicyIds,
-          role,
-          db: ctx.db,
-        }),
-      };
-      break;
+  // `projectId` is nullable: a null value means the key is unscoped (spans
+  // projects). Only resolve the project public ID when the key is scoped.
+  const rawProjectId = row.projectId as number | null;
+  let apiKeyProjectId: number | undefined;
+  let apiKeyProjectPublicId: string | undefined;
+  if (rawProjectId != null) {
+    const proj = await ctx.db.Project.findOne({
+      where: { id: rawProjectId },
+    });
+    if (proj) {
+      apiKeyProjectId = rawProjectId;
+      apiKeyProjectPublicId = proj.publicId as string;
     }
   }
+
+  const apiKeyIsAllowed = createApiKeyIsAllowed({
+    apiKeyProjectPublicId,
+    userRole: role,
+    userPolicyIds,
+    apiKeyPolicyIds,
+    db: ctx.db,
+  });
+
+  ctx.authUser = {
+    id: keyUser.id as number,
+    publicId: keyUser.publicId as string,
+    username: keyUser.username as string,
+    role,
+    apiKeyPublicId: row.publicId as string,
+    apiKeyProjectId,
+    apiKeyProjectPublicId,
+    isAllowed: apiKeyIsAllowed,
+    resolveProjectIds: apiKeyProjectPublicId
+      ? createApiKeyResolveProjectIds({
+          apiKeyProjectPublicId,
+          apiKeyIsAllowed,
+          db: ctx.db,
+        })
+      : createUnscopedApiKeyResolveProjectIds({
+          userRole: role,
+          hasKeyBoundary: apiKeyPolicyIds.length > 0,
+          apiKeyIsAllowed,
+          db: ctx.db,
+        }),
+    getPolicies: createApiKeyGetPolicies({
+      apiKeyProjectPublicId,
+      apiKeyPolicyIds,
+      userPolicyIds,
+      role,
+      db: ctx.db,
+    }),
+  };
 };
 
 /**
@@ -265,7 +238,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
 
   const user = await ctx.db.User.findOne({
     where: { publicId: payload.publicId },
-    attributes: USER_ATTRIBUTES,
+    attributes: AUTH_USER_ATTRIBUTES,
   });
 
   if (!user) return;
@@ -339,36 +312,19 @@ const resolveJwt = async (ctx: Context, token: string) => {
 };
 
 /**
- * Verifies a raw `sk_` API key against the ApiKey table (prefix lookup + bcrypt
- * compare) and returns a minimal identity payload, or null when the token is
- * not a valid key. Used by the MCP endpoint's `verifyToken` gate so `sk_` keys
- * are a first-class MCP credential; the actual per-request authorization
- * still runs in `resolveProjectKey` when the MCP tool handler forwards the same
- * bearer token to the REST API, so scope/policy enforcement is unchanged.
+ * Admits a raw `sk_` key to the MCP endpoint's `verifyToken` gate, or null when
+ * it is not a live key. Per-request authorization still runs in
+ * `resolveProjectKey` when the tool handler forwards the same bearer to REST.
  */
 export const verifyApiKeyToken = async (
   token: string
 ): Promise<{ sub: string; apiKeyPublicId: string } | null> => {
-  if (!token.startsWith(API_KEY_RAW_PREFIX)) return null;
-
-  const keyPrefix = token.substring(0, 8);
-  const candidates = await db.ApiKey.findAll({
-    where: { keyPrefix },
-    include: [{ model: db.User, attributes: USER_ATTRIBUTES }],
-  });
-
-  for (const row of candidates) {
-    const match = await bcrypt.compare(token, row.keyHash as string);
-    if (match) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const keyUser = (row as any).user;
-      return {
-        sub: keyUser.publicId as string,
-        apiKeyPublicId: row.publicId as string,
-      };
-    }
-  }
-  return null;
+  const verified = await verifyApiKey({ rawKey: token });
+  if (!verified) return null;
+  return {
+    sub: verified.user.publicId as string,
+    apiKeyPublicId: verified.apiKey.publicId as string,
+  };
 };
 
 export const authMiddleware = async (ctx: Context, next: Next) => {

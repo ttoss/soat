@@ -11,7 +11,7 @@ Long-lived programmatic credentials that authenticate as their owning user, opti
 
 ## Overview
 
-Keys are prefixed `sk_` with a public `id` prefixed `key_`. The raw value is returned **only at creation**; a `key_prefix` (first 8 characters) is stored for identification. Keys use `Authorization: Bearer <key>`, like JWTs.
+Keys are prefixed `sk_` with a public `id` prefixed `key_`. The raw value is returned **only at creation**; the server never stores it, only its SHA-256 and a `key_prefix` (first 8 characters) for identification. A key is 32 random bytes, so a fast hash is enough to keep it unrecoverable, and a request pays one indexed lookup to verify it. Deleting a key refuses its next request. Keys use `Authorization: Bearer <key>`, like JWTs.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

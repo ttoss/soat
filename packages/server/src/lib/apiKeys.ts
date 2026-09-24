@@ -1,7 +1,7 @@
 import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
-import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
+import { hashApiKey } from './apiKeyVerifier';
 import { paginatedList } from './pagination';
 import { generateSecretValue } from './secrets';
 
@@ -65,7 +65,6 @@ export const createApiKey = async (args: {
   const random = generateSecretValue();
   const key = `${API_KEY_RAW_PREFIX}${random}`;
   const keyPrefix = key.slice(0, 8);
-  const keyHash = await bcrypt.hash(key, 10);
 
   const apiKey = await db.ApiKey.create({
     userId: args.userId,
@@ -73,7 +72,7 @@ export const createApiKey = async (args: {
     projectId: args.projectId ?? null,
     policyIds: args.policyIds ?? [],
     keyPrefix,
-    keyHash,
+    keyHashSha256: hashApiKey({ rawKey: key }),
   });
 
   /* The spec's `ApiKeyCreated` is `allOf[ApiKeyRecord, {key}]`, so create owes
