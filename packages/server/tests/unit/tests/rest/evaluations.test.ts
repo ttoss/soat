@@ -1404,7 +1404,7 @@ describe('Evaluations', () => {
     });
 
     test('runs tied on created_at list newest first', async () => {
-      const started = [];
+      const started: string[] = [];
       for (let index = 0; index < 3; index += 1) {
         const res = await asUser()
           .post(`/api/v1/evals/${evalId}/runs`)
