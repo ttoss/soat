@@ -7,6 +7,8 @@ const ACTIONS = [
   'documents:ListDocuments',
   'documents:UpdateDocument',
   'documents:RestoreDocumentVersion',
+  'documents:IngestDocument',
+  'files:UploadFile',
   'metadata-schemas:ListMetadataSchemas',
   'metadata-schemas:CreateMetadataSchema',
   'metadata-schemas:DeleteMetadataSchema',
@@ -135,13 +137,58 @@ describe('Document metadata schema enforcement', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('leaves a document that carries no metadata alone', async () => {
+    test('judges a document that carries no metadata as an empty bag', async () => {
       await declareReportSchema();
+
+      const response = await createDocument({ path: '/reports' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta.path_prefix).toBe('/reports');
+    });
+
+    test('stores no bag where the schema accepts an empty one', async () => {
+      const declared = await declare({
+        path_prefix: '/reports',
+        schema: { type: 'object', properties: { owner: { type: 'string' } } },
+      });
+      expect(declared.status).toBe(201);
 
       const response = await createDocument({ path: '/reports' });
 
       expect(response.status).toBe(201);
       expect(response.body.metadata).toBeUndefined();
+    });
+
+    test.each([
+      ['no bag', undefined],
+      ['an empty bag', {}],
+      ['a bag the schema rejects', { quarter: 'Q5' }],
+      ['a bag the schema accepts', { quarter: 'Q1' }],
+    ])('is told what the dry run reports for %s', async (_, metadata) => {
+      await declareReportSchema();
+      seq += 1;
+      const path = `/reports/parity-${seq}.txt`;
+
+      const verdict = await authenticatedTestClient(userToken)
+        .post('/api/v1/metadata-schemas/validate')
+        .send({
+          project_id: projectId,
+          path,
+          ...(metadata === undefined ? {} : { metadata }),
+        });
+      expect(verdict.status).toBe(200);
+
+      const written = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Revenue is up.',
+          path,
+          ...(metadata === undefined ? {} : { metadata }),
+        });
+
+      expect(written.status).toBe(verdict.body.valid ? 201 : 400);
     });
 
     test('governs nothing outside the prefix', async () => {
@@ -217,6 +264,38 @@ describe('Document metadata schema enforcement', () => {
     });
   });
 
+  describe('POST /api/v1/documents/ingest', () => {
+    // Ingest carries no bag to judge; the document it files is judged when
+    // metadata is first written to it.
+    test('files a document into a governed prefix without a bag', async () => {
+      await declareReportSchema();
+      seq += 1;
+      const upload = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('Revenue is up.'), {
+          filename: `ingested-${seq}.txt`,
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      expect(upload.status).toBe(201);
+
+      const ingested = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({
+          file_id: upload.body.id,
+          project_id: projectId,
+          path_prefix: '/reports',
+        });
+      expect(ingested.status).toBe(201);
+
+      const refused = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${ingested.body.id}`)
+        .send({ metadata: { owner: 'finance' } });
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('PATCH /api/v1/documents/:document_id', () => {
     test('refuses metadata the declaration rejects', async () => {
       await declareReportSchema();
@@ -261,6 +340,19 @@ describe('Document metadata schema enforcement', () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/documents/${created.body.id}`)
         .send({ path: '/reports/draft.txt' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.meta.path_prefix).toBe('/reports');
+    });
+
+    test('refuses a move of a document carrying no metadata into a prefix requiring some', async () => {
+      await declareReportSchema();
+      const created = await createDocument({ path: '/notes' });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${created.body.id}`)
+        .send({ path: '/reports/moved.txt' });
 
       expect(response.status).toBe(400);
       expect(response.body.error.meta.path_prefix).toBe('/reports');

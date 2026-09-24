@@ -237,8 +237,8 @@ A write that stores metadata violating the declaration in force is refused with 
 
 - **A prefix is a path boundary.** `/reports` governs `/reports/q1.txt` and never `/reports-archive/q1.txt`.
 - **The longest matching prefix decides**, and it decides alone: a nested prefix replaces the outer rule rather than adding to it, which is what lets one corner of a corpus be different.
-- **The schema governs the bag, not whether one exists.** A document with no metadata is never refused — [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) files a document before anyone can attach any. Clearing metadata with `"metadata": null` **is** a write of the bag, so a `required` field refuses it.
-- **A move is a write.** Repathing a document into a prefix whose schema its metadata does not satisfy is refused; a write that touches neither `path` nor `metadata` is not re-judged, so tightening a schema does not freeze the documents already stored.
+- **No bag is an empty bag.** A create that omits `metadata` is judged as `{}`, so a `required` field refuses it, exactly as the dry run below reports. Clearing metadata with `"metadata": null` is judged the same way. [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) carries no bag: the document it files is judged when metadata is first written to it.
+- **A move is a write.** Repathing a document into a prefix whose schema its metadata — or its lack of any — does not satisfy is refused; a write that touches neither `path` nor `metadata` is not re-judged, so tightening a schema does not freeze the documents already stored.
 - **The reserved root cannot be governed.** A `/.system` prefix is refused at declaration — a [platform-written document](#platform-written-documents) carries no caller metadata.
 
 [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers what a write would be told without writing, which is what a batch import wants before it starts.
