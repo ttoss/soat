@@ -6,16 +6,13 @@ import { isPlainObject } from './plainObject';
 const log = createDebug('soat:usage');
 
 /**
- * One-time rewrite of the stored documents that carry a usage name under an
- * older spelling.
+ * One-time rewrite of the stored policy documents that carry a usage action
+ * under an older spelling.
  *
- * Both validators behind those names — `isKnownAction` for policy actions,
- * `RUNTIME_CONTEXT_CATALOG` for guardrail variables — run at authoring time
- * only, so a stored document keeps whatever string it was written with and a
- * spelling the platform no longer answers to silently changes what it does: an
- * `Allow` grants nothing and a `Deny` denies nothing (fail-open), while an
- * unresolvable guardrail variable makes `guardPasses` fail every call
- * (fail-closed, an outage for that agent).
+ * `isKnownAction` runs at authoring time only, so a stored document keeps
+ * whatever string it was written with and a spelling the platform no longer
+ * answers to silently changes what it does: an `Allow` grants nothing and a
+ * `Deny` denies nothing (fail-open).
  *
  * Idempotent and prefiltered in SQL, so a converged database reads no rows and
  * it is safe to leave wired into every boot. The rewrite touches only names
@@ -26,14 +23,6 @@ const log = createDebug('soat:usage');
 const RENAMED_ACTIONS: Record<string, string> = {
   'usage:ListUsageMeters': 'usage:ListEvents',
   'usage:GetUsage': 'usage:GetAggregate',
-};
-
-/** Guardrail `runtime.*` variable names the platform rewrites. */
-const RENAMED_VAR_PATHS: Record<string, string> = {
-  'runtime.usage.run_tokens': 'runtime.usage.orchestration_run_tokens',
-  'runtime.usage.run_cost_usd': 'runtime.usage.orchestration_run_cost_usd',
-  'runtime.run.node_attempt': 'runtime.orchestration_run.node_attempt',
-  'runtime.run.tool_calls': 'runtime.orchestration_run.tool_calls',
 };
 
 // No new name contains an old one, so a rewritten row stops matching and the
@@ -51,75 +40,7 @@ const ACTION_PREFILTER = containsAny({
   needles: Object.keys(RENAMED_ACTIONS),
 });
 
-const varPrefilter = (column: string): string => {
-  return containsAny({ column, needles: Object.keys(RENAMED_VAR_PATHS) });
-};
-
 type Rewritten = { value: unknown; changed: boolean };
-
-const isVarNode = (node: Record<string, unknown>): boolean => {
-  const keys = Object.keys(node);
-  return keys.length === 1 && keys[0] === 'var';
-};
-
-/**
- * A `var` node with its path renamed, in both forms the argument takes: a bare
- * string, and the first element of `[path, default]`. Non-recursive — the
- * argument's own contents are walked by the caller, so a default that itself
- * holds a `var` is still reached.
- */
-const renameVarNode = (node: Record<string, unknown>): Rewritten => {
-  const arg = node.var;
-  if (typeof arg === 'string') {
-    const renamed = RENAMED_VAR_PATHS[arg];
-    return renamed === undefined
-      ? { value: node, changed: false }
-      : { value: { var: renamed }, changed: true };
-  }
-  if (Array.isArray(arg) && typeof arg[0] === 'string') {
-    const renamed = RENAMED_VAR_PATHS[arg[0]];
-    return renamed === undefined
-      ? { value: node, changed: false }
-      : { value: { var: [renamed, ...arg.slice(1)] }, changed: true };
-  }
-  return { value: node, changed: false };
-};
-
-/**
- * Rewrites the path of every JSON Logic `var` node in `node`.
- *
- * The node shape is the one `collectVarPaths` walks — an object whose only key
- * is `var` — and the walk descends through every value afterwards, so a `var`
- * at any depth of a `class` or `guard` expression, including one inside
- * another's default, is reached.
- */
-const rewriteVarPaths = (node: unknown): Rewritten => {
-  if (Array.isArray(node)) {
-    let listChanged = false;
-    const items = node.map((item) => {
-      const rewritten = rewriteVarPaths(item);
-      listChanged = listChanged || rewritten.changed;
-      return rewritten.value;
-    });
-    return { value: listChanged ? items : node, changed: listChanged };
-  }
-
-  if (!isPlainObject(node)) return { value: node, changed: false };
-
-  const renamed = isVarNode(node)
-    ? renameVarNode(node)
-    : { value: node, changed: false };
-  const current = isPlainObject(renamed.value) ? renamed.value : node;
-
-  let changed = renamed.changed;
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(current)) {
-    const rewritten = rewriteVarPaths(value);
-    changed = changed || rewritten.changed;
-    out[key] = rewritten.value;
-  }
-  return { value: changed ? out : node, changed };
-};
 
 const rewriteActionList = (action: unknown): Rewritten => {
   if (typeof action === 'string') {
@@ -162,27 +83,12 @@ export const rewriteStoredPolicyDocument = (
 };
 
 /**
- * Returns the rewritten guardrail document (or version snapshot), or `null`
- * when it referenced no renamed variable.
- */
-export const rewriteStoredGuardrailDocument = (
-  value: unknown
-): Record<string, unknown> | null => {
-  if (!isPlainObject(value)) return null;
-  const rewritten = rewriteVarPaths(value);
-  return rewritten.changed && isPlainObject(rewritten.value)
-    ? rewritten.value
-    : null;
-};
-
-/**
  * Returns the rewritten formation template, or `null` when nothing in it
  * carried a renamed name.
  *
  * Enumerated by resource type rather than walked whole: a `policy` resource's
- * `document` is the only place an action string is the platform's, and a
- * `guardrail` resource flattens `class` / `guard` across its property bag, so
- * the var rewrite reads the bag. Every other resource type is left alone.
+ * `document` is the only place an action string is the platform's. Every other
+ * resource type is left alone.
  */
 const rewriteResourceDeclaration = (declaration: unknown): unknown | null => {
   if (!isPlainObject(declaration) || !isPlainObject(declaration.properties)) {
@@ -199,11 +105,6 @@ const rewriteResourceDeclaration = (declaration: unknown): unknown | null => {
           ...declaration,
           properties: { ...declaration.properties, document },
         };
-  }
-
-  if (declaration.type === 'guardrail') {
-    const properties = rewriteStoredGuardrailDocument(declaration.properties);
-    return properties === null ? null : { ...declaration, properties };
   }
 
   return null;
@@ -243,47 +144,12 @@ const backfillPolicies = async (): Promise<number> => {
   return updated;
 };
 
-const backfillGuardrails = async (): Promise<number> => {
-  const guardrails = await db.Guardrail.findAll({
-    where: db.Guardrail.sequelize!.literal(varPrefilter('"document"')),
-  });
-
-  let updated = 0;
-  for (const guardrail of guardrails) {
-    const document = rewriteStoredGuardrailDocument(guardrail.document);
-    if (!document) continue;
-    guardrail.document = document;
-    await guardrail.save();
-    updated += 1;
-  }
-  return updated;
-};
-
-const backfillGuardrailVersions = async (): Promise<number> => {
-  const versions = await db.GuardrailVersion.findAll({
-    where: db.GuardrailVersion.sequelize!.literal(varPrefilter('"config"')),
-  });
-
-  let updated = 0;
-  for (const version of versions) {
-    const config = rewriteStoredGuardrailDocument(version.config);
-    if (!config) continue;
-    version.config = config;
-    await version.save();
-    updated += 1;
-  }
-  return updated;
-};
-
 const backfillFormations = async (): Promise<number> => {
   const formations = await db.Formation.findAll({
     where: db.Formation.sequelize!.literal(
       `"template" IS NOT NULL AND (${containsAny({
         column: '"template"',
-        needles: [
-          ...Object.keys(RENAMED_ACTIONS),
-          ...Object.keys(RENAMED_VAR_PATHS),
-        ],
+        needles: Object.keys(RENAMED_ACTIONS),
       })})`
     ),
   });
@@ -301,20 +167,10 @@ const backfillFormations = async (): Promise<number> => {
 
 export const backfillUsageRenames = async (): Promise<{
   policies: number;
-  guardrails: number;
-  guardrailVersions: number;
   formations: number;
 }> => {
   const policies = await backfillPolicies();
-  const guardrails = await backfillGuardrails();
-  const guardrailVersions = await backfillGuardrailVersions();
   const formations = await backfillFormations();
-  log(
-    'backfillUsageRenames: policies=%d guardrails=%d guardrailVersions=%d formations=%d',
-    policies,
-    guardrails,
-    guardrailVersions,
-    formations
-  );
-  return { policies, guardrails, guardrailVersions, formations };
+  log('backfillUsageRenames: policies=%d formations=%d', policies, formations);
+  return { policies, formations };
 };

@@ -11,7 +11,7 @@ import { authenticatedTestClient } from '../../testClient';
  * The boot backfill that rewrites stored usage names.
  *
  * Every stored document here is written **directly**, because the authoring
- * validators (`isKnownAction`, `RUNTIME_CONTEXT_CATALOG`) reject the older
+ * validator (`isKnownAction`) rejects the older
  * spellings — which is the point: they run at authoring time only, so a stored
  * document keeps whatever strings it was written with and nothing rewrites
  * them on a read. The backfill has no entry point of its own, so it is
@@ -24,11 +24,7 @@ describe('usage rename backfill', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'usagerename',
-      policyActions: [
-        'guardrails:CreateGuardrail',
-        'guardrails:GetGuardrail',
-        'guardrails:UpdateGuardrail',
-      ],
+      policyActions: ['usage:GetAggregate'],
       createNoPermUser: false,
     });
     adminToken = setup.adminToken;
@@ -98,109 +94,6 @@ describe('usage rename backfill', () => {
     });
   });
 
-  describe('guardrails', () => {
-    let guardrailId: string;
-
-    const STALE_DOCUMENT = {
-      class: {
-        if: [
-          { '>': [{ var: 'runtime.orchestration_run.node_attempt' }, 1] },
-          'C',
-          'A',
-        ],
-      },
-      guard: {
-        '<': [
-          { var: ['runtime.usage.run_cost_usd', 0] },
-          { var: 'context.ceiling' },
-        ],
-      },
-    };
-
-    beforeAll(async () => {
-      const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/guardrails')
-        .send({
-          project_id: projectId,
-          name: 'Stale Guardrail',
-          document: { class: 'A' },
-        });
-      expect(res.status).toBe(201);
-      guardrailId = res.body.id;
-
-      // Both forms a `var` takes, at depth inside `class` and `guard`, plus
-      // the version snapshot that shares the shape.
-      const guardrail = await db.Guardrail.findOne({
-        where: { publicId: guardrailId },
-      });
-      guardrail!.document = {
-        ...STALE_DOCUMENT,
-        class: {
-          if: [{ '>': [{ var: 'runtime.run.node_attempt' }, 1] }, 'C', 'A'],
-        },
-      };
-      await guardrail!.save();
-
-      await db.GuardrailVersion.create({
-        guardrailId: guardrail!.id as number,
-        version: 99,
-        config: {
-          class: 'B',
-          guard: { '<': [{ var: 'runtime.usage.run_tokens' }, 100] },
-        },
-      });
-    });
-
-    test('the backfill rewrites both var forms in the document and its snapshots', async () => {
-      const result = await backfillUsageRenames();
-      expect(result.guardrails).toBe(1);
-      expect(result.guardrailVersions).toBe(1);
-
-      const guardrail = await db.Guardrail.findOne({
-        where: { publicId: guardrailId },
-      });
-      expect(guardrail!.document).toEqual({
-        class: {
-          if: [
-            {
-              '>': [{ var: 'runtime.orchestration_run.node_attempt' }, 1],
-            },
-            'C',
-            'A',
-          ],
-        },
-        guard: {
-          '<': [
-            { var: ['runtime.usage.orchestration_run_cost_usd', 0] },
-            { var: 'context.ceiling' },
-          ],
-        },
-      });
-
-      const version = await db.GuardrailVersion.findOne({
-        where: { guardrailId: guardrail!.id as number, version: 99 },
-      });
-      expect(version!.config).toEqual({
-        class: 'B',
-        guard: {
-          '<': [{ var: 'runtime.usage.orchestration_run_tokens' }, 100],
-        },
-      });
-    });
-
-    test('the rewritten document is what the catalog now accepts', async () => {
-      const read = await authenticatedTestClient(adminToken).get(
-        `/api/v1/guardrails/${guardrailId}`
-      );
-      expect(read.status).toBe(200);
-
-      const rewrite = await authenticatedTestClient(adminToken)
-        .patch(`/api/v1/guardrails/${guardrailId}`)
-        .send({ document: read.body.document });
-      expect(rewrite.status).toBe(200);
-    });
-  });
-
   describe('formations', () => {
     let formationId: number;
 
@@ -222,21 +115,11 @@ describe('usage rename backfill', () => {
                 },
               },
             },
-            ceiling: {
-              type: 'guardrail',
-              properties: {
-                name: 'Ceiling',
-                class: 'B',
-                guard: {
-                  '<': [{ var: 'runtime.usage.run_tokens' }, 100],
-                },
-              },
-            },
             // A resource type the rewrite does not touch, carrying a string
-            // that only looks like a renamed one.
+            // that only looks like a renamed action.
             note: {
               type: 'secret',
-              properties: { name: 'note', value: 'runtime.run.tool_calls' },
+              properties: { name: 'note', value: 'usage:GetUsage' },
             },
           },
         },
@@ -244,7 +127,7 @@ describe('usage rename backfill', () => {
       formationId = formation.id as number;
     });
 
-    test('rewrites policy and guardrail resources and leaves every other type alone', async () => {
+    test('rewrites policy resources and leaves every other type alone', async () => {
       const result = await backfillUsageRenames();
       expect(result.formations).toBe(1);
 
@@ -261,19 +144,9 @@ describe('usage rename backfill', () => {
               },
             },
           },
-          ceiling: {
-            type: 'guardrail',
-            properties: {
-              name: 'Ceiling',
-              class: 'B',
-              guard: {
-                '<': [{ var: 'runtime.usage.orchestration_run_tokens' }, 100],
-              },
-            },
-          },
           note: {
             type: 'secret',
-            properties: { name: 'note', value: 'runtime.run.tool_calls' },
+            properties: { name: 'note', value: 'usage:GetUsage' },
           },
         },
       });
@@ -284,8 +157,6 @@ describe('usage rename backfill', () => {
     await backfillUsageRenames();
     expect(await backfillUsageRenames()).toEqual({
       policies: 0,
-      guardrails: 0,
-      guardrailVersions: 0,
       formations: 0,
     });
   });

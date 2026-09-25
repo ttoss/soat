@@ -1,39 +1,19 @@
 import { DomainError } from '../errors';
-import {
-  buildHttpToolExecute,
-  parseHttpExecuteConfig,
-  toHttpToolDomainError,
-} from './agentToolResolver';
-import { executeSoatTool } from './agentToolResolverExternalTools';
-import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { applyToolOutputMapping } from './jsonLogicMapping';
-import { McpToolError } from './mcpProtocol';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
-import { resolveSecretRefsInString } from './secrets';
-import { soatTools } from './soatTools';
 import {
   assertToolCallAllowed,
   type ToolCallGuardrailMode,
 } from './toolCallGuardrail';
-import { buildContextHeaders } from './toolContext';
 import { mergePresetParameters } from './toolPresetParameters';
 import { callTool } from './tools';
+import { dispatchDirectTool } from './toolsCallDispatch';
+import { resolvePresetParametersForCall } from './toolTemplates';
 import {
-  resolvePresetParametersForCall,
-  resolveToolHeaderTemplates,
-} from './toolTemplates';
-
-const noopLogToolCallingError = () => {};
-
-const toMcpToolDomainError = (error: unknown): DomainError | null => {
-  if (!(error instanceof McpToolError)) return null;
-  // Meta keys are snake_case to match the external REST contract.
-  return new DomainError('MCP_TOOL_ERROR', error.message, {
-    mcp_tool: error.toolName,
-    mcp_url: error.url,
-  });
-};
+  type ToolCallAttribution,
+  withReleasingGuardrails,
+} from './usageToolRecording';
 
 // ── Shared Tool Definition Types ─────────────────────────────────────────────
 
@@ -90,170 +70,6 @@ export const assertEphemeralTypeSupported = (
   }
 };
 
-export const callHttpTool = (
-  tool: CallableToolDefinition,
-  mergedInput: Record<string, unknown>,
-  projectId: number,
-  idempotencyKey?: string,
-  toolContext?: Record<string, string>
-): Promise<unknown> => {
-  const executeConfig = parseHttpExecuteConfig(
-    (tool.execute as
-      | { url: string; method?: string; headers?: Record<string, string> }
-      | string
-      | null) ?? null
-  );
-  if (!executeConfig) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'HTTP tool has an invalid execute configuration.'
-    );
-  }
-  return buildHttpToolExecute(
-    {
-      toolName: tool.name,
-      execute: executeConfig,
-      projectId,
-      contextKeys: tool.contextKeys,
-      // Forwarded verbatim as the `Idempotency-Key` request header (D7).
-      extraHeaders: idempotencyKey
-        ? { 'Idempotency-Key': idempotencyKey }
-        : undefined,
-    },
-    toolContext
-    // Presets were already merged into `mergedInput` by `callResolvedTool`, so
-    // none are passed here — passing them again would resolve and merge twice.
-  )(mergedInput).catch((error: unknown) => {
-    throw toHttpToolDomainError(error) ?? error;
-  });
-};
-
-export const callSoatTool = (
-  tool: CallableToolDefinition,
-  args: {
-    action?: string;
-    mergedInput: Record<string, unknown>;
-    authHeader?: string;
-    toolContext?: Record<string, string>;
-  }
-): Promise<unknown> => {
-  const { authHeader } = args;
-  // Support presetParameters.action as a fallback when no explicit action is given.
-  const action =
-    args.action ??
-    (typeof args.mergedInput['action'] === 'string'
-      ? args.mergedInput['action']
-      : undefined);
-  // Strip 'action' from the inputs so it is not forwarded as a tool parameter.
-  const { action: _action, ...mergedInput } = args.mergedInput;
-  void _action;
-  if (!action) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'operationId is required for soat tools.'
-    );
-  }
-  if (!tool.actions?.includes(action)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not available on this tool.`
-    );
-  }
-  const def = soatTools.find((t) => {
-    return t.name === action;
-  });
-  if (!def) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not a known SOAT action.`
-    );
-  }
-  return executeSoatTool({
-    toolName: tool.name,
-    def,
-    rawArgs: mergedInput,
-    authHeader,
-    toolContext: args.toolContext,
-    contextKeys: tool.contextKeys,
-    buildContextHeaders,
-    logToolCallingError: noopLogToolCallingError,
-    // Same mapping `callHttpTool` applies: the self-call's real status reaches
-    // the caller as `meta.tool_status_code`, which is also what
-    // `isRetriableError` reads to keep a 4xx from being retried.
-  }).catch((error: unknown) => {
-    throw toHttpToolDomainError(error) ?? error;
-  });
-};
-
-export const callMcpTool = async (
-  tool: CallableToolDefinition,
-  action: string | undefined,
-  mergedInput: Record<string, unknown>,
-  projectId: number,
-  toolContext?: Record<string, string>
-): Promise<unknown> => {
-  if (!action) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'action is required for mcp tools.'
-    );
-  }
-  // Enforced before the outbound request: a scoped tool must reject a denied
-  // action at the capability boundary, not merely omit it from the model's tool
-  // surface. Absent `actions` means the whole surface; the denylist wins.
-  if (tool.actions != null && !tool.actions.includes(action)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not available on this tool.`
-    );
-  }
-  if (tool.deniedActions != null && tool.deniedActions.includes(action)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not available on this tool.`
-    );
-  }
-  const mcpConfig = tool.mcp as {
-    url: string;
-    headers?: Record<string, string>;
-  } | null;
-  if (!mcpConfig?.url) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'MCP tool has an invalid mcp configuration.'
-    );
-  }
-  // Resolved at the point of use, so the stored config keeps the reference. A
-  // caller with no `tool_context` fails with `MISSING_TOOL_CONTEXT_KEY` naming
-  // the key, rather than putting the literal token on the wire as a credential
-  // and failing as an opaque upstream 401.
-  const mcpUrl = await resolveSecretRefsInString({
-    value: mcpConfig.url,
-    projectId,
-  });
-  const mcpHeaders = await resolveToolHeaderTemplates({
-    record: mcpConfig.headers,
-    projectId,
-    toolContext,
-  });
-  return buildMcpToolExecute({
-    mcpUrl,
-    mcpHeaders: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      ...(mcpHeaders ?? {}),
-      ...buildContextHeaders({ toolContext, contextKeys: tool.contextKeys }),
-    },
-    mcpToolName: action,
-    // Presets are merged by `callResolvedTool` on this path, already resolved.
-    logToolCallingError: noopLogToolCallingError,
-    // A tool the server itself reported as failed is a `502`, not the `500` an
-    // unmapped throw would be: the call reached the server and it answered.
-  })(mergedInput).catch((error: unknown) => {
-    throw toMcpToolDomainError(error) ?? error;
-  });
-};
-
 // ── Resolved Tool Execution ───────────────────────────────────────────────
 
 /**
@@ -267,52 +83,6 @@ export const callMcpTool = async (
  * a single self-recursive function instead of two consts referencing each
  * other out of declaration order.
  */
-/**
- * Dispatches a non-pipeline tool to its per-type executor. `client` tools (and
- * any unknown type) cannot run server-side.
- */
-const dispatchDirectTool = async (args: {
-  type: string;
-  tool: CallableToolDefinition;
-  action?: string;
-  mergedInput: Record<string, unknown>;
-  authHeader?: string;
-  toolProjectId: number;
-  idempotencyKey?: string;
-  toolContext?: Record<string, string>;
-}): Promise<unknown> => {
-  if (args.type === 'http') {
-    return callHttpTool(
-      args.tool,
-      args.mergedInput,
-      args.toolProjectId,
-      args.idempotencyKey,
-      args.toolContext
-    );
-  }
-  if (args.type === 'builtin') {
-    return callSoatTool(args.tool, {
-      action: args.action,
-      mergedInput: args.mergedInput,
-      authHeader: args.authHeader,
-      toolContext: args.toolContext,
-    });
-  }
-  if (args.type === 'mcp') {
-    return callMcpTool(
-      args.tool,
-      args.action,
-      args.mergedInput,
-      args.toolProjectId,
-      args.toolContext
-    );
-  }
-  throw new DomainError(
-    'TOOL_CALL_NOT_SUPPORTED',
-    'Client tools cannot be invoked server-side; they must be executed by the calling client.'
-  );
-};
-
 /**
  * Runs the guardrail gate unless a gate upstream already classified this call,
  * and answers with the arguments dispatch should carry.
@@ -329,9 +99,11 @@ const adjudicate = async (gateArgs: {
     authHeader?: string;
   };
   presetParameters: Record<string, unknown> | null;
-}): Promise<Record<string, unknown>> => {
+}): Promise<{ input: Record<string, unknown>; guardrailIds: string[] }> => {
   const { args, presetParameters } = gateArgs;
-  if (args.guardrails !== 'apply') return args.input ?? {};
+  if (args.guardrails !== 'apply') {
+    return { input: args.input ?? {}, guardrailIds: [] };
+  }
 
   return assertToolCallAllowed({
     toolId: args.toolPublicId ?? null,
@@ -345,7 +117,7 @@ const adjudicate = async (gateArgs: {
   });
 };
 
-export const callResolvedTool = async (args: {
+type CallResolvedToolArgs = {
   tool: CallableToolDefinition;
   toolProjectId: number;
   /**
@@ -367,7 +139,13 @@ export const callResolvedTool = async (args: {
   // node, the parent call's on a pipeline step. It resolves `{{context:}}` in
   // this tool's headers and presets, and is forwarded as context headers.
   toolContext?: Record<string, string>;
-}): Promise<unknown> => {
+  // Who the call's executions are metered against; a pipeline's steps inherit it.
+  attribution: ToolCallAttribution;
+};
+
+export const callResolvedTool = async (
+  args: CallResolvedToolArgs
+): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
 
   // Resolved once, here, so every dispatch below (and the pipeline's own merge)
@@ -382,7 +160,12 @@ export const callResolvedTool = async (args: {
 
   // Before any dispatch and before the pipeline runner, so a gated pipeline is
   // refused whole rather than after its first step has already run.
-  const input = await adjudicate({ args, presetParameters });
+  const gate = await adjudicate({ args, presetParameters });
+  const { input } = gate;
+  const attribution = withReleasingGuardrails({
+    attribution: args.attribution,
+    guardrailIds: gate.guardrailIds,
+  });
 
   const mergedInput = mergePresetParameters({
     presetParameters,
@@ -412,6 +195,7 @@ export const callResolvedTool = async (args: {
             // pipeline was called with — the same rule a nested orchestration
             // run follows.
             toolContext: args.toolContext,
+            attribution,
           });
         }
         return callTool({
@@ -425,6 +209,7 @@ export const callResolvedTool = async (args: {
           authHeader: args.authHeader,
           remainingDepth: step.remainingDepth,
           toolContext: args.toolContext,
+          attribution,
         });
       },
     });
@@ -441,7 +226,11 @@ export const callResolvedTool = async (args: {
     action: args.action,
     mergedInput,
     authHeader: args.authHeader,
-    toolProjectId: args.toolProjectId,
+    meter: {
+      projectId: args.toolProjectId,
+      toolId: args.toolPublicId ?? null,
+      attribution,
+    },
     idempotencyKey: args.idempotencyKey,
     toolContext: args.toolContext,
   });
@@ -467,6 +256,7 @@ export const callEphemeralTool = async (args: {
   authHeader?: string;
   remainingDepth?: number;
   toolContext?: Record<string, string>;
+  attribution: ToolCallAttribution;
 }): Promise<unknown> => {
   assertEphemeralTypeSupported(args.definition);
   return callResolvedTool({
@@ -478,5 +268,6 @@ export const callEphemeralTool = async (args: {
     authHeader: args.authHeader,
     remainingDepth: args.remainingDepth,
     toolContext: args.toolContext,
+    attribution: args.attribution,
   });
 };

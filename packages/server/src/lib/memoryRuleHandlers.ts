@@ -159,6 +159,10 @@ const runToolHandler = async (args: {
       conversation_id: args.turn.conversationPublicId ?? null,
       transcript: args.turn.transcript,
     },
+    attribution: {
+      generationId: args.turn.generationPublicId,
+      agentId: args.turn.agentPublicId,
+    },
   });
 
   return parseHandlerFacts(raw);

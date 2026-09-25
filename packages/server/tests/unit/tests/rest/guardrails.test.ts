@@ -16,7 +16,7 @@ const GUARDRAIL_ACTIONS = [
 const budgetDocument = {
   default_class: 'C',
   class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
-  guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+  guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
 };
 
 describe('Guardrails', () => {
@@ -185,7 +185,7 @@ describe('Guardrails', () => {
           name: 'Bad',
           document: {
             class: 'B',
-            guard: { '<': [{ var: 'runtime.usage.cost_usd_90d' }, 1] },
+            guard: { '<': [{ var: 'runtime.projects.cost_usd.90d' }, 1] },
           },
         });
       expect(response.status).toBe(400);
@@ -606,7 +606,7 @@ describe('Guardrails', () => {
       expect(after.body.data.length).toBe(before.body.data.length);
     });
 
-    test('resolves live runtime.usage.* and accepts an optional tool_id', async () => {
+    test('resolves live runtime.projects.* and accepts an optional tool_id', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
@@ -614,14 +614,14 @@ describe('Guardrails', () => {
           name: 'Usage Guardrail',
           document: {
             class: 'B',
-            guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+            guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
           },
         });
       const usageGuardrailId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/guardrails/${usageGuardrailId}/evaluate`)
-        // A tool_id that need not exist — it only resolves runtime.tool.*.
+        // A tool_id that need not exist — it only resolves runtime.tools.*.
         .send({ args: { amount: 1 }, tool_id: 'tool_unknown00000000' });
 
       expect(response.status).toBe(200);
@@ -629,9 +629,9 @@ describe('Guardrails', () => {
       // No usage events → windowed cost is 0, under the ceiling → guard passes.
       expect(response.body.guard_result).toBe(true);
       expect(response.body.decision).toBe('execute');
-      expect(response.body.context_snapshot['runtime.usage.cost_usd_24h']).toBe(
-        0
-      );
+      expect(
+        response.body.context_snapshot['runtime.projects.cost_usd.24h']
+      ).toBe(0);
     });
 
     test('run-scoped usage keys are catalogued and fail closed outside a run', async () => {
@@ -644,7 +644,7 @@ describe('Guardrails', () => {
             class: 'B',
             guard: {
               '<': [
-                { var: 'runtime.usage.orchestration_run_tokens' },
+                { var: 'runtime.orchestrations.tokens.total' },
                 { var: 'context.action_token_ceiling' },
               ],
             },
@@ -663,29 +663,37 @@ describe('Guardrails', () => {
       expect(response.body.guard_result).toBe(false);
       expect(response.body.decision).toBe('tripwire');
       expect(
-        response.body.context_snapshot['runtime.usage.orchestration_run_tokens']
+        response.body.context_snapshot['runtime.orchestrations.tokens.total']
       ).toBeNull();
     });
 
     test.each([
-      'runtime.usage.run_tokens',
-      'runtime.usage.run_cost_usd',
-      'runtime.run.node_attempt',
-      'runtime.run.tool_calls',
-    ])('the pre-rename spelling %s is rejected at write time', async (path) => {
-      const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/guardrails')
-        .send({
-          project_id: projectId,
-          name: `Stale Var ${path}`,
-          document: {
-            class: 'B',
-            guard: { '<': [{ var: path }, 10] },
-          },
-        });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_FAILED');
-    });
+      'runtime.tool.id',
+      'runtime.agent.id',
+      'runtime.project.id',
+      'runtime.activity.actions_24h',
+      'runtime.usage.cost_usd_24h',
+      'runtime.usage.orchestration_run_tokens',
+      'runtime.orchestration_run.node_attempt',
+      'runtime.tools.tool_calls',
+      'runtime.guardrails.errors.24h',
+    ])(
+      '%s, outside the served grammar, is rejected at write time',
+      async (path) => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/guardrails')
+          .send({
+            project_id: projectId,
+            name: `Stale Var ${path}`,
+            document: {
+              class: 'B',
+              guard: { '<': [{ var: path }, 10] },
+            },
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    );
 
     test('the run namespace resolves under its declared path', async () => {
       const res = await authenticatedTestClient(userToken)
@@ -696,7 +704,7 @@ describe('Guardrails', () => {
           document: {
             class: 'A',
             guard: {
-              '==': [{ var: 'runtime.orchestration_run.tool_calls' }, null],
+              '==': [{ var: 'runtime.orchestrations.tool_calls.total' }, null],
             },
           },
         });
@@ -707,7 +715,9 @@ describe('Guardrails', () => {
         .send({ args: {} });
       expect(response.status).toBe(200);
       expect(
-        response.body.context_snapshot['runtime.orchestration_run.tool_calls']
+        response.body.context_snapshot[
+          'runtime.orchestrations.tool_calls.total'
+        ]
       ).toBeNull();
     });
 

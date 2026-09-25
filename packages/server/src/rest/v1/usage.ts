@@ -69,6 +69,7 @@ const usageNarrowings = (ctx: Context): UsageNarrowings => {
     source: query.source,
     triggerId: query.trigger_id,
     actionId: query.action_id,
+    outcome: query.outcome,
     sessionId: query.session_id,
     actorId: query.actor_id,
     agentId: query.agent_id,
@@ -77,6 +78,7 @@ const usageNarrowings = (ctx: Context): UsageNarrowings => {
     orchestrationId: query.orchestration_id,
     generationId: query.generation_id,
     traceId: query.trace_id,
+    toolId: query.tool_id,
   };
 };
 
@@ -86,8 +88,8 @@ const usageNarrowings = (ctx: Context): UsageNarrowings => {
  * operationId: listUsageEvents
  * Lists raw usage events the caller can access, optionally filtered by
  * agent_id, generation_id, trace_id, actor_id, session_id, ai_provider_id,
- * orchestration_run_id, orchestration_id, trigger_id, action_id, meter_type,
- * model, and source — the same narrowings the aggregate takes, so a rollup and
+ * orchestration_run_id, orchestration_id, tool_id, trigger_id, action_id,
+ * outcome, meter_type, model, and source — the same narrowings the aggregate takes, so a rollup and
  * the events behind it are addressed the same way. An id naming nothing in
  * scope yields an empty page. One row is recorded per completed generation
  * with the provider's reported input/output/cached/reasoning token counts.
@@ -120,13 +122,13 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
  * Returns a project's usage rolled up over an optional [from, to] window,
  * optionally bucketed by one dimension
  * (group_by=model|ai_provider|agent|orchestration_run|day|meter_type|actor|
- * session|source) and narrowed by any combination of thirteen filters, echoed
+ * session|source|tool) and narrowed by any combination of fifteen filters, echoed
  * back under filters. Each group and the grand total carry an event count,
  * summed token counts, a measured quantity per component, and cost_usd.
- * Narrowings intersect and apply to the whole rollup. The eight naming a
+ * Narrowings intersect and apply to the whole rollup. The nine naming a
  * resource are resolved against the project, and one naming nothing yields an
- * empty rollup, never the project total; the other five (meter_type, model,
- * source, trigger_id, action_id) match the value the event recorded.
+ * empty rollup, never the project total; the other six (meter_type, model,
+ * source, trigger_id, action_id, outcome) match the value the event recorded.
  * orchestration_id selects that orchestration's own runs, not the subtree its
  * nodes started. Omitting group_by returns totals with an empty groups page.
  * groups is paginated with limit/offset;

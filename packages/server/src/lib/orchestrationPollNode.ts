@@ -50,6 +50,7 @@ export const executePollNode = async (args: {
   projectIds: number[];
   authHeader?: string;
   attempt?: number;
+  orchestrationRunId?: string | null;
   // The run's `tool_context` — a poll node is the run calling a tool on its own
   // behalf, so it carries the run's context like a `tool` node does.
   toolContext?: Record<string, string>;
@@ -73,6 +74,10 @@ export const executePollNode = async (args: {
     input: inputs,
     authHeader,
     toolContext,
+    attribution: {
+      orchestrationRunId: args.orchestrationRunId,
+      nodeId: node.id,
+    },
   });
 
   const context = { ...state, response: lastResponse, attempt };

@@ -30,6 +30,7 @@ export type ScopedIdResource =
   | 'orchestration'
   | 'orchestrationRun'
   | 'session'
+  | 'tool'
   | 'trace';
 
 /** The table each one resolves against. */
@@ -54,6 +55,9 @@ const SCOPED_ID_MODELS: Record<ScopedIdResource, Finder> = {
   },
   session: (where) => {
     return db.Session.findOne({ where });
+  },
+  tool: (where) => {
+    return db.Tool.findOne({ where });
   },
   trace: (where) => {
     return db.Trace.findOne({ where });

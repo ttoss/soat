@@ -71,6 +71,9 @@ export type PersistedUsageEvent = {
   ai_provider_id: string | null;
   trigger_id: string | null;
   action_id: string | null;
+  tool_id: string | null;
+  // `ok` | `error` | `timeout` on a `tool_execution` event; null otherwise.
+  outcome: string | null;
   meter_type: string;
   // The workload behind the spend (`eval`, `eval_judge`, `chat`, a memory store pass);
   // null for ordinary agent traffic. This is what makes verification spend
@@ -116,6 +119,7 @@ const mapUsageEvent = (
     actor?: InstanceType<(typeof db)['Actor']> | null;
     session?: InstanceType<(typeof db)['Session']> | null;
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
+    tool?: InstanceType<(typeof db)['Tool']> | null;
     components?: InstanceType<(typeof db)['UsageComponent']>[];
   }
 ): PersistedUsageEvent => {
@@ -135,6 +139,8 @@ const mapUsageEvent = (
     ai_provider_id: assocPublicId(event.aiProvider),
     trigger_id: event.triggerId,
     action_id: event.actionId,
+    tool_id: assocPublicId(event.tool),
+    outcome: event.outcome ?? null,
     meter_type: event.meterType,
     source: event.source ?? null,
     provider: event.provider,
@@ -153,6 +159,7 @@ type ScopedFilterArgs = {
   sessionId?: string;
   aiProviderId?: string;
   orchestrationRunId?: string;
+  toolId?: string;
 };
 
 // The publicId filters that resolve to an internal FK on the event, and the
@@ -170,6 +177,7 @@ const SCOPED_FILTERS: ReadonlyArray<{
   { key: 'sessionId', resource: 'session' },
   { key: 'aiProviderId', resource: 'aiProvider' },
   { key: 'orchestrationRunId', resource: 'orchestrationRun' },
+  { key: 'toolId', resource: 'tool' },
 ];
 
 // Resolves the publicId filters into `where` (mutating it). Returns false when
@@ -215,6 +223,7 @@ const eventIncludes = (args: { orchestrationId?: number }) => {
     { model: db.Actor, as: 'actor' },
     { model: db.Session, as: 'session' },
     { model: db.AiProvider, as: 'aiProvider' },
+    { model: db.Tool, as: 'tool' },
     {
       model: db.UsageComponent,
       as: 'components',
@@ -233,8 +242,10 @@ export const listUsageEvents = async (args: {
   aiProviderId?: string;
   orchestrationRunId?: string;
   orchestrationId?: string;
+  toolId?: string;
   triggerId?: string;
   actionId?: string;
+  outcome?: string;
   meterType?: string;
   model?: string;
   source?: string;
@@ -262,6 +273,7 @@ export const listUsageEvents = async (args: {
     sessionId: args.sessionId,
     aiProviderId: args.aiProviderId,
     orchestrationRunId: args.orchestrationRunId,
+    toolId: args.toolId,
     projectIds: args.projectIds,
   });
   if (!resolved) return emptyPage(args);

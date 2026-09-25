@@ -28,6 +28,10 @@ import {
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+// A protocol test reads the call, not its meter: no project, so the
+// recorder's write is refused and swallowed.
+const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+
 describe('resolveAgentTools', () => {
   let adminToken: string;
   let projectId: string;
@@ -85,24 +89,34 @@ describe('resolveAgentTools', () => {
   });
 
   test('resolves http tool and returns tool with execute function', async () => {
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     expect(tools).toHaveProperty('myHttpTool');
     expect(typeof tools.myHttpTool).toBe('object');
   });
 
   test('resolves client tool and returns tool without execute function', async () => {
-    const tools = await resolveAgentTools({ toolIds: [clientToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [clientToolId],
+    });
     expect(tools).toHaveProperty('myClientTool');
     expect('execute' in tools.myClientTool).toBe(false);
   });
 
   test('skips unknown tool IDs', async () => {
-    const tools = await resolveAgentTools({ toolIds: ['agt_tl_unknown000'] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: ['agt_tl_unknown000'],
+    });
     expect(Object.keys(tools)).toHaveLength(0);
   });
 
   test('resolves multiple tools at once', async () => {
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [httpToolId, clientToolId],
     });
     expect(Object.keys(tools)).toHaveLength(2);
@@ -117,7 +131,10 @@ describe('resolveAgentTools', () => {
         new Response(JSON.stringify({ results: [] }), { status: 200 })
       );
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     if ('execute' in httpTool && typeof httpTool.execute === 'function') {
@@ -153,7 +170,10 @@ describe('resolveAgentTools', () => {
         new Response(JSON.stringify({ id: 'new-item' }), { status: 201 })
       );
 
-    const tools = await resolveAgentTools({ toolIds: [postToolRes.body.id] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [postToolRes.body.id],
+    });
     const postTool = tools.myPostHttpTool;
 
     if ('execute' in postTool && typeof postTool.execute === 'function') {
@@ -190,6 +210,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [siblingToolRes.body.id],
     });
     const siblingTool = tools.mySiblingFieldsHttpTool;
@@ -263,6 +284,7 @@ describe('resolveAgentTools', () => {
     expect(multipartToolRes.body.execute.body_mode).toBe('multipart');
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [multipartToolRes.body.id],
     });
     const multipartTool = tools.myMultipartHttpTool;
@@ -350,6 +372,7 @@ describe('resolveAgentTools', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [contextToolRes.body.id],
       toolContext: {
         session_id: 'ses_01',
@@ -449,6 +472,7 @@ describe('resolveAgentTools', () => {
       toolContext?: Record<string, string>;
     }) => {
       const tools = await resolveAgentTools({
+        attribution: {},
         toolIds: [args.toolId],
         toolContext: args.toolContext,
       });
@@ -815,7 +839,10 @@ describe('resolveAgentTools', () => {
         new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
       );
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     let thrownError: unknown;
@@ -858,7 +885,10 @@ describe('resolveAgentTools', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('Forbidden', { status: 403 }));
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     let thrownError: unknown;
@@ -886,7 +916,10 @@ describe('resolveAgentTools', () => {
       })
     );
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     let result: unknown;
@@ -904,7 +937,10 @@ describe('resolveAgentTools', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     let result: unknown;
@@ -950,6 +986,7 @@ describe('resolveAgentTools', () => {
     const fetchMock = jest.spyOn(global, 'fetch');
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [stringExecuteRes.body.id],
     });
     const tool = tools.myStringExecuteHttpTool;
@@ -974,7 +1011,10 @@ describe('resolveAgentTools', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     if ('execute' in httpTool && typeof httpTool.execute === 'function') {
@@ -1015,7 +1055,10 @@ describe('resolveAgentTools', () => {
         new Response(JSON.stringify({ deleted: true }), { status: 200 })
       );
 
-    const tools = await resolveAgentTools({ toolIds: [deleteToolRes.body.id] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [deleteToolRes.body.id],
+    });
     const deleteTool = tools.myDeleteHttpTool;
 
     if ('execute' in deleteTool && typeof deleteTool.execute === 'function') {
@@ -1048,7 +1091,10 @@ describe('resolveAgentTools', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.myHttpTool;
 
     if ('execute' in httpTool && typeof httpTool.execute === 'function') {
@@ -1076,6 +1122,7 @@ describe('resolveAgentTools', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [invalidToolRes.body.id],
     });
     const invalidTool = tools.myInvalidHttpTool;
@@ -1110,6 +1157,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [mappedToolRes.body.id],
     });
     const mappedTool = tools.myMappedHttpTool;
@@ -1154,6 +1202,7 @@ describe('resolveAgentTools', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [pipelineToolRes.body.id],
     });
     const pipelineTool = tools.myPipelineTool;
@@ -1232,7 +1281,10 @@ describe('resolveAgentTools', () => {
           });
         expect(toolRes.status).toBe(201);
 
-        const tools = await resolveAgentTools({ toolIds: [toolRes.body.id] });
+        const tools = await resolveAgentTools({
+          attribution: {},
+          toolIds: [toolRes.body.id],
+        });
         const resolved = tools.myPresetHttpTool;
 
         const schema = resolved.inputSchema as {
@@ -1274,7 +1326,10 @@ describe('resolveAgentTools', () => {
         });
       expect(toolRes.status).toBe(201);
 
-      const tools = await resolveAgentTools({ toolIds: [toolRes.body.id] });
+      const tools = await resolveAgentTools({
+        attribution: {},
+        toolIds: [toolRes.body.id],
+      });
       const schema = tools.myPresetClientTool.inputSchema as {
         jsonSchema?: {
           properties?: Record<string, unknown>;
@@ -1312,6 +1367,7 @@ describe('resolveAgentTools - ephemeral tools', () => {
 
   test('resolves an ephemeral http tool without creating a Tool row', async () => {
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [],
       tools: [
         {
@@ -1346,6 +1402,7 @@ describe('resolveAgentTools - ephemeral tools', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [persistedRes.body.id],
       tools: [{ name: 'ephemeralClientTool', type: 'client' }],
       projectId: internalProjectId,
@@ -1360,6 +1417,7 @@ describe('resolveAgentTools - ephemeral tools', () => {
   test('rejects an ephemeral tool definition of type pipeline', async () => {
     await expect(
       resolveAgentTools({
+        attribution: {},
         toolIds: [],
         tools: [{ name: 'ephemeralPipeline', type: 'pipeline' }],
         projectId: internalProjectId,
@@ -1369,6 +1427,7 @@ describe('resolveAgentTools - ephemeral tools', () => {
 
   test('does not resolve ephemeral tools when projectId is not provided', async () => {
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [],
       tools: [{ name: 'orphanedEphemeralTool' }],
     });
@@ -2039,7 +2098,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
       )
     );
 
-    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [mcpToolId],
+    });
 
     expect(tools).toHaveProperty('search');
     expect(fetchMock).toHaveBeenCalled();
@@ -2050,7 +2112,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('', { status: 500 }));
 
-    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [mcpToolId],
+    });
 
     expect(Object.keys(tools)).toHaveLength(0);
   });
@@ -2060,7 +2125,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .spyOn(global, 'fetch')
       .mockRejectedValueOnce(new Error('Network error'));
 
-    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [mcpToolId],
+    });
 
     expect(Object.keys(tools)).toHaveLength(0);
   });
@@ -2101,6 +2169,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     });
 
     await resolveAgentTools({
+      attribution: {},
       toolIds: [mcpToolId],
       activity: {
         projectId: project!.id as number,
@@ -2155,6 +2224,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [args.toolId],
       activity: {
         projectId: project!.id as number,
@@ -2255,7 +2325,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
     );
 
     const toolId = await createMcpTool('mcpSseServer');
-    const tools = await resolveAgentTools({ toolIds: [toolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [toolId],
+    });
 
     expect(tools).toHaveProperty('sseSearch');
   });
@@ -2280,6 +2353,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .mockResolvedValueOnce(new Response('{}', { status: 200 }));
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [urlWithQueryRes.body.id],
     });
     if (
@@ -2307,7 +2381,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('{}', { status: 200 }));
 
-    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [httpToolId],
+    });
     const httpTool = tools.resolverHttpTool;
 
     if ('execute' in httpTool && typeof httpTool.execute === 'function') {
@@ -2347,7 +2424,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
         )
       );
 
-    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [mcpToolId],
+    });
     const mcpTool = tools.json_echo;
 
     if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
@@ -2383,7 +2463,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
         )
       );
 
-    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [mcpToolId],
+    });
     const mcpTool = tools.text_echo;
 
     if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
@@ -2419,7 +2502,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
         )
       );
 
-    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [mcpToolId],
+    });
     const mcpTool = tools.empty_content;
 
     if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
@@ -2432,6 +2518,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('resolveAgentTools applies projectIds filter when provided', async () => {
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [httpToolId],
       projectIds: [],
     });
@@ -2450,6 +2537,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
     });
@@ -2478,6 +2566,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [deniedSoatRes.body.id],
       // A real permission, not a name like `files:ListFiles` that no action
       // answers to: a boundary evaluated against the tool name would deny
@@ -2512,6 +2601,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [allowedSoatRes.body.id],
       authHeader: `Bearer ${adminToken}`,
       boundaryPolicy: {
@@ -2542,6 +2632,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(soatToolRes.status).toBe(201);
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [soatToolRes.body.id],
     });
     expect(tools).toHaveProperty('myPresetSoatTool_get-document');
@@ -2580,6 +2671,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(soatToolRes.status).toBe(201);
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
     });
@@ -2626,6 +2718,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(soatToolRes.status).toBe(201);
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
     });
@@ -2648,6 +2741,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
     });
@@ -2688,6 +2782,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [pipelineToolRes.body.id],
     });
 
@@ -2708,7 +2803,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
         mcp: {},
       });
 
-    const tools = await resolveAgentTools({ toolIds: [brokenMcpRes.body.id] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [brokenMcpRes.body.id],
+    });
 
     expect(tools).toEqual({});
   });
@@ -2730,7 +2828,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
         new Response(JSON.stringify({ results: [] }), { status: 200 })
       );
 
-    const tools = await resolveAgentTools({ toolIds: [getToolRes.body.id] });
+    const tools = await resolveAgentTools({
+      attribution: {},
+      toolIds: [getToolRes.body.id],
+    });
     const httpTool = tools.objectQueryArgTool;
 
     if ('execute' in httpTool && typeof httpTool.execute === 'function') {
@@ -2819,6 +2920,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       toolContext?: Record<string, string>;
     }) => {
       const tools = await resolveAgentTools({
+        attribution: {},
         toolIds: [args.toolId],
         toolContext: args.toolContext,
       });
@@ -2953,6 +3055,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
       try {
         const result = await resolveMcpTools({
+          meter: UNMETERED,
           typedTool: {
             mcp: { url: 'http://localhost:19999/mcp' },
             presetParameters: {
@@ -2997,6 +3100,7 @@ describe('buildMcpToolExecute', () => {
     jest.spyOn(global, 'fetch').mockRejectedValueOnce(networkError);
 
     const execute = buildMcpToolExecute({
+      meter: UNMETERED,
       mcpUrl: 'http://localhost:19999/mcp',
       mcpHeaders: { 'Content-Type': 'application/json' },
       mcpToolName: 'my_tool',
@@ -3025,6 +3129,7 @@ describe('resolveMcpTools - direct', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: { mcp: { url: 'http://localhost:19999/mcp' } },
       buildContextHeaders: () => {
         return {};
@@ -3044,6 +3149,7 @@ describe('resolveMcpTools - direct', () => {
         )
       );
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: { mcp: { url: 'http://localhost:19999/mcp' } },
       buildContextHeaders: () => {
         return {};
@@ -3067,6 +3173,7 @@ describe('resolveMcpTools - direct', () => {
   test('exposes the entire MCP server surface when actions is null', async () => {
     mockMcpListWithTwoTools();
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: { mcp: { url: 'http://localhost:19999/mcp' }, actions: null },
       buildContextHeaders: () => {
         return {};
@@ -3079,6 +3186,7 @@ describe('resolveMcpTools - direct', () => {
   test('exposes only allowlisted actions when actions is set', async () => {
     mockMcpListWithTwoTools();
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: {
         mcp: { url: 'http://localhost:19999/mcp' },
         actions: ['read_item'],
@@ -3095,6 +3203,7 @@ describe('resolveMcpTools - direct', () => {
   test('exposes nothing when actions is an empty allowlist', async () => {
     mockMcpListWithTwoTools();
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: { mcp: { url: 'http://localhost:19999/mcp' }, actions: [] },
       buildContextHeaders: () => {
         return {};
@@ -3107,6 +3216,7 @@ describe('resolveMcpTools - direct', () => {
   test('excludes denied actions when deniedActions is set', async () => {
     mockMcpListWithTwoTools();
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: {
         mcp: { url: 'http://localhost:19999/mcp' },
         deniedActions: ['delete_item'],
@@ -3123,6 +3233,7 @@ describe('resolveMcpTools - direct', () => {
   test('denylist takes precedence over allowlist for the same action', async () => {
     mockMcpListWithTwoTools();
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: {
         mcp: { url: 'http://localhost:19999/mcp' },
         actions: ['read_item', 'delete_item'],
@@ -3165,6 +3276,7 @@ describe('resolveMcpTools - direct', () => {
       )
     );
     const result = await resolveMcpTools({
+      meter: UNMETERED,
       typedTool: {
         mcp: { url: 'http://localhost:19999/mcp' },
         presetParameters: { tenant: 'acme' },
@@ -3221,6 +3333,7 @@ describe('executeSoatTool - direct', () => {
     // never imply sharing authority.
     await expect(
       executeSoatTool({
+        meter: UNMETERED,
         toolName: 'test',
         def: soatDef('list-tools'),
         rawArgs: {},
@@ -3350,6 +3463,7 @@ describe('buildSoatRequestBody - trace field injection scoping', () => {
 describe('resolveSoatTools - direct', () => {
   test('returns empty object when actions is null', () => {
     const result = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'myTool',
         description: null,
@@ -3369,6 +3483,7 @@ describe('resolveSoatTools - direct', () => {
 
   test('skips action when def not found in soatTools registry', () => {
     const result = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'myTool',
         description: null,

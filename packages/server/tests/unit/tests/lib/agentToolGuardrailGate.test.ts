@@ -182,6 +182,7 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
       guardrailContext: opts.guardrailContext,
     });
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [httpToolId],
       projectId,
       projectIds: [projectId],
@@ -553,11 +554,11 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
     }
   });
 
-  test('a guard reads windowed runtime.usage.* at evaluation time', async () => {
+  test('a guard reads windowed runtime.projects.* at evaluation time', async () => {
     const id = await makeGuardrail({
       class: 'B',
       // No usage events in this project → cost is 0, under the ceiling → passes.
-      guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+      guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
     });
     const refund = await resolveGuarded({ toolGuardrailIds: [id] });
     const result = await invokeExecute(refund, { amount: 1 });
@@ -581,6 +582,7 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
       projectPublicId,
     });
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [httpToolId],
       projectId,
       projectIds: [projectId],

@@ -763,6 +763,8 @@ describe('Usage', () => {
         orchestration_id: null,
         generation_id: null,
         trace_id: null,
+        tool_id: null,
+        outcome: null,
       });
     });
 

@@ -971,7 +971,7 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/guardrails/$GUARDRAIL_ID" \
 
 ## Next Steps
 
-- [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings) — `guardrail_context`, `context_tool_id`, `runtime.usage.orchestration_run_tokens`.
+- [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings) — `guardrail_context`, `context_tool_id`, `runtime.orchestrations.tokens.total`.
 - [`approval` node](/docs/tutorials/approval-gate) — an explicit human decision point in the graph.
 - [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user) — aggregate spend caps.
 - [Exceptions](/docs/modules/exceptions) — triage what a tripwire files.

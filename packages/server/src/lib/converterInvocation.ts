@@ -170,6 +170,7 @@ const invokeToolConverter = async (args: {
       id: args.rule.tool_id!,
       action: args.rule.action ?? undefined,
       input,
+      attribution: {},
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

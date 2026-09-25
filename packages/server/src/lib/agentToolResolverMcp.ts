@@ -21,11 +21,16 @@ import {
   stripPresetKeysFromSchema,
 } from './toolPresetParameters';
 import { resolvePresetParametersForCall } from './toolTemplates';
+import {
+  meterToolExecution,
+  type ToolExecutionMeter,
+} from './usageToolRecording';
 
 export const buildMcpToolExecute = (args: {
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
   mcpToolName: string;
+  meter: ToolExecutionMeter;
   presetParameters?: object | null;
   // A `{{context:}}` token in a preset resolves against this call's context and
   // is retyped by the tool's schema — at call time, so a missing key fails this
@@ -45,21 +50,30 @@ export const buildMcpToolExecute = (args: {
       ? mergePresetParameters({ presetParameters, input: toolArgs })
       : toolArgs;
     try {
-      const callResponse = await fetchWithEgressGuard(args.mcpUrl, {
-        method: 'POST',
-        headers: args.mcpHeaders,
-        signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'tools/call',
-          params: { name: args.mcpToolName, arguments: callArgs },
-        }),
-      });
-      return readMcpCallResult({
-        body: await parseJsonRpcBody(callResponse),
-        toolName: args.mcpToolName,
-        url: args.mcpUrl,
+      return await meterToolExecution({
+        meter: args.meter,
+        send: async (markSent) => {
+          const callResponse = await fetchWithEgressGuard(
+            args.mcpUrl,
+            {
+              method: 'POST',
+              headers: args.mcpHeaders,
+              signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 2,
+                method: 'tools/call',
+                params: { name: args.mcpToolName, arguments: callArgs },
+              }),
+            },
+            { onRequest: markSent }
+          );
+          return readMcpCallResult({
+            body: await parseJsonRpcBody(callResponse),
+            toolName: args.mcpToolName,
+            url: args.mcpUrl,
+          });
+        },
       });
     } catch (error) {
       args.logToolCallingError({
@@ -96,6 +110,7 @@ const buildMcpToolEntry = (args: {
   mcpTool: McpToolListing;
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
+  meter: ToolExecutionMeter;
   presetParameters?: object | null;
   toolContext?: Record<string, string>;
   logToolCallingError: LogToolCallingError;
@@ -118,6 +133,7 @@ const buildMcpToolEntry = (args: {
       mcpUrl: args.mcpUrl,
       mcpHeaders: args.mcpHeaders,
       mcpToolName: mcpTool.name,
+      meter: args.meter,
       presetParameters: args.presetParameters,
       toolContext: args.toolContext,
       presetSchema: mcpTool.inputSchema,
@@ -169,6 +185,7 @@ export const resolveMcpTools = async (args: {
     // over every action a binding lists.
     presetParameters?: object | null;
   };
+  meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
   buildContextHeaders: (args: {
     toolContext?: Record<string, string>;
@@ -211,6 +228,7 @@ export const resolveMcpTools = async (args: {
       mcpTool,
       mcpUrl,
       mcpHeaders,
+      meter: args.meter,
       presetParameters: args.typedTool.presetParameters,
       toolContext: args.toolContext,
       logToolCallingError: args.logToolCallingError,

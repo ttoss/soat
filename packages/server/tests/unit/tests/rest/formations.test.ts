@@ -3847,7 +3847,7 @@ resources:
             name: 'formation-guardrail',
             class: 'B',
             default_class: 'C',
-            guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+            guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
             context_tool_id: { ref: 'ContextTool' },
             context_mode: 'merge',
           },

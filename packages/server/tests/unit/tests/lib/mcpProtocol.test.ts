@@ -2,6 +2,10 @@ import { asSchema } from 'ai';
 import { resolveMcpTools } from 'src/lib/agentToolResolverMcp';
 import { McpToolError } from 'src/lib/mcpProtocol';
 
+// A protocol test reads the call, not its meter: no project, so the
+// recorder's write is refused and swallowed.
+const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+
 /**
  * How much of the MCP protocol an `mcp` binding actually reads.
  *
@@ -43,6 +47,7 @@ describe('MCP protocol fidelity', () => {
 
   const resolve = async () => {
     return resolveMcpTools({
+      meter: UNMETERED,
       typedTool: { mcp: { url: MCP_URL } },
       buildContextHeaders: () => {
         return {};
@@ -110,6 +115,7 @@ describe('MCP protocol fidelity', () => {
       });
 
       const result = await resolveMcpTools({
+        meter: UNMETERED,
         typedTool: { mcp: { url: MCP_URL } },
         buildContextHeaders: () => {
           return {};
@@ -209,6 +215,7 @@ describe('MCP protocol fidelity', () => {
       });
 
       const tools = await resolveMcpTools({
+        meter: UNMETERED,
         typedTool: { mcp: { url: MCP_URL } },
         buildContextHeaders: () => {
           return {};

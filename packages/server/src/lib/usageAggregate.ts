@@ -352,18 +352,18 @@ export const rollUpUsageTotals = async (
 /**
  * Rolls a project's usage up over an optional `[from, to]` window, optionally
  * bucketed by one dimension (`model` | `ai_provider` | `agent` |
- * `orchestration_run` | `day` | `meter_type` | `actor` | `session` | `source`)
- * and narrowed by any combination of the thirteen filters in
+ * `orchestration_run` | `day` | `meter_type` | `actor` | `session` | `source` |
+ * `tool`) and narrowed by any combination of the fifteen filters in
  * `UsageNarrowings`. Each group and the grand total carry an event count,
  * summed token counts, a measured `quantity` per component, and `cost_usd`
  * (null when no event in the bucket was priced). `include=distinct` adds
  * `totals.distinct`, the distinct-entity counters a "how many" question reads.
  *
  * Narrowings intersect, and apply to the whole rollup — every bucket, the
- * window totals and the distinct counters alike. The eight that name a
+ * window totals and the distinct counters alike. The nine that name a
  * resource are public ids resolved against this project; one naming nothing
  * here empties the rollup, so a mistyped id reads as zero rather than as the
- * project's whole spend. The other five are matched as the event recorded
+ * project's whole spend. The other six are matched as the event recorded
  * them.
  *
  * Aggregated by Postgres, not in memory: the window is grouped and summed in

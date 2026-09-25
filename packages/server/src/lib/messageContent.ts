@@ -313,6 +313,8 @@ const resolveToolOutputContent = async (args: {
     // The generation calling a tool on its own behalf, so it carries the same
     // bag the model's own tool calls resolve from.
     toolContext: args.toolContext,
+    // Resolved before the generation row exists, so there is no turn to name.
+    attribution: {},
   });
 
   const resolvedContent = args.content.output_path

@@ -182,6 +182,7 @@ const dispatchNodeExecution = async (
         projectIds,
         authHeader,
         attempt: pollAttempt,
+        orchestrationRunId: runPublicId,
         toolContext,
       });
     case 'knowledge':

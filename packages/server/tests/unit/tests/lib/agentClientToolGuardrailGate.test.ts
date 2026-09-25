@@ -81,6 +81,7 @@ describe('client-tool guardrail gate (requires_action handoff)', () => {
       projectPublicId,
     });
     return resolveAgentTools({
+      attribution: {},
       toolIds: [clientToolId],
       projectId,
       projectIds: [projectId],

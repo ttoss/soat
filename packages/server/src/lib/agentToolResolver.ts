@@ -15,6 +15,7 @@ import {
   recordToolResolutionFailure,
 } from './agentToolActivity';
 import {
+  collectBindingGuardrails,
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
@@ -52,6 +53,12 @@ import {
   resolvePresetParametersForGate,
   resolveToolHeaderTemplates,
 } from './toolTemplates';
+import {
+  meterToolExecution,
+  type ToolCallAttribution,
+  type ToolExecutionMeter,
+  withReleasingGuardrails,
+} from './usageToolRecording';
 // Re-exported from its own module (both http and soat tool paths throw it).
 export { HttpToolError } from './httpToolError';
 
@@ -580,93 +587,116 @@ const ALLOWED_METHODS = [
   'OPTIONS',
 ];
 
+type HttpToolExecuteArgs = {
+  toolName: string;
+  execute: HttpExecuteConfig;
+  projectId: number;
+  meter: ToolExecutionMeter;
+  contextKeys?: string[] | null;
+  presetParameters?: object | null;
+  // The tool's own `parameters` schema, so a `{{context:}}`-resolved preset is
+  // retyped to the field's declared type before it is merged.
+  parameterSchema?: unknown;
+  // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
+  // execute headers and context headers.
+  extraHeaders?: Record<string, string>;
+};
+
+const sendHttpToolRequest = async (
+  args: Omit<HttpToolExecuteArgs, 'meter'> & {
+    toolArgs: unknown;
+    toolContext?: Record<string, string>;
+    markSent: () => void;
+  }
+): Promise<unknown> => {
+  const { toolArgs, toolContext } = args;
+  const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
+  const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
+  const hasBody = !['GET', 'HEAD'].includes(method);
+  let url = args.execute.url;
+  try {
+    // Here, not at tool-resolution time, so a missing `{{context:}}` key
+    // fails this call rather than every other tool the agent has.
+    const rawArgs = mergePresetParameters({
+      presetParameters: resolvePresetParametersForCall({
+        presetParameters: args.presetParameters,
+        toolContext,
+        toolName: args.toolName,
+        schema: args.parameterSchema,
+      }),
+      input: toolArgs,
+    });
+    const { resolvedUrl: afterPathParams, remainingArgs: afterPathParamsArgs } =
+      resolveUrlPathParams({ url: args.execute.url, toolArgs: rawArgs });
+    const { resolvedUrl, remainingArgs } = resolveBodyParamInterpolations({
+      url: afterPathParams,
+      toolArgs: afterPathParamsArgs,
+    });
+    url = buildHttpRequestUrl({
+      resolvedUrl,
+      method,
+      remainingArgs,
+      hasBody,
+    });
+    const resolved = await resolveHttpRequestTemplates({
+      url,
+      headers: args.execute.headers,
+      auth: args.execute.auth,
+      projectId: args.projectId,
+      toolContext,
+    });
+    const init = buildHttpRequestInit({
+      method,
+      hasBody,
+      bodyMode: args.execute.bodyMode,
+      resolvedHeaders: resolved.headers,
+      remainingArgs,
+      toolContext,
+      contextKeys: args.contextKeys,
+      extraHeaders: args.extraHeaders,
+    });
+    // Last, over the final request: SigV4 signs a hash of exactly what goes
+    // on the wire, so nothing may be added after this point. Egress is
+    // checked on the resolved address and every redirect hop (toolEgress.ts).
+    const response = await fetchWithEgressGuard(
+      resolved.fetchUrl,
+      await withHttpToolAuth({
+        auth: resolved.auth,
+        method,
+        url: resolved.fetchUrl,
+        init,
+      }),
+      { onRequest: args.markSent }
+    );
+    return await readHttpToolResponse({ response, method, url });
+  } catch (error) {
+    logToolCallingError({
+      toolName: args.toolName,
+      toolType: 'http',
+      url,
+      method,
+      error,
+    });
+    throw error;
+  }
+};
+
 export const buildHttpToolExecute = (
-  args: {
-    toolName: string;
-    execute: HttpExecuteConfig;
-    projectId: number;
-    contextKeys?: string[] | null;
-    presetParameters?: object | null;
-    // The tool's own `parameters` schema, so a `{{context:}}`-resolved preset is
-    // retyped to the field's declared type before it is merged.
-    parameterSchema?: unknown;
-    // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
-    // execute headers and context headers.
-    extraHeaders?: Record<string, string>;
-  },
+  args: HttpToolExecuteArgs,
   toolContext?: Record<string, string>
 ) => {
-  return async (toolArgs: unknown) => {
-    const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
-    const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
-    const hasBody = !['GET', 'HEAD'].includes(method);
-    let url = args.execute.url;
-    try {
-      // Here, not at tool-resolution time, so a missing `{{context:}}` key
-      // fails this call rather than every other tool the agent has.
-      const rawArgs = mergePresetParameters({
-        presetParameters: resolvePresetParametersForCall({
-          presetParameters: args.presetParameters,
+  return (toolArgs: unknown) => {
+    return meterToolExecution({
+      meter: args.meter,
+      send: (markSent) => {
+        return sendHttpToolRequest({
+          ...args,
+          toolArgs,
           toolContext,
-          toolName: args.toolName,
-          schema: args.parameterSchema,
-        }),
-        input: toolArgs,
-      });
-      const {
-        resolvedUrl: afterPathParams,
-        remainingArgs: afterPathParamsArgs,
-      } = resolveUrlPathParams({ url: args.execute.url, toolArgs: rawArgs });
-      const { resolvedUrl, remainingArgs } = resolveBodyParamInterpolations({
-        url: afterPathParams,
-        toolArgs: afterPathParamsArgs,
-      });
-      url = buildHttpRequestUrl({
-        resolvedUrl,
-        method,
-        remainingArgs,
-        hasBody,
-      });
-      const resolved = await resolveHttpRequestTemplates({
-        url,
-        headers: args.execute.headers,
-        auth: args.execute.auth,
-        projectId: args.projectId,
-        toolContext,
-      });
-      const init = buildHttpRequestInit({
-        method,
-        hasBody,
-        bodyMode: args.execute.bodyMode,
-        resolvedHeaders: resolved.headers,
-        remainingArgs,
-        toolContext,
-        contextKeys: args.contextKeys,
-        extraHeaders: args.extraHeaders,
-      });
-      // Last, over the final request: SigV4 signs a hash of exactly what goes
-      // on the wire, so nothing may be added after this point. Egress is
-      // checked on the resolved address and every redirect hop (toolEgress.ts).
-      const response = await fetchWithEgressGuard(
-        resolved.fetchUrl,
-        await withHttpToolAuth({
-          auth: resolved.auth,
-          method,
-          url: resolved.fetchUrl,
-          init,
-        })
-      );
-      return await readHttpToolResponse({ response, method, url });
-    } catch (error) {
-      logToolCallingError({
-        toolName: args.toolName,
-        toolType: 'http',
-        url,
-        method,
-        error,
-      });
-      throw error;
-    }
+          markSent,
+        });
+      },
+    });
   };
 };
 
@@ -690,6 +720,7 @@ const modelVisibleSchema = (
 
 const resolveHttpTool = (
   typedTool: TypedHttpTool,
+  meter: ToolExecutionMeter,
   toolContext?: Record<string, string>
 ): Tool => {
   const parameters =
@@ -714,6 +745,7 @@ const resolveHttpTool = (
             toolName: typedTool.name,
             execute,
             projectId: typedTool.projectId,
+            meter,
             contextKeys: typedTool.contextKeys,
             presetParameters: typedTool.presetParameters,
             parameterSchema: parameters,
@@ -786,6 +818,7 @@ const reportBindingUnavailable = (args: {
 
 const resolveMcpToolEntry = async (args: {
   typedTool: AgentToolRow;
+  meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
   activity?: ActivityCallContext;
   unavailable?: UnavailableToolSink;
@@ -814,6 +847,7 @@ const resolveMcpToolEntry = async (args: {
         contextKeys: typedTool.contextKeys,
         presetParameters: typedTool.presetParameters,
       },
+      meter: args.meter,
       toolContext,
       buildContextHeaders,
       logToolCallingError,
@@ -938,6 +972,7 @@ const resolvePipelineTool = (
     projectIds?: number[];
     authHeader?: string;
     remainingDepth?: number;
+    attribution: ToolCallAttribution;
   }
 ): Tool => {
   const parameters =
@@ -966,6 +1001,7 @@ const resolvePipelineTool = (
         input,
         authHeader: args.authHeader,
         remainingDepth: args.remainingDepth,
+        attribution: args.attribution,
       });
     },
   });
@@ -997,21 +1033,14 @@ const isAgentToolType = (value: string): value is AgentToolType => {
 
 const resolveToolByType = async (
   typedTool: AgentToolRow,
-  args: {
-    projectIds?: number[];
-    boundaryPolicy?: unknown;
-    authHeader?: string;
-    toolContext?: Record<string, string>;
-    traceId?: string;
-    parentTraceId?: string | null;
-    rootTraceId?: string | null;
-    remainingDepth?: number;
-    projectPublicId?: string;
-    activity?: ActivityCallContext;
-    unavailable?: UnavailableToolSink;
-  }
+  args: ResolveToolByTypeArgs & { projectPublicId?: string }
 ): Promise<Record<string, Tool>> => {
   const toolType = typedTool.type;
+  const meter: ToolExecutionMeter = {
+    projectId: typedTool.projectId,
+    toolId: typedTool.publicId || null,
+    attribution: args.attribution,
+  };
 
   if (!isAgentToolType(toolType)) {
     // An unknown stored type drops the tool rather than failing the generation,
@@ -1028,7 +1057,9 @@ const resolveToolByType = async (
 
   switch (toolType) {
     case 'http':
-      return { [typedTool.name]: resolveHttpTool(typedTool, args.toolContext) };
+      return {
+        [typedTool.name]: resolveHttpTool(typedTool, meter, args.toolContext),
+      };
     case 'client':
       return {
         [typedTool.name]: resolveClientTool(typedTool, args.toolContext),
@@ -1039,11 +1070,13 @@ const resolveToolByType = async (
           projectIds: args.projectIds,
           authHeader: args.authHeader,
           remainingDepth: args.remainingDepth,
+          attribution: args.attribution,
         }),
       };
     case 'mcp':
       return resolveMcpToolEntry({
         typedTool,
+        meter,
         toolContext: args.toolContext,
         activity: args.activity,
         unavailable: args.unavailable,
@@ -1051,6 +1084,7 @@ const resolveToolByType = async (
     case 'builtin':
       return resolveSoatTools({
         typedTool,
+        meter,
         boundaryPolicy: args.boundaryPolicy,
         authHeader: args.authHeader,
         projectPublicId: args.projectPublicId,
@@ -1111,6 +1145,20 @@ const ephemeralDefinitionToRow = (
   };
 };
 
+// A binding's calls execute only when every guardrail that applies to it
+// released them, so those are the guardrails its executions are counted under.
+const releasedBy = (args: {
+  attribution: ToolCallAttribution;
+  guardrails: Array<{ guardrailId: string }>;
+}): ToolCallAttribution => {
+  return withReleasingGuardrails({
+    attribution: args.attribution,
+    guardrailIds: args.guardrails.map((guardrail) => {
+      return guardrail.guardrailId;
+    }),
+  });
+};
+
 /**
  * Resolves an ephemeral (inline, unpersisted) tool definition into an AI-SDK
  * tool, reusing the same `resolveToolByType` dispatch as a persisted row
@@ -1135,12 +1183,20 @@ export const resolveEphemeralAgentTool = async (args: {
   guardrail?: ResolverGuardrailContext;
   activity?: ActivityCallContext;
   unavailable?: UnavailableToolSink;
+  attribution: ToolCallAttribution;
 }): Promise<Record<string, Tool>> => {
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
+  const guardrails = await collectBindingGuardrails({
+    context: args.guardrail,
+    toolGuardrailIds: null,
+  });
 
-  const tools = await resolveToolByType(typedTool, args);
+  const tools = await resolveToolByType(typedTool, {
+    ...args,
+    attribution: releasedBy({ attribution: args.attribution, guardrails }),
+  });
   const mapped = wrapToolsWithOutputMapping(
     recordToolActivity({
       tools,
@@ -1162,7 +1218,7 @@ export const resolveEphemeralAgentTool = async (args: {
     toolId: null,
     toolType: typedTool.type,
     toolName: typedTool.name,
-    toolGuardrailIds: null,
+    guardrails,
     presetParameters: resolvePresetParametersForGate({
       presetParameters: typedTool.presetParameters,
       toolContext: args.toolContext,
@@ -1185,6 +1241,7 @@ type ResolveToolByTypeArgs = {
   remainingDepth?: number;
   activity?: ActivityCallContext;
   unavailable?: UnavailableToolSink;
+  attribution: ToolCallAttribution;
 };
 
 // Resolves one persisted-tool binding into its (output-mapped, optionally
@@ -1206,9 +1263,17 @@ const resolveReferenceBinding = async (args: {
   if (!agentTool) return {};
 
   const typedTool = agentTool as unknown as AgentToolRow;
+  const guardrails = await collectBindingGuardrails({
+    context: args.guardrail,
+    toolGuardrailIds: typedTool.guardrailIds,
+  });
   const resolved = await resolveToolByType(typedTool, {
     ...args.resolveArgs,
     activity: args.activity,
+    attribution: releasedBy({
+      attribution: args.resolveArgs.attribution,
+      guardrails,
+    }),
   });
   // Activity recording sits innermost, so it only fires for a call that actually
   // reached (and returned from) the tool — see `recordToolActivity`.
@@ -1234,7 +1299,7 @@ const resolveReferenceBinding = async (args: {
     toolId: typedTool.publicId,
     toolType: typedTool.type,
     toolName: typedTool.name,
-    toolGuardrailIds: typedTool.guardrailIds,
+    guardrails,
     // The gate classifies the *effective* arguments, so it must see the values
     // the dispatch will actually send — a guardrail comparing a pinned account
     // against `{{context:ocaAdAccountId}}` gates nothing.
@@ -1277,6 +1342,8 @@ export const resolveAgentTools = async (args: {
   // Reports each binding that contributed nothing, so the turn can be told the
   // tool exists and could not be reached.
   unavailable?: UnavailableToolSink;
+  // Who the turn's tool executions are metered against.
+  attribution: ToolCallAttribution;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
@@ -1308,6 +1375,7 @@ export const resolveAgentTools = async (args: {
         guardrail: args.guardrail,
         activity: args.activity,
         unavailable: args.unavailable,
+        attribution: args.attribution,
       });
       Object.assign(resolvedTools, ephemeralTools);
     }

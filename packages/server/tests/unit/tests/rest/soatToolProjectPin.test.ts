@@ -4,6 +4,10 @@ import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
+// A protocol test reads the call, not its meter: no project, so the
+// recorder's write is refused and swallowed.
+const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+
 /**
  * A builtin action runs under the caller's bearer with an LLM choosing the
  * arguments, so `project_id` decides which project the generation acts on. A
@@ -24,6 +28,7 @@ describe("a builtin tool acts on the generation's project", () => {
 
   const resolveListAgents = (projectPublicId?: string): Tool => {
     const tools = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'platform',
         description: null,
@@ -131,6 +136,7 @@ describe("a builtin tool acts on the generation's project", () => {
   // project would otherwise reintroduce exactly what this closes.
   test('a preset naming another project does not move the call', async () => {
     const tools = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'platform',
         description: null,

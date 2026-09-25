@@ -3298,6 +3298,7 @@ echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 # resolved from a `var` nested inside a plain object, at both the step-input
 # and pipeline-output level).
 echo "--- Calling pipeline tool ---"
+STEP_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
 PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{"tag":"hello-nested"}')
 printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
 if ! printf '%s\n' "$PIPELINE_CALL_RESP" | jq -e 'has("from_a") and has("from_b")' > /dev/null; then
@@ -3311,6 +3312,24 @@ if [ "$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.echoed.container')" != "he
   exit 1
 fi
 echo "Pipeline call OK (nested JSON Logic resolution verified)"
+
+# Each step is one tool_execution event against the step's tool; the pipeline
+# itself executes nothing on the wire and writes none.
+STEP_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
+PIPELINE_OWN_CALLS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
+if [ "$((STEP_CALLS_AFTER - STEP_CALLS_BEFORE))" != "2" ] || [ "$PIPELINE_OWN_CALLS" != "0" ]; then
+  echo "FAIL: expected 2 tool_execution events for the steps and 0 for the pipeline, got $((STEP_CALLS_AFTER - STEP_CALLS_BEFORE)) and $PIPELINE_OWN_CALLS"
+  exit 1
+fi
+TOOL_AGG_RESP=$($SOAT_CLI get-usage-aggregate --project-id "$PROJECT_PUBLIC_ID" \
+  --meter-type tool_execution --group-by tool --tool-id "$TOOL_ID" --outcome ok | sanitize_json)
+if ! printf '%s\n' "$TOOL_AGG_RESP" | jq -e --arg tool "$TOOL_ID" \
+  '.groups.data | length == 1 and .[0].key == $tool and .[0].event_count >= 2' >/dev/null; then
+  echo "FAIL: get-usage-aggregate --group-by tool did not count the step tool's executions"
+  echo "$TOOL_AGG_RESP"
+  exit 1
+fi
+echo "Tool execution metering (per pipeline step, grouped by tool): OK"
 
 # 19c2. A pipeline `output` that is itself a bare JSON Logic expression (e.g.
 # `{"var": "steps.a.count"}`) must resolve to a bare scalar, not the literal
@@ -3966,8 +3985,8 @@ $SOAT_CLI delete-tool --tool-id "$GATED_TOOL_ID" >/dev/null 2>&1 || true
 $SOAT_CLI delete-guardrail --guardrail-id "$GATED_GUARDRAIL_ID" >/dev/null 2>&1 || true
 echo "Guardrail-gated flow cleanup: OK"
 
-# 22h. A class-B guardrail reading `runtime.activity.actions_24h` against a very
-# high ceiling must pass, which happens only if the key resolves off the feed —
+# 22h. A class-B guardrail reading `runtime.tools.tool_calls.24h` against a very
+# high ceiling must pass, which happens only if the key resolves off the meter —
 # an unresolvable `runtime.*` var fails closed. So a tool call executing here is
 # itself proof the provider is wired.
 echo "--- Creating activity-recorded tool and rate-guarded agent ---"
@@ -3984,7 +4003,7 @@ echo "Activity-recorded tool id: $ACT_TOOL_ID"
 ACT_GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-activity-rate-guardrail \
-  --document '{"class":"B","guard":{"<":[{"var":"runtime.activity.actions_24h"},{"var":"context.action_rate_ceiling"}]}}')
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.tools.tool_calls.24h"},{"var":"context.action_rate_ceiling"}]}}')
 ACT_GUARDRAIL_ID=$(printf '%s\n' "$ACT_GUARDRAIL_RESP" | jq -r '.id')
 echo "Activity-rate guardrail id: $ACT_GUARDRAIL_ID"
 
@@ -4029,7 +4048,12 @@ if [ -n "$ACT_EXEC_ENTRY" ]; then
     exit 1
   fi
   echo "Agent tool-call activity recording: OK"
-  echo "Activity-rate guard context resolved (the guarded call executed): OK"
+  ACT_TOOL_CALLS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$ACT_TOOL_ID" --agent-id "$ACT_AGENT_ID" --limit 1 | sanitize_json | jq -r '.total')
+  if [ "$ACT_TOOL_CALLS" -lt 1 ]; then
+    echo "ERROR: the executed agent tool call wrote no tool_execution event" >&2
+    exit 1
+  fi
+  echo "Tool-call rate guard context resolved (the guarded call executed and was metered): OK"
 else
   echo "WARNING: model did not call the tool (LLM response varies); skipping action_executed assertion." >&2
 fi
@@ -6268,7 +6292,7 @@ echo "--- Creating formation with a guardrail resource ---"
 GUARDRAIL_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-guardrail-formation" \
-  --template '{"resources":{"budgetGuardrail":{"type":"guardrail","properties":{"name":"smoke-formation-guardrail","class":"B","default_class":"C","guard":{"<":[{"var":"runtime.usage.cost_usd_24h"},1000]}}}}}')
+  --template '{"resources":{"budgetGuardrail":{"type":"guardrail","properties":{"name":"smoke-formation-guardrail","class":"B","default_class":"C","guard":{"<":[{"var":"runtime.projects.cost_usd.24h"},1000]}}}}}')
 GUARDRAIL_FORMATION_ID=$(printf '%s\n' "$GUARDRAIL_FORMATION_RESP" | jq -r '.id')
 GUARDRAIL_PHYS_ID=$(printf '%s\n' "$GUARDRAIL_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
 if ! printf '%s\n' "$GUARDRAIL_PHYS_ID" | grep -q '^guard_'; then
@@ -7414,7 +7438,7 @@ echo "--- Guardrails module ---"
 GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-budget-guardrail \
-  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"runtime.usage.tokens_24h"},1000000]}}')
+  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"runtime.projects.tokens.24h"},1000000]}}')
 GUARDRAIL_ID=$(printf '%s\n' "$GUARDRAIL_RESP" | jq -r '.id')
 if [ -z "$GUARDRAIL_ID" ] || [ "$GUARDRAIL_ID" = "null" ]; then
   echo "ERROR: Failed to create guardrail" >&2
@@ -7430,7 +7454,7 @@ fi
 # Dry-run: below the threshold classifies B and the spend guard passes → execute.
 # The guard reads `tokens_24h`, which has no pricing dependency: every
 # immediately-effective price row on this stack is for a model nothing generates
-# with, so a `cost_usd_24h` guard here would resolve to null and fail closed —
+# with, so a `cost_usd.24h` guard here would resolve to null and fail closed —
 # which is what the next case asserts on purpose.
 DRYRUN_LOW=$($SOAT_CLI evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --args '{"amount":100}')
 if [ "$(printf '%s\n' "$DRYRUN_LOW" | jq -r '.class')" != "B" ] || \
@@ -7459,7 +7483,7 @@ $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
 UNPRICED_CEILING_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-unpriced-ceiling-guardrail \
-  --document '{"class":"B","guard":{"<":[{"var":"runtime.usage.cost_usd_24h"},1000000]}}')
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.projects.cost_usd.24h"},1000000]}}')
 UNPRICED_CEILING_ID=$(printf '%s\n' "$UNPRICED_CEILING_RESP" | jq -r '.id')
 if [ -z "$UNPRICED_CEILING_ID" ] || [ "$UNPRICED_CEILING_ID" = "null" ]; then
   echo "ERROR: Failed to create the unpriced-ceiling guardrail" >&2
@@ -7468,7 +7492,7 @@ if [ -z "$UNPRICED_CEILING_ID" ] || [ "$UNPRICED_CEILING_ID" = "null" ]; then
 fi
 DRYRUN_UNPRICED=$($SOAT_CLI evaluate-guardrail \
   --guardrail-id "$UNPRICED_CEILING_ID" --args '{}')
-if [ "$(printf '%s\n' "$DRYRUN_UNPRICED" | jq -r '.context_snapshot["runtime.usage.cost_usd_24h"]')" != "null" ] || \
+if [ "$(printf '%s\n' "$DRYRUN_UNPRICED" | jq -r '.context_snapshot["runtime.projects.cost_usd.24h"]')" != "null" ] || \
    [ "$(printf '%s\n' "$DRYRUN_UNPRICED" | jq -r '.decision')" != "tripwire" ]; then
   echo "ERROR: a cost ceiling over an unpriced window did not fail closed" >&2
   echo "$DRYRUN_UNPRICED" >&2
@@ -7484,10 +7508,10 @@ echo "Cost ceiling over an unpriced window (fail-closed): OK"
 RUN_CEILING_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-run-ceiling-guardrail \
-  --document '{"class":"B","guard":{"<":[{"var":"runtime.usage.orchestration_run_tokens"},{"var":"context.action_token_ceiling"}]}}')
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.orchestrations.tokens.total"},{"var":"context.action_token_ceiling"}]}}')
 RUN_CEILING_ID=$(printf '%s\n' "$RUN_CEILING_RESP" | jq -r '.id')
 if [ -z "$RUN_CEILING_ID" ] || [ "$RUN_CEILING_ID" = "null" ]; then
-  echo "ERROR: runtime.usage.orchestration_run_tokens was rejected by the guardrail catalog" >&2
+  echo "ERROR: runtime.orchestrations.tokens.total was rejected by the guardrail catalog" >&2
   echo "$RUN_CEILING_RESP" >&2
   exit 1
 fi

@@ -37,8 +37,6 @@
  * event-level comparison can tell from a fully priced one.
  */
 
-import { Op } from '@ttoss/postgresdb';
-
 import { db } from '../db';
 import { DEFAULT_METER_TYPE } from './priceCompute';
 import { EMBEDDING_USAGE_SOURCE } from './usageEmbeddingRecording';
@@ -190,7 +188,7 @@ export const pricingCoverage = (events: MeteredEvent[]): PricingCoverage => {
  * and the sum apply one predicate to one set of rows, which is what keeps this
  * identical to the quota path's reading of the same window.
  */
-const enforceableCostUsd = async (args: {
+export const enforceableCostUsd = async (args: {
   where: Record<string | symbol, unknown>;
 }): Promise<number | null> => {
   const events = await db.UsageEvent.findAll({
@@ -203,23 +201,4 @@ const enforceableCostUsd = async (args: {
   return events.reduce((sum, event) => {
     return event.costUsd == null ? sum : sum + Number(event.costUsd);
   }, 0);
-};
-
-/** A project's rolling window, for `runtime.usage.cost_usd_*`. */
-export const windowedEnforceableCostUsd = async (args: {
-  projectId: number;
-  start: Date;
-}): Promise<number | null> => {
-  return enforceableCostUsd({
-    where: { projectId: args.projectId, createdAt: { [Op.gte]: args.start } },
-  });
-};
-
-/** One orchestration run's cumulative spend, for `runtime.usage.orchestration_run_cost_usd`. */
-export const orchestrationRunEnforceableCostUsd = async (args: {
-  runInternalId: number;
-}): Promise<number | null> => {
-  return enforceableCostUsd({
-    where: { orchestrationRunId: args.runInternalId },
-  });
 };

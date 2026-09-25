@@ -120,23 +120,23 @@ describe('guardrailEvaluation', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+          guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
         }),
-        context: { runtime: { usage: { cost_usd_24h: 812.4 } } },
+        context: { runtime: { projects: { cost_usd: { '24h': 812.4 } } } },
       });
       expect(result.decision).toBe('execute');
       expect(result.guardResult).toBe(true);
     });
 
     // json-logic-engine coerces a `null` var to 0 for numeric comparisons, so
-    // `{ var: 'runtime.activity.actions_24h' }` on the *left* of `<` would
+    // `{ var: 'runtime.projects.tool_calls.24h' }` on the *left* of `<` would
     // otherwise evaluate `null < 100` as `true` and pass the guard — the
     // opposite of the documented fail-closed invariant.
     test('a guard referencing an unresolvable runtime.* var fails closed for <', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<': [{ var: 'runtime.activity.actions_24h' }, 100] },
+          guard: { '<': [{ var: 'runtime.projects.tool_calls.24h' }, 100] },
         }),
         // An empty `runtime` bag stands in for any provider that could not resolve
         // the key — the evaluator's invariant is independent of which one.
@@ -150,7 +150,7 @@ describe('guardrailEvaluation', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<=': [{ var: 'runtime.activity.actions_24h' }, 100] },
+          guard: { '<=': [{ var: 'runtime.projects.tool_calls.24h' }, 100] },
         }),
         context: { runtime: {} },
       });
@@ -174,9 +174,9 @@ describe('guardrailEvaluation', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<': [{ var: 'runtime.activity.actions_24h' }, 100] },
+          guard: { '<': [{ var: 'runtime.projects.tool_calls.24h' }, 100] },
         }),
-        context: { runtime: { activity: { actions_24h: 5 } } },
+        context: { runtime: { projects: { tool_calls: { '24h': 5 } } } },
       });
       expect(result.decision).toBe('execute');
       expect(result.guardResult).toBe(true);
@@ -254,7 +254,7 @@ describe('guardrailEvaluation', () => {
           default_class: 'C',
           class: {
             if: [
-              { '<': [{ var: 'runtime.activity.actions_24h' }, 100] },
+              { '<': [{ var: 'runtime.projects.tool_calls.24h' }, 100] },
               'A',
               'C',
             ],

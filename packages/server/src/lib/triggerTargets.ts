@@ -134,6 +134,7 @@ const dispatchToTool = async (
     input: args.input,
     toolContext: args.toolContext,
     authHeader: args.authHeader,
+    attribution: { triggerId: args.triggerId },
   });
   return {
     target_type: 'tool',

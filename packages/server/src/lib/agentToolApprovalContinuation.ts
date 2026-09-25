@@ -94,6 +94,7 @@ const executeApprovedAction = async (args: {
     // continuation that reports it — a proposed `soat` call is executed here,
     // and without the credential it reaches the loopback unauthenticated.
     authHeader: args.authHeader,
+    attribution: { generationId: args.item.generation_id },
   });
 
   return isPlainObject(rawResult) ? rawResult : { output: rawResult };

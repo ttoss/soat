@@ -36,7 +36,8 @@ paths:
         Returns the raw usage events the caller can access, most recent first,
         narrowed by any combination of the same filters the aggregate takes —
         agent, generation, trace, actor, session, AI provider, orchestration
-        run, orchestration, trigger, action, meter type, model or `source` — so
+        run, orchestration, tool, trigger, action, outcome, meter type, model
+        or `source` — so
         a rollup and the events behind it are addressed the same way. Each
         event is the per-generation token usage as reported by the provider,
         for audit and reconciliation.
@@ -128,12 +129,29 @@ paths:
           description: Filter by logical action id
           schema:
             type: string
+        - name: tool_id
+          in: query
+          required: false
+          description: >
+            Filter by the tool a `tool_execution` event metered. A tool that
+            does not exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          required: false
+          description: >
+            Filter by how a `tool_execution` call ended: `ok`, `error` or
+            `timeout`. Every other meter carries no outcome and is matched by
+            none of them.
+          schema:
+            type: string
         - name: meter_type
           in: query
           required: false
           description: >
             Filter by meter type (e.g. `llm_tokens`, `compute_execution`,
-            `api_request`, `storage`)
+            `api_request`, `storage`, `tool_execution`)
           schema:
             type: string
         - name: source
@@ -141,9 +159,10 @@ paths:
           required: false
           description: >
             Filter by what the spend was incurred for. `eval` is an eval run's
-            item generations and `eval_judge` an `llm_judge` scorer's own
-            completion, so verification spend is `source` in (`eval`,
-            `eval_judge`); `embedding` is any embedding call. Ordinary agent
+            item generations, `eval_judge` an `llm_judge` scorer's own
+            completion and `eval_scorer` a `tool` scorer's call, so
+            verification spend is `source` in (`eval`, `eval_judge`,
+            `eval_scorer`); `embedding` is any embedding call. Ordinary agent
             traffic carries no source and is matched by none of them.
           schema:
             type: string
@@ -208,9 +227,9 @@ paths:
       description: >
         Returns a project's usage rolled up over an optional `[from, to]` time
         window, optionally bucketed by a single dimension and narrowed by any
-        combination of thirteen filters — session, actor, agent, AI provider,
-        orchestration run, orchestration, generation, trace, meter type, model,
-        source, trigger and action. That is how "what did this conversation
+        combination of fifteen filters — session, actor, agent, AI provider,
+        orchestration run, orchestration, generation, trace, tool, meter type,
+        model, source, trigger, action and outcome. That is how "what did this conversation
         cost", "what has this end user cost" and "what did this agent cost" are
         answered. Each group and the grand total carry an `event_count`,
         summed token counts, a
@@ -222,10 +241,10 @@ paths:
 
         Narrowings intersect and apply to the whole rollup — every bucket,
         `totals` and `totals.distinct` alike — so each composes with any
-        `group_by`, and all thirteen are echoed back under `filters`. The eight
+        `group_by`, and all fifteen are echoed back under `filters`. The nine
         naming a resource are resolved against the project, and one naming
         nothing there empties the rollup rather than being dropped: a mistyped
-        id must never read back as the project's whole spend. The other five
+        id must never read back as the project's whole spend. The other six
         are matched against the value the event recorded.
 
 
@@ -305,7 +324,7 @@ paths:
           required: false
           description: >
             Narrow the rollup to one meter type (e.g. `llm_tokens`,
-            `compute_execution`, `api_request`, `storage`). Omit to include
+            `compute_execution`, `api_request`, `storage`, `tool_execution`). Omit to include
             every meter. An unknown type yields an empty rollup, not an error.
           schema:
             type: string
@@ -415,6 +434,23 @@ paths:
           description: >
             Narrow to one caller-supplied action label, for per-action spend.
             Matched as recorded, like `trigger_id`.
+          schema:
+            type: string
+        - name: tool_id
+          in: query
+          required: false
+          description: >
+            Narrow to the executions of one tool. An id naming no tool in this
+            project yields an empty rollup.
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          required: false
+          description: >
+            Narrow `tool_execution` events by how the call ended — `ok`,
+            `error` or `timeout` — matched as recorded. `outcome=error` is a
+            tool's failures without a second meter.
           schema:
             type: string
         - name: limit
@@ -869,20 +905,36 @@ components:
           description: >
             Caller-supplied logical action label, for rolling spend up per
             action. Null when the caller did not label the action.
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+          description: >
+            Public ID of the tool a `tool_execution` event metered. Null on
+            every other meter, for an inline tool definition, and once the tool
+            is deleted.
+        outcome:
+          type: string
+          nullable: true
+          description: >
+            How a `tool_execution` call that went out ended, whatever the target
+            answered: `ok`, `error` (including a non-2xx answer), or `timeout`.
+            Null on every other meter.
         meter_type:
           type: string
           description: >
             What the event measures: `llm_tokens`, `compute_execution`,
-            `api_request`, or `storage`.
+            `api_request`, `storage`, or `tool_execution` — one outbound tool
+            call, a single `tool_call` component of quantity 1, unpriced.
         source:
           type: string
           nullable: true
           description: >
             What the spend was incurred for. `eval` is an eval run's item
             generations and `eval_judge` an `llm_judge` scorer's own completion,
-            so verification spend is `source` in (`eval`, `eval_judge`) and the
-            two are distinct so running a suite can be priced apart from grading
-            it. `embedding` is any embedding call — the endpoint, document
+            and `eval_scorer` a `tool` scorer's call, so verification spend is
+            `source` in (`eval`, `eval_judge`, `eval_scorer`) and they are
+            distinct so running a suite can be priced apart from grading it. `embedding` is any embedding call — the endpoint, document
             ingestion, a memory store write, or a search's query vector. Null for
             ordinary agent traffic.
           example: eval
@@ -915,7 +967,8 @@ components:
       description: >
         The dimension an aggregate buckets on. `orchestration_run` buckets on
         the orchestration run; work that runs no orchestration collapses into
-        the single `null` bucket.
+        the single `null` bucket. `tool` buckets `tool_execution` events on
+        the tool they metered; every other meter is the `null` bucket.
       enum:
         [
           model,
@@ -927,6 +980,7 @@ components:
           actor,
           session,
           source,
+          tool,
         ]
 
     UsageDistinct:
@@ -965,6 +1019,8 @@ components:
         sessions:
           type: integer
         ai_providers:
+          type: integer
+        tools:
           type: integer
 
     UsageAggregateComponent:
@@ -1037,9 +1093,9 @@ components:
         sent it and null when unset. Echoed because a rollup of zeros is
         otherwise indistinguishable from a project that spent nothing, and
         always complete so a caller reading one key can tell "not filtered"
-        from "this endpoint does not know that filter". The eight naming a
+        from "this endpoint does not know that filter". The nine naming a
         resource are resolved against the project and empty the rollup when
-        they name nothing in it; the other five are matched against the value
+        they name nothing in it; the other six are matched against the value
         the event recorded.
       properties:
         meter_type:
@@ -1087,6 +1143,13 @@ components:
           nullable: true
         trace_id:
           x-soat-ref: traces
+          type: string
+          nullable: true
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+        outcome:
           type: string
           nullable: true
     UsageAggregate:
@@ -1157,7 +1220,7 @@ components:
               description: >
                 The bucket's value in the chosen dimension (a model id,
                 meter type, AI provider / agent / orchestration run / actor /
-                session public id, or `YYYY-MM-DD` UTC day). Null when the
+                session / tool public id, or `YYYY-MM-DD` UTC day). Null when the
                 dimension does not apply to an event — under
                 `actor`/`session` this is the bucket holding everything with
                 no end user behind it, and under `orchestration_run` the one

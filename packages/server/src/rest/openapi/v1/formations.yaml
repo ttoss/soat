@@ -2026,7 +2026,7 @@ components:
             quotas REST contract.
         meter_type:
           type: string
-          enum: [llm_tokens, compute_execution, api_request, storage]
+          enum: [llm_tokens, compute_execution, api_request, storage, tool_execution]
           description: >-
             Only for metric cost_usd. The meter this cap answers for; omit it
             and the cap sums every priced meter. See the quotas REST contract.

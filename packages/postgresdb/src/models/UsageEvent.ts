@@ -16,13 +16,14 @@ import { Generation } from './Generation';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
 import { Session } from './Session';
+import { Tool } from './Tool';
 import { Trace } from './Trace';
 import { UsageComponent } from './UsageComponent';
 
 /**
  * Append-only, billing-grade record of a single metered occurrence — one
  * completed LLM call, one compute execution, one request batch, one storage
- * snapshot. Attribution and idempotency live here once; the metered quantities
+ * snapshot, one outbound tool call. Attribution and idempotency live here once; the metered quantities
  * live in child {@link UsageComponent} rows (one per priced dimension), so no
  * meter type is privileged: `llm_tokens` is simply an event with several
  * components, and a new dimension is a new set of components, not a new column.
@@ -56,6 +57,19 @@ import { UsageComponent } from './UsageComponent';
     // unindexed would sequential-scan the largest table in the schema.
     { name: 'usage_events_source_idx', fields: ['source'] },
     { name: 'usage_events_ai_provider_id_idx', fields: ['ai_provider_id'] },
+    { name: 'usage_events_tool_id_idx', fields: ['tool_id'] },
+    // Guardrail evaluation counts a tool's (or the project's) executions over a
+    // window while the gated call waits, so the window read must be an index
+    // range, not a scan of the project's events.
+    {
+      name: 'usage_events_project_id_meter_type_tool_id_created_at_idx',
+      fields: ['project_id', 'meter_type', 'tool_id', 'created_at'],
+    },
+    {
+      name: 'usage_events_guardrail_ids_gin_idx',
+      using: 'gin',
+      fields: [{ name: 'guardrail_ids', operator: 'jsonb_path_ops' }],
+    },
     {
       name: 'usage_events_idempotency_key_unique',
       unique: true,
@@ -209,6 +223,34 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare triggerId: string | null;
 
+  // The tool a `tool_execution` event metered. SET NULL on delete, like the
+  // other attribution columns: removing a tool never rewrites the project's
+  // counts. Null for an inline (unpersisted) tool definition.
+  @ForeignKey(() => {
+    return Tool;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare toolId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Tool;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare tool: Tool | null;
+
+  // `ok` | `error` | `timeout` for a `tool_execution` event: how the call that
+  // went out ended. Null on every other meter.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare outcome: string | null;
+
+  // The guardrails whose evaluation released a `tool_execution` event's call —
+  // what a guardrail's own `tool_calls` window counts. Null when nothing gated
+  // the call, and on every other meter.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare guardrailIds: string[] | null;
+
   // Caller-supplied logical action label passed through the generation's
   // metadata, so spend can roll up per action. Null when not labelled.
   @Column({ type: DataType.STRING, allowNull: true })
@@ -221,7 +263,7 @@ export class UsageEvent extends Model {
   declare source: string | null;
 
   // Meter-type discriminator: `llm_tokens`, `compute_execution`, `api_request`,
-  // `storage`. Selects which components an event carries.
+  // `storage`, `tool_execution`. Selects which components an event carries.
   @Column({ type: DataType.STRING, allowNull: false })
   declare meterType: string;
 

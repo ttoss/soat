@@ -7,6 +7,7 @@ describe('callEphemeralTool', () => {
   test('rejects a client-type definition — client tools cannot run server-side', async () => {
     await expect(
       callEphemeralTool({
+        attribution: {},
         guardrails: 'apply',
         definition: { name: 'inline-client-tool', type: 'client' },
         projectId: 1,

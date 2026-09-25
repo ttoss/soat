@@ -6,6 +6,10 @@ import {
 } from 'src/lib/soatAgentActions';
 import { soatTools } from 'src/lib/soatTools';
 
+// A protocol test reads the call, not its meter: no project, so the
+// recorder's write is refused and swallowed.
+const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+
 /**
  * The exclusions are declared in the OpenAPI specs, so these assert against the
  * real catalog rather than a fixture: a spec that loses its annotation, or an
@@ -103,6 +107,7 @@ describe('actions withheld from the agent tool surface', () => {
   // written elsewhere — the surface must still not carry it.
   test('a stored binding naming an excluded action resolves without it', () => {
     const resolved = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'legacy',
         description: null,

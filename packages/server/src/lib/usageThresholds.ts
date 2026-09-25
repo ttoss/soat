@@ -268,43 +268,17 @@ export const windowedCostUsd = async (args: {
   return readTotal(rows[0]);
 };
 
-// Resolves the window's event ids first, then sums their components — avoiding
-// a join+aggregate whose column alias is brittle across Sequelize versions.
-export const windowedTokens = async (args: {
-  projectId: number;
-  start: Date;
-}): Promise<number> => {
-  const events = await db.UsageEvent.findAll({
-    where: { projectId: args.projectId, createdAt: { [Op.gte]: args.start } },
-    attributes: ['id'],
-  });
-  const eventIds = events.map((event) => {
-    return event.id;
-  });
-  if (eventIds.length === 0) return 0;
-
-  const rows = await db.UsageComponent.findAll({
-    where: {
-      usageEventId: { [Op.in]: eventIds },
-      component: { [Op.in]: TOKEN_COMPONENTS },
-    },
-    attributes: [[Sequelize.fn('SUM', Sequelize.col('quantity')), 'total']],
-  });
-  return readTotal(rows[0]);
-};
-
 /**
- * Sums the billable tokens (input + output + cached) recorded against one
- * orchestration run so far. Resolves the run's event ids first, then sums their
- * token components — the same two-step `windowedTokens` uses, for the same
- * reason (a join+aggregate alias is brittle across Sequelize versions).
- * Exported for the guardrail `runtime.usage.orchestration_run_tokens` context provider.
+ * Sums the billable tokens (input + output + cached) of the events `where`
+ * selects. Resolves the event ids first, then sums their token components —
+ * avoiding a join+aggregate whose column alias is brittle across Sequelize
+ * versions. Shared by the threshold windows and the guardrail `tokens` keys.
  */
-export const orchestrationRunTokens = async (args: {
-  runInternalId: number;
+export const sumEventTokens = async (args: {
+  where: Record<string | symbol, unknown>;
 }): Promise<number> => {
   const events = await db.UsageEvent.findAll({
-    where: { orchestrationRunId: args.runInternalId },
+    where: args.where,
     attributes: ['id'],
   });
   const eventIds = events.map((event) => {
@@ -330,7 +304,9 @@ const windowedValue = (args: {
   if (args.metric === 'cost_usd') {
     return windowedCostUsd({ projectId: args.projectId, start: args.start });
   }
-  return windowedTokens({ projectId: args.projectId, start: args.start });
+  return sumEventTokens({
+    where: { projectId: args.projectId, createdAt: { [Op.gte]: args.start } },
+  });
 };
 
 type ThresholdInstance = InstanceType<(typeof db)['UsageThreshold']>;
