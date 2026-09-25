@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.60.0](https://github.com/ttoss/soat/compare/v0.59.4...v0.60.0) (2026-09-25)
+
+### Features
+
+* **orchestrations:** add output_mapping to own a run's output shape ([#1436](https://github.com/ttoss/soat/issues/1436)) ([7fd1cbc](https://github.com/ttoss/soat/commit/7fd1cbc91097b7c0a12d3e2ef88b63097fceb182)), closes [TriangulosTecnologia/naturali.ai#626](https://github.com/TriangulosTecnologia/naturali.ai/issues/626)
+
 ## [0.59.4](https://github.com/ttoss/soat/compare/v0.59.3...v0.59.4) (2026-09-24)
 
 **Note:** Version bump only for package @soat/postgresdb
