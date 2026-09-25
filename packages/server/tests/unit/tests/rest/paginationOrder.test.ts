@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { flushAuditQueue } from 'src/lib/auditQueue';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
@@ -11,14 +12,21 @@ import { authenticatedTestClient } from '../../testClient';
  * page. Actors stand in for every list: the order is decided in one place.
  */
 describe('Pagination order', () => {
+  let adminToken: string;
   let userToken: string;
   let projectId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'pageorder',
-      policyActions: ['actors:CreateActor', 'actors:ListActors'],
+      policyActions: [
+        'actors:CreateActor',
+        'actors:ListActors',
+        'secrets:CreateSecret',
+        'audit:ListAuditEntries',
+      ],
     });
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
   });
@@ -71,6 +79,49 @@ describe('Pagination order', () => {
       }
 
       expect(paged).toEqual(created);
+    });
+  });
+
+  // Not a `paginatedList` caller (its own 25/200 clamp), and the NDJSON export
+  // pages through it, so a tie here drops or repeats entries in an export.
+  describe('GET /api/v1/audit-log', () => {
+    test('one-row pages over tied entries return every entry once, newest first', async () => {
+      for (const name of ['audit_tie_a', 'audit_tie_b', 'audit_tie_c']) {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/secrets')
+          .send({ project_id: projectId, name, value: 'v' });
+        expect(res.status).toBe(201);
+      }
+      await flushAuditQueue();
+      const rows = await db.AuditEntry.findAll({
+        where: { action: 'secrets:CreateSecret' },
+        order: [['id', 'ASC']],
+      });
+      const ids = rows.map((row) => {
+        return row.id as number;
+      });
+      await tieAndReverse({ table: 'audit_entries', ids });
+
+      const paged: string[] = [];
+      for (let offset = 0; offset < ids.length; offset += 1) {
+        const res = await authenticatedTestClient(adminToken)
+          .get('/api/v1/audit-log')
+          .query({
+            project_id: projectId,
+            action: 'secrets:CreateSecret',
+            limit: 1,
+            offset,
+          });
+        expect(res.status).toBe(200);
+        expect(res.body.total).toBe(ids.length);
+        paged.push(res.body.data[0].id as string);
+      }
+
+      expect(paged).toEqual(
+        [...rows].reverse().map((row) => {
+          return row.publicId as string;
+        })
+      );
     });
   });
 });

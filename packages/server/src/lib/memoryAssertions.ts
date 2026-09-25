@@ -6,7 +6,11 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import type { PaginatedResult } from 'src/lib/pagination';
-import { emptyPage, resolvePagination } from 'src/lib/pagination';
+import {
+  emptyPage,
+  resolvePagination,
+  totalListOrder,
+} from 'src/lib/pagination';
 
 const log = createDebug('soat:memories');
 
@@ -145,7 +149,7 @@ const assertionPage = async (args: {
   const { count, rows } = await db.MemoryAssertion.findAndCountAll({
     where: args.where,
     include: assertionIncludes(),
-    order: [['createdAt', args.order]],
+    order: totalListOrder([['createdAt', args.order]]),
     distinct: true,
     limit,
     offset,
