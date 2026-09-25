@@ -27,6 +27,7 @@ const embedOrNull = async (args: {
     return await getEmbedding({
       text: args.content,
       projectId: args.projectId,
+      source: 'embedding',
     });
   } catch {
     // An embedding is optional: a fact must never be lost because the embedder

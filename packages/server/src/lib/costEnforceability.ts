@@ -41,7 +41,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DEFAULT_METER_TYPE } from './priceCompute';
-import { EMBEDDING_USAGE_SOURCE } from './usageEmbeddingRecording';
+import { isEmbeddingUsageSource } from './usageEmbeddingRecording';
 
 /** Whether an event's pricing says anything about a cost cap's enforceability. */
 export const countsTowardPricingVerdict = (event: {
@@ -50,7 +50,7 @@ export const countsTowardPricingVerdict = (event: {
 }): boolean => {
   return (
     event.meterType === DEFAULT_METER_TYPE &&
-    event.source !== EMBEDDING_USAGE_SOURCE
+    !isEmbeddingUsageSource(event.source)
   );
 };
 

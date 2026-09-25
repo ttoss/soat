@@ -5,7 +5,10 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { resolveBedrockCredentials } from './agentModel';
-import { recordEmbeddingUsage } from './usageEmbeddingRecording';
+import {
+  type EmbeddingUsageSource,
+  recordEmbeddingUsage,
+} from './usageEmbeddingRecording';
 
 const log = createDebug('soat:embedding');
 
@@ -91,6 +94,7 @@ export type EmbeddingBillingProjectId = number | null;
 export const getEmbeddings = async (args: {
   texts: string[];
   projectId: EmbeddingBillingProjectId;
+  source: EmbeddingUsageSource;
 }): Promise<number[][]> => {
   const provider = process.env.EMBEDDING_PROVIDER;
   const model = process.env.EMBEDDING_MODEL;
@@ -134,6 +138,7 @@ export const getEmbeddings = async (args: {
       provider,
       model,
       tokens: usage.tokens,
+      source: args.source,
     });
   }
 
@@ -143,10 +148,12 @@ export const getEmbeddings = async (args: {
 export const getEmbedding = async (args: {
   text: string;
   projectId: EmbeddingBillingProjectId;
+  source: EmbeddingUsageSource;
 }): Promise<number[]> => {
   const [embedding] = await getEmbeddings({
     texts: [args.text],
     projectId: args.projectId,
+    source: args.source,
   });
   return embedding;
 };

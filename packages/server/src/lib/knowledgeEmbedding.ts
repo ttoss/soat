@@ -29,7 +29,11 @@ export const embedQueryOrDegrade = async (args: {
   projectId: EmbeddingBillingProjectId;
 }): Promise<number[] | undefined> => {
   try {
-    return await getEmbedding({ text: args.text, projectId: args.projectId });
+    return await getEmbedding({
+      text: args.text,
+      projectId: args.projectId,
+      source: 'embedding',
+    });
   } catch (error) {
     if (error instanceof DomainError) throw error;
     log(

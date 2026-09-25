@@ -111,7 +111,11 @@ const buildScorerRunners = (args: { projectId: number }) => {
     // same one document ingestion uses), so the only thing bound here is the
     // project the scorer's embeddings are billed to.
     runEmbeddings: (embed: { texts: string[] }) => {
-      return getEmbeddings({ ...embed, projectId: args.projectId });
+      return getEmbeddings({
+        ...embed,
+        projectId: args.projectId,
+        source: 'embedding',
+      });
     },
   };
 };

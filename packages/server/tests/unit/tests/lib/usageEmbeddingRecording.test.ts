@@ -64,6 +64,7 @@ describe('recordEmbeddingUsage', () => {
       provider: PROVIDER,
       model: MODEL,
       tokens: 1500,
+      source: 'embedding',
     });
 
     const events = await eventsForProject();
@@ -95,6 +96,7 @@ describe('recordEmbeddingUsage', () => {
       provider: PROVIDER,
       model: 'unset-rate-model',
       tokens: 42,
+      source: 'embedding',
     });
 
     const event = (await eventsForProject()).find((candidate) => {
@@ -117,6 +119,7 @@ describe('recordEmbeddingUsage', () => {
       provider: PROVIDER,
       model: MODEL,
       tokens: 1000,
+      source: 'embedding',
     });
 
     const events = await eventsForProject();
@@ -135,6 +138,7 @@ describe('recordEmbeddingUsage', () => {
         provider: PROVIDER,
         model: MODEL,
         tokens: 5,
+        source: 'embedding',
       })
     ).resolves.toBeUndefined();
 
@@ -149,12 +153,14 @@ describe('recordEmbeddingUsage', () => {
       provider: PROVIDER,
       model: MODEL,
       tokens: 10,
+      source: 'embedding',
     });
     await recordEmbeddingUsage({
       projectId,
       provider: PROVIDER,
       model: MODEL,
       tokens: 10,
+      source: 'embedding',
     });
 
     const events = await eventsForProject();
@@ -177,6 +183,7 @@ describe('recordEmbeddingUsage', () => {
         provider: PROVIDER,
         model: MODEL,
         tokens: 5,
+        source: 'embedding',
       })
     ).resolves.toBeUndefined();
 

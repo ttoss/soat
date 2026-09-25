@@ -14,13 +14,28 @@ import { persistTokenEvent, type PricedComponent } from './usageTokenEvent';
 const log = createDebug('soat:usage');
 
 /**
- * The workload label every embedding event carries. Separate from the
- * generation and completion sources so a rollup can price retrieval and
- * ingestion apart from the turns that read them, and so quota
- * enforcement can tell a call the tenant configured from one the deployment
- * did.
+ * The workload labels an embedding event carries. `embedding` is a call the
+ * server makes on its own behalf — ingestion, retrieval, a memory write, a
+ * scorer — and `embedding_endpoint` is `POST /embeddings`, whose volume the
+ * caller chooses, so a deployment can price the two apart. Both are separate
+ * from the generation and completion sources so a rollup can price retrieval
+ * and ingestion apart from the turns that read them, and so quota enforcement
+ * can tell a call the tenant configured from one the deployment did.
  */
-export const EMBEDDING_USAGE_SOURCE = 'embedding';
+export const EMBEDDING_USAGE_SOURCES = [
+  'embedding',
+  'embedding_endpoint',
+] as const;
+
+export type EmbeddingUsageSource = (typeof EMBEDDING_USAGE_SOURCES)[number];
+
+export const isEmbeddingUsageSource = (
+  source: string | null
+): source is EmbeddingUsageSource => {
+  return EMBEDDING_USAGE_SOURCES.some((embeddingSource) => {
+    return embeddingSource === source;
+  });
+};
 
 /**
  * Prices an embedding's one component from the deployment's configured rate.
@@ -70,10 +85,12 @@ export const recordEmbeddingUsage = async (args: {
   provider: string;
   model: string;
   tokens: number;
+  source: EmbeddingUsageSource;
 }): Promise<void> => {
   log(
-    'recordEmbeddingUsage: projectId=%d provider=%s model=%s tokens=%d',
+    'recordEmbeddingUsage: projectId=%d source=%s provider=%s model=%s tokens=%d',
     args.projectId,
+    args.source,
     args.provider,
     args.model,
     args.tokens
@@ -101,7 +118,7 @@ export const recordEmbeddingUsage = async (args: {
         aiProviderId: null,
         triggerId: null,
         actionId: null,
-        source: EMBEDDING_USAGE_SOURCE,
+        source: args.source,
       },
       idempotencyKey: `embedding:${randomUUID()}`,
       provider: args.provider,

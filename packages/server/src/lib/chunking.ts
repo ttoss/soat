@@ -130,6 +130,7 @@ const embedChunk = async (args: {
     return await getEmbedding({
       text: args.chunk.content,
       projectId: args.projectId,
+      source: 'embedding',
     });
   } catch {
     // embedding is optional — continue without it

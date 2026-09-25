@@ -195,28 +195,31 @@ describe('unpriced cost_usd quotas', () => {
    * one — ingestion alone must not turn a healthy cap into a 409 — nor clear
    * one.
    */
-  test('a window of only embedding events is not a blackout', async () => {
-    const ctx = await freshProjectAndAgent('genquota-unpriced-embedding');
-    for (let i = 0; i < 4; i += 1) {
-      await seedUsageEvent({
+  test.each(['embedding', 'embedding_endpoint'])(
+    'a window of only %s events is not a blackout',
+    async (source) => {
+      const ctx = await freshProjectAndAgent(`genquota-unpriced-${source}`);
+      for (let i = 0; i < 4; i += 1) {
+        await seedUsageEvent({
+          projectInternalId: ctx.projectInternalId,
+          source,
+          costUsd: '0',
+        });
+      }
+      await createQuotaRow({
         projectInternalId: ctx.projectInternalId,
-        source: 'embedding',
-        costUsd: '0',
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
       });
-    }
-    await createQuotaRow({
-      projectInternalId: ctx.projectInternalId,
-      scope: 'project',
-      metric: 'cost_usd',
-      limit: 5,
-    });
 
-    const breach = await evaluateGenerationQuotas({
-      agentId: ctx.agentPublicId,
-    });
-    expect(breach).toBeNull();
-    expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
-  });
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+    }
+  );
 
   test('an embedding priced at zero does not clear a genuine blackout', async () => {
     // An unset embedding rate meters at 0, which is a *priced* event. Counted

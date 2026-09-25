@@ -39,21 +39,30 @@ describe('Usage — embedding metering', () => {
   // priced from configuration, so a price-book row naming its model is ignored.
   const IGNORED_PRICE_BOOK_UNIT_PRICE = 0.000002;
 
-  const readEmbeddingMeters = async (): Promise<MeterRow[]> => {
+  const readEmbeddingMeters = async (
+    source = 'embedding'
+  ): Promise<MeterRow[]> => {
     // The route scopes to the caller's own projects — there is no `project_id`
     // filter — and this user can read exactly the one project.
     const res = await authenticatedTestClient(userToken).get(
-      '/api/v1/usage/events?source=embedding'
+      `/api/v1/usage/events?source=${source}`
     );
     expect(res.status).toBe(200);
     return res.body.data as MeterRow[];
   };
 
+  const readEndpointMeters = (): Promise<MeterRow[]> => {
+    return readEmbeddingMeters('embedding_endpoint');
+  };
+
   // Ingestion embeds chunk by chunk behind the response, so poll the meter
   // rather than sleeping.
-  const waitForMeters = async (expected: number): Promise<MeterRow[]> => {
+  const waitForMeters = async (
+    expected: number,
+    source = 'embedding'
+  ): Promise<MeterRow[]> => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      const rows = await readEmbeddingMeters();
+      const rows = await readEmbeddingMeters(source);
       if (rows.length >= expected) return rows;
       await new Promise((resolve) => {
         return setImmediate(resolve);
@@ -110,16 +119,20 @@ describe('Usage — embedding metering', () => {
   });
 
   test('POST /embeddings meters the call against the named project', async () => {
+    const before = await readEmbeddingMeters();
     const res = await authenticatedTestClient(userToken)
       .post('/api/v1/embeddings')
       .send({ project_id: projectId, input: 'one two three four' });
     expect(res.status).toBe(200);
     expect(res.body.embedding).toHaveLength(1024);
 
-    const rows = await waitForMeters(1);
+    const rows = await waitForMeters(1, 'embedding_endpoint');
     expect(rows).toHaveLength(1);
     expect(rows[0].meter_type).toBe('llm_tokens');
-    expect(rows[0].source).toBe('embedding');
+    // The caller chose this volume, so it is told apart from the embeddings
+    // the server makes on its own behalf.
+    expect(rows[0].source).toBe('embedding_endpoint');
+    expect(await readEmbeddingMeters()).toHaveLength(before.length);
     expect(rows[0].provider).toBe('openai');
     expect(rows[0].model).toBe(EMBEDDING_MODEL);
     // The embedding stack is env-configured, so no AiProvider row backs it and
@@ -134,26 +147,26 @@ describe('Usage — embedding metering', () => {
   });
 
   test('a call naming no project is not metered', async () => {
-    const before = await readEmbeddingMeters();
+    const before = await readEndpointMeters();
 
     const res = await authenticatedTestClient(userToken)
       .post('/api/v1/embeddings')
       .send({ input: 'unattributed words here' });
     expect(res.status).toBe(200);
 
-    const after = await readEmbeddingMeters();
+    const after = await readEndpointMeters();
     expect(after).toHaveLength(before.length);
   });
 
   test('an explicit project the caller cannot write to is refused, not billed', async () => {
-    const before = await readEmbeddingMeters();
+    const before = await readEndpointMeters();
 
     const res = await authenticatedTestClient(noPermToken)
       .post('/api/v1/embeddings')
       .send({ project_id: projectId, input: 'not mine' });
     expect(res.status).toBe(403);
 
-    const after = await readEmbeddingMeters();
+    const after = await readEndpointMeters();
     expect(after).toHaveLength(before.length);
   });
 

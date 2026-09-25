@@ -43,6 +43,7 @@ export const createEmbeddings = async (args: {
     projectId: await resolveBillingProjectId({
       projectPublicId: args.projectPublicId,
     }),
+    source: 'embedding_endpoint',
   });
 
   log('createEmbeddings: done count=%d', embeddings.length);
