@@ -7452,7 +7452,7 @@ if [ "$GUARDRAIL_VERSION" != "1" ]; then
 fi
 
 # Dry-run: below the threshold classifies B and the spend guard passes → execute.
-# The guard reads `tokens_24h`, which has no pricing dependency: every
+# The guard reads `runtime.projects.tokens.24h`, which has no pricing dependency: every
 # immediately-effective price row on this stack is for a model nothing generates
 # with, so a `cost_usd.24h` guard here would resolve to null and fail closed —
 # which is what the next case asserts on purpose.

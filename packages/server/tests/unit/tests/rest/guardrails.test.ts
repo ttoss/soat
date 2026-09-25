@@ -668,15 +668,10 @@ describe('Guardrails', () => {
     });
 
     test.each([
-      'runtime.tool.id',
-      'runtime.agent.id',
-      'runtime.project.id',
-      'runtime.activity.actions_24h',
-      'runtime.usage.cost_usd_24h',
-      'runtime.usage.orchestration_run_tokens',
-      'runtime.orchestration_run.node_attempt',
       'runtime.tools.tool_calls',
+      'runtime.tools.tokens.24h',
       'runtime.guardrails.errors.24h',
+      'runtime.projects.cost_usd.90d',
     ])(
       '%s, outside the served grammar, is rejected at write time',
       async (path) => {
