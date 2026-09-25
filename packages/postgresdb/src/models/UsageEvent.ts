@@ -50,6 +50,10 @@ import { UsageComponent } from './UsageComponent';
     },
     { name: 'usage_events_trace_id_idx', fields: ['trace_id'] },
     { name: 'usage_events_generation_id_idx', fields: ['generation_id'] },
+    {
+      name: 'usage_events_generation_public_id_idx',
+      fields: ['generation_public_id'],
+    },
     { name: 'usage_events_actor_id_idx', fields: ['actor_id'] },
     { name: 'usage_events_session_id_idx', fields: ['session_id'] },
     { name: 'usage_events_meter_type_idx', fields: ['meter_type'] },
@@ -76,6 +80,15 @@ import { UsageComponent } from './UsageComponent';
       fields: ['idempotency_key'],
     },
   ],
+  validate: {
+    // A generation-backed event without its durable id would be metered and
+    // never counted: `totals.distinct.generations` reads the public id.
+    generationPublicIdWithGeneration(this: UsageEvent) {
+      if (typeof this.generationId === 'number' && !this.generationPublicId) {
+        throw new Error('generationPublicId is required with generationId');
+      }
+    },
+  },
   hooks: {
     beforeValidate: (instance: UsageEvent) => {
       if (!instance.publicId) {
@@ -152,6 +165,12 @@ export class UsageEvent extends Model {
     { onDelete: 'SET NULL' }
   )
   declare generation: Generation | null;
+
+  // Denormalized beside the FK, like `trigger_id`: force-deleting an agent
+  // destroys its generations and nulls `generation_id`, and a metered
+  // generation must stay counted for as long as its event exists.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare generationPublicId: string | null;
 
   // Copied from the generation at write time, the same freeze-at-write rule as
   // `cost_usd`. SET NULL on delete so removing an actor or session never blocks

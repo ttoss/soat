@@ -3033,6 +3033,7 @@ describe('Usage', () => {
         orchestrationRunId: run!.id as number,
         nodeId,
         generationId: generation!.id as number,
+        generationPublicId: generation!.publicId,
         meterType: 'llm_tokens',
         provider: 'stub',
         model: 'stub-model',
@@ -3850,6 +3851,9 @@ describe('Usage', () => {
         .filter((field) => {
           return field !== 'project_id';
         })
+        .map((field) => {
+          return field === 'generation_id' ? 'generation_public_id' : field;
+        })
         .sort();
 
       expect(Object.values(DISTINCT_COUNT_COLUMNS).sort()).toEqual(
@@ -3861,5 +3865,81 @@ describe('Usage', () => {
         Object.keys(DISTINCT_COUNT_COLUMNS).sort()
       );
     });
+
+    test('an event naming a generation is refused without its durable id', async () => {
+      const generation = await db.Generation.findOne({
+        where: { publicId: generationId },
+      });
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      await expect(
+        db.UsageEvent.create({
+          projectId: project!.id,
+          generationId: generation!.id,
+          meterType: 'llm_tokens',
+          provider: 'ollama',
+          model: 'stub-model',
+          idempotencyKey: `unkeyed:${generationId}`,
+        })
+      ).rejects.toThrow('generationPublicId is required with generationId');
+    });
+
+    test('force-deleting an agent leaves its metered generations counted', async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'usage-distinct-force-delete' });
+      expect(projectRes.status).toBe(201);
+      const deleteProjectId = projectRes.body.id;
+
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: deleteProjectId,
+          name: 'Force Delete Stub Provider',
+          provider: 'ollama',
+          default_model: 'stub-model',
+          base_url: stubBaseUrl,
+        });
+      expect(providerRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: providerRes.body.id,
+          project_id: deleteProjectId,
+          name: 'Force Deleted Agent',
+        });
+      expect(agentRes.status).toBe(201);
+
+      const genRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
+        .send({
+          messages: [{ role: 'user', content: 'metered then deleted' }],
+        });
+      expect(genRes.status).toBe(200);
+      expect(genRes.body.status).toBe('completed');
+
+      const readTotals = async () => {
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/usage/aggregate?project_id=${deleteProjectId}` +
+            '&group_by=orchestration_run&include=distinct'
+        );
+        expect(res.status).toBe(200);
+        return res.body.totals;
+      };
+      const before = await readTotals();
+      expect(before.distinct.generations).toBe(1);
+
+      const deleteRes = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/agents/${agentRes.body.id}?force=true`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      const after = await readTotals();
+      expect(after.event_count).toBe(before.event_count);
+      expect(after.distinct.generations).toBe(before.distinct.generations);
+    }, 30000);
   });
 });

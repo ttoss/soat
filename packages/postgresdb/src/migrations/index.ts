@@ -19,6 +19,7 @@ import { apiKeySha256 } from './2026-09-24-apiKeySha256';
 import { foreignKeyNullability } from './2026-09-24-foreignKeyNullability';
 import { generationIdempotencyKey } from './2026-09-24-generationIdempotencyKey';
 import { orchestrationOutputMapping } from './2026-09-24-orchestrationOutputMapping';
+import { usageEventGenerationPublicId } from './2026-09-25-usageEventGenerationPublicId';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -59,4 +60,5 @@ export const MIGRATIONS: Migration[] = [
   apiKeySha256,
   foreignKeyNullability,
   orchestrationOutputMapping,
+  usageEventGenerationPublicId,
 ];
