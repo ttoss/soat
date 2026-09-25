@@ -163,9 +163,12 @@ describe('validateGuardrailDocument', () => {
       );
     });
 
-    test('rejects the retired soat.* namespace outright', () => {
+    test('rejects a namespace other than args, context and runtime', () => {
       expectValidationError(
-        { class: 'B', guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1] } },
+        {
+          class: 'B',
+          guard: { '<': [{ var: 'soat.projects.cost_usd.24h' }, 1] },
+        },
         /outside the args\.\* \/ context\.\* \/ runtime\.\* namespaces/
       );
     });

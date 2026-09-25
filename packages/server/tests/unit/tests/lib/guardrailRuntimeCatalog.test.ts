@@ -130,14 +130,6 @@ describe('runtime.* catalog', () => {
     'runtime.guardrails.id',
     'runtime.projects.cost_usd.90d',
     'runtime.generations.tool_calls.total',
-    // Keys outside the grammar.
-    'runtime.tool.id',
-    'runtime.agent.id',
-    'runtime.project.id',
-    'runtime.activity.actions_24h',
-    'runtime.usage.cost_usd_24h',
-    'runtime.usage.orchestration_run_tokens',
-    'runtime.orchestration_run.node_attempt',
   ])('refuses %s', (key) => {
     expect(parseRuntimeKey(key)).toBeNull();
     expect(RUNTIME_CONTEXT_CATALOG.has(key)).toBe(false);

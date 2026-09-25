@@ -254,7 +254,7 @@ describe('guardrail per-run usage ceiling', () => {
     expect(toolRequests).toHaveLength(0);
   });
 
-  test('run_tokens counts only the current run, not the whole project', async () => {
+  test('orchestrations.tokens.total counts only the current run, not the whole project', async () => {
     const noisyRun = await createRun();
     await seedRunUsage({
       runInternalId: noisyRun.id,
@@ -283,7 +283,7 @@ describe('guardrail per-run usage ceiling', () => {
     expect(result).toEqual({ ok: true });
   });
 
-  test('run_cost_usd sums the run cost and trips over its ceiling', async () => {
+  test('orchestrations.cost_usd.total sums the run cost and trips over its ceiling', async () => {
     const run = await createRun();
     await seedRunUsage({
       runInternalId: run.id,
