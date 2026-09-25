@@ -101,7 +101,7 @@ A per-project alert rule: when `metric` over `window` crosses `threshold`, a `us
 
 | `meter_type`     | What one event records                              | Components                                        |
 | ---------------- | --------------------------------------------------- | ------------------------------------------------- |
-| `llm_tokens`     | One whole generation's token usage — a four-step turn is four LLM calls and one event, written when the turn ends | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens` |
+| `llm_tokens`     | One turn segment's token usage — a four-step turn is four LLM calls and one event, written when the turn ends. A turn that pauses on a [client tool](./agents.md) writes one event per segment, each when it pauses or ends | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens` |
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |
@@ -132,7 +132,7 @@ Cache activity appears only for an agent that asked for it — see [Agents — P
 | Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `orchestration_run_id`/`node_id` inside a run |
 | Standalone completions | [Chat](./chats.md) completions (stateless and chat-scoped) and [memory](./memories.md) fact extraction and consolidation | `generation_id` and `trace_id` are `null` — these calls create no generation. `agent_id` is set for memory passes, `null` for chats |
 
-Idempotency keys: inside a run, the node execution **attempt** (`run:<orchestration_run_id>:node:<node_id>:attempt:<n>`), so a replayed node is a no-op while a **retry** meters for real; the same identity keys the `compute_execution` meter and the node-execution record. Standalone completions have no replay identity: `completion:<source>:<uuid>`. A **streamed** completion is metered when the stream finishes; one the client abandons is not.
+Idempotency keys: a generation's first segment is keyed by its id (`<generation_id>`), a segment resumed after `<n>` steps by `<generation_id>:step:<n>`, so a replayed segment is a no-op and a resume meters only the calls it makes. Inside a run the generation's part is the node execution **attempt** (`run:<orchestration_run_id>:node:<node_id>:attempt:<n>`), so a replayed node is a no-op while a **retry** meters for real; the same identity keys the `compute_execution` meter and the node-execution record. Standalone completions have no replay identity: `completion:<source>:<uuid>`. A **streamed** completion is metered when the stream finishes; one the client abandons is not.
 
 A `failed` turn is metered when it spent something: a generation the model *answered* but that failed the agent's [`output_schema`](./agents.md) with `OUTPUT_SCHEMA_VALIDATION_FAILED` was billed, and the counts come back on the failure. A request that never reached the model (provider `4xx`/`5xx`, network fault) writes no event, so a failed generation with no usage row means the call never landed.
 
@@ -246,7 +246,7 @@ Token counts are reported in one schema, `UsageTotals`, wherever they appear —
 
 | Altitude | Where | Notes |
 |---|---|---|
-| Step | [`GET /generations/{id}/transcript`](/docs/api/generations/get-generation-transcript) → `steps[].usage` | `cost_usd` is always `null`: the ledger prices one event per generation, and a per-step price would disagree with it after any price change. Null for the whole object means the step reported nothing. |
+| Step | [`GET /generations/{id}/transcript`](/docs/api/generations/get-generation-transcript) → `steps[].usage` | `cost_usd` is always `null`: the ledger prices one event per turn segment, and a per-step price would disagree with it after any price change. Null for the whole object means the step reported nothing. |
 | Generation | [`GET /generations/{id}`](/docs/api/generations/get-generation) → `usage` | Single read only; the listing omits it. `null` until something is metered. |
 | Session / run | [`GET /sessions/{id}`](/docs/api/sessions/get-session), [`GET /orchestration-runs/{id}`](/docs/api/orchestrations/get-orchestration-run) | Summed across the generations each contains. |
 | Window | [`GET /usage/aggregate`](/docs/api/usage/get-usage-aggregate), [`GET /usage/receipt`](/docs/api/usage/get-usage-receipt) | Buckets and receipt totals. |

@@ -380,6 +380,7 @@ export const buildCompletedGenerationResult = async (args: {
     model,
     usage: args.result.usage,
     aiProviderId: args.model ? routedAiProviderId(args.model) : null,
+    stepsAlreadySpent: 0,
   });
 
   emitResourceEvent({

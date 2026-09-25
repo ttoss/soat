@@ -31,6 +31,8 @@ import {
 import { isTurnBudgetSpent, resolveStopWhen } from './agentStopConditions';
 import {
   fireCompletionSideEffects,
+  meterContinuationSegment,
+  meterTurnSegment,
   recordContinuationFailure,
 } from './generationLifecycle';
 import { applyToolOutputMapping } from './jsonLogicMapping';
@@ -173,6 +175,7 @@ type SettleSaveArgs = {
     response: { messages: unknown[]; modelId?: string };
     text: string;
     finishReason: string;
+    usage?: LanguageModelUsage;
   };
   /** Steps the turn spent before `result` — empty on its first segment. */
   priorSteps?: unknown[];
@@ -182,32 +185,40 @@ type SettleSaveArgs = {
 // Enacts a non-null partition: suspend and hand the released calls to the client
 // (their synthesized siblings merged in on submit), or — when nothing was
 // released — inject the synthesized results and resume so the model can react.
-const settlePartition = (args: {
+// Either way the segment that proposed the calls ends here, so it is metered
+// before the turn is handed back or continues.
+const settlePartition = async (args: {
   pending: PendingGeneration;
   partition: ClientCallPartition;
   save: SettleSaveArgs;
   resumeCount: number;
 }): Promise<GenerationResult> => {
+  await meterTurnSegment({
+    generationId: args.pending.generationId,
+    model: args.save.model,
+    modelId:
+      args.save.result.response.modelId ?? args.save.typedAgent.model ?? '',
+    usage: args.save.result.usage,
+    stepsAlreadySpent: args.save.priorSteps?.length ?? 0,
+  });
   if (args.partition.released.length > 0) {
-    return Promise.resolve(
-      savePendingGeneration({
-        generationId: args.pending.generationId,
-        traceId: args.pending.traceId,
-        parentTraceId: args.pending.parentTraceId,
-        rootTraceId: args.pending.rootTraceId,
-        pendingToolCalls: args.partition.released,
-        syntheticToolResults: args.partition.synthesizedResults,
-        allMessages: args.save.allMessages,
-        result: args.save.result,
-        priorSteps: args.save.priorSteps,
-        model: args.save.model,
-        typedAgent: args.save.typedAgent,
-        agentId: args.pending.agentId,
-        resolvedTools: args.pending.resolvedTools,
-        toolContext: args.pending.toolContext ?? null,
-        remainingDepth: args.save.remainingDepth ?? null,
-      })
-    );
+    return savePendingGeneration({
+      generationId: args.pending.generationId,
+      traceId: args.pending.traceId,
+      parentTraceId: args.pending.parentTraceId,
+      rootTraceId: args.pending.rootTraceId,
+      pendingToolCalls: args.partition.released,
+      syntheticToolResults: args.partition.synthesizedResults,
+      allMessages: args.save.allMessages,
+      result: args.save.result,
+      priorSteps: args.save.priorSteps,
+      model: args.save.model,
+      typedAgent: args.save.typedAgent,
+      agentId: args.pending.agentId,
+      resolvedTools: args.pending.resolvedTools,
+      toolContext: args.pending.toolContext ?? null,
+      remainingDepth: args.save.remainingDepth ?? null,
+    });
   }
   // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutually recursive with resolveToolOutputsResult
   return resumeWithSyntheticResults({
@@ -573,15 +584,13 @@ const completeContinuation = async (args: {
     },
   };
 
+  // Awaited, as the initial turn's is: the segments before this one were
+  // metered when they paused, so the caller reads every call's usage on return.
+  await meterContinuationSegment(args);
   fireCompletionSideEffects({
     generationId: args.generationId,
     pending: args.pending,
-    result: args.result as {
-      steps: unknown[];
-      finishReason: string;
-      response?: { modelId?: string };
-      usage?: LanguageModelUsage;
-    },
+    result: args.result,
     completedResult,
   });
 

@@ -127,6 +127,7 @@ describe('generationLifecycle', () => {
         projectId,
         projectPublicId,
         error: new DomainError('AI_PROVIDER_ERROR', 'upstream refused'),
+        stepsAlreadySpent: 0,
       });
 
       await waitFor(async () => {
@@ -169,6 +170,7 @@ describe('generationLifecycle', () => {
       generationId: 'gen_lifecycle_fail03',
       traceId: 'trc_lifecycle_fail03',
       error: { code: 'SOME_OBJECT', detail: 'not an Error instance' },
+      stepsAlreadySpent: 0,
     });
 
     expect(error).toBeInstanceOf(DomainError);

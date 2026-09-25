@@ -156,6 +156,7 @@ const fireStreamEndSideEffects = (args: {
     model: args.typedAgent.model ?? '',
     usage: args.usage,
     aiProviderId: routedAiProviderId(args.model),
+    stepsAlreadySpent: 0,
   });
 };
 
@@ -187,6 +188,7 @@ const recordStreamFailure = async (args: {
     ...(typeof projectId === 'number'
       ? { projectId, projectPublicId: args.typedAgent.project.publicId }
       : {}),
+    stepsAlreadySpent: 0,
   });
 };
 

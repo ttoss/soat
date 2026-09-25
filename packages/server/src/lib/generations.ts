@@ -485,9 +485,9 @@ export const getGeneration = async (args: {
 
   if (!args.includeUsage) return mapGeneration(gen);
 
-  // The turn's own events. A generation is metered once, so this is a roll-up
-  // of one row in the ordinary case — but sub-agent turns meter against their
-  // own generation, so summing is what keeps a delegating turn honest.
+  // The turn's own events: one per segment, so a turn that paused for client
+  // tools has several. Sub-agent turns meter against their own generation, so
+  // summing is also what keeps a delegating turn honest.
   const [usage, memoryAssertions] = await Promise.all([
     rollUpUsageTotals({
       projectId: gen.projectId,

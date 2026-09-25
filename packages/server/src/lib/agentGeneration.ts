@@ -403,6 +403,7 @@ const runPreparedGeneration = async (args: {
       error,
       model: ctx.model,
       ...failureProject(ctx),
+      stepsAlreadySpent: 0,
     });
   }
 };
@@ -491,6 +492,7 @@ export const startGeneration = async (
         error,
         model: ctx.model,
         ...failureProject(ctx),
+        stepsAlreadySpent: 0,
       });
     } catch {
       log('startGeneration: failed to record generation failure');

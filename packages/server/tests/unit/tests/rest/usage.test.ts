@@ -989,6 +989,7 @@ describe('Usage', () => {
           generationId,
           model: 'stub-model',
           usage: undefined,
+          stepsAlreadySpent: 0,
         })
       ).resolves.toBeUndefined();
       // Without this the test is vacuous: the real write also resolves, so a
@@ -1028,6 +1029,7 @@ describe('Usage', () => {
           generationId,
           model: 'stub-model',
           usage: undefined,
+          stepsAlreadySpent: 0,
         })
       ).resolves.toBeUndefined();
       expect(spy).toHaveBeenCalledTimes(1);
@@ -1040,6 +1042,7 @@ describe('Usage', () => {
         generationId,
         model: 'stub-model',
         usage: undefined,
+        stepsAlreadySpent: 0,
       });
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/events?generation_id=${generationId}`
@@ -1054,6 +1057,7 @@ describe('Usage', () => {
           generationId: 'gen_doesNotExist01',
           model: 'm',
           usage: undefined,
+          stepsAlreadySpent: 0,
         })
       ).resolves.toBeUndefined();
     });
