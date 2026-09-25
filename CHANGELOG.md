@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.61.1](https://github.com/ttoss/soat/compare/v0.61.0...v0.61.1) (2026-09-25)
+
+### Bug Fixes
+
+* **usage:** meter a generation's paused segments on client tool calls ([#1451](https://github.com/ttoss/soat/issues/1451)) ([7dc43f2](https://github.com/ttoss/soat/commit/7dc43f24b2558d7657cb19e8f0801efa6c92d415)), closes [#1450](https://github.com/ttoss/soat/issues/1450)
+
 # [0.61.0](https://github.com/ttoss/soat/compare/v0.60.0...v0.61.0) (2026-09-25)
 
 ### Bug Fixes
