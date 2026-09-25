@@ -102,7 +102,7 @@ const resolveOrchestrationRunId = async (
 // — meters for real. Keying on `run:node` alone made the two indistinguishable
 // and dropped the second attempt. A null attempt resolves to 1, so the first
 // attempt has only one spelling.
-const buildIdempotencyKey = (args: {
+const buildGenerationKey = (args: {
   generationPublicId: string;
   runPublicId: string | null;
   nodeId: string | null;
@@ -113,6 +113,18 @@ const buildIdempotencyKey = (args: {
     return `run:${args.runPublicId}:node:${args.nodeId}:attempt:${attempt}`;
   }
   return args.generationPublicId;
+};
+
+// One key per segment of the turn: a turn pausing on a client tool spends
+// provider calls on both sides of the pause, and a segment is identified by the
+// steps spent before it. The first segment keeps the bare generation key.
+const buildIdempotencyKey = (
+  args: Parameters<typeof buildGenerationKey>[0] & { stepsAlreadySpent: number }
+): string => {
+  const generationKey = buildGenerationKey(args);
+  return args.stepsAlreadySpent > 0
+    ? `${generationKey}:step:${args.stepsAlreadySpent}`
+    : generationKey;
 };
 
 // The priced components and their summed cost for one set of reported tokens.
@@ -147,6 +159,7 @@ const writeGenerationEvent = async (args: {
   model: string;
   usage: LanguageModelUsage | undefined;
   aiProviderId?: string | null;
+  stepsAlreadySpent: number;
 }): Promise<void> => {
   const generation = await db.Generation.findOne({
     where: { publicId: args.generationId },
@@ -188,6 +201,7 @@ const writeGenerationEvent = async (args: {
     runPublicId: attribution.runPublicId,
     nodeId: attribution.nodeId,
     nodeAttempt: attribution.nodeAttempt,
+    stepsAlreadySpent: args.stepsAlreadySpent,
   });
 
   const created = await persistTokenEvent({
@@ -334,11 +348,11 @@ export const recordCompletionUsage = async (args: {
 };
 
 /**
- * Writes one usage event (with its component rows) for a completed generation
- * from the provider's reported token usage. Idempotent on the generation's
- * public ID — a replayed completion is a no-op instead of double counting.
- * Never throws: metering is an observability side effect and must not fail the
- * generation it measures.
+ * Writes one usage event (with its component rows) for one segment of a
+ * generation's turn from the provider's reported token usage. Idempotent on the
+ * generation and the segment — a replayed segment is a no-op instead of double
+ * counting. Never throws: metering is an observability side effect and must not
+ * fail the generation it measures.
  */
 export const recordGenerationUsage = async (args: {
   generationId: string;
@@ -349,11 +363,17 @@ export const recordGenerationUsage = async (args: {
    * null) on a non-routed turn, where the agent's pin is the answer.
    */
   aiProviderId?: string | null;
+  /**
+   * Steps the turn spent before the segment being metered: `0` for a turn's
+   * first `generateText` call, the paused steps' count for a resumed one.
+   */
+  stepsAlreadySpent: number;
 }): Promise<void> => {
   log(
-    'recordGenerationUsage: generationId=%s model=%s',
+    'recordGenerationUsage: generationId=%s model=%s stepsAlreadySpent=%d',
     args.generationId,
-    args.model
+    args.model,
+    args.stepsAlreadySpent
   );
   try {
     await writeGenerationEvent(args);

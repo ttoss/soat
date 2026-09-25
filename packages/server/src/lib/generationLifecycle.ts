@@ -52,6 +52,8 @@ export const recordGenerationFailure = async (args: {
    * caller that records the same failure twice still writes one event.
    */
   usage?: LanguageModelUsage;
+  /** Steps the turn spent before the failed segment — keys its usage event. */
+  stepsAlreadySpent: number;
 }): Promise<unknown> => {
   const errorPayload = buildGenerationErrorPayload(args.error);
   // Derived here so no failure path has to remember to pass it: `usage` is only
@@ -92,6 +94,7 @@ export const recordGenerationFailure = async (args: {
             model: modelIdOf(args.model),
             usage,
             aiProviderId: args.model ? routedAiProviderId(args.model) : null,
+            stepsAlreadySpent: args.stepsAlreadySpent,
           }),
         ]
       : []),
@@ -144,6 +147,11 @@ export const recordGenerationFailure = async (args: {
   });
 };
 
+/** The steps a continuation's turn spent before the segment now running. */
+const priorStepsOf = (pending: PendingGeneration): unknown[] => {
+  return pending.steps ?? [];
+};
+
 /**
  * Fails a continuation turn (the tool-outputs path) the way
  * `runCompletionSideEffects` completes one: the trace keeps every step of the
@@ -171,7 +179,7 @@ export const recordContinuationFailure = async (args: {
       projectPublicId: args.pending.projectPublicId,
       agentId: args.pending.agentId,
       generationId: args.generationId,
-      steps: [...(args.pending.steps ?? []), ...serializeSteps(args.steps)],
+      steps: [...priorStepsOf(args.pending), ...serializeSteps(args.steps)],
       parentTraceId: args.pending.parentTraceId ?? undefined,
       rootTraceId: args.pending.rootTraceId ?? undefined,
     }),
@@ -187,6 +195,7 @@ export const recordContinuationFailure = async (args: {
     // The continuation fails on the model's answer the same way the initial
     // turn does, and its tokens were billed the same way.
     usage: usageFromFailure(args.error),
+    stepsAlreadySpent: priorStepsOf(args.pending).length,
   });
 };
 
@@ -197,32 +206,52 @@ type CompletionSideEffectsArgs = {
     steps: unknown[];
     finishReason: string;
     response?: { modelId?: string };
-    usage?: LanguageModelUsage;
   };
   completedResult: GenerationResult;
 };
 
 /**
- * Meters the response that completed the turn — unless there was none. A
- * segment that never called the model (a turn arriving at
- * `submit-tool-outputs` with its step budget already spent) consumed nothing,
- * and metering it would file a zero-token event against an unknown model, on
- * the same generation as the calls that did consume tokens.
+ * Meters one `generateText` call of a turn — unless it never called the model.
+ * A segment that spent nothing (a turn arriving at `submit-tool-outputs` with
+ * its step budget already spent) would file a zero-token event against an
+ * unknown model, on the same generation as the calls that did consume tokens.
  */
-const meterCompletion = (args: CompletionSideEffectsArgs): Promise<void> => {
-  if (args.result.usage === undefined) return Promise.resolve();
+export const meterTurnSegment = (args: {
+  generationId: string;
+  model: LanguageModel;
+  modelId: string;
+  usage: LanguageModelUsage | undefined;
+  stepsAlreadySpent: number;
+}): Promise<void> => {
+  if (args.usage === undefined) return Promise.resolve();
   return recordGenerationUsage({
     generationId: args.generationId,
-    model: args.result.response?.modelId ?? '',
+    model: args.modelId,
+    usage: args.usage,
+    aiProviderId: routedAiProviderId(args.model),
+    stepsAlreadySpent: args.stepsAlreadySpent,
+  });
+};
+
+/** Meters the segment that finishes a continuation turn. */
+export const meterContinuationSegment = (args: {
+  generationId: string;
+  pending: PendingGeneration;
+  result: { response?: { modelId?: string }; usage?: LanguageModelUsage };
+}): Promise<void> => {
+  return meterTurnSegment({
+    generationId: args.generationId,
+    model: args.pending.resolvedModel,
+    modelId: args.result.response?.modelId ?? '',
     usage: args.result.usage,
-    aiProviderId: routedAiProviderId(args.pending.resolvedModel),
+    stepsAlreadySpent: priorStepsOf(args.pending).length,
   });
 };
 
 const runCompletionSideEffects = async (
   args: CompletionSideEffectsArgs
 ): Promise<void> => {
-  const prevSteps = args.pending.steps ?? [];
+  const prevSteps = priorStepsOf(args.pending);
   const allSteps = [...prevSteps, ...serializeSteps(args.result.steps)];
 
   await Promise.allSettled([
@@ -252,10 +281,6 @@ const runCompletionSideEffects = async (
       generationId: args.generationId,
       model: args.pending.resolvedModel,
     }),
-    // A separate completion path from the two that already meter usage: a
-    // generation that paused for a client tool is metered here, on the response
-    // that finishes it.
-    meterCompletion(args),
   ]);
 
   try {
