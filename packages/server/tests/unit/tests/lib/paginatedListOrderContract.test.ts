@@ -28,8 +28,13 @@ const collectSourceFiles = (dir: string): string[] => {
 /** The source of each `paginatedList(...)` call, with its line number. */
 const paginatedListCalls = (
   source: string
-): Array<{ line: number; body: string }> => {
-  const calls: Array<{ line: number; body: string }> = [];
+): Array<{ line: number; body: string; start: number; end: number }> => {
+  const calls: Array<{
+    line: number;
+    body: string;
+    start: number;
+    end: number;
+  }> = [];
   for (const match of source.matchAll(/\bpaginatedList\(/g)) {
     const start = match.index;
     let depth = 1;
@@ -42,6 +47,8 @@ const paginatedListCalls = (
     calls.push({
       line: source.slice(0, start).split('\n').length,
       body: source.slice(start, end),
+      start,
+      end,
     });
   }
   return calls;
@@ -95,6 +102,34 @@ describe('paginatedList order', () => {
       })
       .map((call) => {
         return call.at;
+      });
+    expect(offenders).toEqual([]);
+  });
+
+  // A list that pages itself — its own clamp, or a batched mapper — still cuts
+  // its pages from a total order, so it sorts through `totalListOrder` too.
+  test('every findAndCountAll outside paginatedList sorts by totalListOrder', () => {
+    const offenders = collectSourceFiles(SRC_DIR)
+      .filter((file) => {
+        return !file.endsWith(join('lib', 'pagination.ts'));
+      })
+      .flatMap((file) => {
+        const source = readFileSync(file, 'utf-8');
+        const calls = paginatedListCalls(source);
+        return [...source.matchAll(/\bfindAndCountAll\(\{/g)]
+          .filter((match) => {
+            return !calls.some((call) => {
+              return match.index > call.start && match.index < call.end;
+            });
+          })
+          .filter((match) => {
+            const call = source.slice(match.index, match.index + 600);
+            return !/\border:\s*totalListOrder\(/.test(call);
+          })
+          .map((match) => {
+            const line = source.slice(0, match.index).split('\n').length;
+            return `${file.slice(SRC_DIR.length + 1)}:${line}`;
+          });
       });
     expect(offenders).toEqual([]);
   });

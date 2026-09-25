@@ -9,6 +9,7 @@ import {
 
 import { emitResourceEvent } from './eventBus';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
+import { totalListOrder } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:audit');
@@ -355,7 +356,7 @@ export const listAuditEntries = async (
   const { rows, count } = await db.AuditEntry.findAndCountAll({
     where,
     include: [{ model: db.Project, as: 'project' }],
-    order: [['createdAt', 'DESC']],
+    order: totalListOrder([['createdAt', 'DESC']]),
     limit,
     offset,
   });
