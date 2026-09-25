@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.61.0](https://github.com/ttoss/soat/compare/v0.60.0...v0.61.0) (2026-09-25)
+
+### Features
+
+* **guardrails:** pass the proposed call to context_tool_id and stop caching its result ([#1448](https://github.com/ttoss/soat/issues/1448)) ([67a751c](https://github.com/ttoss/soat/commit/67a751c588d04998adc6628db6279c5896ee1085)), closes [#1445](https://github.com/ttoss/soat/issues/1445)
+* **usage:** meter tool executions and read them in guardrails as runtime.<module>.<metric>.<window> ([#1446](https://github.com/ttoss/soat/issues/1446)) ([c43373e](https://github.com/ttoss/soat/commit/c43373e78a761fb084addd629ef4ed6a5e1ad2aa))
+
+### BREAKING CHANGES
+
+* **usage:** every `runtime.tool.*`, `runtime.agent.*`,
+  `runtime.project.*`, `runtime.activity.*`, `runtime.usage.*` and
+  `runtime.orchestration_run.*` guardrail key is removed; write-time
+  validation refuses them and stored guardrails still naming one fail
+  closed. `callTool`, `callResolvedTool` and `resolveAgentTools` require an
+  `attribution` argument.
+
 # [0.60.0](https://github.com/ttoss/soat/compare/v0.59.4...v0.60.0) (2026-09-25)
 
 ### Features
