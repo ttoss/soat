@@ -3,7 +3,6 @@ import { db } from 'src/db';
 import { gatePendingClientTools } from 'src/lib/agentClientToolGuardrail';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
 // The gate sits at the `requires_action` handoff — client tools have no execute
@@ -48,7 +47,6 @@ describe('client-tool guardrail gate (requires_action handoff)', () => {
   });
 
   afterEach(async () => {
-    clearGuardrailContextToolCache();
     await db.Tool.update(
       { guardrailIds: null },
       { where: { publicId: clientToolId } }

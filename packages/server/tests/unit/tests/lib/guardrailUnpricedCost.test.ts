@@ -6,7 +6,6 @@ import type { Tool } from 'ai';
 import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { evaluateGuardrailDryRun } from 'src/lib/guardrailDryRun';
 import { createGuardrail } from 'src/lib/guardrails';
 
@@ -61,7 +60,6 @@ describe('guardrail cost ceiling over an unpriced window', () => {
 
   afterEach(() => {
     toolRequests = [];
-    clearGuardrailContextToolCache();
   });
 
   afterAll(async () => {

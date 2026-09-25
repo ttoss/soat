@@ -6,7 +6,6 @@ import type { Tool } from 'ai';
 import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
 import { assertGuardrailEvaluationDetail } from '../../fixtures/guardrailEvaluationDetail';
@@ -129,7 +128,6 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
   afterEach(async () => {
     toolRequests = [];
     contextResponse = {};
-    clearGuardrailContextToolCache();
     // Reset the tool-scope attachment between cases.
     await db.Tool.update(
       { guardrailIds: null },
@@ -487,7 +485,7 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
       status: string;
     };
     expect(first.status).toBe('pending_approval');
-    // A second gated call within the TTL is served from the context-tool cache.
+    // A second gated call asks the context tool again.
     const second = (await invokeExecute(refund, { amount: 2 })) as {
       status: string;
     };

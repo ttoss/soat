@@ -6,7 +6,6 @@ import type { Tool } from 'ai';
 import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
 // The orchestration tool-node executor was once the only instrumented producer,
@@ -91,7 +90,6 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
   });
 
   afterEach(async () => {
-    clearGuardrailContextToolCache();
     await db.Tool.update(
       { guardrailIds: null },
       { where: { publicId: httpToolId } }

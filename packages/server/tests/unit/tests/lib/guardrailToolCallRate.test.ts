@@ -7,7 +7,6 @@ import type { Tool } from 'ai';
 import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
 // `runtime.<module>.<metric>.<window>` read off the `tool_execution` meter at
@@ -123,7 +122,6 @@ describe('guardrail tool-call rate context', () => {
 
   afterEach(async () => {
     toolRequests = 0;
-    clearGuardrailContextToolCache();
     await db.Tool.update(
       { guardrailIds: null },
       { where: { id: [refundId, lookupId] } }

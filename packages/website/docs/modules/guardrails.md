@@ -121,7 +121,28 @@ To gate several tools differently, create a guardrail per tool and [attach](#att
 
 The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. A guardrail may also name a `context_tool_id`, an ordinary [tool](./tools.md) the platform calls immediately before classifying each gated call, so long-parked runs read fresh context. `context_mode` combines the two: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning; `replace` substitutes it entirely.
 
-The context tool runs under the calling agent's credentials (same project scoping and secret resolution); its result never enters the model context. An inaccessible tool fails closed. The call has a per-call timeout and a short per-`(project, guardrail)` TTL cache.
+The context tool is called on every gated call, uncached, with the proposed call as its input, nested under one key:
+
+```json
+{ "call": { "action": "<action>", "tool": { "id": "tool_…", "name": "…" }, "args": { … } } }
+```
+
+`call.args` are the guard's `args.*`: preset parameters applied, [approval justification](./approvals.md) fields removed. The shape is the same on every gate site (agent turn, [client tool](#client-tools), [orchestration tool node](#orchestration-tool-nodes), [direct call or pipeline step](#direct-calls-and-pipeline-steps)) and in a [dry run](#dry-run-evaluation). Its only top-level key is `call`, so the input never supplies the `action` a `builtin` context tool reads its operation from: set that in `preset_parameters.action`. A tool that ignores its input works unchanged. `http` tools receive the input as the request body.
+
+Use it for rules about the call's target entity, which `runtime.*` does not key by argument — the context tool reads `call.args.optimization_id` and returns both figures:
+
+```json
+{
+  "and": [
+    { ">=": [{ "var": "context.hours_since_last_change" }, 24] },
+    { "<": [{ "var": "context.retunes_7d" }, 3] }
+  ]
+}
+```
+
+- **`call.args` are model output.** The tool runs under the calling agent's credentials (same project scoping and secret resolution); validate the arguments before using them in a lookup. Its result never enters the model context.
+- **Bind it to the tools it governs**, not to a whole agent: every gated call pays one tool call and a fail-closed timeout risk (`SOAT_GUARDRAIL_CONTEXT_TIMEOUT_MS`, default 5000 ms), and a read-heavy agent makes dozens of reads per turn.
+- **Fail-closed.** An inaccessible tool, an error, a timeout or a non-object result contributes no `context.*` keys.
 
 The `runtime.*` catalog is a grammar, leaves only:
 
@@ -259,7 +280,7 @@ A guardrail cannot be deleted while attached: [`DELETE /api/v1/guardrails/{guard
 
 ### Dry-run Evaluation
 
-[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline (`class`, guard, context tool per `context_mode`, live `runtime.*`) against caller-supplied `args` and `guardrail_context`, and returns the [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes or is filed. Pass an optional `tool_id` to resolve `runtime.tools.*`; an unresolvable `runtime.*` key fails closed as at runtime. Use it before attaching a document, or before editing a widely attached one.
+[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline (`class`, guard, context tool per `context_mode`, live `runtime.*`) against caller-supplied `args` and `guardrail_context`, and returns the [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes or is filed. Pass an optional `tool_id` to resolve `runtime.tools.*`; the context tool receives the same [`call` input](#guards-and-guardrail-context) a real call sends, built from `args` and `tool_id`. An unresolvable `runtime.*` key fails closed as at runtime. Use it before attaching a document, or before editing a widely attached one.
 
 ### Evaluation Audit Record
 
