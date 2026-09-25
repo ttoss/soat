@@ -64,11 +64,13 @@ export const listWebhooks = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.Webhook.findAndCountAll({
         where: { projectId: args.projectIds },
         include: webhookIncludes(),
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -204,14 +206,15 @@ export const listWebhookDeliveries = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.WebhookDelivery.findAndCountAll({
         where: { webhookId: args.webhookId },
         include: [{ model: db.Webhook, as: 'webhook' }],
         distinct: true,
+        order,
         limit,
         offset,
-        order: [['createdAt', 'DESC']],
       });
     },
     map: mapWebhookDelivery,

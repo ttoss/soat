@@ -428,12 +428,13 @@ export const listGenerations = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['startedAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Generation.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
         include: generationIncludes(),
-        order: [['startedAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

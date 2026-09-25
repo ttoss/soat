@@ -135,12 +135,13 @@ export const listMemories = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.Memory.findAndCountAll({
         where,
         include: memoryIncludes(),
-        order: [['createdAt', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

@@ -102,7 +102,8 @@ export const listTraces = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Trace.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
         include: [
@@ -112,8 +113,8 @@ export const listTraces = async (args: {
           { model: db.Trace, as: 'parentTrace' },
           { model: db.Trace, as: 'rootTrace' },
         ],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

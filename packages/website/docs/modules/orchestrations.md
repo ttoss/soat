@@ -42,6 +42,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `edges`        | array          | Directed connections between nodes               |
 | `state_schema` | object         | Optional JSON Schema describing the run state    |
 | `input_schema` | object         | Optional JSON Schema describing the run input    |
+| `output_mapping` | object \| null | Optional shape of a succeeded run's `output`, JSON Logic over the final state (see [Run output](#run-output)) |
 | `created_at`   | string         | ISO 8601 creation timestamp                      |
 | `updated_at`   | string         | ISO 8601 last-updated timestamp                  |
 
@@ -68,7 +69,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `input`            | object \| null | Initial input provided at run creation                            |
 | `metadata`         | object \| null | Caller-owned annotations supplied at run creation; never merged into `state` (see [Run Metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `idempotency_key`  | string \| null | Deduplication key supplied at run creation, unique within the project (see [Starting a run at most once](#starting-a-run-at-most-once)) |
-| `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
+| `output`           | object \| null | What a `succeeded` run returns: the `output_mapping` result, else the terminal node artifacts keyed by node id (see [Run output](#run-output)); `null` otherwise |
 | `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |
 | `parent_node_id`   | string \| null | The node within `parent_orchestration_run_id` that started this run |
 | `orchestration_run_depth`        | integer        | `loop` / `sub_orchestration` edges between this run and the one a caller started: `0` for a caller-started run, one more than its parent's for a child (see [Nesting depth](#nesting-depth)) |
@@ -115,7 +116,7 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. See [Emitting events](#emitting-events). |
 | `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
-| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — `{ terminalNodeId: terminalArtifact }`, not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly. |
+| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — the child's [`output_mapping`](#run-output) result, or `{ terminalNodeId: terminalArtifact }` when it declares none. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly. |
 
 ### Node artifacts
 
@@ -134,7 +135,7 @@ Every completed node produces an **artifact**: what `state_mapping` reads as `ou
 | `poll` | `{ result, attempts, conditionMet, timedOut }`. See [Polling](#polling). |
 | `delay` | `{ waited }` — the `duration` as declared. |
 | `emit_event` | `{ emitted, eventType }`. See [Emitting events](#emitting-events). |
-| `sub_orchestration` | The child run's `output`, i.e. `{ terminalNodeId: terminalArtifact }`. |
+| `sub_orchestration` | The child run's `output` — see [Run output](#run-output). |
 
 On a `tool` node returning a JSON object, `{"var": "output.result"}` resolves to `null`; map the field the tool returns.
 
@@ -374,6 +375,23 @@ A project-scoped caller gets `per_project` for its projects, `queue_depth` and `
 
 Run **state** = the run input ([Run input](#run-input)) + every upstream `state_mapping` write + every upstream artifact under `nodes.<id>`. `transform` and `condition` evaluate `expression` against full state; other node types receive only their `input_mapping` result; `poll` also evaluates `exit_condition` against state plus `response` and `attempt`.
 
+#### Run output
+
+A succeeded run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
+
+```json
+{
+  "output_mapping": {
+    "first": { "var": "state.first" },
+    "last": { "var": "state.nodes.b.result" }
+  }
+}
+```
+
+The run returns `{ "first": "x", "last": "y" }` however the graph is wired inside, so renaming or appending a terminal node changes nothing a consumer reads. Keys are fields, never expressions: `{ "cat": … }` is an output field named `cat`. A missing path maps to `null`; a mapping that throws (`{ "throw": … }`) fails the run with no `output`.
+
+Without `output_mapping`, `output` is the terminal nodes' artifacts keyed by node id — `{ "b": { "result": "y" } }` — which couples readers to node ids and each node type's [artifact](#node-artifacts). `output_mapping` is versioned with the graph, so a run settles with its [pinned version's](#versioning) mapping; `null` on update clears it.
+
 #### The `nodes.<id>` namespace
 
 Every completed node's artifact is recorded at `state.nodes.<nodeId>`, `state_mapping` or not; downstream reads it with `{ "var": "nodes.<nodeId>.<field>" }`:
@@ -491,7 +509,7 @@ soat validate-orchestration \
 
 ### Versioning
 
-The graph is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create; every write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. Versioned surface: `nodes`, `edges`, `state_schema`, `input_schema`. Metadata-only edits, structurally identical rewrites and restoring the live version archive nothing. `version_label` on a create or update annotates the archived version; it is not part of the config.
+The graph is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create; every write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. Versioned surface: `nodes`, `edges`, `state_schema`, `input_schema`, `output_mapping`. Metadata-only edits, structurally identical rewrites and restoring the live version archive nothing. `version_label` on a create or update annotates the archived version; it is not part of the config.
 
 A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
 

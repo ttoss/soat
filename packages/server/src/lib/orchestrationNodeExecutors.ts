@@ -19,17 +19,18 @@ import { callTool } from './tools';
 
 const log = createDebug('soat:orchestrations');
 
-const writeToState = (
-  path: string,
-  value: unknown,
-  state: Record<string, unknown>
-): void => {
-  const normalizedPath = path.startsWith('state.') ? path : `state.${path}`;
-  const fieldName = normalizedPath.slice('state.'.length);
-  // A dotted target must build a nested object: JSON-Logic's `var` descends
-  // dot-paths, so a flat `state["a.b"]` key reads back as null.
-  const segments = fieldName.split('.');
-  let cursor = state;
+/**
+ * Writes `value` at a dotted `path` inside `target`, building nested objects:
+ * JSON-Logic's `var` descends dot-paths, so a flat `target["a.b"]` key reads
+ * back as null.
+ */
+export const writeAtDottedPath = (args: {
+  target: Record<string, unknown>;
+  path: string;
+  value: unknown;
+}): void => {
+  const segments = args.path.split('.');
+  let cursor = args.target;
   for (let i = 0; i < segments.length - 1; i += 1) {
     const segment = segments[i] as string;
     const next = cursor[segment];
@@ -38,7 +39,20 @@ const writeToState = (
     }
     cursor = cursor[segment] as Record<string, unknown>;
   }
-  cursor[segments[segments.length - 1] as string] = value;
+  cursor[segments[segments.length - 1] as string] = args.value;
+};
+
+const writeToState = (
+  path: string,
+  value: unknown,
+  state: Record<string, unknown>
+): void => {
+  const normalizedPath = path.startsWith('state.') ? path : `state.${path}`;
+  writeAtDottedPath({
+    target: state,
+    path: normalizedPath.slice('state.'.length),
+    value,
+  });
 };
 
 // `applyInputMapping` and the JSON Logic evaluator now live in

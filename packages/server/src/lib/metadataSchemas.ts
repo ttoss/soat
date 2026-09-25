@@ -232,12 +232,13 @@ export const listMetadataSchemas = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.MetadataSchema.findAndCountAll({
         where,
         include: metadataSchemaIncludes(),
-        order: [['createdAt', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

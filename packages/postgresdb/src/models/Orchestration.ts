@@ -56,7 +56,7 @@ export class Orchestration extends Model {
 
   /**
    * Incremented on every write that changes the graph (`nodes`, `edges`,
-   * `stateSchema`, `inputSchema`); each version is archived as an
+   * `stateSchema`, `inputSchema`, `outputMapping`); each version is archived as an
    * `OrchestrationVersion`. A run pins the version it started on, so editing the
    * graph never re-shapes a run already in flight — which makes these
    * columns a *draft* for runs started from now on, not a live rewrite of the
@@ -76,6 +76,13 @@ export class Orchestration extends Model {
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare inputSchema: object | null;
+
+  /**
+   * JSON Logic over the final run state, one entry per `output` field. Null
+   * keeps `output` keyed by terminal node id.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare outputMapping: Record<string, unknown> | null;
 
   @HasMany(() => {
     return OrchestrationRun;

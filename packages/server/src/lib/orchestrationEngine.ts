@@ -30,10 +30,10 @@ import { resolveRunGraph } from './orchestrationRunGraph';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
-  getTerminalOutput,
   mapRunWithIncludes,
   persistScheduledWait,
   resolveResumeStartNodes,
+  resolveSettledOutput,
   restoreRunFromCheckpoint,
   updateRunRecord,
 } from './orchestrationRunHelpers';
@@ -200,22 +200,12 @@ const settleRun = async (args: {
   edges: OrchestrationEdge[];
   traceId: string | null;
 }): Promise<MappedOrchestrationRun> => {
-  const {
-    runRecord,
-    runStatus,
-    requiredAction,
-    runError,
-    state,
-    artifacts,
-    nodes,
-    edges,
-    traceId,
-  } = args;
+  const { runRecord, requiredAction, state, artifacts, traceId } = args;
 
   // Emitted here because the run record is in scope. The bulky frozen spec is
   // dropped after emit — the ApprovalItem is its durable home.
   if (
-    runStatus === 'awaiting_input' &&
+    args.runStatus === 'awaiting_input' &&
     requiredAction?.type === 'approval' &&
     requiredAction.approvalSpec &&
     !requiredAction.approvalId
@@ -251,7 +241,7 @@ const settleRun = async (args: {
     requiredAction.approvalSpec = undefined;
   }
 
-  const output = getTerminalOutput({ nodes, edges, artifacts });
+  const { runStatus, runError, output } = await resolveSettledOutput(args);
   await updateRunRecord({
     runRecord,
     runStatus,

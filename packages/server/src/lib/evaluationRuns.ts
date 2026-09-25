@@ -228,7 +228,11 @@ const planRun = async (args: {
 
   const items = await db.DatasetItem.findAll({
     where: { datasetId: dataset.id as number },
-    order: [['createdAt', 'ASC']],
+    // `id` breaks a `created_at` tie, so items run in insertion order.
+    order: [
+      ['createdAt', 'ASC'],
+      ['id', 'ASC'],
+    ],
   });
   assertRunnableItemCount({
     count: items.length,

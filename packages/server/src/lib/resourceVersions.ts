@@ -236,15 +236,16 @@ const makeVersionReads = <TMappedVersion, TMappedResource>(
     return paginatedList({
       limit: a.limit,
       offset: a.offset,
-      query: ({ limit, offset }) => {
+      // Ordered by the version counter, not a timestamp: two versions can
+      // share a `createdAt`, and a non-deterministic page boundary in
+      // history is worse than useless.
+      order: [['version', 'DESC']],
+      query: ({ limit, offset, order }) => {
         return store.versionModel().findAndCountAll({
           where: { [store.foreignKey]: resource.dbId },
           include: store.versionInclude(),
-          // Ordered by the version counter, not a timestamp: two versions can
-          // share a `createdAt`, and a non-deterministic page boundary in
-          // history is worse than useless.
-          order: [['version', 'DESC']],
           distinct: true,
+          order,
           limit,
           offset,
         });

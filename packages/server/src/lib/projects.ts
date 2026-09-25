@@ -162,8 +162,9 @@ export const listProjects = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
-      return db.Project.findAndCountAll({ where, limit, offset });
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
+      return db.Project.findAndCountAll({ where, order, limit, offset });
     },
     map: mapProject,
   });

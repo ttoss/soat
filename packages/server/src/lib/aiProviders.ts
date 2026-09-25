@@ -52,11 +52,13 @@ export const listAiProviders = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.AiProvider.findAndCountAll({
         where: { projectId: args.projectIds },
         include: getAiProviderIncludes(),
         distinct: true,
+        order,
         limit,
         offset,
       });

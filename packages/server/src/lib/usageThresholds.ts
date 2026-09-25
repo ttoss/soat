@@ -121,12 +121,13 @@ export const listThresholds = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.UsageThreshold.findAndCountAll({
         where,
         include: [{ model: db.Project, as: 'project' }],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

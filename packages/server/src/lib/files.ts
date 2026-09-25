@@ -94,9 +94,11 @@ export const listFiles = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.File.findAndCountAll({
         where: hasPolicyConstraints(where) ? where : undefined,
+        order,
         limit,
         offset,
       });

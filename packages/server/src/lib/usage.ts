@@ -281,11 +281,12 @@ export const listUsageEvents = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.UsageEvent.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
         include: eventIncludes(orchestration),
-        order: [['createdAt', 'DESC']],
+        order,
         limit,
         offset,
         distinct: true,

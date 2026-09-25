@@ -153,12 +153,13 @@ export const listEvalRuns = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.EvalRun.findAndCountAll({
         where: { evalId: evaluation.id as number },
         include: evalRunIncludes(),
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -196,12 +197,13 @@ export const listEvalResults = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.EvalResult.findAndCountAll({
         where: { evalRunId: run.id as number },
         include: evalResultIncludes(),
-        order: [['createdAt', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

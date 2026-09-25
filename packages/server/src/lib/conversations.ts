@@ -102,7 +102,8 @@ export const listConversations = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.Conversation.findAndCountAll({
         where: hasPolicyConstraints(where) ? where : undefined,
         include: [
@@ -110,6 +111,7 @@ export const listConversations = async (args: {
           { model: db.Actor, as: 'actor' },
         ],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -356,7 +358,8 @@ export const listConversationMessages = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['position', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.ConversationMessage.findAndCountAll({
         where: { conversationId: conversation.id },
         include: [
@@ -368,8 +371,8 @@ export const listConversationMessages = async (args: {
           { model: db.Actor, as: 'actor' },
           { model: db.Agent, as: 'agent' },
         ],
-        order: [['position', 'ASC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

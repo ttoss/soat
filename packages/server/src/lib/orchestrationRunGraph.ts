@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { parseOrchestrationGraph } from './orchestrationGraphWire';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:orchestrations');
 
@@ -36,6 +37,27 @@ const liveGraph = (
 };
 
 /**
+ * The config archived at one version of an orchestration, or `null` when that
+ * version was never archived. Wire-shaped (snake_case), as the archive stores it.
+ */
+const findArchivedConfig = async (args: {
+  orchestrationDbId: number;
+  version: number;
+}): Promise<Record<string, unknown> | null> => {
+  const archived = await db.OrchestrationVersion.findOne({
+    where: { orchestrationId: args.orchestrationDbId, version: args.version },
+  });
+  if (!archived) return null;
+
+  const config = archived.config;
+  /* istanbul ignore next -- the column is JSONB NOT NULL and only ever written
+     from buildOrchestrationConfigSnapshot, so no entry point can produce a
+     non-object here; the narrowing exists to keep the return type honest. */
+  if (!isPlainObject(config)) return null;
+  return config;
+};
+
+/**
  * The graph at one archived version of an orchestration, or `null` when that
  * version was never archived.
  *
@@ -46,21 +68,9 @@ const findArchivedGraph = async (args: {
   orchestrationDbId: number;
   version: number;
 }): Promise<RunGraph | null> => {
-  const archived = await db.OrchestrationVersion.findOne({
-    where: { orchestrationId: args.orchestrationDbId, version: args.version },
-  });
-  if (!archived) return null;
-
-  const config = archived.config;
-  /* istanbul ignore next -- the column is JSONB NOT NULL and only ever written
-     from buildOrchestrationConfigSnapshot, so no entry point can produce a
-     non-object here; the narrowing exists to keep the return type honest. */
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    return null;
-  }
-
-  const { nodes, edges } = config as Record<string, unknown>;
-  return parseOrchestrationGraph({ nodes, edges });
+  const config = await findArchivedConfig(args);
+  if (!config) return null;
+  return parseOrchestrationGraph({ nodes: config.nodes, edges: config.edges });
 };
 
 /**
@@ -111,4 +121,28 @@ export const resolveRunGraph = async (args: {
     version
   );
   return archived;
+};
+
+/**
+ * The `output_mapping` a run settles with: its pinned version's, else the live
+ * row's, by the same fallback {@link resolveRunGraph} takes — so a run's
+ * `output` has the shape of the graph it executed, not of a later edit.
+ */
+export const resolveRunOutputMapping = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<Record<string, unknown> | null> => {
+  const orchestrationDbId = args.run.orchestrationId;
+  const version = args.run.orchestrationVersion;
+
+  if (version !== null && version !== undefined) {
+    const config = await findArchivedConfig({ orchestrationDbId, version });
+    if (config) {
+      return isPlainObject(config.output_mapping)
+        ? config.output_mapping
+        : null;
+    }
+  }
+
+  const live = await db.Orchestration.findByPk(orchestrationDbId);
+  return live?.outputMapping ?? null;
 };

@@ -1,9 +1,11 @@
+import { DomainError } from '../errors';
 import type {
   NodeRetryPolicy,
   OrchestrationEdge,
   OrchestrationNode,
   RetryBackoffStrategy,
 } from './orchestrations';
+import { isPlainObject } from './plainObject';
 
 /**
  * The boundary between the snake_case orchestration graph on the wire and the
@@ -204,4 +206,20 @@ export const mapOrchestrationGraph = (args: {
     nodes: args.nodes.map(mapOrchestrationNode),
     edges: args.edges.map(mapOrchestrationEdge),
   };
+};
+
+/**
+ * An orchestration's `output_mapping` as sent: absent leaves it untouched,
+ * `null` clears it, and anything but a keyed object is refused — each key is
+ * an output field.
+ */
+export const parseOutputMapping = (
+  raw: unknown
+): Record<string, unknown> | null | undefined => {
+  if (raw === undefined || raw === null) return raw;
+  if (isPlainObject(raw)) return raw;
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    'output_mapping must be an object mapping output fields to JSON Logic'
+  );
 };

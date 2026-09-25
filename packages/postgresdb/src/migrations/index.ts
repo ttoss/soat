@@ -18,6 +18,7 @@ import { tagBagGinIndexes } from './2026-09-22-tagBagGinIndexes';
 import { apiKeySha256 } from './2026-09-24-apiKeySha256';
 import { foreignKeyNullability } from './2026-09-24-foreignKeyNullability';
 import { generationIdempotencyKey } from './2026-09-24-generationIdempotencyKey';
+import { orchestrationOutputMapping } from './2026-09-24-orchestrationOutputMapping';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -57,4 +58,5 @@ export const MIGRATIONS: Migration[] = [
   generationIdempotencyKey,
   apiKeySha256,
   foreignKeyNullability,
+  orchestrationOutputMapping,
 ];

@@ -186,11 +186,13 @@ export const listActors = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
       return db.Actor.findAndCountAll({
         where: hasPolicyConstraints(where) ? where : undefined,
         include: actorIncludes(),
         distinct: true,
+        order,
         limit,
         offset,
       });

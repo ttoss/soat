@@ -5,6 +5,7 @@ import {
   updateOrchestration,
 } from './orchestrations';
 import { orchestrationVersionStore } from './orchestrationVersionSnapshot';
+import { isPlainObject } from './plainObject';
 import {
   type ArchivedVersionRow,
   configObject,
@@ -92,6 +93,9 @@ const orchestrationVersionArchive = makeVersionArchive({
       // never "leave as is".
       stateSchema: configObject(args.config.state_schema),
       inputSchema: configObject(args.config.input_schema),
+      outputMapping: isPlainObject(args.config.output_mapping)
+        ? args.config.output_mapping
+        : null,
       versionLabel: args.label,
       createdByUserId: args.createdByUserId,
     });

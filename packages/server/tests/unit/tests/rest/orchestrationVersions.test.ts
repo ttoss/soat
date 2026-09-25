@@ -117,6 +117,7 @@ describe('Orchestration versions', () => {
         'edges',
         'input_schema',
         'nodes',
+        'output_mapping',
         'state_schema',
       ]);
     });

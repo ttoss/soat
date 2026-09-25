@@ -74,7 +74,7 @@ export class OrchestrationVersion extends Model {
   /**
    * The orchestration's versioned surface, stored in the wire (snake_case) shape
    * the orchestrations OpenAPI spec documents: `{ nodes, edges, state_schema,
-   * input_schema }`.
+   * input_schema, output_mapping }`.
    *
    * Only the graph is versioned. Name and description are metadata — bumping the
    * version when one of them changes would make two version numbers denote the

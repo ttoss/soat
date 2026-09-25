@@ -160,6 +160,7 @@ export type MappedOrchestration = {
   edges: ReturnType<typeof mapOrchestrationEdge>[];
   state_schema: object | null;
   input_schema: object | null;
+  output_mapping: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -267,6 +268,7 @@ const mapOrchestration = (
     }),
     state_schema: orch.stateSchema,
     input_schema: orch.inputSchema,
+    output_mapping: orch.outputMapping,
     created_at: orch.createdAt,
     updated_at: orch.updatedAt,
   };
@@ -384,6 +386,7 @@ export const createOrchestration = async (
     edges: OrchestrationEdge[];
     stateSchema?: object | null;
     inputSchema?: object | null;
+    outputMapping?: Record<string, unknown> | null;
   } & OrchestrationVersionAuthorship
 ): Promise<MappedOrchestration> => {
   log('createOrchestration %o', { projectId: args.projectId, name: args.name });
@@ -403,6 +406,7 @@ export const createOrchestration = async (
     edges: args.edges,
     stateSchema: args.stateSchema ?? null,
     inputSchema: args.inputSchema ?? null,
+    outputMapping: args.outputMapping ?? null,
   });
 
   const created = await db.Orchestration.findOne({
@@ -439,12 +443,13 @@ export const listOrchestrations = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.Orchestration.findAndCountAll({
         where: { projectId: args.projectIds },
         include: [{ model: db.Project, as: 'project' }],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });
@@ -485,6 +490,7 @@ export const updateOrchestration = async (
     edges?: OrchestrationEdge[];
     stateSchema?: object | null;
     inputSchema?: object | null;
+    outputMapping?: Record<string, unknown> | null;
   } & OrchestrationVersionAuthorship
 ): Promise<MappedOrchestration> => {
   log('updateOrchestration %o', { id: args.id });
@@ -524,6 +530,9 @@ export const updateOrchestration = async (
   if (args.edges !== undefined) updates['edges'] = args.edges;
   if (args.stateSchema !== undefined) updates['stateSchema'] = args.stateSchema;
   if (args.inputSchema !== undefined) updates['inputSchema'] = args.inputSchema;
+  if (args.outputMapping !== undefined) {
+    updates['outputMapping'] = args.outputMapping;
+  }
 
   // A graph write bumps the version, so a run pinned to an earlier one still
   // resolves the topology it started on. Metadata-only edits and re-writing the
@@ -691,7 +700,8 @@ export const listOrchestrationRuns = async (args: {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
-    query: ({ limit, offset }) => {
+    order: [['createdAt', 'DESC']],
+    query: ({ limit, offset, order }) => {
       return db.OrchestrationRun.findAndCountAll({
         where,
         include: [
@@ -699,8 +709,8 @@ export const listOrchestrationRuns = async (args: {
           { model: db.Orchestration, as: 'orchestration' },
           nodeExecutionsInclude(),
         ],
-        order: [['createdAt', 'DESC']],
         distinct: true,
+        order,
         limit,
         offset,
       });

@@ -1,8 +1,14 @@
 import { db } from '../db';
+import { evaluateLogic } from './jsonLogicMapping';
 import { resolveNextNodes } from './orchestrationGraph';
-import { applyStateMapping } from './orchestrationNodeExecutors';
+import {
+  applyStateMapping,
+  writeAtDottedPath,
+} from './orchestrationNodeExecutors';
+import { buildRunError } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import type { RequiredAction, ScheduledWait } from './orchestrationNodeTypes';
+import { resolveRunOutputMapping } from './orchestrationRunGraph';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -51,6 +57,69 @@ export const getTerminalOutput = (args: {
     if (artifacts[id] !== undefined) output[id] = artifacts[id];
   }
   return output;
+};
+
+/**
+ * A succeeded run's `output`. With an `output_mapping`, each key is an output
+ * field (dotted keys nest) and each value JSON Logic over `{ state }`, so the
+ * shape is the orchestration's own; without one, the terminal artifacts.
+ * Entries are evaluated one by one: a mapping whose only key names an operator
+ * (`cat`) is still a field, never an expression.
+ */
+export const buildRunOutput = (args: {
+  outputMapping: Record<string, unknown> | null;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+}): Record<string, unknown> => {
+  if (!args.outputMapping) return getTerminalOutput(args);
+  const context = { state: args.state };
+  const output: Record<string, unknown> = {};
+  for (const [path, expr] of Object.entries(args.outputMapping)) {
+    // The evaluator returns references into state; cloning keeps `output` from
+    // aliasing the state object persisted beside it.
+    writeAtDottedPath({
+      target: output,
+      path,
+      value: structuredClone(evaluateLogic(expr, context) ?? null),
+    });
+  }
+  return output;
+};
+
+/**
+ * The status, error and `output` a run settles with. Only a succeeded run has
+ * an output, so only it reads the pinned `output_mapping`; a mapping that
+ * throws (`{"throw": ...}`) fails the run rather than leaving it unsettled.
+ */
+export const resolveSettledOutput = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  runStatus: MappedOrchestrationRun['status'];
+  runError: object | null;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+}): Promise<{
+  runStatus: MappedOrchestrationRun['status'];
+  runError: object | null;
+  output: Record<string, unknown>;
+}> => {
+  const { runStatus, runError } = args;
+  if (runStatus !== 'succeeded') {
+    return { runStatus, runError, output: getTerminalOutput(args) };
+  }
+  const outputMapping = await resolveRunOutputMapping({ run: args.runRecord });
+  try {
+    return {
+      runStatus,
+      runError,
+      output: buildRunOutput({ ...args, outputMapping }),
+    };
+  } catch (error: unknown) {
+    return { runStatus: 'failed', runError: buildRunError(error), output: {} };
+  }
 };
 
 /**

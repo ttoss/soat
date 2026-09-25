@@ -1307,6 +1307,130 @@ describe('Evaluations', () => {
       expect(results.body.data[0].error).toBe('provider exploded');
     });
 
+    // Rows written in one millisecond tie on `created_at`, and Postgres returns
+    // tied rows in scan order. Re-inserting them in reverse id order makes both
+    // heap and index order the opposite of insertion order.
+    const tieCreatedAt = async (args: { table: string; ids: number[] }) => {
+      await db.sequelize.query(
+        `UPDATE ${args.table} SET created_at = :at WHERE id IN (:ids)`,
+        {
+          replacements: {
+            at: new Date('2026-01-01T00:00:00.000Z'),
+            ids: args.ids,
+          },
+        }
+      );
+      await db.sequelize.query(
+        `WITH moved AS (DELETE FROM ${args.table} WHERE id IN (:ids) RETURNING *)
+         INSERT INTO ${args.table} SELECT * FROM moved ORDER BY id DESC`,
+        { replacements: { ids: args.ids } }
+      );
+    };
+
+    test('results tied on created_at still list in run order', async () => {
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_t1', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_t2', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_t3', 'Paris'));
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: true });
+      expect(res.status).toBe(201);
+
+      const run = await db.EvalRun.findOne({
+        where: { publicId: res.body.id },
+      });
+      const rows = await db.EvalResult.findAll({
+        where: { evalRunId: run!.id as number },
+      });
+      await tieCreatedAt({
+        table: 'eval_results',
+        ids: rows.map((row) => {
+          return row.id as number;
+        }),
+      });
+
+      const results = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
+      );
+      expect(
+        results.body.data.map((result: { dataset_item_id: string }) => {
+          return result.dataset_item_id;
+        })
+      ).toEqual(itemIds);
+    });
+
+    test('items tied on created_at run in insertion order', async () => {
+      const dataset = await createDataset('tied-items-suite');
+      const tied = [
+        await addItem(dataset.id, { input: [{ role: 'user', content: 't1' }] }),
+        await addItem(dataset.id, { input: [{ role: 'user', content: 't2' }] }),
+        await addItem(dataset.id, { input: [{ role: 'user', content: 't3' }] }),
+      ];
+      const rows = await db.DatasetItem.findAll({
+        where: {
+          publicId: tied.map((item) => {
+            return item.id as string;
+          }),
+        },
+      });
+      await tieCreatedAt({
+        table: 'dataset_items',
+        ids: rows.map((row) => {
+          return row.id as number;
+        }),
+      });
+      const tiedEval = await createEval({
+        name: 'tied-items-eval',
+        agent_id: agentId,
+        dataset_id: dataset.id,
+        scorers: [{ type: 'exact_match' }],
+      });
+
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_i1', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_i2', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_i3', 'Paris'));
+      const res = await asUser()
+        .post(`/api/v1/evals/${tiedEval.id}/runs`)
+        .send({ wait: true });
+      expect(res.status).toBe(201);
+
+      const prompts = mockCreateGeneration.mock.calls.map((call) => {
+        return (call[0] as { messages: Array<{ content: string }> })
+          .messages[0]!.content;
+      });
+      expect(prompts).toEqual(['t1', 't2', 't3']);
+    });
+
+    test('runs tied on created_at list newest first', async () => {
+      const started: string[] = [];
+      for (let index = 0; index < 3; index += 1) {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: false });
+        expect(res.status).toBe(201);
+        started.push(res.body.id as string);
+      }
+      const rows = await db.EvalRun.findAll({ where: { publicId: started } });
+      await tieCreatedAt({
+        table: 'eval_runs',
+        ids: rows.map((row) => {
+          return row.id as number;
+        }),
+      });
+
+      const list = await asUser().get(`/api/v1/evals/${evalId}/runs`);
+      const listed = list.body.data
+        .map((run: { id: string }) => {
+          return run.id;
+        })
+        .filter((id: string) => {
+          return started.includes(id);
+        });
+      expect(listed).toEqual([...started].reverse());
+    });
+
     test('lists runs newest first and gets one by id', async () => {
       const list = await asUser().get(`/api/v1/evals/${evalId}/runs`);
       expect(list.status).toBe(200);

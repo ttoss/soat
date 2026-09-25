@@ -1885,6 +1885,14 @@ components:
           nullable: true
           additionalProperties: true
           description: Optional JSON Schema describing the run input
+        output_mapping:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: >-
+            Optional shape of a succeeded run's `output`: each key an output
+            field, each value JSON Logic over `{ "state": <final run state> }`.
+            Omitted keys `output` by terminal node id.
 
     WorkflowResourceProperties:
       description: >-
