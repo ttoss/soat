@@ -5,6 +5,7 @@ import {
   buildContextSnapshot,
   buildGuardrailRuntimeContext,
   type GuardrailCallIdentity,
+  proposedCall,
   referencedRuntimePaths,
   resolveEffectiveContext,
   runtimeForGuardrail,
@@ -88,9 +89,9 @@ export const evaluateGuardrailDryRun = async (args: {
   const { context: effectiveContext, source } = await resolveEffectiveContext({
     guardrail,
     callerContext,
+    call: proposedCall({ identity, effectiveArgs: callArgs }),
     projectId,
     authHeader: args.authHeader,
-    now,
   });
 
   const evaluationContext = {

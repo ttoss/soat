@@ -17,6 +17,7 @@ import {
   buildContextSnapshot,
   buildGuardrailRuntimeContext,
   type GuardrailCallIdentity,
+  proposedCall,
   referencedRuntimePaths,
   resolveEffectiveContext,
   runtimeForGuardrail,
@@ -147,15 +148,20 @@ const evaluateAll = async (args: {
     now,
   });
 
+  const call = proposedCall({
+    identity: args.identity,
+    effectiveArgs: args.effectiveArgs,
+  });
+
   const evaluated: EvaluatedGuardrail[] = [];
   for (const guardrail of args.guardrails) {
     const { context: effectiveContext, source } = await resolveEffectiveContext(
       {
         guardrail,
         callerContext: args.context.callerContext,
+        call,
         projectId: args.context.projectId,
         authHeader: args.context.authHeader,
-        now,
       }
     );
     const evaluationContext = {

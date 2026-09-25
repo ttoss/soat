@@ -7,7 +7,6 @@ import type { Tool } from 'ai';
 import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
 // The per-run cumulative ceiling: the windowed per-project counters are
@@ -101,7 +100,6 @@ describe('guardrail per-run usage ceiling', () => {
 
   afterEach(async () => {
     toolRequests = [];
-    clearGuardrailContextToolCache();
     await db.Tool.update(
       { guardrailIds: null },
       { where: { publicId: httpToolId } }

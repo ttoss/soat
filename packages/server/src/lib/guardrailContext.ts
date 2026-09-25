@@ -182,9 +182,6 @@ export const runtimeForGuardrail = async (args: {
 // ── Per-guardrail context tool ───────────────────────────────────────────────
 
 const DEFAULT_CONTEXT_TOOL_TIMEOUT_MS = 5000;
-// A short per-(project, guardrail) cache so a long tool-calling turn doesn't
-// re-fetch the same context for every gated call.
-const CONTEXT_TOOL_TTL_MS = 5000;
 
 // Read per call so operators (and tests) can tune the context-tool timeout via
 // SOAT_GUARDRAIL_CONTEXT_TIMEOUT_MS without a restart-time capture.
@@ -195,12 +192,29 @@ const contextToolTimeoutMs = (): number => {
     : DEFAULT_CONTEXT_TOOL_TIMEOUT_MS;
 };
 
-type CacheEntry = { value: Record<string, unknown> | null; expiresAt: number };
-const contextToolCache = new Map<string, CacheEntry>();
+/**
+ * The call a context tool is asked about, sent as its input under `call`.
+ * `args` are the arguments the guard evaluates, so the tool and the guard judge
+ * the same call.
+ */
+export type GuardrailProposedCall = {
+  action: string | null;
+  tool: { id: string | null; name: string | null };
+  args: Record<string, unknown>;
+};
 
-// Exposed for tests to reset the module-level cache between cases.
-export const clearGuardrailContextToolCache = (): void => {
-  contextToolCache.clear();
+export const proposedCall = (args: {
+  identity: GuardrailCallIdentity;
+  effectiveArgs: Record<string, unknown>;
+}): GuardrailProposedCall => {
+  return {
+    action: args.identity.action ?? null,
+    tool: {
+      id: args.identity.toolId ?? null,
+      name: args.identity.toolName ?? null,
+    },
+    args: args.effectiveArgs,
+  };
 };
 
 const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -220,25 +234,20 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 /**
  * Calls a guardrail's `context_tool_id` at evaluation time under the calling
  * agent's credentials (the resolver's `authHeader`), returning its output object
- * for the `context.*` namespace. Bounded by a per-call timeout and cached per
- * `(project, guardrail)` for a short TTL. Fail-closed: any failure, timeout, or
- * non-object result yields `null`, which the caller treats as "no tool context"
- * (a missing `context.*` key then fails closed at evaluation).
+ * for the `context.*` namespace. Called on every gated call, uncached: an answer
+ * about one call's target is wrong for the next, and two identical writes must
+ * each read the state the other leaves. Bounded by a per-call timeout.
+ * Fail-closed: any failure, timeout, or non-object result yields `null`, which
+ * the caller treats as "no tool context" (a missing `context.*` key then fails
+ * closed at evaluation).
  */
 const fetchContextTool = async (args: {
   projectId: number;
   guardrailId: string;
   contextToolId: string;
+  call: GuardrailProposedCall;
   authHeader?: string;
-  now: Date;
 }): Promise<Record<string, unknown> | null> => {
-  const cacheKey = `${args.projectId}:${args.guardrailId}`;
-  const cached = contextToolCache.get(cacheKey);
-  if (cached && cached.expiresAt > args.now.getTime()) {
-    return cached.value;
-  }
-
-  let value: Record<string, unknown> | null = null;
   try {
     const raw = await withTimeout(
       callTool({
@@ -247,13 +256,15 @@ const fetchContextTool = async (args: {
         guardrails: 'already-adjudicated',
         projectIds: [args.projectId],
         id: args.contextToolId,
-        input: {},
+        // Nested, never flat: a `builtin` tool with no explicit action reads a
+        // top-level `action` off its input as the operation to run.
+        input: { call: args.call },
         authHeader: args.authHeader,
         attribution: {},
       }),
       contextToolTimeoutMs()
     );
-    value = isPlainObject(raw) ? raw : null;
+    return isPlainObject(raw) ? raw : null;
   } catch (error) {
     log(
       'fetchContextTool: failed guardrail=%s tool=%s %o',
@@ -261,14 +272,8 @@ const fetchContextTool = async (args: {
       args.contextToolId,
       error
     );
-    value = null;
+    return null;
   }
-
-  contextToolCache.set(cacheKey, {
-    value,
-    expiresAt: args.now.getTime() + CONTEXT_TOOL_TTL_MS,
-  });
-  return value;
 };
 
 /**
@@ -280,9 +285,9 @@ const fetchContextTool = async (args: {
 export const resolveEffectiveContext = async (args: {
   guardrail: CollectedGuardrail;
   callerContext: Record<string, unknown>;
+  call: GuardrailProposedCall;
   projectId: number;
   authHeader?: string;
-  now: Date;
 }): Promise<{
   context: Record<string, unknown>;
   source: GuardrailContextSource;
@@ -300,8 +305,8 @@ export const resolveEffectiveContext = async (args: {
     projectId: args.projectId,
     guardrailId: args.guardrail.guardrailId,
     contextToolId: args.guardrail.contextToolId,
+    call: args.call,
     authHeader: args.authHeader,
-    now: args.now,
   });
 
   if (toolContext === null) {
