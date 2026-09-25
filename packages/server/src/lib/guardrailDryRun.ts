@@ -7,6 +7,7 @@ import {
   type GuardrailCallIdentity,
   referencedRuntimePaths,
   resolveEffectiveContext,
+  runtimeForGuardrail,
 } from './guardrailContext';
 import { evaluateGuardrail } from './guardrailEvaluation';
 import {
@@ -49,7 +50,7 @@ export const evaluateGuardrailDryRun = async (args: {
       id: args.guardrailId,
     });
 
-  // Resolve runtime.tool.* from the optional tool_id, exactly as the dispatch path
+  // Resolve runtime.tools.* from the optional tool_id, exactly as the dispatch path
   // would (a tool outside the caller's projects simply leaves the name null).
   let toolName: string | null = null;
   if (args.toolId) {
@@ -73,9 +74,14 @@ export const evaluateGuardrailDryRun = async (args: {
     toolName,
     action: toolName,
   };
-  const runtime = await buildGuardrailRuntimeContext({
+  const runtime = await runtimeForGuardrail({
+    shared: await buildGuardrailRuntimeContext({
+      identity,
+      referencedRuntimePaths: referencedRuntimePaths([guardrail]),
+      now,
+    }),
+    guardrail,
     identity,
-    referencedRuntimePaths: referencedRuntimePaths([guardrail]),
     now,
   });
 

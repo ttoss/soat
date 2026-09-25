@@ -104,7 +104,7 @@ Severity defaults per kind, and a producer may override it:
 
 Entries are kept **indefinitely**: no delete endpoint and, unlike the [audit log](./audit-log.md#append-only--retention), no pruning sweep, so `activity_entries` grows with execution volume.
 
-Nothing reads aged entries: [guardrail rate keys](#the-feed-as-a-guardrail-signal) count a rolling 1-hour or 24-hour window and the feed pages newest-first, so pruning out of band is safe.
+Nothing reads aged entries: the feed pages newest-first, so pruning out of band is safe. Guardrail rate keys read the [usage meter](./usage.md#tool-executions), not the feed.
 
 ### Producers
 
@@ -133,20 +133,6 @@ One producer per kind:
   The binding is dropped rather than failing the turn — one flaky server must not take an agent down — so the generation **completes, with no error and no warning of its own**, having answered with fewer tools than it was configured to have. This entry is the operator's signal, and it is the only one that carries the `reason`: the turn itself is told only that the named tools are unavailable (see [A binding that cannot be resolved](./agents.md#a-binding-that-cannot-be-resolved)), so an upstream status code never becomes text the model can repeat to an end user. SOAT never routes or filters tools per turn, so a turn missing its tools is always this, never a decision the platform made.
 
 Every producer is fire-and-forget: a recording failure is logged and never disturbs the action, as in the [audit log](./audit-log.md).
-
-### The feed as a guardrail signal
-
-`action_executed` counts real executions, so [guardrails](./guardrails.md#guards-and-guardrail-context) read it through `runtime.activity.actions_1h` and `runtime.activity.actions_24h` (entries in this project over a rolling window ending at evaluation time) to cap actions per hour or day:
-
-```json
-{
-  "class": "B",
-  "guard": { "<": [{ "var": "runtime.activity.actions_24h" }, 200] }
-}
-```
-
-- **Only `action_executed` counts.** The other kinds record what the platform did *about* an action, or what it failed to assemble before one.
-- **An empty feed reads as `0`**, so a project with no actions yet passes a rate ceiling; unlike per-run usage keys, "no actions" is a real zero. A query that *fails* still fails closed.
 
 ## Examples
 

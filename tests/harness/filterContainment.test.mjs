@@ -38,8 +38,15 @@ describe('bag containment', () => {
    * Sequelize cannot type from the model attribute and so travels as JSON
    * text, and it carries negation and `LIKE` arms that the filter grammar has
    * no spelling for.
+   *
+   * `guardrailRuntimeMetrics.ts` asks array membership, not bag equality: a
+   * usage event's `guardrail_ids` is a list of ids, with no pairs to match.
    */
-  const SPELLS_CONTAINMENT = ['structuredFilter.ts', 'policyCompiler.ts'];
+  const SPELLS_CONTAINMENT = [
+    'structuredFilter.ts',
+    'policyCompiler.ts',
+    'guardrailRuntimeMetrics.ts',
+  ];
 
   test('one helper writes every containment fragment', () => {
     const spelling = fs

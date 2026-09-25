@@ -155,6 +155,7 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
       projectPublicId,
     });
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [httpToolId],
       projectId,
       projectIds: [projectId],
@@ -247,6 +248,7 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
       projectPublicId,
     });
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [],
       tools: [
         {

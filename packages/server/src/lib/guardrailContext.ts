@@ -1,17 +1,16 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
-import { windowedActionCount } from './activity';
-import {
-  orchestrationRunEnforceableCostUsd,
-  windowedEnforceableCostUsd,
-} from './costEnforceability';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
+import { parseRuntimeKey, type RuntimeKey } from './guardrailRuntimeCatalog';
+import {
+  resolveRuntimeMetric,
+  type RuntimeEntities,
+  runtimeEntities,
+} from './guardrailRuntimeMetrics';
 import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
-import { orchestrationRunTokens, windowedTokens } from './usageThresholds';
 
 const log = createDebug('soat:guardrails');
 
@@ -19,16 +18,19 @@ const log = createDebug('soat:guardrails');
 // recorded on the audit record (guardrails.md — Evaluation Audit Record).
 export type GuardrailContextSource = 'caller' | 'tool' | 'merged' | 'none';
 
-/** Orchestration-run state feeding `runtime.orchestration_run.*`; absent for plain generations. */
+/** Orchestration-run state feeding `runtime.orchestrations.node_attempt`; absent outside a run. */
 export type SoatRunContext = {
   nodeAttempt?: number | null;
-  toolCalls?: number | null;
 };
 
 /** The identity + call inputs every `runtime.*` / snapshot resolution reads from. */
 export type GuardrailCallIdentity = {
   projectId: number;
   projectPublicId: string;
+  // The guardrail being evaluated, for `runtime.guardrails.*`. Set per
+  // guardrail, since the rest of the runtime context is shared by every
+  // guardrail applying to the call.
+  guardrailId?: string | null;
   agentId?: string | null;
   toolId?: string | null;
   toolName?: string | null;
@@ -48,7 +50,7 @@ const getByPath = (root: unknown, path: string): unknown => {
   return node;
 };
 
-// Sets a dotted path (`usage.cost_usd_24h`) into a nested object, creating
+// Sets a dotted path (`projects.cost_usd.24h`) into a nested object, creating
 // intermediate objects as needed.
 const setByPath = (
   root: Record<string, unknown>,
@@ -67,27 +69,18 @@ const setByPath = (
   node[segments[segments.length - 1]] = value;
 };
 
-const WINDOW_MS: Record<string, number> = {
-  '1h': 60 * 60 * 1000,
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
-
-// Deterministic, synchronous `runtime.*` values (identity + run state). The nested
-// shape mirrors the dotted catalog keys so `{ var: 'runtime.tool.id' }` resolves.
+// The synchronous keys: the request fact and each module's identity. The
+// nested shape mirrors the dotted keys so `{ var: 'runtime.tools.id' }`
+// resolves.
 const buildDeterministicRuntime = (
   identity: GuardrailCallIdentity
 ): Record<string, unknown> => {
   return {
     action: identity.action ?? null,
-    tool: { id: identity.toolId ?? null, name: identity.toolName ?? null },
-    agent: { id: identity.agentId ?? null },
-    project: { id: identity.projectPublicId },
-    orchestration_run: {
-      node_attempt: identity.run?.nodeAttempt ?? null,
-      tool_calls: identity.run?.toolCalls ?? null,
-    },
+    tools: { id: identity.toolId ?? null, name: identity.toolName ?? null },
+    agents: { id: identity.agentId ?? null },
+    projects: { id: identity.projectPublicId },
+    orchestrations: { node_attempt: identity.run?.nodeAttempt ?? null },
   };
 };
 
@@ -95,148 +88,37 @@ const buildDeterministicRuntime = (
 // `null`, which a failed query writes explicitly.
 const UNRESOLVED = Symbol('unresolved');
 
-const RUN_USAGE_KEYS = new Set([
-  'usage.orchestration_run_tokens',
-  'usage.orchestration_run_cost_usd',
-]);
-
-// Resolves the call's run public id to its internal id, at most once per
-// evaluation: the two run keys share the lookup, and a guard referencing
-// neither must not pay for it.
-const memoizedRunResolver = (
-  identity: GuardrailCallIdentity
-): (() => Promise<number | null>) => {
-  let cached: number | null | undefined;
-  return async () => {
-    if (cached !== undefined) return cached;
-    if (!identity.orchestrationRunId) {
-      cached = null;
-      return cached;
-    }
-    const run = await db.OrchestrationRun.findOne({
-      where: {
-        publicId: identity.orchestrationRunId,
-        projectId: identity.projectId,
-      },
-      attributes: ['id'],
+// A call with no entity of the key's module (no agent, no run, an inline
+// tool) leaves it unresolved rather than reading 0 and letting a ceiling pass.
+const resolveMetricKey = async (args: {
+  key: Extract<RuntimeKey, { kind: 'metric' }>;
+  path: string;
+  entities: RuntimeEntities;
+  now: Date;
+}): Promise<number | null | typeof UNRESOLVED> => {
+  try {
+    const value = await resolveRuntimeMetric({
+      module: args.key.module,
+      metric: args.key.metric,
+      window: args.key.window,
+      entities: args.entities,
+      now: args.now,
     });
-    cached = (run?.id as number | undefined) ?? null;
-    return cached;
-  };
-};
-
-// `runtime.usage.run_*` — the current run's cumulative metered spend. Outside a
-// run there is nothing to accumulate against, so the key is left unresolved
-// (→ fail-closed) rather than reading as 0 and letting a ceiling pass.
-const resolveRunUsage = async (args: {
-  rel: string;
-  path: string;
-  resolveRun: () => Promise<number | null>;
-}): Promise<number | null | typeof UNRESOLVED> => {
-  try {
-    const runInternalId = await args.resolveRun();
-    if (runInternalId === null) return UNRESOLVED;
-    return args.rel === 'usage.orchestration_run_cost_usd'
-      ? await orchestrationRunEnforceableCostUsd({ runInternalId })
-      : await orchestrationRunTokens({ runInternalId });
+    return value === undefined ? UNRESOLVED : value;
   } catch (error) {
-    log(
-      'buildGuardrailRuntimeContext: run usage failed path=%s %o',
-      args.path,
-      error
-    );
+    log('buildGuardrailRuntimeContext: failed path=%s %o', args.path, error);
     return null;
   }
-};
-
-// `runtime.usage.cost_usd_*` / `tokens_*` — the project's rolling window ending
-// now. An unknown window suffix is left unresolved, and a cost window that
-// metered AI usage but priced none of it resolves to `null` rather than to a
-// sum that understates it (`costEnforceability.ts`).
-const resolveWindowedUsage = async (args: {
-  rel: string;
-  path: string;
-  projectId: number;
-  now: Date;
-}): Promise<number | null | typeof UNRESOLVED> => {
-  const key = args.rel.slice('usage.'.length);
-  const ms = WINDOW_MS[key.slice(key.lastIndexOf('_') + 1)];
-  if (ms === undefined) return UNRESOLVED;
-  const start = new Date(args.now.getTime() - ms);
-  try {
-    return key.startsWith('cost_usd_')
-      ? await windowedEnforceableCostUsd({ projectId: args.projectId, start })
-      : await windowedTokens({ projectId: args.projectId, start });
-  } catch (error) {
-    log(
-      'buildGuardrailRuntimeContext: usage failed path=%s %o',
-      args.path,
-      error
-    );
-    return null;
-  }
-};
-
-// An empty feed is a real 0, not unresolved, so a rate ceiling passes for a
-// project that has taken no actions yet. An unknown window suffix is left
-// unresolved.
-const resolveWindowedActivity = async (args: {
-  rel: string;
-  path: string;
-  projectId: number;
-  now: Date;
-}): Promise<number | null | typeof UNRESOLVED> => {
-  const key = args.rel.slice('activity.'.length);
-  if (!key.startsWith('actions_')) return UNRESOLVED;
-  const ms = WINDOW_MS[key.slice(key.lastIndexOf('_') + 1)];
-  if (ms === undefined) return UNRESOLVED;
-  const start = new Date(args.now.getTime() - ms);
-  try {
-    return await windowedActionCount({ projectId: args.projectId, start });
-  } catch (error) {
-    log(
-      'buildGuardrailRuntimeContext: activity failed path=%s %o',
-      args.path,
-      error
-    );
-    return null;
-  }
-};
-
-// A key outside these namespaces is either already set by
-// `buildDeterministicRuntime` or one we do not compute; UNRESOLVED leaves it
-// unset, so it reads as null and fails closed.
-const resolveAsyncRuntimeKey = (args: {
-  rel: string;
-  path: string;
-  projectId: number;
-  now: Date;
-  resolveRun: () => Promise<number | null>;
-}): Promise<number | null | typeof UNRESOLVED> => {
-  const { rel, path, projectId, now } = args;
-  if (rel.startsWith('activity.')) {
-    return resolveWindowedActivity({ rel, path, projectId, now });
-  }
-  if (!rel.startsWith('usage.')) {
-    return Promise.resolve(UNRESOLVED);
-  }
-  return RUN_USAGE_KEYS.has(rel)
-    ? resolveRunUsage({ rel, path, resolveRun: args.resolveRun })
-    : resolveWindowedUsage({ rel, path, projectId, now });
 };
 
 /**
- * Populates the `runtime.*` namespace for a call, filling **only** the catalog keys
- * the applying guardrails actually reference (`referencedRuntimePaths`). Identity
- * and run keys are synchronous; `runtime.usage.cost_usd_*` / `tokens_*` sum the
- * project's windowed usage at evaluation time;
- * `runtime.usage.orchestration_run_tokens` / `orchestration_run_cost_usd` sum
- * only the current orchestration run's meters so far, so a
- * per-run ceiling can abort one runaway run mid-flight; `runtime.activity.actions_*`
- * count the project's executed actions over the same rolling windows, off the
- * activity feed. Fail-closed throughout: a usage or activity query that throws,
- * a run key read outside a run, or a cost window whose spend cannot be priced
- * all leave the key `null`.
+ * Populates the `runtime.*` namespace for a call, filling **only** the
+ * `runtime.<module>.<metric>.<window>` keys the applying guardrails reference
+ * (`referencedRuntimePaths`); identity keys are set synchronously. Counts and
+ * sums read the usage meter live at evaluation time, scoped to the module's
+ * entity in the call (`guardrailRuntimeMetrics.ts`). Fail-closed throughout: a
+ * query that throws, a key whose entity the call does not have, or a cost
+ * whose spend cannot be priced leaves the key `null`.
  */
 export const buildGuardrailRuntimeContext = async (args: {
   identity: GuardrailCallIdentity;
@@ -244,24 +126,57 @@ export const buildGuardrailRuntimeContext = async (args: {
   now: Date;
 }): Promise<Record<string, unknown>> => {
   const runtime = buildDeterministicRuntime(args.identity);
-  const resolveRun = memoizedRunResolver(args.identity);
+  const entities = runtimeEntities({
+    projectId: args.identity.projectId,
+    guardrailId: args.identity.guardrailId,
+    agentId: args.identity.agentId,
+    toolId: args.identity.toolId,
+    orchestrationRunId: args.identity.orchestrationRunId,
+  });
 
   for (const path of args.referencedRuntimePaths) {
-    // path is like 'runtime.usage.cost_usd_24h' — strip the leading namespace.
-    const rel = path.startsWith('runtime.')
-      ? path.slice('runtime.'.length)
-      : path;
-    const value = await resolveAsyncRuntimeKey({
-      rel,
+    const key = parseRuntimeKey(path);
+    if (key?.kind !== 'metric') continue;
+    const value = await resolveMetricKey({
+      key,
       path,
-      projectId: args.identity.projectId,
+      entities,
       now: args.now,
-      resolveRun,
     });
-    if (value !== UNRESOLVED) setByPath(runtime, rel, value);
+    if (value !== UNRESOLVED) {
+      setByPath(runtime, path.slice('runtime.'.length), value);
+    }
   }
 
   return runtime;
+};
+
+const isGuardrailScopedPath = (path: string): boolean => {
+  const key = parseRuntimeKey(path);
+  return key?.kind === 'metric' && key.module === 'guardrails';
+};
+
+/**
+ * The runtime context one guardrail evaluates against: the call's shared
+ * context, plus the `runtime.guardrails.*` keys this guardrail references,
+ * which answer about the guardrail itself and so differ per guardrail.
+ */
+export const runtimeForGuardrail = async (args: {
+  shared: Record<string, unknown>;
+  guardrail: CollectedGuardrail;
+  identity: GuardrailCallIdentity;
+  now: Date;
+}): Promise<Record<string, unknown>> => {
+  const paths = collectDocumentVarPaths(args.guardrail.document).filter(
+    isGuardrailScopedPath
+  );
+  if (paths.length === 0) return args.shared;
+  const own = await buildGuardrailRuntimeContext({
+    identity: { ...args.identity, guardrailId: args.guardrail.guardrailId },
+    referencedRuntimePaths: paths,
+    now: args.now,
+  });
+  return { ...args.shared, guardrails: own.guardrails };
 };
 
 // ── Per-guardrail context tool ───────────────────────────────────────────────
@@ -334,6 +249,7 @@ const fetchContextTool = async (args: {
         id: args.contextToolId,
         input: {},
         authHeader: args.authHeader,
+        attribution: {},
       }),
       contextToolTimeoutMs()
     );
@@ -429,9 +345,10 @@ export const buildContextSnapshot = (args: {
 };
 
 /**
- * The union of `runtime.*` var paths referenced across every applying guardrail —
- * the set {@link buildGuardrailRuntimeContext} needs to compute (nothing else is
- * populated, keeping usage queries to only what a guard reads).
+ * The union of `runtime.*` var paths referenced across every applying guardrail,
+ * minus the per-guardrail `runtime.guardrails.*` keys ({@link runtimeForGuardrail})
+ * — the set {@link buildGuardrailRuntimeContext} computes once for the call
+ * (nothing else is populated, keeping usage queries to only what a guard reads).
  */
 export const referencedRuntimePaths = (
   guardrails: CollectedGuardrail[]
@@ -439,7 +356,7 @@ export const referencedRuntimePaths = (
   const paths = new Set<string>();
   for (const guardrail of guardrails) {
     for (const path of collectDocumentVarPaths(guardrail.document)) {
-      if (path === 'runtime' || path.startsWith('runtime.')) {
+      if (path.startsWith('runtime.') && !isGuardrailScopedPath(path)) {
         paths.add(path);
       }
     }

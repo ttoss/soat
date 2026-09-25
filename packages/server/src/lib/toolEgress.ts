@@ -315,6 +315,24 @@ const nextRequest = (args: {
   return { method: 'GET', body: undefined, headers };
 };
 
+// One hop: the check, then the request. `onRequest` runs only once the check
+// has passed, so it marks a request that actually went on the wire.
+const sendHop = async (args: {
+  url: string;
+  allowlist: EgressAllowlist;
+  noun: string;
+  onRequest?: () => void;
+  init: RequestInit;
+}): Promise<Response> => {
+  await assertEgressAllowed({
+    url: args.url,
+    allowlist: args.allowlist,
+    noun: args.noun,
+  });
+  args.onRequest?.();
+  return fetch(args.url, args.init);
+};
+
 /**
  * `fetch` with the egress guard applied to the initial URL and to every
  * redirect hop. Redirects are followed manually — `redirect: 'follow'` would
@@ -323,7 +341,12 @@ const nextRequest = (args: {
 export const fetchWithEgressGuard = async (
   url: string,
   init: RequestInit = {},
-  options: { allowlist?: EgressAllowlist; noun?: string } = {}
+  options: {
+    allowlist?: EgressAllowlist;
+    noun?: string;
+    // Called right before each hop goes on the wire, after its check passed.
+    onRequest?: () => void;
+  } = {}
 ): Promise<Response> => {
   const allowlist = options.allowlist ?? getEgressAllowlist();
   const noun = options.noun ?? DEFAULT_NOUN;
@@ -334,14 +357,12 @@ export const fetchWithEgressGuard = async (
   let headers = new Headers(init.headers);
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    await assertEgressAllowed({ url: currentUrl, allowlist, noun });
-
-    const response = await fetch(currentUrl, {
-      ...init,
-      method,
-      body,
-      headers,
-      redirect: 'manual',
+    const response = await sendHop({
+      url: currentUrl,
+      allowlist,
+      noun,
+      onRequest: options.onRequest,
+      init: { ...init, method, body, headers, redirect: 'manual' },
     });
 
     const location = response.headers.get('location');

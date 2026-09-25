@@ -20,6 +20,7 @@ export const USAGE_GROUP_BY = [
   'actor',
   'session',
   'source',
+  'tool',
 ] as const;
 
 export type UsageGroupBy = (typeof USAGE_GROUP_BY)[number];
@@ -105,6 +106,12 @@ const GROUP_DIMENSIONS: { [K in UsageGroupBy]: GroupDimension } = {
     keyExpr: 'sess."public_id"',
     join: { table: 'sessions', alias: 'sess', foreignKey: 'session_id' },
   },
+  // Only `tool_execution` events name a tool; every other meter collapses into
+  // the single null bucket.
+  tool: {
+    keyExpr: 'tl."public_id"',
+    join: { table: 'tools', alias: 'tl', foreignKey: 'tool_id' },
+  },
   // Immutable events carry only created_at; bucket on its UTC calendar day.
   // `to_char` on the UTC-shifted timestamp keeps the key a `YYYY-MM-DD` string
   // regardless of the server's own timezone.
@@ -171,6 +178,7 @@ type ValueNarrowings = {
   source?: string;
   triggerId?: string;
   actionId?: string;
+  outcome?: string;
 };
 
 /**
@@ -185,6 +193,7 @@ type IdNarrowings = {
   orchestrationRunId?: number;
   generationId?: number;
   traceId?: number;
+  toolId?: number;
 };
 
 export type EventFilter = {
@@ -213,6 +222,7 @@ const NARROWING_COLUMNS: {
   source: 'source',
   triggerId: 'trigger_id',
   actionId: 'action_id',
+  outcome: 'outcome',
   sessionId: 'session_id',
   actorId: 'actor_id',
   agentId: 'agent_id',
@@ -220,6 +230,7 @@ const NARROWING_COLUMNS: {
   orchestrationRunId: 'orchestration_run_id',
   generationId: 'generation_id',
   traceId: 'trace_id',
+  toolId: 'tool_id',
 };
 
 const NARROWING_KEYS = Object.keys(NARROWING_COLUMNS) as Array<
@@ -305,6 +316,7 @@ export const DISTINCT_COUNT_COLUMNS = {
   actors: 'actor_id',
   sessions: 'session_id',
   ai_providers: 'ai_provider_id',
+  tools: 'tool_id',
 } as const;
 
 /**

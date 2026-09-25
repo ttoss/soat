@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { RUNTIME_CONTEXT_CATALOG } from './guardrailRuntimeCatalog';
 import { isLogic } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
 
@@ -33,35 +34,6 @@ const DOCUMENT_KEYS = [
   'escalate',
   'expires_in',
 ];
-
-/**
- * The fixed `runtime.*` catalog. A `runtime.*` variable outside this set is rejected
- * at write time rather than resolving to `null` at evaluation time. Windows are
- * baked into the key name (`_1h` / `_24h` / `_7d` / `_30d`). Keep in sync with
- * the catalog table in `packages/website/docs/modules/guardrails.md`.
- */
-export const RUNTIME_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
-  'runtime.action',
-  'runtime.tool.id',
-  'runtime.tool.name',
-  'runtime.agent.id',
-  'runtime.project.id',
-  'runtime.orchestration_run.node_attempt',
-  'runtime.orchestration_run.tool_calls',
-  'runtime.activity.actions_1h',
-  'runtime.activity.actions_24h',
-  'runtime.usage.cost_usd_1h',
-  'runtime.usage.cost_usd_24h',
-  'runtime.usage.cost_usd_7d',
-  'runtime.usage.cost_usd_30d',
-  'runtime.usage.tokens_24h',
-  'runtime.usage.tokens_30d',
-  // Run-scoped cumulative spend — the current orchestration run's totals so
-  // far, not a project window. Unresolvable (→ null → fail-closed) outside a
-  // run, where there is no run to accumulate against.
-  'runtime.usage.orchestration_run_tokens',
-  'runtime.usage.orchestration_run_cost_usd',
-]);
 
 export const isActionClass = (value: unknown): value is ActionClass => {
   return (

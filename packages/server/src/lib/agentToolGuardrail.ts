@@ -19,6 +19,7 @@ import {
   type GuardrailCallIdentity,
   referencedRuntimePaths,
   resolveEffectiveContext,
+  runtimeForGuardrail,
   type SoatRunContext,
 } from './guardrailContext';
 import {
@@ -140,7 +141,7 @@ const evaluateAll = async (args: {
   evaluated: EvaluatedGuardrail[];
 }> => {
   const now = new Date();
-  const runtime = await buildGuardrailRuntimeContext({
+  const sharedRuntime = await buildGuardrailRuntimeContext({
     identity: args.identity,
     referencedRuntimePaths: referencedRuntimePaths(args.guardrails),
     now,
@@ -160,7 +161,12 @@ const evaluateAll = async (args: {
     const evaluationContext = {
       args: args.effectiveArgs,
       context: effectiveContext,
-      runtime,
+      runtime: await runtimeForGuardrail({
+        shared: sharedRuntime,
+        guardrail,
+        identity: args.identity,
+        now,
+      }),
     };
     const result = evaluateGuardrail({ guardrail, context: evaluationContext });
     const record = buildEvaluationRecord({
@@ -571,6 +577,25 @@ const buildClientToolGate = (args: {
 };
 
 /**
+ * Every guardrail governing one tool binding: the generation's project/agent
+ * base plus the tool's own scope. Empty when the turn carries no guardrail
+ * context.
+ */
+export const collectBindingGuardrails = async (args: {
+  context?: ResolverGuardrailContext;
+  toolGuardrailIds: string[] | null;
+}): Promise<CollectedGuardrail[]> => {
+  if (!args.context) return [];
+  const toolScoped = args.toolGuardrailIds?.length
+    ? await collectApplicableGuardrails({
+        projectId: args.context.projectId,
+        toolGuardrailIds: args.toolGuardrailIds,
+      })
+    : [];
+  return [...args.context.baseGuardrails, ...toolScoped];
+};
+
+/**
  * Applies the guardrail interceptor to every resolved tool produced by one
  * binding (one for most types; many for `mcp` / `soat`). A tool is gated only
  * when at least one guardrail applies to it (project/agent base ∪ its own tool
@@ -580,23 +605,19 @@ const buildClientToolGate = (args: {
  * {@link CLIENT_TOOL_GATE} closure the `requires_action` handoff runs — they
  * stay execute-less, so they remain client tools downstream.
  */
-export const gateResolvedToolsWithGuardrails = async (args: {
+export const gateResolvedToolsWithGuardrails = (args: {
   tools: Record<string, Tool>;
   toolId: string | null;
   toolType: string;
   toolName: string;
-  toolGuardrailIds?: string[] | null;
+  // From `collectBindingGuardrails`, collected before the binding resolved so
+  // its executions are metered under the guardrails that release them.
+  guardrails: CollectedGuardrail[];
   presetParameters?: Record<string, unknown> | null;
   rawParameters?: Record<string, unknown> | null;
   context: ResolverGuardrailContext;
-}): Promise<Record<string, Tool>> => {
-  const toolScoped = args.toolGuardrailIds?.length
-    ? await collectApplicableGuardrails({
-        projectId: args.context.projectId,
-        toolGuardrailIds: args.toolGuardrailIds,
-      })
-    : [];
-  const applicable = [...args.context.baseGuardrails, ...toolScoped];
+}): Record<string, Tool> => {
+  const applicable = args.guardrails;
   if (applicable.length === 0) return args.tools;
 
   const injectSchema =

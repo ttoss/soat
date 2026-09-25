@@ -5,6 +5,10 @@ import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
+// A protocol test reads the call, not its meter: no project, so the
+// recorder's write is refused and swallowed.
+const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+
 /**
  * A builtin action carries the caller's bearer, so the route checks the
  * caller's policy against the target's SRN. The agent's `boundary_policy` is
@@ -24,6 +28,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
 
   const resolveGetMemoryStore = (boundaryPolicy: unknown): Tool => {
     const tools = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'platform',
         description: null,
@@ -138,6 +143,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
     // argument at all. Checking the model's arguments alone would find no
     // resource and refuse the call the operator explicitly allowed.
     const tools = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'platform',
         description: null,
@@ -203,6 +209,7 @@ describe('each annotated resource kind resolves the scope its route checks', () 
     resource: string;
   }): Promise<{ id?: string; error?: string }> => {
     const tools = resolveSoatTools({
+      meter: UNMETERED,
       typedTool: {
         name: 'platform',
         description: null,

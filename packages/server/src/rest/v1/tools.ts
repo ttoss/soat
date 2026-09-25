@@ -399,6 +399,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     toolContext: sanitizeCallerToolContext(
       parseToolContextBody(rawToolContext)
     ),
+    attribution: {},
   });
 
   setCallToolResponseBody(ctx, result);

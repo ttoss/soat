@@ -11,7 +11,7 @@ Usage events record the cost of every metered occurrence, with the measured quan
 
 ## Overview
 
-Every metered occurrence writes one **usage event** (attribution, total cost) plus **component** rows (one priced dimension each). Four meter types share the shape: `llm_tokens`, `compute_execution`, `storage`, `api_request`. Events and components are **append-only and immutable**; writes are **idempotent**, so a replayed completion never double-counts. Each event links to its [generation](./generations.md), [agent](./agents.md), [trace](./traces.md), [AI provider](./ai-providers.md), [project](./projects.md), and, when applicable, [trigger](./triggers.md) or [orchestration](./orchestrations.md) run.
+Every metered occurrence writes one **usage event** (attribution, total cost) plus **component** rows (one priced dimension each). Five meter types share the shape: `llm_tokens`, `compute_execution`, `storage`, `api_request`, `tool_execution`. Events and components are **append-only and immutable**; writes are **idempotent**, so a replayed completion never double-counts. Each event links to its [generation](./generations.md), [agent](./agents.md), [trace](./traces.md), [AI provider](./ai-providers.md), [project](./projects.md), and, when applicable, [trigger](./triggers.md) or [orchestration](./orchestrations.md) run.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -38,8 +38,10 @@ Every metered occurrence writes one **usage event** (attribution, total cost) pl
 | `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book. On a [routed](./model-routes.md) generation this is the target the route actually picked, not the agent's binding (a routed agent pins no provider) |
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
+| `tool_id`        | string \| null  | [Tool](./tools.md) a `tool_execution` event metered; `null` on every other meter, for an inline tool, and once the tool is deleted |
+| `outcome`        | string \| null  | How a `tool_execution` call ended: `ok`, `error` or `timeout`; `null` on every other meter |
 | `source`         | string \| null  | The workload behind the spend when it is not ordinary agent traffic; see [Workload source](#workload-source) |
-| `meter_type`     | string          | What the event measures: `llm_tokens`, `compute_execution`, `api_request`, or `storage`         |
+| `meter_type`     | string          | What the event measures: `llm_tokens`, `compute_execution`, `api_request`, `storage`, or `tool_execution` |
 | `provider`       | string          | As-billed SKU vendor slug (e.g. `openai`); `soat` for platform meter types                   |
 | `model`          | string          | Model identifier the provider billed; the billable SKU for platform meter types              |
 | `cost_usd`       | number \| null  | Total cost in USD — the sum of the priced component costs, frozen at write time; `null` when nothing is priced |
@@ -103,8 +105,9 @@ A per-project alert rule: when `metric` over `window` crosses `threshold`, a `us
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |
+| `tool_execution` | One outbound [tool](./tools.md) call                | `tool_call` (quantity `1`)                        |
 
-For platform meter types `(provider, model)` is a **SKU**: `provider` is `soat`, `model` the billable unit (`compute-second`, `gb-day`, `request`).
+For platform meter types `(provider, model)` is a **SKU**: `provider` is `soat`, `model` the billable unit (`compute-second`, `gb-day`, `request`, `tool-call`).
 
 #### Token components
 
@@ -136,6 +139,18 @@ A `failed` turn is metered when it spent something: a generation the model *answ
 ### Compute metering
 
 Every orchestration node execution that actively ran writes one `compute_execution` event with a `compute_second` component of wall-clock seconds (`completed_at − started_at`). Non-agent nodes meter compute too; an agent node produces both an `llm_tokens` and a `compute_execution` event. Attribution is run/node level (`generation_id`, `agent_id`, `trace_id` `null`). Priced from a `soat`/`compute-second` SKU when effective; idempotent on `compute:<orchestration_run_id>:node:<node_id>:attempt:<n>`. A skipped node is not metered.
+
+### Tool executions
+
+Every outbound tool call writes one `tool_execution` event: one `tool_call` component of quantity `1`, `cost_usd` `null` (no price row). It is recorded at the three protocol primitives — the `http` request, the `mcp` `tools/call`, the `builtin` action — which every server-side execution passes through: a direct [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), a tool the model calls inside a generation, an [orchestration](./orchestrations.md) `tool` or `poll` node, a [trigger](./triggers.md) targeting a tool, a [workflow](./workflows.md) task dispatch, an [eval](./evaluations.md) `tool` scorer, a [guardrail](./guardrails.md) context tool and an [ingestion](./ingestion-rules.md) converter.
+
+- **When the call went out, whatever it answered.** `outcome` is `ok`, `error` (a non-2xx answer, an MCP error result, a transport failure) or `timeout`, so failures are counted without a second meter.
+- **Not an execution:** a call refused before it was sent (a guardrail decision other than execute, an [egress](./tools.md) block, an approval pending, an unresolvable template), and a [client tool](./tools.md), which never runs server-side.
+- **A pipeline counts once per step**, never for itself.
+- **Attribution** is what the call site holds: `tool_id` and `project_id` always; inside a generation its `generation_id`, `agent_id`, run, node, trigger, actor, session and `source` are read off the generation; an orchestration node sets `orchestration_run_id` and `node_id`; a trigger sets `trigger_id`; an eval `tool` scorer sets `source: eval_scorer`.
+- **No replay identity**: a retry is a second call on the wire, so the idempotency key is unique per execution (`tool:<uuid>`).
+
+[`GET /api/v1/usage/aggregate?meter_type=tool_execution&group_by=tool`](/docs/api/usage/get-usage-aggregate) counts calls per tool; `tool_id` and `outcome` narrow it. [Guardrails](./guardrails.md#guards-and-guardrail-context) read the same events live through `runtime.<module>.tool_calls.<window>` and `runtime.<module>.errors.<window>`.
 
 ### Storage metering
 
@@ -178,6 +193,7 @@ Requests are counted in memory per (project, API key); a periodic flush writes o
 | `null` | An ordinary agent generation |
 | `eval` | An [eval run](./evaluations.md#eval-spend-is-separable-from-production-spend)'s item generations |
 | `eval_judge` | An `llm_judge` scorer's own grading completion |
+| `eval_scorer` | A `tool` scorer's grading call |
 | `chat` | A standalone [chat](./chats.md) completion |
 | `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
 | `embedding` | An [embedding](./embeddings.md#metering) call — the endpoint, document ingestion, a memory write, or a search's query vector |
@@ -254,13 +270,13 @@ A `loop` or `sub_orchestration` node starts child runs whose events are attribut
 
 ### Aggregation
 
-[`GET /api/v1/usage/aggregate?project_id=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), optionally bucketed by one dimension: `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider billed (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry `event_count`, summed token counts and `cost_usd` (`null` when nothing in the bucket was priced). An event a dimension does not apply to falls in a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
+[`GET /api/v1/usage/aggregate?project_id=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), optionally bucketed by one dimension: `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, [`source`](#workload-source), or `tool` (the tool a [`tool_execution`](#tool-executions) event metered). `ai_provider` buckets on the provider billed (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry `event_count`, summed token counts and `cost_usd` (`null` when nothing in the bucket was priced). An event a dimension does not apply to falls in a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
 
 **`group_by` is optional.** Omitted, it echoes back `null`, `groups` is an empty page, and `totals` describes the whole window. A value naming no dimension is a `400`.
 
 #### Narrowing a rollup
 
-Thirteen filters narrow the rollup before bucketing. They intersect and apply to the **whole** rollup (every bucket, `totals`, `totals.distinct`), so each composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, with `group_by=model` the same spend by model.
+Fifteen filters narrow the rollup before bucketing. They intersect and apply to the **whole** rollup (every bucket, `totals`, `totals.distinct`), so each composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, with `group_by=model` the same spend by model.
 
 | Filter | Selects |
 | --- | --- |
@@ -270,8 +286,9 @@ Thirteen filters narrow the rollup before bucketing. They intersect and apply to
 | `generation_id`, `trace_id` | One generation's events; everything recorded under one trace |
 | `meter_type`, `model`, `source` | One meter, one as-billed SKU, one [workload source](#workload-source) |
 | `trigger_id`, `action_id` | The spend one trigger initiated; one caller-supplied action label |
+| `tool_id`, `outcome` | One tool's [executions](#tool-executions); the ones that ended `ok`, `error` or `timeout` |
 
-The **eight naming a resource** are resolved against the project first; an id naming nothing empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. The **five carrying a value** are matched as the event recorded them, so an unrecognised meter, model or source selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
+The **nine naming a resource** are resolved against the project first; an id naming nothing empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. The **six carrying a value** are matched as the event recorded them, so an unrecognised meter, model, source or outcome selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
 
 `orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started (metered against the child orchestration), so summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
 
@@ -283,7 +300,7 @@ The rollup is grouped and summed in SQL with one join for the chosen dimension, 
 
 #### Counting entities
 
-**`groups.total` counts buckets, not entities.** The `null`-keyed bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent` and `source` carry the same null bucket.
+**`groups.total` counts buckets, not entities.** The `null`-keyed bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent`, `source` and `tool` carry the same null bucket.
 
 To count entities, send `include=distinct` and read `totals.distinct`, one `COUNT(DISTINCT …)` per attribution column:
 
@@ -303,7 +320,8 @@ GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
       "agents": 4,
       "actors": 318,
       "sessions": 902,
-      "ai_providers": 2
+      "ai_providers": 2,
+      "tools": 0
     }
   }
 }
@@ -334,12 +352,13 @@ Under `group_by=model` every group also carries `ai_provider_id`, the [AI provid
 
 ### Spend guards
 
-Metered usage feeds the [guardrail](./guardrails.md) evaluator's `runtime.usage.*` context, so a spend limit is enforced deterministically at the tool boundary:
+Metered usage feeds the [guardrail](./guardrails.md) evaluator's `runtime.*` context, so a limit is enforced deterministically at the tool boundary:
 
-- **Per project, windowed** — `runtime.usage.cost_usd_{1h,24h,7d,30d}` and `runtime.usage.tokens_{24h,30d}`.
-- **Per run, cumulative** — `runtime.usage.orchestration_run_tokens` and `runtime.usage.orchestration_run_cost_usd`; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
+- **Windowed, per project or agent** — `runtime.projects.cost_usd.<window>`, `runtime.projects.tokens.<window>`, `runtime.agents.cost_usd.<window>` over `1h` / `24h` / `7d` / `30d`.
+- **Tool calls** — `runtime.projects.tool_calls.<window>`, `runtime.tools.tool_calls.<window>` (and `total`), `runtime.guardrails.tool_calls.<window>`, plus `errors` for the failed ones.
+- **Per run, cumulative** — `runtime.orchestrations.tokens.total`, `cost_usd.total` and `tool_calls.total`; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
 
-Both read live at evaluation time and fail closed. Unlike [thresholds](#thresholds-and-alerts), which alert, a guard **aborts** the call.
+All read live at evaluation time and fail closed; the full grammar is in [Guards and Guardrail Context](./guardrails.md#guards-and-guardrail-context). Unlike [thresholds](#thresholds-and-alerts), which alert, a guard **aborts** the call.
 
 ### Thresholds and alerts
 

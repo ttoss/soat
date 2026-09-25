@@ -87,7 +87,7 @@ const buildLogicContext = (context: GuardrailEvaluationContext) => {
   };
 };
 
-// Reads a dotted path (`runtime.activity.actions_24h`) off the logic context,
+// Reads a dotted path (`runtime.projects.tool_calls.24h`) off the logic context,
 // returning `undefined` when any segment is missing.
 const getByPath = (root: unknown, path: string): unknown => {
   let node: unknown = root;
@@ -225,7 +225,7 @@ const resolveClass = (
  * guard — forgetting to supply context tightens the posture, never loosens
  * it. The unresolved-var check runs *before* evaluation so a comparison
  * operator's `null → 0` coercion (`{ "<": [{ "var":
- * "runtime.activity.actions_24h" }, 100] }` passing when the provider could not
+ * "runtime.projects.tool_calls.24h" }, 100] }` passing when the provider could not
  * resolve the key) can never flip an unresolvable reference into a passing
  * guard. Plain
  * JS truthiness matches the JSON Logic convention used elsewhere in the

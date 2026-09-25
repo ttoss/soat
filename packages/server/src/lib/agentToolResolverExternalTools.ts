@@ -23,6 +23,10 @@ import {
   stripPresetKeysFromSchema,
 } from './toolPresetParameters';
 import { resolvePresetParametersForCall } from './toolTemplates';
+import {
+  meterToolExecution,
+  type ToolExecutionMeter,
+} from './usageToolRecording';
 
 const log = createDebug('soat:tools');
 
@@ -39,6 +43,7 @@ export const executeSoatTool = async (args: {
   toolName: string;
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
+  meter: ToolExecutionMeter;
   authHeader?: string;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
@@ -69,31 +74,37 @@ export const executeSoatTool = async (args: {
     // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
     // surface; only the error type is this caller's — `HttpToolError` carries
     // the status that `isRetriableError` reads to keep a 4xx from being retried.
-    return await withCallTimeout({
-      promise: dispatchApiRequestOrThrow({
-        method: args.def.method,
-        path,
-        headers: {
-          ...(args.authHeader ? { Authorization: args.authHeader } : {}),
-          ...args.buildContextHeaders({
-            toolContext: args.toolContext,
-            contextKeys: args.contextKeys,
-          }),
-        },
-        body,
-        wrapError: (response) => {
-          log('soat tool result: %s status=%d', toolId, response.status);
-          return new HttpToolError(
-            `SOAT action '${args.def.name}' failed`,
-            response.status,
-            JSON.stringify(response.body) ?? '',
+    return await meterToolExecution({
+      meter: args.meter,
+      send: (markSent) => {
+        markSent();
+        return withCallTimeout({
+          promise: dispatchApiRequestOrThrow({
+            method: args.def.method,
             path,
-            args.def.method
-          );
-        },
-      }),
-      ms: SOAT_TOOL_CALL_TIMEOUT_MS,
-      label: `SOAT action '${args.def.name}'`,
+            headers: {
+              ...(args.authHeader ? { Authorization: args.authHeader } : {}),
+              ...args.buildContextHeaders({
+                toolContext: args.toolContext,
+                contextKeys: args.contextKeys,
+              }),
+            },
+            body,
+            wrapError: (response) => {
+              log('soat tool result: %s status=%d', toolId, response.status);
+              return new HttpToolError(
+                `SOAT action '${args.def.name}' failed`,
+                response.status,
+                JSON.stringify(response.body) ?? '',
+                path,
+                args.def.method
+              );
+            },
+          }),
+          ms: SOAT_TOOL_CALL_TIMEOUT_MS,
+          label: `SOAT action '${args.def.name}'`,
+        });
+      },
     });
   } catch (error) {
     log('soat tool error: %s', toolId);
@@ -130,6 +141,7 @@ const buildSoatActionTool = (args: {
   toolName: string;
   toolDescription: string | null;
   def: (typeof soatTools)[number];
+  meter: ToolExecutionMeter;
   presetParameters?: Record<string, unknown>;
   projectPublicId?: string;
   boundaryPolicy?: unknown;
@@ -201,6 +213,7 @@ const buildSoatActionTool = (args: {
         toolName: args.toolName,
         def: args.def,
         rawArgs,
+        meter: args.meter,
         authHeader: args.authHeader,
         toolContext: args.toolContext,
         contextKeys: args.contextKeys,
@@ -222,6 +235,7 @@ export const resolveSoatTools = (args: {
     presetParameters?: Record<string, unknown> | null;
     contextKeys?: string[] | null;
   };
+  meter: ToolExecutionMeter;
   boundaryPolicy?: unknown;
   authHeader?: string;
   /** The project the generation runs in; see `pinnedProjectParameters`. */
@@ -262,6 +276,7 @@ export const resolveSoatTools = (args: {
       toolName: args.typedTool.name,
       toolDescription: args.typedTool.description,
       def,
+      meter: args.meter,
       presetParameters: args.typedTool.presetParameters ?? undefined,
       projectPublicId: args.projectPublicId,
       boundaryPolicy: args.boundaryPolicy,

@@ -21,6 +21,7 @@ import {
   type InlineToolDefinition,
 } from './toolsCall';
 import { assertValidToolTemplateTokens } from './toolTemplates';
+import type { ToolCallAttribution } from './usageToolRecording';
 
 const log = createDebug('soat:tools');
 
@@ -438,6 +439,11 @@ export const callTool = async (args: {
   // with no agent in between still resolves its `{{context:}}` tokens. A
   // direct `POST /tools/{id}/call` passes none.
   toolContext?: Record<string, string>;
+  /**
+   * Who the call is metered against. Required so every dispatch site states
+   * the ids it holds rather than dropping them by omission.
+   */
+  attribution: ToolCallAttribution;
 }): Promise<unknown> => {
   const toolInstance = await tools.getByPublicId({
     projectIds: args.projectIds,
@@ -458,5 +464,6 @@ export const callTool = async (args: {
     projectIds: args.projectIds,
     idempotencyKey: args.idempotencyKey,
     toolContext: args.toolContext,
+    attribution: args.attribution,
   });
 };

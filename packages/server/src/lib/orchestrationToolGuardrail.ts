@@ -30,7 +30,12 @@ const log = createDebug('soat:guardrails');
  *   approval park (class C). The engine records it as the node's result.
  */
 export type ToolNodeGateResult =
-  | { kind: 'execute'; input: Record<string, unknown> }
+  | {
+      kind: 'execute';
+      input: Record<string, unknown>;
+      // The guardrails that released the call; empty when none applied.
+      guardrailIds: string[];
+    }
   | { kind: 'result'; result: NodeExecutionResult };
 
 const BLOCK_REASON: Record<'blocked' | 'tripwire', string> = {
@@ -172,7 +177,13 @@ const enactToolNodeDecision = (args: {
     };
   }
 
-  return { kind: 'execute', input: cleanArgs };
+  return {
+    kind: 'execute',
+    input: cleanArgs,
+    guardrailIds: evaluated.map((entry) => {
+      return entry.result.guardrailId;
+    }),
+  };
 };
 
 /**
@@ -194,12 +205,12 @@ export const runToolNodeGate = async (args: {
   nodeAttempt?: number | null;
 }): Promise<ToolNodeGateResult> => {
   const toolId = args.node.toolId;
-  if (!toolId) return { kind: 'execute', input: args.inputs };
+  if (!toolId) return { kind: 'execute', input: args.inputs, guardrailIds: [] };
 
   const { guardrails, toolName, projectPublicId } =
     await collectToolNodeGuardrails({ toolId, projectId: args.projectId });
   if (guardrails.length === 0) {
-    return { kind: 'execute', input: args.inputs };
+    return { kind: 'execute', input: args.inputs, guardrailIds: [] };
   }
 
   const context: ResolverGuardrailContext = {

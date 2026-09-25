@@ -221,7 +221,7 @@ export const executeToolNode = async (args: {
   // `Idempotency-Key` request header (D7).
   idempotencyKey?: string;
   // The run's public id — threaded into the guardrail evaluation identity so a
-  // guard can read `runtime.orchestration_run.*`.
+  // guard can read `runtime.orchestrations.*`.
   orchestrationRunId?: string | null;
   // The arguments a human approved. Their presence bypasses the guardrail gate
   // and input mapping — the call was already adjudicated, and re-evaluating
@@ -244,7 +244,7 @@ export const executeToolNode = async (args: {
   const scopeProjectId = args.projectId ?? projectIds[0];
   const gated: ToolNodeGateResult =
     args.approvedArguments != null || scopeProjectId === undefined
-      ? { kind: 'execute', input: inputs }
+      ? { kind: 'execute', input: inputs, guardrailIds: [] }
       : await runToolNodeGate({
           node,
           inputs,
@@ -264,6 +264,11 @@ export const executeToolNode = async (args: {
     authHeader,
     idempotencyKey,
     toolContext,
+    attribution: {
+      orchestrationRunId: args.orchestrationRunId,
+      nodeId: node.id,
+      guardrailIds: gated.guardrailIds,
+    },
   });
 
   const artifact: Record<string, unknown> =

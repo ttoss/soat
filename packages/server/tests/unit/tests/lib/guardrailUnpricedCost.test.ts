@@ -184,6 +184,7 @@ describe('guardrail cost ceiling over an unpriced window', () => {
       orchestrationRunId: args.orchestrationRunId ?? null,
     });
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [args.httpToolId],
       projectId: args.projectId,
       projectIds: [args.projectId],
@@ -194,13 +195,13 @@ describe('guardrail cost ceiling over an unpriced window', () => {
 
   const WINDOW_CEILING = {
     class: 'B',
-    guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 100] },
+    guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 100] },
   };
 
   const RUN_CEILING = {
     class: 'B',
     guard: {
-      '<': [{ var: 'runtime.usage.orchestration_run_cost_usd' }, 100],
+      '<': [{ var: 'runtime.orchestrations.cost_usd.total' }, 100],
     },
   };
 
@@ -341,7 +342,7 @@ describe('guardrail cost ceiling over an unpriced window', () => {
       args: { amount: 1 },
     });
 
-    expect(record.context_snapshot['runtime.usage.cost_usd_24h']).toBeNull();
+    expect(record.context_snapshot['runtime.projects.cost_usd.24h']).toBeNull();
     expect(record.guard_result).toBe(false);
     expect(record.decision).toBe('tripwire');
   });
@@ -360,7 +361,7 @@ describe('guardrail cost ceiling over an unpriced window', () => {
       args: { amount: 1 },
     });
 
-    expect(record.context_snapshot['runtime.usage.cost_usd_24h']).toBe(2.5);
+    expect(record.context_snapshot['runtime.projects.cost_usd.24h']).toBe(2.5);
     expect(record.guard_result).toBe(true);
     expect(record.decision).toBe('execute');
   });

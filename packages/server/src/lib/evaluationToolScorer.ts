@@ -18,6 +18,10 @@ import { callTool } from './tools';
 
 const log = createDebug('soat:evaluations');
 
+// Grading with a tool is verification work like `eval_judge`, metered apart
+// from the item generations (`eval`) it grades.
+export const TOOL_SCORER_USAGE_SOURCE = 'eval_scorer';
+
 // ── Output parsing ─────────────────────────────────────────────────────────
 
 /** The first `{ … }` span in the text, parsed, or null when there is none. */
@@ -189,6 +193,7 @@ export const runToolScorerCall = async (args: {
     action:
       typeof args.scorer.action === 'string' ? args.scorer.action : undefined,
     input: { ...presetParameters, ...args.context },
+    attribution: { source: TOOL_SCORER_USAGE_SOURCE },
   });
 
   return parseToolScorerOutput(raw);

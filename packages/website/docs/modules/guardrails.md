@@ -99,7 +99,7 @@ The document may carry `expires_in` (seconds): the sign-off window for a class-C
 
 `class` is a literal (`{ "class": "C" }` always requires sign-off) or a single JSON Logic expression returning the class, evaluated over the same namespaces as guards (`args.*` / `context.*` / `runtime.*`). There is no rule list; anything other than a valid class falls through to `default_class`.
 
-To gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool rather than branching on `runtime.tool.name`. This example classifies a budget update **B** below a threshold and **C** at or above it:
+To gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool rather than branching on `runtime.tools.name`. This example classifies a budget update **B** below a threshold and **C** at or above it:
 
 ```json
 {
@@ -123,23 +123,53 @@ The caller passes a free-form `guardrail_context` object on the generation reque
 
 The context tool runs under the calling agent's credentials (same project scoping and secret resolution); its result never enters the model context. An inaccessible tool fails closed. The call has a per-call timeout and a short per-`(project, guardrail)` TTL cache.
 
-The `runtime.*` catalog (window suffixes `_1h` / `_24h` / `_7d` / `_30d` are rolling and end at evaluation time):
+The `runtime.*` catalog is a grammar, leaves only:
 
-| Key                                                        | Type    | Source                                                  |
-| ---------------------------------------------------------- | ------- | ------------------------------------------------------- |
-| `runtime.action` / `runtime.tool.id` / `runtime.tool.name`          | string  | The call being classified                               |
-| `runtime.agent.id` / `runtime.project.id`                        | string  | Evaluation identity                                     |
-| `runtime.orchestration_run.node_attempt` / `runtime.orchestration_run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
-| `runtime.activity.actions_1h` / `runtime.activity.actions_24h`   | integer | [Activity feed](./activity.md) (per project)            |
-| `runtime.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
-| `runtime.usage.tokens_24h` / `runtime.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
-| `runtime.usage.orchestration_run_tokens` / `runtime.usage.orchestration_run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
+```txt
+runtime.action                         the request fact; no module, no window
+runtime.<module>.<identity>            runtime.tools.name
+runtime.<module>.<metric>.<window>     runtime.tools.tool_calls.24h
+```
 
-`runtime.activity.actions_1h` / `actions_24h` count this project's `action_executed` entries on the [activity feed](./activity.md#the-feed-as-a-guardrail-signal) over the window, read live. An empty feed reads `0`; only a failing query fails closed.
+A module answers about **the entity of that module in the current call**: `projects` the project, `agents` the calling agent, `tools` the tool being called, `guardrails` the guardrail being evaluated, `orchestrations` the current [orchestration run](./orchestrations.md). Windows `1h` / `24h` / `7d` / `30d` are rolling and end at evaluation time; `total` is the entity's lifetime — all-time for a tool, "this run so far" for `orchestrations`. The served combinations:
 
-`runtime.usage.orchestration_run_tokens` / `orchestration_run_cost_usd` sum only the current [orchestration run](./orchestrations.md)'s usage events, read live; see [Per-run spend ceilings](#per-run-spend-ceilings).
+| Module | Identity | Metrics | Windows |
+| --- | --- | --- | --- |
+| `projects` | `id` | `tool_calls` `tokens` `cost_usd` `errors` | `1h` `24h` `7d` `30d` |
+| `guardrails` | | `tool_calls` | `1h` `24h` `7d` `30d` |
+| `agents` | `id` | `tool_calls` `tokens` `cost_usd` | `1h` `24h` `7d` `30d` |
+| `tools` | `id` `name` | `tool_calls` `errors` | `1h` `24h` `7d` `30d` `total` |
+| `orchestrations` | `node_attempt` | `tool_calls` `tokens` `cost_usd` | `total` |
 
-**A cost key resolves to `null` when its spend cannot be priced.** `SUM(cost_usd)` ignores unpriced events, so a window that metered LLM usage and priced none of it would pass every ceiling. `runtime.usage.cost_usd_*` and `runtime.usage.orchestration_run_cost_usd` report `null` instead, which fails the guard: the same verdict a `cost_usd` [quota](./quotas.md) answers with `QUOTA_UNENFORCEABLE`, cleared once the models carry [price book](./usage.md) rows. Not triggered by a window with no LLM usage (reads `0`), unpriced **embeddings** (their rate is deployment configuration, not a tenant price row), or a partly priced window (any priced LLM event clears it; unpriced events count as zero). The partly priced gap is reported as a [`quota_unpriced` exception](./quotas.md#unpriced-usage) on the project's `cost_usd` [quota](./quotas.md) naming the rows to price.
+Any other path — a non-leaf (`runtime.tools.tool_calls`), an unserved combination (`runtime.tools.tokens.24h`) — is refused at write time.
+
+| Metric | Type | Reads |
+| --- | --- | --- |
+| `tool_calls` | integer | [`tool_execution`](./usage.md#tool-executions) events: one per outbound tool call, whatever the target answered |
+| `errors` | integer | `tool_execution` events whose `outcome` is `error` or `timeout` |
+| `tokens` | integer | Billable tokens (input + output + cached) of the entity's [usage events](./usage.md) |
+| `cost_usd` | number | Cost of the entity's usage events, every meter |
+
+Every metric is read live from the [usage meter](./usage.md) at evaluation time. An entity that has done nothing yet reads `0`; a key whose entity the call does not have — `agents.*` on an orchestration tool node, `orchestrations.*` outside a run, `tools.*` on an inline tool — is unresolvable, and so is a failing query.
+
+`guardrails.tool_calls.*` counts the executions of the calls **this guardrail** released: every guardrail that applied to a call and let it through is recorded on its `tool_execution` event. Attach one guardrail to a set of tools (every write, say) and one key caps the set, with no tool list in the expression. A [pipeline](./tools.md) passes the guardrails that released it to each step.
+
+**A cost key resolves to `null` when its spend cannot be priced.** `SUM(cost_usd)` ignores unpriced events, so a window that metered LLM usage and priced none of it would pass every ceiling. The `cost_usd` keys report `null` instead, which fails the guard: the same verdict a `cost_usd` [quota](./quotas.md) answers with `QUOTA_UNENFORCEABLE`, cleared once the models carry [price book](./usage.md) rows. Not triggered by a window with no LLM usage (reads `0`), unpriced **embeddings** (their rate is deployment configuration, not a tenant price row), or a partly priced window (any priced LLM event clears it; unpriced events count as zero). The partly priced gap is reported as a [`quota_unpriced` exception](./quotas.md#unpriced-usage) on the project's `cost_usd` [quota](./quotas.md) naming the rows to price.
+
+Two windows at once, and a failure circuit breaker, in one guard:
+
+```json
+{
+  "class": "B",
+  "guard": {
+    "and": [
+      { "<": [{ "var": "runtime.tools.tool_calls.24h" }, 50] },
+      { "<": [{ "var": "runtime.tools.tool_calls.1h" }, 10] },
+      { "<": [{ "var": "runtime.tools.errors.1h" }, 3] }
+    ]
+  }
+}
+```
 
 **Fail-closed at both ends.** At write time, a `var` outside the three namespaces, or a `runtime.*` key outside the catalog, is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider fails closed: in `class` the result is `default_class`; in `guard` it counts as a failed guard and tripwire semantics apply.
 
@@ -155,7 +185,7 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 ### Per-run spend ceilings
 
-`runtime.usage.orchestration_run_tokens` and `runtime.usage.orchestration_run_cost_usd` expose the current [orchestration run](./orchestrations.md)'s cumulative metered spend, live, so a ceiling trips mid-run on the call that crosses it, where a project-windowed guard would barely move.
+`runtime.orchestrations.tokens.total` and `runtime.orchestrations.cost_usd.total` expose the current [orchestration run](./orchestrations.md)'s cumulative metered spend, live (`runtime.orchestrations.tool_calls.total` its tool calls), so a ceiling trips mid-run on the call that crosses it, where a project-windowed guard would barely move.
 
 Give the ceiling itself as `guardrail_context` (or a context tool) so one guardrail serves every run:
 
@@ -166,16 +196,16 @@ soat create-guardrail \
     "class": "B",
     "guard": {
       "<": [
-        { "var": "runtime.usage.orchestration_run_tokens" },
+        { "var": "runtime.orchestrations.tokens.total" },
         { "var": "context.action_token_ceiling" }
       ]
     }
   }'
 ```
 
-Attach it to the tools the run dispatches; the guard fails before the tool runs. Swap `orchestration_run_tokens` for `orchestration_run_cost_usd` to cap dollars.
+Attach it to the tools the run dispatches; the guard fails before the tool runs. Swap `tokens.total` for `cost_usd.total` to cap dollars.
 
-- **Fail-closed outside a run.** Both keys are unresolvable when no run is in scope (they do not read as `0`), so a per-run ceiling attached at project scope trips on plain agent calls too; attach at tool scope unless that is intended.
+- **Fail-closed outside a run.** The keys are unresolvable when no run is in scope (they do not read as `0`), so a per-run ceiling attached at project scope trips on plain agent calls too; attach at tool scope unless that is intended.
 - **Metering granularity is the resolution.** Counters advance as each provider call is metered ([usage coverage](./usage.md#coverage)), so a ceiling trips on the first gated call after it is crossed; a single over-budget call can still complete.
 
 ### Client Tools
@@ -229,7 +259,7 @@ A guardrail cannot be deleted while attached: [`DELETE /api/v1/guardrails/{guard
 
 ### Dry-run Evaluation
 
-[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline (`class`, guard, context tool per `context_mode`, live `runtime.*`) against caller-supplied `args` and `guardrail_context`, and returns the [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes or is filed. Pass an optional `tool_id` to resolve `runtime.tool.*`; an unresolvable `runtime.*` key fails closed as at runtime. Use it before attaching a document, or before editing a widely attached one.
+[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline (`class`, guard, context tool per `context_mode`, live `runtime.*`) against caller-supplied `args` and `guardrail_context`, and returns the [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes or is filed. Pass an optional `tool_id` to resolve `runtime.tools.*`; an unresolvable `runtime.*` key fails closed as at runtime. Use it before attaching a document, or before editing a widely attached one.
 
 ### Evaluation Audit Record
 
@@ -251,7 +281,7 @@ Every evaluation writes a `guardrail_evaluation` activity entry and stamps the g
     "args.amount": 450,
     "context.max_daily_budget": 500,
     "context.cost_ceiling": 1000,
-    "runtime.usage.cost_usd_24h": 812.4
+    "runtime.projects.cost_usd.24h": 812.4
   },
   "agent_id": "agent_V1StGXR8Z5jdHi6B",
   "orchestration_run_id": "orch_run_V1StGXR8Z5jdHi6B",
@@ -311,7 +341,7 @@ soat create-guardrail \
   --document '{
     "default_class": "C",
     "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
-    "guard": { "<": [{ "var": "runtime.usage.cost_usd_24h" }, 1000] }
+    "guard": { "<": [{ "var": "runtime.projects.cost_usd.24h" }, 1000] }
   }'
 ```
 
@@ -331,7 +361,7 @@ const { data, error } = await soat.guardrails.createGuardrail({
     document: {
       default_class: 'C',
       class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
-      guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+      guard: { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
     },
   },
 });
@@ -350,7 +380,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
     "document": {
       "default_class": "C",
       "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
-      "guard": { "<": [{ "var": "runtime.usage.cost_usd_24h" }, 1000] }
+      "guard": { "<": [{ "var": "runtime.projects.cost_usd.24h" }, 1000] }
     }
   }'
 ```
@@ -395,7 +425,7 @@ curl -X POST https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/ev
 </TabItem>
 </Tabs>
 
-The response is the would-be [evaluation record](#evaluation-audit-record): class **B**, passing guard, `runtime.usage.cost_usd_24h` resolved live:
+The response is the would-be [evaluation record](#evaluation-audit-record): class **B**, passing guard, `runtime.projects.cost_usd.24h` resolved live:
 
 ```json
 {
@@ -405,7 +435,7 @@ The response is the would-be [evaluation record](#evaluation-audit-record): clas
   "context_source": "none",
   "context_snapshot": {
     "args.amount": 450,
-    "runtime.usage.cost_usd_24h": 812.4
+    "runtime.projects.cost_usd.24h": 812.4
   }
 }
 ```

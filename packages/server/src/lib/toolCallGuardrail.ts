@@ -35,7 +35,12 @@ export type ToolCallGuardrailMode = 'apply' | 'already-adjudicated';
 type SettledOutcome = 'blocked' | 'tripwire' | 'route_to_approval';
 
 export type DirectToolGateResult =
-  | { kind: 'execute'; input: Record<string, unknown> }
+  | {
+      kind: 'execute';
+      input: Record<string, unknown>;
+      // The guardrails that released the call; empty when none applied.
+      guardrailIds: string[];
+    }
   | { kind: 'settled'; outcome: SettledOutcome };
 
 /**
@@ -53,7 +58,15 @@ const enactDirectDecision = (args: {
   projectPublicId: string;
 }): DirectToolGateResult => {
   const { decision, cleanArgs, evaluated } = args.classification;
-  if (decision === 'execute') return { kind: 'execute', input: cleanArgs };
+  if (decision === 'execute') {
+    return {
+      kind: 'execute',
+      input: cleanArgs,
+      guardrailIds: evaluated.map((entry) => {
+        return entry.result.guardrailId;
+      }),
+    };
+  }
 
   if (decision === 'tripwire') {
     emitGuardrailTripwireEvent({
@@ -113,7 +126,7 @@ export const runDirectToolGate = async (args: {
     toolGuardrailIds: args.toolGuardrailIds ?? null,
   });
   if (guardrails.length === 0) {
-    return { kind: 'execute', input: args.input };
+    return { kind: 'execute', input: args.input, guardrailIds: [] };
   }
 
   const context: ResolverGuardrailContext = {
@@ -181,9 +194,11 @@ export const assertToolCallAllowed = async (args: {
   presetParameters?: Record<string, unknown> | null;
   projectId: number;
   authHeader?: string;
-}): Promise<Record<string, unknown>> => {
+}): Promise<{ input: Record<string, unknown>; guardrailIds: string[] }> => {
   const gate = await runDirectToolGate(args);
-  if (gate.kind === 'execute') return gate.input;
+  if (gate.kind === 'execute') {
+    return { input: gate.input, guardrailIds: gate.guardrailIds };
+  }
 
   throw new DomainError(
     'TOOL_DISPATCH_FAILED',

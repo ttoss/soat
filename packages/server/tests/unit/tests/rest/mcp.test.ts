@@ -151,6 +151,20 @@ describe('MCP tools - happy path', () => {
     expect(result.groups.data).toEqual([]);
   });
 
+  test('get-usage-aggregate buckets tool executions by tool and echoes outcome', async () => {
+    const res = await mcpCall('get-usage-aggregate', {
+      project_id: projectId,
+      group_by: 'tool',
+      meter_type: 'tool_execution',
+      outcome: 'error',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.group_by).toBe('tool');
+    expect(result.filters.outcome).toBe('error');
+    expect(result.filters.tool_id).toBeNull();
+  });
+
   test('create-, list-, and delete-usage-threshold manage a threshold', async () => {
     const created = parseResult(
       await mcpCall('create-usage-threshold', {
@@ -2489,7 +2503,7 @@ describe('MCP tools - happy path', () => {
                   { var: 'context.max_daily_budget' },
                 ],
               },
-              { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+              { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
             ],
           },
           expires_in: 259200,
@@ -2588,10 +2602,10 @@ describe('MCP tools - happy path', () => {
       // Var paths are a fixed contract — snake_case, matching the runtime.* catalog.
       expect(keys).toContain('args.amount');
       expect(keys).toContain('context.max_daily_budget');
-      expect(keys).toContain('runtime.usage.cost_usd_24h');
+      expect(keys).toContain('runtime.projects.cost_usd.24h');
       // Not camel-mangled to non-catalog names.
       expect(keys).not.toContain('context.maxDailyBudget');
-      expect(keys).not.toContain('runtime.usage.costUsd_24h');
+      expect(keys).not.toContain('runtime.projects.costUsd.24h');
     });
 
     test('delete-guardrail removes the guardrail', async () => {

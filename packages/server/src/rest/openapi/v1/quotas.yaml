@@ -191,7 +191,7 @@ paths:
                   example: block
                 meter_type:
                   type: string
-                  enum: [llm_tokens, compute_execution, api_request, storage]
+                  enum: [llm_tokens, compute_execution, api_request, storage, tool_execution]
                   description: >-
                     Only for metric cost_usd (400 on any other metric). The
                     meter this cap answers for. Omit it and the cap sums every
@@ -369,7 +369,8 @@ components:
           enum: [enforce, monitor]
         meter_type:
           type: string
-          enum: [llm_tokens, compute_execution, api_request, storage, null]
+          enum:
+            [llm_tokens, compute_execution, api_request, storage, tool_execution, null]
           nullable: true
           description: >-
             The meter a cost_usd cap answers for. Null is every priced meter,

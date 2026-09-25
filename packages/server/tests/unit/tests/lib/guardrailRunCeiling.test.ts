@@ -191,6 +191,7 @@ describe('guardrail per-run usage ceiling', () => {
       guardrailContext: opts.guardrailContext,
     });
     const tools = await resolveAgentTools({
+      attribution: {},
       toolIds: [httpToolId],
       projectId,
       projectIds: [projectId],
@@ -203,7 +204,7 @@ describe('guardrail per-run usage ceiling', () => {
     class: 'B',
     guard: {
       '<': [
-        { var: 'runtime.usage.orchestration_run_tokens' },
+        { var: 'runtime.orchestrations.tokens.total' },
         { var: 'context.action_token_ceiling' },
       ],
     },
@@ -301,7 +302,7 @@ describe('guardrail per-run usage ceiling', () => {
       class: 'B',
       guard: {
         '<': [
-          { var: 'runtime.usage.orchestration_run_cost_usd' },
+          { var: 'runtime.orchestrations.cost_usd.total' },
           { var: 'context.action_cost_ceiling' },
         ],
       },

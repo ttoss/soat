@@ -103,6 +103,7 @@ export const resolveAgentToolSurface = async (args: {
       generationId: args.generationId,
     },
     unavailable: unavailable.sink,
+    attribution: { generationId: args.generationId, agentId: args.agentId },
   });
 
   // Mutates `resolvedTools` in place, adding the tools derived from the agent's

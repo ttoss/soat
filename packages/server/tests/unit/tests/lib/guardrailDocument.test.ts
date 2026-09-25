@@ -1,8 +1,6 @@
 import { DomainError } from 'src/errors';
-import {
-  RUNTIME_CONTEXT_CATALOG,
-  validateGuardrailDocument,
-} from 'src/lib/guardrailDocument';
+import { validateGuardrailDocument } from 'src/lib/guardrailDocument';
+import { RUNTIME_CONTEXT_CATALOG } from 'src/lib/guardrailRuntimeCatalog';
 import { getRequestSchemaFields } from 'src/lib/openapiSpec';
 
 const expectValidationError = (document: unknown, match?: RegExp) => {
@@ -43,7 +41,7 @@ describe('validateGuardrailDocument', () => {
           guard: {
             and: [
               { '<=': [{ var: 'args.amount' }, { var: 'context.max_daily' }] },
-              { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
+              { '<': [{ var: 'runtime.projects.cost_usd.24h' }, 1000] },
             ],
           },
           escalate: true,
@@ -152,7 +150,7 @@ describe('validateGuardrailDocument', () => {
       expectValidationError(
         {
           class: 'B',
-          guard: { '<': [{ var: 'runtime.usage.cost_usd_90d' }, 1] },
+          guard: { '<': [{ var: 'runtime.projects.cost_usd.90d' }, 1] },
         },
         /not in the runtime\.\* catalog/
       );

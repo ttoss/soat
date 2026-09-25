@@ -22,6 +22,7 @@ export type UsageNarrowings = {
   source?: string;
   triggerId?: string;
   actionId?: string;
+  outcome?: string;
   sessionId?: string;
   actorId?: string;
   agentId?: string;
@@ -30,6 +31,7 @@ export type UsageNarrowings = {
   orchestrationId?: string;
   generationId?: string;
   traceId?: string;
+  toolId?: string;
 };
 
 /**
@@ -40,7 +42,7 @@ export type UsageNarrowings = {
  * project that spent nothing, and always complete because a caller reading one
  * key must be able to tell "not filtered" from "this endpoint does not know
  * that filter". Grouped rather than spread across the response's top level: at
- * thirteen they would outnumber the figures, and a top-level `ai_provider_id`
+ * fifteen they would outnumber the figures, and a top-level `ai_provider_id`
  * would sit beside a per-group `ai_provider_id` that means something else.
  */
 export type UsageAggregateFilters = {
@@ -55,6 +57,7 @@ const WIRE_NAMES = {
   source: 'source',
   triggerId: 'trigger_id',
   actionId: 'action_id',
+  outcome: 'outcome',
   sessionId: 'session_id',
   actorId: 'actor_id',
   agentId: 'agent_id',
@@ -63,6 +66,7 @@ const WIRE_NAMES = {
   orchestrationId: 'orchestration_id',
   generationId: 'generation_id',
   traceId: 'trace_id',
+  toolId: 'tool_id',
 } as const satisfies Record<keyof UsageNarrowings, string>;
 
 type WireName<K extends keyof UsageNarrowings> = (typeof WIRE_NAMES)[K];
@@ -75,6 +79,7 @@ type IdNarrowingKey =
   | 'orchestrationId'
   | 'orchestrationRunId'
   | 'sessionId'
+  | 'toolId'
   | 'traceId';
 
 // Which table each id narrowing resolves against.
@@ -90,6 +95,7 @@ const ID_NARROWINGS: ReadonlyArray<{
   { key: 'orchestrationId', resource: 'orchestration' },
   { key: 'generationId', resource: 'generation' },
   { key: 'traceId', resource: 'trace' },
+  { key: 'toolId', resource: 'tool' },
 ];
 
 /** The rest: matched against the event's own column, no lookup. */
@@ -99,6 +105,7 @@ export const VALUE_NARROWING_KEYS = [
   'source',
   'triggerId',
   'actionId',
+  'outcome',
 ] as const;
 
 /**
