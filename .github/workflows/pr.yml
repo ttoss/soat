@@ -323,6 +323,26 @@ jobs:
         if: always()
         run: docker compose -f tests/docker-compose.tutorials.yml down --volumes
 
+  release-lockfile:
+    name: Release Lockfile
+    runs-on: ubuntu-latest
+    # Every other job skips a release PR, but `lerna version` rewrites the
+    # lockfile and `main.yml` installs frozen before it tags anything.
+    if: "startsWith(github.event.pull_request.title, 'chore(release):')"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
@@ -334,6 +354,7 @@ jobs:
       - knowledge-eval
       - smoke-test
       - tutorials-test
+      - release-lockfile
     if: always()
 
     steps:
@@ -346,7 +367,8 @@ jobs:
             "${{ needs.server-coverage.result }}" \
             "${{ needs.knowledge-eval.result }}" \
             "${{ needs.smoke-test.result }}" \
-            "${{ needs.tutorials-test.result }}"; do
+            "${{ needs.tutorials-test.result }}" \
+            "${{ needs.release-lockfile.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "One or more jobs failed."
               exit 1

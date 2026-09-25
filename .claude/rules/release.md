@@ -4,7 +4,9 @@
 
 1. Open a release PR (`release/vX.Y.Z` → `main`) titled `chore(release): …`.
    `pr.yml` skips the build/smoke/tutorials jobs on that title, so never put
-   unreviewed non-release code on such a PR.
+   unreviewed non-release code on such a PR. It still runs `Release
+   Lockfile`, a frozen install: `lerna version` rewrites the lockfile, and
+   `main.yml` refuses to tag on one a frozen install rejects.
 2. **Squash-merge.** Every `main.yml` job gates on
    `startsWith(head_commit.message, 'chore(release):')`; a default merge commit
    (`Merge pull request …`) silently skips the whole release. After merging,
