@@ -321,6 +321,8 @@ export const DISTINCT_COUNT_COLUMNS = {
   sessions: 'session_id',
   ai_providers: 'ai_provider_id',
   tools: 'tool_id',
+  documents: 'document_id',
+  memory_stores: 'memory_store_id',
 } as const;
 
 /**

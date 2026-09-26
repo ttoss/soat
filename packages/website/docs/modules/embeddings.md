@@ -77,7 +77,9 @@ A usage event belongs to a project, so an embedding call needs one:
 | Ingestion, memory, evaluation | the document's, memory's or run's project |
 | A knowledge search | the project searched, when the search is scoped to exactly one |
 
-The query an agent's [`knowledge_config`](./agents.md#knowledge-config) embeds before its turn is also attributed to that generation: the event carries the generation's `generation_id`, `agent_id`, `trace_id`, `session_id` and `actor_id`, so the spend reads per generation and counts towards `agent` and `actor` [quotas](./quotas.md). If the generation's record is never written, the event is billed to the project only. Every other embedding is billed to the project only.
+The query an agent's [`knowledge_config`](./agents.md#knowledge-config) embeds before its turn is also attributed to that generation: the event carries the generation's `generation_id`, `agent_id`, `trace_id`, `session_id` and `actor_id`, so the spend reads per generation and counts towards `agent` and `actor` [quotas](./quotas.md). If the generation's record is never written, the event is billed to the project only.
+
+An embedding of stored text also names what it embedded: `document_id` on a document chunk (ingestion, a re-chunk, a conversation's turns), `memory_store_id` on written memory content. The store, not the memory: a store keeps one copy of each text, shared by every memory that states it. A memory an agent or a rule writes during a turn carries that generation's attribution too. A query embedding names neither.
 
 ### Pricing embeddings
 

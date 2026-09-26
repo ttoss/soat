@@ -118,7 +118,7 @@ describe('getEmbeddings', () => {
     delete process.env.EMBEDDING_PROVIDER;
     try {
       await expect(
-        getEmbeddings({ texts: ['hello'], billing: null })
+        getEmbeddings({ texts: ['hello'], billing: null, subject: null })
       ).rejects.toThrow(/EMBEDDING_PROVIDER and EMBEDDING_MODEL/);
     } finally {
       process.env.EMBEDDING_PROVIDER = prev;
@@ -130,7 +130,7 @@ describe('getEmbeddings', () => {
     process.env.EMBEDDING_PROVIDER = 'cohere';
     try {
       await expect(
-        getEmbeddings({ texts: ['hello'], billing: null })
+        getEmbeddings({ texts: ['hello'], billing: null, subject: null })
       ).rejects.toThrow(/Unsupported embedding provider: cohere/);
     } finally {
       process.env.EMBEDDING_PROVIDER = prev;
@@ -141,6 +141,7 @@ describe('getEmbeddings', () => {
     const embeddings = await getEmbeddings({
       texts: ['alpha', 'beta'],
       billing: null,
+      subject: null,
     });
     expect(embeddings).toHaveLength(2);
     expect(embeddings[0]).toHaveLength(

@@ -114,6 +114,7 @@ const buildScorerRunners = (args: { projectId: number }) => {
       return getEmbeddings({
         ...embed,
         billing: projectEmbeddingBilling({ projectId: args.projectId }),
+        subject: null,
       });
     },
   };

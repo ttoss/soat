@@ -108,9 +108,18 @@ export const projectEmbeddingBilling = (args: {
     : { projectId: args.projectId, generationId: null };
 };
 
+/**
+ * What an embedding is of: a document's chunk, or content written to a memory
+ * store. `null` for text nothing stores — a search query, the embeddings
+ * endpoint, a scorer's operands. Required, so a new caller has to say.
+ */
+export type EmbeddingSubject =
+  { documentId: number } | { memoryStoreId: number } | null;
+
 export const getEmbeddings = async (args: {
   texts: string[];
   billing: EmbeddingBilling;
+  subject: EmbeddingSubject;
 }): Promise<number[][]> => {
   const provider = process.env.EMBEDDING_PROVIDER;
   const model = process.env.EMBEDDING_MODEL;
@@ -152,6 +161,7 @@ export const getEmbeddings = async (args: {
     await recordEmbeddingUsage({
       projectId: args.billing.projectId,
       generationId: args.billing.generationId,
+      subject: args.subject,
       provider,
       model,
       tokens: usage.tokens,
@@ -164,10 +174,12 @@ export const getEmbeddings = async (args: {
 export const getEmbedding = async (args: {
   text: string;
   billing: EmbeddingBilling;
+  subject: EmbeddingSubject;
 }): Promise<number[]> => {
   const [embedding] = await getEmbeddings({
     texts: [args.text],
     billing: args.billing,
+    subject: args.subject,
   });
   return embedding;
 };

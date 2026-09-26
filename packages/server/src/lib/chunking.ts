@@ -123,6 +123,7 @@ const runBounded = async (
 const embedChunk = async (args: {
   chunk: PreparedChunk;
   projectId: number;
+  documentId: number;
   embed?: boolean;
 }): Promise<number[] | null> => {
   if (args.embed === false) return null;
@@ -130,6 +131,7 @@ const embedChunk = async (args: {
     return await getEmbedding({
       text: args.chunk.content,
       billing: projectEmbeddingBilling({ projectId: args.projectId }),
+      subject: { documentId: args.documentId },
     });
   } catch {
     // embedding is optional — continue without it
@@ -145,6 +147,7 @@ export type EmbeddedChunk = PreparedChunk & { embedding: number[] | null };
  */
 export const embedChunks = async (args: {
   projectId: number;
+  documentId: number;
   chunks: PreparedChunk[];
   concurrency?: number;
 }): Promise<EmbeddedChunk[]> => {
@@ -156,7 +159,11 @@ export const embedChunks = async (args: {
       const chunk = args.chunks[i];
       embedded[i] = {
         ...chunk,
-        embedding: await embedChunk({ chunk, projectId: args.projectId }),
+        embedding: await embedChunk({
+          chunk,
+          projectId: args.projectId,
+          documentId: args.documentId,
+        }),
       };
     }
   );
@@ -191,6 +198,7 @@ export const persistChunks = async (args: {
     const embedding = await embedChunk({
       chunk,
       projectId: args.projectId,
+      documentId: args.documentId,
       embed: args.embed,
     });
 

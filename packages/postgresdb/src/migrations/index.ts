@@ -20,6 +20,7 @@ import { foreignKeyNullability } from './2026-09-24-foreignKeyNullability';
 import { generationIdempotencyKey } from './2026-09-24-generationIdempotencyKey';
 import { orchestrationOutputMapping } from './2026-09-24-orchestrationOutputMapping';
 import { usageEventGenerationPublicId } from './2026-09-25-usageEventGenerationPublicId';
+import { usageEventDocumentAndMemoryStore } from './2026-09-26-usageEventDocumentAndMemoryStore';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -61,4 +62,5 @@ export const MIGRATIONS: Migration[] = [
   foreignKeyNullability,
   orchestrationOutputMapping,
   usageEventGenerationPublicId,
+  usageEventDocumentAndMemoryStore,
 ];

@@ -186,7 +186,11 @@ export const prepareDocumentChunkChanges = async (args: {
     content,
     rewriteStorage: args.content !== undefined,
     category: categoryFromPath(file.path),
-    rows: await embedChunks({ projectId: file.projectId, chunks }),
+    rows: await embedChunks({
+      projectId: file.projectId,
+      documentId: args.doc.id as number,
+      chunks,
+    }),
   };
 };
 
