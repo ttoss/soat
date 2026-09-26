@@ -445,6 +445,7 @@ orchestrationsRouter.post(
       runPublicId: orchestrationRunId,
       projectIds: auth.projectIds,
       reason: typeof body.reason === 'string' ? body.reason : null,
+      origin: 'operator',
     });
   }
 );

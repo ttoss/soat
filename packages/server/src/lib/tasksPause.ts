@@ -1,5 +1,7 @@
 import createDebug from 'debug';
 
+import { db } from '../db';
+import { readProjectPause } from './projectPause';
 import { applyLocked, stillInState } from './tasksAutomationLocking';
 
 const log = createDebug('soat:tasks');
@@ -19,6 +21,13 @@ const log = createDebug('soat:tasks');
  * dispatched now. Without it a resume would either re-dispatch a state whose
  * work had already completed, or leave a state that never dispatched stuck.
  */
+
+/**
+ * Whose pause a task carries. A project pause (`projectPause.ts`) flags every
+ * open task of the project as `project`, and the project's resume lifts
+ * exactly those; a task an operator paused first stays paused.
+ */
+export type TaskPauseOrigin = 'operator' | 'project';
 
 /** `automation_status` for a dispatch a pause suppressed, awaiting the resume. */
 export const PAUSED_AUTOMATION_STATUS = 'paused';
@@ -53,4 +62,27 @@ export const markDispatchPaused = async (args: {
     args.taskPublicId,
     args.stateName
   );
+};
+
+/**
+ * Whether the task's project is paused, flagging the task as the project's
+ * when it is. The project's pause sweep flags every open task it finds; a task
+ * written while the sweep ran is caught here, at its first dispatch, so the
+ * project's resume finds it with the rest.
+ */
+export const adoptProjectPause = async (args: {
+  taskId: number;
+  projectId: number;
+}): Promise<boolean> => {
+  const pause = await readProjectPause({ projectId: args.projectId });
+  if (!pause) return false;
+  await db.Task.update(
+    {
+      pauseRequestedAt: pause.pausedAt,
+      pauseReason: pause.reason,
+      pausedByProject: true,
+    },
+    { where: { id: args.taskId, pauseRequestedAt: null } }
+  );
+  return true;
 };

@@ -38,6 +38,8 @@ Access is policy-based, with no membership table: the [policies](./policies.md) 
 | `default_conversation_retrieval` | string | What a [conversation](./conversations.md) that names no `retrieval` of its own does: `embed` or `none` (default). |
 | `trace_content_retention_days` | integer \| null | Days of [trace/generation content retention](./traces.md#retention-policy) before the daily sweep purges it. `null` (default) disables retention; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `trace_content_mode` | string | `full` (default) or `none`. `none` is [zero-retention](./traces.md#zero-retention-mode): trace and generation content is never written for any agent in the project. Settable via `update-project`. |
+| `paused_at` | string \| null | When the project was [paused](#pausing-a-project); `null` while it runs. |
+| `pause_reason` | string \| null | The reason the pause named, up to 256 characters; `null` while the project runs or when the pause named none. |
 | `created_at` | string | ISO 8601 creation timestamp             |
 | `updated_at` | string | ISO 8601 last-updated timestamp         |
 
@@ -117,6 +119,63 @@ record exists, so a refused turn is neither recorded nor metered.
 other side: it reads a window the meter already wrote, so it refuses spend that
 has already happened, where this refuses spend before it starts.
 
+### Pausing a project
+
+[`POST /api/v1/projects/{project_id}/pause`](/docs/api/projects/pause-project) is a kill switch: one call stops everything the project runs. It is fireable by a person or by an automation — it is an IAM action (`projects:PauseProject`), so a project key granted it can pause its own project on an anomaly.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat pause-project --project-id proj_ABC --reason "spend anomaly"
+soat resume-project --project-id proj_ABC
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await soat.projects.pauseProject({
+  path: { project_id: 'proj_ABC' },
+  body: { reason: 'spend anomaly' },
+});
+await soat.projects.resumeProject({ path: { project_id: 'proj_ABC' } });
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/projects/proj_ABC/pause \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"reason": "spend anomaly"}'
+curl -X POST https://api.example.com/api/v1/projects/proj_ABC/resume \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+While `paused_at` is set:
+
+| What | Under the pause | On resume |
+| --- | --- | --- |
+| Agent, session and conversation generations, tool-output continuations, chat completions, direct tool calls | `409 PROJECT_PAUSED` | Accepted again |
+| Orchestration run and eval run starts, manual and webhook trigger fires | `409 PROJECT_PAUSED`, no run or firing written | Accepted again |
+| Event triggers | A `failed` firing with code `PROJECT_PAUSED` | Fire again |
+| Schedule triggers | Not fired | Fire from their next occurrence after now; a missed one is not fired late |
+| Live [orchestration runs](./orchestrations.md) | [Paused](./orchestrations.md): parked at the next checkpoint with `required_action.type: paused` and the project's `pause_reason` | Resumed in the background |
+| Open [tasks](./workflows.md) | Automation paused: transitions work, state dispatches are suppressed | Suppressed dispatches run, as the caller who resumed |
+| Queued [eval](./evaluations.md) items | Not claimed; the run stays `running` | Continue from where they stopped |
+
+A generation, node or eval item already in flight finishes. Reads and writes keep working, so the project can be inspected and fixed while paused — including writes that embed content, such as document ingestion and memory writes, which are not starts. `loop` / `sub_orchestration` children started under the pause are born paused.
+
+Pausing is idempotent and keeps the first reason. [`POST /api/v1/projects/{project_id}/resume`](/docs/api/projects/resume-project) (`projects:ResumeProject`) answers `409 PROJECT_NOT_PAUSED` on a running project, and is not offered to agents as a `soat` tool: deciding to spend again is left to a person or an explicit credential.
+
+The resume hands back only what the pause held. A run or task an operator paused before the project was paused keeps its own pause; resuming one run or task on its own while the project is paused is `409 PROJECT_PAUSED`.
+
+Both transitions emit a [webhook event](./webhooks.md): `projects.paused` and `projects.resumed`, each carrying the project.
+
 ### Deletion
 
 Deleting a project with any dependent resource returns `409 Conflict`, code `PROJECT_HAS_DEPENDENTS`. Every project-scoped resource counts, including those accumulated while running:
@@ -139,6 +198,8 @@ The [audit log](./audit-log.md) is the exception: entries outlive the project wi
 | `403`  | `{ "error": "Forbidden" }`                       | [`GET /projects/{id}`](/docs/api/projects/get-project) (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `srn:<this-project-id>:*:*`, or use a key scoped to this project — see [Project Access via Policies](#project-access-via-policies) |
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
+| `409`  | `{ "error": { "code": "PROJECT_PAUSED" } }` | Starting work — a generation, run, eval run, tool call or trigger fire — or resuming a run or task in a paused project | Resume the project once whatever paused it is resolved; `error.meta.pause_reason` says why — see [Pausing a project](#pausing-a-project) |
+| `409`  | `{ "error": { "code": "PROJECT_NOT_PAUSED" } }` | Resuming a project that is not paused | Nothing to do; `paused_at` is `null` |
 | `409`  | `{ "error": { "code": "MODEL_NOT_PRICED" } }` | A generation on a project with `require_priced_model` whose model carries no price row | Price the `(provider, model, component)` rows in `error.meta.unpriced_rows`, or set `require_priced_model` to `false` — see [Priced models](#priced-models) |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |
 

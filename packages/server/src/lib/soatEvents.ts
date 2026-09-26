@@ -98,6 +98,12 @@ export const SOAT_EVENTS = {
     'orchestration_runs.succeeded': 'An orchestration run succeeded.',
     'orchestration_runs.failed': 'An orchestration run failed.',
   },
+  project: {
+    'projects.paused':
+      'A project was paused: nothing new starts in it, and the runs and tasks it had in motion park at their next checkpoint.',
+    'projects.resumed':
+      'A project was resumed: the runs and tasks its pause held are handed back, and its schedules fire again.',
+  },
   quota: {
     'quota.exceeded': 'A quota limit was exceeded.',
   },

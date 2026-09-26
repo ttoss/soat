@@ -343,6 +343,8 @@ Pausing is **idempotent** (a second pause answers with the run unchanged); a set
 
 **A pause does not reach work in flight**: the current round's nodes, including a nested child started in it, finish.
 
+**A [project pause](./projects.md#pausing-a-project) pauses every live run the same way**, carrying the project's reason. The project's resume lifts exactly those; resuming one of them on its own while the project is paused answers `409 PROJECT_PAUSED`, and a run paused by an operator before the project keeps its own pause.
+
 ### Listing the runs still driving
 
 [`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `project_id`, `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**; values are ORed:

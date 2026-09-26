@@ -218,6 +218,8 @@ The reconciler considers only a dispatch that has read `running` longer than `TA
 
 Pausing is **idempotent**; a closed task answers `409 TASK_NOT_PAUSABLE`, and resuming with no pause in force answers `409 TASK_NOT_PAUSED`.
 
+**A [project pause](./projects.md#pausing-a-project) pauses every open task the same way.** The project's resume lifts exactly those and runs their suppressed dispatches; resuming one on its own while the project is paused answers `409 PROJECT_PAUSED`.
+
 ### Finding the tasks whose automation is running
 
 [`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on `automation_status` beside `status`, `state`, `workflow_id` and `assignee`; `status=open` narrows to the cards in play. The parameter **repeats**; values are ORed:

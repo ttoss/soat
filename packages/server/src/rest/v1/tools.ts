@@ -4,11 +4,11 @@ import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import {
-  callTool,
   createTool,
   deleteTool,
   getTool,
   listTools,
+  startToolCall,
   tools,
   updateTool,
 } from 'src/lib/tools';
@@ -386,7 +386,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
 
   const authHeader = ctx.request.headers.authorization;
 
-  const result = await callTool({
+  const result = await startToolCall({
     guardrails: 'apply',
     projectIds,
     id: ctx.params.tool_id,

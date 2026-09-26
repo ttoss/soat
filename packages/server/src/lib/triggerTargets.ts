@@ -2,7 +2,7 @@ import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import { startEvalRun } from './evaluationRuns';
 import { startOrchestrationRun } from './orchestrationEngine';
-import { callTool } from './tools';
+import { startToolCall } from './tools';
 import { buildAgentMessages } from './triggerDispatch';
 
 /**
@@ -124,7 +124,7 @@ const dispatchToEval = async (
 const dispatchToTool = async (
   args: DispatchArgs
 ): Promise<Record<string, unknown>> => {
-  const output = await callTool({
+  const output = await startToolCall({
     // A firing is a call of this tool, so its guardrails decide it — a trigger
     // is not a way to reach a tool the project has classified as forbidden.
     guardrails: 'apply',

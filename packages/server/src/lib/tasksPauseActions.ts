@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import type { RequestPrincipal } from './principals';
+import { assertProjectAcceptsWork } from './projectPause';
 import { emitTaskEvent } from './taskEvents';
 import {
   dispatchOnEnter,
@@ -9,7 +10,11 @@ import {
   mapTask,
   stateByName,
 } from './tasks';
-import { isTaskPaused, PAUSED_AUTOMATION_STATUS } from './tasksPause';
+import {
+  isTaskPaused,
+  PAUSED_AUTOMATION_STATUS,
+  type TaskPauseOrigin,
+} from './tasksPause';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 
 const log = createDebug('soat:tasks');
@@ -36,6 +41,8 @@ const log = createDebug('soat:tasks');
 export const pauseTask = async (args: {
   id: string;
   reason?: string | null;
+  /** Whose pause it is — see `TaskPauseOrigin`. */
+  origin: TaskPauseOrigin;
 }): Promise<ReturnType<typeof mapTask>> => {
   log('pauseTask: id=%s', args.id);
 
@@ -54,6 +61,7 @@ export const pauseTask = async (args: {
   await task.update({
     pauseRequestedAt: new Date(),
     pauseReason: args.reason ?? null,
+    pausedByProject: args.origin === 'project',
   });
 
   const refreshed = await findTaskInstance({ id: args.id });
@@ -93,11 +101,15 @@ export const resumeTask = async (args: {
       `Task '${args.id}' is not paused.`
     );
   }
+  // The project's resume hands back every task its pause holds; lifting one
+  // under it would restart the dispatch the project's pause suppressed.
+  await assertProjectAcceptsWork({ projectId: task.projectId as number });
 
   const suppressed = task.automationStatus === PAUSED_AUTOMATION_STATUS;
   await task.update({
     pauseRequestedAt: null,
     pauseReason: null,
+    pausedByProject: false,
     ...(suppressed ? { automationStatus: null } : {}),
   });
 

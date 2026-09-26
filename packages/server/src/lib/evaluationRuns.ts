@@ -30,6 +30,7 @@ import { validateScorerReferences } from './evaluationScorerReferences';
 import { scorerList, validateScorers } from './evaluationScorers';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
+import { assertProjectAcceptsWork } from './projectPause';
 import { parseActiveRelease } from './releaseAssignment';
 import { acceptStoredToolContext } from './toolContextCarrier';
 
@@ -342,6 +343,9 @@ export const startEvalRun = async (args: {
   });
 
   const plan = await planRun({ ...args, wait });
+  await assertProjectAcceptsWork({
+    projectId: plan.evaluation.projectId as number,
+  });
 
   const run = await db.EvalRun.create({
     evalId: plan.evaluation.id as number,

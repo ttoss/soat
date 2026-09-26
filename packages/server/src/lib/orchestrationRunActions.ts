@@ -16,9 +16,11 @@ import {
   isRunPaused,
   parkPausedRun,
   PAUSABLE_RUN_STATUSES,
+  type RunPauseOrigin,
 } from './orchestrationRunPause';
 import type { MappedOrchestrationRun } from './orchestrations';
 import { mapOrchestrationRun } from './orchestrations';
+import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:orchestrations');
 
@@ -120,6 +122,7 @@ export const pauseOrchestrationRun = async (args: {
   runPublicId: string;
   projectIds?: number[];
   reason?: string | null;
+  origin: RunPauseOrigin;
 }): Promise<MappedOrchestrationRun> => {
   log('pauseOrchestrationRun %o', { runPublicId: args.runPublicId });
 
@@ -143,6 +146,7 @@ export const pauseOrchestrationRun = async (args: {
     runPublicId: run.publicId,
     reason,
     requestedAt: new Date(),
+    origin: args.origin,
   });
   await run.reload();
 
@@ -219,6 +223,10 @@ export const resumeOrchestrationRun = async (args: {
       'ORCHESTRATION_RUN_NOT_AWAITING_INPUT',
       `Run '${args.runPublicId}' is not awaiting input (status: '${run.status}').`
     );
+
+  // Lifting one run's pause under a paused project would restart the work the
+  // project's pause holds; the project's resume hands its runs back.
+  await assertProjectAcceptsWork({ projectId: run.projectId as number });
 
   return resumeOrchestrationRunExecution({ run, liftPause: true });
 };

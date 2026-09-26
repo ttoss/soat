@@ -27,6 +27,16 @@
       "description": "Delete a project (admin only)"
     },
     {
+      "operationId": "pauseProject",
+      "action": "projects:PauseProject",
+      "description": "Pause everything a project runs"
+    },
+    {
+      "operationId": "resumeProject",
+      "action": "projects:ResumeProject",
+      "description": "Resume a paused project"
+    },
+    {
       "operationId": "getProjectPrices",
       "action": "projects:GetProjectPrices",
       "description": "List a project's per-provider-slug price rows"

@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { ScheduledWait } from './orchestrationNodeTypes';
+import { readProjectPause } from './projectPause';
 
 const log = createDebug('soat:orchestrations');
 
@@ -17,7 +18,15 @@ const log = createDebug('soat:orchestrations');
  * `pauseRequestedAt` is the whole mechanism: the run loop reads it after each
  * checkpoint, the queued/wake/redrive drivers read it before driving, and it
  * stays set while the run is parked so nothing but `resume` lifts it.
+ *
+ * A project pause (`projectPause.ts`) sets the same flag on every live run of
+ * the project, with `pausedByProject` recording whose pause it is: the
+ * project's resume lifts those, and a pause an operator set on the run first
+ * is left for the run's own `resume`.
  */
+
+/** Whose pause a run carries — its own operator's, or its project's. */
+export type RunPauseOrigin = 'operator' | 'project';
 
 /** A run status a pause can still act on — anything not yet settled. */
 export const PAUSABLE_RUN_STATUSES: ReadonlySet<string> = new Set([
@@ -137,10 +146,12 @@ export const flagRunTreePaused = async (args: {
   runPublicId: string;
   reason: string | null;
   requestedAt: Date;
+  origin: RunPauseOrigin;
 }): Promise<void> => {
   const values = {
     pauseRequestedAt: args.requestedAt,
     pauseReason: args.reason,
+    pausedByProject: args.origin === 'project',
   };
   let frontier = [args.runPublicId];
   while (frontier.length > 0) {
@@ -178,7 +189,48 @@ export const clearRunPause = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   if (!isRunPaused(args.runRecord)) return;
-  await args.runRecord.update({ pauseRequestedAt: null, pauseReason: null });
+  await args.runRecord.update({
+    pauseRequestedAt: null,
+    pauseReason: null,
+    pausedByProject: false,
+  });
+};
+
+/**
+ * Flags an unflagged run as its paused project's, returning whether the
+ * project is paused. The project's pause sweep flags every live run it finds;
+ * a run written while the sweep ran is caught by the next driver to touch it,
+ * so the project's resume finds it with the rest.
+ */
+const adoptProjectPause = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<boolean> => {
+  const projectPause = await readProjectPause({
+    projectId: args.run.projectId as number,
+  });
+  if (!projectPause) return false;
+  await db.OrchestrationRun.update(
+    {
+      pauseRequestedAt: projectPause.pausedAt,
+      pauseReason: projectPause.reason,
+      pausedByProject: true,
+    },
+    { where: { id: args.run.id as number, pauseRequestedAt: null } }
+  );
+  await args.run.reload();
+  return true;
+};
+
+/**
+ * {@link isRunPaused} for a driver about to drive a run it loaded: the run's
+ * own flag, or its project's pause, which it adopts. The row is reloaded when
+ * it adopts, so `pauseReason` on it is the project's.
+ */
+export const isRunPausedForDrive = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<boolean> => {
+  if (isRunPaused(args.run)) return true;
+  return adoptProjectPause({ run: args.run });
 };
 
 /**
@@ -191,9 +243,10 @@ export const readRunPause = async (args: {
 }): Promise<{ paused: boolean; reason: string | null }> => {
   const row = await db.OrchestrationRun.findOne({
     where: { id: args.orchestrationRunId },
-    attributes: ['pauseRequestedAt', 'pauseReason'],
   });
-  if (!row || !isRunPaused(row)) return { paused: false, reason: null };
+  if (!row || !(await isRunPausedForDrive({ run: row }))) {
+    return { paused: false, reason: null };
+  }
   return { paused: true, reason: row.pauseReason };
 };
 
@@ -206,14 +259,35 @@ export const readRunPause = async (args: {
  */
 export const inheritedPause = async (args: {
   parentRunId?: string;
-}): Promise<{ pauseRequestedAt: Date | null; pauseReason: string | null }> => {
-  if (!args.parentRunId) return { pauseRequestedAt: null, pauseReason: null };
-  const parent = await db.OrchestrationRun.findOne({
-    where: { publicId: args.parentRunId, pauseRequestedAt: { [Op.ne]: null } },
-    attributes: ['pauseRequestedAt', 'pauseReason'],
-  });
+  projectId: number;
+}): Promise<{
+  pauseRequestedAt: Date | null;
+  pauseReason: string | null;
+  pausedByProject: boolean;
+}> => {
+  const parent = args.parentRunId
+    ? await db.OrchestrationRun.findOne({
+        where: {
+          publicId: args.parentRunId,
+          pauseRequestedAt: { [Op.ne]: null },
+        },
+        attributes: ['pauseRequestedAt', 'pauseReason', 'pausedByProject'],
+      })
+    : null;
+  if (parent) {
+    return {
+      pauseRequestedAt: parent.pauseRequestedAt,
+      pauseReason: parent.pauseReason,
+      pausedByProject: parent.pausedByProject,
+    };
+  }
+  // A child started while its project is paused, before the sweep reached its
+  // parent, is still born paused — and so is any run a start admitted just
+  // before the pause landed.
+  const projectPause = await readProjectPause({ projectId: args.projectId });
   return {
-    pauseRequestedAt: parent?.pauseRequestedAt ?? null,
-    pauseReason: parent?.pauseReason ?? null,
+    pauseRequestedAt: projectPause?.pausedAt ?? null,
+    pauseReason: projectPause?.reason ?? null,
+    pausedByProject: projectPause !== null,
   };
 };

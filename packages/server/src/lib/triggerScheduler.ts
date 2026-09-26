@@ -36,6 +36,14 @@ export const fireDueTriggers = createSweep({
         type: 'schedule',
         active: true,
         nextFireAt: { [Op.lte]: now },
+        // A paused project's schedules are not fired at all, rather than fired
+        // and refused: a `* * * * *` trigger would otherwise write a failed
+        // firing every minute of the pause. Its resume re-anchors them.
+        projectId: {
+          [Op.notIn]: db.sequelize.literal(
+            '(SELECT "id" FROM "projects" WHERE "paused_at" IS NOT NULL)'
+          ),
+        },
       },
       order: [['nextFireAt', 'ASC']],
       limit,

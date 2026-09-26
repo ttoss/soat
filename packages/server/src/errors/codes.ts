@@ -157,6 +157,15 @@ export const ERROR_CODES = {
     description:
       'The project has one or more dependent resources (agents, ai providers, tools, etc.) and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  PROJECT_PAUSED: {
+    httpStatus: 409,
+    description:
+      'The project is paused, so nothing new starts in it: no generation, chat completion, tool call, orchestration run, eval run or trigger firing, and no resume of a run or task the pause holds. Reads and configuration writes still work. `meta` carries `project_id`, `paused_at` and `pause_reason`.',
+  },
+  PROJECT_NOT_PAUSED: {
+    httpStatus: 409,
+    description: 'The project carries no pause, so there is nothing to resume.',
+  },
   RESERVED_TAG_KEY: {
     httpStatus: 400,
     description:

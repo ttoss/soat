@@ -23,7 +23,7 @@ import {
 
 const log = createDebug('soat:projects');
 
-const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
+export const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   return {
     id: project.publicId,
     name: project.name,
@@ -37,6 +37,8 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     default_conversation_retrieval: project.defaultConversationRetrieval,
     trace_content_retention_days: project.traceContentRetentionDays,
     trace_content_mode: project.traceContentMode,
+    paused_at: project.pausedAt,
+    pause_reason: project.pauseReason,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
   };
@@ -92,7 +94,9 @@ const validateRequirePricedModel = (value: unknown): string | null => {
   return null;
 };
 
-const getProjectOrThrow = async (id: string) => {
+export const getProjectOrThrow = async (
+  id: string
+): Promise<InstanceType<(typeof db)['Project']>> => {
   const project = await db.Project.findOne({ where: { publicId: id } });
 
   if (!project) {

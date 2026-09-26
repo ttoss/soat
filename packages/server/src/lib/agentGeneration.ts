@@ -14,6 +14,7 @@ import {
 import { type GenerationResult } from './agentGenerationTypes';
 import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
+import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import {
   claimKeyedGeneration,
@@ -27,6 +28,7 @@ import { createGenerationRecord } from './generations';
 import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
+import { assertAgentProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { assertValidToolContextKeys } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
@@ -282,6 +284,12 @@ const prepareGeneration = async (
   // Rejects a key that could not become a header before any provider call or
   // metering happens, covering every path but the session's own write-time check.
   assertValidToolContextKeys(args.toolContext);
+
+  // A run node's or an eval item's turn was admitted with its run; the run's
+  // checkpoint, or the eval driver, is where a project pause stops it.
+  if (!args.orchestrationRunId && args.source !== EVAL_USAGE_SOURCE) {
+    await assertAgentProjectAcceptsWork({ agentPublicId: args.agentId });
+  }
 
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);

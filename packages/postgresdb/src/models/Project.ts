@@ -103,6 +103,15 @@ export class Project extends Model {
   })
   declare traceContentMode: string;
 
+  // Set while a project-wide pause is in force: no new generation, run, eval
+  // run, tool call or trigger firing starts in the project, and the schedule
+  // and eval drivers skip it. `resume` is the only thing that clears it.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare pausedAt: Date | null;
+
+  @Column({ type: DataType.STRING(256), allowNull: true })
+  declare pauseReason: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

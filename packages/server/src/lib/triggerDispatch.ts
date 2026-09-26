@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { buildSrn } from './iam';
 import { createJwtIsAllowed } from './permissions';
+import { assertProjectAcceptsWork } from './projectPause';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
   createFiringRecord,
@@ -275,6 +276,9 @@ export const prepareFiring = async (args: {
     where: { publicId: args.triggerPublicId },
     label: args.triggerPublicId,
   });
+  // Before the firing record: a refused manual or webhook fire answers
+  // `PROJECT_PAUSED` and leaves no firing behind.
+  await assertProjectAcceptsWork({ projectId: trigger.projectId as number });
 
   const project = await db.Project.findOne({
     where: { id: trigger.projectId as number },
@@ -373,6 +377,7 @@ export const runReservedFiring = async (args: {
       where: { id: firing.triggerId as number },
       label: String(firing.triggerId),
     });
+    await assertProjectAcceptsWork({ projectId: trigger.projectId as number });
 
     const { authHeader, effectiveToolContext } =
       await resolveDispatchCredentials({ trigger });
