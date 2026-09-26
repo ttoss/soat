@@ -27,8 +27,10 @@ import { UsageComponent } from './UsageComponent';
  * live in child {@link UsageComponent} rows (one per priced dimension), so no
  * meter type is privileged: `llm_tokens` is simply an event with several
  * components, and a new dimension is a new set of components, not a new column.
- * Rows are immutable — there is no `updatedAt` and no update/delete path — so
- * historical usage never changes after the fact.
+ * What was metered and what it cost never change after the fact — there is no
+ * `updatedAt` and no delete path. Only attribution moves: a deleted resource's
+ * foreign key nulls, and an embedding made before its generation's record is
+ * linked to it when the record commits (`usageEmbeddingRecording.ts`).
  */
 @Table({
   tableName: 'usage_events',
