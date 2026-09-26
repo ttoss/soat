@@ -25,6 +25,8 @@ const ENTITY_TABLES = [
   { table: 'traces', column: 'trace_id', id: 'trc' },
   { table: 'ai_providers', column: 'ai_provider_id', id: 'aip' },
   { table: 'tools', column: 'tool_id', id: 'tool' },
+  { table: 'documents', column: 'document_id', id: 'doc' },
+  { table: 'memory_stores', column: 'memory_store_id', id: 'mem' },
 ];
 
 const publicIdColumn = (column: string) => {
@@ -74,7 +76,9 @@ beforeAll(async () => {
     INSERT INTO usage_events (${ENTITY_TABLES.map(({ column }) => {
       return column;
     }).join(', ')}, idempotency_key)
-      VALUES (1, 1, 1, 1, 1, 1, 1, 'attributed');
+      VALUES (${ENTITY_TABLES.map(() => {
+        return '1';
+      }).join(', ')}, 'attributed');
     INSERT INTO usage_events (agent_id, idempotency_key) VALUES (1, 'agent-only');
     INSERT INTO usage_events (idempotency_key) VALUES ('unattributed');
   `);

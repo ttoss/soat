@@ -19,6 +19,8 @@ type MeterRow = {
   generation_id: string | null;
   agent_id: string | null;
   trace_id: string | null;
+  document_id: string | null;
+  memory_store_id: string | null;
   ai_provider_id: string | null;
   cost_usd: number | null;
   components: Array<{
@@ -201,6 +203,9 @@ describe('Usage — embedding metering', () => {
     for (const row of chunkRows) {
       expect(row.source).toBe('embedding');
       expect(quantityOf(row, 'input_tokens')).toBeGreaterThan(0);
+      expect(row.document_id).toBe(res.body.id);
+      expect(row.memory_store_id).toBeNull();
+      expect(row.generation_id).toBeNull();
     }
   });
 
@@ -222,6 +227,8 @@ describe('Usage — embedding metering', () => {
 
     const rows = await waitForMeters(before.length + 1);
     expect(quantityOf(rows[0], 'input_tokens')).toBe(4);
+    expect(rows[0].memory_store_id).toBe(memoryStoreRes.body.id);
+    expect(rows[0].document_id).toBeNull();
   });
 
   test('a knowledge search meters the query embedding', async () => {
@@ -235,6 +242,9 @@ describe('Usage — embedding metering', () => {
     const rows = await waitForMeters(before.length + 1);
     expect(rows[0].source).toBe('embedding');
     expect(quantityOf(rows[0], 'input_tokens')).toBe(2);
+    // A query embeds nothing stored.
+    expect(rows[0].document_id).toBeNull();
+    expect(rows[0].memory_store_id).toBeNull();
   });
 
   describe("an agent's knowledge retrieval", () => {

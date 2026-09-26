@@ -91,6 +91,7 @@ export const createMemory = async (args: {
     projectId: await resolveMemoryStoreProjectId({
       memoryStoreId: args.memoryStoreId,
     }),
+    generationId: args.assertion.generationId,
   });
 
   const entry = await db.Memory.create({
@@ -210,6 +211,8 @@ export const updateMemory = async (args: {
       projectId: await resolveMemoryStoreProjectId({
         memoryStoreId: entry.memoryStoreId,
       }),
+      // An edit through the API runs for no generation.
+      generationId: null,
     });
     updates.contentId = content.id as number;
   }

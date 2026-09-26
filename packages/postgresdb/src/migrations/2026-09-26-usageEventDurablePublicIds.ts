@@ -17,6 +17,8 @@ const PAIRS = [
   { column: 'trace_id', table: 'traces' },
   { column: 'ai_provider_id', table: 'ai_providers' },
   { column: 'tool_id', table: 'tools' },
+  { column: 'document_id', table: 'documents' },
+  { column: 'memory_store_id', table: 'memory_stores' },
 ] as const;
 
 const publicIdColumn = (column: string) => {

@@ -472,6 +472,7 @@ export const writeMemory = async (
     memoryStoreId: args.memoryStoreId,
     content: args.content,
     projectId: store.projectId,
+    generationId: args.assertion.generationId,
   });
 
   const { match, similarity } = await measureWrite({

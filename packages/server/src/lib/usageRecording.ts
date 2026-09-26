@@ -189,6 +189,8 @@ const writeGenerationEvent = async (args: {
       ...(await readGenerationEventAttribution(generation)),
       projectId: generation.projectId,
       aiProviderId: attribution.aiProviderId,
+      documentId: null,
+      memoryStoreId: null,
       // `eval` for an eval run's item generations, null for production traffic.
       // Copied off the generation's own column, so a caller cannot bill eval
       // spend as production or vice versa.
@@ -286,6 +288,8 @@ export const recordCompletionUsage = async (args: {
         aiProviderId: args.aiProviderId,
         triggerId: null,
         actionId: null,
+        documentId: null,
+        memoryStoreId: null,
         // A generation-less completion has no generation or agent row to
         // identify the workload by, so it labels itself: the same value that
         // names it in the idempotency key.

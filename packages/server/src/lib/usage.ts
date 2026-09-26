@@ -72,6 +72,9 @@ export type PersistedUsageEvent = {
   trigger_id: string | null;
   action_id: string | null;
   tool_id: string | null;
+  // What an embedding event embedded; null on a query and every other meter.
+  document_id: string | null;
+  memory_store_id: string | null;
   // `ok` | `error` | `timeout` on a `tool_execution` event; null otherwise.
   outcome: string | null;
   meter_type: string;
@@ -120,6 +123,8 @@ const mapUsageEvent = (
     session?: InstanceType<(typeof db)['Session']> | null;
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
     tool?: InstanceType<(typeof db)['Tool']> | null;
+    document?: InstanceType<(typeof db)['Document']> | null;
+    memoryStore?: InstanceType<(typeof db)['MemoryStore']> | null;
     components?: InstanceType<(typeof db)['UsageComponent']>[];
   }
 ): PersistedUsageEvent => {
@@ -140,6 +145,8 @@ const mapUsageEvent = (
     trigger_id: event.triggerId,
     action_id: event.actionId,
     tool_id: assocPublicId(event.tool),
+    document_id: assocPublicId(event.document),
+    memory_store_id: assocPublicId(event.memoryStore),
     outcome: event.outcome ?? null,
     meter_type: event.meterType,
     source: event.source ?? null,
@@ -224,6 +231,8 @@ const eventIncludes = (args: { orchestrationId?: number }) => {
     { model: db.Session, as: 'session' },
     { model: db.AiProvider, as: 'aiProvider' },
     { model: db.Tool, as: 'tool' },
+    { model: db.Document, as: 'document' },
+    { model: db.MemoryStore, as: 'memoryStore' },
     {
       model: db.UsageComponent,
       as: 'components',

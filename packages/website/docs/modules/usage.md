@@ -39,6 +39,8 @@ Every metered occurrence writes one **usage event** (attribution, total cost) pl
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
 | `tool_id`        | string \| null  | [Tool](./tools.md) a `tool_execution` event metered; `null` on every other meter, for an inline tool, and once the tool is deleted |
+| `document_id`    | string \| null  | [Document](./documents.md) an [embedding](./embeddings.md#metering) event embedded a chunk of; `null` on a query embedding, every other meter, and once the document is deleted |
+| `memory_store_id` | string \| null | [Memory store](./memories.md) an embedding event embedded written content for; `null` on a query embedding, every other meter, and once the store is deleted |
 | `outcome`        | string \| null  | How a `tool_execution` call ended: `ok`, `error` or `timeout`; `null` on every other meter |
 | `source`         | string \| null  | The workload behind the spend when it is not ordinary agent traffic; see [Workload source](#workload-source) |
 | `meter_type`     | string          | What the event measures: `llm_tokens`, `compute_execution`, `api_request`, `storage`, or `tool_execution` |
@@ -339,7 +341,9 @@ GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
       "actors": 318,
       "sessions": 902,
       "ai_providers": 2,
-      "tools": 0
+      "tools": 0,
+      "documents": 37,
+      "memory_stores": 3
     }
   }
 }
@@ -349,7 +353,7 @@ Nulls are not counted: a generation-less completion (`chat`, `memory_extraction`
 
 - **Opt-in because it costs**: each key sorts the window once more. Count entities with one request at `limit=1&include=distinct`; page for spend with no `include`.
 - **On `totals` only**; groups never carry `distinct` (a `COUNT(DISTINCT)` per bucket).
-- **Deletion does not lower a count**: each key counts the entity's id as the event recorded it, so deleting an agent, its generations and traces, an orchestration and its runs, an actor, a session, a provider or a tool leaves every figure unchanged, even where the event's own attribution field reads `null` afterwards.
+- **Deletion does not lower a count**: each key counts the entity's id as the event recorded it, so deleting an agent, its generations and traces, an orchestration and its runs, an actor, a session, a provider, a tool, a document or a memory store leaves every figure unchanged, even where the event's own attribution field reads `null` afterwards.
 - **Figures describe one window and do not add**: adjacent windows' `distinct.sessions` overlap where a session spans the boundary, and a run straddling midnight is in two `day` windows. A wider figure is a wider query.
 
 Any `include` value other than `distinct` is a `400`.

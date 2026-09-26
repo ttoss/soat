@@ -12,7 +12,9 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Actor } from './Actor';
 import { Agent } from './Agent';
 import { AiProvider } from './AiProvider';
+import { Document } from './Document';
 import { Generation } from './Generation';
+import { MemoryStore } from './MemoryStore';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
 import { Session } from './Session';
@@ -47,6 +49,16 @@ export const USAGE_EVENT_DURABLE_IDS = [
     table: 'ai_providers',
   },
   { foreignKey: 'toolId', publicId: 'toolPublicId', table: 'tools' },
+  {
+    foreignKey: 'documentId',
+    publicId: 'documentPublicId',
+    table: 'documents',
+  },
+  {
+    foreignKey: 'memoryStoreId',
+    publicId: 'memoryStorePublicId',
+    table: 'memory_stores',
+  },
 ] as const;
 
 /**
@@ -56,8 +68,10 @@ export const USAGE_EVENT_DURABLE_IDS = [
  * live in child {@link UsageComponent} rows (one per priced dimension), so no
  * meter type is privileged: `llm_tokens` is simply an event with several
  * components, and a new dimension is a new set of components, not a new column.
- * Rows are immutable — there is no `updatedAt` and no update/delete path — so
- * historical usage never changes after the fact.
+ * What was metered and what it cost never change after the fact — there is no
+ * `updatedAt` and no delete path. Only attribution moves: a deleted resource's
+ * foreign key nulls, and an embedding made before its generation's record is
+ * linked to it when the record commits (`usageEmbeddingRecording.ts`).
  */
 @Table({
   tableName: 'usage_events',
@@ -91,6 +105,8 @@ export const USAGE_EVENT_DURABLE_IDS = [
     { name: 'usage_events_source_idx', fields: ['source'] },
     { name: 'usage_events_ai_provider_id_idx', fields: ['ai_provider_id'] },
     { name: 'usage_events_tool_id_idx', fields: ['tool_id'] },
+    { name: 'usage_events_document_id_idx', fields: ['document_id'] },
+    { name: 'usage_events_memory_store_id_idx', fields: ['memory_store_id'] },
     // Guardrail evaluation counts a tool's (or the project's) executions over a
     // window while the gated call waits, so the window read must be an index
     // range, not a scan of the project's events.
@@ -226,6 +242,12 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare toolPublicId: string | null;
 
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare documentPublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare memoryStorePublicId: string | null;
+
   // Copied from the generation at write time, the same freeze-at-write rule as
   // `cost_usd`. SET NULL on delete so removing an actor or session never blocks
   // on historical spend — the row survives with a null dimension rather than
@@ -312,6 +334,37 @@ export class UsageEvent extends Model {
     { onDelete: 'SET NULL' }
   )
   declare tool: Tool | null;
+
+  // What an embedding event embedded: a document's chunk, or content written to
+  // a memory store. Null on a query embedding and on every other meter. SET
+  // NULL on delete, like every attribution column, so spend outlives it.
+  @ForeignKey(() => {
+    return Document;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare documentId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Document;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare document: Document | null;
+
+  @ForeignKey(() => {
+    return MemoryStore;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare memoryStoreId: number | null;
+
+  @BelongsTo(
+    () => {
+      return MemoryStore;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare memoryStore: MemoryStore | null;
 
   // `ok` | `error` | `timeout` for a `tool_execution` event: how the call that
   // went out ended. Null on every other meter.

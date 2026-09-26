@@ -2,6 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV } from 'src/lib/embeddingPrice';
 import { createGenerationRecord } from 'src/lib/generations';
+import { writeMemory } from 'src/lib/memoryWrite';
 import { recordEmbeddingUsage } from 'src/lib/usageEmbeddingRecording';
 
 // The embedding stack is env-configured rather than backed by an AiProvider
@@ -64,6 +65,7 @@ describe('recordEmbeddingUsage', () => {
     await recordEmbeddingUsage({
       projectId,
       generationId: null,
+      subject: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 1500,
@@ -96,6 +98,7 @@ describe('recordEmbeddingUsage', () => {
     await recordEmbeddingUsage({
       projectId,
       generationId: null,
+      subject: null,
       provider: PROVIDER,
       model: 'unset-rate-model',
       tokens: 42,
@@ -119,6 +122,7 @@ describe('recordEmbeddingUsage', () => {
     await recordEmbeddingUsage({
       projectId,
       generationId: null,
+      subject: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 1000,
@@ -138,6 +142,7 @@ describe('recordEmbeddingUsage', () => {
       recordEmbeddingUsage({
         projectId,
         generationId: null,
+        subject: null,
         provider: PROVIDER,
         model: MODEL,
         tokens: 5,
@@ -153,6 +158,7 @@ describe('recordEmbeddingUsage', () => {
     await recordEmbeddingUsage({
       projectId,
       generationId: null,
+      subject: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 10,
@@ -160,6 +166,7 @@ describe('recordEmbeddingUsage', () => {
     await recordEmbeddingUsage({
       projectId,
       generationId: null,
+      subject: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 10,
@@ -183,6 +190,7 @@ describe('recordEmbeddingUsage', () => {
       recordEmbeddingUsage({
         projectId: 2_147_483_600,
         generationId: null,
+        subject: null,
         provider: PROVIDER,
         model: MODEL,
         tokens: 5,
@@ -206,6 +214,7 @@ describe('recordEmbeddingUsage', () => {
       return recordEmbeddingUsage({
         projectId,
         generationId,
+        subject: null,
         provider: PROVIDER,
         model: MODEL,
         tokens: 3,
@@ -278,6 +287,32 @@ describe('recordEmbeddingUsage', () => {
       await recordFor(generationId);
 
       await expectAttributedTo(generationId);
+    });
+
+    test('a memory an agent writes mid-turn names both its store and the turn', async () => {
+      const generationId = newGenerationId();
+      await createRecord({ generationId, agentId: agentPublicId });
+      const store = await db.MemoryStore.create({
+        publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryStore),
+        projectId,
+        name: 'Embedding Attribution Store',
+      });
+
+      await writeMemory({
+        memoryStoreId: store.id as number,
+        content: 'the customer prefers email',
+        assertion: {
+          mechanism: 'tool',
+          generationId,
+          principalType: 'agent',
+          principalId: agentPublicId,
+        },
+      });
+
+      await expectAttributedTo(generationId);
+      const event = await eventFor(generationId);
+      expect(event.memoryStoreId).toBe(store.id);
+      expect(event.documentId).toBeNull();
     });
 
     test('an embedding whose generation record is never written names no generation', async () => {

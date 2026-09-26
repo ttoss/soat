@@ -22,7 +22,7 @@ describe('GET /api/v1/usage/aggregate — totals.distinct across deletions', () 
   let after: Totals;
 
   // Answers every request as an OpenAI-compatible completion: the agent's
-  // provider and the http tool both call it.
+  // provider and the http tool both call it. Embeddings use the suite's stub.
   const startStubServer = async (): Promise<string> => {
     stubServer = createServer((req, res) => {
       req.on('data', () => {});
@@ -138,8 +138,33 @@ describe('GET /api/v1/usage/aggregate — totals.distinct across deletions', () 
     });
     await post(`/api/v1/tools/${tool.id}/call`, { input: {} });
 
-    before = await readTotals();
+    // Embedding a document's chunks and a memory's content attributes the
+    // document and the memory store.
+    const document = await post('/api/v1/documents', {
+      project_id: projectId,
+      content: 'alpha beta gamma delta',
+      path: '/usage-distinct-deletion/doc.txt',
+    });
+    const memoryStore = await post('/api/v1/memory-stores', {
+      project_id: projectId,
+      name: 'Deleted Memory Store',
+    });
+    await post('/api/v1/memories', {
+      memory_store_id: memoryStore.id,
+      content: 'the customer prefers email',
+    });
 
+    // Chunk embedding runs after the create answers.
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      before = await readTotals();
+      if (before.distinct.documents > 0) break;
+      await new Promise((resolve) => {
+        return setImmediate(resolve);
+      });
+    }
+
+    await remove(`/api/v1/documents/${document.id}`);
+    await remove(`/api/v1/memory-stores/${memoryStore.id}`);
     await remove(`/api/v1/tools/${tool.id}`);
     await remove(`/api/v1/orchestrations/${orchestration.id}`);
     await remove(`/api/v1/sessions/${session.id}`);

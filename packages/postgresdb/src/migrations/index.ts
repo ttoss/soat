@@ -20,6 +20,7 @@ import { foreignKeyNullability } from './2026-09-24-foreignKeyNullability';
 import { generationIdempotencyKey } from './2026-09-24-generationIdempotencyKey';
 import { orchestrationOutputMapping } from './2026-09-24-orchestrationOutputMapping';
 import { usageEventGenerationPublicId } from './2026-09-25-usageEventGenerationPublicId';
+import { usageEventDocumentAndMemoryStore } from './2026-09-26-usageEventDocumentAndMemoryStore';
 import { usageEventDurablePublicIds } from './2026-09-26-usageEventDurablePublicIds';
 
 /**
@@ -62,5 +63,6 @@ export const MIGRATIONS: Migration[] = [
   foreignKeyNullability,
   orchestrationOutputMapping,
   usageEventGenerationPublicId,
+  usageEventDocumentAndMemoryStore,
   usageEventDurablePublicIds,
 ];

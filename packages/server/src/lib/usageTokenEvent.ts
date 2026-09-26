@@ -138,6 +138,9 @@ export type TokenEventAttribution = {
   aiProviderId: number | null;
   triggerId: string | null;
   actionId: string | null;
+  // What an embedding event embedded; null on every other event.
+  documentId: number | null;
+  memoryStoreId: number | null;
   /**
    * The workload behind the spend when it is not production traffic (`eval`,
    * `eval_judge`); `null` for ordinary traffic. Required rather than optional so
@@ -177,6 +180,8 @@ export const persistTokenEvent = async (args: {
         aiProviderId: attribution.aiProviderId,
         triggerId: attribution.triggerId,
         actionId: attribution.actionId,
+        documentId: attribution.documentId,
+        memoryStoreId: attribution.memoryStoreId,
         source: attribution.source,
         meterType: 'llm_tokens',
         provider: args.provider,

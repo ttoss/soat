@@ -45,6 +45,7 @@ export const createEmbeddings = async (args: {
         projectPublicId: args.projectPublicId,
       }),
     }),
+    subject: null,
   });
 
   log('createEmbeddings: done count=%d', embeddings.length);
