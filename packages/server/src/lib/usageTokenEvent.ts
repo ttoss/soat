@@ -128,6 +128,9 @@ export type TokenEventAttribution = {
   nodeId: string | null;
   agentId: number | null;
   generationId: number | null;
+  // Required beside `generationId`: the FK nulls when the generation is
+  // deleted, and this is what `totals.distinct.generations` counts.
+  generationPublicId: string | null;
   traceId: number | null;
   actorId: number | null;
   sessionId: number | null;
@@ -168,6 +171,7 @@ export const persistTokenEvent = async (args: {
         nodeId: attribution.nodeId,
         agentId: attribution.agentId,
         generationId: attribution.generationId,
+        generationPublicId: attribution.generationPublicId,
         traceId: attribution.traceId,
         actorId: attribution.actorId,
         sessionId: attribution.sessionId,

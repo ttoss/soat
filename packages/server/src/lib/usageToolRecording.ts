@@ -94,6 +94,7 @@ type ResolvedAttribution = {
   toolId: number | null;
   agentId: number | null;
   generationId: number | null;
+  generationPublicId: string | null;
   orchestrationRunId: number | null;
   nodeId: string | null;
   traceId: number | null;
@@ -141,6 +142,7 @@ const resolveAttribution = async (
       toolId,
       agentId: generation.agentId,
       generationId: generation.id,
+      generationPublicId: generation.publicId,
       orchestrationRunId: await internalId({
         model: 'OrchestrationRun',
         projectId,
@@ -164,6 +166,7 @@ const resolveAttribution = async (
       publicId: attribution.agentId,
     }),
     generationId: null,
+    generationPublicId: null,
     orchestrationRunId: await internalId({
       model: 'OrchestrationRun',
       projectId,

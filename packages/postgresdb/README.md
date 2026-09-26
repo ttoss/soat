@@ -74,6 +74,7 @@ The flow they follow is
 | `2026-09-24-api-key-sha256` | `api_keys.key_hash_sha256`, unique, the SHA-256 a key is verified by; `api_keys.key_hash` nullable |
 | `2026-09-24-foreign-key-nullability` | `agents.ai_provider_id`, `chats.ai_provider_id`, `api_keys.project_id` and `conversation_messages.actor_id` nullable, as their models declare |
 | `2026-09-24-orchestration-output-mapping` | `orchestrations.output_mapping`, the declared shape of a run's `output` |
+| `2026-09-25-usage-event-generation-public-id` | `usage_events.generation_public_id`, the durable generation id `totals.distinct.generations` counts, backfilled from the generation or from a standalone generation's idempotency key |
 
 Run them from the server package, which owns the entrypoint:
 

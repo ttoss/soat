@@ -231,6 +231,7 @@ describe('guardrail tool-call rate context', () => {
         toolId: refundId,
         agentId,
         generationId: generation!.id,
+        generationPublicId,
         outcome: 'ok',
         guardrailIds: [id],
       });

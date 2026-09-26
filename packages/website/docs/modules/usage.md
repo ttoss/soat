@@ -331,6 +331,7 @@ Nulls are not counted: a generation-less completion (`chat`, `memory_extraction`
 
 - **Opt-in because it costs**: each key sorts the window once more. Count entities with one request at `limit=1&include=distinct`; page for spend with no `include`.
 - **On `totals` only**; groups never carry `distinct` (a `COUNT(DISTINCT)` per bucket).
+- **`generations` survives deletion**: it counts the generation id each event keeps as a string, so force-deleting an agent (which deletes its generations and nulls the events' `generation_id`) leaves it unchanged. The other keys count the attribution column itself and drop an entity once it is deleted.
 - **Figures describe one window and do not add**: adjacent windows' `distinct.sessions` overlap where a session spans the boundary, and a run straddling midnight is in two `day` windows. A wider figure is a wider query.
 
 Any `include` value other than `distinct` is a `400`.

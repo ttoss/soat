@@ -307,9 +307,13 @@ const runQuery = async (args: {
  * traffic. A list chosen by hand is one a test cannot pin against the model,
  * and a new attribution column later is one key here rather than a new named
  * field. Every column is indexed (`UsageEvent`).
+ *
+ * `generations` counts the durable public id rather than its FK: deleting a
+ * generation nulls `generation_id`, and a count that billing reads must not
+ * drop when the metered resource is deleted.
  */
 export const DISTINCT_COUNT_COLUMNS = {
-  generations: 'generation_id',
+  generations: 'generation_public_id',
   traces: 'trace_id',
   orchestration_runs: 'orchestration_run_id',
   agents: 'agent_id',

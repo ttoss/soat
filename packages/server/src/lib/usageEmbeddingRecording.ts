@@ -93,6 +93,7 @@ export const recordEmbeddingUsage = async (args: {
         nodeId: null,
         agentId: null,
         generationId: null,
+        generationPublicId: null,
         traceId: null,
         // An embedding call is dispatched by ingestion, retrieval or the
         // embeddings endpoint — none of which runs as an end user.
