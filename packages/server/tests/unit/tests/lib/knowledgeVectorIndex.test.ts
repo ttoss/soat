@@ -237,7 +237,7 @@ describe('semantic search under an ANN index', () => {
   test('document search returns the project’s own chunk behind a crowded index', async () => {
     const results = await resolveDocumentSearch({
       projectIds: [scopedProjectId],
-      billingProjectId: null,
+      embeddingBilling: null,
       config: { search: 'retrieval corpus', limit: 10 },
     });
 
@@ -268,7 +268,7 @@ describe('semantic search under an ANN index', () => {
   test('memoryStore search returns the scoped memoryStore’s own entry behind a crowded index', async () => {
     const results = await resolveMemoryStoreSearch({
       projectIds: [scopedProjectId],
-      billingProjectId: null,
+      embeddingBilling: null,
       config: {
         memoryStoreIds: [scopedMemoryStoreId],
         search: 'scoped fact',

@@ -78,19 +78,39 @@ const isEmbeddingProvider = (value: string): value is EmbeddingProvider => {
 };
 
 /**
- * The project an embedding call is billed to. `null` where the call belongs to
- * no single project — an unscoped `POST /embeddings`, or a knowledge search
- * whose scope spans several projects — in which case nothing is metered because
- * a usage event has no project to attribute.
+ * Who an embedding call is billed to. `null` where the call belongs to no
+ * single project — an unscoped `POST /embeddings`, or a knowledge search whose
+ * scope spans several projects — in which case nothing is metered because a
+ * usage event has no project to attribute.
  *
- * Required rather than optional at every call site, so a new caller has to say
- * which it is instead of defaulting into unmetered spend.
+ * `generationId` is the public id of the generation the embedding is made for —
+ * the retrieval ahead of an agent's turn — and `null` for work no generation
+ * runs.
+ *
+ * Required rather than optional at every call site, and both fields with it, so
+ * a new caller has to say which it is instead of defaulting into unmetered or
+ * unattributed spend.
  */
-export type EmbeddingBillingProjectId = number | null;
+export type EmbeddingBilling = {
+  projectId: number;
+  generationId: string | null;
+} | null;
+
+/**
+ * The billing of work no generation runs — ingestion, memory writes, the
+ * embeddings endpoint, a standalone search — or none when there is no project.
+ */
+export const projectEmbeddingBilling = (args: {
+  projectId: number | null;
+}): EmbeddingBilling => {
+  return args.projectId === null
+    ? null
+    : { projectId: args.projectId, generationId: null };
+};
 
 export const getEmbeddings = async (args: {
   texts: string[];
-  projectId: EmbeddingBillingProjectId;
+  billing: EmbeddingBilling;
 }): Promise<number[][]> => {
   const provider = process.env.EMBEDDING_PROVIDER;
   const model = process.env.EMBEDDING_MODEL;
@@ -113,11 +133,11 @@ export const getEmbeddings = async (args: {
   }
 
   log(
-    'getEmbeddings: provider=%s model=%s count=%d projectId=%s',
+    'getEmbeddings: provider=%s model=%s count=%d billing=%o',
     provider,
     model,
     args.texts.length,
-    args.projectId
+    args.billing
   );
 
   const { embeddings, usage } = await embedMany({
@@ -128,9 +148,10 @@ export const getEmbeddings = async (args: {
   // Awaited, not fire-and-forget: most callers swallow an embedding failure and
   // continue, so an unawaited write could still be in flight when the request
   // that owns it has already answered.
-  if (args.projectId !== null) {
+  if (args.billing !== null) {
     await recordEmbeddingUsage({
-      projectId: args.projectId,
+      projectId: args.billing.projectId,
+      generationId: args.billing.generationId,
       provider,
       model,
       tokens: usage.tokens,
@@ -142,11 +163,11 @@ export const getEmbeddings = async (args: {
 
 export const getEmbedding = async (args: {
   text: string;
-  projectId: EmbeddingBillingProjectId;
+  billing: EmbeddingBilling;
 }): Promise<number[]> => {
   const [embedding] = await getEmbeddings({
     texts: [args.text],
-    projectId: args.projectId,
+    billing: args.billing,
   });
   return embedding;
 };

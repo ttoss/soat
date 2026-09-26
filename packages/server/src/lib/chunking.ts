@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { getEmbedding } from './embedding';
+import { getEmbedding, projectEmbeddingBilling } from './embedding';
 
 const log = createDebug('soat:chunking');
 
@@ -129,7 +129,7 @@ const embedChunk = async (args: {
   try {
     return await getEmbedding({
       text: args.chunk.content,
-      projectId: args.projectId,
+      billing: projectEmbeddingBilling({ projectId: args.projectId }),
     });
   } catch {
     // embedding is optional — continue without it

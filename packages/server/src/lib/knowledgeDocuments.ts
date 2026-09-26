@@ -2,7 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { mapDocument } from './documentMapper';
-import type { EmbeddingBillingProjectId } from './embedding';
+import type { EmbeddingBilling } from './embedding';
 import { buildFileInclude } from './knowledgeDocumentScope';
 import { distanceExpression, embedQueryOrDegrade } from './knowledgeEmbedding';
 import {
@@ -513,7 +513,7 @@ export const resolveDocumentSearchLists = async (args: {
  */
 export const resolveDocumentSearch = async (args: {
   projectIds?: number[];
-  billingProjectId: EmbeddingBillingProjectId;
+  embeddingBilling: EmbeddingBilling;
   config: DocumentQueryConfig;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
@@ -523,7 +523,7 @@ export const resolveDocumentSearch = async (args: {
     embedding: args.config.search
       ? await embedQueryOrDegrade({
           text: args.config.search,
-          projectId: args.billingProjectId,
+          billing: args.embeddingBilling,
         })
       : undefined,
   });

@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import type { EmbeddingBillingProjectId } from './embedding';
+import type { EmbeddingBilling } from './embedding';
 import { getEmbedding } from './embedding';
 
 const log = createDebug('soat:knowledge');
@@ -26,10 +26,10 @@ const log = createDebug('soat:knowledge');
  */
 export const embedQueryOrDegrade = async (args: {
   text: string;
-  projectId: EmbeddingBillingProjectId;
+  billing: EmbeddingBilling;
 }): Promise<number[] | undefined> => {
   try {
-    return await getEmbedding({ text: args.text, projectId: args.projectId });
+    return await getEmbedding({ text: args.text, billing: args.billing });
   } catch (error) {
     if (error instanceof DomainError) throw error;
     log(

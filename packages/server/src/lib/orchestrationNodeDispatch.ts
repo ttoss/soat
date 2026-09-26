@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { projectEmbeddingBilling } from './embedding';
 import { executeApprovalNode } from './orchestrationApprovalNode';
 import { executeEmitEventNode } from './orchestrationEmitEventNode';
 import {
@@ -190,7 +191,9 @@ const dispatchNodeExecution = async (
         node: nodeDefn,
         state,
         projectIds,
-        billingProjectId: projectId ?? null,
+        embeddingBilling: projectEmbeddingBilling({
+          projectId: projectId ?? null,
+        }),
       });
     default:
       throw new DomainError(

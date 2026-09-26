@@ -1,10 +1,13 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 // Every embedding the server makes reaches the provider through one function, so
 // these assertions drive the entry points that reach it and read the meter back:
 // the stateless endpoint, document ingestion, a memory store write, and a knowledge
-// search. The stub embedding provider reports one token per word, and
+// search, and an agent's knowledge retrieval. The stub embedding provider reports one token per word, and
 // the rate comes from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` rather than the price
 // book.
 
@@ -14,6 +17,8 @@ type MeterRow = {
   provider: string;
   model: string;
   generation_id: string | null;
+  agent_id: string | null;
+  trace_id: string | null;
   ai_provider_id: string | null;
   cost_usd: number | null;
   components: Array<{
@@ -73,6 +78,8 @@ describe('Usage — embedding metering', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'usageembeddings',
       policyActions: [
+        'agents:CreateAgent',
+        'agents:CreateAgentGeneration',
         'documents:CreateDocument',
         'embeddings:CreateEmbeddings',
         'knowledge:SearchKnowledge',
@@ -228,5 +235,92 @@ describe('Usage — embedding metering', () => {
     const rows = await waitForMeters(before.length + 1);
     expect(rows[0].source).toBe('embedding');
     expect(quantityOf(rows[0], 'input_tokens')).toBe(2);
+  });
+
+  describe("an agent's knowledge retrieval", () => {
+    let chatServer: Server;
+    let agentId: string;
+
+    // Stands in for the model, so the turn completes and the retrieval that
+    // precedes it is the only embedding the generation makes.
+    const startChatServer = async (): Promise<string> => {
+      chatServer = createServer((_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            id: 'chatcmpl-stub',
+            object: 'chat.completion',
+            created: 0,
+            model: 'stub-model',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'answer' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          })
+        );
+      });
+      await new Promise<void>((resolve) => {
+        chatServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = chatServer.address() as AddressInfo;
+      return `http://127.0.0.1:${port}`;
+    };
+
+    beforeAll(async () => {
+      const baseUrl = await startChatServer();
+
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'usage-embeddings-chat',
+          provider: 'ollama',
+          default_model: 'stub-model',
+          base_url: baseUrl,
+        });
+      expect(providerRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: providerRes.body.id,
+          name: 'usage-embeddings-agent',
+          knowledge_config: { document_paths: ['/'], min_score: 0 },
+        });
+      expect(agentRes.status).toBe(201);
+      agentId = agentRes.body.id;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        chatServer.close(() => {
+          return resolve();
+        });
+      });
+    });
+
+    test('the query embedding is attributed to the generation it was retrieved for', async () => {
+      const before = await readEmbeddingMeters();
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'gamma delta epsilon' }] });
+      expect(genRes.status).toBe(200);
+
+      const rows = await waitForMeters(before.length + 1);
+      expect(rows).toHaveLength(before.length + 1);
+      expect(rows[0].source).toBe('embedding');
+      expect(quantityOf(rows[0], 'input_tokens')).toBe(3);
+      expect(rows[0].generation_id).toBe(genRes.body.id);
+      expect(rows[0].agent_id).toBe(agentId);
+      expect(rows[0].trace_id).toBe(genRes.body.trace_id);
+      // The deployment's embedding stack, not the agent's provider.
+      expect(rows[0].ai_provider_id).toBeNull();
+    });
   });
 });

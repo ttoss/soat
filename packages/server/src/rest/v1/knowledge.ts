@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { projectEmbeddingBilling } from 'src/lib/embedding';
 import type { KnowledgePolicyWhere } from 'src/lib/knowledge';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
@@ -151,7 +152,9 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     // A search scoped to exactly one project bills its query embedding there.
     // An unscoped search (a JWT admin, or a user with several projects in
     // scope) names no single project to charge, so it is not metered.
-    billingProjectId: projectIds?.length === 1 ? projectIds[0] : null,
+    embeddingBilling: projectEmbeddingBilling({
+      projectId: projectIds?.length === 1 ? projectIds[0] : null,
+    }),
     policyWhere,
     query: body.query,
     minSimilarity: body.min_similarity,

@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { getEmbedding } from './embedding';
+import { getEmbedding, projectEmbeddingBilling } from './embedding';
 
 const log = createDebug('soat:conversations');
 
@@ -91,7 +91,7 @@ export const embedConversationBacklog = async (args: {
     try {
       const embedding = await getEmbedding({
         text: chunk.content,
-        projectId: args.projectId,
+        billing: projectEmbeddingBilling({ projectId: args.projectId }),
       });
       await chunk.update({ embedding });
       embedded += 1;

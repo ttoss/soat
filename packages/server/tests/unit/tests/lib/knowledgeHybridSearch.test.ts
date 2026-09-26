@@ -156,7 +156,7 @@ describe('hybrid knowledge search', () => {
     test('returns a document chunk containing the exact token', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: RARE_TOKEN,
         minSimilarity: 0.5,
       });
@@ -176,7 +176,7 @@ describe('hybrid knowledge search', () => {
     test('returns a memory containing the exact token', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: RARE_TOKEN,
         memoryStoreIds: [fixtures.memoryStoreId],
         includeDocuments: false,
@@ -196,7 +196,7 @@ describe('hybrid knowledge search', () => {
     test('the similarity floor still removes a vector-only candidate', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: RARE_TOKEN,
         minSimilarity: 0.999,
       });
@@ -214,7 +214,7 @@ describe('hybrid knowledge search', () => {
   test('fuses four lists when both signals and both sources apply', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: RARE_TOKEN,
       memoryStoreIds: [fixtures.memoryStoreId],
     });
@@ -246,7 +246,7 @@ describe('hybrid knowledge search', () => {
   test('a result both signals rank outranks one only a single signal ranks', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: OTHER_TOKEN,
     });
 
@@ -261,7 +261,7 @@ describe('hybrid knowledge search', () => {
   test('populates similarity_score on a lexical-only hit', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: RARE_TOKEN,
       memoryStoreIds: [fixtures.memoryStoreId],
     });
@@ -276,7 +276,7 @@ describe('hybrid knowledge search', () => {
   test('score is the fused value, not the cosine', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: RARE_TOKEN,
     });
 
@@ -289,13 +289,13 @@ describe('hybrid knowledge search', () => {
   test('rrf_k changes the fused magnitudes without changing the contract', async () => {
     const tight = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: RARE_TOKEN,
       rrfK: 1,
     });
     const loose = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: RARE_TOKEN,
       rrfK: 60,
     });
@@ -308,7 +308,7 @@ describe('hybrid knowledge search', () => {
 
     await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: RARE_TOKEN,
       memoryStoreIds: [fixtures.memoryStoreId],
     });
@@ -330,7 +330,7 @@ describe('hybrid knowledge search', () => {
     test('reports both channels for a result both of them ranked', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: OTHER_TOKEN,
       });
 
@@ -353,7 +353,7 @@ describe('hybrid knowledge search', () => {
     test('omits the channel that did not rank a result', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: OTHER_TOKEN,
       });
 
@@ -374,7 +374,7 @@ describe('hybrid knowledge search', () => {
     test('ranks within a channel, not within the fused order', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: RARE_TOKEN,
         memoryStoreIds: [fixtures.memoryStoreId],
       });
@@ -417,7 +417,7 @@ describe('hybrid knowledge search', () => {
     test('is absent from a search that carries no query', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         documentIds: [fixtures.lexicalOnlyDocumentId],
       });
 
@@ -448,7 +448,7 @@ describe('hybrid knowledge search', () => {
 
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: RARE_TOKEN,
       });
 
@@ -483,7 +483,10 @@ describe('hybrid knowledge search', () => {
       await expect(
         searchKnowledge({
           projectIds: [fixtures.projectId],
-          billingProjectId: fixtures.projectId,
+          embeddingBilling: {
+            projectId: fixtures.projectId,
+            generationId: null,
+          },
           query: RARE_TOKEN,
         })
       ).rejects.toThrow(DomainError);
@@ -494,7 +497,7 @@ describe('hybrid knowledge search', () => {
 
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
-        billingProjectId: fixtures.projectId,
+        embeddingBilling: { projectId: fixtures.projectId, generationId: null },
         query: RARE_TOKEN,
       });
 
@@ -515,7 +518,7 @@ describe('hybrid knowledge search', () => {
   test('a search without a query keeps its deterministic order', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       documentIds: [fixtures.lexicalOnlyDocumentId],
     });
 
@@ -630,7 +633,7 @@ describe('ranking does not allocate result slots by store', () => {
 
     const results = await searchKnowledge({
       projectIds: [projectId],
-      billingProjectId: projectId,
+      embeddingBilling: { projectId, generationId: null },
       query: QUERY,
       memoryStoreIds: [memoryStoreId],
       limit: 10,

@@ -59,7 +59,10 @@ const runGoldenQueries = async (args: {
   for (const query of args.golden.queries) {
     const results = await searchKnowledge({
       projectIds: [args.corpus.projectId],
-      billingProjectId: args.corpus.projectId,
+      embeddingBilling: {
+        projectId: args.corpus.projectId,
+        generationId: null,
+      },
       query: query.query,
       tags: CORPUS_TAGS,
       limit: RESULT_LIMIT,

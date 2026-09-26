@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { getEmbeddings } from './embedding';
+import { getEmbeddings, projectEmbeddingBilling } from './embedding';
 
 const log = createDebug('soat:embeddings');
 
@@ -40,8 +40,10 @@ export const createEmbeddings = async (args: {
 
   const embeddings = await getEmbeddings({
     texts: args.inputs,
-    projectId: await resolveBillingProjectId({
-      projectPublicId: args.projectPublicId,
+    billing: projectEmbeddingBilling({
+      projectId: await resolveBillingProjectId({
+        projectPublicId: args.projectPublicId,
+      }),
     }),
   });
 

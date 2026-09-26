@@ -1,7 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
-import type { EmbeddingBillingProjectId } from './embedding';
+import type { EmbeddingBilling } from './embedding';
 import { distanceExpression, embedQueryOrDegrade } from './knowledgeEmbedding';
 import {
   lexicalMatchWhere,
@@ -497,7 +497,7 @@ export const resolveMemoryStoreSearchLists = async (args: {
  */
 export const resolveMemoryStoreSearch = async (args: {
   projectIds?: number[];
-  billingProjectId: EmbeddingBillingProjectId;
+  embeddingBilling: EmbeddingBilling;
   config: MemoryStoreQueryConfig;
   policyWhere?: MemoryStorePolicyWhere;
 }): Promise<MemoryKnowledgeResult[]> => {
@@ -506,7 +506,7 @@ export const resolveMemoryStoreSearch = async (args: {
     embedding: args.config.search
       ? await embedQueryOrDegrade({
           text: args.config.search,
-          projectId: args.billingProjectId,
+          billing: args.embeddingBilling,
         })
       : undefined,
   });

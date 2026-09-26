@@ -5,6 +5,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { sumComponentCostUsd } from './priceCompute';
+import { readGenerationEventAttribution } from './usageGenerationAttribution';
 import { evaluateProjectThresholds } from './usageThresholds';
 import type { PricedComponent } from './usageTokenEvent';
 import {
@@ -26,11 +27,8 @@ type GenerationWithAgent = InstanceType<(typeof db)['Generation']> & {
 type Attribution = {
   aiProviderId: number | null;
   provider: string;
-  actionId: string | null;
-  triggerId: string | null;
   // Public id of the orchestration run that dispatched the generation, and the
-  // node within it. `runPublicId` is resolved to the internal FK at persist
-  // time. Null for standalone generations.
+  // node within it — what keys a node's event. Null for standalone generations.
   runPublicId: string | null;
   nodeId: string | null;
   // The node's 1-based retry attempt, part of the idempotency key so two
@@ -66,8 +64,8 @@ const resolveBillingProvider = async (args: {
   return pinned ? { id: pinned.id, provider: pinned.provider } : null;
 };
 
-// Read off typed generation columns, so a caller cannot bill another action,
-// trigger or run.
+// Read off typed generation columns, so a caller cannot bill another provider
+// or key the event to another run.
 const resolveEventAttribution = (args: {
   generation: GenerationWithAgent;
   aiProvider: { id: number; provider: string } | null;
@@ -76,25 +74,10 @@ const resolveEventAttribution = (args: {
   return {
     aiProviderId: aiProvider?.id ?? null,
     provider: aiProvider?.provider ?? 'unknown',
-    actionId: generation.actionId,
-    triggerId: generation.triggerId,
     runPublicId: generation.orchestrationRunId,
     nodeId: generation.nodeId,
     nodeAttempt: generation.nodeAttempt,
   };
-};
-
-// Resolves the run's public id to its internal FK. Returns null when absent or
-// the run no longer exists — the event is still recorded, just without the run
-// association.
-const resolveOrchestrationRunId = async (
-  runPublicId: string | null
-): Promise<number | null> => {
-  if (!runPublicId) return null;
-  const run = await db.OrchestrationRun.findOne({
-    where: { publicId: runPublicId },
-  });
-  return (run?.id as number | undefined) ?? null;
 };
 
 // Scoped to the node execution *attempt*, so a replayed node upserts into a
@@ -193,9 +176,6 @@ const writeGenerationEvent = async (args: {
     projectId: generation.projectId,
   });
 
-  const orchestrationRunId = await resolveOrchestrationRunId(
-    attribution.runPublicId
-  );
   const idempotencyKey = buildIdempotencyKey({
     generationPublicId: generation.publicId,
     runPublicId: attribution.runPublicId,
@@ -206,19 +186,9 @@ const writeGenerationEvent = async (args: {
 
   const created = await persistTokenEvent({
     attribution: {
+      ...(await readGenerationEventAttribution(generation)),
       projectId: generation.projectId,
-      orchestrationRunId,
-      nodeId: attribution.nodeId,
-      agentId: generation.agentId,
-      generationId: generation.id,
-      generationPublicId: generation.publicId,
-      traceId: generation.traceId,
-      // End-user attribution, copied from the generation's own FK columns.
-      actorId: generation.startedByActorId,
-      sessionId: generation.sessionId,
       aiProviderId: attribution.aiProviderId,
-      triggerId: attribution.triggerId,
-      actionId: attribution.actionId,
       // `eval` for an eval run's item generations, null for production traffic.
       // Copied off the generation's own column, so a caller cannot bill eval
       // spend as production or vice versa.

@@ -3,7 +3,7 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { emitActivityEntry } from './activity';
 import { createGeneration } from './agentGeneration';
-import type { EmbeddingBillingProjectId } from './embedding';
+import type { EmbeddingBilling } from './embedding';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { parseDuration } from './orchestrationDuration';
@@ -307,14 +307,14 @@ export const executeKnowledgeNode = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   /** The run's own project — what the query embedding is billed to. */
-  billingProjectId: EmbeddingBillingProjectId;
+  embeddingBilling: EmbeddingBilling;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds } = args;
   const inputs = applyInputMapping(node.inputMapping, state);
 
   const results = await searchKnowledge({
     projectIds,
-    billingProjectId: args.billingProjectId,
+    embeddingBilling: args.embeddingBilling,
     query: typeof inputs['query'] === 'string' ? inputs['query'] : undefined,
     memoryStoreIds: Array.isArray(inputs['memoryStoreIds'])
       ? (inputs['memoryStoreIds'] as string[])
