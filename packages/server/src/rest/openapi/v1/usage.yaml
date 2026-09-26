@@ -1035,7 +1035,8 @@ components:
           description: >
             The measured dimension: `input_tokens`, `cached_tokens`,
             `cache_write_tokens`, `output_tokens`, `reasoning_tokens`,
-            `compute_second`, `request`, `gb_day`, `chunk_count`, …
+            `compute_second`, `request`, `gb_day`, `chunk_count`,
+            `record_gb_day`, …
         unit:
           type: string
           description: >

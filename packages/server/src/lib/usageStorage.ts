@@ -4,6 +4,10 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { getEffectivePrice } from './priceBook';
 import { computeComponentCostUsd, sumComponentCostUsd } from './priceCompute';
+import {
+  projectRecordFootprint,
+  type RecordFootprint,
+} from './usageRecordFootprint';
 import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
@@ -21,6 +25,7 @@ const STORAGE_PROVIDER = 'soat';
 const STORAGE_MODEL = 'gb-day';
 const GB_DAY_COMPONENT = 'gb_day';
 const CHUNK_COUNT_COMPONENT = 'chunk_count';
+const RECORD_GB_DAY_COMPONENT = 'record_gb_day';
 const COUNT_UNIT = 'count';
 const BYTES_PER_GB = 1_000_000_000;
 
@@ -256,17 +261,25 @@ type PricedStorageComponent = StorageComponent & {
  * a day left out would read as a day nobody measured rather than a day the
  * project stored nothing.
  */
-const storageComponents = (footprint: StoredFootprint): StorageComponent[] => {
+const storageComponents = (args: {
+  footprint: StoredFootprint;
+  records: RecordFootprint;
+}): StorageComponent[] => {
   return [
     {
       component: GB_DAY_COMPONENT,
       unit: GB_DAY_COMPONENT,
-      quantity: footprint.bytes.total / BYTES_PER_GB,
+      quantity: args.footprint.bytes.total / BYTES_PER_GB,
     },
     {
       component: CHUNK_COUNT_COMPONENT,
       unit: COUNT_UNIT,
-      quantity: footprint.counts.total,
+      quantity: args.footprint.counts.total,
+    },
+    {
+      component: RECORD_GB_DAY_COMPONENT,
+      unit: GB_DAY_COMPONENT,
+      quantity: args.records.total / BYTES_PER_GB,
     },
   ];
 };
@@ -357,8 +370,9 @@ const persistStorageEvent = async (args: {
 
 /**
  * Writes one `storage` usage event for a project's current footprint, sampled
- * for `now`'s UTC day: a `gb_day` component whose quantity is bytes ÷ 1e9, and a
- * `chunk_count` component whose quantity is the indexed rows behind them. Each
+ * for `now`'s UTC day: a `gb_day` component whose quantity is bytes ÷ 1e9, a
+ * `chunk_count` component whose quantity is the indexed rows behind them, and a
+ * `record_gb_day` component for the records of work beside them. Each
  * is priced at write time from its own `soat`/`gb-day` price-book row when one
  * is effective (`cost_usd = null` otherwise), and the event's cost is their sum.
  * Idempotent on `storage:{project}:{YYYY-MM-DD}` — a re-run for the same day is
@@ -371,11 +385,14 @@ export const snapshotProjectStorage = async (args: {
   now?: Date;
 }): Promise<boolean> => {
   const now = args.now ?? new Date();
-  const footprint = await projectStoredFootprint(args.projectId);
+  const [footprint, records] = await Promise.all([
+    projectStoredFootprint(args.projectId),
+    projectRecordFootprint({ projectId: args.projectId }),
+  ]);
 
   const components = await priceStorageComponents({
     projectId: args.projectId,
-    components: storageComponents(footprint),
+    components: storageComponents({ footprint, records }),
     at: now,
   });
   const costUsd = sumComponentCostUsd(
@@ -392,7 +409,7 @@ export const snapshotProjectStorage = async (args: {
     costUsd,
   });
   log(
-    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d rows=%d chunkRows=%d memoryRows=%d created=%s costUsd=%s',
+    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d rows=%d chunkRows=%d memoryRows=%d recordBytes=%d generations=%d traces=%d usageEvents=%d auditEntries=%d activityEntries=%d created=%s costUsd=%s',
     args.projectPublicId,
     footprint.bytes.total,
     footprint.bytes.files,
@@ -403,6 +420,12 @@ export const snapshotProjectStorage = async (args: {
     footprint.counts.total,
     footprint.counts.documentChunks,
     footprint.counts.memories,
+    records.total,
+    records.generations,
+    records.traces,
+    records.usageEvents,
+    records.auditEntries,
+    records.activityEntries,
     created,
     costUsd
   );
