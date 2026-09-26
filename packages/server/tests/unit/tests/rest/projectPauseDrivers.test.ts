@@ -1,5 +1,8 @@
+import { createServer } from 'node:http';
+
 import { db } from 'src/db';
 import { drainEvalQueueOnce } from 'src/lib/evaluationWorker';
+import * as orchestrationRunActions from 'src/lib/orchestrationRunActions';
 import { flushProjectResumes } from 'src/lib/projectPauseActions';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import { fireDueTriggers } from 'src/lib/triggerScheduler';
@@ -167,6 +170,115 @@ describe('Project pause — work in motion', () => {
       const run = await getRun(runId);
       expect(run.status).toBe('awaiting_input');
       expect(run.pause_reason).toBe('operator hold');
+    });
+
+    // Spied solely to drive the per-row `.catch()`: one run that cannot be
+    // paused must not leave the others running.
+    test('a run the sweep cannot pause does not stop the others', async () => {
+      const failing = await startSleepingRun();
+      const other = await startSleepingRun();
+      const original = orchestrationRunActions.pauseOrchestrationRun;
+      const spy = jest
+        .spyOn(orchestrationRunActions, 'pauseOrchestrationRun')
+        .mockImplementation((args) => {
+          return args.runPublicId === failing
+            ? Promise.reject(new Error('settled meanwhile'))
+            : original(args);
+        });
+
+      try {
+        await pauseProject();
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect((await getRun(failing)).status).toBe('sleeping');
+      expect((await getRun(other)).status).toBe('awaiting_input');
+    });
+
+    // Spied solely to drive the background resume's `.catch()`.
+    test('a run the resume cannot hand back keeps its own resume', async () => {
+      const runId = await startSleepingRun();
+      await pauseProject();
+      const original = orchestrationRunActions.resumeOrchestrationRun;
+      const spy = jest
+        .spyOn(orchestrationRunActions, 'resumeOrchestrationRun')
+        .mockImplementation((args) => {
+          return args.runPublicId === runId
+            ? Promise.reject(new Error('upstream gone'))
+            : original(args);
+        });
+
+      try {
+        await resumeProject();
+      } finally {
+        spy.mockRestore();
+      }
+      expect((await getRun(runId)).status).toBe('awaiting_input');
+
+      const own = await asAdmin().post(
+        `/api/v1/orchestration-runs/${runId}/resume`
+      );
+      expect(own.status).toBe(200);
+      expect(own.body.status).toBe('sleeping');
+    });
+
+    // A tool node answered by a local server is the one deterministic way to
+    // be inside a round: the pause and the resume both land mid-node.
+    test('a run resumed before its checkpoint keeps driving', async () => {
+      let runId: string | null = null;
+      const server = createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          void (async () => {
+            if (runId) {
+              await pauseProject();
+              expect((await getRun(runId)).pause_requested_at).not.toBeNull();
+              await resumeProject();
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          })();
+        });
+      });
+      await new Promise<void>((resolve) => {
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const address = server.address();
+      const port =
+        address && typeof address === 'object' ? address.port : undefined;
+
+      try {
+        const tool = await asAdmin()
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'midRoundTool',
+            type: 'http',
+            parameters: { type: 'object', properties: {} },
+            execute: { url: `http://127.0.0.1:${port}/do`, method: 'POST' },
+          });
+        const orch = await asAdmin()
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: 'Mid Round',
+            nodes: [
+              { id: 'call', type: 'tool', tool_id: tool.body.id },
+              { id: 'after', type: 'transform', expression: 'done' },
+            ],
+            edges: [{ from: 'call', to: 'after' }],
+          });
+        const started = await asAdmin()
+          .post('/api/v1/orchestration-runs')
+          .send({ orchestration_id: orch.body.id, input: {} });
+        runId = started.body.id as string;
+
+        const settled = await pollRun({ runId, status: 'succeeded' });
+        expect(settled.pause_requested_at).toBeNull();
+      } finally {
+        server.close();
+      }
     });
 
     test('a run the sweep missed is flagged at its checkpoint', async () => {

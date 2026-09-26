@@ -26,15 +26,24 @@ const log = createDebug('soat:projects');
 type MappedProject = ReturnType<typeof mapProject>;
 
 /**
- * A settled run or a closed task is one the sweep raced: it finished between
- * the listing and the pause. There is nothing left to stop, so it is skipped.
+ * Runs `step` for every row, logging the ones that fail rather than stopping.
+ *
+ * On a pause, a row that fails — typically one that settled between the
+ * listing and its own pause — must not leave the rest running; a straggler is
+ * caught by the drivers' own adoption of the project's pause. On a resume the
+ * project is already running, and a row that cannot be handed back keeps its
+ * own `resume`.
  */
-const isAlreadySettled = (error: unknown): boolean => {
-  return (
-    error instanceof DomainError &&
-    (error.code === 'ORCHESTRATION_RUN_NOT_PAUSABLE' ||
-      error.code === 'TASK_NOT_PAUSABLE')
-  );
+const forEachRow = async <T extends { publicId: string }>(args: {
+  rows: T[];
+  step: (row: T) => Promise<unknown>;
+  label: string;
+}): Promise<void> => {
+  for (const row of args.rows) {
+    await args.step(row).catch((error: unknown) => {
+      log('%s: %s failed %o', args.label, row.publicId, error);
+    });
+  }
 };
 
 const pauseLiveRuns = async (args: {
@@ -50,17 +59,17 @@ const pauseLiveRuns = async (args: {
     attributes: ['publicId'],
     order: [['id', 'ASC']],
   });
-  for (const run of runs) {
-    try {
-      await pauseOrchestrationRun({
+  await forEachRow({
+    rows: runs,
+    label: 'pauseProject',
+    step: (run) => {
+      return pauseOrchestrationRun({
         runPublicId: run.publicId,
         reason: args.reason,
         origin: 'project',
       });
-    } catch (error) {
-      if (!isAlreadySettled(error)) throw error;
-    }
-  }
+    },
+  });
 };
 
 const pauseOpenTasks = async (args: {
@@ -76,17 +85,17 @@ const pauseOpenTasks = async (args: {
     attributes: ['publicId'],
     order: [['id', 'ASC']],
   });
-  for (const task of tasks) {
-    try {
-      await pauseTask({
-        id: task.publicId as string,
+  await forEachRow({
+    rows: tasks,
+    label: 'pauseProject',
+    step: (task) => {
+      return pauseTask({
+        id: task.publicId,
         reason: args.reason,
         origin: 'project',
       });
-    } catch (error) {
-      if (!isAlreadySettled(error)) throw error;
-    }
-  }
+    },
+  });
 };
 
 const emitProjectEvent = (args: {
@@ -198,9 +207,11 @@ const reanchorSchedules = async (args: {
     },
   });
   for (const trigger of due) {
-    const cron = trigger.cron as string | null;
-    if (!cron) continue;
-    await trigger.update({ nextFireAt: computeNextFireAt(cron, now) });
+    // A schedule trigger always carries a cron; `triggerValidation` refuses one
+    // without.
+    await trigger.update({
+      nextFireAt: computeNextFireAt(trigger.cron as string, now),
+    });
   }
 };
 
@@ -239,25 +250,18 @@ export const resumeProject = async (args: {
     where: { projectId, pausedByProject: true },
     attributes: ['publicId'],
   });
-  // One task or run that cannot be handed back must not strand the rest: the
-  // project is already running, and each keeps its own `resume`.
-  for (const task of tasks) {
-    await resumeTask({
-      id: task.publicId as string,
-      principal: args.principal,
-    }).catch((error: unknown) => {
-      log('resumeProject: task=%s did not resume %o', task.publicId, error);
-    });
-  }
+  await forEachRow({
+    rows: tasks,
+    label: 'resumeProject',
+    step: (task) => {
+      return resumeTask({ id: task.publicId, principal: args.principal });
+    },
+  });
 
   const runs = await db.OrchestrationRun.findAll({
     where: { projectId, pausedByProject: true },
   });
-  for (const run of runs) {
-    await resumeRun(run).catch((error: unknown) => {
-      log('resumeProject: run=%s did not resume %o', run.publicId, error);
-    });
-  }
+  await forEachRow({ rows: runs, label: 'resumeProject', step: resumeRun });
 
   const mapped = mapProject(project);
   emitProjectEvent({ type: 'projects.resumed', projectId, project: mapped });

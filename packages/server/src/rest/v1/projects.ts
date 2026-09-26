@@ -222,7 +222,7 @@ projectsRouter.post('/projects/:project_id/pause', async (ctx: Context) => {
     ctx,
     action: 'projects:PauseProject',
   });
-  const body = (ctx.request.body ?? {}) as { reason?: unknown };
+  const body = ctx.request.body as { reason?: unknown };
 
   ctx.body = await pauseProject({ id: projectPublicId, reason: body.reason });
 });

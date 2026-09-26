@@ -274,6 +274,14 @@ describe('Project pause', () => {
 
     // No provider answers in the suite, so a generation that is admitted fails
     // at the provider instead — which is exactly what "not refused" looks like.
+    test('an unknown agent is still a 404', async () => {
+      const res = await asAdmin()
+        .post('/api/v1/agents/agt_doesnotexist0000/generate?wait=true')
+        .send({ messages: [{ role: 'user', content: 'hi' }] });
+
+      expect(res.status).toBe(404);
+    });
+
     test('another project is not refused', async () => {
       const res = await asAdmin()
         .post(`/api/v1/agents/${otherAgentId}/generate?wait=true`)
