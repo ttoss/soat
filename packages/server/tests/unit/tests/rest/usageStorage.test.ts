@@ -229,8 +229,8 @@ describe('Usage — storage metering', () => {
     expect(created).toBe(true);
 
     const event = (await storageMeters()).find((meter) => {
-      return meter.components.every((c) => {
-        return c.cost_usd != null;
+      return meter.components.some((c) => {
+        return c.component === 'chunk_count' && c.cost_usd != null;
       });
     });
     expect(event).toBeDefined();
@@ -242,7 +242,15 @@ describe('Usage — storage metering', () => {
     expect(Number(count!.quantity)).toBe(2);
     expect(Number(count!.cost_usd)).toBeCloseTo(0.5);
 
-    // The event's cost is both components, not one of them.
+    // No row prices run records here: the quantity is still recorded, and the
+    // priced components are not blocked by it.
+    const records = event!.components.find((c) => {
+      return c.component === 'record_gb_day';
+    });
+    expect(Number(records!.quantity)).toBeGreaterThan(0);
+    expect(records!.cost_usd).toBeNull();
+
+    // The event's cost is every priced component, not one of them.
     const componentSum = event!.components.reduce((total, c) => {
       return total + Number(c.cost_usd);
     }, 0);

@@ -2243,7 +2243,7 @@ describe('Usage', () => {
         res.body.totals.components.map((c: AggregateComponent) => {
           return c.component;
         })
-      ).toEqual(['chunk_count', 'gb_day']);
+      ).toEqual(['chunk_count', 'gb_day', 'record_gb_day']);
     });
 
     test('meter_type echoes null when unfiltered', async () => {

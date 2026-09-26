@@ -54,7 +54,7 @@ One priced dimension of an event: `quantity` is always in `unit`, and `cost_usd 
 
 | Field        | Type            | Description                                                                                   |
 | ------------ | --------------- | --------------------------------------------------------------------------------------------- |
-| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, `chunk_count`, … |
+| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, `chunk_count`, `record_gb_day`, … |
 | `quantity`   | number          | The measured amount, expressed in `unit`                                                      |
 | `unit`       | string          | Unit `quantity` is measured in (`token`, `compute_second`, `request`, `gb_day`, `count`)         |
 | `billable`   | boolean         | Whether the component contributes to cost. `reasoning_tokens` (a subset of `output_tokens`) is non-billable and excluded from cost and billable totals |
@@ -104,7 +104,7 @@ A per-project alert rule: when `metric` over `window` crosses `threshold`, a `us
 | `llm_tokens`     | One turn segment's token usage — a four-step turn is four LLM calls and one event, written when the turn ends. A turn that pauses on a [client tool](./agents.md) writes one event per segment, each when it pauses or ends | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens` |
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
-| `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |
+| `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`, `record_gb_day`          |
 | `tool_execution` | One outbound [tool](./tools.md) call                | `tool_call` (quantity `1`)                        |
 
 For platform meter types `(provider, model)` is a **SKU**: `provider` is `soat`, `model` the billable unit (`compute-second`, `gb-day`, `request`, `tool-call`).
@@ -154,7 +154,7 @@ Every outbound tool call writes one `tool_execution` event: one `tool_call` comp
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project per UTC day with two components measured in one statement: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them). No principal/agent/run attribution. Both are priced from the `soat`/`gb-day` SKU, each from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null.
+A daily snapshot writes one `storage` event per project per UTC day with three components: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them), measured in one statement, and [`record_gb_day`](#run-records) (gigabytes of run records). No principal/agent/run attribution. Each is priced from the `soat`/`gb-day` SKU from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null.
 
 `gb_day` sums seven terms:
 
@@ -175,6 +175,24 @@ A daily snapshot writes one `storage` event per project per UTC day with two com
 - **Embeddings dominate.** Four bytes per dimension: at `EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against ~1 KB of text. A row without an embedding contributes its text only. Vector widths are measured from the stored value, not computed from `EMBEDDING_DIMENSIONS`.
 - **Physical overhead is excluded from `gb_day`.** Index pages (including the HNSW graphs over both vector columns), TOAST chunk and tuple headers, and table bloat are not counted: none is attributable to one project and it moves with vacuum state. Real disk use is higher by a deployment-dependent factor.
 - **`chunk_count` is what that overhead is priced against.** Most of a chunk's cost is fixed per row: at `EMBEDDING_DIMENSIONS=1024` an HNSW element occupies a whole 8 KiB page (4 KB vector plus neighbour list) on top of the ~5.5 KB stored out of line. On a mirrored schema, a 25× change in chunk size moves a chunk's cost by 17%, while the same corpus re-chunked meters between 2.2× and 7.4× its source size on `gb_day`. A count does not drift with the caller's [`chunk_strategy`](./documents.md), and distinguishes a few large documents from a million tiny chunks, alike on `gb_day` and unlike on search.
+
+#### Run records
+
+`record_gb_day` is the gigabytes the runtime writes as work runs, beside what a caller stored:
+
+| Term | Source |
+| --- | --- |
+| Generations | every column of each [generation](./generations.md), including its recorded input messages |
+| Traces | every column of each [trace](./traces.md) row |
+| Usage events | every column of each usage event and its components, this meter's own included |
+| Audit entries | every column of each [audit entry](./audit-log.md) scoped to the project |
+| Activity entries | every column of each [activity](./activity.md) entry |
+
+- **Disjoint from `gb_day`.** Trace steps are stored as a file under `/.system/traces/`, which `gb_day` sums with the other files; the trace row is all `record_gb_day` adds. Summing the two never counts a byte twice.
+- **Not under the `storage_bytes` quota.** The [quota](./quotas.md#storage-enforcement) reads `gb_day` alone, so run history never refuses a corpus write.
+- **Stored width.** Each column is measured as PostgreSQL stored it, so a compressed transcript counts its compressed size. Physical overhead is excluded, as for `gb_day`.
+- **Shrinks with retention.** A [content purge](./traces.md#content-purge) or the [retention sweep](./traces.md#retention-policy) clears a trace's and its generations' content, and the next snapshot reads the skeleton that remains. Audit entries past the deployment's retention window are deleted.
+- **Unpriced by default.** No price row ships for it; the quantity is recorded with `cost_usd` null until a deployment adds one.
 
 ### API-request metering
 
