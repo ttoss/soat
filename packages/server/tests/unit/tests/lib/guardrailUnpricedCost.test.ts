@@ -8,6 +8,7 @@ import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { evaluateGuardrailDryRun } from 'src/lib/guardrailDryRun';
 import { createGuardrail } from 'src/lib/guardrails';
+import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 // A cost ceiling reads `SUM(cost_usd)`, which ignores nulls — so a window whose
 // AI usage was never priced summed to a number that understated real spend and
@@ -127,16 +128,20 @@ describe('guardrail cost ceiling over an unpriced window', () => {
     unpricedComponent?: boolean;
   }): Promise<void> => {
     seq += 1;
-    const event = await db.UsageEvent.create({
-      projectId: args.projectId,
-      orchestrationRunId: args.orchestrationRunId ?? null,
-      meterType: args.meterType ?? 'llm_tokens',
-      source: args.source ?? null,
-      provider: 'ollama',
-      model: 'stub-model',
-      costUsd: args.costUsd,
-      idempotencyKey: `unpriced-cost:${seq}`,
-    });
+    const event = await db.UsageEvent.create(
+      await withDurablePublicIds({
+        values: {
+          projectId: args.projectId,
+          orchestrationRunId: args.orchestrationRunId ?? null,
+          meterType: args.meterType ?? 'llm_tokens',
+          source: args.source ?? null,
+          provider: 'ollama',
+          model: 'stub-model',
+          costUsd: args.costUsd,
+          idempotencyKey: `unpriced-cost:${seq}`,
+        },
+      })
+    );
     if (!args.unpricedComponent) return;
     await db.UsageComponent.create({
       usageEventId: event.id,

@@ -21,6 +21,35 @@ import { Trace } from './Trace';
 import { UsageComponent } from './UsageComponent';
 
 /**
+ * Every attribution FK and the public id stored beside it. The FK is
+ * `SET NULL`, so deleting an entity never blocks on its history; the public id
+ * is a plain string the delete leaves in place, so a count over it does not
+ * drop when the entity goes.
+ */
+export const USAGE_EVENT_DURABLE_IDS = [
+  {
+    foreignKey: 'orchestrationRunId',
+    publicId: 'orchestrationRunPublicId',
+    table: 'orchestration_runs',
+  },
+  { foreignKey: 'agentId', publicId: 'agentPublicId', table: 'agents' },
+  {
+    foreignKey: 'generationId',
+    publicId: 'generationPublicId',
+    table: 'generations',
+  },
+  { foreignKey: 'actorId', publicId: 'actorPublicId', table: 'actors' },
+  { foreignKey: 'sessionId', publicId: 'sessionPublicId', table: 'sessions' },
+  { foreignKey: 'traceId', publicId: 'tracePublicId', table: 'traces' },
+  {
+    foreignKey: 'aiProviderId',
+    publicId: 'aiProviderPublicId',
+    table: 'ai_providers',
+  },
+  { foreignKey: 'toolId', publicId: 'toolPublicId', table: 'tools' },
+] as const;
+
+/**
  * Append-only, billing-grade record of a single metered occurrence — one
  * completed LLM call, one compute execution, one request batch, one storage
  * snapshot, one outbound tool call. Attribution and idempotency live here once; the metered quantities
@@ -81,11 +110,15 @@ import { UsageComponent } from './UsageComponent';
     },
   ],
   validate: {
-    // A generation-backed event without its durable id would be metered and
-    // never counted: `totals.distinct.generations` reads the public id.
-    generationPublicIdWithGeneration(this: UsageEvent) {
-      if (typeof this.generationId === 'number' && !this.generationPublicId) {
-        throw new Error('generationPublicId is required with generationId');
+    // An FK without its public id would be metered and never counted:
+    // `totals.distinct` reads the public ids.
+    durablePublicIds(this: UsageEvent) {
+      for (const pair of USAGE_EVENT_DURABLE_IDS) {
+        if (typeof this[pair.foreignKey] === 'number' && !this[pair.publicId]) {
+          throw new Error(
+            `${pair.publicId} is required with ${pair.foreignKey}`
+          );
+        }
       }
     },
   },
@@ -166,11 +199,32 @@ export class UsageEvent extends Model {
   )
   declare generation: Generation | null;
 
-  // Denormalized beside the FK, like `trigger_id`: force-deleting an agent
-  // destroys its generations and nulls `generation_id`, and a metered
-  // generation must stay counted for as long as its event exists.
+  // The public ids of `USAGE_EVENT_DURABLE_IDS`, denormalized beside their FKs
+  // like `trigger_id`: a metered entity stays counted for as long as its event
+  // exists, whatever is deleted.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare orchestrationRunPublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare agentPublicId: string | null;
+
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare generationPublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare actorPublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare sessionPublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare tracePublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare aiProviderPublicId: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare toolPublicId: string | null;
 
   // Copied from the generation at write time, the same freeze-at-write rule as
   // `cost_usd`. SET NULL on delete so removing an actor or session never blocks

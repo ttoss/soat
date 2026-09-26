@@ -9,6 +9,7 @@ import {
   computeComponentCostUsd,
   sumComponentCostUsd,
 } from './priceCompute';
+import { withDurablePublicIds } from './usageEventWrite';
 import {
   type GenerationEventAttribution,
   readGenerationEventAttribution,
@@ -180,9 +181,12 @@ const linkPendingEmbeddings = async (where: PendingEmbeddings) => {
   });
   /* istanbul ignore if -- the record committed just before this read */
   if (!generation) return;
-  await db.UsageEvent.update(await readGenerationEventAttribution(generation), {
-    where,
-  });
+  await db.UsageEvent.update(
+    await withDurablePublicIds({
+      values: await readGenerationEventAttribution(generation),
+    }),
+    { where }
+  );
 };
 
 /**

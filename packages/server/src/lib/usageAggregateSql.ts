@@ -300,27 +300,28 @@ const runQuery = async (args: {
 /**
  * The distinct-entity counters, keyed by the column each counts over.
  *
- * The set is the event model's foreign keys minus `project_id` (the filter
+ * One key per attribution FK on the event model minus `project_id` (the filter
  * fixes it), mechanically rather than by judgment — `trigger_id` and
  * `action_id` are denormalized strings, not FKs, so they are out, and
  * `trace_id` is in even though it tracks `generations` closely on today's
  * traffic. A list chosen by hand is one a test cannot pin against the model,
  * and a new attribution column later is one key here rather than a new named
- * field. Every column is indexed (`UsageEvent`).
+ * field.
  *
- * `generations` counts the durable public id rather than its FK: deleting a
- * generation nulls `generation_id`, and a count that billing reads must not
- * drop when the metered resource is deleted.
+ * Each key counts the public id stored beside its FK
+ * (`USAGE_EVENT_DURABLE_IDS`), never the FK: deleting an entity nulls the FK on
+ * its events, and a count over a closed window must not drop when the metered
+ * entity is deleted.
  */
 export const DISTINCT_COUNT_COLUMNS = {
   generations: 'generation_public_id',
-  traces: 'trace_id',
-  orchestration_runs: 'orchestration_run_id',
-  agents: 'agent_id',
-  actors: 'actor_id',
-  sessions: 'session_id',
-  ai_providers: 'ai_provider_id',
-  tools: 'tool_id',
+  traces: 'trace_public_id',
+  orchestration_runs: 'orchestration_run_public_id',
+  agents: 'agent_public_id',
+  actors: 'actor_public_id',
+  sessions: 'session_public_id',
+  ai_providers: 'ai_provider_public_id',
+  tools: 'tool_public_id',
 } as const;
 
 /**

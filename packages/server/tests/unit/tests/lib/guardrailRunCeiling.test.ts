@@ -8,6 +8,7 @@ import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { createGuardrail } from 'src/lib/guardrails';
+import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 // The per-run cumulative ceiling: the windowed per-project counters are
 // the wrong granularity for aborting one runaway run, so these sum only the
@@ -131,16 +132,20 @@ describe('guardrail per-run usage ceiling', () => {
     outputTokens: number;
     costUsd: string;
   }): Promise<void> => {
-    const event = await db.UsageEvent.create({
-      projectId,
-      orchestrationRunId: args.runInternalId,
-      nodeId: 'node-a',
-      meterType: 'llm_tokens',
-      provider: 'ollama',
-      model: 'stub-model',
-      costUsd: args.costUsd,
-      idempotencyKey: `seed:${args.runInternalId}:${args.inputTokens}:${args.outputTokens}`,
-    });
+    const event = await db.UsageEvent.create(
+      await withDurablePublicIds({
+        values: {
+          projectId,
+          orchestrationRunId: args.runInternalId,
+          nodeId: 'node-a',
+          meterType: 'llm_tokens',
+          provider: 'ollama',
+          model: 'stub-model',
+          costUsd: args.costUsd,
+          idempotencyKey: `seed:${args.runInternalId}:${args.inputTokens}:${args.outputTokens}`,
+        },
+      })
+    );
     await db.UsageComponent.bulkCreate([
       {
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),

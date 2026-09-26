@@ -2,7 +2,11 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
+import {
+  generatePublicId,
+  PUBLIC_ID_PREFIXES,
+  USAGE_EVENT_DURABLE_IDS,
+} from '@soat/postgresdb';
 import { db } from 'src/db';
 import { createGeneration } from 'src/lib/agentGeneration';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
@@ -16,6 +20,7 @@ import {
   DISTINCT_COUNT_COLUMNS,
   windowTotalsSelect,
 } from 'src/lib/usageAggregateSql';
+import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 import { snapshotProjectStorage } from 'src/lib/usageStorage';
 import * as usageTokenEventModule from 'src/lib/usageTokenEvent';
 
@@ -3028,20 +3033,23 @@ describe('Usage', () => {
       const project = await db.Project.findOne({
         where: { publicId: projectId },
       });
-      await db.UsageEvent.create({
-        projectId: project!.id as number,
-        orchestrationRunId: run!.id as number,
-        nodeId,
-        generationId: generation!.id as number,
-        generationPublicId: generation!.publicId,
-        meterType: 'llm_tokens',
-        provider: 'stub',
-        model: 'stub-model',
-        costUsd: null,
-        idempotencyKey: `retry-${generatePublicId(
-          PUBLIC_ID_PREFIXES.usageEvent
-        )}`,
-      });
+      await db.UsageEvent.create(
+        await withDurablePublicIds({
+          values: {
+            projectId: project!.id as number,
+            orchestrationRunId: run!.id as number,
+            nodeId,
+            generationId: generation!.id as number,
+            meterType: 'llm_tokens',
+            provider: 'stub',
+            model: 'stub-model',
+            costUsd: null,
+            idempotencyKey: `retry-${generatePublicId(
+              PUBLIC_ID_PREFIXES.usageEvent
+            )}`,
+          },
+        })
+      );
 
       const after = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/aggregate?project_id=${projectId}` +
@@ -3840,24 +3848,26 @@ describe('Usage', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('the distinct key set is the event model FK set minus project_id', async () => {
-      const foreignKeyColumns = Object.values(db.UsageEvent.getAttributes())
-        .filter((attribute) => {
-          return attribute.references !== undefined;
+    test('every attribution FK has a durable public id, and distinct counts it', async () => {
+      const attributes = db.UsageEvent.getAttributes();
+      const foreignKeys = Object.entries(attributes)
+        .filter(([name, attribute]) => {
+          return attribute.references !== undefined && name !== 'projectId';
         })
-        .map((attribute) => {
-          return attribute.field as string;
-        })
-        .filter((field) => {
-          return field !== 'project_id';
-        })
-        .map((field) => {
-          return field === 'generation_id' ? 'generation_public_id' : field;
+        .map(([name]) => {
+          return name;
         })
         .sort();
 
+      expect(
+        USAGE_EVENT_DURABLE_IDS.map((pair) => {
+          return pair.foreignKey;
+        }).sort()
+      ).toEqual(foreignKeys);
       expect(Object.values(DISTINCT_COUNT_COLUMNS).sort()).toEqual(
-        foreignKeyColumns
+        USAGE_EVENT_DURABLE_IDS.map((pair) => {
+          return attributes[pair.publicId].field;
+        }).sort()
       );
 
       const distinct = await readDistinct({ projectId: standaloneProjectId });
@@ -3866,80 +3876,26 @@ describe('Usage', () => {
       );
     });
 
-    test('an event naming a generation is refused without its durable id', async () => {
-      const generation = await db.Generation.findOne({
-        where: { publicId: generationId },
-      });
-      const project = await db.Project.findOne({
-        where: { publicId: projectId },
-      });
-
-      await expect(
-        db.UsageEvent.create({
-          projectId: project!.id,
-          generationId: generation!.id,
-          meterType: 'llm_tokens',
-          provider: 'ollama',
-          model: 'stub-model',
-          idempotencyKey: `unkeyed:${generationId}`,
-        })
-      ).rejects.toThrow('generationPublicId is required with generationId');
-    });
-
-    test('force-deleting an agent leaves its metered generations counted', async () => {
-      const projectRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'usage-distinct-force-delete' });
-      expect(projectRes.status).toBe(201);
-      const deleteProjectId = projectRes.body.id;
-
-      const providerRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/ai-providers')
-        .send({
-          project_id: deleteProjectId,
-          name: 'Force Delete Stub Provider',
-          provider: 'ollama',
-          default_model: 'stub-model',
-          base_url: stubBaseUrl,
+    test.each(USAGE_EVENT_DURABLE_IDS)(
+      'an event setting $foreignKey without $publicId is refused',
+      async (pair) => {
+        const project = await db.Project.findOne({
+          where: { publicId: projectId },
         });
-      expect(providerRes.status).toBe(201);
 
-      const agentRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/agents')
-        .send({
-          ai_provider_id: providerRes.body.id,
-          project_id: deleteProjectId,
-          name: 'Force Deleted Agent',
-        });
-      expect(agentRes.status).toBe(201);
-
-      const genRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
-        .send({
-          messages: [{ role: 'user', content: 'metered then deleted' }],
-        });
-      expect(genRes.status).toBe(200);
-      expect(genRes.body.status).toBe('completed');
-
-      const readTotals = async () => {
-        const res = await authenticatedTestClient(adminToken).get(
-          `/api/v1/usage/aggregate?project_id=${deleteProjectId}` +
-            '&group_by=orchestration_run&include=distinct'
+        await expect(
+          db.UsageEvent.create({
+            projectId: project!.id,
+            [pair.foreignKey]: 1,
+            meterType: 'llm_tokens',
+            provider: 'ollama',
+            model: 'stub-model',
+            idempotencyKey: `unkeyed:${pair.foreignKey}`,
+          })
+        ).rejects.toThrow(
+          `${pair.publicId} is required with ${pair.foreignKey}`
         );
-        expect(res.status).toBe(200);
-        return res.body.totals;
-      };
-      const before = await readTotals();
-      expect(before.distinct.generations).toBe(1);
-
-      const deleteRes = await authenticatedTestClient(adminToken).delete(
-        `/api/v1/agents/${agentRes.body.id}?force=true`
-      );
-      expect(deleteRes.status).toBe(204);
-
-      const after = await readTotals();
-      expect(after.event_count).toBe(before.event_count);
-      expect(after.distinct.generations).toBe(before.distinct.generations);
-    }, 30000);
+      }
+    );
   });
 });

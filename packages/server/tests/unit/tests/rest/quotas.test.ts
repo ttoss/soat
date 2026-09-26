@@ -2,6 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -1630,15 +1631,19 @@ describe('Quotas', () => {
 
       // 30 billable tokens, attributed to Bob — the shape usageRecording
       // writes for a session generation.
-      const event = await db.UsageEvent.create({
-        projectId: projectInternalId,
-        actorId: bob.actorInternalId,
-        meterType: 'llm_tokens',
-        provider: 'ollama',
-        model: 'stub-model',
-        costUsd: null,
-        idempotencyKey: `${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}:seed`,
-      });
+      const event = await db.UsageEvent.create(
+        await withDurablePublicIds({
+          values: {
+            projectId: projectInternalId,
+            actorId: bob.actorInternalId,
+            meterType: 'llm_tokens',
+            provider: 'ollama',
+            model: 'stub-model',
+            costUsd: null,
+            idempotencyKey: `${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}:seed`,
+          },
+        })
+      );
       await db.UsageComponent.bulkCreate(
         [
           { component: 'input_tokens', quantity: '10', billable: true },
