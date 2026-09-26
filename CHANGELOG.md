@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.62.0](https://github.com/ttoss/soat/compare/v0.61.1...v0.62.0) (2026-09-26)
+
+### Bug Fixes
+
+* **usage:** keep deleted entities in every totals.distinct counter ([#1459](https://github.com/ttoss/soat/issues/1459)) ([c299f63](https://github.com/ttoss/soat/commit/c299f6379bf182e85f20e8820f197853a56bc1d0)), closes [#1458](https://github.com/ttoss/soat/issues/1458)
+* **usage:** keep force-deleted generations in totals.distinct.generations ([#1454](https://github.com/ttoss/soat/issues/1454)) ([e552d4c](https://github.com/ttoss/soat/commit/e552d4c876e205375d0676a3a653a191bda3be37)), closes [#1453](https://github.com/ttoss/soat/issues/1453)
+
+### Features
+
+* **projects:** pause and resume everything a project runs ([#1460](https://github.com/ttoss/soat/issues/1460)) ([22b7636](https://github.com/ttoss/soat/commit/22b76363cc5ab0b6521de43cf8b1f822a0994e60))
+* **usage:** attribute a knowledge retrieval's embedding to its generation ([#1456](https://github.com/ttoss/soat/issues/1456)) ([fe31011](https://github.com/ttoss/soat/commit/fe31011d08cd7a5e427b4bc5aea0f9afd8cc81cd))
+* **usage:** meter records of work as record_gb_day on the storage event ([#1455](https://github.com/ttoss/soat/issues/1455)) ([2b6c6b9](https://github.com/ttoss/soat/commit/2b6c6b925c91a3cbaa9d501e68e71efc2b93ddb5)), closes [TriangulosTecnologia/naturali.ai#609](https://github.com/TriangulosTecnologia/naturali.ai/issues/609)
+* **usage:** name the document or memory store an embedding embedded ([#1457](https://github.com/ttoss/soat/issues/1457)) ([e8a9452](https://github.com/ttoss/soat/commit/e8a9452751c3515c12c045a518cbe1999244cc43))
+
 ## [0.61.1](https://github.com/ttoss/soat/compare/v0.61.0...v0.61.1) (2026-09-25)
 
 ### Bug Fixes
