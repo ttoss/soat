@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { EmbeddingSubject } from './embedding';
 import { readEmbeddingInputTokenPriceUsd } from './embeddingPrice';
 import {
   buildEmbeddingComponents,
@@ -98,8 +99,8 @@ const resolveEmbeddingAttribution = async (args: {
  * so the idempotency key is unique per call (`embedding:{uuid}`).
  *
  * `generationId` names the generation the embedding was made for — a retrieval
- * ahead of an agent's turn — and is null for ingestion, memory writes and the
- * embeddings endpoint, which run for no generation.
+ * ahead of an agent's turn, a memory an agent writes — and is null for work no
+ * generation runs. `subject` names what was embedded.
  *
  * Never throws: metering is an observability side effect and must not fail the
  * call it measures. An embedding failure is already non-fatal on most callers
@@ -108,6 +109,7 @@ const resolveEmbeddingAttribution = async (args: {
 export const recordEmbeddingUsage = async (args: {
   projectId: number;
   generationId: string | null;
+  subject: EmbeddingSubject;
   provider: string;
   model: string;
   tokens: number;
@@ -133,6 +135,14 @@ export const recordEmbeddingUsage = async (args: {
         ...(await resolveEmbeddingAttribution(args)),
         projectId: args.projectId,
         aiProviderId: null,
+        documentId:
+          args.subject && 'documentId' in args.subject
+            ? args.subject.documentId
+            : null,
+        memoryStoreId:
+          args.subject && 'memoryStoreId' in args.subject
+            ? args.subject.memoryStoreId
+            : null,
         source: EMBEDDING_USAGE_SOURCE,
       },
       idempotencyKey: `embedding:${randomUUID()}`,

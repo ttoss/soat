@@ -913,6 +913,23 @@ components:
             Public ID of the tool a `tool_execution` event metered. Null on
             every other meter, for an inline tool definition, and once the tool
             is deleted.
+        document_id:
+          x-soat-ref: documents
+          type: string
+          nullable: true
+          description: >
+            Public ID of the document an `embedding` event embedded a chunk of —
+            ingestion, a re-chunk, a conversation's turns. Null on a query
+            embedding, on every other meter, and once the document is deleted.
+        memory_store_id:
+          x-soat-ref: memory-stores
+          type: string
+          nullable: true
+          description: >
+            Public ID of the memory store an `embedding` event embedded written
+            content for. The store rather than the memory: stored content is
+            shared by every memory in the store that states it. Null on a query
+            embedding, on every other meter, and once the store is deleted.
         outcome:
           type: string
           nullable: true
@@ -1021,6 +1038,10 @@ components:
         ai_providers:
           type: integer
         tools:
+          type: integer
+        documents:
+          type: integer
+        memory_stores:
           type: integer
 
     UsageAggregateComponent:

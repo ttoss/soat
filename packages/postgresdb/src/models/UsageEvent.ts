@@ -12,7 +12,9 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Actor } from './Actor';
 import { Agent } from './Agent';
 import { AiProvider } from './AiProvider';
+import { Document } from './Document';
 import { Generation } from './Generation';
+import { MemoryStore } from './MemoryStore';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
 import { Session } from './Session';
@@ -64,6 +66,8 @@ import { UsageComponent } from './UsageComponent';
     { name: 'usage_events_source_idx', fields: ['source'] },
     { name: 'usage_events_ai_provider_id_idx', fields: ['ai_provider_id'] },
     { name: 'usage_events_tool_id_idx', fields: ['tool_id'] },
+    { name: 'usage_events_document_id_idx', fields: ['document_id'] },
+    { name: 'usage_events_memory_store_id_idx', fields: ['memory_store_id'] },
     // Guardrail evaluation counts a tool's (or the project's) executions over a
     // window while the gated call waits, so the window read must be an index
     // range, not a scan of the project's events.
@@ -260,6 +264,37 @@ export class UsageEvent extends Model {
     { onDelete: 'SET NULL' }
   )
   declare tool: Tool | null;
+
+  // What an embedding event embedded: a document's chunk, or content written to
+  // a memory store. Null on a query embedding and on every other meter. SET
+  // NULL on delete, like every attribution column, so spend outlives it.
+  @ForeignKey(() => {
+    return Document;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare documentId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Document;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare document: Document | null;
+
+  @ForeignKey(() => {
+    return MemoryStore;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare memoryStoreId: number | null;
+
+  @BelongsTo(
+    () => {
+      return MemoryStore;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare memoryStore: MemoryStore | null;
 
   // `ok` | `error` | `timeout` for a `tool_execution` event: how the call that
   // went out ended. Null on every other meter.

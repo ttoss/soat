@@ -92,6 +92,7 @@ export const embedConversationBacklog = async (args: {
       const embedding = await getEmbedding({
         text: chunk.content,
         billing: projectEmbeddingBilling({ projectId: args.projectId }),
+        subject: { documentId: chunk.documentId },
       });
       await chunk.update({ embedding });
       embedded += 1;
