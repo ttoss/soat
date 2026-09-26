@@ -76,6 +76,7 @@ The flow they follow is
 | `2026-09-24-orchestration-output-mapping` | `orchestrations.output_mapping`, the declared shape of a run's `output` |
 | `2026-09-25-usage-event-generation-public-id` | `usage_events.generation_public_id`, the durable generation id `totals.distinct.generations` counts, backfilled from the generation or from a standalone generation's idempotency key |
 | `2026-09-26-usage-event-document-and-memory-store` | `usage_events.document_id` and `usage_events.memory_store_id`, what an embedding event embedded; not backfilled |
+| `2026-09-26-usage-event-durable-public-ids` | a public id beside every other attribution FK on `usage_events` (`agent`, `trace`, `orchestration_run`, `actor`, `session`, `ai_provider`, `tool`, `document`, `memory_store`), which `totals.distinct` counts, backfilled from the rows the FKs still name |
 
 Run them from the server package, which owns the entrypoint:
 

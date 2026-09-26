@@ -4,6 +4,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { insertUsageEvent } from './usageEventWrite';
 
 const log = createDebug('soat:usage');
 
@@ -193,10 +194,8 @@ const persistToolExecution = async (args: {
   const idempotencyKey = `tool:${randomUUID()}`;
 
   await db.sequelize.transaction(async (transaction) => {
-    const [event, created] = await db.UsageEvent.findOrCreate({
-      where: { idempotencyKey },
+    const [event, created] = await insertUsageEvent({
       defaults: {
-        publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: args.meter.projectId,
         ...resolved,
         aiProviderId: null,

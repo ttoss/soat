@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { getEffectivePrice } from './priceBook';
 import { computeComponentCostUsd, sumComponentCostUsd } from './priceCompute';
+import { insertUsageEvent } from './usageEventWrite';
 import {
   projectRecordFootprint,
   type RecordFootprint,
@@ -324,10 +325,8 @@ const persistStorageEvent = async (args: {
   costUsd: string | null;
 }): Promise<boolean> => {
   return db.sequelize.transaction(async (transaction) => {
-    const [event, created] = await db.UsageEvent.findOrCreate({
-      where: { idempotencyKey: args.idempotencyKey },
+    const [event, created] = await insertUsageEvent({
       defaults: {
-        publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: args.projectId,
         orchestrationRunId: null,
         nodeId: null,

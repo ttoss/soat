@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { getEffectivePrice } from './priceBook';
 import { computeComponentCostUsd } from './priceCompute';
+import { insertUsageEvent } from './usageEventWrite';
 import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
@@ -28,10 +29,8 @@ const persistComputeEvent = async (args: {
   priceId: number | null;
 }): Promise<boolean> => {
   return db.sequelize.transaction(async (transaction) => {
-    const [event, created] = await db.UsageEvent.findOrCreate({
-      where: { idempotencyKey: args.idempotencyKey },
+    const [event, created] = await insertUsageEvent({
       defaults: {
-        publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: args.projectId,
         orchestrationRunId: args.orchestrationRunId,
         nodeId: args.nodeId,

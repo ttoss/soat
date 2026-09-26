@@ -1,5 +1,6 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 import { authenticatedTestClient } from '../testClient';
 
@@ -163,7 +164,9 @@ const eventAttributes = (opts: SeedUsageEventOptions) => {
 export const seedUsageEvent = async (
   opts: SeedUsageEventOptions
 ): Promise<UsageEventInstance> => {
-  const event = await db.UsageEvent.create(eventAttributes(opts));
+  const event = await db.UsageEvent.create(
+    await withDurablePublicIds({ values: eventAttributes(opts) })
+  );
   await seedTokenComponents({
     eventId: (event as unknown as { id: number }).id,
     tokens: opts.tokens,

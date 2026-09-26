@@ -8,6 +8,7 @@ import { db } from 'src/db';
 import { buildResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { createGuardrail } from 'src/lib/guardrails';
+import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 // `runtime.<module>.<metric>.<window>` read off the `tool_execution` meter at
 // evaluation time, and the meter those reads depend on: an agent's tool calls
@@ -153,19 +154,23 @@ describe('guardrail tool-call rate context', () => {
   }): Promise<void> => {
     const createdAt = new Date(Date.now() - (args.minutesAgo ?? 0) * 60 * 1000);
     for (let index = 0; index < args.count; index += 1) {
-      await db.UsageEvent.create({
-        projectId: args.projectId ?? projectId,
-        toolId: args.toolId === undefined ? refundId : args.toolId,
-        agentId: args.agentId ?? null,
-        outcome: args.outcome ?? 'ok',
-        guardrailIds: args.guardrailIds ?? null,
-        meterType: args.meterType ?? 'tool_execution',
-        provider: 'soat',
-        model: 'tool-call',
-        costUsd: null,
-        idempotencyKey: `seed:${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}`,
-        createdAt,
-      });
+      await db.UsageEvent.create(
+        await withDurablePublicIds({
+          values: {
+            projectId: args.projectId ?? projectId,
+            toolId: args.toolId === undefined ? refundId : args.toolId,
+            agentId: args.agentId ?? null,
+            outcome: args.outcome ?? 'ok',
+            guardrailIds: args.guardrailIds ?? null,
+            meterType: args.meterType ?? 'tool_execution',
+            provider: 'soat',
+            model: 'tool-call',
+            costUsd: null,
+            idempotencyKey: `seed:${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}`,
+            createdAt,
+          },
+        })
+      );
     }
   };
 

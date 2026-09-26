@@ -16,5 +16,6 @@ export {
 } from './models/MemoryAssertion';
 export type { MemoryRuleEvent } from './models/MemoryRule';
 export { MEMORY_RULE_EVENTS } from './models/MemoryRule';
+export { USAGE_EVENT_DURABLE_IDS } from './models/UsageEvent';
 export * from './utils/embedding';
 export * from './utils/publicId';
