@@ -196,7 +196,7 @@ describe('knowledge recency blend', () => {
   const search = async (args?: { recencyHalfLifeDays?: number }) => {
     return searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: QUERY,
       memoryStoreIds: fixtures.memoryStoreIds,
       recencyHalfLifeDays: args?.recencyHalfLifeDays,
@@ -272,14 +272,14 @@ describe('knowledge recency blend', () => {
     process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '30';
     const blended = await resolveDocumentSearch({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       config: { search: QUERY },
     });
 
     delete process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS;
     const plain = await resolveDocumentSearch({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       config: { search: QUERY },
     });
 
@@ -301,7 +301,7 @@ describe('knowledge recency blend', () => {
     // a fact, which is what its `isMemory` answers.
     const results = await resolveMemoryStoreSearch({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       config: {
         memoryStoreIds: fixtures.memoryStoreIds,
         search: QUERY,
@@ -323,12 +323,12 @@ describe('knowledge recency blend', () => {
     // reaches it with its own shard shape.
     const documents = await resolveDocumentSearch({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       config: { search: QUERY },
     });
     const memories = await resolveMemoryStoreSearch({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       config: {
         memoryStoreIds: fixtures.memoryStoreIds,
         search: QUERY,

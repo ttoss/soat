@@ -90,3 +90,20 @@ export const attributionColumns = (args: GenerationAttribution) => {
     source: args.source ?? null,
   };
 };
+
+/**
+ * The conversation a turn served, by public id. Resolved here rather than
+ * threaded as an internal id: every other caller of `createGenerationRecord`
+ * speaks in public ids, and a conversation that no longer exists simply leaves
+ * the column null.
+ */
+export const findConversationDbId = async (
+  conversationId?: string | null
+): Promise<number | null> => {
+  if (!conversationId) return null;
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: conversationId },
+    attributes: ['id'],
+  });
+  return (conversation?.id as number | undefined) ?? null;
+};

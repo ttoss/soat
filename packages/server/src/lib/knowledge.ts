@@ -1,4 +1,4 @@
-import type { EmbeddingBillingProjectId } from './embedding';
+import type { EmbeddingBilling } from './embedding';
 import type { QueryDocumentResult } from './knowledgeDocuments';
 import {
   DOCUMENT_METADATA_COLUMN,
@@ -66,7 +66,7 @@ export type KnowledgeResult =
 type SearchKnowledgeArgs = {
   projectIds?: number[];
   /** See {@link resolveDocumentSearchLists}. Required, so a caller has to say. */
-  billingProjectId: EmbeddingBillingProjectId;
+  embeddingBilling: EmbeddingBilling;
   query?: string;
   /**
    * Raw-cosine floor a **vector** candidate must clear to enter fusion.
@@ -252,7 +252,7 @@ export const searchKnowledge = async (
   const embedding = args.query
     ? await embedQueryOrDegrade({
         text: args.query,
-        projectId: args.billingProjectId,
+        billing: args.embeddingBilling,
       })
     : undefined;
 

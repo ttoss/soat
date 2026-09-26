@@ -1,5 +1,7 @@
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV } from 'src/lib/embeddingPrice';
+import { createGenerationRecord } from 'src/lib/generations';
 import { recordEmbeddingUsage } from 'src/lib/usageEmbeddingRecording';
 
 // The embedding stack is env-configured rather than backed by an AiProvider
@@ -61,6 +63,7 @@ describe('recordEmbeddingUsage', () => {
 
     await recordEmbeddingUsage({
       projectId,
+      generationId: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 1500,
@@ -92,6 +95,7 @@ describe('recordEmbeddingUsage', () => {
 
     await recordEmbeddingUsage({
       projectId,
+      generationId: null,
       provider: PROVIDER,
       model: 'unset-rate-model',
       tokens: 42,
@@ -114,6 +118,7 @@ describe('recordEmbeddingUsage', () => {
 
     await recordEmbeddingUsage({
       projectId,
+      generationId: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 1000,
@@ -132,6 +137,7 @@ describe('recordEmbeddingUsage', () => {
     await expect(
       recordEmbeddingUsage({
         projectId,
+        generationId: null,
         provider: PROVIDER,
         model: MODEL,
         tokens: 5,
@@ -146,12 +152,14 @@ describe('recordEmbeddingUsage', () => {
 
     await recordEmbeddingUsage({
       projectId,
+      generationId: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 10,
     });
     await recordEmbeddingUsage({
       projectId,
+      generationId: null,
       provider: PROVIDER,
       model: MODEL,
       tokens: 10,
@@ -174,6 +182,7 @@ describe('recordEmbeddingUsage', () => {
     await expect(
       recordEmbeddingUsage({
         projectId: 2_147_483_600,
+        generationId: null,
         provider: PROVIDER,
         model: MODEL,
         tokens: 5,
@@ -181,5 +190,142 @@ describe('recordEmbeddingUsage', () => {
     ).resolves.toBeUndefined();
 
     expect(await eventsForProject()).toHaveLength(before.length);
+  });
+
+  // A retrieval ahead of an agent's turn embeds before the turn's record
+  // exists, so the event is written naming the generation by public id and
+  // `createGenerationRecord` links the rest when the row commits.
+  describe('attributed to a generation', () => {
+    let agentPublicId: string;
+
+    const newGenerationId = () => {
+      return generatePublicId(PUBLIC_ID_PREFIXES.generation);
+    };
+
+    const recordFor = (generationId: string) => {
+      return recordEmbeddingUsage({
+        projectId,
+        generationId,
+        provider: PROVIDER,
+        model: MODEL,
+        tokens: 3,
+      });
+    };
+
+    const createRecord = (args: { generationId: string; agentId: string }) => {
+      return createGenerationRecord({
+        publicId: args.generationId,
+        projectId,
+        agentId: args.agentId,
+        traceId: generatePublicId(PUBLIC_ID_PREFIXES.trace),
+      });
+    };
+
+    const eventFor = async (generationId: string) => {
+      const events = await db.UsageEvent.findAll({
+        where: { projectId, generationPublicId: generationId },
+      });
+      expect(events).toHaveLength(1);
+      return events[0];
+    };
+
+    const expectAttributedTo = async (generationId: string) => {
+      const generation = await db.Generation.findOne({
+        where: { publicId: generationId },
+      });
+      const event = await eventFor(generationId);
+      expect(event.generationId).toBe(generation!.id);
+      expect(event.agentId).toBe(generation!.agentId);
+      expect(event.traceId).toBe(generation!.traceId);
+      expect(event.sessionId).toBe(generation!.sessionId);
+      expect(event.actorId).toBe(generation!.startedByActorId);
+      expect(event.source).toBe('embedding');
+      expect(event.aiProviderId).toBeNull();
+    };
+
+    beforeAll(async () => {
+      const aiProvider = await db.AiProvider.create({
+        projectId,
+        name: 'Embedding Attribution Provider',
+        provider: 'ollama',
+        defaultModel: 'stub-model',
+      });
+      const agent = await db.Agent.create({
+        projectId,
+        aiProviderId: aiProvider.id,
+        name: 'Embedding Attribution Agent',
+      });
+      agentPublicId = agent.publicId;
+    });
+
+    test('an embedding made before its generation record is linked when the record is written', async () => {
+      const generationId = newGenerationId();
+
+      await recordFor(generationId);
+      const pending = await eventFor(generationId);
+      expect(pending.generationId).toBeNull();
+      expect(pending.agentId).toBeNull();
+
+      await createRecord({ generationId, agentId: agentPublicId });
+
+      await expectAttributedTo(generationId);
+    });
+
+    test('an embedding made after its generation record is attributed as it is written', async () => {
+      const generationId = newGenerationId();
+      await createRecord({ generationId, agentId: agentPublicId });
+
+      await recordFor(generationId);
+
+      await expectAttributedTo(generationId);
+    });
+
+    test('an embedding whose generation record is never written names no generation', async () => {
+      const generationId = newGenerationId();
+      await recordFor(generationId);
+      const pending = await eventFor(generationId);
+
+      await expect(
+        createRecord({ generationId, agentId: 'agt_missing' })
+      ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
+
+      const detached = await db.UsageEvent.findByPk(pending.id);
+      expect(detached!.generationPublicId).toBeNull();
+      expect(detached!.generationId).toBeNull();
+      // The spend stays on the project it was billed to.
+      expect(detached!.projectId).toBe(projectId);
+    });
+
+    // Sanctioned force-failures: attribution is bookkeeping around the record
+    // write, so its own failure must neither fail a written record nor replace
+    // the error of one that was not.
+    test('a failed link leaves the record written and the embedding still billed', async () => {
+      const generationId = newGenerationId();
+      await recordFor(generationId);
+      const update = jest
+        .spyOn(db.UsageEvent, 'update')
+        .mockRejectedValueOnce(new Error('simulated link failure'));
+
+      await expect(
+        createRecord({ generationId, agentId: agentPublicId })
+      ).resolves.toMatchObject({ id: generationId });
+      update.mockRestore();
+
+      const event = await eventFor(generationId);
+      expect(event.generationId).toBeNull();
+    });
+
+    test('a failed detach still surfaces the record write error', async () => {
+      const generationId = newGenerationId();
+      await recordFor(generationId);
+      const update = jest
+        .spyOn(db.UsageEvent, 'update')
+        .mockRejectedValueOnce(new Error('simulated detach failure'));
+
+      await expect(
+        createRecord({ generationId, agentId: 'agt_missing' })
+      ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
+      update.mockRestore();
+    });
   });
 });

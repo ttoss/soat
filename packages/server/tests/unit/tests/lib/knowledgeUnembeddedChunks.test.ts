@@ -112,7 +112,7 @@ describe('chunks and memories without an embedding', () => {
   test('a document chunk with no vector is not a vector candidate', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: UNRELATED_QUERY,
       paths: ['/turns/'],
     });
@@ -123,7 +123,7 @@ describe('chunks and memories without an embedding', () => {
   test('a memory with no vector is not a vector candidate', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: UNRELATED_QUERY,
       memoryStoreIds: [fixtures.memoryStoreId],
       includeDocuments: false,
@@ -135,7 +135,7 @@ describe('chunks and memories without an embedding', () => {
   test('the lexical channel still reaches an unembedded chunk', async () => {
     const results = await searchKnowledge({
       projectIds: [fixtures.projectId],
-      billingProjectId: fixtures.projectId,
+      embeddingBilling: { projectId: fixtures.projectId, generationId: null },
       query: 'loading dock',
       paths: ['/turns/'],
     });

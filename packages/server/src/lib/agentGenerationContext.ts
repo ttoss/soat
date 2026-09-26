@@ -98,6 +98,7 @@ const resolveGenerationModel = async (args: {
 
 const assembleContextMessages = async (args: {
   agentId: string;
+  generationId: string;
   projectIds?: number[];
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
@@ -115,7 +116,10 @@ const assembleContextMessages = async (args: {
       override: readKnowledgeConfig(args.knowledgeConfig),
     }),
     projectIds: args.projectIds,
-    billingProjectId: typeof projectId === 'number' ? projectId : null,
+    embeddingBilling:
+      typeof projectId === 'number'
+        ? { projectId, generationId: args.generationId }
+        : null,
     messages: args.resolvedMessages,
   });
 
@@ -228,7 +232,8 @@ export const buildGenerationContext = async (
 
   // Generated up front (before tool resolution) so the approval gate can freeze
   // it onto any item it files — a tool-call approval's continuation is linked
-  // back to this generation via `initiator_generation_id`.
+  // back to this generation via `initiator_generation_id` — and so the knowledge
+  // retrieval's embedding names the turn it was made for.
   const generationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
 
   const toolSurface = await resolveAgentToolSurface({
@@ -249,6 +254,7 @@ export const buildGenerationContext = async (
 
   const allMessages = await assembleContextMessages({
     agentId: args.agentId,
+    generationId,
     projectIds: args.projectIds,
     typedAgent,
     resolvedMessages,

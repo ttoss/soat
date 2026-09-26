@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import createDebug from 'debug';
 import { db } from 'src/db';
-import { getEmbedding } from 'src/lib/embedding';
+import { getEmbedding, projectEmbeddingBilling } from 'src/lib/embedding';
 
 const log = createDebug('soat:memories');
 
@@ -26,7 +26,7 @@ const embedOrNull = async (args: {
   try {
     return await getEmbedding({
       text: args.content,
-      projectId: args.projectId,
+      billing: projectEmbeddingBilling({ projectId: args.projectId }),
     });
   } catch {
     // An embedding is optional: a fact must never be lost because the embedder

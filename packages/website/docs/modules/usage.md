@@ -327,7 +327,7 @@ GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
 }
 ```
 
-Nulls are not counted: a generation-less completion (`chat`, `memory_extraction`, `memory_consolidation`, `eval_judge`) moves `event_count` and nothing in `distinct`; a standalone generation counts under `generations`, not `orchestration_runs`; a retried orchestration node counts once as a run.
+Nulls are not counted: a generation-less completion (`chat`, `memory_extraction`, `memory_consolidation`, `eval_judge`) moves `event_count` and nothing in `distinct`; a standalone generation counts under `generations`, not `orchestration_runs`; a retried orchestration node counts once as a run. An agent's [knowledge retrieval](./embeddings.md#metering) is metered under its generation, so a turn that retrieved and then failed before the model reported usage still counts under `generations`.
 
 - **Opt-in because it costs**: each key sorts the window once more. Count entities with one request at `limit=1&include=distinct`; page for spend with no `include`.
 - **On `totals` only**; groups never carry `distinct` (a `COUNT(DISTINCT)` per bucket).

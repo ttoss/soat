@@ -2,6 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   attributionColumns,
+  findConversationDbId,
   type GenerationAttribution,
   resolveEndUserAttribution,
 } from './generationAttribution';
@@ -26,6 +27,7 @@ import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { rollUpUsageTotals } from './usageAggregate';
+import { withGenerationEmbeddingUsage } from './usageEmbeddingRecording';
 
 // The row → wire mapper lives in its own module; re-exported so the many
 // existing `from './generations'` imports of the type keep working.
@@ -47,23 +49,6 @@ const generationIncludes = () => {
     { model: db.Actor, as: 'startedByActor' },
     { model: db.Conversation, as: 'conversation' },
   ];
-};
-
-/**
- * The conversation a turn served, by public id. Resolved here rather than
- * threaded as an internal id: every other caller of `createGenerationRecord`
- * speaks in public ids, and a conversation that no longer exists simply leaves
- * the column null.
- */
-const findConversationDbId = async (
-  conversationId?: string | null
-): Promise<number | null> => {
-  if (!conversationId) return null;
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: conversationId },
-    attributes: ['id'],
-  });
-  return (conversation?.id as number | undefined) ?? null;
 };
 
 const findInitiatorGeneration = async (args: {
@@ -175,7 +160,7 @@ const commitGenerationWithTrace = async (helperArgs: {
   });
 };
 
-export const createGenerationRecord = async (
+const insertGenerationRecord = async (
   args: GenerationAttribution & {
     publicId: string;
     projectId: number;
@@ -273,6 +258,15 @@ export const createGenerationRecord = async (
   }
 
   return mapGeneration(fullGeneration);
+};
+
+export const createGenerationRecord = (
+  args: Parameters<typeof insertGenerationRecord>[0]
+) => {
+  return withGenerationEmbeddingUsage({
+    record: args,
+    create: insertGenerationRecord,
+  });
 };
 
 type UpdateGenerationRecordArgs = {

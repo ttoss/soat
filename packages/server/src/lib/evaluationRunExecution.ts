@@ -16,7 +16,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
-import { getEmbeddings } from './embedding';
+import { getEmbeddings, projectEmbeddingBilling } from './embedding';
 import { computeBaselineComparison } from './evaluationDeltas';
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { runJudgeCompletion } from './evaluationJudge';
@@ -111,7 +111,10 @@ const buildScorerRunners = (args: { projectId: number }) => {
     // same one document ingestion uses), so the only thing bound here is the
     // project the scorer's embeddings are billed to.
     runEmbeddings: (embed: { texts: string[] }) => {
-      return getEmbeddings({ ...embed, projectId: args.projectId });
+      return getEmbeddings({
+        ...embed,
+        billing: projectEmbeddingBilling({ projectId: args.projectId }),
+      });
     },
   };
 };
