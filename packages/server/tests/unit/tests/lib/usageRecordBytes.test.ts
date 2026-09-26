@@ -124,7 +124,7 @@ const bytesBetween = (args: {
   );
 };
 
-describe('Usage — what the storage snapshot counts as run records', () => {
+describe('Usage — what the storage snapshot counts as records of work', () => {
   test('writes record_gb_day beside gb_day and chunk_count', async () => {
     const project = await seedProject('records-shape');
 
@@ -299,7 +299,7 @@ describe('Usage — what the storage snapshot counts as run records', () => {
     ).toBeLessThan(SLACK);
   });
 
-  test('the storage_bytes quota reads gb_day alone, never run records', async () => {
+  test('the storage_bytes quota reads gb_day alone, never records of work', async () => {
     const project = await seedProject('records-quota');
     await seedGeneration({ ...project, chars: GENERATION_CHARS });
 

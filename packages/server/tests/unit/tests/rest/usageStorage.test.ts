@@ -242,7 +242,7 @@ describe('Usage — storage metering', () => {
     expect(Number(count!.quantity)).toBe(2);
     expect(Number(count!.cost_usd)).toBeCloseTo(0.5);
 
-    // No row prices run records here: the quantity is still recorded, and the
+    // No row prices record_gb_day here: the quantity is still recorded, and the
     // priced components are not blocked by it.
     const records = event!.components.find((c) => {
       return c.component === 'record_gb_day';

@@ -372,7 +372,7 @@ const persistStorageEvent = async (args: {
  * Writes one `storage` usage event for a project's current footprint, sampled
  * for `now`'s UTC day: a `gb_day` component whose quantity is bytes ÷ 1e9, a
  * `chunk_count` component whose quantity is the indexed rows behind them, and a
- * `record_gb_day` component for the run records beside them. Each
+ * `record_gb_day` component for the records of work beside them. Each
  * is priced at write time from its own `soat`/`gb-day` price-book row when one
  * is effective (`cost_usd = null` otherwise), and the event's cost is their sum.
  * Idempotent on `storage:{project}:{YYYY-MM-DD}` — a re-run for the same day is

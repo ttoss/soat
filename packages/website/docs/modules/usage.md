@@ -154,7 +154,7 @@ Every outbound tool call writes one `tool_execution` event: one `tool_call` comp
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project per UTC day with three components: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them), measured in one statement, and [`record_gb_day`](#run-records) (gigabytes of run records). No principal/agent/run attribution. Each is priced from the `soat`/`gb-day` SKU from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null.
+A daily snapshot writes one `storage` event per project per UTC day with three components: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them), measured in one statement, and [`record_gb_day`](#records-of-work) (gigabytes of records of work done). No principal/agent/run attribution. Each is priced from the `soat`/`gb-day` SKU from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null.
 
 `gb_day` sums seven terms:
 
@@ -176,7 +176,7 @@ A daily snapshot writes one `storage` event per project per UTC day with three c
 - **Physical overhead is excluded from `gb_day`.** Index pages (including the HNSW graphs over both vector columns), TOAST chunk and tuple headers, and table bloat are not counted: none is attributable to one project and it moves with vacuum state. Real disk use is higher by a deployment-dependent factor.
 - **`chunk_count` is what that overhead is priced against.** Most of a chunk's cost is fixed per row: at `EMBEDDING_DIMENSIONS=1024` an HNSW element occupies a whole 8 KiB page (4 KB vector plus neighbour list) on top of the ~5.5 KB stored out of line. On a mirrored schema, a 25× change in chunk size moves a chunk's cost by 17%, while the same corpus re-chunked meters between 2.2× and 7.4× its source size on `gb_day`. A count does not drift with the caller's [`chunk_strategy`](./documents.md), and distinguishes a few large documents from a million tiny chunks, alike on `gb_day` and unlike on search.
 
-#### Run records
+#### Records of work
 
 `record_gb_day` is the gigabytes the runtime writes as work runs, beside what a caller stored:
 
