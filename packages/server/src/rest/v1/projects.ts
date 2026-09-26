@@ -3,6 +3,8 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { readRetrievalMode } from 'src/lib/conversationRetrieval';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
+import { principalFromAuthUser } from 'src/lib/principals';
+import { pauseProject, resumeProject } from 'src/lib/projectPauseActions';
 import {
   createProject,
   deleteProject,
@@ -29,13 +31,12 @@ type ProjectPriceBody = {
   effective_from?: string;
 };
 
-// Returns the project public id, or null once a 401/403 has already been set on
-// ctx. Existence is the lib's to resolve — it 404s an unknown project the
-// caller can reach.
-const authorizeProjectPrices = async (args: {
+// An IAM-authorized action on one project, returning its public id. Existence
+// is the lib's to resolve — it 404s an unknown project the caller can reach.
+const authorizeProjectAction = async (args: {
   ctx: Context;
   action: string;
-}): Promise<string | null> => {
+}): Promise<string> => {
   const { ctx, action } = args;
   requireAuth(ctx);
 
@@ -210,22 +211,57 @@ projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
+/**
+ * @openapi
+ * /api/v1/projects/{project_id}/pause:
+ *   post:
+ *     $ref: 'openapi/v1/projects.yaml#/paths/~1api~1v1~1projects~1{project_id}~1pause/post'
+ */
+projectsRouter.post('/projects/:project_id/pause', async (ctx: Context) => {
+  const projectPublicId = await authorizeProjectAction({
+    ctx,
+    action: 'projects:PauseProject',
+  });
+  const body = ctx.request.body as { reason?: unknown };
+
+  ctx.body = await pauseProject({ id: projectPublicId, reason: body.reason });
+});
+
+/**
+ * @openapi
+ * /api/v1/projects/{project_id}/resume:
+ *   post:
+ *     $ref: 'openapi/v1/projects.yaml#/paths/~1api~1v1~1projects~1{project_id}~1resume/post'
+ */
+projectsRouter.post('/projects/:project_id/resume', async (ctx: Context) => {
+  requireAuth(ctx);
+  const projectPublicId = await authorizeProjectAction({
+    ctx,
+    action: 'projects:ResumeProject',
+  });
+
+  ctx.body = await resumeProject({
+    id: projectPublicId,
+    // A task's suppressed dispatch runs as whoever resumed: the resume is the
+    // decision to spend again.
+    principal: principalFromAuthUser(ctx.authUser),
+  });
+});
+
 projectsRouter.get('/projects/:project_id/prices', async (ctx: Context) => {
-  const projectPublicId = await authorizeProjectPrices({
+  const projectPublicId = await authorizeProjectAction({
     ctx,
     action: 'projects:GetProjectPrices',
   });
-  if (!projectPublicId) return;
 
   ctx.body = await listProjectPrices({ projectId: projectPublicId });
 });
 
 projectsRouter.put('/projects/:project_id/prices', async (ctx: Context) => {
-  const projectPublicId = await authorizeProjectPrices({
+  const projectPublicId = await authorizeProjectAction({
     ctx,
     action: 'projects:ManageProjectPrices',
   });
-  if (!projectPublicId) return;
 
   const body = ctx.request.body as { prices?: ProjectPriceBody[] };
   const prices = (body.prices ?? []).map((price) => {

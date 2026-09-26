@@ -358,6 +358,101 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_id}/pause:
+    post:
+      tags:
+        - Projects
+      summary: Pause a project
+      description: >-
+        Stops everything the project runs, with one call. From the moment it
+        answers, nothing new starts in the project: agent, session and
+        conversation generations, tool-output continuations, chat completions,
+        direct tool calls, orchestration runs, eval runs and trigger firings
+        are refused with `409 PROJECT_PAUSED`, and so is resuming a single run
+        or task the pause holds.
+
+        What is already in motion is parked rather than discarded: every live
+        orchestration run is paused the way pause-orchestration-run pauses it
+        (a running one parks at its next checkpoint), every open task's
+        automation is paused, schedule triggers stop firing, and queued eval
+        items wait unclaimed. A generation or node already in flight finishes.
+        Reads and configuration writes keep working.
+
+        Idempotent: pausing a paused project answers it unchanged and keeps the
+        first `reason`. Emits `projects.paused`.
+      operationId: pauseProject
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseProjectRequest'
+      responses:
+        '200':
+          description: The paused project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRecord'
+        '400':
+          description: Bad Request (reason is not a string of at most 256 characters)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Project not found
+  /api/v1/projects/{project_id}/resume:
+    post:
+      tags:
+        - Projects
+      summary: Resume a project
+      description: >-
+        Lifts the project's pause and hands back exactly what it held: the runs
+        and tasks the pause parked are resumed (a run the way
+        resume-orchestration-run resumes it, in the background; a task's
+        suppressed dispatch runs as the caller), and schedule triggers fire
+        again from their next occurrence after now — an occurrence that fell
+        due while paused is not fired late. A run or task an operator paused
+        before the project was paused keeps its own pause. Eval runs continue
+        from the item they stopped at. Emits `projects.resumed`.
+      operationId: resumeProject
+      x-soat-agent-exclude: true
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The resumed project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRecord'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Project not found
+        '409':
+          description: The project is not paused
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/projects/{project_id}/prices:
     get:
       tags:
@@ -536,6 +631,23 @@ components:
             `none` is zero-retention — content is never written for any agent
             in this project.
           example: full
+        paused_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When the project was paused. `null` while it runs. While set,
+            nothing new starts in the project — see pause-project.
+          example: null
+        pause_reason:
+          type: string
+          nullable: true
+          maxLength: 256
+          description: >-
+            The reason the pause was requested with, echoed as `pause_reason`
+            on every run and task the pause parked. `null` while the project
+            runs, or when the pause named none.
+          example: null
         created_at:
           type: string
           format: date-time
@@ -544,6 +656,17 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
+    PauseProjectRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 256
+          description: >-
+            Why the project is paused. Stored as `pause_reason` and carried
+            onto every run and task the pause parks.
+          example: anomaly detected by the spend monitor
     ProjectPrice:
       type: object
       properties:

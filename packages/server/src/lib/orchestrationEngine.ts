@@ -43,7 +43,7 @@ import { executeRunLoop, type RunLoopResult } from './orchestrationRunLoop';
 import {
   clearRunPause,
   inheritedPause,
-  isRunPaused,
+  isRunPausedForDrive,
   parkPausedRun,
   readRunPause,
 } from './orchestrationRunPause';
@@ -63,6 +63,7 @@ import {
 } from './orchestrationStartRun';
 import { kickWorker } from './orchestrationWorker';
 import type { RequestPrincipal } from './principals';
+import { assertProjectAcceptsWork } from './projectPause';
 import { acceptStoredToolContext } from './toolContextCarrier';
 
 const log = createDebug('soat:orchestrations');
@@ -613,7 +614,10 @@ const createRunRecord = async (args: {
     // checkpoint rather than running a whole graph its parent was already
     // stopped from entering. The tree walk at pause time cannot reach
     // it — this row does not exist yet then.
-    ...(await inheritedPause({ parentRunId: args.parent?.runId })),
+    ...(await inheritedPause({
+      parentRunId: args.parent?.runId,
+      projectId: args.projectId,
+    })),
     startedAt: new Date(),
     // In `wait` mode the run is `running` immediately, so acquire a lease so the
     // reaper can reclaim it if this driver crashes before the first checkpoint.
@@ -713,6 +717,12 @@ export const startOrchestrationRun = async (
       projectIds: args.projectIds,
       orchestrationProjectId: orch.projectId as number,
     });
+
+  // A `loop` / `sub_orchestration` child is its parent's work, admitted with
+  // it; under a project pause it is born paused instead (`inheritedPause`).
+  if (!args.parent) {
+    await assertProjectAcceptsWork({ projectId: orch.projectId as number });
+  }
 
   const { state, artifacts } = seedRunState(args.input);
 
@@ -907,7 +917,7 @@ export const driveQueuedRun = async (args: {
   // the race, or the flag arrived through its parent's tree walk. Park it here
   // on the graph's start nodes, so `resume` re-drives the run from the top with
   // nothing executed.
-  if (isRunPaused(run)) {
+  if (await isRunPausedForDrive({ run })) {
     await parkPausedRun({
       runRecord: run,
       reason: run.pauseReason,
@@ -952,7 +962,7 @@ export const wakeRun = async (args: {
   // is only visible here — and the claim already consumed the run's `wakeAt`.
   // Re-writing the wake as due now is what lets `resume` hand the run back to
   // the scheduler instead of re-executing the node that set the timer.
-  if (isRunPaused(run)) {
+  if (await isRunPausedForDrive({ run })) {
     await parkPausedRun({
       runRecord: run,
       reason: run.pauseReason,
@@ -1342,7 +1352,7 @@ export const redriveRun = async (args: {
 
   // A reclaimed run whose pause landed while its driver was dying: park the
   // frontier the redrive would have run instead of running it.
-  if (isRunPaused(run)) {
+  if (await isRunPausedForDrive({ run })) {
     await parkPausedRun({
       runRecord: run,
       reason: run.pauseReason,
@@ -1394,7 +1404,7 @@ const resumeRunForApproval = async (args: {
   // An operator pause outranks the decision: resolving an approval would drive
   // the run the pause exists to stop. The item stays resolved and `resume`
   // re-drives the parked node, which files a fresh proposal.
-  if (isRunPaused(run)) {
+  if (await isRunPausedForDrive({ run })) {
     log('resumeRunForApproval: run %s is paused, not resuming', run.publicId);
     return;
   }

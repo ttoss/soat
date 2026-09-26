@@ -11,6 +11,7 @@ import {
 } from './eventCausation';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { fileException } from './exceptions';
+import { projectPausedError, readProjectPause } from './projectPause';
 import { evaluateRequestQuotas, quotaBreachError } from './quotaEnforcement';
 import { retryTransient } from './transientRetry';
 import { reserveEventFiring } from './triggerEventFirings';
@@ -140,8 +141,8 @@ const firingInputFor = (event: SoatEvent): Record<string, unknown> => {
 };
 
 /**
- * Admits one firing against the project's `requests` quotas *before* dispatch,
- * which is the only place a cap can act: an event trigger never passes through
+ * Admits one firing against the project's pause and its `requests` quotas
+ * *before* dispatch, which is the only place either can act: an event trigger never passes through
  * the HTTP middleware that admits every other request, so without this a `*`
  * pattern on an agent target is an uncapped spend path.
  *
@@ -152,6 +153,11 @@ const firingInputFor = (event: SoatEvent): Record<string, unknown> => {
 const admitFiring = async (args: {
   trigger: TriggerRow;
 }): Promise<DomainError | null> => {
+  const pause = await readProjectPause({
+    projectId: args.trigger.projectId as number,
+  });
+  if (pause) return projectPausedError(pause);
+
   const breach = await evaluateRequestQuotas({
     projectId: args.trigger.projectId as number,
     apiKeyPublicId: null,

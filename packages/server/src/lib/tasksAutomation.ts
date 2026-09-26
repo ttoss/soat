@@ -14,7 +14,11 @@ import {
 } from './tasksAutomationLocking';
 import { runDispatchWithRetry } from './tasksAutomationRetry';
 import { type DispatchResult, failedDispatchIds } from './tasksDispatch';
-import { isTaskPaused, markDispatchPaused } from './tasksPause';
+import {
+  adoptProjectPause,
+  isTaskPaused,
+  markDispatchPaused,
+} from './tasksPause';
 import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -361,7 +365,8 @@ const markDispatchRunning = (args: {
 };
 
 /**
- * Whether an operator pause suppressed this state's dispatch before it started.
+ * Whether an operator or project pause suppressed this state's dispatch before
+ * it started.
  *
  * `runStateAutomation` is the one place every state dispatch passes through, so
  * the check here stops all of them at once — an agent generation, a tool call
@@ -373,7 +378,15 @@ const suppressIfPaused = async (args: {
   stateName: string;
   token: number;
 }): Promise<boolean> => {
-  if (!isTaskPaused(args.task)) return false;
+  if (
+    !isTaskPaused(args.task) &&
+    !(await adoptProjectPause({
+      taskId: args.task.id as number,
+      projectId: args.task.projectId as number,
+    }))
+  ) {
+    return false;
+  }
   const taskPublicId = args.task.publicId as string;
   log(
     'runStateAutomation: task=%s is paused, suppressing dispatch',

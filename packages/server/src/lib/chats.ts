@@ -21,6 +21,7 @@ import {
   validateModelRouteExclusivity,
 } from './modelRoutes';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { assertProjectAcceptsWork } from './projectPause';
 import { makeResourceAccessor } from './resourceAccessor';
 import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
 
@@ -331,6 +332,16 @@ const prepareChatCompletion = async (args: ChatCompletionArgs) => {
     authUser: args.authUser,
   });
 
+  const resolvedModel = typedChat
+    ? await resolveChatScopedModel({ typedChat, model: args.model })
+    : await resolveChatModel({
+        // No chat means `validateChatCompletionTarget` above accepted an
+        // `aiProviderId`, which TypeScript cannot infer from that check.
+        aiProviderId: args.aiProviderId as string,
+        model: args.model,
+      });
+  await assertProjectAcceptsWork({ projectId: resolvedModel.projectId });
+
   return {
     fallbackModel: args.model ?? typedChat?.model ?? undefined,
     // A stateless completion has no stored prompt to fall back to.
@@ -339,14 +350,7 @@ const prepareChatCompletion = async (args: ChatCompletionArgs) => {
       storedInstructions: typedChat?.systemMessage ?? null,
     }),
     messages: resolvedMessages as ModelMessage[],
-    resolvedModel: typedChat
-      ? await resolveChatScopedModel({ typedChat, model: args.model })
-      : await resolveChatModel({
-          // No chat means `validateChatCompletionTarget` above accepted an
-          // `aiProviderId`, which TypeScript cannot infer from that check.
-          aiProviderId: args.aiProviderId as string,
-          model: args.model,
-        }),
+    resolvedModel,
   };
 };
 

@@ -9,6 +9,7 @@ import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
 } from './pipelineTools';
+import { assertProjectAcceptsWork } from './projectPause';
 import { makeResourceAccessor } from './resourceAccessor';
 import { assertSecretRefsExist } from './secrets';
 import { validateSoatActions } from './soatActionValidation';
@@ -466,4 +467,24 @@ export const callTool = async (args: {
     toolContext: args.toolContext,
     attribution: args.attribution,
   });
+};
+
+/**
+ * {@link callTool} for a call that is new work in its own right — the direct
+ * `POST /tools/{id}/call` — refused while the tool's project is paused. The
+ * calls a generation, a run node or a scorer makes are the work of something
+ * already admitted, so they go through `callTool` and stop at that owner's own
+ * checkpoint.
+ */
+export const startToolCall = async (
+  args: Parameters<typeof callTool>[0]
+): Promise<unknown> => {
+  const toolInstance = await tools.getByPublicId({
+    projectIds: args.projectIds,
+    id: args.id,
+  });
+  await assertProjectAcceptsWork({
+    projectId: toolInstance.projectId as number,
+  });
+  return callTool(args);
 };

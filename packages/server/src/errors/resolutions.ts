@@ -41,6 +41,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
+  PROJECT_PAUSED:
+    'Resume the project with `POST /api/v1/projects/{project_id}/resume` once whatever paused it is resolved; `meta.pause_reason` says why it was paused. Nothing is queued while paused — retry the request after resuming.',
+  PROJECT_NOT_PAUSED:
+    'Nothing to do: the project is already running. Read `paused_at` on `GET /api/v1/projects/{project_id}` before resuming.',
   QUOTA_EXCEEDED:
     'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
   QUOTA_UNENFORCEABLE:

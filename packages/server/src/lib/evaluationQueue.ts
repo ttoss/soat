@@ -78,8 +78,10 @@ type CandidateRow = { id: number };
  * incremented attempt count.
  *
  * A task is due when `available_at <= now` and it is either unclaimed or its
- * previous lease has expired — the latter being the redelivery path. Raw SQL
- * names the physical snake_case columns; the models are `underscored`.
+ * previous lease has expired — the latter being the redelivery path — and its
+ * project is not paused: a paused project's items wait, unclaimed, for the
+ * resume, so its runs continue where they stopped. Raw SQL names the physical
+ * snake_case columns; the models are `underscored`.
  */
 export const claimEvalItemTasks = async (args: {
   limit: number;
@@ -93,8 +95,12 @@ export const claimEvalItemTasks = async (args: {
     const [rows] = await sequelize.query(
       `SELECT t."id"
          FROM "${EVAL_RUN_TASK_TABLE}" t
+         JOIN "eval_runs" r ON r."id" = t."eval_run_id"
+         JOIN "evals" e ON e."id" = r."eval_id"
+         JOIN "projects" p ON p."id" = e."project_id"
         WHERE t."available_at" <= :now
           AND (t."claimed_at" IS NULL OR t."lease_expires_at" < :now)
+          AND p."paused_at" IS NULL
         ORDER BY t."available_at" ASC
         LIMIT :limit
         FOR UPDATE OF t SKIP LOCKED`,

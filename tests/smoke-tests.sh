@@ -185,6 +185,39 @@ if [ "$(printf '%s\n' "$PROJECT_RETENTION_CLEARED" | jq -r '.trace_content_reten
 fi
 echo "Project retention window set/cleared: OK"
 
+# 3a-ii-c. Project kill switch. A paused project refuses every new start; the
+# orchestration is created while paused because configuration writes still work.
+echo "--- Project pause and resume ---"
+PROJECT_PAUSE_RESP=$($SOAT_CLI pause-project --project-id "$PROJECT_PUBLIC_ID" --reason "smoke: kill switch")
+if ! printf '%s\n' "$PROJECT_PAUSE_RESP" | jq -e '.paused_at != null and .pause_reason == "smoke: kill switch"' >/dev/null 2>&1; then
+  echo "ERROR: pause-project did not record the pause" >&2
+  echo "$PROJECT_PAUSE_RESP" >&2
+  exit 1
+fi
+PAUSED_ORCH_ID=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-paused-project" \
+  --nodes '[{"id":"a","type":"transform","expression":1}]' \
+  --edges '[]' | jq -r '.id')
+set +e
+PAUSED_START_RESP=$($SOAT_CLI start-orchestration-run --orchestration-id "$PAUSED_ORCH_ID" 2>&1)
+PAUSED_START_EXIT=$?
+set -e
+if [ "$PAUSED_START_EXIT" -eq 0 ] || ! printf '%s\n' "$PAUSED_START_RESP" \
+  | jq -e '.status == 409 and .error.code == "PROJECT_PAUSED"' >/dev/null 2>&1; then
+  echo "ERROR: start-orchestration-run was not refused while the project was paused" >&2
+  printf '%s\n' "$PAUSED_START_RESP" >&2
+  exit 1
+fi
+PROJECT_RESUME_RESP=$($SOAT_CLI resume-project --project-id "$PROJECT_PUBLIC_ID")
+if ! printf '%s\n' "$PROJECT_RESUME_RESP" | jq -e '.paused_at == null and .pause_reason == null' >/dev/null 2>&1; then
+  echo "ERROR: resume-project did not lift the pause" >&2
+  echo "$PROJECT_RESUME_RESP" >&2
+  exit 1
+fi
+$SOAT_CLI delete-orchestration --orchestration-id "$PAUSED_ORCH_ID" >/dev/null
+echo "Project pause/resume: OK"
+
 # 3a-iii. Orchestration queue stats endpoint
 echo "--- Orchestration queue stats ---"
 QUEUE_STATS_RESP=$($SOAT_CLI get-queue-stats)

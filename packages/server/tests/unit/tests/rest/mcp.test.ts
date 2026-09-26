@@ -1233,6 +1233,25 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toBe(projectId);
       expect(result.name).toBe('MCP Happy Path Renamed');
     });
+
+    // One test, so the shared project is never left paused for the rest of
+    // the file.
+    test('pause-project and resume-project toggle the pause', async () => {
+      const paused = await mcpCall('pause-project', {
+        project_id: projectId,
+        reason: 'mcp kill switch',
+      });
+      expect(paused.status).toBe(200);
+      const pausedResult = parseResult(paused);
+      expect(pausedResult.paused_at).not.toBeNull();
+      expect(pausedResult.pause_reason).toBe('mcp kill switch');
+
+      const resumed = await mcpCall('resume-project', {
+        project_id: projectId,
+      });
+      expect(resumed.status).toBe(200);
+      expect(parseResult(resumed).paused_at).toBeNull();
+    });
   });
 
   // ── Metadata schemas ─────────────────────────────────────────────────────

@@ -249,6 +249,7 @@ tasksRouter.post('/tasks/:task_id/pause', async (ctx: Context) => {
   ctx.body = await pauseTask({
     id: ctx.params.task_id,
     reason: typeof body.reason === 'string' ? body.reason : null,
+    origin: 'operator',
   });
 });
 

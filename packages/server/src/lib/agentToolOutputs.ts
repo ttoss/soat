@@ -16,6 +16,7 @@ import {
   collectSystemInstructions,
   withoutSystemMessages,
 } from './modelMessages';
+import { assertProjectAcceptsWork } from './projectPause';
 
 /**
  * The ids a caller may answer are the ones this pause opened.
@@ -115,6 +116,10 @@ export const submitToolOutputs = async (args: {
     toolOutputs: args.toolOutputs,
     pendingToolCalls: pending.pendingToolCalls,
   });
+
+  // The continuation is a new turn, and under a pause it stays pending — the
+  // outputs can be submitted again once the project resumes.
+  await assertProjectAcceptsWork({ projectId: pending.projectId });
 
   pendingGenerations.delete(args.generationId);
 

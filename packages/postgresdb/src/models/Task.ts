@@ -191,6 +191,12 @@ export class Task extends Model {
   @Column({ type: DataType.STRING(256), allowNull: true })
   declare pauseReason: string | null;
 
+  // The pause was the project's, not an operator's on this row: resuming the
+  // project lifts it, while a pause set on the row itself before the project
+  // paused is left for the row's own `resume`.
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare pausedByProject: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 
