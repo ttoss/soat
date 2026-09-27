@@ -1,7 +1,14 @@
-import type { HelpFlag, ParsedFlags, RouteLike, Wrapper } from './types.js';
+import type {
+  HelpFlag,
+  ParsedFlags,
+  RouteLike,
+  Wrapper,
+  WrapperResult,
+} from './types.js';
 import { formationsWrapper } from './wrappers/formations.js';
+import { tagBagsWrapper } from './wrappers/tagBags.js';
 
-const WRAPPERS: Wrapper[] = [formationsWrapper];
+const WRAPPERS: Wrapper[] = [formationsWrapper, tagBagsWrapper];
 
 const resolveWrapperForCommand = (args: {
   commandName: string;
@@ -17,7 +24,7 @@ export const applyWrapperForCommand = (args: {
   commandName: string;
   route: RouteLike;
   parsedFlags: ParsedFlags;
-}): { flags: ParsedFlags; forcedBody: Record<string, unknown> } => {
+}): WrapperResult => {
   const { commandName, route, parsedFlags } = args;
   const wrapper = resolveWrapperForCommand({ commandName });
 

@@ -688,9 +688,8 @@ $SOAT_CLI list-actors --project_id "$PROJECT_PUBLIC_ID"
 # Tags mechanism (shared by every tagged resource): the sub-resource returns
 # the bag, the list filters by `key:value`, and a malformed body or pair is 400.
 echo "--- Actor tags: sub-resource, list filter, validation ---"
-ACTOR_TAGS_RESP=$(curl -s -X PUT "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"env":"smoke","team":"qa"}')
+ACTOR_TAGS_RESP=$($SOAT_CLI replace-actor-tags --actor-id "$ACTOR_ID" \
+  --tags '{"env":"smoke","team":"qa"}')
 if ! printf '%s\n' "$ACTOR_TAGS_RESP" | jq -e '. == {"env":"smoke","team":"qa"}' >/dev/null 2>&1; then
   echo "ERROR: PUT actor tags did not return the tag map" >&2
   echo "$ACTOR_TAGS_RESP" >&2
@@ -703,23 +702,17 @@ if ! printf '%s\n' "$ACTOR_TAG_LIST" | jq -e --arg id "$ACTOR_ID" \
   echo "$ACTOR_TAG_LIST" >&2
   exit 1
 fi
-ACTOR_BAD_TAGS_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"env":["a","b"]}')
-if [ "$ACTOR_BAD_TAGS_STATUS" != "400" ]; then
-  echo "ERROR: non-string tag value expected 400, got $ACTOR_BAD_TAGS_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 400 merge-actor-tags --actor-id "$ACTOR_ID" \
+  --tags '{"env":["a","b"]}'
 expect_cli_error_status 400 list-actors --project_id "$PROJECT_PUBLIC_ID" --tags smoke
 # The bag is bounded where it is written, and the refusal names the bound it
 # crossed: every pair reaches the IAM context of every check on the resource.
 LONG_TAG_VALUE=$(awk 'BEGIN { while (i++ < 257) printf "v" }')
-LONG_TAG_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"env\":\"$LONG_TAG_VALUE\"}")
-if ! printf '%s\n' "$LONG_TAG_RESP" | jq -e '.error.meta.limit == 256' >/dev/null 2>&1; then
+expect_cli_error_status 400 merge-actor-tags --actor-id "$ACTOR_ID" \
+  --tags "{\"env\":\"$LONG_TAG_VALUE\"}"
+if ! printf '%s\n' "$CLI_OUTPUT" | jq -e '.error.meta.limit == 256' >/dev/null 2>&1; then
   echo "ERROR: an over-long tag value expected 400 naming the 256 limit" >&2
-  echo "$LONG_TAG_RESP" >&2
+  echo "$CLI_OUTPUT" >&2
   exit 1
 fi
 echo "Actor tags: OK"
@@ -1705,9 +1698,8 @@ echo "Memory store updated."
 
 # Memory store tags sub-resource — the same three routes every tagged resource has.
 echo "--- Memory store tags sub-resource ---"
-MEM_TAGS_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/memory-stores/$MEM_ID/tags" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"domain":"smoke"}')
+MEM_TAGS_RESP=$($SOAT_CLI merge-memory-store-tags --memory-store-id "$MEM_ID" \
+  --tags '{"domain":"smoke"}')
 if ! printf '%s\n' "$MEM_TAGS_RESP" | jq -e '.domain == "smoke"' >/dev/null 2>&1; then
   echo "ERROR: PATCH memory store tags did not return the merged tag map" >&2
   echo "$MEM_TAGS_RESP" >&2

@@ -301,6 +301,10 @@ program
       route,
       parsedFlags,
     });
+    if (wrapped.errors?.length) {
+      for (const line of wrapped.errors) console.error(line);
+      process.exit(1);
+    }
     const flags = wrapped.flags.single;
     const repeatedFlags = wrapped.flags.repeated;
 
@@ -414,6 +418,7 @@ program
     if (Object.keys(pathArgs).length) callOpts['path'] = pathArgs;
     if (Object.keys(queryArgs).length) callOpts['query'] = queryArgs;
     if (Object.keys(bodyArgs).length) callOpts['body'] = bodyArgs;
+    if (wrapped.rootBody) callOpts['body'] = wrapped.rootBody;
 
     const result = await method(callOpts);
 
