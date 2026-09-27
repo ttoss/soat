@@ -6,6 +6,7 @@ import { chatsFormationModule } from './formation-modules/chatsFormationModule';
 import { conversationsFormationModule } from './formation-modules/conversationsFormationModule';
 import { datasetItemsFormationModule } from './formation-modules/datasetItemsFormationModule';
 import { datasetsFormationModule } from './formation-modules/datasetsFormationModule';
+import { decidersFormationModule } from './formation-modules/decidersFormationModule';
 import { documentsFormationModule } from './formation-modules/documentsFormationModule';
 import { evalsFormationModule } from './formation-modules/evalsFormationModule';
 import { filesFormationModule } from './formation-modules/filesFormationModule';
@@ -72,6 +73,7 @@ registerFormationModule({ module: datasetsFormationModule });
 registerFormationModule({ module: datasetItemsFormationModule });
 registerFormationModule({ module: evalsFormationModule });
 registerFormationModule({ module: workflowsFormationModule });
+registerFormationModule({ module: decidersFormationModule });
 
 /**
  * The types that ship with SOAT, frozen after the registrations above.

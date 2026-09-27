@@ -111,8 +111,27 @@ type DeciderBackend =
   | { agent: null; tool: DeciderToolRow };
 
 /**
+ * Why a write's backend fields are unusable, or null. Naming both is always
+ * refused; naming neither only on a create, since an update that names no
+ * backend keeps the current one. Shared by the route and the formation module.
+ */
+export const deciderBackendNamingError = (args: {
+  namesAgent: boolean;
+  namesTool: boolean;
+  forUpdate: boolean;
+}): string | null => {
+  if (args.namesAgent && args.namesTool) {
+    return 'A decider names exactly one of agent_id and tool_id, not both.';
+  }
+  if (!args.namesAgent && !args.namesTool && !args.forUpdate) {
+    return 'A decider names exactly one of agent_id and tool_id.';
+  }
+  return null;
+};
+
+/**
  * The one backend a write names: a tool-less agent or a callable tool, in the
- * decider's project. Naming both, or neither, is refused.
+ * decider's project.
  */
 const resolveBackend = async (args: {
   projectId: number;
@@ -120,13 +139,12 @@ const resolveBackend = async (args: {
   toolId?: unknown;
 }): Promise<DeciderBackend> => {
   const namesAgent = args.agentId !== undefined;
-  const namesTool = args.toolId !== undefined;
-  if (namesAgent === namesTool) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'A decider names exactly one of agent_id and tool_id.'
-    );
-  }
+  const namingError = deciderBackendNamingError({
+    namesAgent,
+    namesTool: args.toolId !== undefined,
+    forUpdate: false,
+  });
+  if (namingError) throw new DomainError('VALIDATION_FAILED', namingError);
   if (namesAgent) {
     const agent = await findDeciderAgent({
       projectId: args.projectId,

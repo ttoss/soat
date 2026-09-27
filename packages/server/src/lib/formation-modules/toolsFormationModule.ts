@@ -13,7 +13,8 @@ import {
 } from '../resource-inputs/normalizers';
 import { validateExecuteAuth } from '../toolAuth';
 import { assertValidToolContextAllowlist } from '../toolContext';
-import { createTool, deleteTool, getTool, updateTool } from '../tools';
+import { deleteTool, findToolDeletionBlocker } from '../toolDelete';
+import { createTool, getTool, updateTool } from '../tools';
 import {
   describeToolTemplateTokenProblems,
   findInvalidTemplateTokens,
@@ -211,6 +212,10 @@ export const toolsFormationModule = defineFormationModule({
 
   remove: ({ physicalResourceId }) => {
     return deleteTool({ id: physicalResourceId });
+  },
+
+  deletionBlocker: ({ physicalResourceId, alsoDeleting }) => {
+    return findToolDeletionBlocker({ id: physicalResourceId, alsoDeleting });
   },
 
   fetch: ({ physicalResourceId }) => {

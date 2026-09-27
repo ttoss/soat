@@ -208,8 +208,8 @@ export const agentsFormationModule = defineFormationModule({
   // Checked up front rather than left to the delete: that refusal would land
   // after the dataset, its items and the eval are already gone, destroying the
   // stack around the agent. Failing here leaves the teardown intact.
-  deletionBlocker: ({ physicalResourceId }) => {
-    return findAgentDeletionBlocker({ id: physicalResourceId });
+  deletionBlocker: ({ physicalResourceId, alsoDeleting }) => {
+    return findAgentDeletionBlocker({ id: physicalResourceId, alsoDeleting });
   },
 
   fetch: ({ physicalResourceId }) => {

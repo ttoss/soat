@@ -11,6 +11,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
 import { agentVersionStore } from './agentVersionSnapshot';
+import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 
@@ -140,15 +141,14 @@ const countAgentDependents = async (
  * traces `force` does not cascade them: deleting the agent would take away the
  * judge their decisions were answered by.
  */
-const countAgentDeciders = (args: { agentId: number }): Promise<number> => {
-  return db.Decider.count({ where: { agentId: args.agentId } });
-};
-
 const assertNoDeciders = async (args: {
   agentId: number;
   publicId: string;
 }): Promise<void> => {
-  const deciderCount = await countAgentDeciders({ agentId: args.agentId });
+  const deciderCount = await countBackendDeciders({
+    backend: { agentId: args.agentId },
+    excludingPublicIds: new Set(),
+  });
   if (deciderCount === 0) return;
   throw new DomainError(
     'AGENT_HAS_DEPENDENTS',
@@ -160,10 +160,13 @@ const assertNoDeciders = async (args: {
 export const findAgentDeletionBlocker = async (args: {
   projectIds?: number[];
   id: string;
+  /** Physical ids deleted alongside the agent; a decider among them blocks nothing. */
+  alsoDeleting: ReadonlySet<string>;
 }): Promise<string | null> => {
   const agent = await agents.getByPublicId(args);
-  const deciderCount = await countAgentDeciders({
-    agentId: agent.id as number,
+  const deciderCount = await countBackendDeciders({
+    backend: { agentId: agent.id as number },
+    excludingPublicIds: args.alsoDeleting,
   });
   if (deciderCount > 0) {
     return `Agent '${args.id}' is the agent of ${String(deciderCount)} decider(s), so it cannot be deleted.`;

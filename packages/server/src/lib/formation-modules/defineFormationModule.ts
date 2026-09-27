@@ -121,6 +121,7 @@ export type FormationModuleDefinition<TResource> = {
    */
   deletionBlocker?: (args: {
     physicalResourceId: string;
+    alsoDeleting: ReadonlySet<string>;
   }) => Promise<string | null>;
   /**
    * Loads the live resource. Any throw, and a `null`/`undefined` result, mean
