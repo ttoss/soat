@@ -16,6 +16,8 @@ components:
       type: object
       additionalProperties:
         type: string
+      # The CLI flag a tag route's whole body arrives in: `--tags '{…}'`.
+      x-cli-flag-name: tags
       description: >-
         Key-value labels on a resource. A flat object of string values —
         an array, a nested object or a number is rejected with

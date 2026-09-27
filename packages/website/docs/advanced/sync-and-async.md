@@ -117,7 +117,7 @@ A [trigger](../modules/triggers.md) firing has no `wait`: it always starts an ev
 
 **Streaming implies waiting.** `stream: true` holds the response open, so it is a blocking call whether or not you pass `wait`. `stream: true` with `?wait=false` is contradictory and returns `400 VALIDATION_FAILED`.
 
-**A `builtin` tool call always waits.** When an agent calls another agent through a `builtin` tool, the nested call blocks: a tool call is one request returning one result, with no channel to poll later. The field is not offered on the tool surface, like `stream`. See [Agent-to-Agent Calls](../modules/agents.md#nested-agent-calls).
+**A `builtin` tool call always waits where the result is the point of the call and the work is bounded.** That is agent and conversation generation and [requesting a decision](../modules/deciders.md#requesting-a-decision): a tool call is one request returning one result, and an agent step or an orchestration `tool` node reading a queued record would find no answer in it. The field is not offered on the tool surface, like `stream`, and the MCP tools derived from the same specs behave the same way. See [Agent-to-Agent Calls](../modules/agents.md#nested-agent-calls). Runs that can pause or run long (orchestration and eval runs) keep `wait` on the tool surface, since polling them is the point.
 
 ## Choosing a mode
 

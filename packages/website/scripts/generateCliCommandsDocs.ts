@@ -10,6 +10,8 @@ import * as url from 'node:url';
 
 import { load } from 'js-yaml';
 
+import { routes as cliRoutes } from '../../cli/src/generated/routes';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
@@ -438,6 +440,27 @@ const getParamFlags = (args: {
     });
 };
 
+/**
+ * A body that names no property arrives whole in one flag. Read from the CLI
+ * manifest, which names it, so this page cannot drift from the CLI.
+ */
+const rootBodyFlags = (args: { command: string }): CommandFlag[] => {
+  const route = cliRoutes[args.command];
+  return (route?.flags ?? [])
+    .filter((flag) => {
+      return flag.in === 'body-root';
+    })
+    .map((flag) => {
+      return {
+        flag: toFlagFromName(flag.name),
+        source: 'body',
+        required: flag.required,
+        type: flag.type,
+        description: flag.description || '—',
+      };
+    });
+};
+
 const getCommandFlags = (args: {
   command: string;
   operation: OperationSpec;
@@ -451,7 +474,10 @@ const getCommandFlags = (args: {
   const queryFlags = getParamFlags({ operation, spec }).filter((flag) => {
     return flag.source === 'query';
   });
-  const bodyFlags = getBodyFlags({ operation, spec });
+  const bodyFlags = [
+    ...getBodyFlags({ operation, spec }),
+    ...rootBodyFlags({ command }),
+  ];
   const wrapperFlags = WRAPPER_FLAG_OVERRIDES[command] ?? [];
 
   return [...pathFlags, ...queryFlags, ...bodyFlags, ...wrapperFlags];

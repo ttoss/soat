@@ -2940,6 +2940,56 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(listed).total).toBe(1);
     });
 
+    test('create-decision always waits, returning the settled decision', async () => {
+      // A pipeline answering from a builtin read: deterministic, no model.
+      const engineRes = await mcpCall('create-tool', {
+        project_id: projectId,
+        name: 'mcp-decider-rules',
+        type: 'pipeline',
+        description: 'Answers from the decider it reads',
+        pipeline: {
+          steps: [
+            {
+              id: 'read',
+              tool: {
+                name: 'read-decider',
+                type: 'builtin',
+                actions: ['get-decider'],
+              },
+              action: 'get-decider',
+              input: { decider_id: { var: 'input.state.decider_id' } },
+            },
+          ],
+          output: {
+            answers: {
+              escalate: {
+                value: { '==': [{ var: 'steps.read.version' }, 1] },
+              },
+            },
+          },
+        },
+      });
+      expect(engineRes.status).toBe(200);
+      const ruleDeciderRes = await mcpCall('create-decider', {
+        project_id: projectId,
+        name: 'mcp-rule-triage',
+        tool_id: parseResult(engineRes).id,
+        questions,
+      });
+      const ruleDeciderId = parseResult(ruleDeciderRes).id;
+
+      const res = await mcpCall('create-decision', {
+        decider_id: ruleDeciderId,
+        state: { decider_id: ruleDeciderId },
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).status).toBe('completed');
+      expect(parseResult(res).answers).toEqual({
+        escalate: { type: 'boolean', value: true },
+      });
+    });
+
     test('delete-decider removes it', async () => {
       const res = await mcpCall('delete-decider', { decider_id: deciderId });
       expect(res.status).toBe(200);
@@ -3268,5 +3318,14 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
 
     expect(generate).toBeDefined();
     expect(generate?.inputSchema?.properties?.wait).toBeUndefined();
+  });
+
+  test('create-decision is offered without its wait field', () => {
+    const decide = tools.find((t) => {
+      return t.name === 'create-decision';
+    });
+
+    expect(decide).toBeDefined();
+    expect(decide?.inputSchema?.properties?.wait).toBeUndefined();
   });
 });

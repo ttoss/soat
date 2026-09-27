@@ -329,6 +329,11 @@ program
     const pathArgs: Record<string, unknown> = {};
     const queryArgs: Record<string, unknown> = {};
     const bodyArgs: Record<string, unknown> = {};
+    // A body that names no property arrives whole in one flag, not as a field.
+    const rootBodyFlag = route.flags.find((f) => {
+      return f.in === 'body-root';
+    });
+    let rootBody: { value: unknown } | undefined;
 
     for (const [flagKey, val] of Object.entries(flags)) {
       if (flagKey === 'profile' || flagKey === 'id') continue;
@@ -347,6 +352,8 @@ program
 
       if (pathParam) {
         pathArgs[pathParam] = parsedValue;
+      } else if (rootBodyFlag && canonical === toCanonical(rootBodyFlag.name)) {
+        rootBody = { value: parsedValue };
       } else if (queryParam) {
         queryArgs[queryParam] = parsedValue;
       } else if (route.httpMethod === 'get') {
@@ -414,6 +421,21 @@ program
     if (Object.keys(pathArgs).length) callOpts['path'] = pathArgs;
     if (Object.keys(queryArgs).length) callOpts['query'] = queryArgs;
     if (Object.keys(bodyArgs).length) callOpts['body'] = bodyArgs;
+    if (rootBody) {
+      if (Object.keys(bodyArgs).length) {
+        console.error(
+          `Unknown flag(s) ${Object.keys(bodyArgs)
+            .map((key) => {
+              return `--${toKebab(key)}`;
+            })
+            .join(
+              ', '
+            )}: '${commandName}' sends its whole body in --${toKebab(rootBodyFlag?.name ?? '')}.`
+        );
+        process.exit(1);
+      }
+      callOpts['body'] = rootBody.value;
+    }
 
     const result = await method(callOpts);
 
