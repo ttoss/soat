@@ -29,7 +29,8 @@
     "generate-page-twins": "tsx scripts/generatePageTwins.ts",
     "generate-error-codes-page": "tsx scripts/generateErrorCodesPage.ts",
     "advertise-markdown-twins": "tsx scripts/advertiseMarkdownTwins.ts",
-    "check-agent-surfaces": "tsx scripts/checkAgentSurfaces.ts"
+    "check-agent-surfaces": "tsx scripts/checkAgentSurfaces.ts",
+    "check-client-examples": "tsx scripts/checkClientExamples.ts"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
