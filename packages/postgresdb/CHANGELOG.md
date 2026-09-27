@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.63.0](https://github.com/ttoss/soat/compare/v0.62.0...v0.63.0) (2026-09-27)
+
+### Features
+
+* **deciders:** tool backend with a strict answer contract ([#1465](https://github.com/ttoss/soat/issues/1465)) ([61441fa](https://github.com/ttoss/soat/commit/61441fa09dfa8e08eea67379feae68f1010a50fd)), closes [#1462](https://github.com/ttoss/soat/issues/1462)
+* **deciders:** versioned question sets producing typed, append-only decisions ([#1463](https://github.com/ttoss/soat/issues/1463)) ([8547ea4](https://github.com/ttoss/soat/commit/8547ea46cca1cd7623d0b1b02efbc83dd2e9ec1e)), closes [#1462](https://github.com/ttoss/soat/issues/1462)
+
 # [0.62.0](https://github.com/ttoss/soat/compare/v0.61.1...v0.62.0) (2026-09-26)
 
 ### Bug Fixes
