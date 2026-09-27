@@ -39,7 +39,6 @@ const NOT_NULL_FOREIGN_KEYS = [
   'dataset_items.dataset_id',
   'datasets.project_id',
   'decider_versions.decider_id',
-  'deciders.agent_id',
   'deciders.project_id',
   'decisions.project_id',
   'document_chunks.document_id',

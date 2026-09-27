@@ -8499,6 +8499,57 @@ fi
 echo "--- A decider holds its agent ---"
 expect_cli_error_status 409 delete-agent --agent-id "$DECIDER_AGENT_ID" --force true
 
+echo "--- A tool-backed decider ---"
+# A deterministic engine: a pipeline wrapping a call to this server, whose
+# fixed output is the answer, so the contract is exercised without a model.
+DECIDER_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name decider-engine-stub-http \
+  --type http \
+  --description "Deterministic stub call behind the decider engine." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+DECIDER_HTTP_TOOL_ID=$(printf '%s\n' "$DECIDER_HTTP_TOOL_RESP" | jq -r '.id')
+DECIDER_ENGINE_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name decider-engine-stub \
+  --type pipeline \
+  --description "Answers the decider's question set with a fixed answer." \
+  --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$DECIDER_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"answers\":{\"escalate\":{\"value\":true,\"probabilities\":{\"true\":0.9,\"false\":0.1}}}}}")
+DECIDER_ENGINE_ID=$(printf '%s\n' "$DECIDER_ENGINE_RESP" | jq -r '.id')
+
+TOOL_DECIDER_RESP=$($SOAT_CLI create-decider \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-tool-triage" \
+  --tool_id "$DECIDER_ENGINE_ID" \
+  --questions '{"escalate":{"type":"boolean","instructions":"Must a person read this first?"}}')
+TOOL_DECIDER_ID=$(printf '%s\n' "$TOOL_DECIDER_RESP" | jq -r '.id')
+if ! printf '%s\n' "$TOOL_DECIDER_RESP" | jq -e --arg tool "$DECIDER_ENGINE_ID" \
+  '.tool_id == $tool and .agent_id == null' >/dev/null 2>&1; then
+  echo "ERROR: create-decider did not take the tool as its backend" >&2
+  printf '%s\n' "$TOOL_DECIDER_RESP" >&2
+  exit 1
+fi
+
+TOOL_DECISION_RESP=$($SOAT_CLI create-decision \
+  --decider_id "$TOOL_DECIDER_ID" \
+  --state "A customer threatens legal action." \
+  --wait true)
+if ! printf '%s\n' "$TOOL_DECISION_RESP" | jq -e \
+  '.status == "completed" and .generation_id == null and .answers.escalate == {"type":"boolean","value":true,"probabilities":{"true":0.9,"false":0.1}}' \
+  >/dev/null 2>&1; then
+  echo "ERROR: the tool-backed decision did not settle with the tool's answer" >&2
+  printf '%s\n' "$TOOL_DECISION_RESP" >&2
+  exit 1
+fi
+
+echo "--- A decider holds its tool ---"
+expect_cli_error_status 409 delete-tool --tool-id "$DECIDER_ENGINE_ID"
+
+$SOAT_CLI delete-decider --decider_id "$TOOL_DECIDER_ID"
+$SOAT_CLI delete-tool --tool-id "$DECIDER_ENGINE_ID" >/dev/null
+$SOAT_CLI delete-tool --tool-id "$DECIDER_HTTP_TOOL_ID" >/dev/null
+
 echo "--- Cleaning up deciders fixtures ---"
 $SOAT_CLI delete-decider --decider_id "$DECIDER_ID"
 $SOAT_CLI get-decision --decision_id "$DECISION_ID" >/dev/null

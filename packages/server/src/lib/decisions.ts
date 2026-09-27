@@ -13,7 +13,8 @@ import {
   type DeciderQuestions,
   toDecisionAnswers,
 } from './deciderQuestions';
-import { deciderQuestionsOf, deciders } from './deciders';
+import { deciderQuestionsOf, type DeciderRow, deciders } from './deciders';
+import { answerWithTool, assertDeciderToolCallable } from './deciderTool';
 import { emitResourceEvent } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { isPlainObject } from './plainObject';
@@ -86,7 +87,7 @@ type Outcome =
   | {
       status: 'completed';
       answers: Record<string, unknown>;
-      generationId: string;
+      generationId: string | null;
     }
   | { status: 'failed'; error: { code: ErrorCode; message: string } };
 
@@ -167,15 +168,25 @@ export const interruptDecision = async (args: {
   return updated > 0;
 };
 
-/** The generation's own code when it raised one; anything else is opaque. */
-const failedOutcome = (error: unknown): Outcome => {
+type FailureCause = { code: ErrorCode; message: string };
+
+const GENERATION_FAILURE: FailureCause = {
+  code: 'GENERATION_FAILED',
+  message: 'The generation failed.',
+};
+
+const TOOL_FAILURE: FailureCause = {
+  code: 'INTERNAL_ERROR',
+  message: 'The tool call failed.',
+};
+
+/** The backend's own code when it raised one; anything else is opaque. */
+const failedOutcome = (args: {
+  error: unknown;
+  opaque: FailureCause;
+}): Outcome => {
   const { code, message } =
-    error instanceof DomainError
-      ? error
-      : {
-          code: 'GENERATION_FAILED' as const,
-          message: 'The generation failed.',
-        };
+    args.error instanceof DomainError ? args.error : args.opaque;
   return { status: 'failed', error: { code, message } };
 };
 
@@ -197,7 +208,7 @@ const outcomeOf = (args: {
   const answer = answerOf(result);
   /* istanbul ignore next -- see `answerOf`. */
   if (answer === null || result instanceof ReadableStream) {
-    return failedOutcome(null);
+    return failedOutcome({ error: null, opaque: GENERATION_FAILURE });
   }
   return {
     status: 'completed',
@@ -206,18 +217,45 @@ const outcomeOf = (args: {
   };
 };
 
-/**
- * Runs the agent over the frame and settles the decision. Never throws: a
- * failure after admission is recorded on the decision, since a background
- * caller has no request left to receive it.
- */
-const evaluateDecision = async (args: {
+/** Runs the agent over the frame; the generation carries the answer. */
+const answerWithAgent = async (args: {
   projectIds?: number[];
-  decisionDbId: number;
   agentPublicId: string;
   agentVersion: number;
   questions: DeciderQuestions;
   state: unknown;
+}): Promise<Outcome> => {
+  const result = await createGeneration({
+    projectIds: args.projectIds,
+    agentId: args.agentPublicId,
+    messages: [
+      {
+        role: 'user',
+        content: renderDeciderFrame({
+          questions: args.questions,
+          state: args.state,
+        }),
+      },
+    ],
+    stream: false,
+    // The version whose tool surface was checked at admission, so an edit
+    // landing mid-evaluation cannot hand the generation a tool.
+    pinnedAgentVersion: args.agentVersion,
+    source: DECIDER_USAGE_SOURCE,
+    outputSchemaOverride: compileAnswerSchema(args.questions),
+  });
+  return outcomeOf({ result, questions: args.questions });
+};
+
+/**
+ * Runs the decider's backend and settles the decision. Never throws: a
+ * failure after admission is recorded on the decision, since a background
+ * caller has no request left to receive it.
+ */
+const evaluateDecision = async (args: {
+  decisionDbId: number;
+  answer: () => Promise<Outcome>;
+  opaqueFailure: FailureCause;
 }): Promise<void> => {
   await db.Decision.update(
     { status: 'running' },
@@ -226,31 +264,73 @@ const evaluateDecision = async (args: {
 
   let outcome: Outcome;
   try {
-    const result = await createGeneration({
-      projectIds: args.projectIds,
-      agentId: args.agentPublicId,
-      messages: [
-        {
-          role: 'user',
-          content: renderDeciderFrame({
-            questions: args.questions,
-            state: args.state,
-          }),
-        },
-      ],
-      stream: false,
-      // The version whose tool surface was checked at admission, so an edit
-      // landing mid-evaluation cannot hand the generation a tool.
-      pinnedAgentVersion: args.agentVersion,
-      source: DECIDER_USAGE_SOURCE,
-      outputSchemaOverride: compileAnswerSchema(args.questions),
-    });
-    outcome = outcomeOf({ result, questions: args.questions });
+    outcome = await args.answer();
   } catch (error) {
-    outcome = failedOutcome(error);
+    outcome = failedOutcome({ error, opaque: args.opaqueFailure });
   }
 
   await settleDecision({ decisionDbId: args.decisionDbId, outcome });
+};
+
+type Evaluation = {
+  answer: () => Promise<Outcome>;
+  opaqueFailure: FailureCause;
+};
+
+/**
+ * Checks the decider's backend can answer, then returns how it will. Every
+ * check here runs before the decision is written, so a refusal is a `4xx`.
+ */
+const admitBackend = async (args: {
+  projectIds?: number[];
+  decider: DeciderRow;
+  state: unknown;
+}): Promise<Evaluation> => {
+  const { decider } = args;
+  const questions = deciderQuestionsOf(decider);
+  const { agent, tool } = decider;
+  if (tool) {
+    assertDeciderToolCallable(tool);
+    await assertProjectAcceptsWork({ projectId: decider.projectId });
+    return {
+      answer: async () => {
+        return {
+          status: 'completed',
+          answers: await answerWithTool({
+            projectId: decider.projectId,
+            toolPublicId: tool.publicId,
+            questions,
+            storedQuestions: decider.questions,
+            state: args.state,
+          }),
+          generationId: null,
+        };
+      },
+      opaqueFailure: TOOL_FAILURE,
+    };
+  }
+  /* istanbul ignore next -- a decider names exactly one backend. */
+  if (!agent)
+    throw new DomainError('INTERNAL_ERROR', 'Decider has no backend.');
+  assertDeciderAgentToolLess(agent);
+  await assertProjectAcceptsWork({ projectId: decider.projectId });
+  const breach = await checkGenerationQuota({
+    agentId: agent.publicId,
+    projectIds: args.projectIds,
+  });
+  if (breach) throw quotaBreachError(breach);
+  return {
+    answer: () => {
+      return answerWithAgent({
+        projectIds: args.projectIds,
+        agentPublicId: agent.publicId,
+        agentVersion: agent.version,
+        questions,
+        state: args.state,
+      });
+    },
+    opaqueFailure: GENERATION_FAILURE,
+  };
 };
 
 export const createDecision = async (args: {
@@ -266,14 +346,11 @@ export const createDecision = async (args: {
     projectIds: args.projectIds,
     id: args.deciderId,
   });
-  assertDeciderAgentToolLess(decider.agent);
-  const questions = deciderQuestionsOf(decider);
-  await assertProjectAcceptsWork({ projectId: decider.projectId });
-  const breach = await checkGenerationQuota({
-    agentId: decider.agent.publicId,
+  const evaluation = await admitBackend({
     projectIds: args.projectIds,
+    decider,
+    state: args.state,
   });
-  if (breach) throw quotaBreachError(breach);
 
   const decision = await db.Decision.create({
     projectId: decider.projectId,
@@ -287,12 +364,8 @@ export const createDecision = async (args: {
 
   const evaluate = () => {
     return evaluateDecision({
-      projectIds: args.projectIds,
       decisionDbId: decision.id as number,
-      agentPublicId: decider.agent.publicId,
-      agentVersion: decider.agent.version,
-      questions,
-      state: args.state,
+      ...evaluation,
     });
   };
 

@@ -393,6 +393,15 @@ export const deleteTool = async (args: {
   id: string;
 }): Promise<void> => {
   const tool = await tools.getByPublicId(args);
+  // A decider's backend: the FK is RESTRICT, so this is the readable refusal.
+  const deciderCount = await db.Decider.count({ where: { toolId: tool.id } });
+  if (deciderCount > 0) {
+    throw new DomainError(
+      'TOOL_HAS_DEPENDENTS',
+      `Tool '${tool.publicId}' is the backend of ${deciderCount} decider(s).`,
+      { decider_count: deciderCount }
+    );
+  }
   await tool.destroy();
 };
 

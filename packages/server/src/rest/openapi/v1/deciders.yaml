@@ -81,13 +81,16 @@ paths:
         - Deciders
       summary: Create a decider
       description: >-
-        Creates a decider at version 1: a named question set and the agent that
-        answers it. Every question declares a finite answer space, validated
-        here. The agent must be in the decider's project and carry no tool
-        surface — no tool binding left active by `active_tool_ids` and no
+        Creates a decider at version 1: a named question set and the backend
+        that answers it, exactly one of `agent_id` and `tool_id`. Every question
+        declares a finite answer space, validated here. The backend must be in
+        the decider's project. An agent must carry no tool surface — no tool
+        binding left active by `active_tool_ids` and no
         `knowledge_config.write_memory_store_id` — or the create is refused with
-        `400 DECIDER_AGENT_NOT_TOOL_LESS`. A duplicate `name` in the project is
-        `409 NAME_CONFLICT`.
+        `400 DECIDER_AGENT_NOT_TOOL_LESS`. A tool must be `http` or `pipeline`
+        and must not pin `state` or `questions` in its `preset_parameters`, or
+        the create is refused with `400 DECIDER_TOOL_NOT_CALLABLE`. A duplicate
+        `name` in the project is `409 NAME_CONFLICT`.
       operationId: createDecider
       requestBody:
         required: true
@@ -139,10 +142,12 @@ paths:
         - Deciders
       summary: Update a decider
       description: >-
-        Updates any of `name`, `description`, `agent_id` and `questions`. Only a
-        change to `questions` archives a new version; a rename, a new agent or a
-        rewrite of the questions the decider already holds leaves `version`
-        where it is. A new agent is held to the same rules as on create.
+        Updates any of `name`, `description`, the backend and `questions`. Naming
+        `agent_id` or `tool_id` replaces the current backend; naming both is
+        `400`. Only a change to `questions` archives a new version; a rename, a
+        new backend or a rewrite of the questions the decider already holds
+        leaves `version` where it is. A new backend is held to the same rules as
+        on create.
       operationId: updateDecider
       x-soat-resource:
         kind: decider
@@ -335,9 +340,16 @@ paths:
 
         Everything that can refuse the request is checked before the decision
         is written, so a refusal is a `4xx` and never a polled failure: the
-        agent's tool surface (`400 DECIDER_AGENT_NOT_TOOL_LESS`), a paused
-        project (`409 PROJECT_PAUSED`) and quota admission
+        agent's tool surface (`400 DECIDER_AGENT_NOT_TOOL_LESS`), a tool that
+        cannot answer (`400 DECIDER_TOOL_NOT_CALLABLE`), a paused project
+        (`409 PROJECT_PAUSED`) and, for an agent, quota admission
         (`429 QUOTA_EXCEEDED`).
+
+
+        A tool backend is called with `{ state, questions }` and must answer
+        `{ answers: { <question id>: { choice | score | value, probabilities? } } }`;
+        an answer outside that contract fails the decision with
+        `DECISION_ANSWER_INVALID`.
 
 
         With `wait: false`, the default, the answer is `201` with the decision
@@ -570,8 +582,15 @@ components:
         agent_id:
           x-soat-ref: agents
           type: string
-          description: The tool-less agent that answers
+          nullable: true
+          description: The tool-less agent that answers; null when a tool does
           example: agent_V1StGXR8Z5jdHi6B
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+          description: The http or pipeline tool that answers; null when an agent does
+          example: tool_V1StGXR8Z5jdHi6B
         version:
           type: integer
           description: >-
@@ -589,9 +608,9 @@ components:
     CreateDeciderRequest:
       type: object
       additionalProperties: false
+      description: Names exactly one of `agent_id` and `tool_id`.
       required:
         - name
-        - agent_id
         - questions
       properties:
         project_id:
@@ -609,7 +628,13 @@ components:
         agent_id:
           x-soat-ref: agents
           type: string
+          description: A tool-less agent that answers
           example: agent_V1StGXR8Z5jdHi6B
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: An http or pipeline tool that answers
+          example: tool_V1StGXR8Z5jdHi6B
         questions:
           $ref: '#/components/schemas/DeciderQuestions'
         version_label:
@@ -628,6 +653,11 @@ components:
         agent_id:
           x-soat-ref: agents
           type: string
+          description: Replaces the backend with this agent
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: Replaces the backend with this tool
         questions:
           $ref: '#/components/schemas/DeciderQuestions'
         version_label:
@@ -715,7 +745,8 @@ components:
       description: >-
         One question's answer, confined to its answer space. `choice` carries
         the chosen option, `score` the level's zero-based index and its
-        `legend`, `boolean` the `value`.
+        `legend`, `boolean` the `value`. `probabilities` is present only when a
+        tool backend supplied it.
       properties:
         type:
           type: string
@@ -732,6 +763,17 @@ components:
         value:
           type: boolean
           example: false
+        probabilities:
+          type: object
+          description: >-
+            A distribution over the answer space, keyed by option, by level
+            index as a string, or by `true` / `false`. Carried as the tool
+            supplied it; SOAT does not vouch for its meaning.
+          additionalProperties:
+            type: number
+          example:
+            billing: 0.8
+            technical: 0.2
     Decision:
       type: object
       properties:
@@ -775,8 +817,8 @@ components:
           type: string
           nullable: true
           description: >-
-            The generation that answered, once one has. Its receipt carries
-            what the decision cost.
+            The generation that answered, once one has; null for a tool
+            backend. Its receipt carries what the decision cost.
           example: gen_V1StGXR8Z5jdHi6B
         metadata:
           allOf:

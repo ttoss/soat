@@ -2857,6 +2857,28 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(res).questions).toEqual(questions);
     });
 
+    test('create-decider takes a tool as the backend', async () => {
+      const toolRes = await mcpCall('create-tool', {
+        project_id: projectId,
+        name: 'mcp-decider-engine',
+        type: 'http',
+        description: 'Answers a question set',
+        execute: { url: 'https://engine.example.com/decide', method: 'POST' },
+      });
+      expect(toolRes.status).toBe(200);
+
+      const res = await mcpCall('create-decider', {
+        project_id: projectId,
+        name: 'mcp-tool-triage',
+        tool_id: parseResult(toolRes).id,
+        questions,
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).tool_id).toBe(parseResult(toolRes).id);
+      expect(parseResult(res).agent_id).toBeNull();
+    });
+
     test('list-deciders pages the project’s deciders', async () => {
       const res = await mcpCall('list-deciders', { project_id: projectId });
 

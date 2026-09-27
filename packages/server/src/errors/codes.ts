@@ -152,6 +152,21 @@ export const ERROR_CODES = {
     description:
       'Recorded on a decision, never returned by a request: the process evaluating it stopped before it settled. The evaluated state is not stored, so the decision cannot be re-run; request a new one.',
   },
+  DECIDER_TOOL_NOT_CALLABLE: {
+    httpStatus: 400,
+    description:
+      "The tool a decider evaluates with cannot answer a decision. Only `http` and `pipeline` tools can: a `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry. A tool whose `preset_parameters` pin `state` or `questions` is refused too, since presets are merged over the call input and would replace the caller's state or the stored questions. `meta.tool_id` names the tool, with `meta.type` or `meta.pinned`.",
+  },
+  DECISION_ANSWER_INVALID: {
+    httpStatus: 502,
+    description:
+      "Recorded on a decision, never returned by a request: the decider's tool answered outside the contract — not a JSON object with `answers`, an answer missing or naming no question, a value outside the question's answer space, a probability for an answer outside it or outside 0–1, or a field the contract does not define (`confidence`, `noul`). The message names the question and the field.",
+  },
+  TOOL_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The tool is the backend of one or more deciders and cannot be deleted. `meta.decider_count` counts them; delete them or point them at another backend first.',
+  },
   PROMOTION_GATE_UNMET: {
     httpStatus: 409,
     description:

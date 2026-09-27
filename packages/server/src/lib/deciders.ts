@@ -12,6 +12,11 @@ import {
   parseDeciderQuestions,
 } from './deciderQuestions';
 import {
+  assertDeciderToolCallable,
+  type DeciderToolRow,
+  findDeciderTool,
+} from './deciderTool';
+import {
   buildDeciderConfigSnapshot,
   deciderVersionStore,
 } from './deciderVersionSnapshot';
@@ -24,13 +29,15 @@ const log = createDebug('soat:deciders');
 
 export type DeciderRow = InstanceType<(typeof db)['Decider']> & {
   project: { publicId: string };
-  agent: DeciderAgentRow;
+  agent: DeciderAgentRow | null;
+  tool: DeciderToolRow | null;
 };
 
 const deciderIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.Agent, as: 'agent' },
+    { model: db.Tool, as: 'tool' },
   ];
 };
 
@@ -53,7 +60,8 @@ export const mapDecider = (row: DeciderRow) => {
     project_id: row.project.publicId,
     name: row.name,
     description: row.description,
-    agent_id: row.agent.publicId,
+    agent_id: row.agent?.publicId ?? null,
+    tool_id: row.tool?.publicId ?? null,
     version: row.version,
     questions: row.questions,
     created_at: row.createdAt,
@@ -98,14 +106,41 @@ const assertNameAvailable = async (args: {
   );
 };
 
-/** A tool-less agent in the decider's project. */
-const resolveToolLessAgent = async (args: {
+type DeciderBackend =
+  | { agent: DeciderAgentRow; tool: null }
+  | { agent: null; tool: DeciderToolRow };
+
+/**
+ * The one backend a write names: a tool-less agent or a callable tool, in the
+ * decider's project. Naming both, or neither, is refused.
+ */
+const resolveBackend = async (args: {
   projectId: number;
-  agentPublicId: unknown;
-}): Promise<DeciderAgentRow> => {
-  const agent = await findDeciderAgent(args);
-  assertDeciderAgentToolLess(agent);
-  return agent;
+  agentId?: unknown;
+  toolId?: unknown;
+}): Promise<DeciderBackend> => {
+  const namesAgent = args.agentId !== undefined;
+  const namesTool = args.toolId !== undefined;
+  if (namesAgent === namesTool) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'A decider names exactly one of agent_id and tool_id.'
+    );
+  }
+  if (namesAgent) {
+    const agent = await findDeciderAgent({
+      projectId: args.projectId,
+      agentPublicId: args.agentId,
+    });
+    assertDeciderAgentToolLess(agent);
+    return { agent, tool: null };
+  }
+  const tool = await findDeciderTool({
+    projectId: args.projectId,
+    toolPublicId: args.toolId,
+  });
+  assertDeciderToolCallable(tool);
+  return { agent: null, tool };
 };
 
 export const createDecider = async (
@@ -113,7 +148,8 @@ export const createDecider = async (
     projectId: number;
     name: unknown;
     description?: unknown;
-    agentId: unknown;
+    agentId?: unknown;
+    toolId?: unknown;
     questions: unknown;
   } & VersionedWrite
 ): Promise<MappedDecider> => {
@@ -122,17 +158,15 @@ export const createDecider = async (
   const name = validateName(args.name);
   const description = validateDescription(args.description);
   const questions = parseDeciderQuestions(args.questions);
-  const agent = await resolveToolLessAgent({
-    projectId: args.projectId,
-    agentPublicId: args.agentId,
-  });
+  const backend = await resolveBackend(args);
   await assertNameAvailable({ projectId: args.projectId, name });
 
   const decider = await db.Decider.create({
     projectId: args.projectId,
     name,
     description,
-    agentId: agent.id,
+    agentId: backend.agent?.id ?? null,
+    toolId: backend.tool?.id ?? null,
     version: 1,
     questions,
   });
@@ -195,6 +229,7 @@ const applyMetadata = async (args: {
   name?: unknown;
   description?: unknown;
   agentId?: unknown;
+  toolId?: unknown;
 }): Promise<void> => {
   const { decider } = args;
   if (args.name !== undefined) {
@@ -209,13 +244,17 @@ const applyMetadata = async (args: {
   if (args.description !== undefined) {
     decider.description = validateDescription(args.description);
   }
-  if (args.agentId !== undefined) {
-    const agent = await resolveToolLessAgent({
+  if (args.agentId !== undefined || args.toolId !== undefined) {
+    // Naming one backend replaces the other.
+    const backend = await resolveBackend({
       projectId: decider.projectId,
-      agentPublicId: args.agentId,
+      agentId: args.agentId,
+      toolId: args.toolId,
     });
-    decider.agentId = agent.id as number;
-    decider.agent = agent;
+    decider.agentId = (backend.agent?.id as number | undefined) ?? null;
+    decider.agent = backend.agent;
+    decider.toolId = (backend.tool?.id as number | undefined) ?? null;
+    decider.tool = backend.tool;
   }
 };
 
@@ -226,6 +265,7 @@ export const updateDecider = async (
     name?: unknown;
     description?: unknown;
     agentId?: unknown;
+    toolId?: unknown;
     questions?: unknown;
   } & VersionedWrite
 ): Promise<MappedDecider> => {

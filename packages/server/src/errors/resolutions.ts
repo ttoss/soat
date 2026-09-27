@@ -43,6 +43,12 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   DECIDER_AGENT_NOT_TOOL_LESS:
     "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `PATCH /api/v1/agents/{agent_id}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
+  DECIDER_TOOL_NOT_CALLABLE:
+    'Point the decider at an `http` or `pipeline` tool with no `state` or `questions` in its `preset_parameters`. Reach an `mcp` or `builtin` tool through a `pipeline` step, which names its own `action`.',
+  DECISION_ANSWER_INVALID:
+    "Make the tool answer `{ answers: { <question id>: { choice | score | value, probabilities? } } }` for every question; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
+  TOOL_HAS_DEPENDENTS:
+    'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool.',
   DECISION_INTERRUPTED:
     'Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions`; nothing about the interrupted one can be resumed.',
   PROJECT_PAUSED:

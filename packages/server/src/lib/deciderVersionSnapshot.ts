@@ -12,9 +12,9 @@ import {
  */
 
 /**
- * Everything on a decider response but its questions. The agent is metadata
+ * Everything on a decider response but its questions. The backend is metadata
  * like the name: a version number is what a decision cites to say which
- * criteria it was answered under, and repointing the agent changes none.
+ * criteria it was answered under, and repointing the backend changes none.
  */
 const NON_CONFIG_DECIDER_FIELDS: ReadonlySet<string> = new Set([
   'id',
@@ -22,6 +22,7 @@ const NON_CONFIG_DECIDER_FIELDS: ReadonlySet<string> = new Set([
   'name',
   'description',
   'agent_id',
+  'tool_id',
   'version',
   'created_at',
   'updated_at',
