@@ -10,8 +10,6 @@ import * as url from 'node:url';
 
 import { load } from 'js-yaml';
 
-import { tagBagsWrapper } from '../../cli/src/cli-wrappers/wrappers/tagBags';
-
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
@@ -440,20 +438,6 @@ const getParamFlags = (args: {
     });
 };
 
-/** Read from the CLI wrapper that serves the flag, so the page cannot drift from it. */
-const tagBagFlags = (args: { command: string }): CommandFlag[] => {
-  if (!tagBagsWrapper.commands.includes(args.command)) return [];
-  return (tagBagsWrapper.helpFlags ?? []).map((flag) => {
-    return {
-      flag: toFlagFromName(flag.name),
-      source: 'wrapper',
-      required: flag.required,
-      type: flag.type,
-      description: flag.description,
-    };
-  });
-};
-
 const getCommandFlags = (args: {
   command: string;
   operation: OperationSpec;
@@ -468,8 +452,7 @@ const getCommandFlags = (args: {
     return flag.source === 'query';
   });
   const bodyFlags = getBodyFlags({ operation, spec });
-  const wrapperFlags =
-    WRAPPER_FLAG_OVERRIDES[command] ?? tagBagFlags({ command });
+  const wrapperFlags = WRAPPER_FLAG_OVERRIDES[command] ?? [];
 
   return [...pathFlags, ...queryFlags, ...bodyFlags, ...wrapperFlags];
 };

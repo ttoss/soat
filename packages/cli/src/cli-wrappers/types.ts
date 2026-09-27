@@ -15,14 +15,6 @@ export type RouteLike = {
 export type WrapperResult = {
   flags: ParsedFlags;
   forcedBody: Record<string, unknown>;
-  /**
-   * The entire request body, for an operation whose body names no property.
-   * Sent as is, an empty object included; `forcedBody` merges into named
-   * fields instead.
-   */
-  rootBody?: Record<string, unknown>;
-  /** Printed before exiting 1, with no request sent. */
-  errors?: string[];
 };
 
 export type WrapperContext = {
