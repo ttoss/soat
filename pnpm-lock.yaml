@@ -331,8 +331,8 @@ importers:
         specifier: ^1.38.0
         version: 1.38.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.5.0
+        version: 0.5.0
       '@ttoss/test-utils':
         specifier: ^4.2.19
         version: 4.2.19(@types/jest@30.0.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(encoding@0.1.13)(jest@30.5.1(@types/node@26.5.1)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.5.1)(typescript@6.0.3)))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)
@@ -401,8 +401,8 @@ importers:
         specifier: ^1.38.0
         version: 1.38.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.5.0
+        version: 0.5.0
       '@types/node':
         specifier: ^26.5.1
         version: 26.5.1
@@ -470,8 +470,8 @@ importers:
         specifier: ^0.29.0
         version: 0.29.0(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/http-server-mcp-openapi':
-        specifier: ^0.4.0
-        version: 0.4.0(hono@4.12.30)(supports-color@8.1.1)
+        specifier: ^0.5.0
+        version: 0.5.0(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/postgresdb':
         specifier: ^0.12.0
         version: 0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
@@ -4446,8 +4446,8 @@ packages:
     peerDependencies:
       '@ttoss/http-server': ^0.8.1
 
-  '@ttoss/http-server-mcp-openapi@0.4.0':
-    resolution: {integrity: sha512-6beg2imXco1H9SOkFnO583QEc2QPB+nrF+yuivzKg5bcPv4wlSHoDre8bpwPp0ZiGyHMOAxSK2xGmvdQqhMXOQ==}
+  '@ttoss/http-server-mcp-openapi@0.5.0':
+    resolution: {integrity: sha512-fCQ6gi/zle4mCQw4b+L54GCM5BQL4iFkeBjObB6xjLUdwMwU1Ar2vLjSZXm1yeqZJ4x7tvIgwotNimVq/QfyBA==}
 
   '@ttoss/http-server-mcp@0.29.0':
     resolution: {integrity: sha512-vYrbn3hr/b4jjK5Mjk7fDRWPMdCW1nY9D7vHU9VRYfWpunxbe22hDqAP9xWaGzS+FoWc5I2jpc3WEgQlZRjtWQ==}
@@ -4462,8 +4462,8 @@ packages:
     resolution: {integrity: sha512-Va8rL3SZ08yLrNQS8FQOJzcihz8QQET5BR+ePS52wbwf5pZAHWaMZoxwv5Uo7EzG8LVvl5++p+LrxoWBTBUnGg==}
     hasBin: true
 
-  '@ttoss/openapi-codegen@0.4.0':
-    resolution: {integrity: sha512-8+PwO0B9hW3OZgM+vuDG6n9lTiDkBDIlTM3duhzFPrDwQwtJMBKBBrQyO3xQ66+n8OErvEbksdoZ0zI/IHWyGA==}
+  '@ttoss/openapi-codegen@0.5.0':
+    resolution: {integrity: sha512-HDtROkpKweOZMcL13xqA8/pg1Fv3KM40wjXz82wnGI0qgOmtMYx+3+3MvZXJT/IvSgr5XORZLlLWAoBTGqbZ+Q==}
 
   '@ttoss/postgresdb-cli@0.3.0':
     resolution: {integrity: sha512-89eIZx8WgouNjVRE20tMVEzCpedIHNGt1OApr6BnhrW3/gkdae5hALVW2CG1zqlroE7+9Zhjj2vKlxqS/AksOQ==}
@@ -18446,7 +18446,7 @@ snapshots:
       '@ttoss/auth-core': 0.14.1
       '@ttoss/http-server': 0.8.1(supports-color@8.1.1)
 
-  '@ttoss/http-server-mcp-openapi@0.4.0(hono@4.12.30)(supports-color@8.1.1)':
+  '@ttoss/http-server-mcp-openapi@0.5.0(hono@4.12.30)(supports-color@8.1.1)':
     dependencies:
       '@ttoss/http-server-mcp': 0.29.0(hono@4.12.30)(supports-color@8.1.1)
     transitivePeerDependencies:
@@ -18483,7 +18483,7 @@ snapshots:
     dependencies:
       commander: 14.0.3
 
-  '@ttoss/openapi-codegen@0.4.0':
+  '@ttoss/openapi-codegen@0.5.0':
     dependencies:
       js-yaml: 4.3.2
 

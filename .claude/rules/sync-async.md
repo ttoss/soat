@@ -33,9 +33,11 @@ The toggle is always `wait`; never `async`, `sync`, `blocking`, `background`.
 ## Fixed interactions
 
 - `stream: true` with `wait=false` → `400 VALIDATION_FAILED`.
-- A `soat` tool call always waits: mark the parameter
+- A `soat` tool call always waits where the result is the point of the call
+  and the work is bounded (a generation, a decision): mark `wait`
   `x-soat-tool-forced: 'true'` (pinned server-side, hidden from the tool
-  schema) only on endpoints a tool caller cannot poll.
+  schema), in the query string or the request body alike. A run that can
+  pause or run long keeps `wait` for the tool caller to choose.
 
 ## Enforcement and docs
 

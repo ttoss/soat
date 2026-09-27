@@ -451,7 +451,7 @@ DECIDE_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 | `pay` | `transform` | Runs on the `approve` branch |
 | `escalate` | `transform` | Runs on the `review` branch |
 
-`decide` sends `wait: true`, so its artifact is the settled [decision](/docs/modules/deciders#requesting-a-decision), and `route` reads the answer at `nodes.decide.answers.route.choice` ([The `nodes.<id>` namespace](/docs/modules/orchestrations#the-nodesid-namespace)).
+A `builtin` `create-decision` call always waits, so `decide`'s artifact is the settled [decision](/docs/modules/deciders#requesting-a-decision), and `route` reads the answer at `nodes.decide.answers.route.choice` ([The `nodes.<id>` namespace](/docs/modules/orchestrations#the-nodesid-namespace)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -468,8 +468,7 @@ ORCH_ID=$(soat create-orchestration \
       "operation_id": "create-decision",
       "input_mapping": {
         "decider_id": "'"$DECIDER_ID"'",
-        "state": {"customer_id": {"var": "input.customer_id"}, "amount": {"var": "input.amount"}},
-        "wait": true
+        "state": {"customer_id": {"var": "input.customer_id"}, "amount": {"var": "input.amount"}}
       }
     },
     {"id": "route", "type": "condition", "expression": {"var": "nodes.decide.answers.route.choice"}},
@@ -514,7 +513,6 @@ const { data: orch } = await adminSoat.orchestrations.createOrchestration({
             customer_id: { var: 'input.customer_id' },
             amount: { var: 'input.amount' },
           },
-          wait: true,
         },
       },
       {
@@ -556,7 +554,7 @@ ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
     "project_id": "'"$PROJECT_ID"'",
     "name": "refund-desk",
     "nodes": [
-      {"id":"decide","type":"tool","tool_id":"'"$DECIDE_TOOL_ID"'","operation_id":"create-decision","input_mapping":{"decider_id":"'"$DECIDER_ID"'","state":{"customer_id":{"var":"input.customer_id"},"amount":{"var":"input.amount"}},"wait":true}},
+      {"id":"decide","type":"tool","tool_id":"'"$DECIDE_TOOL_ID"'","operation_id":"create-decision","input_mapping":{"decider_id":"'"$DECIDER_ID"'","state":{"customer_id":{"var":"input.customer_id"},"amount":{"var":"input.amount"}}}},
       {"id":"route","type":"condition","expression":{"var":"nodes.decide.answers.route.choice"}},
       {"id":"pay","type":"transform","expression":{"cat":["PAID ",{"var":"input.amount"}]},"state_mapping":{"state.result":{"var":"output.result"}}},
       {"id":"escalate","type":"transform","expression":{"cat":["REVIEW ",{"var":"input.amount"}]},"state_mapping":{"state.result":{"var":"output.result"}}}
