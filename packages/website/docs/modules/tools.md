@@ -403,6 +403,10 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 
+### Deleting a tool
+
+[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) refuses a tool that is a [decider's backend](./deciders.md#the-tool-backend) with `409 TOOL_HAS_DEPENDENTS`; `meta.decider_count` counts the deciders to delete or repoint first.
+
 ### Who may act on a tool
 
 Every route that acts on one tool — read it, change it, delete it, or

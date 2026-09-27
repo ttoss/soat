@@ -35,10 +35,15 @@ export const DECIDER_USAGE_SOURCE = 'decider';
 
 export type DeciderQuestions = Record<string, DeciderQuestion>;
 
-export type DecisionAnswer =
+/**
+ * `probabilities` is a distribution over the answer space, set only when a
+ * tool backend supplies one. SOAT carries it and does not vouch for it.
+ */
+export type DecisionAnswer = (
   | { type: 'choice'; choice: string }
   | { type: 'score'; score: number; legend: string }
-  | { type: 'boolean'; value: boolean };
+  | { type: 'boolean'; value: boolean }
+) & { probabilities?: Record<string, number> };
 
 /**
  * A question id is a JSON Schema property name and a JSON Logic `var` path
