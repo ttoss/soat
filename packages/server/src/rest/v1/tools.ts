@@ -3,9 +3,9 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
+import { deleteTool } from 'src/lib/toolDelete';
 import {
   createTool,
-  deleteTool,
   getTool,
   listTools,
   startToolCall,

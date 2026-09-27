@@ -91,14 +91,22 @@ export const collectDeletionBlockers = async (
   orderedResources: ResourceRow[]
 ): Promise<FormationEvent[]> => {
   const blocked: FormationEvent[] = [];
+  const deleted = orderedResources.flatMap((resource) => {
+    const { physicalResourceId } = resource;
+    if (!physicalResourceId || resource.deletionPolicy === 'retain') return [];
+    return [{ resource, physicalResourceId }];
+  });
+  const alsoDeleting: ReadonlySet<string> = new Set(
+    deleted.map(({ physicalResourceId }) => {
+      return physicalResourceId;
+    })
+  );
 
-  for (const resource of orderedResources) {
-    if (!resource.physicalResourceId) continue;
-    if (resource.deletionPolicy === 'retain') continue;
-
+  for (const { resource, physicalResourceId } of deleted) {
     const blocker = await findResourceDeletionBlocker({
       resourceType: resource.resourceType,
-      physicalResourceId: resource.physicalResourceId,
+      physicalResourceId,
+      alsoDeleting,
     });
     if (blocker === null) continue;
 
@@ -113,7 +121,7 @@ export const collectDeletionBlockers = async (
       resourceType: resource.resourceType,
       action: 'delete',
       status: 'failed',
-      physicalResourceId: resource.physicalResourceId,
+      physicalResourceId,
       error: blocker,
     });
   }

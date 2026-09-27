@@ -256,6 +256,11 @@ export type FormationModule = {
    */
   findDeletionBlocker?: (args: {
     physicalResourceId: string;
+    /**
+     * Physical ids the same teardown deletes. A dependent among them is gone
+     * before this resource's turn, so it refuses nothing.
+     */
+    alsoDeleting: ReadonlySet<string>;
   }) => Promise<string | null>;
   /**
    * Read the current live state of a resource and return its properties in

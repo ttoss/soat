@@ -382,6 +382,34 @@ A decision's generation is metered like any other, with `source: decider`, so de
 
 Both carry the decision. See [Webhooks](./webhooks.md).
 
+### Formations
+
+A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) takes `name`, `description`, `questions` and exactly one of `agent_id` and `tool_id`, each of which may be a `{ "ref": "ResourceName" }` to an `agent` or `tool` resource in the same template. The questions are validated as on [`POST /api/v1/deciders`](/docs/api/deciders/create-decider), and a template update that changes them archives a new version. Tearing a stack down deletes a decider before the agent or tool it names; a decider outside the stack still keeps that agent or tool, and the teardown is refused before anything is deleted.
+
+```json
+{
+  "resources": {
+    "Judge": {
+      "type": "agent",
+      "properties": { "ai_provider_id": "aip_…", "name": "triage-judge" }
+    },
+    "Triage": {
+      "type": "decider",
+      "properties": {
+        "name": "support-triage",
+        "agent_id": { "ref": "Judge" },
+        "questions": {
+          "needs_human": {
+            "type": "boolean",
+            "instructions": "Must a person read this before any automated reply?"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ## Configuration
 
 | Variable                          | Default | Description                                         |

@@ -2090,6 +2090,41 @@ components:
           description: >-
             How tool-fetched context combines with the caller-supplied context.
 
+    DeciderResourceProperties:
+      description: >-
+        Creates a decider — a versioned question set answered against a
+        caller's state. Names exactly one backend: `agent_id` (a tool-less
+        agent) or `tool_id` (an `http` or `pipeline` tool), either a `{ "ref":
+        … }` to a resource in the same template. Only a change to `questions`
+        archives a new version. Mirrors the deciders REST contract.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - questions
+      properties:
+        name:
+          type: string
+          description: Human-readable name, unique per project
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: The tool-less agent that answers
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: The http or pipeline tool that answers
+        questions:
+          type: object
+          additionalProperties: true
+          description: >-
+            Question id → question (`type`, `instructions`, `criteria`), 1 to
+            20 of them, validated as the deciders REST contract validates them.
+
     ResourceDeclaration:
       type: object
       required:
@@ -2102,7 +2137,7 @@ components:
           description: >
             Resource type. The built-in types are `ai_provider`, `tool`,
             `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`,
-            `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`,
+            `dataset_item`, `decider`, `document`, `file`, `guardrail`, `ingestion_rule`,
             `memory_store`, `memory`, `memory_rule`, `metadata_schema`,
             `model_route`, `eval`, `orchestration`,
             `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`,

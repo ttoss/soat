@@ -388,23 +388,6 @@ export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
   return mapTool(await tools.reload(tool));
 };
 
-export const deleteTool = async (args: {
-  projectIds?: number[];
-  id: string;
-}): Promise<void> => {
-  const tool = await tools.getByPublicId(args);
-  // A decider's backend: the FK is RESTRICT, so this is the readable refusal.
-  const deciderCount = await db.Decider.count({ where: { toolId: tool.id } });
-  if (deciderCount > 0) {
-    throw new DomainError(
-      'TOOL_HAS_DEPENDENTS',
-      `Tool '${tool.publicId}' is the backend of ${deciderCount} decider(s).`,
-      { decider_count: deciderCount }
-    );
-  }
-  await tool.destroy();
-};
-
 // ── Call ──────────────────────────────────────────────────────────────────
 
 // The call path reads camelCase but `mapTool` emits the wire's snake_case.

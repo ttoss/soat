@@ -74,6 +74,7 @@ export const applyUpdateResource = async (
 export const findResourceDeletionBlocker = async (args: {
   resourceType: string;
   physicalResourceId: string;
+  alsoDeleting: ReadonlySet<string>;
 }): Promise<string | null> => {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
@@ -82,6 +83,7 @@ export const findResourceDeletionBlocker = async (args: {
   try {
     return await formationModule.findDeletionBlocker({
       physicalResourceId: args.physicalResourceId,
+      alsoDeleting: args.alsoDeleting,
     });
   } catch {
     return null;

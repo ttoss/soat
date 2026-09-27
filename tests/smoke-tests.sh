@@ -8496,6 +8496,22 @@ if [ "$(printf '%s\n' "$DECISIONS_LISTED" | jq -r '.data[0].id')" != "$DECISION_
   exit 1
 fi
 
+echo "--- A decider in a formation ---"
+DECIDER_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-decider-formation" \
+  --template "{\"resources\":{\"Judge\":{\"type\":\"agent\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"smoke-formation-judge\"}},\"Triage\":{\"type\":\"decider\",\"properties\":{\"name\":\"smoke-formation-triage\",\"agent_id\":{\"ref\":\"Judge\"},\"questions\":{\"escalate\":{\"type\":\"boolean\",\"instructions\":\"Must a person read this first?\"}}}}}}")
+DECIDER_FORMATION_ID=$(printf '%s\n' "$DECIDER_FORMATION_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DECIDER_FORMATION_RESP" | jq -e \
+  '.status == "active" and ([.resources[] | select(.logical_id == "Triage") | .physical_resource_id | startswith("dcd_")] == [true])' \
+  >/dev/null 2>&1; then
+  echo "ERROR: the formation did not create the decider" >&2
+  printf '%s\n' "$DECIDER_FORMATION_RESP" >&2
+  exit 1
+fi
+# The decider goes first, so it does not hold the agent it names.
+$SOAT_CLI delete-formation --formation_id "$DECIDER_FORMATION_ID" >/dev/null
+
 echo "--- A decider holds its agent ---"
 expect_cli_error_status 409 delete-agent --agent-id "$DECIDER_AGENT_ID" --force true
 
