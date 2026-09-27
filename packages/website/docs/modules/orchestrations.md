@@ -304,11 +304,43 @@ A worker holds the lease for as long as its drive takes, re-arming it every thir
 
 Starting a run spends model tokens, so an ambiguous network failure on [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) is the one worth being able to retry. Pass an `idempotency_key`:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --idempotency-key "dispatch-2026-09-18-activation-42"
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.orchestrations.startOrchestrationRun({
+  body: {
+    orchestration_id: ORCH_ID,
+    idempotency_key: 'dispatch-2026-09-18-activation-42',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/orchestration-runs \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orchestration_id": "'"$ORCH_ID"'",
+    "idempotency_key": "dispatch-2026-09-18-activation-42"
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 The first request under a key starts the run and answers `201`. Every later request carrying the same key answers `200` with that same run, in whatever state it has reached — including a retry that arrives while the original request is still in flight, which is the case a timeout produces. The key is scoped to the project and claimed by the run record for as long as that record exists, so it never expires out from under a caller and lets a second run through.
 
@@ -501,6 +533,9 @@ Graphs are validated **before** persistence: `create-orchestration` / `update-or
 
 An unwritten `input_mapping` reference is an **error** only under a declared `input_schema` (a closed input contract); without one a parallel node's `state_mapping` may write the key first, so the graph stays permissive. An unwritten `{"var": "nodes.<id>..."}` reference is always an error.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat validate-orchestration \
   --nodes '[{"id":"a","type":"transform","expression":1,"state_mapping": { "state.step1": { "var": "output.result" } }},
@@ -508,6 +543,41 @@ soat validate-orchestration \
   --edges '[{"from":"a","to":"b"}]'
 # → { "valid": true, "errors": [], "warnings": [] }
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.orchestrations.validateOrchestration({
+  body: {
+    nodes: [
+      { id: 'a', type: 'transform', expression: 1, state_mapping: { 'state.step1': { var: 'output.result' } } },
+      { id: 'b', type: 'transform', expression: 1, input_mapping: { val: { var: 'step1' } } },
+    ],
+    edges: [{ from: 'a', to: 'b' }],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/orchestrations/validate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nodes": [
+      {"id":"a","type":"transform","expression":1,"state_mapping": { "state.step1": { "var": "output.result" } }},
+      {"id":"b","type":"transform","expression":1,"input_mapping":{"val":{"var":"step1"}}}
+    ],
+    "edges": [{"from":"a","to":"b"}]
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Versioning
 
@@ -517,12 +587,46 @@ A write may name the version it is changing (`expected_version`, or an `If-Match
 
 **A run executes the version it started on.** `start-orchestration-run` stamps `version` onto the run as `orchestration_version`; every later step (wake, resume, redrive) resolves its topology from it. Editing never re-shapes a run in flight; the live graph is a **draft** for runs started from now on. To read a run's topology, fetch the version `orchestration_version` names:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat get-orchestration-run --orchestration-run-id "$RUN_ID"
 # → { "orchestration_version": 3, ... }
 
 soat get-orchestration-version --orchestration-id "$ORCH_ID" --version 3
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const run = await soat.orchestrations.getOrchestrationRun({
+  path: { orchestration_run_id: RUN_ID },
+});
+if (run.error) throw new Error(JSON.stringify(run.error));
+// → { orchestration_version: 3, ... }
+
+const { data, error } = await soat.orchestrations.getOrchestrationVersion({
+  path: { orchestration_id: ORCH_ID, version: 3 },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/orchestration-runs/$RUN_ID \
+  -H "Authorization: Bearer <token>"
+# → { "orchestration_version": 3, ... }
+
+curl https://api.example.com/api/v1/orchestrations/$ORCH_ID/versions/3 \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 Versions: `list-orchestration-versions`, `get-orchestration-version`, `restore-orchestration-version`.
 
@@ -567,6 +671,9 @@ Usage is metered as each generation settles: read the roll-up from `get-orchestr
 
 An `agent` node's `node_executions` artifact is the final answer (`{ content, object }`); reasoning, tool calls and token usage live on the [generation](./generations.md), which is stamped with `orchestration_run_id`, `node_id` and `node_attempt`. Filter the generations list:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 # every generation this run's agent nodes produced
 soat list-generations --orchestration-run-id run_abc123
@@ -574,6 +681,39 @@ soat list-generations --orchestration-run-id run_abc123
 # one node's — one row per attempt if a retry policy re-ran it
 soat list-generations --orchestration-run-id run_abc123 --node-id summarize
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// every generation this run's agent nodes produced
+const all = await soat.generations.listGenerations({
+  query: { orchestration_run_id: 'run_abc123' },
+});
+if (all.error) throw new Error(JSON.stringify(all.error));
+
+// one node's — one row per attempt if a retry policy re-ran it
+const { data, error } = await soat.generations.listGenerations({
+  query: { orchestration_run_id: 'run_abc123', node_id: 'summarize' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# every generation this run's agent nodes produced
+curl "https://api.example.com/api/v1/generations?orchestration_run_id=run_abc123" \
+  -H "Authorization: Bearer <token>"
+
+# one node's — one row per attempt if a retry policy re-ran it
+curl "https://api.example.com/api/v1/generations?orchestration_run_id=run_abc123&node_id=summarize" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 `node_attempt` equals the `attempt` on the matching `node_executions` entry, pairing a [retried](#retry-policy) node exactly.
 
@@ -587,12 +727,46 @@ The bag is **write-only**: it is accepted at run start and never returned on a r
 
 It is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc"}' \
   --input '{"question":"what is my balance?"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.orchestrations.startOrchestrationRun({
+  body: {
+    orchestration_id: ORCH_ID,
+    tool_context: { ocaToken: 'eyJhbGciOiJIUzI1NiJ9.abc' },
+    input: { question: 'what is my balance?' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/orchestration-runs \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orchestration_id": "'"$ORCH_ID"'",
+    "tool_context": {"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc"},
+    "input": {"question":"what is my balance?"}
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 #### Narrowing what a child run inherits
 
@@ -618,11 +792,43 @@ A run carrying `{"ocaToken": "…", "tenant": "acme"}` hands that child `tenant`
 
 It survives every drive (queued start, scheduler wake, human or approval resume, crash redrive). A non-object `metadata` is `400 VALIDATION_FAILED` at start time; no run is created. Unlike `tool_context`, it is **not** inherited by `loop` / `sub_orchestration` children; pass one per child through the graph.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --metadata '{"tenant_account_id":"42","dispatch_batch":"nightly-2026-08-25"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.orchestrations.startOrchestrationRun({
+  body: {
+    orchestration_id: ORCH_ID,
+    metadata: { tenant_account_id: '42', dispatch_batch: 'nightly-2026-08-25' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/orchestration-runs \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orchestration_id": "'"$ORCH_ID"'",
+    "metadata": {"tenant_account_id":"42","dispatch_batch":"nightly-2026-08-25"}
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Filtering runs by a metadata key is not supported; filter client-side.
 

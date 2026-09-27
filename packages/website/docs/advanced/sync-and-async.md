@@ -2,6 +2,9 @@
 description: 'The wait toggle: every long-running endpoint runs in the background by default and returns a handle to poll; wait=true blocks. One contract, one polarity, one default.'
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Synchronous & Asynchronous Execution
 
 Operations that outlast a request — an LLM generation, a document ingestion, an orchestration run — are controlled by one toggle, **`wait`**:
@@ -19,6 +22,9 @@ This page is the canonical definition. Module pages describe their own handle an
 
 `wait` is a **query parameter** on the generation and ingestion endpoints, and a **body field** on the run endpoints (`start-orchestration-run`, `start-eval-run`, `create-decision`); same name, same meaning.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 # Background (default): returns a handle immediately
 soat create-agent-generation --agent-id agent_01 \
@@ -28,6 +34,49 @@ soat create-agent-generation --agent-id agent_01 \
 soat create-agent-generation --agent-id agent_01 --wait true \
   --messages '[{"role":"user","content":"Summarize Q1"}]'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+// Background (default): returns a handle immediately
+const { data: handle, error } = await soat.agents.createAgentGeneration({
+  path: { agent_id: 'agent_01' },
+  body: { messages: [{ role: 'user', content: 'Summarize Q1' }] },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+// Blocking: returns the finished generation
+const { data: generation, error: waitError } = await soat.agents.createAgentGeneration({
+  path: { agent_id: 'agent_01' },
+  query: { wait: true },
+  body: { messages: [{ role: 'user', content: 'Summarize Q1' }] },
+});
+if (waitError) throw new Error(JSON.stringify(waitError));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# Background (default): returns a handle immediately
+curl -X POST "$SOAT_URL/api/v1/agents/agent_01/generate" \
+  -H "Authorization: Bearer $SOAT_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"Summarize Q1"}]}'
+
+# Blocking: returns the finished generation
+curl -X POST "$SOAT_URL/api/v1/agents/agent_01/generate?wait=true" \
+  -H "Authorization: Bearer $SOAT_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"Summarize Q1"}]}'
+```
+
+</TabItem>
+</Tabs>
 
 ## Where it applies
 

@@ -756,8 +756,8 @@ curl -s "$SOAT_BASE_URL/api/v1/documents/$PUBLIC_DOC_ID" \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/documents/$PRIVATE_DOC_ID" \
-  -H "Authorization: Bearer $ALICE_TOKEN" | jq '.'
+SOAT_TOKEN="$ALICE_TOKEN" \
+  soat get-document --document-id "$PRIVATE_DOC_ID" | jq '.'
 # Expected: 403 Forbidden
 ```
 

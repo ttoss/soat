@@ -428,8 +428,7 @@ curl -s "$SOAT_URL/api/v1/files/$TRACE_FILE_ID/download/base64" \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-curl -s "$SOAT_URL/api/v1/generations?trace_id=$TRACE_1_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.data[].id]'
+soat list-generations --trace-id "$TRACE_1_ID" | jq '[.data[].id]'
 
 cat > /tmp/debug-links.json <<EOF
 [

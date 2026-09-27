@@ -4,6 +4,9 @@ sidebar_position: 1
 slug: /getting-started
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Quick Start
 
 ## Prerequisites
@@ -151,6 +154,42 @@ echo "AI Provider: $AI_PROVIDER_ID"
 
 Send a stateless completion (no chat resource required):
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+SOAT_BASE_URL=http://localhost:5047 SOAT_TOKEN="$TOKEN" \
+  soat create-chat-completion \
+  --ai-provider-id "$AI_PROVIDER_ID" \
+  --messages '[
+    { "role": "system", "content": "You are a helpful assistant." },
+    { "role": "user", "content": "What is the color of the sky?" }
+  ]' | jq '.choices[0].message.content'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'http://localhost:5047', token: TOKEN });
+
+const { data, error } = await soat.chats.createChatCompletion({
+  body: {
+    ai_provider_id: AI_PROVIDER_ID,
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'What is the color of the sky?' },
+    ],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.choices[0].message.content);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
 ```bash
 curl -s -X POST http://localhost:5047/api/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -163,6 +202,9 @@ curl -s -X POST http://localhost:5047/api/v1/chat/completions \
     ]
   }" | jq '.choices[0].message.content'
 ```
+
+</TabItem>
+</Tabs>
 
 ## 6. What's next?
 

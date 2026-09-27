@@ -324,6 +324,9 @@ Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-c
 
 Memories carry their own `tags` (and optional `metadata`), independent of the store's tags. [`GET /api/v1/memories`](/docs/api/memories/list-memories) filters them with the same `?tags=key:value` parameter, and [`GET /api/v1/memories/:id/tags`](/docs/api/memories/get-memory-tags), [`PUT /api/v1/memories/:id/tags`](/docs/api/memories/replace-memory-tags) and [`PATCH /api/v1/memories/:id/tags`](/docs/api/memories/merge-memory-tags) manage the bag without touching `content`. `tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.tags` match at **memory granularity**: a memory is returned when its parent store's tags contain the pairs (store-level, all its memories returned) **or** its own tags do (only that memory returned). A single store can thus hold memories for many roles/sources: tag captured rules with `role: traffic-manager` and `source: rejected_approval`, then search `tags: { "role": "traffic-manager" }` to read only those.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-memory \
   --memory-store-id mstore_01 \
@@ -331,6 +334,39 @@ soat create-memory \
   --tags '{"role": "traffic-manager", "source": "rejected_approval"}' \
   --metadata '{"evidence": "high"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.memories.createMemory({
+  body: {
+    memory_store_id: 'mstore_01',
+    content: 'Reject refunds above $500 for the traffic-manager role',
+    tags: { role: 'traffic-manager', source: 'rejected_approval' },
+    metadata: { evidence: 'high' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/memories \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memory_store_id": "mstore_01",
+    "content": "Reject refunds above $500 for the traffic-manager role",
+    "tags": { "role": "traffic-manager", "source": "rejected_approval" },
+    "metadata": { "evidence": "high" }
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Agent Integration
 

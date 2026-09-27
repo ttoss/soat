@@ -142,10 +142,46 @@ The client holds no state beyond the base URL and token; cache it per tenant if 
 
 Deleting the project is the cascade; `force=true` removes dependent resources with it:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
-soat delete-api-key --api_key_id key_V1StGXR8Z5jdHi6B
-soat delete-project --project_id proj_V1StGXR8Z5jdHi6B --force true
+soat delete-api-key --api-key-id key_V1StGXR8Z5jdHi6B
+soat delete-project --project-id proj_V1StGXR8Z5jdHi6B --force true
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { error: keyError } = await soat.apiKeys.deleteApiKey({
+  path: { api_key_id: 'key_V1StGXR8Z5jdHi6B' },
+});
+if (keyError) throw new Error(JSON.stringify(keyError));
+
+const { error } = await soat.projects.deleteProject({
+  path: { project_id: 'proj_V1StGXR8Z5jdHi6B' },
+  query: { force: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X DELETE "$SOAT_URL/api/v1/api-keys/key_V1StGXR8Z5jdHi6B" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl -X DELETE "$SOAT_URL/api/v1/projects/proj_V1StGXR8Z5jdHi6B?force=true" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+</TabItem>
+</Tabs>
 
 Delete the key first: a revoked key stops authenticating immediately, so an interrupted offboarding leaves the tenant unreachable rather than half-open.
 

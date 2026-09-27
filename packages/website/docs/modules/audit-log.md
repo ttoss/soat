@@ -72,9 +72,36 @@ Events no principal authorized leave `principal_type` and `principal_id` **null*
 
 By default only mutations are recorded. A project opts into read auditing with `audit_reads_enabled` on the [project](./projects.md):
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-project --project-id proj_ABC --audit-reads-enabled true
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_ABC' },
+  body: { audit_reads_enabled: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_ABC \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "audit_reads_enabled": true }'
+```
+
+</TabItem>
+</Tabs>
 
 A `GET` then produces the same entry shape: the authorizing action (`secrets:GetSecret`, `secrets:ListSecrets`), its SRN, and the status. The flag is per-project:
 
@@ -102,10 +129,44 @@ The export is not an MCP or `builtin` tool action (unbounded stream); tools use 
 
 Every persisted **project-scoped** entry emits an `audit.entry_created` [webhook](./webhooks.md) event with the full entry as `data`, in the read API's snake_case shape. Subscribe with `audit.*` or the exact name:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-webhook --project-id proj_ABC \
   --url https://siem.example.com/soat --events "audit.entry_created"
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.webhooks.createWebhook({
+  body: {
+    project_id: 'proj_ABC',
+    url: 'https://siem.example.com/soat',
+    events: ['audit.entry_created'],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/webhooks \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "url": "https://siem.example.com/soat",
+    "events": ["audit.entry_created"]
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Global entries (`project_id` null, e.g. `users:CreateUser`) emit nothing; platform-originated entries do, with null principal fields.
 

@@ -474,7 +474,15 @@ Optional: pass `--secret <webhook-secret>` to validate `X-Soat-Signature`.
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
-Start a local HTTP server for deliveries. In automated tests `SOAT_WEBHOOK_BASE_URL` is injected so the server container can reach it.
+```ts
+import { createServer } from 'node:http';
+
+const WEBHOOK_BASE_URL = process.env.SOAT_WEBHOOK_BASE_URL ?? 'http://localhost:8787';
+createServer((req, res) => {
+  req.pipe(process.stdout);
+  res.end();
+}).listen(8787);
+```
 
 </TabItem>
 <TabItem value="curl" label="curl">

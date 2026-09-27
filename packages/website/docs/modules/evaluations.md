@@ -2,6 +2,9 @@
 description: "Evaluations — datasets, scorers, and scored runs that turn 'did this change make the agent better?' into a pass/fail verdict in SOAT."
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Evaluations
 
 Repeatable, scored test suites for an agent: a dataset of cases, scorers that grade the
@@ -252,12 +255,52 @@ deleted since fails the run request with `400`.
 
 Bind one like any other scorer:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name tone-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
   --scorers '[{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}]' \
   --pass-threshold 0.8
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.createEval({
+  body: {
+    project_id: projectId,
+    name: 'tone-suite',
+    agent_id: agentId,
+    dataset_id: datasetId,
+    scorers: [{ type: 'tool', name: 'tone', tool_id: toolId, pass_threshold: 0.5 }],
+    pass_threshold: 0.8,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/evals \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "tone-suite",
+    "agent_id": "'"$AGENT_ID"'",
+    "dataset_id": "'"$DATASET_ID"'",
+    "scorers": [{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}],
+    "pass_threshold": 0.8
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Calls are real, one per item: point scorer tools at infrastructure that tolerates the
 volume, and at a staging target if the algorithm has side effects.
@@ -273,11 +316,38 @@ else.
 
 `create-dataset-item-from-generation` promotes a real turn into a dataset item:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-dataset-item-from-generation \
   --dataset-id "$DATASET_ID" \
   --generation-id "$GENERATION_ID"
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.createDatasetItemFromGeneration({
+  path: { dataset_id: datasetId },
+  body: { generation_id: generationId },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/datasets/$DATASET_ID/items/from-generation" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"generation_id": "'"$GENERATION_ID"'"}'
+```
+
+</TabItem>
+</Tabs>
 
 The generation's stored input becomes the item's `input` and its answer becomes
 `expected_output` (`--expected-output` overrides it; `null` stores no reference answer).
@@ -359,11 +429,38 @@ that still has queued tasks is left alone.
 
 Nothing in the scoring path reads it, and no key is reserved: `status`, `agent_version`, `aggregate_scores`, `passed` and the counts are fields of their own and cannot be written from here. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no run is created.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat start-eval-run \
   --eval-id "$EVAL_ID" \
   --metadata '{"commit_sha":"9f2c1ab","ci_job":"nightly-evals"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.startEvalRun({
+  path: { eval_id: evalId },
+  body: { metadata: { commit_sha: '9f2c1ab', ci_job: 'nightly-evals' } },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"metadata": {"commit_sha":"9f2c1ab","ci_job":"nightly-evals"}}'
+```
+
+</TabItem>
+</Tabs>
 
 Filtering runs by a metadata key is not supported — fetch and filter client-side.
 
@@ -373,12 +470,42 @@ An agent whose tools authorize through [`tool_context`](../advanced/tool-context
 
 `start-eval-run` accepts a `tool_context` bag, forwarded to every item's generation:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat start-eval-run \
   --eval-id "$EVAL_ID" \
   --wait true \
   --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc","tenant":"acme"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.startEvalRun({
+  path: { eval_id: evalId },
+  body: {
+    wait: true,
+    tool_context: { ocaToken: 'eyJhbGciOiJIUzI1NiJ9.abc', tenant: 'acme' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"wait": true, "tool_context": {"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc","tenant":"acme"}}'
+```
+
+</TabItem>
+</Tabs>
 
 Unlike `metadata`:
 
@@ -411,6 +538,9 @@ creating a run. Creating an eval-target trigger requires `evaluations:RunEval` o
 `triggers:CreateTrigger`. A trigger carries no [`tool_context`](#run-tool-context); an
 eval whose agent needs one has to be started through the API.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-trigger \
   --project-id "$PROJECT_ID" \
@@ -420,6 +550,43 @@ soat create-trigger \
   --target-id "$EVAL_ID" \
   --cron "0 3 * * *"
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.triggers.createTrigger({
+  body: {
+    project_id: projectId,
+    name: 'nightly-regression',
+    type: 'schedule',
+    target_type: 'eval',
+    target_id: evalId,
+    cron: '0 3 * * *',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/triggers \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "nightly-regression",
+    "type": "schedule",
+    "target_type": "eval",
+    "target_id": "'"$EVAL_ID"'",
+    "cron": "0 3 * * *"
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Formation support
 
@@ -537,6 +704,9 @@ Listing datasets and evals stays project-scoped: [`GET /api/v1/datasets`](/docs/
 
 Create a dataset and add a case:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-dataset --project-id "$PROJECT_ID" --name billing-regressions
 
@@ -546,7 +716,52 @@ soat create-dataset-item --dataset-id "$DATASET_ID" \
   --metadata '{"topic":"billing"}'
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const dataset = await soat.evaluations.createDataset({
+  body: { project_id: projectId, name: 'billing-regressions' },
+});
+if (dataset.error) throw new Error(JSON.stringify(dataset.error));
+
+const item = await soat.evaluations.createDatasetItem({
+  path: { dataset_id: datasetId },
+  body: {
+    input: [{ role: 'user', content: 'When is my invoice issued?' }],
+    expected_output: 'On the first of each month.',
+    metadata: { topic: 'billing' },
+  },
+});
+if (item.error) throw new Error(JSON.stringify(item.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/datasets \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "'"$PROJECT_ID"'", "name": "billing-regressions"}'
+
+curl -X POST "https://api.example.com/api/v1/datasets/$DATASET_ID/items" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [{"role":"user","content":"When is my invoice issued?"}],
+    "expected_output": "On the first of each month.",
+    "metadata": {"topic":"billing"}
+  }'
+```
+
+</TabItem>
+</Tabs>
+
 Bind an eval and gate it at an 80% pass rate:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name billing-regression-suite \
@@ -555,14 +770,89 @@ soat create-eval --project-id "$PROJECT_ID" --name billing-regression-suite \
   --pass-threshold 0.8
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.createEval({
+  body: {
+    project_id: projectId,
+    name: 'billing-regression-suite',
+    agent_id: agentId,
+    dataset_id: datasetId,
+    scorers: [{ type: 'contains', value: 'first of each month' }],
+    pass_threshold: 0.8,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/evals \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "billing-regression-suite",
+    "agent_id": "'"$AGENT_ID"'",
+    "dataset_id": "'"$DATASET_ID"'",
+    "scorers": [{"type":"contains","value":"first of each month"}],
+    "pass_threshold": 0.8
+  }'
+```
+
+</TabItem>
+</Tabs>
+
 Run it synchronously and read the per-item results:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat start-eval-run --eval-id "$EVAL_ID" --wait true
 soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID"
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const run = await soat.evaluations.startEvalRun({
+  path: { eval_id: evalId },
+  body: { wait: true },
+});
+if (run.error) throw new Error(JSON.stringify(run.error));
+
+const results = await soat.evaluations.listEvalResults({
+  path: { eval_id: evalId, eval_run_id: runId },
+});
+if (results.error) throw new Error(JSON.stringify(results.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"wait": true}'
+
+curl "https://api.example.com/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
 Queue a larger run and poll for the verdict:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat start-eval-run --eval-id "$EVAL_ID" --wait false   # → status: queued
@@ -570,9 +860,76 @@ soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID"
 soat cancel-eval-run --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID"
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const run = await soat.evaluations.startEvalRun({
+  path: { eval_id: evalId },
+  body: { wait: false }, // → status: queued
+});
+if (run.error) throw new Error(JSON.stringify(run.error));
+
+const polled = await soat.evaluations.getEvalRun({
+  path: { eval_id: evalId, eval_run_id: runId },
+});
+if (polled.error) throw new Error(JSON.stringify(polled.error));
+
+const canceled = await soat.evaluations.cancelEvalRun({
+  path: { eval_id: evalId, eval_run_id: runId },
+});
+if (canceled.error) throw new Error(JSON.stringify(canceled.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"wait": false}'   # → status: queued
+
+curl "https://api.example.com/api/v1/evals/$EVAL_ID/runs/$RUN_ID" \
+  -H "Authorization: Bearer <token>"
+
+curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs/$RUN_ID/cancel" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
 Evaluate a specific archived version against a baseline — the shape a promotion gate uses:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat start-eval-run --eval-id "$EVAL_ID" --wait true \
   --agent-version 3 --baseline-run-id "$BASELINE_RUN_ID"
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.startEvalRun({
+  path: { eval_id: evalId },
+  body: { wait: true, agent_version: 3, baseline_run_id: baselineRunId },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"wait": true, "agent_version": 3, "baseline_run_id": "'"$BASELINE_RUN_ID"'"}'
+```
+
+</TabItem>
+</Tabs>

@@ -2,6 +2,9 @@
 description: 'How session and actor context reaches a tool endpoint as X-Soat-Context-* request headers: the exact key-to-header rule, the auto-populated keys, precedence, and validation.'
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Tool Context
 
 `tool_context` is a flat `Record<string, string>` a caller attaches to a generation. Every entry is forwarded as an HTTP **request header** on each tool call the generation makes, so a server-side tool can authorize against the caller's identity instead of trusting the prompt.
@@ -112,12 +115,45 @@ A preset is a **pin**: it wins over whatever the model (or a direct caller) supp
 
 [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) takes a `tool_context` of its own, so a tool that authorizes through the bag can be smoke-tested without an agent:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat call-tool \
   --tool-id tool_01 \
   --input '{"order_id":"ord_42"}' \
   --tool-context '{"ocaToken":"tok_abc123","tenant":"acme"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { data, error } = await soat.tools.callTool({
+  path: { tool_id: 'tool_01' },
+  body: {
+    input: { order_id: 'ord_42' },
+    tool_context: { ocaToken: 'tok_abc123', tenant: 'acme' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "$SOAT_URL/api/v1/tools/tool_01/call" \
+  -H "Authorization: Bearer $SOAT_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"order_id":"ord_42"},"tool_context":{"ocaToken":"tok_abc123","tenant":"acme"}}'
+```
+
+</TabItem>
+</Tabs>
 
 The bag behaves as elsewhere: it resolves `{{context:...}}` in `execute.headers`, `mcp.headers` and `preset_parameters`, it is forwarded as `X-Soat-Context-*` headers, and the tool's [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool) narrows it.
 
@@ -214,12 +250,45 @@ Changing the prefix on a running deployment breaks every tool endpoint already r
 
 ## Example
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-session \
   --agent-id agent_01 \
   --actor-id actor_01 \
   --tool-context '{"tenantId":"acme","plan":"pro"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { data, error } = await soat.sessions.createSession({
+  body: {
+    agent_id: 'agent_01',
+    actor_id: 'actor_01',
+    tool_context: { tenantId: 'acme', plan: 'pro' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "$SOAT_URL/api/v1/sessions" \
+  -H "Authorization: Bearer $SOAT_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_id":"agent_01","actor_id":"actor_01","tool_context":{"tenantId":"acme","plan":"pro"}}'
+```
+
+</TabItem>
+</Tabs>
 
 Every `http` tool call in that session then receives:
 

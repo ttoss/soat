@@ -269,12 +269,46 @@ Firing a `requires_approval: true` transition (user, API key or automation outco
 
 Unlike write-only `tool_context`, `metadata` is readable, and it survives every transition (a transition supplies none). A non-object `metadata` is `400 VALIDATION_FAILED`; no task is created.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-task \
   --workflow-id "$WORKFLOW_ID" \
   --title 'Refund request #8123' \
   --metadata '{"tenant_account_id":"42","source":"zendesk"}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.tasks.createTask({
+  body: {
+    workflow_id: WORKFLOW_ID,
+    title: 'Refund request #8123',
+    metadata: { tenant_account_id: '42', source: 'zendesk' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/tasks \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow_id": "'"$WORKFLOW_ID"'",
+    "title": "Refund request #8123",
+    "metadata": {"tenant_account_id":"42","source":"zendesk"}
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Filtering tasks by a metadata key is not supported; filter client-side.
 

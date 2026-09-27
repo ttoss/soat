@@ -38,6 +38,13 @@ import TabItem from '@theme/TabItem';
 ## Examples             always: one <Tabs groupId="client"> per key operation, CLI/SDK/curl, at least create + one read
 ```
 
+Every call on any handwritten page (CLI, SDK or curl) sits in a
+`<Tabs groupId="client">` with `cli`, `sdk`, `curl` tabs in that order.
+Enforced by `pnpm --filter @soat/website check-client-examples` (in
+`docs-lint`); page exemptions live in `EXEMPT` there. A call only one
+client can make carries `{/* single-client: <reason> */}` on the line before
+its fence.
+
 Overview ends with:
 
 > See the [Permissions Reference](./permissions.md) for the IAM action strings for this module.
