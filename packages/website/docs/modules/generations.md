@@ -157,9 +157,33 @@ swept by retention. A generation whose input is gone can no longer be curated an
 [`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript) reads one turn back step by step: what it
 was asked, each model step with its tool calls and results, and how it ended.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
-soat get-generation-transcript --generation_id gen_abc
+soat get-generation-transcript --generation-id gen_abc
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.generations.getGenerationTranscript({
+  path: { generation_id: 'gen_abc' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/generations/gen_abc/transcript \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 The transcript is **assembled at read time** from the generation record and the trace's
 steps object; there is no transcript table and no extra write on the generation path, so
@@ -246,6 +270,9 @@ Intermediate steps of multi-step reasoning composed by the calling application a
 
 An [orchestration](./orchestrations.md) run's `node_executions` record what each node received and produced but carry **no generation id**. The pointer runs the other way: a generation dispatched by an agent node stores `orchestration_run_id`, `node_id` and `node_attempt` as attribution columns, next to `action_id` and `trigger_id`. Filter the list endpoint:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 # every generation the run produced
 soat list-generations --orchestration-run-id run_abc123
@@ -254,16 +281,80 @@ soat list-generations --orchestration-run-id run_abc123
 soat list-generations --orchestration-run-id run_abc123 --node-id summarize
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// every generation the run produced
+const all = await soat.generations.listGenerations({
+  query: { orchestration_run_id: 'run_abc123' },
+});
+if (all.error) throw new Error(JSON.stringify(all.error));
+
+// just one node's — one row per attempt if the node was retried
+const node = await soat.generations.listGenerations({
+  query: { orchestration_run_id: 'run_abc123', node_id: 'summarize' },
+});
+if (node.error) throw new Error(JSON.stringify(node.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# every generation the run produced
+curl "https://api.example.com/api/v1/generations?orchestration_run_id=run_abc123" \
+  -H "Authorization: Bearer <token>"
+
+# just one node's — one row per attempt if the node was retried
+curl "https://api.example.com/api/v1/generations?orchestration_run_id=run_abc123&node_id=summarize" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
 `node_attempt` distinguishes the generations of a **retried** node: one node execution record and one generation per attempt, matched exactly on `node_attempt`.
 
 From a generation reached this way, the rest of the graph is reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, `chain_id` opens the [continuation chain](./chains.md) it belongs to (filtering generations by that id returns every member), and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
 
 `session_id` and `actor_id` also **filter** the listing, so the turns behind a conversation's or an end user's [cost](./usage.md#end-user-attribution) are one call away:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat list-generations --session-id sess_abc123
 soat list-generations --actor-id actor_abc123
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const bySession = await soat.generations.listGenerations({
+  query: { session_id: 'sess_abc123' },
+});
+if (bySession.error) throw new Error(JSON.stringify(bySession.error));
+
+const byActor = await soat.generations.listGenerations({
+  query: { actor_id: 'actor_abc123' },
+});
+if (byActor.error) throw new Error(JSON.stringify(byActor.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/generations?session_id=sess_abc123" \
+  -H "Authorization: Bearer <token>"
+curl "https://api.example.com/api/v1/generations?actor_id=actor_abc123" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 An id naming nothing in scope yields an empty page, never an unfiltered one.
 

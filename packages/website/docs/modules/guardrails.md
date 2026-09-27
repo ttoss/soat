@@ -210,6 +210,9 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 Give the ceiling itself as `guardrail_context` (or a context tool) so one guardrail serves every run:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-guardrail \
   --name "Per-run token ceiling" \
@@ -223,6 +226,51 @@ soat create-guardrail \
     }
   }'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.guardrails.createGuardrail({
+  body: {
+    name: 'Per-run token ceiling',
+    document: {
+      class: 'B',
+      guard: {
+        '<': [
+          { var: 'runtime.orchestrations.tokens.total' },
+          { var: 'context.action_token_ceiling' },
+        ],
+      },
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/guardrails \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Per-run token ceiling",
+    "document": {
+      "class": "B",
+      "guard": {
+        "<": [
+          { "var": "runtime.orchestrations.tokens.total" },
+          { "var": "context.action_token_ceiling" }
+        ]
+      }
+    }
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Attach it to the tools the run dispatches; the guard fails before the tool runs. Swap `tokens.total` for `cost_usd.total` to cap dollars.
 

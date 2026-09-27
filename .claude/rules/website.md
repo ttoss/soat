@@ -41,7 +41,9 @@ import TabItem from '@theme/TabItem';
 Every call on any handwritten page (CLI, SDK or curl) sits in a
 `<Tabs groupId="client">` with `cli`, `sdk`, `curl` tabs in that order.
 Enforced by `pnpm --filter @soat/website check-client-examples` (in
-`docs-lint`); exemptions live in `EXEMPT` there.
+`docs-lint`); page exemptions live in `EXEMPT` there. A call only one
+client can make carries `{/* single-client: <reason> */}` on the line before
+its fence.
 
 Overview ends with:
 

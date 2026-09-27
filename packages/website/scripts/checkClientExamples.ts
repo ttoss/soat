@@ -32,6 +32,9 @@ const EXEMPT: Record<string, string> = {
 /** Generated output, not handwritten. */
 const GENERATED_DIRS = ['api', 'cli/commands', 'sdk/services', 'mcp/tools'];
 
+/** Marks the next block as a call only one client can make; a reason is required. */
+const SINGLE_CLIENT = /^\s*\{\/\*\s*single-client:\s*\S.*\*\/\}\s*$/;
+
 const REQUIRED_DIRS = ['modules/'];
 
 type TabsFrame = {
@@ -40,14 +43,20 @@ type TabsFrame = {
   line: number;
 };
 
-const listMarkdownFiles = (args: { dir: string; prefix?: string }): string[] => {
+const listMarkdownFiles = (args: {
+  dir: string;
+  prefix?: string;
+}): string[] => {
   return fs
     .readdirSync(args.dir, { withFileTypes: true })
     .flatMap((entry) => {
       const rel = args.prefix ? `${args.prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (GENERATED_DIRS.includes(rel)) return [];
-        return listMarkdownFiles({ dir: path.join(args.dir, entry.name), prefix: rel });
+        return listMarkdownFiles({
+          dir: path.join(args.dir, entry.name),
+          prefix: rel,
+        });
       }
       return /\.mdx?$/.test(entry.name) ? [rel] : [];
     })
@@ -55,11 +64,18 @@ const listMarkdownFiles = (args: { dir: string; prefix?: string }): string[] => 
 };
 
 /** The client a code block is a call for, or undefined when it is no call. */
-const clientOf = (args: { content: string; language: string }): Client | undefined => {
+const clientOf = (args: {
+  content: string;
+  language: string;
+}): Client | undefined => {
   const { content, language } = args;
   if (['bash', 'sh', 'shell'].includes(language)) {
-    if (/(^|\n)\s*curl\s/.test(content)) return 'curl';
-    if (/(^|\n)\s*soat\s+[a-z]/.test(content)) return 'cli';
+    // `/hooks/` endpoints are called by third parties, never by a SOAT client.
+    if (/(^|\n)\s*curl\s/.test(content)) {
+      return /\/hooks\//.test(content) ? undefined : 'curl';
+    }
+    // `soat listen` is a local webhook receiver, not an API call.
+    if (/(^|\n)\s*soat\s+(?!listen\b)[a-z]/.test(content)) return 'cli';
     return undefined;
   }
   if (['js', 'javascript', 'ts', 'tsx', 'typescript'].includes(language)) {
@@ -76,89 +92,122 @@ const enclosingClientTab = (stack: TabsFrame[]): string | undefined => {
   return undefined;
 };
 
-export const checkSource = (args: { file: string; source: string }): string[] => {
-  const { file, source } = args;
-  const problems: string[] = [];
-  const lines = source.split('\n');
-  const stack: TabsFrame[] = [];
-  let clientTabSets = 0;
-  let openFence: { language: string; line: number; text: string[] } | undefined;
+type Fence = {
+  language: string;
+  line: number;
+  singleClient: boolean;
+  text: string[];
+};
 
-  lines.forEach((line, index) => {
-    const lineNumber = index + 1;
+type ScanState = {
+  clientTabSets: number;
+  file: string;
+  openFence: Fence | undefined;
+  problems: string[];
+  stack: TabsFrame[];
+};
 
-    const fence = /^\s*```(\S*)/.exec(line);
-    if (fence) {
-      if (openFence) {
-        const client = clientOf({
-          content: openFence.text.join('\n'),
-          language: openFence.language,
-        });
-        const tab = enclosingClientTab(stack);
-        for (const frame of stack) {
-          const item = frame.items.at(-1);
-          if (item) item.blocks += 1;
-        }
-        if (client && !tab) {
-          problems.push(
-            `${file}:${openFence.line} a ${client} example outside a <Tabs groupId="client"> block — show the same call for ${CLIENTS.join(', ')}`
-          );
-        } else if (client && tab !== client) {
-          problems.push(`${file}:${openFence.line} a ${client} example inside the "${tab}" tab`);
-        }
-        openFence = undefined;
-      } else {
-        openFence = { language: fence[1] ?? '', line: lineNumber, text: [] };
-      }
-      return;
-    }
-
-    if (openFence) {
-      openFence.text.push(line);
-      return;
-    }
-
-    const tabsOpen = /^\s*<Tabs\b([^>]*)>/.exec(line);
-    if (tabsOpen) {
-      const groupId = /groupId="([^"]+)"/.exec(tabsOpen[1] ?? '')?.[1] ?? '';
-      if (groupId === 'client') clientTabSets += 1;
-      stack.push({ groupId, items: [], line: lineNumber });
-      return;
-    }
-
-    if (/^\s*<\/Tabs>/.test(line)) {
-      const frame = stack.pop();
-      if (!frame) {
-        problems.push(`${file}:${lineNumber} </Tabs> without a matching <Tabs>`);
-        return;
-      }
-      if (frame.groupId !== 'client') return;
-      const values = frame.items.map((item) => item.value);
-      if (values.join(',') !== CLIENTS.join(',')) {
-        problems.push(
-          `${file}:${frame.line} client tabs are [${values.join(', ') || 'none'}] — expected exactly [${CLIENTS.join(', ')}], in that order`
-        );
-      }
-      for (const item of frame.items) {
-        if (item.blocks === 0) {
-          problems.push(`${file}:${frame.line} the "${item.value}" tab has no example in it`);
-        }
-      }
-      return;
-    }
-
-    const tabItem = /^\s*<TabItem\b[^>]*value="([^"]+)"/.exec(line);
-    if (tabItem) stack.at(-1)?.items.push({ blocks: 0, value: tabItem[1] ?? '' });
+const closeFence = (args: { fence: Fence; state: ScanState }) => {
+  const { fence, state } = args;
+  const client = clientOf({
+    content: fence.text.join('\n'),
+    language: fence.language,
   });
+  const tab = enclosingClientTab(state.stack);
+  for (const frame of state.stack) {
+    const item = frame.items.at(-1);
+    if (item) item.blocks += 1;
+  }
+  if (!client || (!tab && fence.singleClient)) return;
+  if (!tab) {
+    state.problems.push(
+      `${state.file}:${fence.line} a ${client} example outside a <Tabs groupId="client"> block — show the same call for ${CLIENTS.join(', ')}`
+    );
+  } else if (tab !== client) {
+    state.problems.push(
+      `${state.file}:${fence.line} a ${client} example inside the "${tab}" tab`
+    );
+  }
+};
 
-  if (clientTabSets === 0 && REQUIRED_DIRS.some((dir) => file.startsWith(dir))) {
-    problems.push(`${file} has no <Tabs groupId="client"> block — module pages show their key operations for ${CLIENTS.join(', ')}`);
+const closeTabs = (args: { lineNumber: number; state: ScanState }) => {
+  const { lineNumber, state } = args;
+  const frame = state.stack.pop();
+  if (!frame) {
+    state.problems.push(
+      `${state.file}:${lineNumber} </Tabs> without a matching <Tabs>`
+    );
+    return;
+  }
+  if (frame.groupId !== 'client') return;
+  const values = frame.items.map((item) => {
+    return item.value;
+  });
+  if (values.join(',') !== CLIENTS.join(',')) {
+    state.problems.push(
+      `${state.file}:${frame.line} client tabs are [${values.join(', ') || 'none'}] — expected exactly [${CLIENTS.join(', ')}], in that order`
+    );
+  }
+  for (const item of frame.items) {
+    if (item.blocks === 0) {
+      state.problems.push(
+        `${state.file}:${frame.line} the "${item.value}" tab has no example in it`
+      );
+    }
+  }
+};
+
+const scanMarkup = (args: {
+  line: string;
+  lineNumber: number;
+  state: ScanState;
+}) => {
+  const { line, lineNumber, state } = args;
+  const tabsOpen = /^\s*<Tabs\b([^>]*)>/.exec(line);
+  if (tabsOpen) {
+    const groupId = /groupId="([^"]+)"/.exec(tabsOpen[1] ?? '')?.[1] ?? '';
+    if (groupId === 'client') state.clientTabSets += 1;
+    state.stack.push({ groupId, items: [], line: lineNumber });
+    return;
+  }
+  if (/^\s*<\/Tabs>/.test(line)) {
+    closeTabs({ lineNumber, state });
+    return;
+  }
+  const tabItem = /^\s*<TabItem\b[^>]*value="([^"]+)"/.exec(line);
+  if (tabItem) {
+    state.stack.at(-1)?.items.push({ blocks: 0, value: tabItem[1] ?? '' });
+  }
+};
+
+const pageProblems = (args: {
+  clientTabSets: number;
+  file: string;
+  source: string;
+}): string[] => {
+  const { clientTabSets, file, source } = args;
+  const problems: string[] = [];
+  if (
+    clientTabSets === 0 &&
+    REQUIRED_DIRS.some((dir) => {
+      return file.startsWith(dir);
+    })
+  ) {
+    problems.push(
+      `${file} has no <Tabs groupId="client"> block — module pages show their key operations for ${CLIENTS.join(', ')}`
+    );
   }
 
   if (clientTabSets > 0) {
     for (const component of ['Tabs', 'TabItem']) {
-      if (!new RegExp(`import ${component} from '@theme/${component}'`).test(source)) {
-        problems.push(`${file} uses <${component}> without importing it from @theme/${component}`);
+      if (
+        !new RegExp(`import ${component} from '@theme/${component}'`).test(
+          source
+        )
+      ) {
+        problems.push(
+          `${file} uses <${component}> without importing it from @theme/${component}`
+        );
       }
     }
   }
@@ -166,10 +215,54 @@ export const checkSource = (args: { file: string; source: string }): string[] =>
   return problems;
 };
 
+export const checkSource = (args: {
+  file: string;
+  source: string;
+}): string[] => {
+  const { file, source } = args;
+  const lines = source.split('\n');
+  const state: ScanState = {
+    clientTabSets: 0,
+    file,
+    openFence: undefined,
+    problems: [],
+    stack: [],
+  };
+
+  for (const [index, line] of lines.entries()) {
+    const fence = /^\s*```(\S*)/.exec(line);
+    if (fence && state.openFence) {
+      closeFence({ fence: state.openFence, state });
+      state.openFence = undefined;
+    } else if (fence) {
+      state.openFence = {
+        language: fence[1] ?? '',
+        line: index + 1,
+        singleClient: SINGLE_CLIENT.test(lines[index - 1] ?? ''),
+        text: [],
+      };
+    } else if (state.openFence) {
+      state.openFence.text.push(line);
+    } else {
+      scanMarkup({ line, lineNumber: index + 1, state });
+    }
+  }
+
+  return [
+    ...state.problems,
+    ...pageProblems({ file, source, clientTabSets: state.clientTabSets }),
+  ];
+};
+
 const run = () => {
-  const files = listMarkdownFiles({ dir: DOCS_DIR }).filter((file) => !(file in EXEMPT));
+  const files = listMarkdownFiles({ dir: DOCS_DIR }).filter((file) => {
+    return !(file in EXEMPT);
+  });
   const problems = files.flatMap((file) => {
-    return checkSource({ file, source: fs.readFileSync(path.join(DOCS_DIR, file), 'utf8') });
+    return checkSource({
+      file,
+      source: fs.readFileSync(path.join(DOCS_DIR, file), 'utf8'),
+    });
   });
   if (problems.length > 0) {
     throw new Error(

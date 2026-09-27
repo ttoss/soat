@@ -19,7 +19,10 @@ const full = [
 ].join('\n');
 
 test('a complete client tab set passes', () => {
-  assert.deepEqual(checkSource({ file: 'modules/a.md', source: IMPORTS + full }), []);
+  assert.deepEqual(
+    checkSource({ file: 'modules/a.md', source: IMPORTS + full }),
+    []
+  );
 });
 
 test('a call outside client tabs fails', () => {
@@ -64,4 +67,34 @@ test('a conceptual page with no calls passes', () => {
     checkSource({ file: 'advanced/a.md', source: '```json\n{}\n```\n' }),
     []
   );
+});
+
+test('a third-party call to an inbound webhook is not a client call', () => {
+  assert.deepEqual(
+    checkSource({
+      file: 'modules/a.md',
+      source:
+        IMPORTS +
+        full +
+        '\n```bash\ncurl -X POST https://api.example.com/hooks/triggers/trg_1\n```\n',
+    }),
+    []
+  );
+});
+
+test('a block marked single-client with a reason passes', () => {
+  const source =
+    '{/* single-client: CLI flag parsing */}\n```bash\nsoat create-formation --env-file .env\n```\n';
+  assert.deepEqual(checkSource({ file: 'advanced/a.md', source }), []);
+});
+
+test('a single-client marker without a reason fails', () => {
+  const source =
+    '{/* single-client: */}\n```bash\nsoat create-formation\n```\n';
+  assert.equal(checkSource({ file: 'advanced/a.md', source }).length, 1);
+});
+
+test('the local `soat listen` tool is not an API call', () => {
+  const source = '```bash\nsoat listen --port 8787\n```\n';
+  assert.deepEqual(checkSource({ file: 'advanced/a.md', source }), []);
 });
