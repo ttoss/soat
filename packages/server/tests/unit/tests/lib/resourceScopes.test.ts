@@ -319,6 +319,20 @@ describe('resolveResourceScope', () => {
           window: 'calendar_month',
           threshold: '100',
         }),
+        decider: await db.Decider.create({
+          projectId,
+          name: 'scopes-kind-decider',
+          agentId: agent.id,
+          questions: {
+            escalate: { type: 'boolean', instructions: 'Escalate?' },
+          },
+        }),
+        decision: await db.Decision.create({
+          projectId,
+          deciderId: 'dcd_scopes_kind',
+          deciderVersion: 1,
+          status: 'completed',
+        }),
       };
 
       seeded = Object.fromEntries(
@@ -346,6 +360,8 @@ describe('resolveResourceScope', () => {
       ['metadata_schema', 'metadata_schema'],
       ['audit', 'audit'],
       ['usage', 'usage'],
+      ['decider', 'decider'],
+      ['decision', 'decision'],
     ])(
       'a %s resolves to a %s SRN in its project',
       async (kind, resourceType) => {
@@ -381,6 +397,8 @@ describe('resolveResourceScope', () => {
       ['metadata_schema', 'mdschema_absent'],
       ['audit', 'audit_absent'],
       ['usage', 'uthr_absent'],
+      ['decider', 'dcd_absent'],
+      ['decision', 'dec_absent'],
     ])('an id that names no %s resolves to nothing', async (kind, publicId) => {
       await expect(
         resolveResourceScope({ kind, publicId })

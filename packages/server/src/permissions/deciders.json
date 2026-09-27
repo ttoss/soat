@@ -1,0 +1,60 @@
+{
+  "module": "deciders",
+  "operations": [
+    {
+      "operationId": "listDeciders",
+      "action": "deciders:ListDeciders",
+      "description": "List deciders in a project"
+    },
+    {
+      "operationId": "createDecider",
+      "action": "deciders:CreateDecider",
+      "description": "Create a decider: a versioned question set answered by a tool-less agent"
+    },
+    {
+      "operationId": "getDecider",
+      "action": "deciders:GetDecider",
+      "description": "Get a decider by ID"
+    },
+    {
+      "operationId": "updateDecider",
+      "action": "deciders:UpdateDecider",
+      "description": "Update a decider's name, description, agent or questions"
+    },
+    {
+      "operationId": "deleteDecider",
+      "action": "deciders:DeleteDecider",
+      "description": "Delete a decider; its decisions remain"
+    },
+    {
+      "operationId": "listDeciderVersions",
+      "action": "deciders:ListDeciderVersions",
+      "description": "List the archived question sets of a decider"
+    },
+    {
+      "operationId": "getDeciderVersion",
+      "action": "deciders:GetDeciderVersion",
+      "description": "Get one archived question set of a decider"
+    },
+    {
+      "operationId": "restoreDeciderVersion",
+      "action": "deciders:RestoreDeciderVersion",
+      "description": "Restore an archived question set as a new version"
+    },
+    {
+      "operationId": "createDecision",
+      "action": "deciders:CreateDecision",
+      "description": "Evaluate a decider against a state, recording the decision"
+    },
+    {
+      "operationId": "listDecisions",
+      "action": "deciders:ListDecisions",
+      "description": "List decisions in a project"
+    },
+    {
+      "operationId": "getDecision",
+      "action": "deciders:GetDecision",
+      "description": "Get a decision by ID"
+    }
+  ]
+}

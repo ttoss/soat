@@ -1,0 +1,789 @@
+openapi: 3.0.3
+info:
+  title: SOAT Deciders API
+  version: 1.0.0
+  description: >-
+    API for deciders — versioned question sets answered against a caller's
+    state — and the append-only decisions they produce.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Deciders
+    description: Manage deciders and request decisions from them
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/deciders:
+    get:
+      tags:
+        - Deciders
+      summary: List deciders
+      description: Returns the deciders defined in a project, newest first.
+      operationId: listDeciders
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of deciders
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Decider'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags:
+        - Deciders
+      summary: Create a decider
+      description: >-
+        Creates a decider at version 1: a named question set and the agent that
+        answers it. Every question declares a finite answer space, validated
+        here. The agent must be in the decider's project and carry no tool
+        surface — no tool binding left active by `active_tool_ids` and no
+        `knowledge_config.write_memory_store_id` — or the create is refused with
+        `400 DECIDER_AGENT_NOT_TOOL_LESS`. A duplicate `name` in the project is
+        `409 NAME_CONFLICT`.
+      operationId: createDecider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeciderRequest'
+      responses:
+        '201':
+          description: Decider created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '400':
+          description: Bad request — invalid questions, an unknown or tool-bearing agent
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: A decider with this name already exists in the project
+
+  /api/v1/deciders/{decider_id}:
+    get:
+      tags:
+        - Deciders
+      summary: Get a decider
+      description: Returns a decider with its current question set and version.
+      operationId: getDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+      responses:
+        '200':
+          description: The decider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Decider not found
+    patch:
+      tags:
+        - Deciders
+      summary: Update a decider
+      description: >-
+        Updates any of `name`, `description`, `agent_id` and `questions`. Only a
+        change to `questions` archives a new version; a rename, a new agent or a
+        rewrite of the questions the decider already holds leaves `version`
+        where it is. A new agent is held to the same rules as on create.
+      operationId: updateDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeciderRequest'
+      responses:
+        '200':
+          description: Decider updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '400':
+          description: Bad request — invalid questions, an unknown or tool-bearing agent
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Decider not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
+    delete:
+      tags:
+        - Deciders
+      summary: Delete a decider
+      description: >-
+        Deletes a decider and its version archive. Its decisions remain and keep
+        naming the decider's ID.
+      operationId: deleteDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+      responses:
+        '204':
+          description: Decider deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Decider not found
+
+  /api/v1/deciders/{decider_id}/versions:
+    get:
+      tags:
+        - Deciders
+      summary: List a decider's versions
+      description: >-
+        Returns the decider's archived question sets, newest first. A version is
+        written on create and on every write that changes `questions`.
+      operationId: listDeciderVersions
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of decider versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeciderVersion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Decider not found
+
+  /api/v1/deciders/{decider_id}/versions/{version}:
+    get:
+      tags:
+        - Deciders
+      summary: Fetch an archived decider version
+      description: >-
+        Returns the question set a version held. A decision names the
+        `decider_version` it was answered under, so this is how its criteria
+        are read after the decider has changed.
+      operationId: getDeciderVersion
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+        - $ref: '#/components/parameters/Version'
+      responses:
+        '200':
+          description: Archived decider version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeciderVersion'
+        '400':
+          description: Bad request — version is not a positive integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /api/v1/deciders/{decider_id}/versions/{version}/restore:
+    post:
+      tags:
+        - Deciders
+      summary: Restore an archived decider version
+      description: >-
+        Writes an archived question set back as the decider's live one, which
+        archives it again as a new version rather than rewinding the counter.
+        Restoring the question set the decider already holds is a no-op.
+      operationId: restoreDeciderVersion
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+        - $ref: '#/components/parameters/Version'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreDeciderVersionRequest'
+      responses:
+        '200':
+          description: The decider, at its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '400':
+          description: Bad request — version is not a positive integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
+
+  /api/v1/deciders/{decider_id}/decisions:
+    post:
+      tags:
+        - Deciders
+      summary: Request a decision
+      description: >-
+        Evaluates the decider against `state` and records the decision. The
+        questions come from the decider, never from the request, so a call site
+        can only supply what is judged.
+
+
+        Everything that can refuse the request is checked before the decision
+        is written, so a refusal is a `4xx` and never a polled failure: the
+        agent's tool surface (`400 DECIDER_AGENT_NOT_TOOL_LESS`), a paused
+        project (`409 PROJECT_PAUSED`) and quota admission
+        (`429 QUOTA_EXCEEDED`).
+
+
+        With `wait: false`, the default, the answer is `201` with the decision
+        `queued`; poll `GET /api/v1/decisions/{decision_id}` or subscribe to
+        `decisions.completed` and `decisions.failed`. With `wait: true` it is
+        `201` with the decision settled.
+      operationId: createDecision
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - $ref: '#/components/parameters/DeciderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDecisionRequest'
+      responses:
+        '201':
+          description: The decision — `queued`, or settled when `wait` is true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '400':
+          description: Bad request — a missing state, a non-object metadata bag, or a tool-bearing agent
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Decider not found
+        '409':
+          description: The project is paused
+        '429':
+          description: A generation quota is exhausted
+
+  /api/v1/decisions:
+    get:
+      tags:
+        - Deciders
+      summary: List decisions
+      description: Returns the decisions in a project, newest first.
+      operationId: listDecisions
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: decider_id
+          in: query
+          description: Only decisions requested from this decider
+          schema:
+            type: string
+            example: dcd_V1StGXR8Z5jdHi6B
+        - name: status
+          in: query
+          description: Only decisions in this status
+          schema:
+            type: string
+            enum: [queued, running, completed, failed]
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of decisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Decision'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/decisions/{decision_id}:
+    get:
+      tags:
+        - Deciders
+      summary: Get a decision
+      description: >-
+        Returns a decision. Poll it after a `wait: false` request until
+        `status` is `completed` or `failed`.
+      operationId: getDecision
+      x-soat-resource:
+        kind: decision
+        from: decision_id
+      parameters:
+        - name: decision_id
+          in: path
+          required: true
+          description: The decision ID
+          schema:
+            type: string
+            example: dec_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Decision not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    DeciderId:
+      name: decider_id
+      in: path
+      required: true
+      description: The decider ID
+      schema:
+        type: string
+        example: dcd_V1StGXR8Z5jdHi6B
+    Version:
+      name: version
+      in: path
+      required: true
+      description: The archived version number
+      schema:
+        type: integer
+        minimum: 1
+  schemas:
+    DeciderQuestion:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - instructions
+      description: >-
+        One question and its finite answer space. `criteria` is an object
+        mapping each option to its description for `choice` (2 to 20 options,
+        in the order the model is shown them), an ordered array of level
+        descriptions for `score` (2 to 20 levels; the answer is a level's
+        zero-based index), and for `boolean` an optional object describing what
+        `false` and `true` mean.
+      properties:
+        type:
+          type: string
+          enum: [choice, score, boolean]
+          example: choice
+        instructions:
+          type: string
+          description: What to judge
+          example: Which team should own this ticket?
+        criteria:
+          description: The answer space's descriptions; the shape follows `type`
+          oneOf:
+            - type: object
+              additionalProperties:
+                type: string
+            - type: array
+              items:
+                type: string
+          example:
+            billing: Charges, refunds, invoices, plan changes
+            technical: Errors, outages, integration failures
+    DeciderQuestions:
+      type: object
+      description: >-
+        Question id → question, 1 to 20 of them. A question id starts with a
+        letter or underscore and holds only letters, digits and underscores (at
+        most 64), since it keys the answer object.
+      additionalProperties:
+        $ref: '#/components/schemas/DeciderQuestion'
+      example:
+        route:
+          type: choice
+          instructions: Which team should own this ticket?
+          criteria:
+            billing: Charges, refunds, invoices, plan changes
+            technical: Errors, outages, integration failures
+        needs_human:
+          type: boolean
+          instructions: Must a person read this before any automated reply?
+    Decider:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dcd_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: support-triage
+        description:
+          type: string
+          nullable: true
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: The tool-less agent that answers
+          example: agent_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          description: >-
+            The question set's version. Bumped only by a write that changes
+            `questions`.
+          example: 1
+        questions:
+          $ref: '#/components/schemas/DeciderQuestions'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateDeciderRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - agent_id
+        - questions
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Project ID (required if not using project key auth)
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Human-readable name, unique per project
+          example: support-triage
+        description:
+          type: string
+          nullable: true
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          example: agent_V1StGXR8Z5jdHi6B
+        questions:
+          $ref: '#/components/schemas/DeciderQuestions'
+        version_label:
+          type: string
+          description: Optional tag for version 1, e.g. `initial`
+          example: initial
+    UpdateDeciderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        agent_id:
+          x-soat-ref: agents
+          type: string
+        questions:
+          $ref: '#/components/schemas/DeciderQuestions'
+        version_label:
+          type: string
+          description: >-
+            Optional tag for the version this write archives. Ignored when the
+            write changes no question, since no version is archived.
+          example: add-account-option
+        expected_version:
+          description: Refuses the write unless the decider is at this version.
+          allOf:
+            - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
+    DeciderVersion:
+      type: object
+      description: An immutable archive of a decider's question set at one version.
+      properties:
+        id:
+          type: string
+          example: dcd_ver_V1StGXR8Z5jdHi6B
+        decider_id:
+          x-soat-ref: deciders
+          type: string
+          example: dcd_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          example: 1
+        config:
+          type: object
+          additionalProperties: true
+          description: The versioned surface as it stood at this version.
+          properties:
+            questions:
+              $ref: '#/components/schemas/DeciderQuestions'
+        label:
+          type: string
+          nullable: true
+          example: restored from v2
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    RestoreDeciderVersionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          description: Optional tag for the new version. Defaults to `restored from vN`.
+          example: rollback
+    CreateDecisionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+      properties:
+        state:
+          description: >-
+            What is judged: any JSON value. A string reaches the agent verbatim;
+            anything else is serialized as JSON. Not stored.
+          example:
+            subject: Charged twice
+            body: I was charged twice for the same order.
+        metadata:
+          description: >-
+            Caller-owned annotations stored on the decision and returned on
+            every read — typically the id of what was judged, since the state
+            itself is not stored. Written once, with the decision. A non-object
+            is rejected with `400 VALIDATION_FAILED` and no decision is written.
+          example:
+            ticket_id: ZD-48213
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            True evaluates before answering and returns the settled decision.
+            False — the default — returns the `queued` decision at once.
+          example: true
+    DecisionAnswer:
+      type: object
+      description: >-
+        One question's answer, confined to its answer space. `choice` carries
+        the chosen option, `score` the level's zero-based index and its
+        `legend`, `boolean` the `value`.
+      properties:
+        type:
+          type: string
+          enum: [choice, score, boolean]
+        choice:
+          type: string
+          example: technical
+        score:
+          type: integer
+          example: 2
+        legend:
+          type: string
+          example: Blocks one workflow for one customer
+        value:
+          type: boolean
+          example: false
+    Decision:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dec_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        decider_id:
+          x-soat-ref: deciders
+          type: string
+          description: The decider asked; kept after the decider is deleted
+          example: dcd_V1StGXR8Z5jdHi6B
+        decider_version:
+          type: integer
+          description: The question-set version the decision was answered under
+          example: 1
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        answers:
+          type: object
+          nullable: true
+          description: Question id → answer. Null until the decision completes, then never rewritten.
+          additionalProperties:
+            $ref: '#/components/schemas/DecisionAnswer'
+        error:
+          type: object
+          nullable: true
+          description: Why a `failed` decision failed.
+          properties:
+            code:
+              type: string
+              example: OUTPUT_SCHEMA_VALIDATION_FAILED
+            message:
+              type: string
+        generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+          description: >-
+            The generation that answered, once one has. Its receipt carries
+            what the decision cost.
+          example: gen_V1StGXR8Z5jdHi6B
+        metadata:
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

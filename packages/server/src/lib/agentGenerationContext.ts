@@ -13,7 +13,10 @@ import {
   readKnowledgeConfig,
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
-import { resolveServedAgentVersion } from './agentServedVersion';
+import {
+  resolveServedAgentVersion,
+  withOutputSchema,
+} from './agentServedVersion';
 import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
@@ -184,6 +187,8 @@ export type BuildGenerationContextArgs = {
   sessionId?: string | null;
   /** Forces one archived agent version — see `resolveServedAgentVersion`. */
   pinnedAgentVersion?: number | null;
+  /** Replaces the served output schema — see `withOutputSchema`. */
+  outputSchemaOverride?: Record<string, unknown>;
 };
 
 export const buildGenerationContext = async (
@@ -204,10 +209,18 @@ export const buildGenerationContext = async (
 
   // Before anything reads the config: under a staged rollout everything below
   // must come from the assigned archived version, not the live row.
-  const { typedAgent, agentVersion } = await resolveServedAgentVersion({
+  const served = await resolveServedAgentVersion({
     agent: liveAgent,
     sessionId: args.sessionId,
     pinnedVersion: args.pinnedAgentVersion,
+  });
+  const { agentVersion } = served;
+  // Applied once, here, so everything below — the structured-output request,
+  // the text-encoded tool-call check and the frozen config a resumed turn
+  // reads — sees the schema that actually constrained the call.
+  const typedAgent = withOutputSchema({
+    typedAgent: served.typedAgent,
+    outputSchema: args.outputSchemaOverride,
   });
 
   const resolvedMessages = await resolveGenerationInputMessages({

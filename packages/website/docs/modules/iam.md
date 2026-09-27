@@ -116,6 +116,8 @@ Grant a **user** (JWT) a project with `resource: ["srn:proj_ABC:*:*"]`. API keys
 | `orchestration` | `orch_`          | Orchestrations  |
 | `dataset`       | `dset_`          | Evaluations     |
 | `eval`          | `eval_`          | Evaluations     |
+| `decider`       | `dcd_`           | Deciders        |
+| `decision`      | `dec_`           | Deciders        |
 | `generation`    | `gen_`           | Generations     |
 | `trace`         | `trace_`         | Traces          |
 | `chain`         | `chain_`         | Chains          |

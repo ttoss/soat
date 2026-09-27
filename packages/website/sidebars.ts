@@ -95,6 +95,7 @@ const sidebars: SidebarsConfig = {
             'modules/actors',
             'modules/generations',
             'modules/chains',
+            'modules/deciders',
           ],
         },
         {

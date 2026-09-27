@@ -30,6 +30,7 @@ const USAGE_UNIT_CHARS = 200;
 const USAGE_COMPONENTS = 8;
 const AUDIT_DETAIL_CHARS = 900;
 const ACTIVITY_SUMMARY_CHARS = 600;
+const DECISION_METADATA_CHARS = 800;
 const OTHER_PROJECT_CHARS = 20_000;
 const TRACE_FILE_BYTES = 250_000;
 
@@ -217,6 +218,20 @@ describe('Usage — what the storage snapshot counts as records of work', () => 
           action: 'agents:CreateAgent',
           status: 201,
           detail: { note: text(AUDIT_DETAIL_CHARS) },
+        });
+      },
+    },
+    {
+      kind: 'a decision',
+      chars: DECISION_METADATA_CHARS,
+      seed: async (project: Seeded) => {
+        await db.Decision.create({
+          publicId: generatePublicId(PUBLIC_ID_PREFIXES.decision),
+          projectId: project.projectId,
+          deciderId: generatePublicId(PUBLIC_ID_PREFIXES.decider),
+          deciderVersion: 1,
+          status: 'completed',
+          metadata: { note: text(DECISION_METADATA_CHARS) },
         });
       },
     },

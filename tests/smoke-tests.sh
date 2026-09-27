@@ -8433,6 +8433,78 @@ $SOAT_CLI delete-eval --eval_id "$EVAL_ID"
 $SOAT_CLI delete-dataset --dataset_id "$DATASET_ID"
 echo "Evaluations: OK"
 
+echo "=== Deciders ==="
+
+echo "--- Creating a tool-less agent and a decider ---"
+DECIDER_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name "smoke-decider-agent" \
+  --instructions "You triage support tickets.")
+DECIDER_AGENT_ID=$(printf '%s\n' "$DECIDER_AGENT_RESP" | jq -r '.id')
+
+DECIDER_RESP=$($SOAT_CLI create-decider \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-triage" \
+  --agent_id "$DECIDER_AGENT_ID" \
+  --questions '{"escalate":{"type":"boolean","instructions":"Must a person read this first?"}}')
+DECIDER_ID=$(printf '%s\n' "$DECIDER_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DECIDER_RESP" | jq -e '(.id | startswith("dcd_")) and .version == 1' >/dev/null 2>&1; then
+  echo "ERROR: create-decider did not return a decider at version 1" >&2
+  printf '%s\n' "$DECIDER_RESP" >&2
+  exit 1
+fi
+echo "Decider id: $DECIDER_ID"
+
+echo "--- Changing the questions archives a new version ---"
+DECIDER_UPDATED=$($SOAT_CLI update-decider \
+  --decider_id "$DECIDER_ID" \
+  --questions '{"escalate":{"type":"boolean","instructions":"Does a person have to see this first?"}}')
+if [ "$(printf '%s\n' "$DECIDER_UPDATED" | jq -r '.version')" != "2" ]; then
+  echo "ERROR: a question change did not bump the decider to version 2" >&2
+  printf '%s\n' "$DECIDER_UPDATED" >&2
+  exit 1
+fi
+DECIDER_V1=$($SOAT_CLI get-decider-version --decider_id "$DECIDER_ID" --version 1)
+if ! printf '%s\n' "$DECIDER_V1" | jq -e \
+  '.config.questions.escalate.instructions == "Must a person read this first?"' >/dev/null 2>&1; then
+  echo "ERROR: version 1 did not keep the questions it held" >&2
+  printf '%s\n' "$DECIDER_V1" >&2
+  exit 1
+fi
+
+echo "--- Requesting a decision ---"
+# Whether the sandbox model answers inside the space is its own business, so
+# the decision is asserted settled either way, under the version it was asked.
+DECISION_RESP=$($SOAT_CLI create-decision \
+  --decider_id "$DECIDER_ID" \
+  --state "A customer threatens legal action." \
+  --metadata '{"ticket_id":"smoke-1"}' \
+  --wait true)
+DECISION_ID=$(printf '%s\n' "$DECISION_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DECISION_RESP" | jq -e \
+  '(.id | startswith("dec_")) and .decider_version == 2 and (.status == "completed" or .status == "failed") and .metadata.ticket_id == "smoke-1"' \
+  >/dev/null 2>&1; then
+  echo "ERROR: create-decision did not settle under version 2" >&2
+  printf '%s\n' "$DECISION_RESP" >&2
+  exit 1
+fi
+DECISIONS_LISTED=$($SOAT_CLI list-decisions --project_id "$PROJECT_PUBLIC_ID" --decider_id "$DECIDER_ID")
+if [ "$(printf '%s\n' "$DECISIONS_LISTED" | jq -r '.data[0].id')" != "$DECISION_ID" ]; then
+  echo "ERROR: list-decisions did not return the decision" >&2
+  printf '%s\n' "$DECISIONS_LISTED" >&2
+  exit 1
+fi
+
+echo "--- A decider holds its agent ---"
+expect_cli_error_status 409 delete-agent --agent-id "$DECIDER_AGENT_ID" --force true
+
+echo "--- Cleaning up deciders fixtures ---"
+$SOAT_CLI delete-decider --decider_id "$DECIDER_ID"
+$SOAT_CLI get-decision --decision_id "$DECISION_ID" >/dev/null
+$SOAT_CLI delete-agent --agent-id "$DECIDER_AGENT_ID" --force true >/dev/null
+echo "Deciders: OK"
+
 echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")

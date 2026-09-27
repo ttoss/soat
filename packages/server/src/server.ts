@@ -8,6 +8,7 @@ import { initializeDatabase, logDatabaseConnectionError } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
+import { startDecisionsScheduler } from './lib/decisionsScheduler';
 import {
   EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV,
   embeddingPriceWarning,
@@ -95,6 +96,8 @@ const startServer = async () => {
     // Start the task stall sweeper so tasks parked past their `stalled_after`
     // threshold emit `tasks.stalled` (once per episode, re-armed on transition).
     startTasksScheduler();
+    // Settles decisions a restart left unsettled.
+    startDecisionsScheduler();
     // Start the webhook delivery outbox sweep so failed deliveries are retried
     // behind their backoff, and so deliveries interrupted mid-attempt by a
     // restart are reclaimed once their lease expires instead of being stranded.

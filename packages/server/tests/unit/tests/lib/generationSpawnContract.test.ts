@@ -38,6 +38,7 @@ const ROOT_SPAWNERS: Record<string, string> = {
     'a node is bounded by its run graph, and carries the run instead',
   'lib/evaluationRunExecution.ts': 'an eval item is one row of a dataset',
   'lib/converterInvocation.ts': 'an ingestion rule converts one document',
+  'lib/decisions.ts': 'a decision is requested by a caller, never by a turn',
 };
 
 /**

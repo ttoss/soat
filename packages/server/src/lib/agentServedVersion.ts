@@ -77,6 +77,42 @@ const buildTypedAgentFromConfig = (args: {
 };
 
 /**
+ * The served config with its output schema replaced, for the one caller that
+ * brings its own: a decider, whose question set compiles to the schema its
+ * answer must satisfy. Enumerated like {@link buildTypedAgentFromConfig},
+ * since the live agent is a model instance a spread would empty.
+ */
+export const withOutputSchema = (args: {
+  typedAgent: TypedAgent;
+  outputSchema?: Record<string, unknown>;
+}): TypedAgent => {
+  const { typedAgent, outputSchema } = args;
+  if (outputSchema === undefined) return typedAgent;
+  return {
+    instructions: typedAgent.instructions,
+    model: typedAgent.model,
+    toolBindings: typedAgent.toolBindings,
+    maxSteps: typedAgent.maxSteps,
+    toolChoice: typedAgent.toolChoice,
+    stopConditions: typedAgent.stopConditions,
+    activeToolIds: typedAgent.activeToolIds,
+    stepRules: typedAgent.stepRules,
+    boundaryPolicy: typedAgent.boundaryPolicy,
+    temperature: typedAgent.temperature,
+    knowledgeConfig: typedAgent.knowledgeConfig,
+    outputSchema,
+    promptCaching: typedAgent.promptCaching,
+    guardrailIds: typedAgent.guardrailIds,
+    project: typedAgent.project,
+    aiProvider: typedAgent.aiProvider,
+    modelRoute: typedAgent.modelRoute,
+    id: typedAgent.id,
+    version: typedAgent.version,
+    activeRelease: typedAgent.activeRelease,
+  };
+};
+
+/**
  * The identity a rollout split is sticky on: the actor behind the session where
  * there is one, else the session itself, else nothing (an anonymous one-shot,
  * which `assignReleaseVersion` splits randomly).

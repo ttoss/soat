@@ -83,6 +83,44 @@ describe('versioned write contract', () => {
         },
       ],
     },
+    'Decider.ts': {
+      path: '/api/v1/deciders',
+      archived: true,
+      create: async () => {
+        const agentId = await createIn('/api/v1/agents', {
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: unique('contract-judge'),
+        });
+        return createIn('/api/v1/deciders', {
+          project_id: projectId,
+          name: unique('contract-decider'),
+          agent_id: agentId,
+          questions: {
+            escalate: { type: 'boolean', instructions: 'Escalate?' },
+          },
+        });
+      },
+      writes: [
+        {
+          name: 'updateDecider',
+          send: (id, extra) => {
+            return client()
+              .patch(`/api/v1/deciders/${id}`)
+              .send({
+                questions: {
+                  escalate: { type: 'boolean', instructions: 'Escalate now?' },
+                },
+                ...extra,
+              });
+          },
+        },
+        {
+          name: 'restoreDeciderVersion',
+          send: restore('/api/v1/deciders', 1),
+        },
+      ],
+    },
     'Guardrail.ts': {
       path: '/api/v1/guardrails',
       archived: true,
@@ -241,6 +279,7 @@ describe('versioned write contract', () => {
       prefix: 'verwrite',
       policyActions: [
         'agents:*',
+        'deciders:*',
         'guardrails:*',
         'orchestrations:*',
         'workflows:*',

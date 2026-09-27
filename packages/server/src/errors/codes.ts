@@ -140,7 +140,17 @@ export const ERROR_CODES = {
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The agent is referenced by one or more generations or traces and cannot be deleted. Delete the dependent records first.',
+      'The agent is referenced by one or more generations, traces or deciders and cannot be deleted. `meta.decider_count` names the deciders, which block deletion even under `force=true` and must be deleted or repointed first; generations and traces block only until `force=true`.',
+  },
+  DECIDER_AGENT_NOT_TOOL_LESS: {
+    httpStatus: 400,
+    description:
+      'The agent a decider evaluates with has a tool surface: a tool binding left active by `active_tool_ids`, or a `knowledge_config.write_memory_store_id`. A decision has no resume route, and a tool call during evaluation would take a side effect the decision cannot record, so a decider agent carries no tools. Knowledge retrieval stays available.',
+  },
+  DECISION_INTERRUPTED: {
+    httpStatus: 500,
+    description:
+      'Recorded on a decision, never returned by a request: the process evaluating it stopped before it settled. The evaluated state is not stored, so the decision cannot be re-run; request a new one.',
   },
   PROMOTION_GATE_UNMET: {
     httpStatus: 409,
@@ -160,7 +170,7 @@ export const ERROR_CODES = {
   PROJECT_PAUSED: {
     httpStatus: 409,
     description:
-      'The project is paused, so nothing new starts in it: no generation, chat completion, tool call, orchestration run, eval run or trigger firing, and no resume of a run or task the pause holds. Reads and configuration writes still work. `meta` carries `project_id`, `paused_at` and `pause_reason`.',
+      'The project is paused, so nothing new starts in it: no generation, chat completion, tool call, orchestration run, eval run, decision or trigger firing, and no resume of a run or task the pause holds. Reads and configuration writes still work. `meta` carries `project_id`, `paused_at` and `pause_reason`.',
   },
   PROJECT_NOT_PAUSED: {
     httpStatus: 409,
