@@ -204,6 +204,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/orchestrate-a-sonnet-with-workflows',
         'tutorials/multi-agent-orchestration',
         'tutorials/conditional-orchestration',
+        'tutorials/route-work-with-a-decider',
         'tutorials/orchestration-control-flow',
         'tutorials/approval-gate',
         'tutorials/create-an-agent-squad',

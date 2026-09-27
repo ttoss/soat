@@ -21,6 +21,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 
 - [Orchestration Control Flow: Delay, Poll, and Loop](/docs/tutorials/orchestration-control-flow) — `delay`, `poll`, `loop`, and `condition` nodes in one run
 - [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration) — branch routing and `skipped` node executions
+- [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a `tool` node requests a decision and a `condition` node branches on its answer
 - [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph)
 - [Orchestrate a Sonnet - Step 7 (Start a run)](/docs/tutorials/orchestrate-a-sonnet#step-7--start-a-run)
 - [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state)

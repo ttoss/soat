@@ -18,6 +18,10 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 - **A decision is append-only**: its `answers` are written once, when it settles, and never rewritten.
 - **Two backends answer**: a tool-less agent, which SOAT prompts, or a tool, which receives the question set and answers it — a classifier, a calibrated model or any endpoint of your own.
 
+## Related Tutorials
+
+- [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer record, and an orchestration branches on its answer
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
