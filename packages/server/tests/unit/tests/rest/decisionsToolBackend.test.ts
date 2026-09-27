@@ -3,7 +3,10 @@ import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import {
   createQuotaRow,
   freshProjectAndAgent,
@@ -742,6 +745,111 @@ describe('Decisions — tool backend', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('completed');
+    });
+  });
+  describe('a builtin step in the tool acts as the requester', () => {
+    /**
+     * A pipeline whose inline builtin step reads a decider named in the state,
+     * and answers from what it read: the answer exists only if the step's
+     * self-call carried a credential allowed to make it.
+     */
+    const createLookupDecider = async () => {
+      const toolId = await createTool({
+        type: 'pipeline',
+        description: 'Answers from a decider it reads',
+        pipeline: {
+          steps: [
+            {
+              id: 'lookup',
+              tool: {
+                name: 'read-decider',
+                type: 'builtin',
+                actions: ['get-decider'],
+              },
+              action: 'get-decider',
+              input: { decider_id: { var: 'input.state.decider_id' } },
+            },
+          ],
+          output: {
+            answers: {
+              route: {
+                choice: {
+                  if: [
+                    { '==': [{ var: 'steps.lookup.version' }, 1] },
+                    'billing',
+                    'technical',
+                  ],
+                },
+              },
+              severity: { score: 0 },
+              needs_human: { value: false },
+            },
+          },
+        },
+      });
+      return createDecider({ tool_id: toolId });
+    };
+
+    const stateFor = (decider: string) => {
+      return { decider_id: decider };
+    };
+
+    test('wait: true answers from the step’s read', async () => {
+      const decider = await createLookupDecider();
+
+      const res = await decide({ decider, body: { state: stateFor(decider) } });
+
+      expect(res.status).toBe(201);
+      expect(res.body.error).toBeNull();
+      expect(res.body.status).toBe('completed');
+      expect(res.body.answers.route.choice).toBe('billing');
+    });
+
+    test('wait: false settles from the step’s read', async () => {
+      const decider = await createLookupDecider();
+
+      const res = await decide({
+        decider,
+        body: { state: stateFor(decider), wait: false },
+      });
+
+      expect(res.status).toBe(201);
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const row = await db.Decision.findOne({
+          where: { publicId: res.body.id },
+        });
+        if (row && row.status !== 'queued' && row.status !== 'running') {
+          expect(row.error).toBeNull();
+          expect(row.status).toBe('completed');
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 25);
+        });
+      }
+      throw new Error('The decision never settled.');
+    });
+
+    test('a requester who may not read what the step reads gets a failed decision', async () => {
+      const decider = await createLookupDecider();
+      const narrowToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('decider-narrow'),
+        actions: ['deciders:CreateDecision'],
+      });
+
+      const res = await decide({
+        decider,
+        token: narrowToken,
+        body: { state: stateFor(decider) },
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.code).toBe('PIPELINE_STEP_FAILED');
+      // A read the caller may not make answers as if the decider did not exist.
+      expect(res.body.error.message).toMatch(/HTTP 404/);
     });
   });
 });

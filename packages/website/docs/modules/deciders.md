@@ -236,6 +236,8 @@ A decider can point at a [tool](./tools.md) instead of an agent. SOAT calls it a
 
 Only `http` and `pipeline` tools can back a decider. A `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry: wrap it in a [`pipeline`](./tools.md#pipeline) step, which names one. A tool whose `preset_parameters` pin `state` or `questions` is refused as well, since presets are merged over what the decider sends. Each is `400 DECIDER_TOOL_NOT_CALLABLE`, checked when the decider is written and again when a decision is requested. A decider keeps its tool from being deleted: [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` with `meta.decider_count`.
 
+The tool runs as whoever requested the decision. A `builtin` pipeline step calls the API with the requester's credential, so it reads and writes only what the requester may: a step whose call the requester may not make fails the decision with `PIPELINE_STEP_FAILED`.
+
 The tool receives the state and the question set exactly as stored, with no frame:
 
 ```json

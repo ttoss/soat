@@ -77,6 +77,11 @@ export const answerWithTool = async (args: {
   questions: DeciderQuestions;
   storedQuestions: object;
   state: unknown;
+  /**
+   * The requester's credential: a `builtin` step calls this server's API as
+   * whoever asked for the decision, never as nobody or as anyone else.
+   */
+  authHeader?: string;
 }): Promise<Record<string, DecisionAnswer>> => {
   log('answerWithTool: toolId=%s', args.toolPublicId);
   const raw = await callTool({
@@ -84,6 +89,7 @@ export const answerWithTool = async (args: {
     id: args.toolPublicId,
     guardrails: 'apply',
     input: { state: args.state, questions: args.storedQuestions },
+    authHeader: args.authHeader,
     attribution: { source: DECIDER_USAGE_SOURCE },
   });
   return parseToolAnswers({ questions: args.questions, raw });
