@@ -47,6 +47,8 @@ export const PROJECT_CASCADE_ORDER = [
   // A chain references nothing (its agent and root generation are plain ids,
   // deliberately not foreign keys) and nothing references it.
   'GenerationChain',
+  // A decision names its decider and generation by public id, not by key.
+  'Decision',
 
   // Automation — a firing belongs to a trigger, a task to a workflow.
   'TriggerFiring',
@@ -82,6 +84,8 @@ export const PROJECT_CASCADE_ORDER = [
   'Actor',
   'Chat',
 
+  // Must precede Agent, which its RESTRICT agentId FK points at.
+  'Decider',
   'Agent',
   // Must follow Agent, whose modelRouteId FK points at it.
   'ModelRoute',
@@ -135,6 +139,8 @@ export const PROJECT_COUNTED_MODELS = [
   'Chat',
   'Conversation',
   'Dataset',
+  'Decider',
+  'Decision',
   'Eval',
   'ExceptionItem',
   'File',

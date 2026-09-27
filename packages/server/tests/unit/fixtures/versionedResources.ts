@@ -15,6 +15,8 @@ export const VERSIONED_RESOURCES: Record<
   { module: string; update: string }[]
 > = {
   'Agent.ts': [{ module: 'agents.ts', update: 'updateAgent' }],
+  // Only a changed question set bumps it; a rename or a new agent does not.
+  'Decider.ts': [{ module: 'deciders.ts', update: 'updateDecider' }],
   'Guardrail.ts': [{ module: 'guardrails.ts', update: 'updateGuardrail' }],
   'Orchestration.ts': [
     { module: 'orchestrations.ts', update: 'updateOrchestration' },

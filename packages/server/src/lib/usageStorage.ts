@@ -408,7 +408,7 @@ export const snapshotProjectStorage = async (args: {
     costUsd,
   });
   log(
-    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d rows=%d chunkRows=%d memoryRows=%d recordBytes=%d generations=%d traces=%d usageEvents=%d auditEntries=%d activityEntries=%d created=%s costUsd=%s',
+    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d rows=%d chunkRows=%d memoryRows=%d recordBytes=%d generations=%d traces=%d usageEvents=%d auditEntries=%d activityEntries=%d decisions=%d created=%s costUsd=%s',
     args.projectPublicId,
     footprint.bytes.total,
     footprint.bytes.files,
@@ -425,6 +425,7 @@ export const snapshotProjectStorage = async (args: {
     records.usageEvents,
     records.auditEntries,
     records.activityEntries,
+    records.decisions,
     created,
     costUsd
   );

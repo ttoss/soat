@@ -25,6 +25,8 @@ import { actors } from './actors';
 import { agents } from './agentAccessor';
 import { auditEntries } from './auditLog';
 import { conversations } from './conversations';
+import { deciders } from './deciders';
+import { decisions } from './decisions';
 import { datasets } from './evaluationDatasets';
 import { evals } from './evaluations';
 import { chains } from './generationChains';
@@ -131,6 +133,20 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
       return datasets;
     },
     resourceType: 'dataset',
+  },
+
+  decider: {
+    accessor: () => {
+      return deciders;
+    },
+    resourceType: 'decider',
+  },
+
+  decision: {
+    accessor: () => {
+      return decisions;
+    },
+    resourceType: 'decision',
   },
 
   eval: {

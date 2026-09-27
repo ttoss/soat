@@ -2818,6 +2818,114 @@ describe('MCP tools - happy path', () => {
       ).toBe(200);
     });
   });
+
+  // ── Deciders ───────────────────────────────────────────────────────────────
+
+  describe('Deciders', () => {
+    const questions = {
+      escalate: {
+        type: 'boolean',
+        instructions: 'Must a person read this first?',
+      },
+    };
+    let deciderId: string;
+
+    beforeAll(async () => {
+      const agentRes = await mcpCall('create-agent', {
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
+        name: 'MCP Decider Agent',
+      });
+      expect(agentRes.status).toBe(200);
+
+      const deciderRes = await mcpCall('create-decider', {
+        project_id: projectId,
+        name: 'mcp-triage',
+        agent_id: parseResult(agentRes).id,
+        questions,
+      });
+      expect(deciderRes.status).toBe(200);
+      deciderId = parseResult(deciderRes).id;
+    });
+
+    test('create-decider returns the decider at version 1', async () => {
+      const res = await mcpCall('get-decider', { decider_id: deciderId });
+
+      expect(res.status).toBe(200);
+      expect(deciderId).toMatch(/^dcd_/);
+      expect(parseResult(res).version).toBe(1);
+      expect(parseResult(res).questions).toEqual(questions);
+    });
+
+    test('list-deciders pages the project’s deciders', async () => {
+      const res = await mcpCall('list-deciders', { project_id: projectId });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).total).toBeGreaterThan(0);
+    });
+
+    test('update-decider archives a changed question set', async () => {
+      const res = await mcpCall('update-decider', {
+        decider_id: deciderId,
+        questions: {
+          escalate: { type: 'boolean', instructions: 'Escalate it now?' },
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).version).toBe(2);
+
+      const versions = await mcpCall('list-decider-versions', {
+        decider_id: deciderId,
+      });
+      expect(parseResult(versions).total).toBe(2);
+
+      const first = await mcpCall('get-decider-version', {
+        decider_id: deciderId,
+        version: 1,
+      });
+      expect(parseResult(first).config.questions).toEqual(questions);
+    });
+
+    test('restore-decider-version appends the archived questions', async () => {
+      const res = await mcpCall('restore-decider-version', {
+        decider_id: deciderId,
+        version: 1,
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).questions).toEqual(questions);
+    });
+
+    test('create-decision, get-decision and list-decisions', async () => {
+      const created = await mcpCall('create-decision', {
+        decider_id: deciderId,
+        state: 'A customer threatens legal action.',
+        metadata: { ticket_id: 'mcp-1' },
+      });
+      expect(created.status).toBe(200);
+      const decision = parseResult(created);
+      expect(decision.id).toMatch(/^dec_/);
+      expect(decision.metadata).toEqual({ ticket_id: 'mcp-1' });
+
+      const got = await mcpCall('get-decision', { decision_id: decision.id });
+      expect(parseResult(got).decider_id).toBe(deciderId);
+
+      const listed = await mcpCall('list-decisions', {
+        project_id: projectId,
+        decider_id: deciderId,
+      });
+      expect(parseResult(listed).total).toBe(1);
+    });
+
+    test('delete-decider removes it', async () => {
+      const res = await mcpCall('delete-decider', { decider_id: deciderId });
+      expect(res.status).toBe(200);
+
+      const after = await mcpCall('get-decider', { decider_id: deciderId });
+      expect(after.body.result?.isError).toBe(true);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {

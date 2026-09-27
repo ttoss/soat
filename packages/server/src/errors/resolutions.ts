@@ -41,6 +41,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
+  DECIDER_AGENT_NOT_TOOL_LESS:
+    "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `PATCH /api/v1/agents/{agent_id}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
+  DECISION_INTERRUPTED:
+    'Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions`; nothing about the interrupted one can be resumed.',
   PROJECT_PAUSED:
     'Resume the project with `POST /api/v1/projects/{project_id}/resume` once whatever paused it is resolved; `meta.pause_reason` says why it was paused. Nothing is queued while paused — retry the request after resuming.',
   PROJECT_NOT_PAUSED:

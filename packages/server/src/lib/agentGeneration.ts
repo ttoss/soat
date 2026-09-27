@@ -14,6 +14,7 @@ import {
 import { type GenerationResult } from './agentGenerationTypes';
 import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
+import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import {
@@ -80,7 +81,8 @@ const dispatchGeneration = (args: {
   });
 };
 
-const resolveContextAndRecord = async (args: {
+/** What {@link resolveContextAndRecord} needs to build a turn and record it. */
+type ResolveContextArgs = {
   agentId: string;
   projectIds?: number[];
   messages: GenerationInputMessage[];
@@ -106,7 +108,12 @@ const resolveContextAndRecord = async (args: {
   pinnedAgentVersion?: number | null;
   source?: string | null;
   idempotency?: GenerationIdempotency;
-}): Promise<GenerationContext> => {
+  outputSchemaOverride?: Record<string, unknown>;
+};
+
+const resolveContextAndRecord = async (
+  args: ResolveContextArgs
+): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
     projectIds: args.projectIds,
@@ -125,6 +132,7 @@ const resolveContextAndRecord = async (args: {
     // same agent version across calls.
     sessionId: args.sessionId,
     pinnedAgentVersion: args.pinnedAgentVersion,
+    outputSchemaOverride: args.outputSchemaOverride,
   });
 
   // Persisted rather than left to the request: work resuming after the request
@@ -264,6 +272,9 @@ export type CreateGenerationArgs = {
   source?: string | null;
   // Written only by `claimKeyedGeneration`, which checks the key first.
   idempotency?: GenerationIdempotency;
+  // The schema a decider's question set compiles to. Internal only: no route
+  // reads a per-call schema, so a call site cannot widen what an agent answers.
+  outputSchemaOverride?: Record<string, unknown>;
 };
 
 /**
@@ -285,9 +296,11 @@ const prepareGeneration = async (
   // metering happens, covering every path but the session's own write-time check.
   assertValidToolContextKeys(args.toolContext);
 
-  // A run node's or an eval item's turn was admitted with its run; the run's
-  // checkpoint, or the eval driver, is where a project pause stops it.
-  if (!args.orchestrationRunId && args.source !== EVAL_USAGE_SOURCE) {
+  // A run node's, an eval item's or a decision's turn was admitted with its
+  // run or decision; the pause was checked there, before the record existed.
+  const admitted =
+    args.source === EVAL_USAGE_SOURCE || args.source === DECIDER_USAGE_SOURCE;
+  if (!args.orchestrationRunId && !admitted) {
     await assertAgentProjectAcceptsWork({ agentPublicId: args.agentId });
   }
 
@@ -354,6 +367,7 @@ const prepareGeneration = async (
     pinnedAgentVersion: args.pinnedAgentVersion,
     source: args.source,
     idempotency: args.idempotency,
+    outputSchemaOverride: args.outputSchemaOverride,
   });
 
   return { kind: 'ready', ctx, traceId, ...lineage };

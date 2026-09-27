@@ -47,6 +47,12 @@ export const SOAT_EVENTS = {
     'conversations.message.deleted':
       'A message was removed from a conversation.',
   },
+  decision: {
+    'decisions.completed':
+      'A decision settled with its answers; the payload carries the decision, answers included.',
+    'decisions.failed':
+      'A decision settled without answers; the payload carries the decision and its `error`.',
+  },
   document: {
     'documents.created': 'A document was created.',
     'documents.updated': 'A document was updated.',

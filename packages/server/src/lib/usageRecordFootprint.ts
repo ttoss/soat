@@ -15,6 +15,7 @@ export type RecordFootprint = {
   usageEvents: number;
   auditEntries: number;
   activityEntries: number;
+  decisions: number;
   total: number;
 };
 
@@ -51,13 +52,21 @@ const readRecordFootprint = (rows: unknown[]): RecordFootprint => {
     Number(row.usage_event_bytes) + Number(row.usage_component_bytes);
   const auditEntries = Number(row.audit_entry_bytes);
   const activityEntries = Number(row.activity_entry_bytes);
+  const decisions = Number(row.decision_bytes);
   return {
     generations,
     traces,
     usageEvents,
     auditEntries,
     activityEntries,
-    total: generations + traces + usageEvents + auditEntries + activityEntries,
+    decisions,
+    total:
+      generations +
+      traces +
+      usageEvents +
+      auditEntries +
+      activityEntries +
+      decisions,
   };
 };
 
@@ -79,7 +88,8 @@ export const projectRecordFootprint = async (args: {
             usage_events.usage_event_bytes,
             usage_components.usage_component_bytes,
             audit_entries.audit_entry_bytes,
-            activity_entries.activity_entry_bytes
+            activity_entries.activity_entry_bytes,
+            decisions.decision_bytes
        FROM (SELECT COALESCE(SUM(${rowWidth({ model: db.Generation, alias: 'g' })}), 0) AS generation_bytes
                FROM "generations" g
               WHERE g."project_id" = :projectId) generations
@@ -103,7 +113,11 @@ export const projectRecordFootprint = async (args: {
        CROSS JOIN
             (SELECT COALESCE(SUM(${rowWidth({ model: db.ActivityEntry, alias: 'act' })}), 0) AS activity_entry_bytes
                FROM "activity_entries" act
-              WHERE act."project_id" = :projectId) activity_entries`,
+              WHERE act."project_id" = :projectId) activity_entries
+       CROSS JOIN
+            (SELECT COALESCE(SUM(${rowWidth({ model: db.Decision, alias: 'dec' })}), 0) AS decision_bytes
+               FROM "decisions" dec
+              WHERE dec."project_id" = :projectId) decisions`,
     { replacements: { projectId: args.projectId } }
   );
   return readRecordFootprint(rows);

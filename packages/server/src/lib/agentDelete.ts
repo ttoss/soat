@@ -135,11 +135,39 @@ const countAgentDependents = async (
  * The count logic is shared with `deleteAgent` rather than restated, so the
  * pre-flight can never disagree with the delete it predicts.
  */
+/**
+ * Deciders are configuration that names the agent, so unlike generations and
+ * traces `force` does not cascade them: deleting the agent would take away the
+ * judge their decisions were answered by.
+ */
+const countAgentDeciders = (args: { agentId: number }): Promise<number> => {
+  return db.Decider.count({ where: { agentId: args.agentId } });
+};
+
+const assertNoDeciders = async (args: {
+  agentId: number;
+  publicId: string;
+}): Promise<void> => {
+  const deciderCount = await countAgentDeciders({ agentId: args.agentId });
+  if (deciderCount === 0) return;
+  throw new DomainError(
+    'AGENT_HAS_DEPENDENTS',
+    `Agent '${args.publicId}' is the agent of ${String(deciderCount)} decider(s); delete or repoint them first.`,
+    { decider_count: deciderCount }
+  );
+};
+
 export const findAgentDeletionBlocker = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<string | null> => {
   const agent = await agents.getByPublicId(args);
+  const deciderCount = await countAgentDeciders({
+    agentId: agent.id as number,
+  });
+  if (deciderCount > 0) {
+    return `Agent '${args.id}' is the agent of ${String(deciderCount)} decider(s), so it cannot be deleted.`;
+  }
   const { generationCount, traceCount } = await countAgentDependents(
     agent.id as number
   );
@@ -162,6 +190,8 @@ export const deleteAgent = async (args: {
   const agent = await agents.getByPublicId(args);
 
   const agentId = agent.id as number;
+
+  await assertNoDeciders({ agentId, publicId: args.id });
 
   const { generationCount, traceCount } = await countAgentDependents(agentId);
 
