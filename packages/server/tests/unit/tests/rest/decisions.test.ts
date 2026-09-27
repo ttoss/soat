@@ -532,6 +532,39 @@ describe('Decisions', () => {
     });
   });
 
+  describe('a background evaluation that cannot record its progress', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('leaves the decision queued for the sweep', async () => {
+      // Drives only the `.catch` on the detached evaluation: the write that
+      // moves the decision to `running` is the first thing it does.
+      const update = jest
+        .spyOn(db.Decision, 'update')
+        .mockRejectedValueOnce(new Error('connection reset'));
+
+      const res = await decide({ body: { wait: false } });
+      expect(res.body.status).toBe('queued');
+      for (
+        let tick = 0;
+        tick < 40 && update.mock.calls.length === 0;
+        tick += 1
+      ) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 25);
+        });
+      }
+
+      expect(update).toHaveBeenCalled();
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/decisions/${res.body.id}`
+      );
+      expect(after.body.status).toBe('queued');
+      expect(after.body.answers).toBeNull();
+    });
+  });
+
   describe('an interrupted decision', () => {
     test('is settled failed by the sweep, and the late answer is discarded', async () => {
       let release = () => {};
@@ -591,6 +624,25 @@ describe('Decisions', () => {
       expect(res.status).toBe(200);
       expect(res.body.total).toBe(1);
       expect(res.body.data[0].id).toBe(made.body.id);
+    });
+
+    test('an admin lists across projects when no project is named', async () => {
+      const decider = await createDecider();
+      const made = await decide({ decider });
+
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/decisions?decider_id=${decider}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data[0].id).toBe(made.body.id);
+    });
+
+    test('a repeated status filter is refused with 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/decisions?project_id=${projectId}&status=queued&status=failed`
+      );
+      expect(res.status).toBe(400);
     });
 
     test('a status filter outside the vocabulary is refused with 400', async () => {

@@ -277,6 +277,27 @@ describe('Deciders', () => {
       expect(res.body.error.code).toBe('DECIDER_AGENT_NOT_TOOL_LESS');
     });
 
+    test('rejects an agent with an inline tool', async () => {
+      const inlineAgentId = await createAgent({
+        name: unique('inline-tool-agent'),
+        tool_bindings: [
+          {
+            tool: {
+              name: 'inline_lookup',
+              type: 'client',
+              parameters: { type: 'object', properties: {} },
+            },
+          },
+        ],
+      });
+
+      const res = await createDecider(userToken, { agent_id: inlineAgentId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('DECIDER_AGENT_NOT_TOOL_LESS');
+      expect(res.body.error.meta.tools).toEqual(['inline_lookup']);
+    });
+
     test('rejects an agent that writes memories', async () => {
       const res = await createDecider(userToken, { agent_id: memoryAgentId });
 

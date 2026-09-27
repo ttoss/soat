@@ -167,15 +167,26 @@ export const interruptDecision = async (args: {
   return updated > 0;
 };
 
+/** The generation's own code when it raised one; anything else is opaque. */
 const failedOutcome = (error: unknown): Outcome => {
-  const domain = error instanceof DomainError ? error : null;
-  return {
-    status: 'failed',
-    error: {
-      code: domain?.code ?? 'GENERATION_FAILED',
-      message: domain?.message ?? 'The generation failed.',
-    },
-  };
+  const { code, message } =
+    error instanceof DomainError
+      ? error
+      : {
+          code: 'GENERATION_FAILED' as const,
+          message: 'The generation failed.',
+        };
+  return { status: 'failed', error: { code, message } };
+};
+
+/* istanbul ignore next -- a non-streamed generation of a tool-less agent with
+   an output schema always completes with an object or throws. */
+const answerOf = (
+  result: GenerationResult | ReadableStream
+): Record<string, unknown> | null => {
+  if (result instanceof ReadableStream) return null;
+  const object = result.output?.object;
+  return isPlainObject(object) ? object : null;
 };
 
 const outcomeOf = (args: {
@@ -183,11 +194,9 @@ const outcomeOf = (args: {
   questions: DeciderQuestions;
 }): Outcome => {
   const { result } = args;
-  const answer =
-    result instanceof ReadableStream ? null : result.output?.object;
-  /* istanbul ignore next -- a non-streamed generation of a tool-less agent
-     with an output schema always completes with an object or throws. */
-  if (result instanceof ReadableStream || !isPlainObject(answer)) {
+  const answer = answerOf(result);
+  /* istanbul ignore next -- see `answerOf`. */
+  if (answer === null || result instanceof ReadableStream) {
     return failedOutcome(null);
   }
   return {
