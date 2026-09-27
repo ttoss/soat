@@ -285,6 +285,7 @@ const admitBackend = async (args: {
   projectIds?: number[];
   decider: DeciderRow;
   state: unknown;
+  authHeader?: string;
 }): Promise<Evaluation> => {
   const { decider } = args;
   const questions = deciderQuestionsOf(decider);
@@ -302,6 +303,7 @@ const admitBackend = async (args: {
             questions,
             storedQuestions: decider.questions,
             state: args.state,
+            authHeader: args.authHeader,
           }),
           generationId: null,
         };
@@ -339,6 +341,11 @@ export const createDecision = async (args: {
   state: unknown;
   metadata?: Record<string, unknown>;
   wait: boolean;
+  /**
+   * Borrowed, not stored: evaluation never outlives this process, since an
+   * interrupted decision is failed rather than re-run.
+   */
+  authHeader?: string;
 }): Promise<MappedDecision> => {
   log('createDecision: deciderId=%s wait=%s', args.deciderId, args.wait);
 
@@ -350,6 +357,7 @@ export const createDecision = async (args: {
     projectIds: args.projectIds,
     decider,
     state: args.state,
+    authHeader: args.authHeader,
   });
 
   const decision = await db.Decision.create({

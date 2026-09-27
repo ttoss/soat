@@ -271,6 +271,7 @@ decidersRouter.post('/deciders/:decider_id/decisions', async (ctx: Context) => {
     // 201 long before it settles.
     metadata: parseMetadataBag(body.metadata),
     wait: body.wait === true,
+    authHeader: ctx.request.headers.authorization,
   });
 });
 

@@ -18,6 +18,10 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 - **A decision is append-only**: its `answers` are written once, when it settles, and never rewritten.
 - **Two backends answer**: a tool-less agent, which SOAT prompts, or a tool, which receives the question set and answers it — a classifier, a calibrated model or any endpoint of your own.
 
+## Related Tutorials
+
+- [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer record, and an orchestration branches on its answer
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
@@ -235,6 +239,8 @@ The frame's wording belongs to SOAT, not to the decider: `decider_version` track
 A decider can point at a [tool](./tools.md) instead of an agent. SOAT calls it as it calls any tool — with its [egress](./tools.md#where-a-tool-may-reach-egress) rules, [preset parameters](./tools.md#preset-parameters), [output mapping](./tools.md#output-mapping) and guardrails — and reads its answer against the question set.
 
 Only `http` and `pipeline` tools can back a decider. A `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry: wrap it in a [`pipeline`](./tools.md#pipeline) step, which names one. A tool whose `preset_parameters` pin `state` or `questions` is refused as well, since presets are merged over what the decider sends. Each is `400 DECIDER_TOOL_NOT_CALLABLE`, checked when the decider is written and again when a decision is requested. A decider keeps its tool from being deleted: [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` with `meta.decider_count`.
+
+The tool runs as whoever requested the decision. A `builtin` pipeline step calls the API with the requester's credential, so it reads and writes only what the requester may: a step whose call the requester may not make fails the decision with `PIPELINE_STEP_FAILED`.
 
 The tool receives the state and the question set exactly as stored, with no frame:
 
