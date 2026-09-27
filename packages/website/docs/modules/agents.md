@@ -399,9 +399,36 @@ Every step of a turn re-sends the same prefix: the tool definitions, then the in
 
 `prompt_caching` marks a cache breakpoint at the end of that static prefix, so a provider that caches by explicit breakpoint serves it from cache instead of charging for it again:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat patch-agent --agent-id agent_xyz --prompt-caching '{"enabled": true}'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_xyz' },
+  body: { prompt_caching: { enabled: true } },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "prompt_caching": { "enabled": true } }'
+```
+
+</TabItem>
+</Tabs>
 
 The breakpoint sits on the **last system block**, which is what puts both the tool definitions and the instructions inside the cached prefix — the request is ordered tools → system → messages, and the cache covers everything up to the mark. The conversation after it is never marked: it grows every step, so caching it would write a prefix that never repeats.
 
@@ -423,9 +450,36 @@ Nothing else about the turn changes: the same messages, tools and instructions a
 
 `trace_content_mode: "none"` stops this agent's trace and generation content from being written (regulated content in an otherwise ordinary project).
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat patch-agent --agent-id agent_xyz --trace-content-mode none
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_xyz' },
+  body: { trace_content_mode: 'none' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "trace_content_mode": "none" }'
+```
+
+</TabItem>
+</Tabs>
 
 `null` (default) inherits the project's `trace_content_mode`; an agent may only tighten (`full` under a `none` project is `400 VALIDATION_FAILED`). Skeleton, usage attribution and cost metering are unaffected; a client-tool pause is unrecoverable after a server restart. Fields: [Traces — Zero-Retention Mode](./traces.md#zero-retention-mode).
 
@@ -627,18 +681,83 @@ Every generation creates its own trace linked to its parent: [Traces](./traces.m
 
 A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat list-agent-versions --agent-id agent_V1StGXR8Z5jdHi6B
 soat get-agent-version --agent-id agent_V1StGXR8Z5jdHi6B --version 2
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const versions = await soat.agentVersions.listAgentVersions({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+});
+if (versions.error) throw new Error(JSON.stringify(versions.error));
+
+const version = await soat.agentVersions.getAgentVersion({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B', version: 2 },
+});
+if (version.error) throw new Error(JSON.stringify(version.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions \
+  -H "Authorization: Bearer <token>"
+
+curl https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions/2 \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
 Tag the version a write archives with `version_label`:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat update-agent --agent-id agent_V1StGXR8Z5jdHi6B \
   --instructions "Be concise and cite sources." \
   --version-label pre-tone-change
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.updateAgent({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+  body: {
+    instructions: 'Be concise and cite sources.',
+    version_label: 'pre-tone-change',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "Be concise and cite sources.",
+    "version_label": "pre-tone-change"
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 #### What a version captures
 
@@ -650,9 +769,33 @@ Runtime-injected context is not snapshotted: a version records the `knowledge_co
 
 `restore-agent-version` copies an archived config onto the agent as a new version (history stays append-only).
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat restore-agent-version --agent-id agent_V1StGXR8Z5jdHi6B --version 1
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agentVersions.restoreAgentVersion({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B', version: 1 },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions/1/restore \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 The archived config replaces the current one; fields it did not set are cleared. Restore re-validates: a tool, provider or guardrail deleted since the snapshot fails the request. Restoring the current config is a no-op and creates no version.
 
@@ -660,19 +803,74 @@ The archived config replaces the current one; fields it did not set are cleared.
 
 A release serves two archived versions side by side.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat set-agent-release --agent-id agent_V1StGXR8Z5jdHi6B \
   --stable-version 1 --canary-version 2 --canary-percent 20
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agentVersions.setAgentRelease({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+  body: { stable_version: 1, canary_version: 2, canary_percent: 20 },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/release \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "stable_version": 1, "canary_version": 2, "canary_percent": 20 }'
+```
+
+</TabItem>
+</Tabs>
+
 Assignment hashes the [actor](./actors.md) behind the request's [session](./sessions.md), else the session; requests with neither split randomly. During a release the live config is a draft: edits archive versions without disturbing the split.
 
 End the rollout:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat promote-agent-release --agent-id agent_V1StGXR8Z5jdHi6B   # canary wins
 soat abort-agent-release   --agent-id agent_V1StGXR8Z5jdHi6B   # back to stable
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// canary wins
+await soat.agentVersions.promoteAgentRelease({ path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' } });
+// back to stable
+await soat.agentVersions.abortAgentRelease({ path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' } });
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# canary wins
+curl -X POST https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/release/promote \
+  -H "Authorization: Bearer <token>"
+# back to stable
+curl -X POST https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/release/abort \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 Both write the winning version's config to the agent and clear the release (a mid-rollout edit is neither promoted nor left serving). Without an active release either is `409 Conflict` with error code `NO_ACTIVE_RELEASE`.
 
@@ -680,18 +878,90 @@ Both write the winning version's config to the agent and clear the release (a mi
 
 `promotion_gate` names an [eval](./evaluations.md); `promote` then requires a run of it that finished `completed`, reported `passed: true` and was pinned to the canary version.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat set-agent-release --agent-id agent_V1StGXR8Z5jdHi6B \
   --stable-version 1 --canary-version 2 --canary-percent 20 \
   --promotion-gate eval_V1StGXR8Z5jdHi6B
 ```
 
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agentVersions.setAgentRelease({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+  body: {
+    stable_version: 1,
+    canary_version: 2,
+    canary_percent: 20,
+    promotion_gate: 'eval_V1StGXR8Z5jdHi6B',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/release \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "stable_version": 1,
+    "canary_version": 2,
+    "canary_percent": 20,
+    "promotion_gate": "eval_V1StGXR8Z5jdHi6B"
+  }'
+```
+
+</TabItem>
+</Tabs>
+
 The eval must be in the same project and evaluate this agent, else `400 VALIDATION_FAILED` when the release is set. Produce the evidence with `agent_version` pinned to the canary:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
 soat start-eval-run --eval-id eval_V1StGXR8Z5jdHi6B --agent-version 2 --wait true
 soat promote-agent-release --agent-id agent_V1StGXR8Z5jdHi6B
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const run = await soat.evaluations.startEvalRun({
+  path: { eval_id: 'eval_V1StGXR8Z5jdHi6B' },
+  body: { agent_version: 2, wait: true },
+});
+if (run.error) throw new Error(JSON.stringify(run.error));
+
+const promoted = await soat.agentVersions.promoteAgentRelease({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+});
+if (promoted.error) throw new Error(JSON.stringify(promoted.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/evals/eval_V1StGXR8Z5jdHi6B/runs \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "agent_version": 2, "wait": true }'
+
+curl -X POST https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/release/promote \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 Until then `promote` is `409 Conflict` with error code `PROMOTION_GATE_UNMET`. Fail-closed: a green run against another version, a failed run and a deleted gate eval all block; `abort` is never blocked; the gate does not run the eval. The clearing run is recorded as `eval_run_id` on the version that goes live; re-setting the release without `promotion_gate` drops the gate.
 

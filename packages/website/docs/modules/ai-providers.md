@@ -188,6 +188,9 @@ Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex expr
 
 On a deployment that set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials), a `bedrock` or `vertex` record with **no linked secret** lists with the server's own credentials, so a vendor's live catalogue can be browsed before any key is provisioned: create a credential-less record naming only the region (or GCP project) and list against it:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-ai-provider \
   --project-id proj_ABC \
@@ -198,6 +201,49 @@ soat create-ai-provider \
 
 soat list-ai-provider-models --ai-provider-id aip_01
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const created = await soat.aiProviders.createAiProvider({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'Bedrock Catalog',
+    provider: 'bedrock',
+    default_model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+    config: { region: 'us-east-1' },
+  },
+});
+if (created.error) throw new Error(JSON.stringify(created.error));
+
+const models = await soat.aiProviders.listAiProviderModels({
+  path: { ai_provider_id: 'aip_01' },
+});
+if (models.error) throw new Error(JSON.stringify(models.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/ai-providers \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "Bedrock Catalog",
+    "provider": "bedrock",
+    "default_model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "config": { "region": "us-east-1" }
+  }'
+
+curl https://api.example.com/api/v1/ai-providers/aip_01/models \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 The record supplies the region and the IAM scope; the credential comes from the server's instance role. Without that setting the record is refused at creation; give it a key that can call `ListFoundationModels` (or the Vertex publisher listing) and it lists against its own credential.
 

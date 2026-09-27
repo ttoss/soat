@@ -2,6 +2,9 @@
 description: 'Ordered provider+model failover for SOAT completions: a named route with retry, per-target timeouts, and a circuit breaker, recorded on the generation.'
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Model Routes
 
 Project-scoped failover for completion models: a named, ordered list of provider+model targets tried in priority order.
@@ -41,6 +44,9 @@ Routing is opt-in: a consumer pinning `ai_provider_id` resolves as before. A con
 | `timeout_seconds` | integer | Optional per-attempt deadline. Omitted means no deadline                              |
 | `max_retries`     | integer | Retries on this target before falling through (default `0`)                            |
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-model-route \
   --project_id proj_… \
@@ -50,6 +56,43 @@ soat create-model-route \
     { "ai_provider_id": "aip_fallback", "model": "claude-3-5-haiku-latest" }
   ]'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.modelRoutes.createModelRoute({
+  body: {
+    project_id: 'proj_…',
+    name: 'primary-with-fallback',
+    targets: [
+      { ai_provider_id: 'aip_primary', model: 'gpt-4o-mini', timeout_seconds: 30, max_retries: 1 },
+      { ai_provider_id: 'aip_fallback', model: 'claude-3-5-haiku-latest' },
+    ],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/model-routes \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_…",
+    "name": "primary-with-fallback",
+    "targets": [
+      { "ai_provider_id": "aip_primary",  "model": "gpt-4o-mini", "timeout_seconds": 30, "max_retries": 1 },
+      { "ai_provider_id": "aip_fallback", "model": "claude-3-5-haiku-latest" }
+    ]
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ## Key Concepts
 
@@ -72,17 +115,71 @@ One exported validator enforces this on every write path (REST and [formations](
 
 To switch a pinned agent to a route, clear the pin in the same request:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-agent --agent_id agent_… --model_route_id route_… --ai_provider_id null
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.updateAgent({
+  path: { agent_id: 'agent_…' },
+  body: { model_route_id: 'route_…', ai_provider_id: null },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PUT https://api.example.com/api/v1/agents/agent_… \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "model_route_id": "route_…", "ai_provider_id": null }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Project default route
 
 `default_model_route_id` is inherited by every consumer in the project that binds nothing, turning failover on project-wide without editing each consumer:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-project --project-id proj_… --default_model_route_id route_…
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_…' },
+  body: { default_model_route_id: 'route_…' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_… \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "default_model_route_id": "route_…" }'
+```
+
+</TabItem>
+</Tabs>
 
 Repointing it to another route is free and changes behavior for every inheriting consumer. Unlike fallbacks on the AI provider, it is a single project-scoped switch, not a side effect of editing a credential, and it cannot override an explicit binding.
 

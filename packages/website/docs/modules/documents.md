@@ -99,9 +99,33 @@ actor, agent and role a row came from, and are the platform's to write
 
 [`GET /api/v1/documents`](/docs/api/documents/list-documents) accepts `path_prefix` to return one directory:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat list-documents --project-id proj_ABC --path-prefix /reports/
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.documents.listDocuments({
+  query: { project_id: 'proj_ABC', path_prefix: '/reports/' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/documents?project_id=proj_ABC&path_prefix=/reports/" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 The prefix is a **path boundary, not a substring**: `/reports` matches `/reports/q1.txt`, never `/reports-archive/q1.txt`. `reports`, `/reports` and `/reports/` are the same filter; `%` and `_` are literal. `/` selects the whole project apart from the reserved root, which only a prefix naming it returns. The filter runs in SQL with the policy filter, so `total` and pagination stay accurate per group.
 

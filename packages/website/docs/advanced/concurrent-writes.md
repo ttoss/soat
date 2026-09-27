@@ -2,6 +2,9 @@
 description: 'Optimistic concurrency on versioned resources: expected_version or If-Match refuses a write whose author read a version that has since moved, and concurrent writes to one resource are serialized whether or not anybody opted in.'
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Concurrent Writes
 
 Every resource that carries a `version` counter — [agents](../modules/agents.md), [guardrails](../modules/guardrails.md), [orchestrations](../modules/orchestrations.md), [workflows](../modules/workflows.md), [documents](../modules/documents.md), [memories](../modules/memories.md) — accepts a **write precondition**:
@@ -20,12 +23,43 @@ The change that vanished leaves no trace. The archived version records the winne
 
 Send the version in the request body:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
-soat update-agent --agent-id agent_01 --expected_version 3 --model claude-sonnet-5
+soat patch-agent --agent-id agent_01 --expected-version 3 --model claude-sonnet-5
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_01' },
+  body: { expected_version: 3, model: 'claude-sonnet-5' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH "$SOAT_URL/api/v1/agents/agent_01" \
+  -H "Authorization: Bearer $SOAT_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_version": 3, "model": "claude-sonnet-5"}'
+```
+
+</TabItem>
+</Tabs>
 
 Or as an HTTP entity tag, which is the same precondition:
 
+{/* single-client: the CLI cannot send an If-Match header */}
 ```bash
 curl -X PATCH "$SOAT_URL/api/v1/agents/agent_01" \
   -H "Authorization: Bearer $SOAT_API_KEY" \

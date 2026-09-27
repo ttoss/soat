@@ -110,6 +110,37 @@ Delete these explicitly beforehand for a full cleanup.
 
 [`POST /api/v1/sessions/{session_id}/fork`](/docs/api/sessions/fork-session) branches a new session from a point in an existing one: same context, different continuation (e.g. a stricter prompt or another agent version against the context that produced a bad answer at message 7).
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat fork-session \
+  --session-id "$SESSION_ID" \
+  --fork-at-position 7 \
+  --agent-id agent_V1StGXR8Z5jdHi6B \
+  --name "retry with stricter system prompt" \
+  --tags '{ "experiment": "prompt-v2" }'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.sessions.forkSession({
+  path: { session_id: SESSION_ID },
+  body: {
+    fork_at_position: 7,
+    agent_id: 'agent_V1StGXR8Z5jdHi6B',
+    name: 'retry with stricter system prompt',
+    tags: { experiment: 'prompt-v2' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
 ```bash
 curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
   -H "Authorization: Bearer $TOKEN" \
@@ -121,6 +152,9 @@ curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
         "tags": { "experiment": "prompt-v2" }
       }'
 ```
+
+</TabItem>
+</Tabs>
 
 | Field              | Default            | Meaning                                                                     |
 | ------------------ | ------------------ | --------------------------------------------------------------------------- |
@@ -137,9 +171,32 @@ curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
 
 Lineage reads back on the session itself (`forked_from_session_id`, `forked_from_position`) and from the parent:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-session-forks --session-id "$SESSION_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.sessions.listSessionForks({
+  path: { session_id: SESSION_ID },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
 ```bash
 curl "$SOAT_URL/api/v1/sessions/$SESSION_ID/forks" -H "Authorization: Bearer $TOKEN"
 ```
+
+</TabItem>
+</Tabs>
 
 That walks **one level**. Forking a fork is allowed and unbounded; each fork is listed under its own parent. Deleting a parent does not delete its forks; their `forked_from_session_id` becomes `null`.
 

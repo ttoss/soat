@@ -81,9 +81,36 @@ Authorization is policy-only; a project-scoped grant is honored by every project
 
 `default_model_route_id` names the [model route](./model-routes.md) inherited by every consumer binding neither `model_route_id` nor `ai_provider_id`, giving agents, chats, and memory completions failover without editing each:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-project --project-id proj_… --default_model_route_id route_…
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_…' },
+  body: { default_model_route_id: 'route_…' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_… \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "default_model_route_id": "route_…" }'
+```
+
+</TabItem>
+</Tabs>
 
 The route must belong to the project. An explicit binding always wins. Repointing is free; **clearing** returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, and deleting the route itself returns `409 MODEL_ROUTE_HAS_DEPENDENTS`. Governed by `projects:UpdateProject`.
 
@@ -92,9 +119,36 @@ The route must belong to the project. An explicit binding always wins. Repointin
 `require_priced_model` refuses a generation whose model no price row covers,
 before the provider is called:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-project --project-id proj_ABC --require_priced_model true
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_ABC' },
+  body: { require_priced_model: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_ABC \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "require_priced_model": true }'
+```
+
+</TabItem>
+</Tabs>
 
 The refusal is `409 MODEL_NOT_PRICED`, and `error.meta.unpriced_rows` names each
 `(provider, model, component)` to price. It is raised before the generation

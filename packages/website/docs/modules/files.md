@@ -138,6 +138,7 @@ A token is invalidated after one successful upload: reuse `409`, expired `410`, 
 
 MCP payloads above ~100 KB are truncated, so `upload-file-base64` cannot carry a large file. Use the token flow: `create-presigned-url` (an MCP tool) is small; do step 2 **out-of-band** (`curl`, a `fetch`/HTTP tool, or the SDK) with `multipart/form-data` streamed from disk:
 
+{/* single-client: streamed multipart upload; the CLI and SDK send base64 JSON */}
 ```bash
 # Step 1 returned upload_url = /api/v1/files/upload/upt_xxx
 curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx"

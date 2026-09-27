@@ -220,10 +220,48 @@ The end user is derived from the generation's [session](./sessions.md), never a 
 
 For `actor` scope a null `scope_ref` is **one budget per actor**, not a pooled total: *"every end user gets 100k tokens a month"*, and one user exhausting theirs blocks nobody else:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-quota --project-id proj_ABC --scope actor \
   --metric tokens --window calendar_month --limit 100000
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.quotas.createQuota({
+  body: {
+    project_id: 'proj_ABC',
+    scope: 'actor',
+    metric: 'tokens',
+    window: 'calendar_month',
+    limit: 100000,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/quotas \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "scope": "actor",
+    "metric": "tokens",
+    "window": "calendar_month",
+    "limit": 100000
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Set a `scope_ref` to cap one named actor instead (a larger allowance, or throttling an abusive user).
 

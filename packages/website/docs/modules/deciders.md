@@ -2,6 +2,9 @@
 description: 'Deciders: versioned question sets a tool-less agent answers against a state, producing append-only decisions confined to each question’s answer space.'
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Deciders
 
 A decider is a named, versioned question set. Evaluated against a state, it produces a **decision**: one answer per question, each confined to the answer space the question declares, recorded append-only.
@@ -62,6 +65,9 @@ A question id starts with a letter or underscore and holds only letters, digits 
 
 A `score` answer is the level's zero-based index; `legend` is the level's text, taken from the decider. With a single option or level there is no judgment to make, so both need at least two.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-decider \
   --project-id proj_… \
@@ -84,6 +90,83 @@ soat create-decider \
     }
   }'
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.deciders.createDecider({
+  body: {
+    project_id: 'proj_…',
+    name: 'support-triage',
+    agent_id: 'agent_…',
+    questions: {
+      "route": {
+        "type": "choice",
+        "instructions": "Which team should own this ticket?",
+        "criteria": {
+          "billing": "Charges, refunds, invoices",
+          "technical": "Errors, outages"
+        }
+      },
+      "severity": {
+        "type": "score",
+        "instructions": "How urgent is this ticket?",
+        "criteria": [
+          "Cosmetic",
+          "Workaround exists",
+          "Blocks one customer"
+        ]
+      },
+      "needs_human": {
+        "type": "boolean",
+        "instructions": "Must a person read this before any automated reply?"
+      }
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/deciders \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_…",
+    "name": "support-triage",
+    "agent_id": "agent_…",
+    "questions": {
+      "route": {
+        "type": "choice",
+        "instructions": "Which team should own this ticket?",
+        "criteria": {
+          "billing": "Charges, refunds, invoices",
+          "technical": "Errors, outages"
+        }
+      },
+      "severity": {
+        "type": "score",
+        "instructions": "How urgent is this ticket?",
+        "criteria": [
+          "Cosmetic",
+          "Workaround exists",
+          "Blocks one customer"
+        ]
+      },
+      "needs_human": {
+        "type": "boolean",
+        "instructions": "Must a person read this before any automated reply?"
+      }
+    }
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ## Key Concepts
 
@@ -149,6 +232,9 @@ The frame's wording belongs to SOAT, not to the decider: `decider_version` track
 
 [`POST /api/v1/deciders/{decider_id}/decisions`](/docs/api/deciders/create-decision) takes `state`, optional `metadata` and `wait`. The decision is a run: with `wait` omitted it is `201` in `status: queued`, and with `wait: true` it is `201` settled. Poll [`GET /api/v1/decisions/{decision_id}`](/docs/api/deciders/get-decision) or subscribe to the events below; see [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the contract.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat create-decision \
   --decider-id dcd_… \
@@ -156,6 +242,38 @@ soat create-decision \
   --metadata '{ "ticket_id": "ZD-48213" }' \
   --wait true
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.deciders.createDecision({
+  path: { decider_id: 'dcd_…' },
+  body: {
+    state: 'I was charged twice for the same order.',
+    metadata: { ticket_id: 'ZD-48213' },
+    wait: true,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/deciders/dcd_…/decisions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "state": "I was charged twice for the same order.",
+    "metadata": { "ticket_id": "ZD-48213" },
+    "wait": true
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Everything that can refuse the request runs before the decision is written, so a refusal is never a polled failure: the agent's tool surface (`400`), a [paused project](./projects.md) (`409 PROJECT_PAUSED`) and quota admission (`429 QUOTA_EXCEEDED`).
 

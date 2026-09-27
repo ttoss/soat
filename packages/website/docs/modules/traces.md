@@ -54,9 +54,33 @@ Raw step objects from the Vercel AI SDK `generateText` call are stored at `/trac
 The steps object is in the `ai` package's own shape. The generation's transcript is an
 ordered projection of the same steps into a stable schema:
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat get-generation-transcript --generation_id gen_abc
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.generations.getGenerationTranscript({
+  path: { generation_id: 'gen_abc' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/generations/gen_abc/transcript \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 A transcript is scoped to one **turn** (a trace can hold several generations; `status`,
 `stop_reason` and `agent_version` are generation fields) and reads back only its own
@@ -93,9 +117,36 @@ Idempotent: re-purging leaves the original `content_redacted_at` untouched. The 
 
 `trace_content_retention_days` on a [project](./projects.md) makes a daily sweep content-purge every trace older than the window. The sweep also runs once at server startup.
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-project --project_id proj_abc --trace_content_retention_days 90
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_abc' },
+  body: { trace_content_retention_days: 90 },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_abc \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "trace_content_retention_days": 90 }'
+```
+
+</TabItem>
+</Tabs>
 
 - **Opt-in.** `null` (default) disables retention; clear with `--trace_content_retention_days null`.
 - **Same purge path** as [`DELETE /traces/{id}/content`](/docs/api/traces/purge-trace-content): cascade, byte deletion, `content_redacted_at`, audit entries and `traces.content_purged` events.
@@ -109,10 +160,52 @@ Already-redacted traces are excluded from the due set.
 
 Zero-retention never writes content. Set `trace_content_mode` to `none` on a [project](./projects.md) (every agent in it) or a single [agent](./agents.md#zero-retention):
 
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
 ```bash
 soat update-project --project_id proj_abc --trace_content_mode none   # whole project
 soat patch-agent --agent_id agent_xyz --trace_content_mode none          # one agent
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// whole project
+const project = await soat.projects.updateProject({
+  path: { project_id: 'proj_abc' },
+  body: { trace_content_mode: 'none' },
+});
+if (project.error) throw new Error(JSON.stringify(project.error));
+
+// one agent
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_xyz' },
+  body: { trace_content_mode: 'none' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# whole project
+curl -X PATCH https://api.example.com/api/v1/projects/proj_abc \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "trace_content_mode": "none" }'
+
+# one agent
+curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "trace_content_mode": "none" }'
+```
+
+</TabItem>
+</Tabs>
 
 **The project is a floor; the agent may only tighten**: `full` under a `none` project is refused with `400`. An agent's `null` (default) inherits the project.
 

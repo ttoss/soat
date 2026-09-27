@@ -228,6 +228,7 @@ The CLI takes a repeatable `--parameter` instead of a JSON `--parameters` object
 
 The shell expands `$VAR` before the CLI starts, so `--env-file` values need `@VAR_NAME` or the bare key. Lookup order: `--env-file`, then `process.env`. An unset `@VAR_NAME` / bare-`KEY` variable is **omitted** from the request (the server reuses the stored value for `use_previous_value: true` parameters or returns `400 Missing required parameters`); an unset `Key=$VAR` / `Key=${VAR}` fails fast in the CLI.
 
+{/* single-client: CLI parameter parsing */}
 ```bash
 soat update-formation \
   --formation-id form_6sBFq1eBsCwB16dM \
@@ -443,6 +444,7 @@ A deploy is a reconciler, so the two failure kinds are reported differently:
 
 **The CLI exits non-zero on that body.** `create-formation` and `update-formation` print the payload to stdout (`$(…)` capture and `| jq` unaffected), write the reason to stderr and exit `1`:
 
+{/* single-client: CLI exit-code behaviour */}
 ```bash
 soat update-formation --formation-id "$F" --template "$T" && echo "deployed"
 # update-formation: the deploy failed at resource 'case1' — the formation is

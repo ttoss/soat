@@ -168,15 +168,42 @@ Flow (with `?wait=true`):
    - `generation_id` and `trace_id`.
    - `model` — the model used.
 
+   <Tabs groupId="client">
+   <TabItem value="cli" label="CLI" default>
+
+   ```bash
+   soat generate-conversation-message \
+     --conversation-id conv_01 \
+     --agent-id agent_01 \
+     --wait true
+   ```
+
+   </TabItem>
+   <TabItem value="sdk" label="SDK">
+
    ```ts
-   const { data } = await soat.conversations.generateConversationMessage({
-     path: { conversation_id },
+   const { data, error } = await soat.conversations.generateConversationMessage({
+     path: { conversation_id: 'conv_01' },
      query: { wait: true },
-     body: { agent_id: agentId },
+     body: { agent_id: 'agent_01' },
    });
+   if (error) throw new Error(JSON.stringify(error));
    // data.content is always the AI-generated text when data.status === 'completed'
    const responseText = data?.content;
    ```
+
+   </TabItem>
+   <TabItem value="curl" label="curl">
+
+   ```bash
+   curl -X POST "https://api.example.com/api/v1/conversations/conv_01/generate?wait=true" \
+     -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     -d '{ "agent_id": "agent_01" }'
+   ```
+
+   </TabItem>
+   </Tabs>
 
 6. On `requires_action` (client tools), no message is persisted yet. Submit outputs via [`POST /agents/:id/generate/:generation_id/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs); the message is persisted on completion.
 
