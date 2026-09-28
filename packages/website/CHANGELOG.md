@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.65.0](https://github.com/ttoss/soat/compare/v0.64.0...v0.65.0) (2026-09-28)
+
+### Bug Fixes
+
+* type tool pins, derive the MCP docs, and check the tool-call wait sentence ([#1473](https://github.com/ttoss/soat/issues/1473)) ([06838be](https://github.com/ttoss/soat/commit/06838be88609e3f38cec4355cf0186633a91a40b))
+
+### Features
+
+* **sessions:** pin wait for tool-called session generation, and require every wait to state its tool behavior ([#1472](https://github.com/ttoss/soat/issues/1472)) ([78d4398](https://github.com/ttoss/soat/commit/78d4398f239b7d3a480a75426e06488d57d9130e))
+
 # [0.64.0](https://github.com/ttoss/soat/compare/v0.63.0...v0.64.0) (2026-09-28)
 
 ### Bug Fixes
