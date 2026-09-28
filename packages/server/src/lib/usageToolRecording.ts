@@ -4,21 +4,19 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { isPlainObject } from './plainObject';
+import { sumComponentCostUsd } from './priceCompute';
 import { insertUsageEvent } from './usageEventWrite';
+import {
+  priceToolExecution,
+  TOOL_EXECUTION_METER_TYPE,
+  TOOL_MODEL,
+  TOOL_PROVIDER,
+  type ToolCallQuantityContext,
+  type ToolExecutionOutcome,
+} from './usageToolPricing';
 
 const log = createDebug('soat:usage');
-
-// A platform meter, unpriced: one `tool_call` component per event. With no
-// price row the event's `cost_usd` stays null ("captured, not yet priced").
-const TOOL_PROVIDER = 'soat';
-const TOOL_MODEL = 'tool-call';
-const TOOL_COMPONENT = 'tool_call';
-
-export const TOOL_EXECUTION_METER_TYPE = 'tool_execution';
-
-export const TOOL_EXECUTION_OUTCOMES = ['ok', 'error', 'timeout'] as const;
-
-export type ToolExecutionOutcome = (typeof TOOL_EXECUTION_OUTCOMES)[number];
 
 /**
  * What the dispatching call site knows about who made a tool call. Every field
@@ -40,8 +38,10 @@ export type ToolCallAttribution = {
   guardrailIds?: readonly string[];
 };
 
-/** The meter a primitive records against: the tool, its project, and the caller. */
+/** The meter a primitive records against: the tool and the caller. */
 export type ToolExecutionMeter = {
+  // The calling project, which the event is written to — for a published tool,
+  // not the project that owns it.
   projectId: number;
   // Public id; null for an inline (unpersisted) definition.
   toolId: string | null;
@@ -107,18 +107,29 @@ type ResolvedAttribution = {
 };
 
 const internalId = async (args: {
-  model: 'Tool' | 'Agent' | 'OrchestrationRun';
+  model: 'Agent' | 'OrchestrationRun';
   projectId: number;
   publicId: string | null | undefined;
 }): Promise<number | null> => {
   if (!args.publicId) return null;
   const where = { publicId: args.publicId, projectId: args.projectId };
   const row =
-    args.model === 'Tool'
-      ? await db.Tool.findOne({ where, attributes: ['id'] })
-      : args.model === 'Agent'
-        ? await db.Agent.findOne({ where, attributes: ['id'] })
-        : await db.OrchestrationRun.findOne({ where, attributes: ['id'] });
+    args.model === 'Agent'
+      ? await db.Agent.findOne({ where, attributes: ['id'] })
+      : await db.OrchestrationRun.findOne({ where, attributes: ['id'] });
+  return (row?.id as number | undefined) ?? null;
+};
+
+// Not scoped to the calling project: a published tool lives in another one.
+// The id comes from the dispatching site, never from the caller.
+const toolInternalId = async (
+  publicId: string | null
+): Promise<number | null> => {
+  if (!publicId) return null;
+  const row = await db.Tool.findOne({
+    where: { publicId },
+    attributes: ['id'],
+  });
   return (row?.id as number | undefined) ?? null;
 };
 
@@ -126,11 +137,7 @@ const resolveAttribution = async (
   meter: ToolExecutionMeter
 ): Promise<ResolvedAttribution> => {
   const { projectId, attribution } = meter;
-  const toolId = await internalId({
-    model: 'Tool',
-    projectId,
-    publicId: meter.toolId,
-  });
+  const toolId = await toolInternalId(meter.toolId);
 
   const generation = attribution.generationId
     ? await db.Generation.findOne({
@@ -185,10 +192,17 @@ const resolveAttribution = async (
 
 const persistToolExecution = async (args: {
   meter: ToolExecutionMeter;
-  outcome: ToolExecutionOutcome;
+  call: ToolCallQuantityContext;
 }): Promise<void> => {
   const resolved = await resolveAttribution(args.meter);
   const guardrailIds = args.meter.attribution.guardrailIds ?? [];
+  const components = await priceToolExecution({
+    toolId: resolved.toolId,
+    toolPublicId: args.meter.toolId,
+    projectId: args.meter.projectId,
+    at: new Date(),
+    call: args.call,
+  });
   // A tool call has no replay identity: a retry is a second call on the wire
   // and meters as one, so the key is unique per execution.
   const idempotencyKey = `tool:${randomUUID()}`;
@@ -199,32 +213,38 @@ const persistToolExecution = async (args: {
         projectId: args.meter.projectId,
         ...resolved,
         aiProviderId: null,
-        outcome: args.outcome,
+        outcome: args.call.outcome,
         guardrailIds: guardrailIds.length > 0 ? [...guardrailIds] : null,
         meterType: TOOL_EXECUTION_METER_TYPE,
         provider: TOOL_PROVIDER,
         model: TOOL_MODEL,
-        costUsd: null,
+        costUsd: sumComponentCostUsd(
+          components.map((component) => {
+            return component.costUsd;
+          })
+        ),
         idempotencyKey,
       },
       transaction,
     });
     if (!created) return;
 
-    await db.UsageComponent.create(
-      {
-        publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
-        usageEventId: event.id,
-        component: TOOL_COMPONENT,
-        quantity: '1',
-        unit: TOOL_COMPONENT,
-        billable: true,
-        unitPrice: null,
-        costUsd: null,
-        priceId: null,
-      },
-      { transaction }
-    );
+    for (const component of components) {
+      await db.UsageComponent.create(
+        {
+          publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
+          usageEventId: event.id,
+          component: component.component,
+          quantity: component.quantity,
+          unit: component.unit,
+          billable: true,
+          unitPrice: component.unitPrice,
+          costUsd: component.costUsd,
+          priceId: component.priceId,
+        },
+        { transaction }
+      );
+    }
   });
 };
 
@@ -234,27 +254,41 @@ const persistToolExecution = async (args: {
  * `send` calls `markSent` the moment the request leaves: a call refused before
  * that (an egress block, an unresolvable template) is not an execution and
  * writes nothing, while one that went out is recorded whatever the target
- * answered. The write is awaited so a guardrail counting this tool's calls
- * sees it on the next call, and never throws: metering must not fail the call
- * it measures.
+ * answered. `input` (the arguments sent) and `action`, with the answer and the
+ * outcome, are what a price row's `quantity` reads. The write is awaited so a
+ * guardrail counting this tool's calls sees it on the next call, and never
+ * throws: metering must not fail the call it measures.
  */
 export const meterToolExecution = async <T>(args: {
   meter: ToolExecutionMeter;
+  input: unknown;
+  action?: string | null;
   send: (markSent: () => void) => Promise<T>;
 }): Promise<T> => {
   let sent = false;
   let outcome: ToolExecutionOutcome = 'ok';
+  let response: unknown = null;
   try {
-    return await args.send(() => {
+    const result = await args.send(() => {
       sent = true;
     });
+    response = result;
+    return result;
   } catch (error) {
     outcome = isTimeoutError(error) ? 'timeout' : 'error';
     throw error;
   } finally {
     if (sent) {
       try {
-        await persistToolExecution({ meter: args.meter, outcome });
+        await persistToolExecution({
+          meter: args.meter,
+          call: {
+            input: isPlainObject(args.input) ? args.input : {},
+            action: args.action ?? null,
+            response,
+            outcome,
+          },
+        });
       } catch (error) {
         log(
           'meterToolExecution: failed tool=%s error=%s',

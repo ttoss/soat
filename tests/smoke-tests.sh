@@ -3356,6 +3356,42 @@ if ! printf '%s\n' "$TOOL_AGG_RESP" | jq -e --arg tool "$TOOL_ID" \
 fi
 echo "Tool execution metering (per pipeline step, grouped by tool): OK"
 
+# 19c1. A published tool priced per call from a tool-keyed price row: another
+# project calls it, reads only its redacted view, and is metered for it. The
+# quantity reads the listing's `total` off the response.
+echo "--- Verifying a priced published tool ---"
+PUB_TENANT_ID=$($SOAT_CLI create-project --name smoke-published-tenant | jq -r '.id')
+PUB_TOOL_ID=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name published-list-projects \
+  --type http \
+  --published true \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  | jq -r '.id')
+PUB_PRICE_RESP=$($SOAT_CLI upsert-price-book \
+  --prices "[{\"meter_type\":\"tool_execution\",\"provider\":\"soat\",\"model\":\"tool-call\",\"tool_id\":\"$PUB_TOOL_ID\",\"component\":\"project\",\"unit\":\"project\",\"quantity\":{\"var\":\"response.total\"},\"unit_price\":0.001,\"effective_from\":\"2000-01-01T00:00:00.000Z\"}]" \
+  | sanitize_json)
+if ! printf '%s\n' "$PUB_PRICE_RESP" | jq -e --arg tool "$PUB_TOOL_ID" '.prices[0].tool_id == $tool and .prices[0].quantity.var == "response.total"' >/dev/null; then
+  echo "FAIL: upsert-price-book did not store the tool-keyed row"
+  echo "$PUB_PRICE_RESP"
+  exit 1
+fi
+PUB_VIEW=$($SOAT_CLI get-tool --tool-id "$PUB_TOOL_ID" --project-id "$PUB_TENANT_ID" | sanitize_json)
+if ! printf '%s\n' "$PUB_VIEW" | jq -e '.published == true and (has("execute") | not) and (has("project_id") | not)' >/dev/null; then
+  echo "FAIL: get-tool from another project did not return the redacted view"
+  echo "$PUB_VIEW"
+  exit 1
+fi
+$SOAT_CLI call-tool --tool-id "$PUB_TOOL_ID" --project-id "$PUB_TENANT_ID" >/dev/null
+PUB_EVENTS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PUB_TOOL_ID" | sanitize_json)
+if ! printf '%s\n' "$PUB_EVENTS" | jq -e --arg tenant "$PUB_TENANT_ID" \
+  '.data | length == 1 and .[0].project_id == $tenant and .[0].cost_usd > 0 and ([.[0].components[] | select(.component == "project" and .quantity > 0)] | length == 1)' >/dev/null; then
+  echo "FAIL: the published tool call was not priced into the calling project"
+  echo "$PUB_EVENTS"
+  exit 1
+fi
+echo "Priced published tool: OK"
+
 # 19c2. A pipeline `output` that is itself a bare JSON Logic expression (e.g.
 # `{"var": "steps.a.count"}`) must resolve to a bare scalar, not the literal
 # unevaluated expression object.

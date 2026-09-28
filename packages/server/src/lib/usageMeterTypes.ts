@@ -11,7 +11,7 @@
  */
 
 import { DEFAULT_METER_TYPE } from './priceCompute';
-import { TOOL_EXECUTION_METER_TYPE } from './usageToolRecording';
+import { TOOL_EXECUTION_METER_TYPE } from './usageToolPricing';
 
 export const USAGE_METER_TYPES = [
   DEFAULT_METER_TYPE,

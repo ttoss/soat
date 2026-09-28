@@ -10,6 +10,7 @@ import {
   validatePipelineConfig,
 } from './pipelineTools';
 import { assertProjectAcceptsWork } from './projectPause';
+import { referenceableToolWhere } from './publishedTools';
 import { makeResourceAccessor } from './resourceAccessor';
 import { assertSecretRefsExist } from './secrets';
 import { validateSoatActions } from './soatActionValidation';
@@ -54,6 +55,7 @@ export type MappedTool = {
   pipeline: object | null;
   output_mapping: object | null;
   guardrail_ids: string[] | null;
+  published: boolean;
   created_at: Date;
   updated_at: Date;
 };
@@ -93,6 +95,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     pipeline: tool.pipeline,
     output_mapping: tool.outputMapping,
     guardrail_ids: tool.guardrailIds,
+    published: tool.published,
     created_at: tool.createdAt,
     updated_at: tool.updatedAt,
   };
@@ -103,6 +106,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
 export type CreateToolArgs = InlineToolDefinition & {
   projectId: number;
   guardrailIds?: string[] | null;
+  published?: boolean;
 };
 
 const nullify = <T>(value: T | undefined): T | null => {
@@ -130,6 +134,7 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
     projectId: args.projectId,
     type: args.type ?? 'http',
     name: args.name,
+    published: args.published ?? false,
     ...buildToolConfigFields(args),
   };
 };
@@ -275,6 +280,7 @@ const buildToolUpdates = (args: {
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
+  published?: boolean;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const scalarFields = [
@@ -291,6 +297,7 @@ const buildToolUpdates = (args: {
     'pipeline',
     'outputMapping',
     'guardrailIds',
+    'published',
   ] as const;
   for (const field of scalarFields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -314,6 +321,7 @@ type ToolUpdateArgs = {
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
+  published?: boolean;
 };
 
 /**
@@ -410,6 +418,20 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
   };
 };
 
+const getCallableTool = (args: {
+  projectIds?: number[];
+  id: string;
+  callingProjectId?: number;
+}): Promise<ToolRow> => {
+  if (args.callingProjectId === undefined) {
+    return tools.getByPublicId({ projectIds: args.projectIds, id: args.id });
+  }
+  return tools.getByPublicId({
+    id: args.id,
+    where: referenceableToolWhere({ projectIds: args.projectIds }),
+  });
+};
+
 // A thin DB-backed wrapper around `callResolvedTool` (toolsCall.ts), which
 // holds the actual per-type dispatch logic shared with `callEphemeralTool`.
 export const callTool = async (args: {
@@ -437,16 +459,20 @@ export const callTool = async (args: {
    * the ids it holds rather than dropping them by omission.
    */
   attribution: ToolCallAttribution;
+  /**
+   * The project the call is made from: metered to and gated by. Setting it
+   * also makes a published tool outside `projectIds` reachable. Absent, the
+   * tool's own project.
+   */
+  callingProjectId?: number;
 }): Promise<unknown> => {
-  const toolInstance = await tools.getByPublicId({
-    projectIds: args.projectIds,
-    id: args.id,
-  });
+  const toolInstance = await getCallableTool(args);
   const foundTool = mapTool(toolInstance);
 
   return callResolvedTool({
     tool: toCallableTool(foundTool),
     toolProjectId: toolInstance.projectId,
+    callingProjectId: args.callingProjectId ?? toolInstance.projectId,
     guardrails: args.guardrails,
     toolPublicId: foundTool.id,
     toolGuardrailIds: foundTool.guardrail_ids,
@@ -471,12 +497,9 @@ export const callTool = async (args: {
 export const startToolCall = async (
   args: Parameters<typeof callTool>[0]
 ): Promise<unknown> => {
-  const toolInstance = await tools.getByPublicId({
-    projectIds: args.projectIds,
-    id: args.id,
-  });
+  const toolInstance = await getCallableTool(args);
   await assertProjectAcceptsWork({
-    projectId: toolInstance.projectId as number,
+    projectId: args.callingProjectId ?? toolInstance.projectId,
   });
   return callTool(args);
 };

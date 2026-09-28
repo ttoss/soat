@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { getPublishedToolView } from 'src/lib/publishedTools';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { deleteTool } from 'src/lib/toolDelete';
 import {
@@ -9,7 +10,6 @@ import {
   getTool,
   listTools,
   startToolCall,
-  tools,
   updateTool,
 } from 'src/lib/tools';
 import { redactToolSecrets } from 'src/lib/toolSecretRedaction';
@@ -22,28 +22,22 @@ import {
 import {
   parsePagination,
   parseToolContextBody,
+  requireAdmin,
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
 } from './helpers';
-import { makeItemRouteAuthorizer } from './resourceAccess';
+import { authorizeToolUse, authorizeToolWrite } from './toolUseAccess';
 
 export const toolsRouter = new Router<Context>();
 
-/**
- * Every `/tools/:tool_id` route authorizes against the tool's own SRN.
- *
- * `tools:CallTool` is why this module went first: the route *executes*, and
- * `approvals.ts` has always checked `CallTool` against the tool's SRN. Until
- * this, the same per-tool grant was honored on the approval path and ignored on
- * the direct route.
- */
-const toolAccess = makeItemRouteAuthorizer({
-  findScope: tools.findScope,
-  resourceType: 'tool',
-  param: 'tool_id',
-  label: 'Tool',
-});
+// Publishing makes a tool callable from every project, so only the operator
+// may set `published`, whichever way.
+const parsePublished = (ctx: Context, value: unknown): boolean | undefined => {
+  if (value === undefined) return undefined;
+  requireAdmin(ctx, 'tools:PublishTool');
+  return value === true;
+};
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
@@ -157,8 +151,11 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', TOOL_JSON_FIELDS_ERROR);
   }
 
+  const published = parsePublished(ctx, body.published);
+
   const result = await createTool({
     projectId: Number(targetProjectId),
+    published,
     name,
     type: parseStringOrUndefined(type),
     description: parseStringOrUndefined(description),
@@ -204,13 +201,19 @@ toolsRouter.get('/tools', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/get'
  */
 toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
-  const { projectIds } = await toolAccess.authorizeRead({
+  const use = await authorizeToolUse({
     ctx,
     action: 'tools:GetTool',
+    callingProjectPublicId: ctx.query.project_id as string | undefined,
   });
 
+  if (!use.owned) {
+    ctx.body = await getPublishedToolView({ id: ctx.params.tool_id });
+    return;
+  }
+
   const result = await getTool({
-    projectIds,
+    projectIds: use.projectIds,
     id: ctx.params.tool_id,
   });
 
@@ -224,7 +227,7 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/patch'
  */
 toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
-  const { projectIds } = await toolAccess.authorizeWrite({
+  const { projectIds } = await authorizeToolWrite({
     ctx,
     action: 'tools:UpdateTool',
   });
@@ -292,6 +295,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline: parsedPipeline,
     outputMapping: parsedOutputMapping,
     guardrailIds: nextGuardrailIds,
+    published: parsePublished(ctx, body.published),
   });
 
   ctx.body = redactToolSecrets(result);
@@ -304,7 +308,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/delete'
  */
 toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
-  const { projectIds } = await toolAccess.authorizeWrite({
+  const { projectIds } = await authorizeToolWrite({
     ctx,
     action: 'tools:DeleteTool',
   });
@@ -361,20 +365,23 @@ const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}~1call/post'
  */
 toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
-  const { projectIds } = await toolAccess.authorizeWrite({
-    ctx,
-    action: 'tools:CallTool',
-  });
-
   const {
     action,
     input,
     tool_context: rawToolContext,
+    project_id: callingProjectPublicId,
   } = ctx.request.body as {
     action?: unknown;
     input?: unknown;
     tool_context?: unknown;
+    project_id?: string;
   };
+
+  const { projectIds, callingProjectId } = await authorizeToolUse({
+    ctx,
+    action: 'tools:CallTool',
+    callingProjectPublicId,
+  });
 
   const parsedInput =
     input !== undefined &&
@@ -389,6 +396,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
   const result = await startToolCall({
     guardrails: 'apply',
     projectIds,
+    callingProjectId,
     id: ctx.params.tool_id,
     action: typeof action === 'string' ? action : undefined,
     input: parsedInput,

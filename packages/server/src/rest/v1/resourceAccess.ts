@@ -112,8 +112,12 @@ export const authorizeResource = async (args: {
   /** The id the SRN names, likewise the parent's where the scope is. */
   resourceId: string;
   action: string;
-  /** What a refusal reads as; see the module comment. */
-  onDenied: 'hide' | 'refuse';
+  /**
+   * What a refusal reads as; see the module comment. `refuse-visible` is for
+   * a resource whose existence is public — a published tool — so a refusal is
+   * always `403`.
+   */
+  onDenied: 'hide' | 'refuse' | 'refuse-visible';
   /**
    * The noun a `404` names, e.g. `Tool`. Usually the scope's own noun: on a
    * nested route whose parent id is in the path, the parent is what could not
@@ -174,7 +178,8 @@ export const authorizeResource = async (args: {
   if (!allowed) {
     const hide =
       args.onDenied === 'hide' ||
-      (await beyondReach({ ctx, scope: args.scope }));
+      (args.onDenied === 'refuse' &&
+        (await beyondReach({ ctx, scope: args.scope })));
 
     throw hide ? notFound : new DomainError('FORBIDDEN', 'Forbidden');
   }
@@ -210,7 +215,7 @@ export const makeItemRouteAuthorizer = (config: {
   errorCode?: ErrorCode;
 }) => {
   const authorize = async (
-    args: ItemRouteArgs & { onDenied: 'hide' | 'refuse' }
+    args: ItemRouteArgs & { onDenied: 'hide' | 'refuse' | 'refuse-visible' }
   ): Promise<ResourceAccess> => {
     const resourceId = args.ctx.params[config.param];
 

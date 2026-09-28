@@ -2,8 +2,9 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 
 type PriceScopeWhere = {
-  aiProviderId: number | null;
+  aiProviderId?: number | null;
   projectId?: number | null;
+  toolId: number | null;
 };
 
 /**
@@ -18,21 +19,27 @@ const priorPriceScopes = (args: {
   aiProviderId: number | null;
   projectId: number | null;
   providerProjectId: number | null;
+  toolId: number | null;
 }): PriceScopeWhere[] => {
+  // A tool's row resolves ahead of every project's and the default, so any of
+  // them may already have priced one of its calls.
+  if (args.toolId !== null) {
+    return [{ toolId: args.toolId }, { toolId: null, aiProviderId: null }];
+  }
   if (args.aiProviderId !== null) {
     return [
-      { aiProviderId: args.aiProviderId },
-      { aiProviderId: null, projectId: args.providerProjectId },
-      { aiProviderId: null, projectId: null },
+      { aiProviderId: args.aiProviderId, toolId: null },
+      { aiProviderId: null, projectId: args.providerProjectId, toolId: null },
+      { aiProviderId: null, projectId: null, toolId: null },
     ];
   }
   if (args.projectId !== null) {
     return [
-      { aiProviderId: null, projectId: args.projectId },
-      { aiProviderId: null, projectId: null },
+      { aiProviderId: null, projectId: args.projectId, toolId: null },
+      { aiProviderId: null, projectId: null, toolId: null },
     ];
   }
-  return [{ aiProviderId: null, projectId: null }];
+  return [{ aiProviderId: null, projectId: null, toolId: null }];
 };
 
 const hasPriorPriceRow = async (args: {
@@ -105,6 +112,7 @@ export const createEffectiveFromResolver = (args: {
     effectiveFrom: string;
     aiProviderId?: number | null;
     providerProjectId?: number | null;
+    toolId?: number | null;
   }): Promise<Date> => {
     const effectiveFrom = new Date(price.effectiveFrom);
     if (Number.isNaN(effectiveFrom.getTime())) {
@@ -119,9 +127,11 @@ export const createEffectiveFromResolver = (args: {
     const aiProviderId = price.aiProviderId ?? args.aiProviderId;
     const providerProjectId =
       price.providerProjectId ?? args.providerProjectId ?? null;
+    const toolId = price.toolId ?? null;
     const key = [
       aiProviderId,
       args.projectId,
+      toolId,
       price.provider,
       price.model,
       price.component,
@@ -134,6 +144,7 @@ export const createEffectiveFromResolver = (args: {
           aiProviderId,
           projectId: args.projectId,
           providerProjectId,
+          toolId,
         }),
         provider: price.provider,
         model: price.model,

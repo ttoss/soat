@@ -73,11 +73,13 @@ A versioned unit price for one billable **component** of a SKU. Three scopes liv
 | `id`             | string          | Public identifier for the price row (`price_` prefix)              |
 | `ai_provider_id` | string \| null  | Set for a per-provider override; `null` otherwise                   |
 | `project_id`     | string \| null  | Set for a project + provider-slug price; `null` otherwise           |
+| `tool_id`        | string \| null  | Set for a `tool_execution` row pricing one tool's calls; `null` otherwise. See [Pricing tool calls](#pricing-tool-calls) |
 | `meter_type`     | string          | Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …) |
 | `provider`       | string          | SKU vendor slug (e.g. `openai`); `soat` for platform SKUs          |
 | `model`          | string          | Model identifier, or the billable SKU for platform meter types    |
 | `component`      | string          | The component this row prices (`input_tokens`, `compute_second`, …)   |
 | `unit`           | string          | Unit `unit_price` is denominated in (`token`, `compute_second`, …)   |
+| `quantity`       | object \| null  | `tool_execution` only: JSON Logic giving the component's quantity; `null` means `1` |
 | `unit_price`     | number          | USD per `unit` (for token components, USD per token)               |
 | `effective_from` | string          | ISO 8601; the latest row `<= now()` prices a call                  |
 | `created_at`     | string          | ISO 8601 creation timestamp                                        |
@@ -107,7 +109,7 @@ A per-project alert rule: when `metric` over `window` crosses `threshold`, a `us
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`, `record_gb_day`          |
-| `tool_execution` | One outbound [tool](./tools.md) call                | `tool_call` (quantity `1`)                        |
+| `tool_execution` | One outbound [tool](./tools.md) call                | `tool_call` (quantity `1`), plus one per [tool price row](#pricing-tool-calls) |
 
 For platform meter types `(provider, model)` is a **SKU**: `provider` is `soat`, `model` the billable unit (`compute-second`, `gb-day`, `request`, `tool-call`).
 
@@ -144,12 +146,12 @@ Every orchestration node execution that actively ran writes one `compute_executi
 
 ### Tool executions
 
-Every outbound tool call writes one `tool_execution` event: one `tool_call` component of quantity `1`, `cost_usd` `null` (no price row). It is recorded at the three protocol primitives — the `http` request, the `mcp` `tools/call`, the `builtin` action — which every server-side execution passes through: a direct [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), a tool the model calls inside a generation, an [orchestration](./orchestrations.md) `tool` or `poll` node, a [trigger](./triggers.md) targeting a tool, a [workflow](./workflows.md) task dispatch, an [eval](./evaluations.md) `tool` scorer, a [guardrail](./guardrails.md) context tool and an [ingestion](./ingestion-rules.md) converter.
+Every outbound tool call writes one `tool_execution` event: a `tool_call` component of quantity `1`, plus one component per price row covering the tool — see [Pricing tool calls](#pricing-tool-calls). It is recorded at the three protocol primitives — the `http` request, the `mcp` `tools/call`, the `builtin` action — which every server-side execution passes through: a direct [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), a tool the model calls inside a generation, an [orchestration](./orchestrations.md) `tool` or `poll` node, a [trigger](./triggers.md) targeting a tool, a [workflow](./workflows.md) task dispatch, an [eval](./evaluations.md) `tool` scorer, a [guardrail](./guardrails.md) context tool and an [ingestion](./ingestion-rules.md) converter.
 
 - **When the call went out, whatever it answered.** `outcome` is `ok`, `error` (a non-2xx answer, an MCP error result, a transport failure) or `timeout`, so failures are counted without a second meter.
 - **Not an execution:** a call refused before it was sent (a guardrail decision other than execute, an [egress](./tools.md) block, an approval pending, an unresolvable template), and a [client tool](./tools.md), which never runs server-side.
 - **A pipeline counts once per step**, never for itself.
-- **Attribution** is what the call site holds: `tool_id` and `project_id` always; inside a generation its `generation_id`, `agent_id`, run, node, trigger, actor, session and `source` are read off the generation; an orchestration node sets `orchestration_run_id` and `node_id`; a trigger sets `trigger_id`; an eval `tool` scorer sets `source: eval_scorer`.
+- **Attribution** is what the call site holds: `tool_id` and `project_id` always, where `project_id` is the calling project — for a [published tool](./tools.md#published-tools), not the one that owns it; inside a generation its `generation_id`, `agent_id`, run, node, trigger, actor, session and `source` are read off the generation; an orchestration node sets `orchestration_run_id` and `node_id`; a trigger sets `trigger_id`; an eval `tool` scorer sets `source: eval_scorer`.
 - **No replay identity**: a retry is a second call on the wire, so the idempotency key is unique per execution (`tool:<uuid>`).
 
 [`GET /api/v1/usage/aggregate?meter_type=tool_execution&group_by=tool`](/docs/api/usage/get-usage-aggregate) counts calls per tool; `tool_id` and `outcome` narrow it. [Guardrails](./guardrails.md#guards-and-guardrail-context) read the same events live through `runtime.<module>.tool_calls.<window>` and `runtime.<module>.errors.<window>`.
@@ -252,13 +254,42 @@ Each component's cost is computed at write time from the effective price row for
 
 SOAT ships **no default prices**. Prices are managed where their scope lives:
 
-- **Global defaults** — admins via [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). [`GET /api/v1/usage/prices`](/docs/api/usage/get-price-book) lists only these.
+- **Global defaults** — admins via [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). [`GET /api/v1/usage/prices`](/docs/api/usage/get-price-book) lists only these, and lists [tool-keyed rows](#pricing-tool-calls) to admins only.
 - **Project + provider-slug** — project members via [`PUT /api/v1/projects/{project_id}/prices`](./projects.md).
 - **Per-provider override** — project members via [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](./ai-providers.md#price-overrides).
 
 Past-effective prices are immutable; corrections ship as future-dated rows. A **first** price is the exception: when nothing prices a `(provider, model, component)` in the scope being written or any broader one it resolves through, `effective_from` may be now or earlier (a forced future date would charge `null` until it lands). Prices can also be **declared in a formation** with the `project_price` resource type, keyed on `(provider, model, component, effective_from)`, where `effective_from` is optional and defaults to deploy time. See [Formations Types → Project Price](/docs/formations-types/project-price).
 
 Each `PUT` takes a batch and stops at the first refused row. Both refusals, an unparseable `effective_from` and a now-or-past-dated write onto an already priced `(provider, model, component)`, return `400 VALIDATION_FAILED` with the failing row in `error.meta` as `provider`, `model`, `component` and `effective_from`.
+
+#### Pricing tool calls
+
+A `tool_execution` call is priced from `soat` / `tool-call` rows written through [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). Two fields apply to these rows only:
+
+- **`tool_id`** keys a row to one tool. For each component the tool's row wins, then the calling project's, then the generic default.
+- **`quantity`** is JSON Logic evaluated against `{ input, action, response, outcome }`: the arguments sent (presets included), the MCP tool or `builtin` action (`null` for `http`), the answer before `output_mapping` (`null` unless `outcome` is `ok`), and the outcome. No secrets, auth headers or `tool_context` are in scope. Absent, the quantity is `1` — a flat price per call.
+
+The event carries `tool_call` always and one component per effective row. A `quantity` that is not a finite number ≥ 0 records its component with quantity `0` and `cost_usd: null` and writes a [`usage_quantity_invalid`](./activity.md) entry to the calling project; the call still succeeds. The expression is part of the row, so changing how units are counted is dated by `effective_from` like a change of rate.
+
+```json
+{
+  "prices": [
+    {
+      "meter_type": "tool_execution",
+      "provider": "soat",
+      "model": "tool-call",
+      "tool_id": "tool_V1StGXR8Z5jdHi6B",
+      "component": "page",
+      "unit": "page",
+      "quantity": { "var": "response.page_count" },
+      "unit_price": 0.002,
+      "effective_from": "2026-10-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+A cost the tool reports marks up the same way: `component: "cost"`, `unit: "usd"`, `quantity: { "var": "response.usage.cost_usd" }`, `unit_price: 1.3`. `tool_id` or `quantity` on any other row, or `tool_id` with `ai_provider_id`, is `400 VALIDATION_FAILED`; an unknown tool is `400 TOOL_NOT_FOUND`.
 
 ### One shape at every altitude
 

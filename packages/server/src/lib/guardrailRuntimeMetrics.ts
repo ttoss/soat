@@ -8,7 +8,7 @@ import type {
   RuntimeWindow,
 } from './guardrailRuntimeCatalog';
 import { sumEventTokens } from './usageThresholds';
-import { TOOL_EXECUTION_METER_TYPE } from './usageToolRecording';
+import { TOOL_EXECUTION_METER_TYPE } from './usageToolPricing';
 
 type EventWhere = Record<string | symbol, unknown>;
 

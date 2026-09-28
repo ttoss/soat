@@ -76,6 +76,8 @@ export const executeSoatTool = async (args: {
     // the status that `isRetriableError` reads to keep a 4xx from being retried.
     return await meterToolExecution({
       meter: args.meter,
+      input: args.rawArgs,
+      action: args.def.name,
       send: (markSent) => {
         markSent();
         return withCallTimeout({

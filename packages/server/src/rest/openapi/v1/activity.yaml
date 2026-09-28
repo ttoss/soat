@@ -59,6 +59,7 @@ paths:
                 exception_created,
                 schedule_fired,
                 tool_resolution_failed,
+                usage_quantity_invalid,
               ]
         - name: severity
           in: query
@@ -224,6 +225,7 @@ components:
               exception_created,
               schedule_fired,
               tool_resolution_failed,
+              usage_quantity_invalid,
             ]
           description: >-
             How the entry was produced. `tool_resolution_failed` means a tool
@@ -232,6 +234,10 @@ components:
             nothing to attach — so the turn ran without it. The generation
             itself completes, carrying no error, so this is the only signal
             that it answered with fewer tools than it was configured to have.
+            `usage_quantity_invalid` means a price row's `quantity` expression
+            did not evaluate to a finite number ≥ 0 for a tool call, so that
+            component was recorded with `cost_usd: null`; the call itself
+            succeeded.
         severity:
           type: string
           enum: [info, warning, critical]

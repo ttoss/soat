@@ -2,6 +2,7 @@ import { DomainError } from '../errors';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
+import { isForeignTool } from './publishedTools';
 import {
   assertToolCallAllowed,
   type ToolCallGuardrailMode,
@@ -76,7 +77,8 @@ export const assertEphemeralTypeSupported = (
  * Executes an already-resolved tool definition — shared by `tools.ts#callTool`
  * (looks up a persisted Tool row first) and `callEphemeralTool` (executes an
  * inline definition directly, no DB row). `toolProjectId` scopes
- * `{{secret:...}}` resolution for `http`/`mcp` tools.
+ * `{{secret:...}}` resolution for `http`/`mcp` tools; `callingProjectId` is
+ * the project the call is metered to and gated by.
  *
  * A pipeline step's `callStep` dispatches inline here (rather than through a
  * separate named helper calling back into `callEphemeralTool`) so this stays
@@ -91,6 +93,7 @@ const adjudicate = async (gateArgs: {
   args: {
     tool: CallableToolDefinition;
     toolProjectId: number;
+    callingProjectId: number;
     guardrails: ToolCallGuardrailMode;
     toolPublicId?: string | null;
     toolGuardrailIds?: string[] | null;
@@ -108,11 +111,11 @@ const adjudicate = async (gateArgs: {
   return assertToolCallAllowed({
     toolId: args.toolPublicId ?? null,
     toolName: args.tool.name,
-    toolGuardrailIds: args.toolGuardrailIds,
+    toolGuardrailIds: isForeignTool(args) ? null : args.toolGuardrailIds,
     action: args.action,
     input: args.input ?? {},
     presetParameters,
-    projectId: args.toolProjectId,
+    projectId: args.callingProjectId,
     authHeader: args.authHeader,
   });
 };
@@ -120,6 +123,7 @@ const adjudicate = async (gateArgs: {
 type CallResolvedToolArgs = {
   tool: CallableToolDefinition;
   toolProjectId: number;
+  callingProjectId: number;
   /**
    * Whether a guardrail gate has already adjudicated this call. Required, so a
    * dispatch path cannot reach a tool without saying which it is — every path
@@ -167,10 +171,7 @@ export const callResolvedTool = async (
     guardrailIds: gate.guardrailIds,
   });
 
-  const mergedInput = mergePresetParameters({
-    presetParameters,
-    input,
-  });
+  const mergedInput = mergePresetParameters({ presetParameters, input });
 
   if (type === 'pipeline') {
     const rawResult = await runPipeline({
@@ -184,6 +185,7 @@ export const callResolvedTool = async (
           return callResolvedTool({
             tool: step.tool,
             toolProjectId: args.toolProjectId,
+            callingProjectId: args.callingProjectId,
             // An inline step definition has no Tool row and so no tool-scoped
             // guardrail of its own, but the project's still governs it.
             guardrails: 'apply',
@@ -199,7 +201,9 @@ export const callResolvedTool = async (
           });
         }
         return callTool({
-          projectIds: args.projectIds,
+          // A published pipeline's steps resolve in its own project.
+          projectIds: [args.toolProjectId],
+          callingProjectId: args.callingProjectId,
           id: step.toolId as string,
           // A step is a call of that tool like any other: its own guardrails
           // govern it here exactly as they would a direct call.
@@ -226,8 +230,9 @@ export const callResolvedTool = async (
     action: args.action,
     mergedInput,
     authHeader: args.authHeader,
+    toolProjectId: args.toolProjectId,
     meter: {
-      projectId: args.toolProjectId,
+      projectId: args.callingProjectId,
       toolId: args.toolPublicId ?? null,
       attribution,
     },
@@ -262,6 +267,7 @@ export const callEphemeralTool = async (args: {
   return callResolvedTool({
     tool: args.definition,
     toolProjectId: args.projectId,
+    callingProjectId: args.projectId,
     guardrails: args.guardrails,
     action: args.action,
     input: args.input,

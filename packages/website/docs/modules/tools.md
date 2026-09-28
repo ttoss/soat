@@ -52,6 +52,7 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
 | `guardrail_ids`     | `array \| null`                                 | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment) |
+| `published`         | `boolean`                                       | Callable by id from any project. Admin-set only. See [Published tools](#published-tools) |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
 
@@ -395,13 +396,25 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 
 ### Calling a Tool Directly
 
-[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
+[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`, and `project_id` to call a [published tool](#published-tools) from another project. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
 
 - A target neither publicly routable nor in `TOOL_EGRESS_ALLOWED_HOSTS` is `403 TOOL_EGRESS_BLOCKED` before any connection is opened — [Where a Tool May Reach](#where-a-tool-may-reach-egress).
 - A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url` and `tool_method`.
 - [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`.
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
+
+### Published tools
+
+An admin sets `published: true` to offer a tool to every project without handing over its credential. Any project may then reference it by id: a direct call, an agent's `tool_bindings`, a pipeline step and an orchestration `tool` or `poll` node. A non-admin setting `published`, either way, is `403 FORBIDDEN`.
+
+- **Reads are redacted.** From another project, [`GET /api/v1/tools/{tool_id}`](/docs/api/tools/get-tool) returns only `id`, `name`, `description`, `parameters` and `published` — never `execute`, `mcp`, headers, presets, `output_mapping` or the price. Name the reading project in `?project_id=`, or use a credential scoped to it.
+- **Writes are refused.** [`PATCH`](/docs/api/tools/update-tool) and [`DELETE`](/docs/api/tools/delete-tool) from another project are `403`.
+- **Secrets stay with the owner.** `{{secret:…}}` resolves in the tool's project; the caller never holds the credential.
+- **The caller pays and gates.** The [`tool_execution` event](./usage.md#tool-executions) is written to the calling project, whose guardrails and pause apply; the tool's own `guardrail_ids` name the owner's guardrails and do not. Price it per tool with a [tool-keyed price row](./usage.md#pricing-tool-calls).
+- **A published pipeline** runs its steps in its own project, so they need not be published themselves; each step is still metered to the caller.
+
+An unpublished tool named from another project stays `404`.
 
 ### Deleting a tool
 
@@ -431,6 +444,8 @@ This is the same check [approvals](./approvals.md) have always made for
 arrives directly or through an approval.
 
 Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a tool it may not see does not announce itself), a write or a call is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project none of the caller's policies name is `404` too — the same answer their read would get, so a refusal never confirms existence across a tenant boundary.
+
+A [published tool](#published-tools) is also read and called from other projects, authorized in the calling project instead.
 
 Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-tools) asks whether the caller may list tools in a project at all, so a policy that names individual tools grants no listing.
 

@@ -87,6 +87,10 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare guardrailIds: string[] | null;
 
+  // Callable by id from any project, which reads a redacted view of it.
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare published: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

@@ -16,6 +16,7 @@ import {
   resolveModelRouteDbId,
   validateModelRouteExclusivity,
 } from './modelRoutes';
+import { referenceableToolWhere } from './publishedTools';
 import { validateAgentTraceContentMode } from './traceContentPolicy';
 
 /**
@@ -33,7 +34,10 @@ const assertActiveToolsExist = async (args: {
   if (ids.length === 0) return;
 
   const found = await db.Tool.findAll({
-    where: { publicId: ids, projectId: args.projectId },
+    where: {
+      publicId: ids,
+      ...referenceableToolWhere({ projectIds: [args.projectId] }),
+    },
     attributes: ['publicId'],
   });
   const foundSet = new Set(

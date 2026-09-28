@@ -282,7 +282,10 @@ paths:
       tags:
         - Tools
       summary: Get a tool
-      description: Returns a single tool by ID.
+      description: >
+        Returns a single tool by ID. Read from a project that does not own it,
+        a published tool returns only `id`, `name`, `description`,
+        `parameters` and `published`; an unpublished one is `404`.
       operationId: getTool
       x-soat-resource:
         kind: tool
@@ -293,6 +296,16 @@ paths:
           required: true
           schema:
             type: string
+        - name: project_id
+          in: query
+          required: false
+          description: >
+            The project the tool is read from. Defaults to the credential's own
+            project, else the tool's. Name another project to read a published
+            tool from it.
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: Tool
@@ -439,6 +452,13 @@ paths:
         `meta` carries the `tool_id` and the `outcome`. A `pipeline` tool is
         adjudicated before its first step runs, and every step is adjudicated as
         the call of that tool it is.
+
+        A published tool can be called from any project by naming it in
+        `project_id` (or with a credential scoped to it). The call resolves the
+        tool's secrets in the tool's own project, but it is metered to the
+        calling project, which also pauses and gates it: its guardrails apply,
+        the tool's own `guardrail_ids` do not. An unpublished tool named from
+        another project is `404`.
       operationId: callTool
       x-soat-resource:
         kind: tool
@@ -737,6 +757,14 @@ components:
           description: >-
             Guardrails attached at the tool scope, governing this tool wherever
             it is used, by any agent.
+        published:
+          type: boolean
+          description: >-
+            Whether any project may reference this tool by id — a direct call,
+            an agent's `tool_bindings`, a pipeline step or an orchestration
+            node. Such a project reads only `id`, `name`, `description`,
+            `parameters` and `published`, and cannot write it. Set by an admin
+            only.
         created_at:
           type: string
           format: date-time
@@ -844,6 +872,12 @@ components:
           items:
             type: string
           description: Guardrails attached at the tool scope.
+        published:
+          type: boolean
+          default: false
+          description: >-
+            Makes the tool callable by id from any project. Admin only; `403`
+            otherwise.
 
     UpdateToolRequest:
       type: object
@@ -942,10 +976,23 @@ components:
           items:
             type: string
           description: Guardrails attached at the tool scope.
+        published:
+          type: boolean
+          description: >-
+            Makes the tool callable by id from any project, or stops it. Admin
+            only; `403` otherwise.
 
     CallToolRequest:
       type: object
       properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: >
+            The project the call is made from and metered to. Defaults to the
+            credential's own project, else the tool's. Name another project to
+            call a published tool from it.
+          example: proj_V1StGXR8Z5jdHi6B
         action:
           type: string
           description: >

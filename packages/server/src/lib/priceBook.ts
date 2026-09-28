@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { createEffectiveFromResolver } from './priceBookEffectiveFrom';
 import { DEFAULT_METER_TYPE, validatePriceInput } from './priceCompute';
+import { assertToolPriceFields, resolvePriceToolId } from './usageToolPricing';
 
 export { DEFAULT_METER_TYPE } from './priceCompute';
 
@@ -14,11 +15,13 @@ export type PersistedPrice = {
   id: string;
   ai_provider_id: string | null;
   project_id: string | null;
+  tool_id: string | null;
   meter_type: string;
   provider: string;
   model: string;
   component: string;
   unit: string;
+  quantity: object | null;
   unit_price: number;
   effective_from: Date;
   created_at: Date;
@@ -28,17 +31,20 @@ export const mapPrice = (
   price: InstanceType<(typeof db)['PriceBook']> & {
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
     project?: InstanceType<(typeof db)['Project']> | null;
+    tool?: InstanceType<(typeof db)['Tool']> | null;
   }
 ): PersistedPrice => {
   return {
     id: price.publicId,
     ai_provider_id: price.aiProvider?.publicId ?? null,
     project_id: price.project?.publicId ?? null,
+    tool_id: price.tool?.publicId ?? null,
     meter_type: price.meterType,
     provider: price.provider,
     model: price.model,
     component: price.component,
     unit: price.unit,
+    quantity: price.quantity ?? null,
     unit_price: Number(price.unitPrice),
     effective_from: price.effectiveFrom,
     created_at: price.createdAt,
@@ -65,6 +71,7 @@ export const getEffectivePrice = async (args: {
     provider: args.provider,
     model: args.model,
     component: args.component,
+    toolId: null,
     effectiveFrom: { [Op.lte]: args.at },
   };
 
@@ -95,10 +102,18 @@ export const getEffectivePrice = async (args: {
 
 // Lists the global default prices only. Per-provider overrides and project +
 // provider-slug prices are read through their own project-scoped endpoints, so
-// one project never sees another's rates.
-export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
+// one project never sees another's rates. Tool-keyed rows name a tool in some
+// project, so they are listed to the operator alone.
+export const listPrices = async (args: {
+  includeToolRows: boolean;
+}): Promise<{ prices: PersistedPrice[] }> => {
   const rows = await db.PriceBook.findAll({
-    where: { aiProviderId: null, projectId: null },
+    where: {
+      aiProviderId: null,
+      projectId: null,
+      ...(args.includeToolRows ? {} : { toolId: null }),
+    },
+    include: [{ model: db.Tool, as: 'tool' }],
     order: [
       ['provider', 'ASC'],
       ['model', 'ASC'],
@@ -111,6 +126,8 @@ export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
 
 type PriceInput = {
   aiProviderId?: string | null;
+  toolId?: string | null;
+  quantity?: object | null;
   meterType?: string;
   provider: string;
   model: string;
@@ -152,6 +169,8 @@ const assertPriceInput = (args: {
 export const persistPriceRow = async (args: {
   aiProviderId: number | null;
   projectId: number | null;
+  toolId?: number | null;
+  quantity?: object | null;
   meterType?: string;
   provider: string;
   model: string;
@@ -165,6 +184,8 @@ export const persistPriceRow = async (args: {
   const values = {
     aiProviderId: args.aiProviderId,
     projectId: args.projectId,
+    toolId: args.toolId ?? null,
+    quantity: args.quantity ?? null,
     meterType: args.meterType ?? DEFAULT_METER_TYPE,
     provider: args.provider,
     model: args.model,
@@ -178,6 +199,7 @@ export const persistPriceRow = async (args: {
     where: {
       aiProviderId: args.aiProviderId,
       projectId: args.projectId,
+      toolId: values.toolId,
       provider: values.provider,
       model: values.model,
       component: values.component,
@@ -190,6 +212,7 @@ export const persistPriceRow = async (args: {
     await row.update({
       meterType: values.meterType,
       unit: values.unit,
+      quantity: values.quantity,
       unitPrice: values.unitPrice,
     });
   }
@@ -203,6 +226,7 @@ const loadPrices = async (ids: number[]): Promise<PersistedPrice[]> => {
     include: [
       { model: db.AiProvider, as: 'aiProvider' },
       { model: db.Project, as: 'project' },
+      { model: db.Tool, as: 'tool' },
     ],
   });
   return rows.map(mapPrice);
@@ -218,11 +242,15 @@ export const upsertPrices = async (args: {
   });
   const ids: number[] = [];
   for (const price of args.prices) {
+    assertToolPriceFields(price);
     const provider = await resolveAiProvider(price.aiProviderId);
+    const toolId = await resolvePriceToolId(price.toolId);
     ids.push(
       await persistPriceRow({
         aiProviderId: provider.id,
         projectId: null,
+        toolId,
+        quantity: price.quantity,
         meterType: price.meterType,
         provider: price.provider,
         model: price.model,
@@ -233,6 +261,7 @@ export const upsertPrices = async (args: {
           ...price,
           aiProviderId: provider.id,
           providerProjectId: provider.projectId,
+          toolId,
         }),
       })
     );

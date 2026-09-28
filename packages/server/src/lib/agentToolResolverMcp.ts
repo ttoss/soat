@@ -52,6 +52,8 @@ export const buildMcpToolExecute = (args: {
     try {
       return await meterToolExecution({
         meter: args.meter,
+        input: callArgs,
+        action: args.mcpToolName,
         send: async (markSent) => {
           const callResponse = await fetchWithEgressGuard(
             args.mcpUrl,

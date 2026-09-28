@@ -7,6 +7,7 @@
  * which is an import-cycle edge.
  */
 import { db } from '../db';
+import { referenceableToolWhere } from './publishedTools';
 
 /**
  * The bound tool ids a generation may resolve after applying the agent's
@@ -53,7 +54,10 @@ export const resolveToolIdsToNames = async (args: {
   if (args.toolIds.length === 0) return {};
 
   const found = await db.Tool.findAll({
-    where: { publicId: args.toolIds, projectId: args.projectId },
+    where: {
+      publicId: args.toolIds,
+      ...referenceableToolWhere({ projectIds: [args.projectId] }),
+    },
     attributes: ['publicId', 'name'],
   });
 

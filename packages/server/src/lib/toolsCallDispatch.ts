@@ -33,10 +33,11 @@ const toMcpToolDomainError = (error: unknown): DomainError | null => {
 export const callHttpTool = (
   tool: CallableToolDefinition,
   mergedInput: Record<string, unknown>,
-  meter: ToolExecutionMeter,
+  target: { toolProjectId: number; meter: ToolExecutionMeter },
   idempotencyKey?: string,
   toolContext?: Record<string, string>
 ): Promise<unknown> => {
+  const { meter } = target;
   const executeConfig = parseHttpExecuteConfig(
     (tool.execute as
       | { url: string; method?: string; headers?: Record<string, string> }
@@ -53,7 +54,7 @@ export const callHttpTool = (
     {
       toolName: tool.name,
       execute: executeConfig,
-      projectId: meter.projectId,
+      projectId: target.toolProjectId,
       meter,
       contextKeys: tool.contextKeys,
       // Forwarded verbatim as the `Idempotency-Key` request header (D7).
@@ -132,10 +133,11 @@ export const callMcpTool = async (
   tool: CallableToolDefinition,
   action: string | undefined,
   mergedInput: Record<string, unknown>,
-  meter: ToolExecutionMeter,
+  target: { toolProjectId: number; meter: ToolExecutionMeter },
   toolContext?: Record<string, string>
 ): Promise<unknown> => {
-  const { projectId } = meter;
+  const { meter } = target;
+  const projectId = target.toolProjectId;
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -209,15 +211,18 @@ export const dispatchDirectTool = async (args: {
   action?: string;
   mergedInput: Record<string, unknown>;
   authHeader?: string;
+  // Where the tool's secrets resolve; the meter names the calling project.
+  toolProjectId: number;
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
 }): Promise<unknown> => {
+  const target = { toolProjectId: args.toolProjectId, meter: args.meter };
   if (args.type === 'http') {
     return callHttpTool(
       args.tool,
       args.mergedInput,
-      args.meter,
+      target,
       args.idempotencyKey,
       args.toolContext
     );
@@ -236,7 +241,7 @@ export const dispatchDirectTool = async (args: {
       args.tool,
       args.action,
       args.mergedInput,
-      args.meter,
+      target,
       args.toolContext
     );
   }

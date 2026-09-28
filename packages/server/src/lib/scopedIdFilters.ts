@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { referenceableToolWhere } from './publishedTools';
 import { scopedWhere } from './resourceAccessor';
 
 /**
@@ -76,12 +77,20 @@ const resolveOne = async (args: {
   publicId: string;
   projectIds?: number[];
 }): Promise<number | null> => {
-  const row = await SCOPED_ID_MODELS[args.resource](
-    scopedWhere({
-      id: args.publicId,
-      ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
-    })
-  );
+  // A project's own events can name a published tool it does not own.
+  const where =
+    args.resource === 'tool'
+      ? {
+          publicId: args.publicId,
+          ...referenceableToolWhere({ projectIds: args.projectIds }),
+        }
+      : scopedWhere({
+          id: args.publicId,
+          ...(args.projectIds !== undefined
+            ? { projectIds: args.projectIds }
+            : {}),
+        });
+  const row = await SCOPED_ID_MODELS[args.resource](where);
   return row?.id ?? null;
 };
 

@@ -86,7 +86,8 @@ export class ActivityEntry extends Model {
       'approval_resolved',
       'exception_created',
       'schedule_fired',
-      'tool_resolution_failed'
+      'tool_resolution_failed',
+      'usage_quantity_invalid'
     ),
     allowNull: false,
   })
@@ -96,7 +97,8 @@ export class ActivityEntry extends Model {
     | 'approval_resolved'
     | 'exception_created'
     | 'schedule_fired'
-    | 'tool_resolution_failed';
+    | 'tool_resolution_failed'
+    | 'usage_quantity_invalid';
 
   // ExceptionItem's vocabulary, so the two surfaces stay consistent.
   @Column({

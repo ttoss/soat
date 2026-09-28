@@ -25,6 +25,7 @@ import type { UnavailableToolSink } from './agentToolUnavailable';
 import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
+import { isForeignTool, referenceableToolWhere } from './publishedTools';
 import { resolveSecretRefsInString } from './secrets';
 import {
   applyHttpToolAuth,
@@ -602,30 +603,23 @@ type HttpToolExecuteArgs = {
   extraHeaders?: Record<string, string>;
 };
 
+const httpMethodOf = (execute: HttpExecuteConfig): string => {
+  const rawMethod = (execute.method ?? 'POST').toUpperCase();
+  return ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
+};
+
 const sendHttpToolRequest = async (
   args: Omit<HttpToolExecuteArgs, 'meter'> & {
-    toolArgs: unknown;
+    rawArgs: Record<string, unknown>;
     toolContext?: Record<string, string>;
     markSent: () => void;
   }
 ): Promise<unknown> => {
-  const { toolArgs, toolContext } = args;
-  const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
-  const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
+  const { rawArgs, toolContext } = args;
+  const method = httpMethodOf(args.execute);
   const hasBody = !['GET', 'HEAD'].includes(method);
   let url = args.execute.url;
   try {
-    // Here, not at tool-resolution time, so a missing `{{context:}}` key
-    // fails this call rather than every other tool the agent has.
-    const rawArgs = mergePresetParameters({
-      presetParameters: resolvePresetParametersForCall({
-        presetParameters: args.presetParameters,
-        toolContext,
-        toolName: args.toolName,
-        schema: args.parameterSchema,
-      }),
-      input: toolArgs,
-    });
     const { resolvedUrl: afterPathParams, remainingArgs: afterPathParamsArgs } =
       resolveUrlPathParams({ url: args.execute.url, toolArgs: rawArgs });
     const { resolvedUrl, remainingArgs } = resolveBodyParamInterpolations({
@@ -685,13 +679,37 @@ export const buildHttpToolExecute = (
   args: HttpToolExecuteArgs,
   toolContext?: Record<string, string>
 ) => {
-  return (toolArgs: unknown) => {
+  return async (toolArgs: unknown) => {
+    let rawArgs: Record<string, unknown>;
+    try {
+      // Here, not at tool-resolution time, so a missing `{{context:}}` key
+      // fails this call rather than every other tool the agent has.
+      rawArgs = mergePresetParameters({
+        presetParameters: resolvePresetParametersForCall({
+          presetParameters: args.presetParameters,
+          toolContext,
+          toolName: args.toolName,
+          schema: args.parameterSchema,
+        }),
+        input: toolArgs,
+      });
+    } catch (error) {
+      logToolCallingError({
+        toolName: args.toolName,
+        toolType: 'http',
+        url: args.execute.url,
+        method: httpMethodOf(args.execute),
+        error,
+      });
+      throw error;
+    }
     return meterToolExecution({
       meter: args.meter,
+      input: rawArgs,
       send: (markSent) => {
         return sendHttpToolRequest({
           ...args,
-          toolArgs,
+          rawArgs,
           toolContext,
           markSent,
         });
@@ -970,6 +988,7 @@ const resolvePipelineTool = (
   typedTool: AgentToolRow,
   args: {
     projectIds?: number[];
+    callingProjectId?: number;
     authHeader?: string;
     remainingDepth?: number;
     attribution: ToolCallAttribution;
@@ -997,6 +1016,7 @@ const resolvePipelineTool = (
         // (`gateResolvedToolsWithGuardrails`), so the call arrives classified.
         guardrails: 'already-adjudicated',
         projectIds: args.projectIds,
+        callingProjectId: args.callingProjectId,
         id: typedTool.publicId,
         input,
         authHeader: args.authHeader,
@@ -1037,7 +1057,7 @@ const resolveToolByType = async (
 ): Promise<Record<string, Tool>> => {
   const toolType = typedTool.type;
   const meter: ToolExecutionMeter = {
-    projectId: typedTool.projectId,
+    projectId: args.callingProjectId ?? typedTool.projectId,
     toolId: typedTool.publicId || null,
     attribution: args.attribution,
   };
@@ -1068,6 +1088,7 @@ const resolveToolByType = async (
       return {
         [typedTool.name]: resolvePipelineTool(typedTool, {
           projectIds: args.projectIds,
+          callingProjectId: args.callingProjectId,
           authHeader: args.authHeader,
           remainingDepth: args.remainingDepth,
           attribution: args.attribution,
@@ -1232,6 +1253,9 @@ export const resolveEphemeralAgentTool = async (args: {
 
 type ResolveToolByTypeArgs = {
   projectIds?: number[];
+  // The agent's project: tool calls are metered to it, which for a published
+  // tool is not the tool's own.
+  callingProjectId?: number;
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
@@ -1254,18 +1278,22 @@ const resolveReferenceBinding = async (args: {
   guardrail?: ResolverGuardrailContext;
   activity?: ActivityCallContext;
 }): Promise<Record<string, Tool>> => {
-  const toolWhere: Record<string, unknown> = { publicId: args.toolPublicId };
-  if (args.projectIds !== undefined) {
-    toolWhere.projectId = args.projectIds;
-  }
-
-  const agentTool = await db.Tool.findOne({ where: toolWhere });
+  const agentTool = await db.Tool.findOne({
+    where: {
+      publicId: args.toolPublicId,
+      ...referenceableToolWhere({ projectIds: args.projectIds }),
+    },
+  });
   if (!agentTool) return {};
 
   const typedTool = agentTool as unknown as AgentToolRow;
+  const { callingProjectId } = args.resolveArgs;
+  const foreign =
+    callingProjectId !== undefined &&
+    isForeignTool({ toolProjectId: typedTool.projectId, callingProjectId });
   const guardrails = await collectBindingGuardrails({
     context: args.guardrail,
-    toolGuardrailIds: typedTool.guardrailIds,
+    toolGuardrailIds: foreign ? null : typedTool.guardrailIds,
   });
   const resolved = await resolveToolByType(typedTool, {
     ...args.resolveArgs,
@@ -1353,7 +1381,7 @@ export const resolveAgentTools = async (args: {
       await resolveReferenceBinding({
         toolPublicId,
         projectIds: args.projectIds,
-        resolveArgs: args,
+        resolveArgs: { ...args, callingProjectId: args.projectId },
         guardrail: args.guardrail,
         activity: args.activity,
       })

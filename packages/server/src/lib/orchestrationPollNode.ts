@@ -69,6 +69,7 @@ export const executePollNode = async (args: {
     // guardrails govern it.
     guardrails: 'apply',
     projectIds,
+    callingProjectId: projectIds[0],
     id: toolId,
     action: node.operationId,
     input: inputs,

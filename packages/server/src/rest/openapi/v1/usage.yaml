@@ -944,7 +944,8 @@ components:
           description: >
             What the event measures: `llm_tokens`, `compute_execution`,
             `api_request`, `storage`, or `tool_execution` — one outbound tool
-            call, a single `tool_call` component of quantity 1, unpriced.
+            call: a `tool_call` component of quantity 1, plus one component per
+            price row covering the tool.
         source:
           type: string
           nullable: true
@@ -1421,6 +1422,14 @@ components:
           description: >
             Null for a global default price. Set when this row is a
             per-provider override for a specific AI provider instance.
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+          description: >
+            Set when this `tool_execution` row prices one tool's calls. It is
+            resolved before the generic `soat` / `tool-call` row. Listed to
+            admins only.
         meter_type:
           type: string
           description: Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …)
@@ -1438,6 +1447,12 @@ components:
         unit:
           type: string
           description: Unit `unit_price` is denominated in (`token`, `compute_second`, …)
+        quantity:
+          type: object
+          nullable: true
+          description: >
+            JSON Logic giving a `tool_execution` component's quantity, evaluated
+            against `{ input, action, response, outcome }`. Null means 1.
         unit_price:
           type: number
           description: USD per `unit` (for token components, USD per token)
@@ -1489,6 +1504,29 @@ components:
                 description: >
                   Omit for a global default price; set to a provider public ID
                   to record a per-provider override.
+              tool_id:
+                x-soat-ref: tools
+                type: string
+                nullable: true
+                description: >
+                  Prices one tool's calls. Requires `meter_type:
+                  tool_execution`, `provider: soat`, `model: tool-call`, and no
+                  `ai_provider_id`.
+              quantity:
+                type: object
+                nullable: true
+                description: >
+                  JSON Logic evaluated against `{ input, action, response,
+                  outcome }` of a `tool_execution` call: `input` is the
+                  arguments sent, `action` the MCP tool or SOAT action (null for
+                  `http`), `response` the answer before `output_mapping` (null
+                  unless `outcome` is `ok`). Omit for a quantity of 1. A result
+                  that is not a finite number ≥ 0 records the component with
+                  `cost_usd: null` and a `usage_quantity_invalid` activity
+                  entry; the call still succeeds. Same row requirements as
+                  `tool_id`.
+                example:
+                  var: response.page_count
               meter_type:
                 type: string
                 default: llm_tokens

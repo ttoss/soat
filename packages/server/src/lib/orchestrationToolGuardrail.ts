@@ -19,6 +19,7 @@ import type {
   NodeExecutionResult,
 } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
+import { isForeignTool, referenceableToolWhere } from './publishedTools';
 
 const log = createDebug('soat:guardrails');
 
@@ -60,8 +61,11 @@ const collectToolNodeGuardrails = async (args: {
 }> => {
   const [tool, project] = await Promise.all([
     db.Tool.findOne({
-      where: { publicId: args.toolId, projectId: args.projectId },
-      attributes: ['name', 'guardrailIds'],
+      where: {
+        publicId: args.toolId,
+        ...referenceableToolWhere({ projectIds: [args.projectId] }),
+      },
+      attributes: ['name', 'projectId', 'guardrailIds'],
     }),
     db.Project.findOne({
       where: { id: args.projectId },
@@ -72,7 +76,14 @@ const collectToolNodeGuardrails = async (args: {
   const guardrails = await collectApplicableGuardrails({
     projectId: args.projectId,
     projectGuardrailIds: project?.guardrailIds ?? null,
-    toolGuardrailIds: tool?.guardrailIds ?? null,
+    toolGuardrailIds:
+      tool &&
+      !isForeignTool({
+        toolProjectId: tool.projectId,
+        callingProjectId: args.projectId,
+      })
+        ? tool.guardrailIds
+        : null,
   });
 
   return {

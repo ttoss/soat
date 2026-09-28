@@ -45,6 +45,8 @@ const thresholdAccess = makeItemRouteAuthorizer({
 type UpsertPricesBody = {
   prices?: Array<{
     ai_provider_id?: string | null;
+    tool_id?: string | null;
+    quantity?: object | null;
     meter_type?: string;
     provider: string;
     model: string;
@@ -385,12 +387,15 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
  * GET /api/v1/usage/prices
  * operationId: getPriceBook
  * Returns the global price book — the versioned per-provider/model unit prices
- * used to compute usage cost. Readable by any authenticated user.
+ * used to compute usage cost. Readable by any authenticated user; rows keyed
+ * to a tool are listed to admins only.
  */
 usageRouter.get('/usage/prices', async (ctx: Context) => {
   requireAuth(ctx);
 
-  ctx.body = await listPrices();
+  ctx.body = await listPrices({
+    includeToolRows: ctx.authUser.role === 'admin',
+  });
 });
 
 /**
@@ -409,6 +414,8 @@ usageRouter.put('/usage/prices', async (ctx: Context) => {
     prices: (body.prices ?? []).map((price) => {
       return {
         aiProviderId: price.ai_provider_id,
+        toolId: price.tool_id,
+        quantity: price.quantity,
         meterType: price.meter_type,
         provider: price.provider,
         model: price.model,

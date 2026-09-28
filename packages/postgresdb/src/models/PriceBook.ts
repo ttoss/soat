@@ -10,6 +10,7 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { AiProvider } from './AiProvider';
 import { Project } from './Project';
+import { Tool } from './Tool';
 
 /**
  * Versioned unit price for a single billable **component** of a SKU. Cost is
@@ -23,6 +24,10 @@ import { Project } from './Project';
  * and a **global default** (both null). Within each scope the latest
  * `effectiveFrom <= now()` applies. New future-dated rows change the price
  * deterministically without mutating costs already frozen onto components.
+ *
+ * A `tool_execution` row may also name one tool (`toolId`), resolved before
+ * the generic `soat/tool-call` row, and carry a JSON Logic `quantity` read off
+ * the call instead of the fixed quantity 1.
  */
 @Table({
   tableName: 'price_books',
@@ -38,11 +43,12 @@ import { Project } from './Project';
       // The derived name for this many columns exceeds Postgres's 63-char
       // limit, and the truncation crashes the next `sync({ alter: true })`
       // with 42P07.
-      name: 'price_books_scope_sku_component_effective_uk',
+      name: 'price_books_scope_tool_sku_component_effective_uk',
       unique: true,
       fields: [
         'ai_provider_id',
         'project_id',
+        'tool_id',
         'provider',
         'model',
         'component',
@@ -102,6 +108,22 @@ export class PriceBook extends Model {
   )
   declare project: Project | null;
 
+  // Null unless this row prices one tool's calls. Deleting the tool drops its
+  // rows; frozen component costs are safe.
+  @ForeignKey(() => {
+    return Tool;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare toolId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Tool;
+    },
+    { onDelete: 'CASCADE' }
+  )
+  declare tool: Tool | null;
+
   // Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …).
   @Column({ type: DataType.STRING, allowNull: false })
   declare meterType: string;
@@ -123,6 +145,11 @@ export class PriceBook extends Model {
   // the metered component's unit.
   @Column({ type: DataType.STRING, allowNull: false })
   declare unit: string;
+
+  // JSON Logic over `{ input, action, response, outcome }` giving the
+  // component's quantity. Null = 1.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare quantity: object | null;
 
   // USD per `unit`.
   @Column({ type: DataType.DECIMAL, allowNull: false })
