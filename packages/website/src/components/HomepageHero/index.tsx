@@ -16,7 +16,7 @@ const FACTS = [
 /* The logo bitmap's own geometry: its size and where its recall-core sits.
    Node positions are pixel coordinates on the bitmap, sampled where a spiral
    arm is brightest, so every module dot lands on an arm and not beside it. */
-const LOGO = { width: 573, height: 435, coreX: 286, coreY: 211 };
+const LOGO = { width: 836, height: 608, coreX: 409, coreY: 284 };
 
 const VIEW = { width: 700, height: 560 };
 const LOGO_SCALE = 620 / LOGO.width;
@@ -28,18 +28,18 @@ const LOGO_ORIGIN = {
 type Node = { id: string; x: number; y: number; below?: boolean };
 
 const NODES: Node[] = [
-  { id: 'formations', x: 63, y: 195 },
-  { id: 'iam', x: 148, y: 149 },
-  { id: 'workflows', x: 163, y: 75 },
-  { id: 'sessions', x: 274, y: 104 },
-  { id: 'orchestrations', x: 322, y: 64 },
-  { id: 'knowledge', x: 420, y: 162 },
-  { id: 'memories', x: 488, y: 225 },
-  { id: 'tools', x: 426, y: 285 },
-  { id: 'guardrails', x: 365, y: 299, below: true },
-  { id: 'approvals', x: 360, y: 395 },
-  { id: 'evaluations', x: 187, y: 320 },
-  { id: 'traces', x: 155, y: 269 },
+  { id: 'formations', x: 95, y: 263 },
+  { id: 'iam', x: 220, y: 194 },
+  { id: 'workflows', x: 235, y: 92 },
+  { id: 'sessions', x: 391, y: 133 },
+  { id: 'orchestrations', x: 461, y: 78 },
+  { id: 'knowledge', x: 598, y: 218 },
+  { id: 'memories', x: 698, y: 307 },
+  { id: 'tools', x: 610, y: 391 },
+  { id: 'guardrails', x: 524, y: 414, below: true },
+  { id: 'approvals', x: 512, y: 548 },
+  { id: 'evaluations', x: 271, y: 435 },
+  { id: 'traces', x: 229, y: 370 },
 ];
 
 const toView = (point: { x: number; y: number }) => {
