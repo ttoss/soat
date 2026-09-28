@@ -1,6 +1,6 @@
 {
   "name": "@soat/server",
-  "version": "0.65.0",
+  "version": "0.66.0",
   "private": true,
   "description": "SOAT server — open-source infrastructure for production-ready AI agents.",
   "keywords": [
