@@ -18,25 +18,6 @@
   margin-top: 1.25rem;
 }
 
-.notWired {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  margin: 2rem 0 0;
-  font-size: 0.92rem;
-}
-
-.notWiredLabel {
-  color: var(--ifm-font-color-secondary);
-  font-weight: 600;
-}
-
-.struck {
-  color: var(--ifm-color-emphasis-600);
-  text-decoration-color: var(--ifm-color-primary);
-  text-decoration-thickness: 1.5px;
-}
-
 /* The diagram: callers on the left, one server box in the middle, one
    database on the right, tied together by the lanes' pseudo-element lines. */
 .diagram {
@@ -344,7 +325,16 @@ html[data-theme='dark'] .chip:hover {
     padding-left: 0;
   }
 
-  .groups {
-    grid-template-columns: minmax(0, 1fr);
+  /* A bordered chip per module stacks into a wall on a phone; plain inline
+     links carry the same list at a third of the height. */
+  .chips {
+    gap: 0.1rem 0.7rem;
+  }
+
+  .chip {
+    padding: 0;
+    border: 0;
+    color: var(--ifm-color-primary);
+    font-size: 0.72rem;
   }
 }

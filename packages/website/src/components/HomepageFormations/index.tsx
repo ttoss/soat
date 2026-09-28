@@ -247,9 +247,7 @@ const DependencyGraph = () => {
 
 const HomepageFormations = (): React.ReactNode => {
   return (
-    <section
-      className={clsx(shared.band, shared.bleed, shared.dark, styles.section)}
-    >
+    <section className={clsx(shared.band, shared.bleed, styles.section)}>
       <div className="container">
         <div className={shared.header}>
           <p className={shared.eyebrow}>Agent formations</p>
@@ -277,26 +275,27 @@ const HomepageFormations = (): React.ReactNode => {
               template into this graph.
             </p>
             <DependencyGraph />
+            <ol className={styles.rail}>
+              {STEPS.map((step, index) => {
+                return (
+                  <li className={styles.station} key={step.title}>
+                    <span className={styles.stationDot} aria-hidden="true" />
+                    <span className={styles.stationIndex}>
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <Heading as="h3" className={styles.stationTitle}>
+                      {step.title}
+                    </Heading>
+                    <code className={styles.stationCommand}>
+                      {step.command}
+                    </code>
+                    <p className={styles.stationDetail}>{step.detail}</p>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         </div>
-
-        <ol className={styles.rail}>
-          {STEPS.map((step, index) => {
-            return (
-              <li className={styles.station} key={step.title}>
-                <span className={styles.stationDot} aria-hidden="true" />
-                <span className={styles.stationIndex}>
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <Heading as="h3" className={styles.stationTitle}>
-                  {step.title}
-                </Heading>
-                <code className={styles.stationCommand}>{step.command}</code>
-                <p className={styles.stationDetail}>{step.detail}</p>
-              </li>
-            );
-          })}
-        </ol>
       </div>
     </section>
   );

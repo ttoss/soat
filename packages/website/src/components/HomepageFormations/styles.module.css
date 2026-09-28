@@ -1,5 +1,29 @@
+/* The band follows the color mode so the template's code block, which does,
+   never sits on a band of the other theme. The graph panel is a console and
+   stays dark in both. */
 .section {
-  border-top: 1px solid rgba(0, 229, 255, 0.08);
+  --band-muted: var(--ifm-font-color-secondary);
+  --band-faint: var(--ifm-color-emphasis-600);
+  --band-accent: var(--ifm-color-primary);
+  --band-ground: var(--ifm-background-color);
+
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  background:
+    radial-gradient(
+      ellipse at 85% 15%,
+      rgba(142, 68, 173, 0.08) 0%,
+      transparent 42%
+    ),
+    var(--ifm-background-surface-color);
+}
+
+html[data-theme='dark'] .section {
+  --band-muted: rgba(240, 248, 255, 0.7);
+  --band-faint: rgba(240, 248, 255, 0.4);
+  --band-accent: #00e5ff;
+  --band-ground: #080c14;
+
+  border-top-color: rgba(0, 229, 255, 0.08);
   background:
     radial-gradient(
       ellipse at 85% 15%,
@@ -18,12 +42,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 2rem;
-  align-items: stretch;
+  align-items: start;
 }
 
 .template :global(.theme-code-block) {
   margin-bottom: 0;
-  height: 100%;
 }
 
 .graphColumn {
@@ -34,20 +57,19 @@
 
 .graphCaption {
   margin: 0;
-  color: rgba(240, 248, 255, 0.6);
+  color: var(--band-muted);
   font-size: 0.85rem;
 }
 
 .graphCaption code,
 .graphCaption span {
-  color: #00e5ff;
+  color: var(--band-accent);
   background: none;
   border: 0;
   padding: 0;
 }
 
 .graph {
-  flex: 1;
   display: flex;
   align-items: center;
   padding: 1rem;
@@ -147,14 +169,14 @@
   }
 }
 
-/* Three stations on one horizontal rail. */
+/* Three stations on a vertical rail under the graph, filling the column the
+   taller template leaves beside it. */
 .rail {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2rem;
-  margin: 3.5rem 0 0;
-  padding: 2rem 0 0;
+  gap: 1.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0 0 0 1.75rem;
   list-style: none;
 }
 
@@ -162,10 +184,15 @@
   content: '';
   position: absolute;
   top: 0;
+  bottom: 0;
   left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, #8e44ad 0%, #00e5ff 60%, transparent 100%);
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    #8e44ad 0%,
+    #00e5ff 60%,
+    transparent 100%
+  );
   opacity: 0.6;
 }
 
@@ -176,76 +203,56 @@
 
 .stationDot {
   position: absolute;
-  top: calc(-2rem - 5px);
-  left: 0;
+  top: 0.3rem;
+  left: calc(-1.75rem - 5px);
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #080c14;
-  border: 2px solid #00e5ff;
+  background: var(--band-ground);
+  border: 2px solid var(--band-accent);
+}
+
+html[data-theme='dark'] .stationDot {
   box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
 }
 
 .stationIndex {
-  display: block;
-  margin-bottom: 0.4rem;
-  color: rgba(240, 248, 255, 0.4);
+  display: inline;
+  margin-right: 0.6rem;
+  color: var(--band-faint);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
 }
 
 .stationTitle {
-  margin: 0 0 0.35rem;
-  font-size: 1.3rem;
+  display: inline;
+  margin: 0 0.6rem 0 0;
+  font-size: 1.15rem;
 }
 
 .stationCommand {
-  display: inline-block;
-  margin-bottom: 0.7rem;
+  display: block;
+  width: fit-content;
+  margin-top: 0.4rem;
+  margin-bottom: 0.5rem;
   padding: 0.15rem 0.5rem;
-  border: 1px solid rgba(0, 229, 255, 0.2);
+  border: 1px solid color-mix(in srgb, var(--band-accent) 25%, transparent);
   border-radius: 0.3rem;
-  background: rgba(0, 229, 255, 0.06);
-  color: #00e5ff;
+  background: color-mix(in srgb, var(--band-accent) 7%, transparent);
+  color: var(--band-accent);
   font-size: 0.78rem;
 }
 
 .stationDetail {
   margin: 0;
-  color: rgba(240, 248, 255, 0.7);
-  font-size: 0.95rem;
-  line-height: 1.65;
+  color: var(--band-muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 @media screen and (max-width: 996px) {
   .pair {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rail {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.75rem;
-    padding: 0 0 0 1.75rem;
-    margin-top: 3rem;
-  }
-
-  .rail::before {
-    top: 0;
-    bottom: 0;
-    right: auto;
-    width: 1px;
-    height: auto;
-    background: linear-gradient(
-      180deg,
-      #8e44ad 0%,
-      #00e5ff 60%,
-      transparent 100%
-    );
-  }
-
-  .stationDot {
-    top: 0.3rem;
-    left: calc(-1.75rem - 5px);
   }
 }

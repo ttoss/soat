@@ -1,0 +1,188 @@
+.section {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* Fifteen rating columns do not fit a phone; the table scrolls inside its own
+   box with the solution name pinned, so the page itself never scrolls
+   sideways. */
+.scroller {
+  overflow-x: auto;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.75rem;
+  background: var(--ifm-background-color);
+}
+
+.table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table tr,
+.table th,
+.table td {
+  border: 0;
+  background: none;
+}
+
+.table thead tr {
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.table tbody tr + tr {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.nameHead,
+.textHead,
+.countHead {
+  padding: 0.75rem 1rem;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  vertical-align: bottom;
+}
+
+.countHead {
+  text-align: right;
+}
+
+.clusterHead {
+  width: 2.1rem;
+  padding: 0.75rem 0.1rem;
+  vertical-align: bottom;
+}
+
+.clusterHead span {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nameHead,
+.nameCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ifm-background-color);
+}
+
+.nameCell {
+  padding: 0.55rem 1rem;
+  color: var(--ifm-heading-color);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.textCell {
+  padding: 0.55rem 1rem 0.55rem 0;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.table .baselineRow,
+.table .baselineRow .nameCell {
+  background: color-mix(
+    in srgb,
+    var(--ifm-color-primary) 8%,
+    var(--ifm-background-color)
+  );
+}
+
+/* Positioned so the visually hidden label is clipped by the scroller instead
+   of widening the page. */
+.ratingCell {
+  position: relative;
+  padding: 0.55rem 0.1rem;
+  text-align: center;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.countCell {
+  padding: 0.55rem 1rem;
+  color: var(--ifm-heading-color);
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.countOf {
+  color: var(--ifm-font-color-secondary);
+  font-weight: 400;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.82rem;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.more {
+  font-weight: 600;
+}
+
+@media screen and (max-width: 996px) {
+  .nameCell {
+    white-space: normal;
+    min-width: 8rem;
+  }
+
+  /* On a phone the ratings are the point; the type and deployment columns
+     would push every dot out of view. */
+  .textHead,
+  .textCell {
+    display: none;
+  }
+
+  .clusterHead {
+    width: 1.5rem;
+  }
+}

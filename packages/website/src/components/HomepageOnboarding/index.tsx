@@ -1,4 +1,4 @@
-import Link from '@docusaurus/Link';
+import PrimaryAction from '@site/src/components/HomepageShared/PrimaryAction';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
 import { ONBOARDING_STEPS } from '@site/src/data/agentInstructions';
 import Heading from '@theme/Heading';
@@ -26,18 +26,13 @@ const HomepageOnboarding = (): React.ReactNode => {
               No signup. No sales call. No waitlist.
             </Heading>
             <p className={shared.lead}>
-              SOAT is Apache-2.0 software you run yourself, so there is nothing
-              to request and no tier to be approved for. A local deployment is
-              the same software as a production one: the sandbox, the free tier
-              and the product are one thing. Keys are minted by an API call,
-              which matters because an agent cannot fill in a contact form.
+              SOAT is Apache-2.0 software you run yourself. A local deployment
+              is the same software as a production one: the sandbox, the free
+              tier and the product are one thing. Keys are minted by an API
+              call, which matters because an agent cannot fill in a contact
+              form.
             </p>
-            <Link
-              className={clsx(shared.ghostButton, styles.cta)}
-              to="/docs/getting-started"
-            >
-              Open the quick start
-            </Link>
+            <PrimaryAction className={styles.cta} />
           </div>
 
           <ol className={styles.rail}>
