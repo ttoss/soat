@@ -348,7 +348,7 @@ describe('buildWriteMemoryTool', () => {
 
 describe('buildKnowledgeMessages', () => {
   test('returns [] when config is null', async () => {
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: null,
       messages: [],
@@ -358,7 +358,7 @@ describe('buildKnowledgeMessages', () => {
   });
 
   test('returns [] when config is undefined', async () => {
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: undefined,
       messages: [],
@@ -368,7 +368,7 @@ describe('buildKnowledgeMessages', () => {
   });
 
   test('returns [] when no query and no knowledge filters', async () => {
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [],
@@ -379,7 +379,7 @@ describe('buildKnowledgeMessages', () => {
 
   test('returns [] when searchKnowledge returns empty results', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'hello' }],
@@ -411,7 +411,7 @@ describe('buildKnowledgeMessages', () => {
   // rejected it — now deleted. A turn with no message and no filters
   // injects nothing.
   test('injects nothing when no user message exists and no filters are set', async () => {
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: { limit: 5 },
       messages: [{ role: 'assistant', content: 'hi' }],
@@ -453,7 +453,7 @@ describe('buildKnowledgeMessages', () => {
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'guide' }],
@@ -485,7 +485,7 @@ describe('buildKnowledgeMessages', () => {
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'revenue' }],
@@ -512,7 +512,7 @@ describe('buildKnowledgeMessages', () => {
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'guide' }],
@@ -535,7 +535,7 @@ describe('buildKnowledgeMessages', () => {
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'remember' }],
@@ -741,7 +741,7 @@ describe('buildKnowledgeMessages', () => {
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'combined' }],
@@ -1053,7 +1053,7 @@ describe('buildKnowledgeMessages — injection hardening', () => {
   test('never injects retrieved knowledge with the system role', async () => {
     mockSearchKnowledge.mockResolvedValueOnce(memoryStoreResult);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'prefs' }],
@@ -1067,7 +1067,7 @@ describe('buildKnowledgeMessages — injection hardening', () => {
   test('wraps knowledge in delimiters framed as reference data, not instructions', async () => {
     mockSearchKnowledge.mockResolvedValueOnce(memoryStoreResult);
 
-    const result = await buildKnowledgeMessages({
+    const { messages: result } = await buildKnowledgeMessages({
       embeddingBilling: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'prefs' }],

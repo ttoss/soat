@@ -49,6 +49,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 | Field         | Type           | Description                                              |
 | ------------- | -------------- | -------------------------------------------------------- |
 | `document_id` | `string`       | Public document ID (`doc_` prefix)                       |
+| `document_version` | `number`  | Version of the document the chunk belongs to — cite it to record which text was read; the document's [versions](./documents.md#versioning) keep that text |
 | `file_id`     | `string`       | ID of the underlying File record                         |
 | `project_id`  | `string`       | ID of the owning project                                 |
 | `path`        | `string\|null` | Logical path within the project (e.g. `/reports/q1.txt`) |

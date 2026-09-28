@@ -180,11 +180,11 @@ generationsRouter.get(
  * PATCH /api/v1/generations/{generation_id}
  * operationId: updateGeneration
  * Attaches caller-supplied key/value metadata to a generation, for per-run
- * audit attribution (e.g. which knowledge-corpus version produced an action).
+ * audit attribution (e.g. the ticket or case an action belongs to).
  * The provided keys are shallow-merged over the existing metadata. The bag is
  * caller-owned: server state (usage attribution, the served agent version, the
- * model route's record, the memory-extraction summary) lives in its own
- * top-level fields and cannot be reached from here.
+ * model route's record, the memory-extraction summary, what retrieval served)
+ * lives in its own top-level fields and cannot be reached from here.
  */
 generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
   const { projectIds } = await generationAccess.authorizeWrite({

@@ -117,6 +117,38 @@ describe('Knowledge', () => {
       expect(result.project_id).toBe(projectId);
     });
 
+    test('each document result names the version its chunk was read from', async () => {
+      // Its own project, so the extra document never competes for a slot in
+      // the shared project's ranked searches.
+      const asAdmin = () => {
+        return authenticatedTestClient(adminToken);
+      };
+      const project = await asAdmin()
+        .post('/api/v1/projects')
+        .send({ name: 'Knowledge Versioned Project' });
+      const created = await asAdmin().post('/api/v1/documents').send({
+        project_id: project.body.id,
+        content: 'Returns close after 30 days.',
+        path: '/versioned/returns.md',
+      });
+      expect(created.status).toBe(201);
+      const edit = await asAdmin()
+        .patch(`/api/v1/documents/${created.body.id}`)
+        .send({ content: 'Returns close after 60 days.' });
+      expect(edit.status).toBe(200);
+
+      const response = await asAdmin()
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: project.body.id, document_ids: [created.body.id] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results).toHaveLength(1);
+      expect(response.body.results[0].document_version).toBe(2);
+      expect(response.body.results[0].content).toBe(
+        'Returns close after 60 days.'
+      );
+    });
+
     test('matches a document stored via a path lacking a leading slash', async () => {
       // Documents persisted without a leading slash must still be reachable by
       // a leading-slash prefix — the shape the stored path is normalized to.

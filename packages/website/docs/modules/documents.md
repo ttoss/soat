@@ -209,7 +209,7 @@ Embedding concurrency is bounded (default 5 simultaneous requests).
 
 ### Versioning
 
-A document's content and annotations are versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create; every write that **changes** the content, `title`, `path`, `metadata`, `tags` or chunk configuration increments `version` and archives the state it replaced. Re-writing the state the document already holds archives nothing, so two version numbers never denote the same content — which is what lets a run cite a version to say what it read.
+A document's content and annotations are versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create; every write that **changes** the content, `title`, `path`, `metadata`, `tags` or chunk configuration increments `version` and archives the state it replaced. Re-writing the state the document already holds archives nothing, so two version numbers never denote the same content — which is what lets a run cite a version to say what it read. A [knowledge search](./knowledge.md) result carries the `document_version` its chunk belongs to, and a generation records it for every chunk its agent's retrieval injected ([`retrieval`](./generations.md#what-retrieval-served)).
 
 A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the document has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md). A refused write leaves the document exactly as it was — stored text, search chunks and path — and so does the loser of two concurrent writes that read the same version.
 

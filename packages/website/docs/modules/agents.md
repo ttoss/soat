@@ -505,6 +505,8 @@ Customer prefers email over phone calls.
 
 Each tag names its source row: a memory result carries its memory id, resolvable via [`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory) even once [superseded](./memories.md#temporal-invalidation); a document chunk carries its page when it has one (else `[Document: /reports/q1.txt]`).
 
+What was injected is recorded on the generation as [`retrieval`](./generations.md#what-retrieval-served) — each document with the version read, each memory by id — so a turn can be traced back to the exact text it was given.
+
 | Field             | Type                  | Description                                                                                                                                                                                                                       |
 | ----------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `memory_store_ids` | `string[]`            | Search memories within these specific memory stores (`mstore_` prefix)                                                                                                                                                                     |

@@ -182,6 +182,7 @@ const resolveContextAndRecord = async (
     // eval dataset item long after the request that produced it is gone.
     inputMessages: ctx.inputMessages,
     toolSurface: ctx.toolSurface,
+    retrieval: ctx.retrieval,
     idempotency: args.idempotency,
   }).catch((error) => {
     // The one write failure that must not be swallowed: a claimed key means

@@ -1,4 +1,5 @@
 import type { db } from '../db';
+import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import type { MappedMemoryAssertion } from './memoryAssertions';
 import type { UsageTotals } from './usageTotals';
 
@@ -44,6 +45,7 @@ export type PersistedGeneration = {
    */
   usage?: UsageTotals | null;
   tool_surface: Record<string, unknown> | null;
+  retrieval: KnowledgeRetrieval;
   idempotency_key: string | null;
   metadata: Record<string, unknown> | null;
   content_redacted_at: Date | null;
@@ -117,6 +119,9 @@ export const mapGeneration = (
     routing: gen.routing,
     extraction: gen.extraction,
     tool_surface: gen.toolSurface,
+    // Written only by `knowledgeRetrievalRecord.ts`'s mapper, so the stored
+    // shape is the wire shape.
+    retrieval: gen.retrieval as KnowledgeRetrieval,
     idempotency_key: gen.idempotencyKey,
     // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
     metadata: gen.metadata,

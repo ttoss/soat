@@ -7,6 +7,10 @@ import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import type { EmbeddingBilling } from './embedding';
 import { buildSrn } from './iam';
 import { searchKnowledge } from './knowledge';
+import {
+  type KnowledgeRetrieval,
+  toKnowledgeRetrieval,
+} from './knowledgeRetrievalRecord';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
 import { isPlainObject } from './plainObject';
@@ -270,9 +274,13 @@ export const buildKnowledgeMessages = async (args: {
    */
   embeddingBilling: EmbeddingBilling;
   messages: Array<{ role: string; content: unknown }>;
-}): Promise<Array<{ role: string; content: string }>> => {
+}): Promise<{
+  messages: Array<{ role: string; content: string }>;
+  /** What was injected, for the generation record. Null when nothing ran. */
+  retrieval: KnowledgeRetrieval;
+}> => {
   const config = args.knowledgeConfig as KnowledgeConfig | null | undefined;
-  if (!config) return [];
+  if (!config) return { messages: [], retrieval: null };
 
   const lastUserMessage = [...args.messages].reverse().find((m) => {
     return m.role === 'user';
@@ -292,7 +300,9 @@ export const buildKnowledgeMessages = async (args: {
     config.documentPaths
   );
 
-  if (!query && !hasKnowledgeFilters(config)) return [];
+  if (!query && !hasKnowledgeFilters(config)) {
+    return { messages: [], retrieval: null };
+  }
 
   // `searchKnowledge` treats any defined `query` as "both stores", but here
   // `query` is auto-derived from the chat message every turn — letting it pick
@@ -325,13 +335,17 @@ export const buildKnowledgeMessages = async (args: {
 
   log('buildKnowledgeMessages: results count=%d', results.length);
 
-  if (results.length === 0) return [];
+  const retrieval = toKnowledgeRetrieval(results);
+  if (results.length === 0) return { messages: [], retrieval };
 
   const knowledgeText = results.map(formatResult).join('\n\n');
 
   log('buildKnowledgeMessages: knowledge text=%s', knowledgeText);
 
-  return [{ role: 'user', content: buildKnowledgeContent(knowledgeText) }];
+  return {
+    messages: [{ role: 'user', content: buildKnowledgeContent(knowledgeText) }],
+    retrieval,
+  };
 };
 
 /**
