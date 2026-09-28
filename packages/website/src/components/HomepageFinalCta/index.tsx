@@ -1,6 +1,7 @@
 import Link from '@docusaurus/Link';
 import PrimaryAction from '@site/src/components/HomepageShared/PrimaryAction';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
+import VectorGalaxy from '@site/src/components/VectorGalaxy';
 import Heading from '@theme/Heading';
 import clsx from 'clsx';
 import type * as React from 'react';
@@ -11,7 +12,7 @@ const HomepageFinalCta = (): React.ReactNode => {
   return (
     <section className={clsx(shared.bleed, shared.dark, styles.section)}>
       <div className={styles.galaxy} aria-hidden="true">
-        <img src="/img/soat-logo-no-bg.png" alt="" loading="lazy" />
+        <VectorGalaxy className={styles.mark} loading="lazy" />
       </div>
       <div className={clsx('container', styles.inner)}>
         <Heading as="h2" className={styles.title}>

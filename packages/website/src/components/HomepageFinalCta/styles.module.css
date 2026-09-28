@@ -17,9 +17,9 @@
   pointer-events: none;
 }
 
-.galaxy img {
+.mark {
   width: min(900px, 130vw);
-  max-width: none;
+  flex: none;
   opacity: 0.22;
   filter: blur(0.5px) saturate(1.1);
   animation: breathe 14s ease-in-out infinite alternate;
@@ -39,11 +39,11 @@
 
 @keyframes breathe {
   from {
-    transform: scale(1) rotate(0deg);
+    transform: scale(1);
     opacity: 0.2;
   }
   to {
-    transform: scale(1.04) rotate(2deg);
+    transform: scale(1.04);
     opacity: 0.28;
   }
 }
@@ -78,7 +78,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .galaxy img {
+  .mark {
     animation: none;
   }
 }
