@@ -85,10 +85,10 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.85rem 1.4rem;
-  border: 1px solid rgba(0, 229, 255, 0.28);
+  border: 1px solid var(--ifm-color-emphasis-400);
   border-radius: 0.5rem;
-  background: rgba(0, 229, 255, 0.04);
-  color: #f0f8ff;
+  background: transparent;
+  color: var(--ifm-heading-color);
   font-weight: 600;
   text-decoration: none;
   transition:
@@ -99,12 +99,27 @@
 }
 
 .ghostButton:hover {
-  color: #f0f8ff;
+  color: var(--ifm-color-primary);
   text-decoration: none;
+  border-color: var(--ifm-color-primary);
+  transform: translateY(-2px);
+}
+
+/* A band that is dark in both color modes, or the dark theme itself, gets the
+   luminous variant. */
+html[data-theme='dark'] .ghostButton,
+.dark .ghostButton {
+  border-color: rgba(0, 229, 255, 0.28);
+  background: rgba(0, 229, 255, 0.04);
+  color: #f0f8ff;
+}
+
+html[data-theme='dark'] .ghostButton:hover,
+.dark .ghostButton:hover {
+  color: #f0f8ff;
   border-color: rgba(0, 229, 255, 0.6);
   background: rgba(0, 229, 255, 0.08);
   box-shadow: 0 0 24px rgba(0, 229, 255, 0.18);
-  transform: translateY(-2px);
 }
 
 @media screen and (max-width: 996px) {

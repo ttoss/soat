@@ -3,10 +3,9 @@
 }
 
 .layout {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-  gap: 3rem;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
 }
 
 /* An index, not a grid of cards: one row per job, hairline-separated. */
@@ -14,16 +13,19 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 3rem;
   border-top: 1px solid var(--ifm-color-emphasis-300);
 }
 
 .row {
   position: relative;
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) auto;
-  gap: 1.25rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 0.35rem 1rem;
   align-items: baseline;
-  padding: 1.35rem 0.75rem 1.35rem 0;
+  padding: 1.2rem 0.75rem 1.2rem 0;
   border-bottom: 1px solid var(--ifm-color-emphasis-300);
   transition: background 200ms ease;
 }
@@ -74,6 +76,8 @@ html[data-theme='dark'] .row:hover::before {
 }
 
 .moduleLink {
+  grid-column: 2;
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -97,10 +101,8 @@ html[data-theme='dark'] .row:hover::before {
 }
 
 /* The one place on the page that says no, so it looks different: a dashed
-   outline, no fill, sticky beside the list. */
+   outline and no fill. */
 .notFor {
-  position: sticky;
-  top: calc(var(--ifm-navbar-height) + 2rem);
   padding: 1.5rem 1.6rem;
   border: 1px dashed var(--ifm-color-emphasis-400);
   border-radius: 0.75rem;
@@ -115,9 +117,9 @@ html[data-theme='dark'] .row:hover::before {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem 2rem;
   color: var(--ifm-font-color-secondary);
   font-size: 0.92rem;
   line-height: 1.6;
@@ -140,8 +142,12 @@ html[data-theme='dark'] .row:hover::before {
 
 @media screen and (max-width: 996px) {
   .layout {
-    grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
+  }
+
+  .ledger,
+  .notForList {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .row {
@@ -151,13 +157,5 @@ html[data-theme='dark'] .row:hover::before {
 
   .row::before {
     display: none;
-  }
-
-  .moduleLink {
-    grid-column: 2;
-  }
-
-  .notFor {
-    position: static;
   }
 }

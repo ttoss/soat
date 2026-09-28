@@ -41,47 +41,25 @@ const MODULE_GROUPS = [
   },
 ];
 
-const NOT_WIRED = [
-  'a message queue',
-  'a vector database',
-  'an auth server',
-  'a trace collector',
-  'a scheduler',
-];
-
 const HomepageDefinition = (): React.ReactNode => {
   return (
     <section className={clsx(shared.band, styles.section)}>
       <div className="container">
         <div className={styles.grid}>
           <div className={styles.intro}>
-            <p className={shared.eyebrow}>What SOAT is</p>
+            <p className={shared.eyebrow}>How a call flows</p>
             <Heading as="h2" className={shared.title}>
-              One server. Every layer an agent needs.
+              Every caller reaches the same logic through the same permissions.
             </Heading>
             <p className={shared.lead}>
-              SOAT is open-source infrastructure for production-ready AI agents:
-              one self-hostable Node.js server that gives an agent identity,
-              storage with vector search, memory, orchestration, guardrails,
-              evaluations and traces, backed by PostgreSQL. You bring the
-              product. SOAT handles the infrastructure layer.
+              SOAT is open-source infrastructure for production-ready AI agents.
+              You bring the product; SOAT handles the layer underneath it.
             </p>
             <p className={clsx(shared.lead, styles.leadSecond)}>
               The REST API and the MCP endpoint are one process calling the same
               business logic through the same permission engine, so a resource
-              created on one surface is already visible on the others.
-            </p>
-            <p className={styles.notWired}>
-              <span className={styles.notWiredLabel}>
-                Not in the diagram, on purpose:
-              </span>
-              {NOT_WIRED.map((item) => {
-                return (
-                  <s className={styles.struck} key={item}>
-                    {item}
-                  </s>
-                );
-              })}
+              created on one surface is already visible on the others. Each
+              module below links to its documentation.
             </p>
           </div>
 

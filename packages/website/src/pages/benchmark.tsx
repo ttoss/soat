@@ -10,19 +10,13 @@ import {
   CLUSTERS,
   orderSolutions,
   PINNED_SLUG,
+  RATING_COLORS,
   RATING_LABELS,
   solutions,
 } from '../data/solutions';
 import styles from './benchmark.module.css';
 
 const MAX_COMPARED = 4;
-
-const RATING_COLORS: Record<Rating, string> = {
-  native: 'var(--ifm-color-success)',
-  partial: 'var(--ifm-color-warning)',
-  plugin: 'var(--soat-violet, #8e44ad)',
-  absent: 'var(--ifm-color-emphasis-400)',
-};
 
 const RatingBadge = (props: { rating: Rating }) => {
   const color = RATING_COLORS[props.rating];

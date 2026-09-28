@@ -1,6 +1,7 @@
 import Head from '@docusaurus/Head';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import HomepageAgentManifest from '@site/src/components/HomepageAgentManifest';
+import HomepageCompare from '@site/src/components/HomepageCompare';
 import HomepageDefinition from '@site/src/components/HomepageDefinition';
 import HomepageFinalCta from '@site/src/components/HomepageFinalCta';
 import HomepageFormations from '@site/src/components/HomepageFormations';
@@ -8,7 +9,6 @@ import HomepageHero from '@site/src/components/HomepageHero';
 import HomepageLayers from '@site/src/components/HomepageLayers';
 import HomepageOnboarding from '@site/src/components/HomepageOnboarding';
 import HomepageSurfaces from '@site/src/components/HomepageSurfaces';
-import HomepageTerminal from '@site/src/components/HomepageTerminal';
 import HomepageWhenToUse from '@site/src/components/HomepageWhenToUse';
 import Layout from '@theme/Layout';
 import type * as React from 'react';
@@ -39,14 +39,14 @@ export default function Home(): React.ReactNode {
           heading parked outside it reads as a page with no heading at all. */}
       <main>
         <HomepageHero />
+        <HomepageWhenToUse />
         <HomepageDefinition />
-        <HomepageLayers />
         <HomepageSurfaces />
         <HomepageFormations />
-        <HomepageTerminal />
-        <HomepageWhenToUse />
-        <HomepageOnboarding />
+        <HomepageCompare />
         <HomepageAgentManifest />
+        <HomepageLayers />
+        <HomepageOnboarding />
         <HomepageFinalCta />
       </main>
     </Layout>

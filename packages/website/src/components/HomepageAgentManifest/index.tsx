@@ -16,13 +16,10 @@ const HomepageAgentManifest = (): React.ReactNode => {
             Everything on this site is readable by a machine.
           </Heading>
           <p className={shared.lead}>
-            SOAT is infrastructure for agents, so its documentation is published
-            the way an agent wants to read it. Every page is server-rendered,
-            with the full text in the HTML and no JavaScript required, and has a
-            Markdown twin one URL away. The REST surface is one OpenAPI
-            description and the error contract is a catalog of stable codes, so
-            a client can be generated and its failures handled without scraping
-            a page.
+            Every page is server-rendered with its full text in the HTML and has
+            a Markdown twin one URL away. The REST surface is one OpenAPI
+            description and errors are a catalog of stable codes, so a client
+            can be generated without scraping a page.
           </p>
         </div>
 
@@ -67,17 +64,10 @@ const HomepageAgentManifest = (): React.ReactNode => {
         </div>
 
         <p className={styles.note}>
-          Send <code>Accept: text/markdown</code> to any documentation URL and
-          that page answers in Markdown, or append <code>.md</code> for the same
-          file by name, for example{' '}
-          <a href="/docs/introduction.md">/docs/introduction.md</a>. Every HTML
-          page advertises its own twin with a{' '}
-          <code>
-            &lt;link rel=&quot;alternate&quot;
-            type=&quot;text/markdown&quot;&gt;
-          </code>{' '}
-          tag, and dead URLs answer with a real HTTP 404 carrying a Markdown
-          recovery map instead of a soft 200.
+          Send <code>Accept: text/markdown</code> to any documentation URL, or
+          append <code>.md</code>, as in{' '}
+          <a href="/docs/introduction.md">/docs/introduction.md</a>. A dead URL
+          answers a real 404 with a Markdown recovery map.
         </p>
       </div>
     </section>
