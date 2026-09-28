@@ -1,0 +1,63 @@
+/* Geometry measured on the 836×608 bitmap: the recall-core sits at
+   48.9% × 46.7%, and the galaxy is seen tilted to 608/836 = 0.727, the frame's
+   own ratio, so percentage-sized masks are already the tilted ellipse. */
+.galaxy {
+  --core-x: 48.9%;
+  --core-y: 46.7%;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 836 / 608;
+}
+
+.galaxy img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  transform-origin: var(--core-x) var(--core-y);
+}
+
+/* Stretch the tilted ellipse into a circle, rotate, flatten back: the arms turn
+   in the galaxy's plane instead of like a tipping disc. The mask lives in the
+   unstretched frame, so the stretch makes it a circle and the rotation never
+   changes its shape. */
+.arms {
+  transform: scaleY(0.727) rotate(0deg) scaleY(1.375);
+  animation: spin 180s linear infinite;
+  will-change: transform;
+  mask-image: radial-gradient(
+    ellipse 20% 20% at var(--core-x) var(--core-y),
+    transparent 50%,
+    #000 100%
+  );
+}
+
+.core {
+  mask-image: radial-gradient(
+    ellipse 20% 20% at var(--core-x) var(--core-y),
+    #000 50%,
+    transparent 100%
+  );
+  animation: pulse 7s ease-in-out infinite alternate;
+}
+
+@keyframes spin {
+  to {
+    transform: scaleY(0.727) rotate(-360deg) scaleY(1.375);
+  }
+}
+
+@keyframes pulse {
+  to {
+    filter: brightness(1.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arms,
+  .core {
+    animation: none;
+  }
+}

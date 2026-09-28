@@ -97,3 +97,39 @@ test('capability rows put the baseline first and follow the cluster order', () =
     );
   }
 });
+
+const SITE_ROOT = path.resolve(__dirname, '..');
+const VECTOR_GALAXY_FILE = path.join(
+  'src',
+  'components',
+  'VectorGalaxy',
+  'index.tsx'
+);
+const GALAXY_BITMAP = 'soat-logo-no-bg.png';
+
+const siteSources = (dir: string): string[] => {
+  return fs
+    .readdirSync(path.join(SITE_ROOT, dir), { withFileTypes: true })
+    .flatMap((entry) => {
+      const relative = path.join(dir, entry.name);
+      if (entry.isDirectory()) return siteSources(relative);
+      return /\.(tsx?|css)$/.test(entry.name) ? [relative] : [];
+    });
+};
+
+test('the Vector Galaxy is drawn only by VectorGalaxy', () => {
+  const offenders = [...siteSources('src'), 'docusaurus.config.ts'].filter(
+    (file) => {
+      if (file === VECTOR_GALAXY_FILE) return false;
+      return fs
+        .readFileSync(path.join(SITE_ROOT, file), 'utf8')
+        .includes(GALAXY_BITMAP);
+    }
+  );
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'a component draws the galaxy bitmap itself; render <VectorGalaxy /> so every placement shares the in-plane rotation and its reduced-motion rule'
+  );
+});

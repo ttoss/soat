@@ -256,10 +256,6 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'SOAT',
-      logo: {
-        src: 'img/soat-logo-no-bg.png',
-      },
       items: [
         {
           type: 'docSidebar',
