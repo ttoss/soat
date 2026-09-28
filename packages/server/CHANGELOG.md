@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.64.0](https://github.com/ttoss/soat/compare/v0.63.0...v0.64.0) (2026-09-28)
+
+### Bug Fixes
+
+* **deciders:** run a decider's tool as the decision's requester ([#1468](https://github.com/ttoss/soat/issues/1468)) ([74963b4](https://github.com/ttoss/soat/commit/74963b40b1b05e0d071ab57d157b0917c2b6782c))
+
+### Features
+
+* always wait on tool-called decisions and send tag bags with --tags ([#1469](https://github.com/ttoss/soat/issues/1469)) ([fc62dd0](https://github.com/ttoss/soat/commit/fc62dd0e9ddfed633807c50a61e5958d5d294e4d))
+
 # [0.63.0](https://github.com/ttoss/soat/compare/v0.62.0...v0.63.0) (2026-09-27)
 
 ### Features
