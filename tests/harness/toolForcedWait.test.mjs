@@ -16,7 +16,7 @@ const { load } = createRequire(path.join(serverRoot, 'package.json'))(
 /**
  * A tool call is one request returning one result: a `202` it cannot poll
  * leaves an agent step or an orchestration `tool` node holding a record with
- * no answer in it. So every `wait` either carries `x-soat-tool-forced: 'true'`
+ * no answer in it. So every `wait` either carries `x-soat-tool-forced: true`
  * or is named here, with the reason polling it is the point of the call
  * (`.claude/rules/sync-async.md`).
  */
@@ -98,7 +98,7 @@ describe('wait on the tool surface', () => {
     const wrong = fields
       .filter(({ field }) => {
         const pin = field['x-soat-tool-forced'];
-        return pin !== undefined && pin !== 'true';
+        return pin !== undefined && pin !== true;
       })
       .map(({ owner }) => {
         return owner;

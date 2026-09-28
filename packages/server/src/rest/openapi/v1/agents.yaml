@@ -377,7 +377,7 @@ paths:
           # Pinned to `true` for tool calls: a nested agent-to-agent call has no
           # channel to poll a background generation later, so it must block —
           # the mirror image of `stream`, which a tool call cannot receive.
-          x-soat-tool-forced: 'true'
+          x-soat-tool-forced: true
           description: 'When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately with a `generation_id` to poll. Pass `true` to block until the generation settles and receive the result. Mutually exclusive with `stream: true`. A `builtin` tool call always waits.'
           schema:
             type: boolean

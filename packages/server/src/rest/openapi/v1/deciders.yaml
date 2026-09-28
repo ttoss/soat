@@ -738,7 +738,7 @@ components:
           default: false
           # Pinned to `true` for tool calls: a tool caller wants the answer,
           # and an orchestration node reading a queued decision finds none.
-          x-soat-tool-forced: 'true'
+          x-soat-tool-forced: true
           description: >-
             True evaluates before answering and returns the settled decision.
             False — the default — returns the `queued` decision at once. A

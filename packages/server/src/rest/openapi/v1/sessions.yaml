@@ -295,7 +295,7 @@ paths:
           in: query
           required: false
           # Pinned to `true` for tool calls; see the agents generate operation.
-          x-soat-tool-forced: 'true'
+          x-soat-tool-forced: true
           description: When omitted or `false` (default), generation runs in the background and `202 Accepted` is returned immediately. Pass `true` to block until the generation settles and receive the result. A `builtin` tool call always waits.
           schema:
             type: boolean

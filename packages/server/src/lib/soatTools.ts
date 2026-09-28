@@ -20,6 +20,7 @@ import createDebug from 'debug';
 import { load } from 'js-yaml';
 
 import { getActionForOperation } from './permissionCatalog';
+import { prepareToolExtensions } from './soatToolsExtensions';
 import { readResourceRef, type SoatResourceRef } from './soatToolsResource';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -45,8 +46,9 @@ export const REST_PATH_PREFIX = '/api/v1/';
  *   depth); honored when the server injects it (`acceptedBodyFields`).
  * - `x-soat-tool-unsupported` — a response mode a tool call cannot receive,
  *   such as an SSE stream.
- * - `x-soat-tool-forced` — pinned to its string value for every tool call
- *   (`wait: 'true'` on endpoints a tool caller cannot poll).
+ * - `x-soat-tool-forced` — pinned for every tool call to its value, written as
+ *   the field's own type (`wait: true` on endpoints a tool caller cannot
+ *   poll). `soatToolsExtensions.ts` checks each spelling.
  */
 const SERVER_MANAGED_EXTENSIONS = [
   'x-soat-server-managed',
@@ -157,7 +159,7 @@ const loadToolDefinitions = (): ToolDefinition[] => {
   const documents: OpenApiDocuments = {};
   for (const file of files) {
     const spec = readSpec(path.join(specDir, file));
-    if (spec) documents[`./${file}`] = spec;
+    if (spec) documents[`./${file}`] = prepareToolExtensions({ spec, file });
   }
 
   return openApiToToolDefinitions({
