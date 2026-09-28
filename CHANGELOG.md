@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.66.0](https://github.com/ttoss/soat/compare/v0.65.0...v0.66.0) (2026-09-28)
+
+### Bug Fixes
+
+* **website:** rebuild the transparent logo from the original Vector Galaxy ([#1477](https://github.com/ttoss/soat/issues/1477)) ([9857e0b](https://github.com/ttoss/soat/commit/9857e0ba9fa1f5823aaa4343064ee67ac0227e35))
+
+### Features
+
+* **generations:** record what knowledge_config retrieval served ([#1479](https://github.com/ttoss/soat/issues/1479)) ([9fd27a9](https://github.com/ttoss/soat/commit/9fd27a96150611cc8d515e271cbdfdc2e8a78866))
+* **website:** animate the Vector Galaxy in its own plane ([#1478](https://github.com/ttoss/soat/issues/1478)) ([354f199](https://github.com/ttoss/soat/commit/354f199279fdcde9db4da87a0d68fd8d29c4430c))
+* **website:** rebuild the homepage around what makes SOAT specific ([#1476](https://github.com/ttoss/soat/issues/1476)) ([9401803](https://github.com/ttoss/soat/commit/9401803bb570ef05f4b8efd5fd9e786157c7cc0a))
+
 # [0.65.0](https://github.com/ttoss/soat/compare/v0.64.0...v0.65.0) (2026-09-28)
 
 ### Bug Fixes

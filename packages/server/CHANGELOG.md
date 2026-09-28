@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.66.0](https://github.com/ttoss/soat/compare/v0.65.0...v0.66.0) (2026-09-28)
+
+### Features
+
+* **generations:** record what knowledge_config retrieval served ([#1479](https://github.com/ttoss/soat/issues/1479)) ([9fd27a9](https://github.com/ttoss/soat/commit/9fd27a96150611cc8d515e271cbdfdc2e8a78866))
+
 # [0.65.0](https://github.com/ttoss/soat/compare/v0.64.0...v0.65.0) (2026-09-28)
 
 ### Bug Fixes
