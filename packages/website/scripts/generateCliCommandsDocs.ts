@@ -8,9 +8,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
+import type { Route as CliRoute } from '@ttoss/openapi-codegen';
 import { load } from 'js-yaml';
-
-import { routes as cliRoutes } from '../../cli/src/generated/routes';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -441,9 +440,13 @@ const getParamFlags = (args: {
 };
 
 /**
- * A body that names no property arrives whole in one flag. Read from the CLI
- * manifest, which names it, so this page cannot drift from the CLI.
+ * The CLI manifest, built in-process by the generator the CLI build runs, so
+ * this page cannot drift from the CLI and needs no CLI build output. Loaded in
+ * `main`: the generator is ESM-only and this script runs as CommonJS.
  */
+let cliRoutes: Record<string, CliRoute> = {};
+
+/** A body that names no property arrives whole in one flag. */
 const rootBodyFlags = (args: { command: string }): CommandFlag[] => {
   const route = cliRoutes[args.command];
   return (route?.flags ?? [])
@@ -638,7 +641,15 @@ const cleanGeneratedModuleDocs = () => {
   }
 };
 
-const main = () => {
+const main = async () => {
+  const { generateCliRouteManifest } = await import('@ttoss/openapi-codegen');
+  cliRoutes = generateCliRouteManifest({
+    specsDir: SPECS_DIR,
+    moduleDocsUrl: () => {
+      return '';
+    },
+  });
+
   const modules = loadModules();
   cleanGeneratedModuleDocs();
 
@@ -715,4 +726,8 @@ const main = () => {
   console.log(`CLI module command docs written to: ${MODULES_OUTPUT_DIR}`);
 };
 
-main();
+main().catch((error: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error(error);
+  process.exit(1);
+});
