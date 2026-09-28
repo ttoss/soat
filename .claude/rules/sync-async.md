@@ -42,7 +42,9 @@ The toggle is always `wait`; never `async`, `sync`, `blocking`, `background`.
 ## Enforcement and docs
 
 `tests/unit/tests/rest/waitToggleContract.test.ts` (reintroduced `async`,
-non-background default, required `wait`, missing `202`) and
+non-background default, required `wait`, missing `202`),
+`tests/harness/toolForcedWait.test.mjs` (a `wait` neither pinned for tool
+calls nor named in `TOOL_CHOOSES_WAIT` with its reason) and
 `scripts/docs-lint.mjs` (retired `?async=` / `--async` in docs).
 
 `packages/website/docs/advanced/sync-and-async.md` is the canonical user page;

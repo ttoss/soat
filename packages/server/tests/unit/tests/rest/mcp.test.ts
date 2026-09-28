@@ -3328,4 +3328,13 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
     expect(decide).toBeDefined();
     expect(decide?.inputSchema?.properties?.wait).toBeUndefined();
   });
+
+  test('generate-session-response is offered without its wait field', () => {
+    const generate = tools.find((t) => {
+      return t.name === 'generate-session-response';
+    });
+
+    expect(generate).toBeDefined();
+    expect(generate?.inputSchema?.properties?.wait).toBeUndefined();
+  });
 });
