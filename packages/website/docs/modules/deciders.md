@@ -20,7 +20,7 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 
 ## Related Tutorials
 
-- [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer record, and an orchestration branches on its answer
+- [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer's actor tags, and an orchestration branches on its answer
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

@@ -19,6 +19,7 @@ An Actor belongs to a project and has a display name, an optional `external_id`,
 
 - [Cap Spend Per End User - Step 4 (Create an actor per end user)](/docs/tutorials/cap-spend-per-end-user#step-4--create-an-actor-per-end-user)
 - [Cap Spend Per End User - Step 5 (Run a turn through a session bound to the actor)](/docs/tutorials/cap-spend-per-end-user#step-5--run-a-turn-through-a-session-bound-to-the-actor)
+- [Route Work with a Decider - Step 3 (Tag two customers)](/docs/tutorials/route-work-with-a-decider#step-3--tag-two-customers)
 
 ## Data Model
 
