@@ -45,11 +45,27 @@ describe('MCP tool derivation', () => {
     assert.deepEqual(offenders, []);
   });
 
-  test('soatTools derives through the library', () => {
-    const soatTools = fs.readFileSync(
-      path.join(serverSrc, 'lib/soatTools.ts'),
+  test('the one derivation calls the library, and the server tools use it', () => {
+    const read = (file) => {
+      return fs.readFileSync(path.join(serverSrc, file), 'utf8');
+    };
+    assert.match(
+      read('lib/soatToolsDerivation.ts'),
+      /openApiToToolDefinitions\(/
+    );
+    assert.match(read('lib/soatTools.ts'), /deriveToolDefinitions\(/);
+  });
+
+  test('the MCP tools reference reads the same derivation', () => {
+    const docs = fs.readFileSync(
+      fileURLToPath(
+        new URL(
+          '../../packages/website/scripts/mcpToolDocs.ts',
+          import.meta.url
+        )
+      ),
       'utf8'
     );
-    assert.match(soatTools, /openApiToToolDefinitions\(/);
+    assert.match(docs, /deriveToolDefinitions\(/);
   });
 });

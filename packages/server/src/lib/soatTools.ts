@@ -11,50 +11,21 @@ import * as url from 'node:url';
 
 import type { JsonObjectSchema } from '@ttoss/http-server-mcp';
 import {
-  type OpenApiDocuments,
   type OpenApiSpec,
-  openApiToToolDefinitions,
   type ToolDefinition as OpenApiToolDefinition,
 } from '@ttoss/http-server-mcp-openapi';
 import createDebug from 'debug';
 import { load } from 'js-yaml';
 
 import { getActionForOperation } from './permissionCatalog';
-import { prepareToolExtensions } from './soatToolsExtensions';
+import { deriveToolDefinitions } from './soatToolsDerivation';
 import { readResourceRef, type SoatResourceRef } from './soatToolsResource';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const log = createDebug('soat:tools');
 
-/**
- * The prefix every REST operation shares. The specs also describe endpoints
- * mounted at the root — the OAuth 2.1 protocol endpoints in `oauth.yaml`, whose
- * paths the RFCs fix — and those are described for discovery, not for wrapping:
- * `/authorize` is a browser redirect, and `/token` takes a form-encoded body no
- * JSON-shaped generated caller can send. Pinned by
- * `tests/unit/tests/lib/soatToolsApiSurface.test.ts`, and mirrored by the SDK
- * and CLI generators, which draw their surface from the same specs.
- */
-export const REST_PATH_PREFIX = '/api/v1/';
-
-/**
- * Markers that keep a value out of the tool schema, all meaning "the model may
- * not set this":
- *
- * - `x-soat-server-managed` — the platform supplies it (trace lineage, call
- *   depth); honored when the server injects it (`acceptedBodyFields`).
- * - `x-soat-tool-unsupported` — a response mode a tool call cannot receive,
- *   such as an SSE stream.
- * - `x-soat-tool-forced` — pinned for every tool call to its value, written as
- *   the field's own type (`wait: true` on endpoints a tool caller cannot
- *   poll). `soatToolsExtensions.ts` checks each spelling.
- */
-const SERVER_MANAGED_EXTENSIONS = [
-  'x-soat-server-managed',
-  'x-soat-tool-unsupported',
-  'x-soat-tool-forced',
-];
+export { REST_PATH_PREFIX } from './soatToolsDerivation';
 
 export interface ToolDefinition {
   name: string;
@@ -130,16 +101,6 @@ const readSpec = (filePath: string): OpenApiSpec | null => {
   }
 };
 
-/** Keeps only the REST operations; see {@link REST_PATH_PREFIX}. */
-const restPathsOnly = (spec: OpenApiSpec): OpenApiSpec => {
-  const paths = Object.fromEntries(
-    Object.entries(spec.paths ?? {}).filter(([pathTemplate]) => {
-      return pathTemplate.startsWith(REST_PATH_PREFIX);
-    })
-  );
-  return { ...spec, paths };
-};
-
 const loadToolDefinitions = (): ToolDefinition[] => {
   const candidate1 = path.resolve(__dirname, '../rest/openapi/v1');
   const candidate2 = path.resolve(__dirname, 'rest/openapi/v1');
@@ -154,23 +115,12 @@ const loadToolDefinitions = (): ToolDefinition[] => {
     })
     .sort();
 
-  // Every spec is also a `$ref` target: shared components (tags, filters) are
-  // written once in a sibling file and referenced as `./tags.yaml#/…`.
-  const documents: OpenApiDocuments = {};
-  for (const file of files) {
+  const specs = files.flatMap((file) => {
     const spec = readSpec(path.join(specDir, file));
-    if (spec) documents[`./${file}`] = prepareToolExtensions({ spec, file });
-  }
+    return spec ? [{ file, spec }] : [];
+  });
 
-  return openApiToToolDefinitions({
-    spec: Object.values(documents).map(restPathsOnly),
-    options: {
-      argumentNames: 'verbatim',
-      excludeExtension: 'x-soat-mcp-exclude',
-      serverManagedExtension: SERVER_MANAGED_EXTENSIONS,
-      documents,
-    },
-  }).map(toSoatTool);
+  return deriveToolDefinitions({ specs }).map(toSoatTool);
 };
 
 export const soatTools = loadToolDefinitions();
