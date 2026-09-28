@@ -43,6 +43,8 @@ export interface JsonSchema {
 }
 
 export interface ParameterSpec {
+  /** A shared parameter, `#/components/parameters/<Name>` in the same spec. */
+  $ref?: string;
   name: string;
   in: 'path' | 'query' | string;
   required?: boolean;
@@ -69,7 +71,10 @@ export interface OperationSpec {
 export interface OpenApiSpec {
   tags?: Array<{ name: string }>;
   paths?: Record<string, Record<string, OperationSpec>>;
-  components?: { schemas?: Record<string, JsonSchema> };
+  components?: {
+    schemas?: Record<string, JsonSchema>;
+    parameters?: Record<string, ParameterSpec>;
+  };
 }
 
 /**
@@ -218,12 +223,27 @@ export interface OperationParam {
   description: string;
 }
 
+const PARAMETER_REF_PREFIX = '#/components/parameters/';
+
+const resolveParameterRef = (args: {
+  parameter: ParameterSpec;
+  spec: OpenApiSpec;
+}): ParameterSpec => {
+  const { parameter, spec } = args;
+  if (!parameter.$ref?.startsWith(PARAMETER_REF_PREFIX)) return parameter;
+  const name = parameter.$ref.slice(PARAMETER_REF_PREFIX.length);
+  return spec.components?.parameters?.[name] ?? parameter;
+};
+
 export const getOperationParams = (args: {
   operation: OperationSpec;
   spec: OpenApiSpec;
 }): OperationParam[] => {
   const { operation, spec } = args;
   return (operation.parameters ?? [])
+    .map((p) => {
+      return resolveParameterRef({ parameter: p, spec });
+    })
     .filter((p) => {
       return p.in === 'path' || p.in === 'query';
     })

@@ -4,10 +4,9 @@
  *   docs/mcp/tools.md            — index page linking to one page per module
  *   docs/mcp/tools/<module>.md   — per-module tool list with argument detail
  *
- * The MCP tool surface is derived at runtime by the server from the same specs
- * (`src/lib/soatTools.ts`), so this generator mirrors its two rules:
- *   - operations flagged `x-soat-mcp-exclude` are not exposed as tools;
- *   - request-body fields flagged `x-soat-server-managed` are not tool inputs.
+ * Which tools exist and which arguments each takes come from the derivation
+ * the server itself runs (`src/lib/soatToolsDerivation.ts`), so the reference
+ * lists what a tool accepts and nothing a tool call cannot send.
  *
  * MCP tool names are kebab-case (from `operationId`); argument names are the
  * spec's snake_case property names verbatim, exactly as the runtime
@@ -21,15 +20,14 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 
 import {
-  type BodyProp,
-  getBodyProps,
-  getOperationParams,
+  loadTools,
+  loadToolSurface,
+  type ToolArgument,
+  type ToolEntry,
+} from './mcpToolDocs';
+import {
   loadModules,
-  loadOperations,
-  mcpToolName,
   type ModuleConfig,
-  type OperationEntry,
-  type OperationParam,
   sanitizeInline,
 } from './openapiReferenceHelpers';
 
@@ -37,79 +35,6 @@ const scriptsDir = path.dirname(url.fileURLToPath(import.meta.url));
 const MCP_DOCS_DIR = path.resolve(scriptsDir, '../docs/mcp');
 const INDEX_OUTPUT_FILE = path.join(MCP_DOCS_DIR, 'tools.md');
 const TOOLS_OUTPUT_DIR = path.join(MCP_DOCS_DIR, 'tools');
-
-interface ToolArgument {
-  name: string;
-  type: string;
-  required: boolean;
-  description: string;
-}
-
-interface ToolEntry {
-  name: string;
-  description: string;
-  args: ToolArgument[];
-}
-
-const paramToArgument = (param: OperationParam): ToolArgument => {
-  return {
-    name: param.name,
-    type: param.type,
-    required: param.required,
-    description: param.description,
-  };
-};
-
-const bodyPropToArgument = (prop: BodyProp): ToolArgument => {
-  return {
-    name: prop.snakeName,
-    type: prop.type,
-    required: prop.required,
-    description: prop.description,
-  };
-};
-
-const buildTool = (args: {
-  entry: OperationEntry;
-  mod: ModuleConfig;
-}): ToolEntry | null => {
-  const { entry, mod } = args;
-  if (entry.operation['x-soat-mcp-exclude']) return null;
-  // The MCP surface wraps the REST API. A spec may also describe endpoints
-  // mounted at the root — the OAuth protocol endpoints, whose paths the RFCs
-  // fix — which are described for discovery, not for wrapping. The server's
-  // `soatTools` applies the same prefix rule, so the docs match the surface.
-  if (!entry.apiPath.startsWith('/api/v1/')) return null;
-
-  const params = getOperationParams({
-    operation: entry.operation,
-    spec: mod.spec,
-  });
-  const bodyProps = getBodyProps({
-    operation: entry.operation,
-    spec: mod.spec,
-    excludeServerManaged: true,
-  });
-
-  return {
-    name: mcpToolName(entry.operationId),
-    description: entry.description,
-    args: [
-      ...params.map(paramToArgument),
-      ...bodyProps.map(bodyPropToArgument),
-    ],
-  };
-};
-
-const loadTools = (mod: ModuleConfig): ToolEntry[] => {
-  return loadOperations(mod.spec)
-    .map((entry) => {
-      return buildTool({ entry, mod });
-    })
-    .filter((tool): tool is ToolEntry => {
-      return tool !== null;
-    });
-};
 
 const renderArguments = (args: ToolArgument[]): string => {
   if (args.length === 0) return 'This tool takes no arguments.';
@@ -189,8 +114,11 @@ const main = (): void => {
 
   const moduleLinks: string[] = [];
 
-  for (const mod of loadModules()) {
-    const tools = loadTools(mod);
+  const modules = loadModules();
+  const surface = loadToolSurface(modules);
+
+  for (const mod of modules) {
+    const tools = loadTools({ mod, surface });
     if (tools.length === 0) continue;
 
     const outputFile = path.join(TOOLS_OUTPUT_DIR, `${mod.file}.md`);
