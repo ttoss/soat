@@ -1,11 +1,12 @@
 ---
-description: "Route an orchestration on a decider's answer: a tool-backed decider applies refund rules to a customer record, and a condition node takes the branch it chose."
+description: "Route an orchestration on a decider's answer: a tool-backed decider applies refund rules to a customer's tags, and a condition node takes the branch it chose."
 keywords:
   - deciders
   - decisions
   - orchestration routing
   - rule engine
   - condition nodes
+  - actor tags
 sidebar_position: 32
 ---
 
@@ -14,7 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Route Work with a Decider
 
-An orchestration that asks a [decider](/docs/modules/deciders) whether to pay a refund now or send it to a person, then takes the branch the decider chose. The decider is answered by a [pipeline tool](/docs/modules/tools#pipeline) that reads the customer's record and applies two rules: a refund of 50 or less is paid, and so is any refund for a gold customer. No AI provider is required.
+An orchestration that asks a [decider](/docs/modules/deciders) whether to pay a refund now or send it to a person, then takes the branch the decider chose. The decider is answered by a [pipeline tool](/docs/modules/tools#pipeline) that reads the customer's tags and applies two rules: a refund of 50 or less is paid, and so is any refund for a gold customer. No AI provider is required.
 
 ## Prerequisites
 
@@ -127,27 +128,19 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ---
 
-## Step 3 — Store two customer records
+## Step 3 — Tag two customers
 
-Each customer is a [file](/docs/modules/files) under `/customers/` whose [metadata](/docs/modules/files#data-model) carries the tier the rules read.
+Each customer is an [actor](/docs/modules/actors) whose `tier` [tag](/docs/modules/actors#tags) is what the rules read. Replacing an actor's tags sends the whole tag map as the body ([`PUT /api/v1/actors/{actor_id}/tags`](/docs/api/actors/replace-actor-tags)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-RITA_ID=$(soat create-file \
-  --project-id "$PROJECT_ID" \
-  --prefix /customers \
-  --filename rita.json \
-  --content-type application/json \
-  --metadata '{"tier": "standard"}' | jq -r '.id')
+RITA_ID=$(soat create-actor --project-id "$PROJECT_ID" --name Rita | jq -r '.id')
+GIL_ID=$(soat create-actor --project-id "$PROJECT_ID" --name Gil | jq -r '.id')
 
-GIL_ID=$(soat create-file \
-  --project-id "$PROJECT_ID" \
-  --prefix /customers \
-  --filename gil.json \
-  --content-type application/json \
-  --metadata '{"tier": "gold"}' | jq -r '.id')
+soat replace-actor-tags --actor-id "$RITA_ID" --tags '{"tier": "standard"}'
+soat replace-actor-tags --actor-id "$GIL_ID" --tags '{"tier": "gold"}'
 echo "Rita: $RITA_ID  Gil: $GIL_ID"
 ```
 
@@ -155,43 +148,48 @@ echo "Rita: $RITA_ID  Gil: $GIL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: rita } = await adminSoat.files.createFile({
-  body: {
-    project_id: PROJECT_ID,
-    prefix: '/customers',
-    filename: 'rita.json',
-    content_type: 'application/json',
-    metadata: { tier: 'standard' },
-  },
+const { data: rita } = await adminSoat.actors.createActor({
+  body: { project_id: PROJECT_ID, name: 'Rita' },
 });
-const { data: gil } = await adminSoat.files.createFile({
-  body: {
-    project_id: PROJECT_ID,
-    prefix: '/customers',
-    filename: 'gil.json',
-    content_type: 'application/json',
-    metadata: { tier: 'gold' },
-  },
+const { data: gil } = await adminSoat.actors.createActor({
+  body: { project_id: PROJECT_ID, name: 'Gil' },
 });
 const RITA_ID = rita!.id;
 const GIL_ID = gil!.id;
+
+await adminSoat.actors.replaceActorTags({
+  path: { actor_id: RITA_ID },
+  body: { tier: 'standard' },
+});
+await adminSoat.actors.replaceActorTags({
+  path: { actor_id: GIL_ID },
+  body: { tier: 'gold' },
+});
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-RITA_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files" \
+RITA_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/actors" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","prefix":"/customers","filename":"rita.json","content_type":"application/json","metadata":{"tier":"standard"}}' \
-  | jq -r '.id')
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"Rita"}' | jq -r '.id')
 
-GIL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files" \
+GIL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/actors" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","prefix":"/customers","filename":"gil.json","content_type":"application/json","metadata":{"tier":"gold"}}' \
-  | jq -r '.id')
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"Gil"}' | jq -r '.id')
+
+curl -s -X PUT "$SOAT_BASE_URL/api/v1/actors/$RITA_ID/tags" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tier":"standard"}'
+
+curl -s -X PUT "$SOAT_BASE_URL/api/v1/actors/$GIL_ID/tags" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tier":"gold"}'
 ```
 
 </TabItem>
@@ -201,7 +199,7 @@ GIL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files" \
 
 ## Step 4 — Write the refund rules as a pipeline
 
-A decider sends its tool `{ state, questions }` and reads back `{ answers }` ([The tool backend](/docs/modules/deciders#the-tool-backend)). This pipeline reads the customer named in the state with a builtin `get-file` step, then builds the answer in its `output`: `approve` when the amount is 50 or less or the tier is `gold`, `review` otherwise.
+A decider sends its tool `{ state, questions }` and reads back `{ answers }` ([The tool backend](/docs/modules/deciders#the-tool-backend)). This pipeline reads the tags of the customer named in the state with a builtin `get-actor-tags` step, then builds the answer in its `output`: `approve` when the amount is 50 or less or the `tier` tag is `gold`, `review` otherwise.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -216,9 +214,9 @@ RULES_ID=$(soat create-tool \
     "steps": [
       {
         "id": "customer",
-        "tool": {"name": "read-customer", "type": "builtin", "actions": ["get-file"]},
-        "action": "get-file",
-        "input": {"file_id": {"var": "input.state.customer_id"}}
+        "tool": {"name": "read-customer", "type": "builtin", "actions": ["get-actor-tags"]},
+        "action": "get-actor-tags",
+        "input": {"actor_id": {"var": "input.state.customer_id"}}
       }
     ],
     "output": {
@@ -228,7 +226,7 @@ RULES_ID=$(soat create-tool \
             "if": [
               {"or": [
                 {"<=": [{"var": "input.state.amount"}, 50]},
-                {"==": [{"var": "steps.customer.metadata.tier"}, "gold"]}
+                {"==": [{"var": "steps.customer.tier"}, "gold"]}
               ]},
               "approve",
               "review"
@@ -255,9 +253,13 @@ const { data: rules } = await adminSoat.tools.createTool({
       steps: [
         {
           id: 'customer',
-          tool: { name: 'read-customer', type: 'builtin', actions: ['get-file'] },
-          action: 'get-file',
-          input: { file_id: { var: 'input.state.customer_id' } },
+          tool: {
+            name: 'read-customer',
+            type: 'builtin',
+            actions: ['get-actor-tags'],
+          },
+          action: 'get-actor-tags',
+          input: { actor_id: { var: 'input.state.customer_id' } },
         },
       ],
       output: {
@@ -268,7 +270,7 @@ const { data: rules } = await adminSoat.tools.createTool({
                 {
                   or: [
                     { '<=': [{ var: 'input.state.amount' }, 50] },
-                    { '==': [{ var: 'steps.customer.metadata.tier' }, 'gold'] },
+                    { '==': [{ var: 'steps.customer.tier' }, 'gold'] },
                   ],
                 },
                 'approve',
@@ -298,12 +300,12 @@ RULES_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
     "description": "Pays small refunds and any refund for a gold customer",
     "pipeline": {
       "steps": [
-        {"id":"customer","tool":{"name":"read-customer","type":"builtin","actions":["get-file"]},"action":"get-file","input":{"file_id":{"var":"input.state.customer_id"}}}
+        {"id":"customer","tool":{"name":"read-customer","type":"builtin","actions":["get-actor-tags"]},"action":"get-actor-tags","input":{"actor_id":{"var":"input.state.customer_id"}}}
       ],
       "output": {
         "answers": {
           "route": {
-            "choice": {"if":[{"or":[{"<=":[{"var":"input.state.amount"},50]},{"==":[{"var":"steps.customer.metadata.tier"},"gold"]}]},"approve","review"]}
+            "choice": {"if":[{"or":[{"<=":[{"var":"input.state.amount"},50]},{"==":[{"var":"steps.customer.tier"},"gold"]}]},"approve","review"]}
           }
         }
       }
@@ -314,7 +316,7 @@ RULES_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 </TabItem>
 </Tabs>
 
-The `get-file` step runs as whoever requested the decision, so it reads only the records that caller may read.
+The `get-actor-tags` step runs as whoever requested the decision, so it reads only the actors that caller may read.
 
 ---
 
