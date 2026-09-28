@@ -451,7 +451,7 @@ DECIDE_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 | `pay` | `transform` | Runs on the `approve` branch |
 | `escalate` | `transform` | Runs on the `review` branch |
 
-A `builtin` `create-decision` call always waits, so `decide`'s artifact is the settled [decision](/docs/modules/deciders#requesting-a-decision), and `route` reads the answer at `nodes.decide.answers.route.choice` ([The `nodes.<id>` namespace](/docs/modules/orchestrations#the-nodesid-namespace)).
+A [tool call waits for its decision](/docs/advanced/sync-and-async#two-combinations-that-are-resolved-for-you), so `decide`'s artifact is the settled [decision](/docs/modules/deciders#requesting-a-decision), and `route` reads the answer at `nodes.decide.answers.route.choice` ([The `nodes.<id>` namespace](/docs/modules/orchestrations#the-nodesid-namespace)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

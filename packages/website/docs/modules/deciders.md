@@ -320,7 +320,7 @@ The output names each answer field, which is what leaves `confidence` behind. It
 
 ### Requesting a decision
 
-[`POST /api/v1/deciders/{decider_id}/decisions`](/docs/api/deciders/create-decision) takes `state`, optional `metadata` and `wait`. The decision is a run: with `wait` omitted it is `201` in `status: queued`, and with `wait: true` it is `201` settled. Poll [`GET /api/v1/decisions/{decision_id}`](/docs/api/deciders/get-decision) or subscribe to the events below; see [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the contract. A [`builtin` tool](./tools.md#data-model) or MCP call always waits and returns the settled decision.
+[`POST /api/v1/deciders/{decider_id}/decisions`](/docs/api/deciders/create-decision) takes `state`, optional `metadata` and `wait`. The decision is a run: with `wait` omitted it is `201` in `status: queued`, and with `wait: true` it is `201` settled. Poll [`GET /api/v1/decisions/{decision_id}`](/docs/api/deciders/get-decision) or subscribe to the events below; see [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md#two-combinations-that-are-resolved-for-you) for the contract, including how a [`builtin` tool](./tools.md#data-model) or MCP call waits.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

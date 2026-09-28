@@ -323,7 +323,7 @@ Validated on write: an unknown `type`, a `has_tool_call` without `tool_name`, or
 
 `generation_id` is pollable at once via [`GET /generations/{generation_id}`](/docs/api/generations/get-generation). Validation, permissions, the call-depth guard and quota admission run synchronously: a bad request is `400`/`403`/`404`/`429`, never a polled failure.
 
-`?wait=true` returns the result inline. `requires_action` (client tools) is observable only in a waited response, so client-tool flows must pass it. `stream` and `builtin` tool calls always wait; platform-wide contract in [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md).
+`?wait=true` returns the result inline. `requires_action` (client tools) is observable only in a waited response, so client-tool flows must pass it. How `wait` combines with `stream` and with tool calls: [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md#two-combinations-that-are-resolved-for-you).
 
 The inline result's `ai_provider_id` is the [AI provider](./ai-providers.md) that served `output.model` (a [model route](./model-routes.md)'s picked target, or the pinned provider; two providers in a project can serve one model name), `null` when none was resolved. The [`tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) result carries the same field.
 
