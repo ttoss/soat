@@ -143,6 +143,14 @@ export const RATING_LABELS: Record<Rating, string> = {
   absent: 'Absent',
 };
 
+/** One color per rating, shared by `/benchmark` and the homepage excerpt. */
+export const RATING_COLORS: Record<Rating, string> = {
+  native: 'var(--ifm-color-success)',
+  partial: 'var(--ifm-color-warning)',
+  plugin: 'var(--soat-violet, #8e44ad)',
+  absent: 'var(--ifm-color-emphasis-400)',
+};
+
 const asSolution = (value: {
   archetype: string;
   deployment: string[];
@@ -185,5 +193,43 @@ export const orderSolutions = (entries: Solution[]): Solution[] => {
       return 1;
     }
     return a.name.localeCompare(b.name);
+  });
+};
+
+export type CapabilityCell = {
+  clusterId: string;
+  rating: Rating;
+};
+
+export type CapabilityRow = {
+  slug: string;
+  name: string;
+  archetype: Archetype;
+  deployment: Deployment[];
+  lastVerified: string;
+  ratings: CapabilityCell[];
+  nativeCount: number;
+};
+
+/** Each solution's ratings in `CLUSTERS` order, baseline first. */
+export const capabilityRows = (entries: Solution[]): CapabilityRow[] => {
+  return orderSolutions(entries).map((solution) => {
+    const ratings = CLUSTERS.map((cluster) => {
+      return {
+        clusterId: cluster.id,
+        rating: solution.capabilities[cluster.id].rating,
+      };
+    });
+    return {
+      slug: solution.slug,
+      name: solution.name,
+      archetype: solution.archetype,
+      deployment: solution.deployment,
+      lastVerified: solution.last_verified,
+      ratings,
+      nativeCount: ratings.filter((cell) => {
+        return cell.rating === 'native';
+      }).length,
+    };
   });
 };

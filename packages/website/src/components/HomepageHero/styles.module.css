@@ -1,30 +1,56 @@
+/* The hero follows the color mode so the navbar above it never meets a band
+   of the opposite theme. Light mode keeps the cosmic imagery faded, per the
+   brand's light-surface rule. */
 .hero {
+  --hero-text: var(--ifm-heading-color);
+  --hero-muted: var(--ifm-font-color-secondary);
+  --hero-rule: var(--ifm-color-emphasis-300);
+  --hero-accent: var(--ifm-color-primary);
+
   position: relative;
   overflow: hidden;
-  padding: 6rem 0 0;
+  padding: 5.5rem 0 0;
+  background:
+    radial-gradient(
+      ellipse at 80% 35%,
+      rgba(142, 68, 173, 0.1) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 70% 60%,
+      rgba(26, 115, 232, 0.08) 0%,
+      transparent 42%
+    ),
+    var(--ifm-background-color);
+  color: var(--hero-text);
+}
+
+html[data-theme='dark'] .hero {
+  --hero-text: #f0f8ff;
+  --hero-muted: rgba(240, 248, 255, 0.72);
+  --hero-rule: rgba(0, 229, 255, 0.12);
+  --hero-accent: #00e5ff;
+
   background:
     radial-gradient(
       ellipse at 78% 38%,
-      rgba(142, 68, 173, 0.28) 0%,
+      rgba(142, 68, 173, 0.26) 0%,
       transparent 42%
     ),
     radial-gradient(
       ellipse at 70% 55%,
-      rgba(0, 229, 255, 0.14) 0%,
+      rgba(0, 229, 255, 0.12) 0%,
       transparent 40%
     ),
     #080c14;
-  color: #f0f8ff;
 }
 
-/* A dot grid, faded toward the edges, is the engineered ground the
-   constellation sits on. */
 .hero::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image: radial-gradient(
-    rgba(0, 229, 255, 0.16) 1px,
+    color-mix(in srgb, var(--hero-accent) 18%, transparent) 1px,
     transparent 1px
   );
   background-size: 28px 28px;
@@ -41,46 +67,95 @@
   pointer-events: none;
 }
 
+.galaxy {
+  position: absolute;
+  top: 50%;
+  right: -8%;
+  width: min(900px, 70vw);
+  transform: translateY(-58%);
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+html[data-theme='dark'] .galaxy {
+  opacity: 0.32;
+  filter: drop-shadow(0 0 40px rgba(0, 229, 255, 0.25));
+}
+
+.galaxy img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .inner {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 3rem;
+  gap: 3.5rem;
 }
 
 .copy {
-  max-width: 620px;
+  max-width: 600px;
 }
 
 .eyebrow {
-  color: #00e5ff;
+  color: var(--hero-accent);
 }
 
 .title {
   margin-bottom: 1.25rem;
-  color: #f0f8ff;
-  font-size: clamp(2.2rem, 3.6vw + 1rem, 3.9rem);
-  line-height: 1.05;
+  color: var(--hero-text);
+  font-size: clamp(2.1rem, 2.8vw + 1rem, 3.4rem);
+  line-height: 1.07;
   letter-spacing: 0.005em;
   text-wrap: balance;
 }
 
 .titleGlow {
-  background: linear-gradient(135deg, #ffffff 0%, #00e5ff 45%, #a855c7 100%);
+  background: linear-gradient(135deg, #8e44ad 0%, #1a73e8 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+html[data-theme='dark'] .titleGlow {
+  background: linear-gradient(135deg, #ffffff 0%, #00e5ff 45%, #a855c7 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
   filter: drop-shadow(0 0 18px rgba(0, 229, 255, 0.28));
 }
 
 .subtitle {
   max-width: 560px;
-  margin: 0 0 2rem;
-  color: rgba(240, 248, 255, 0.76);
-  font-size: 1.15rem;
+  margin: 0 0 1.25rem;
+  color: var(--hero-muted);
+  font-size: 1.12rem;
   line-height: 1.65;
   text-wrap: pretty;
+}
+
+.notWired {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.8rem;
+  margin: 0 0 2rem;
+  font-size: 0.92rem;
+}
+
+.notWiredLabel {
+  color: var(--hero-text);
+  font-weight: 600;
+}
+
+.struck {
+  color: var(--hero-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.86rem;
+  text-decoration-color: var(--hero-accent);
+  text-decoration-thickness: 1.5px;
 }
 
 .actions {
@@ -91,132 +166,53 @@
 }
 
 .command {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.6rem 0.75rem;
-  margin-top: 1.75rem;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid rgba(0, 229, 255, 0.14);
-  border-radius: 0.5rem;
-  background: rgba(13, 17, 23, 0.7);
-  color: #f0f8ff;
-  font-size: 0.88rem;
-  text-decoration: none;
-  transition: border-color 200ms ease;
-}
-
-.command:hover {
-  color: #f0f8ff;
-  text-decoration: none;
-  border-color: rgba(0, 229, 255, 0.4);
+  gap: 0.3rem 0.7rem;
+  margin: 1.5rem 0 0;
+  color: var(--hero-muted);
+  font-size: 0.85rem;
 }
 
 .command code {
   border: 0;
   padding: 0;
   background: none;
-  color: #f0f8ff;
-  font-size: 0.92rem;
+  color: var(--hero-text);
+  font-size: 0.9rem;
 }
 
 .prompt {
-  color: #00e5ff;
+  color: var(--hero-accent);
   font-family: var(--ifm-font-family-monospace);
   font-weight: 700;
 }
 
-.commandHint {
-  color: rgba(240, 248, 255, 0.5);
-  font-size: 0.8rem;
+.commandHint a {
+  color: var(--hero-accent);
 }
 
 .visual {
   position: relative;
-  display: flex;
-  justify-content: center;
-}
-
-.constellation {
-  width: 100%;
-  max-width: 660px;
-  height: auto;
-  overflow: visible;
-  color: #f0f8ff;
-}
-
-.galaxy {
-  filter: drop-shadow(0 0 28px rgba(0, 229, 255, 0.35));
-}
-
-.halo {
-  fill: rgba(0, 229, 255, 0.16);
-  stroke: rgba(0, 229, 255, 0.45);
-  stroke-width: 1;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: breathe 4.2s ease-in-out infinite alternate;
-}
-
-.dot {
-  fill: #ffffff;
-  stroke: #00e5ff;
-  stroke-width: 2;
-  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.9));
-}
-
-@keyframes breathe {
-  from {
-    transform: scale(0.85);
-    opacity: 0.55;
-  }
-  to {
-    transform: scale(1.15);
-    opacity: 1;
-  }
-}
-
-.labelBacking {
-  fill: rgba(8, 12, 20, 0.78);
-  stroke: rgba(0, 229, 255, 0.18);
-  stroke-width: 1;
-}
-
-.label {
-  fill: rgba(240, 248, 255, 0.92);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
-}
-
-.coreLabelBacking {
-  fill: #080c14;
-  stroke: rgba(0, 229, 255, 0.35);
-  stroke-width: 1;
-}
-
-.coreLabel {
-  fill: #00e5ff;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  min-width: 0;
 }
 
 .facts {
   position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 4rem;
-  border-top: 1px solid rgba(0, 229, 255, 0.1);
+  margin-top: 4.5rem;
+  margin-bottom: 0;
+  border-top: 1px solid var(--hero-rule);
 }
 
 .fact {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding: 1.5rem 1.25rem 1.75rem;
-  border-left: 1px solid rgba(0, 229, 255, 0.1);
+  padding: 1.4rem 1.25rem 1.6rem;
+  border-left: 1px solid var(--hero-rule);
 }
 
 .fact:first-child {
@@ -225,36 +221,42 @@
 }
 
 .factValue {
-  color: #f0f8ff;
   font-family: var(--ifm-heading-font-family);
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
-.factLabel {
-  color: rgba(240, 248, 255, 0.55);
-  font-size: 0.85rem;
+.factValue a {
+  color: var(--hero-text);
+  text-decoration: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .halo {
-    animation: none;
-  }
+.factValue a:hover {
+  color: var(--hero-accent);
+}
+
+.factLabel {
+  margin: 0;
+  color: var(--hero-muted);
+  font-size: 0.85rem;
 }
 
 @media screen and (max-width: 996px) {
   .hero {
-    padding-top: 3.5rem;
+    padding-top: 3rem;
   }
 
   .inner {
     grid-template-columns: minmax(0, 1fr);
-    gap: 2rem;
+    gap: 2.25rem;
   }
 
-  .constellation {
-    max-width: 460px;
+  .galaxy {
+    top: 0;
+    right: -30%;
+    width: 110vw;
+    transform: none;
   }
 
   .facts {
@@ -272,6 +274,6 @@
   }
 
   .fact:nth-child(n + 3) {
-    border-top: 1px solid rgba(0, 229, 255, 0.1);
+    border-top: 1px solid var(--hero-rule);
   }
 }

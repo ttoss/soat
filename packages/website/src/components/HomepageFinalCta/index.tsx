@@ -1,4 +1,5 @@
 import Link from '@docusaurus/Link';
+import PrimaryAction from '@site/src/components/HomepageShared/PrimaryAction';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
 import Heading from '@theme/Heading';
 import clsx from 'clsx';
@@ -18,28 +19,14 @@ const HomepageFinalCta = (): React.ReactNode => {
         </Heading>
         <p className={styles.lead}>
           Self-host SOAT and ship agents that can reach what they need, prove
-          they did the job, and improve on evidence. Sessions, knowledge,
-          memory, IAM, guardrails, versions, traces and MCP, on your own
-          infrastructure.
+          they did the job, and improve on evidence.
         </p>
         <div className={styles.actions}>
-          <Link
-            className="button button--primary button--lg"
-            to="/docs/getting-started"
-          >
-            Run it locally
-          </Link>
+          <PrimaryAction />
           <Link className={shared.ghostButton} to="/docs/introduction">
             Read the docs
           </Link>
         </div>
-        <p className={styles.note}>
-          Weighing your options?{' '}
-          <Link to="/benchmark">
-            See how SOAT compares to other agent solutions
-          </Link>
-          .
-        </p>
       </div>
     </section>
   );
