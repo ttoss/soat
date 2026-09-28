@@ -3,6 +3,7 @@ import { DomainError } from '../errors';
 import {
   attributionColumns,
   findConversationDbId,
+  findInitiatorGeneration,
   type GenerationAttribution,
   resolveEndUserAttribution,
 } from './generationAttribution';
@@ -23,6 +24,7 @@ import {
   type PersistedGeneration,
 } from './generationMapper';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
+import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -51,31 +53,6 @@ const generationIncludes = () => {
   ];
 };
 
-const findInitiatorGeneration = async (args: {
-  initiatorGenerationId?: string | null;
-  projectId: number;
-}) => {
-  if (!args.initiatorGenerationId) {
-    return null;
-  }
-
-  const initiatorGeneration = await db.Generation.findOne({
-    where: {
-      publicId: args.initiatorGenerationId,
-      projectId: args.projectId,
-    },
-  });
-
-  if (!initiatorGeneration) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${args.initiatorGenerationId}' not found.`
-    );
-  }
-
-  return initiatorGeneration;
-};
-
 /**
  * Creates the Trace (if needed) and the Generation in one transaction.
  *
@@ -93,6 +70,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
     toolSurface?: Record<string, unknown> | null;
+    retrieval?: KnowledgeRetrieval;
     idempotency?: GenerationIdempotency;
   };
   agentDbId: number;
@@ -150,6 +128,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         // Not a content column: three integers describing the request, which a
         // purge and zero-retention both leave standing.
         toolSurface: args.toolSurface ?? null,
+        // Pointers, not text — see the column.
+        retrieval: args.retrieval ?? null,
         idempotencyKey: args.idempotency?.key ?? null,
         idempotencyDigest: args.idempotency?.digest ?? null,
         ...attributionColumns(args),
@@ -187,6 +167,7 @@ const insertGenerationRecord = async (
     inputMessages?: unknown[] | null;
     // Measured, never caller-supplied. Not content — see the column.
     toolSurface?: Record<string, unknown> | null;
+    retrieval?: KnowledgeRetrieval;
     // A unique violation on it is the caller's retry losing the race.
     idempotency?: GenerationIdempotency;
   }

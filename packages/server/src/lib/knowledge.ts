@@ -35,6 +35,11 @@ export type KnowledgeResult =
   | {
       source_type: 'document';
       document_id: string;
+      /**
+       * The document version the chunk belongs to — what a caller cites to
+       * say which text it read.
+       */
+      document_version?: number;
       chunk_id: string;
       file_id?: string;
       project_id?: string;
@@ -163,6 +168,7 @@ const toDocumentResult = (doc: QueryDocumentResult): KnowledgeResult => {
   return {
     source_type: 'document' as const,
     document_id: doc.id,
+    document_version: doc.version,
     chunk_id: doc.chunk_id,
     file_id: doc.file_id,
     project_id: doc.project_id,

@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import type { ServerToolContextIdentity } from './toolContext';
 
 export type EndUserAttribution = {
@@ -106,4 +107,29 @@ export const findConversationDbId = async (
     attributes: ['id'],
   });
   return (conversation?.id as number | undefined) ?? null;
+};
+
+export const findInitiatorGeneration = async (args: {
+  initiatorGenerationId?: string | null;
+  projectId: number;
+}): Promise<InstanceType<(typeof db)['Generation']> | null> => {
+  if (!args.initiatorGenerationId) {
+    return null;
+  }
+
+  const initiatorGeneration = await db.Generation.findOne({
+    where: {
+      publicId: args.initiatorGenerationId,
+      projectId: args.projectId,
+    },
+  });
+
+  if (!initiatorGeneration) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${args.initiatorGenerationId}' not found.`
+    );
+  }
+
+  return initiatorGeneration;
 };

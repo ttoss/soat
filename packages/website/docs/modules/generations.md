@@ -53,6 +53,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation; `null` for ordinary traffic     |
 | `idempotency_key`           | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once)) |
 | `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
+| `retrieval`                 | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served)) |
 | `extraction`                | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))  |
 | `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |
 | `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)                                |
@@ -118,14 +119,14 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 
 ### Metadata
 
-`metadata` is a **caller-owned** bag, returned verbatim, for per-run audit attribution (e.g. which knowledge-corpus version produced an AI action).
+`metadata` is a **caller-owned** bag, returned verbatim, for per-run audit attribution (e.g. the ticket or case an AI action belongs to). What knowledge the turn read is not the caller's to record: the server writes it to [`retrieval`](#what-retrieval-served).
 
 - **At create time** — pass a `metadata` object on [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation).
 - **After creation** — [`PATCH /generations/:generation_id`](/docs/api/generations/update-generation) with a `metadata` object. Keys are **shallow-merged** over the existing metadata, so repeated patches accumulate.
 
 PATCH requires `generations:UpdateGeneration`; the create path requires `agents:CreateAgentGeneration`.
 
-**No key is reserved.** Every piece of server-owned state (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, `extraction`) is a field of its own, so nothing written into `metadata` can reach it; a caller key spelled `action_id` is just an annotation.
+**No key is reserved.** Every piece of server-owned state (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, `extraction`, `retrieval`) is a field of its own, so nothing written into `metadata` can reach it; a caller key spelled `action_id` is just an annotation.
 
 Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored in its own column and is never exposed through the API.
 
@@ -151,6 +152,35 @@ exists so a real turn can be promoted into an evaluation fixture with
 It is **content**, not skeleton: never written under zero-retention, cleared by a purge,
 swept by retention. A generation whose input is gone can no longer be curated and answers
 `409 GENERATION_CONTENT_UNAVAILABLE`.
+
+### What retrieval served
+
+An agent with a [`knowledge_config`](./agents.md#knowledge-config) retrieves before the model is called, and `retrieval` records what that injected, in injection order:
+
+```json
+"retrieval": [
+  {
+    "source_type": "document",
+    "document_id": "doc_V1StGXR8Z5jdHi6B",
+    "document_version": 3,
+    "chunk_id": "dchunk_V1StGXR8Z5jdHi6B",
+    "page": null,
+    "similarity_score": 0.82
+  },
+  {
+    "source_type": "memory",
+    "memory_store_id": "mstore_V1StGXR8Z5jdHi6B",
+    "memory_id": "mem_V1StGXR8Z5jdHi6B",
+    "similarity_score": 0.74
+  }
+]
+```
+
+Together with `agent_version`, it answers "which playbook version produced this action". `document_version` is the durable pointer: a document edited between two turns leaves each citing the version it read, and [the document's versions](./documents.md#versioning) keep that text. `chunk_id` stops resolving once the document is re-chunked. The array order is the rank. `similarity_score` is raw cosine, [the number that keeps its meaning once stored](./knowledge.md#relevance-scoring); `null` when the turn had no query or the search answered from the lexical channel alone.
+
+`null` means no retrieval ran — no `knowledge_config`, or neither a query nor a filter to search with. `[]` means it ran and matched nothing.
+
+It is written by the server when the turn starts and cannot be set by a caller. Being pointers and no text, it is not content: it survives a [purge](#content-purge) and is written even on a zero-retention agent.
 
 ### Transcript
 
@@ -245,7 +275,7 @@ Being three integers and no text, `tool_surface` is not content: it survives a [
 
 [`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
-The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`). A purged generation reads back as that skeleton, not a 404.
+The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`, `retrieval`). A purged generation reads back as that skeleton, not a 404.
 
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 

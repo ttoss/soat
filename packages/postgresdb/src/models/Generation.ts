@@ -289,6 +289,14 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare toolSurface: Record<string, unknown> | null;
 
+  // What `knowledge_config` retrieval injected (`knowledgeRetrievalRecord.ts`):
+  // ids, versions and similarity, never the text. Not content, so it survives a
+  // purge and is written under zero retention — it is the audit trail of what
+  // the turn read. Null when no retrieval ran; empty when it ran and matched
+  // nothing.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare retrieval: Array<Record<string, unknown>> | null;
+
   // Caller-owned. The server writes nothing here, so there is no reserved-key
   // list to maintain and no key a caller sets that reaches platform state.
   @Column({ type: DataType.JSONB, allowNull: true })

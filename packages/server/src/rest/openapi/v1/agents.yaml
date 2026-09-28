@@ -1894,13 +1894,13 @@ components:
         metadata:
           description: >-
             Caller-supplied key/value metadata attached to the generation
-            record for per-run audit attribution (e.g. the knowledge-corpus
-            version that produced this action). Round-trips verbatim when the
-            generation is fetched via the generations API. The bag is
-            caller-owned and no key is reserved: server-owned state (usage
-            attribution, the served agent version, the model route's record, the
-            extraction summary) lives in its own top-level generation fields and
-            cannot be written from here. Use the request's own `action_id` field
+            record for per-run audit attribution (e.g. the ticket or case this
+            action belongs to). Round-trips verbatim when the generation is
+            fetched via the generations API. The bag is caller-owned and no key
+            is reserved: server-owned state (usage attribution, the served agent
+            version, the model route's record, the extraction summary, what
+            knowledge retrieval served) lives in its own top-level generation
+            fields and cannot be written from here. Use the request's own `action_id` field
             to set the usage-attribution label.
           allOf:
             - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'

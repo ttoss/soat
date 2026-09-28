@@ -211,12 +211,12 @@ paths:
       summary: Update generation metadata
       description: >
         Attaches caller-supplied key/value metadata to a generation record for
-        per-run audit attribution (e.g. recording which knowledge-corpus version
-        produced an AI action). The provided keys are shallow-merged over the
-        existing `metadata`, so repeated patches accumulate. The bag is
-        caller-owned and no key is reserved: server-owned state (usage
-        attribution, the served agent version, the route's record, the
-        extraction summary) lives in its own top-level fields and cannot be
+        per-run audit attribution (e.g. the ticket or case an AI action belongs
+        to). The provided keys are shallow-merged over the existing `metadata`,
+        so repeated patches accumulate. The bag is caller-owned and no key is
+        reserved: server-owned state (usage attribution, the served agent
+        version, the route's record, the extraction summary, what knowledge
+        retrieval served) lives in its own top-level fields and cannot be
         written from here.
       operationId: updateGeneration
       x-soat-resource:
@@ -635,6 +635,33 @@ components:
                 `bytes` over a measured bytes-per-token ratio. An estimate, and
                 named one.
               example: 45148
+        retrieval:
+          type: array
+          nullable: true
+          description: >-
+            What `knowledge_config` retrieval injected into this turn, in the
+            order it was injected: which document, at which version, and which
+            chunk, or which memory. Written by the server at turn start and
+            never writable; pointers only, never the text.
+
+
+            Null when no retrieval ran — the agent has no `knowledge_config`,
+            or the turn had neither a query nor a filter to search with. An
+            empty array is a retrieval that ran and matched nothing.
+
+
+            Not content: a content purge leaves it standing, and zero retention
+            still writes it. `document_version` names an archived version, so
+            the text the turn read stays readable after the document changes.
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/GenerationRetrievedDocument'
+              - $ref: '#/components/schemas/GenerationRetrievedMemory'
+            discriminator:
+              propertyName: source_type
+              mapping:
+                document: '#/components/schemas/GenerationRetrievedDocument'
+                memory: '#/components/schemas/GenerationRetrievedMemory'
         idempotency_key:
           type: string
           nullable: true
@@ -742,6 +769,82 @@ components:
           type: string
           format: date-time
 
+    GenerationRetrievedDocument:
+      type: object
+      required:
+        - source_type
+        - document_id
+        - document_version
+        - chunk_id
+        - page
+        - similarity_score
+      properties:
+        source_type:
+          type: string
+          enum:
+            - document
+          example: document
+        document_id:
+          x-soat-ref: documents
+          type: string
+          description: Public ID of the document the chunk belongs to
+          example: 'doc_V1StGXR8Z5jdHi6B'
+        document_version:
+          type: integer
+          nullable: true
+          description: >-
+            The document version the chunk was read from. Read it back with the
+            document's versions to see the exact text the turn was given.
+          example: 3
+        chunk_id:
+          type: string
+          description: >-
+            Public ID of the injected chunk. Stops resolving once the document
+            is re-chunked; `document_version` is the durable pointer.
+          example: 'dchunk_V1StGXR8Z5jdHi6B'
+        page:
+          type: integer
+          nullable: true
+          description: Page within the source PDF (1-indexed). Null for plain text.
+          example: 2
+        similarity_score:
+          type: number
+          nullable: true
+          description: >-
+            Raw cosine similarity (0–1) between the turn's query and the
+            result. Null when the turn had no query, or the search answered
+            from the lexical channel alone. The rank is the array order.
+          example: 0.82
+    GenerationRetrievedMemory:
+      type: object
+      required:
+        - source_type
+        - memory_store_id
+        - memory_id
+        - similarity_score
+      properties:
+        source_type:
+          type: string
+          enum:
+            - memory
+          example: memory
+        memory_store_id:
+          x-soat-ref: memory-stores
+          type: string
+          description: Public ID of the memory store the memory belongs to
+          example: 'mstore_V1StGXR8Z5jdHi6B'
+        memory_id:
+          type: string
+          description: Public ID of the injected memory
+          example: 'mem_V1StGXR8Z5jdHi6B'
+        similarity_score:
+          type: number
+          nullable: true
+          description: >-
+            Raw cosine similarity (0–1) between the turn's query and the
+            result. Null when the turn had no query, or the search answered
+            from the lexical channel alone. The rank is the array order.
+          example: 0.82
     UpdateGenerationRequest:
       type: object
       required:

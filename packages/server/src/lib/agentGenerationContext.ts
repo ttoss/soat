@@ -26,6 +26,7 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
+import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { assertGenerationModelPriced } from './modelPricingGate';
 import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
@@ -45,6 +46,11 @@ export type GenerationContext = {
    */
   toolSurface: ToolSurface;
   allMessages: Array<{ role: string; content: unknown }>;
+  /**
+   * What `knowledge_config` retrieval injected into
+   * {@link GenerationContext.allMessages}. Stamped on the generation record.
+   */
+  retrieval: KnowledgeRetrieval;
   /**
    * The caller's messages after content resolution, without the agent's
    * instructions or its knowledge injections — the replayable half of
@@ -107,13 +113,16 @@ const assembleContextMessages = async (args: {
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
   unavailableToolNames: string[];
-}): Promise<Array<{ role: string; content: unknown }>> => {
+}): Promise<{
+  allMessages: Array<{ role: string; content: unknown }>;
+  retrieval: KnowledgeRetrieval;
+}> => {
   // `TypedAgent.project.id` is `unknown` — the row is built from several
   // sources — so it is narrowed rather than asserted: a non-number leaves the
   // retrieval embedding unmetered rather than failing the turn.
   const projectId = args.typedAgent.project.id;
 
-  const knowledgeMessages = await buildKnowledgeMessages({
+  const knowledge = await buildKnowledgeMessages({
     knowledgeConfig: mergeKnowledgeConfig({
       base: readKnowledgeConfig(args.typedAgent.knowledgeConfig),
       override: readKnowledgeConfig(args.knowledgeConfig),
@@ -129,7 +138,7 @@ const assembleContextMessages = async (args: {
   log(
     'assembleContextMessages: agentId=%s knowledgeMessages=%d userMessages=%d',
     args.agentId,
-    knowledgeMessages.length,
+    knowledge.messages.length,
     args.resolvedMessages.length
   );
 
@@ -143,7 +152,7 @@ const assembleContextMessages = async (args: {
     // end of the system block, and the note is part of it.
     messages: withUnavailableToolsNote({
       messages: buildAllMessages(args.typedAgent.instructions, [
-        ...knowledgeMessages,
+        ...knowledge.messages,
         ...args.resolvedMessages,
       ]),
       unavailableToolNames: args.unavailableToolNames,
@@ -152,7 +161,7 @@ const assembleContextMessages = async (args: {
 
   log('assembleContextMessages: allMessages=%o', allMessages);
 
-  return allMessages;
+  return { allMessages, retrieval: knowledge.retrieval };
 };
 
 // The identity chokepoint: every fresh generation builds its context
@@ -265,7 +274,7 @@ export const buildGenerationContext = async (
   });
   const resolvedTools = toolSurface.tools;
 
-  const allMessages = await assembleContextMessages({
+  const { allMessages, retrieval } = await assembleContextMessages({
     agentId: args.agentId,
     generationId,
     projectIds: args.projectIds,
@@ -281,6 +290,7 @@ export const buildGenerationContext = async (
     resolvedTools,
     toolSurface: await measureToolSurface({ tools: resolvedTools }),
     allMessages,
+    retrieval,
     inputMessages: resolvedMessages,
     generationId,
     toolContext: toolContext ?? null,

@@ -225,6 +225,13 @@ components:
           type: string
           description: Public ID of the document
           example: 'doc_V1StGXR8Z5jdHi6B'
+        document_version:
+          type: integer
+          description: >-
+            The document version the chunk belongs to. Cite it to record which
+            text was read; the document's versions keep that text after it
+            changes.
+          example: 3
         chunk_id:
           type: string
           description: Public ID of the document chunk that matched the query

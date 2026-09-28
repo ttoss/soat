@@ -63,6 +63,8 @@ export type QueryDocumentResult = {
   title?: string;
   metadata?: unknown;
   tags?: Record<string, string>;
+  /** The document's version, read in the same query as the chunk. */
+  version?: number;
   content: string | null;
   page?: number;
   score?: number;
@@ -123,6 +125,7 @@ const pickDocumentFields = (
   | 'title'
   | 'metadata'
   | 'tags'
+  | 'version'
 > => {
   if (!base) {
     return {
@@ -134,6 +137,7 @@ const pickDocumentFields = (
       title: undefined,
       metadata: undefined,
       tags: undefined,
+      version: undefined,
     };
   }
   return {
@@ -145,6 +149,7 @@ const pickDocumentFields = (
     title: base.title,
     metadata: base.metadata,
     tags: base.tags,
+    version: base.version,
   };
 };
 
