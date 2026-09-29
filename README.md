@@ -1,4 +1,4 @@
-# SOAT — Infrastructure for production-ready AI agents
+# SOAT — open-source infrastructure for production-ready AI agents
 
 <p align="center">
   <img src="./packages/website/static/img/soat-architecture.png" alt="SOAT Architecture" width="100%">
@@ -15,7 +15,7 @@ You bring the product. SOAT handles the infrastructure layer.
 
 ## Why SOAT?
 
-Shipping AI applications means rebuilding the same infrastructure on every project: users, API keys, encrypted secrets, file storage, embeddings, conversation history, agent tool calling, traces, observability. SOAT solves all of it once and exposes it through five equivalent surfaces — REST, MCP, CLI, TypeScript SDK, and a built-in web app — so the same operation runs the same way whether you call it from a backend, Claude Desktop, a CI script, the bundled UI, or your own frontend.
+Shipping AI applications means rebuilding the same infrastructure on every project: users, API keys, encrypted secrets, file storage, embeddings, conversation history, agent tool calling, traces, observability. SOAT solves all of it once and exposes it through four equivalent surfaces — REST, MCP, CLI, and TypeScript SDK — plus a built-in web console on top of them, so the same operation runs the same way whether you call it from a backend, Claude Desktop, a CI script, the bundled UI, or your own frontend.
 
 SOAT organizes that surface around the [four layers of an agent system](https://soat.ttoss.dev/docs/agent-system-layers): the **harness** (what an agent can reach and what it is forbidden), the **loop** (what proves a run did the job), the **graph** (what is allowed to happen next), and the **ratchet** (what proves a change to the agent was an improvement). All four are shipped — see [The ratchet](#the-ratchet-governing-change-itself) for the layer that governs change itself.
 

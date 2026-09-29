@@ -11,9 +11,10 @@ const buttonVariants = cva(
       variant: {
         default:
           'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-        // Brand call-to-action: galaxy gradient + cyan glow (dark) + hover lift.
+        // Brand call-to-action: action gradient + cyan glow (dark) + hover lift.
+        // No hover brightening: a lighter fill drops white text below 4.5:1.
         gradient:
-          'bg-galaxy-gradient text-white shadow-xs transition-all dark:shadow-glow hover:-translate-y-0.5 hover:brightness-110 dark:hover:shadow-glow-cyan-md',
+          'bg-action-gradient text-action-foreground shadow-xs transition-all dark:shadow-glow hover:-translate-y-0.5 dark:hover:shadow-glow-cyan-md',
         destructive:
           'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90',
         outline:

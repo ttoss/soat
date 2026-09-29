@@ -16,6 +16,6 @@ Key starting points:
 - `components/` — React primitives: Button, Badge, MethodBadge, Tag, Input, Switch, Card, CodeBlock.
 - `guidelines/` — foundation specimen cards (color, type, spacing, brand).
 
-> Code-only install: the `ui_kits/` (full-screen recreations) and `assets/` (Vector Galaxy logo, hero, architecture PNGs) from the original bundle are not included here to keep the repo light. Pull them from the source bundle or the SOAT repo (`packages/website/static/img/`) if you need imagery.
+> The mark (`S[•]AT` wordmark and `[•]` symbol) has SVG masters in `packages/website/static/img/brand/`; other imagery lives in `packages/website/static/img/`. This skill holds tokens, components and specimen cards only.
 
 Brand essentials: dark-mode-first, luminous (cyan/violet glow on deep space backgrounds); Space Grotesk headings + Inter body + JetBrains Mono code; engineered, precise, confident voice; NO emojis.

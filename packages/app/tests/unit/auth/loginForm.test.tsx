@@ -4,13 +4,15 @@ import { describe, expect, test } from 'vitest';
 
 import { AuthProvider } from '@/auth/authContext';
 import { LoginForm } from '@/auth/loginForm';
+import { BRAND_ASSETS } from '@/lib/brandAssets';
 
-const renderLogin = () =>
-  render(
+const renderLogin = () => {
+  return render(
     <AuthProvider>
       <LoginForm />
     </AuthProvider>
   );
+};
 
 describe('LoginForm', () => {
   test('renders the username and password fields', () => {
@@ -28,18 +30,21 @@ describe('LoginForm', () => {
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
   });
 
-  test('renders the SOAT wordmark with the galaxy gradient', () => {
+  test('renders the SOAT wordmark from the brand masters', () => {
     renderLogin();
-    const wordmark = screen.getByText('SOAT');
-    expect(wordmark).toHaveClass('bg-galaxy-gradient');
-    expect(wordmark).toHaveClass('bg-clip-text');
-    expect(wordmark).toHaveClass('text-transparent');
+    const wordmark = screen.getByRole('img', { name: 'SOAT' });
+    expect(wordmark.getAttribute('src')).toBe(BRAND_ASSETS.wordmark.light);
+    const darkSource = wordmark.parentElement?.querySelector('source');
+    expect(darkSource?.getAttribute('media')).toBe(
+      '(prefers-color-scheme: dark)'
+    );
+    expect(darkSource?.getAttribute('srcset')).toBe(BRAND_ASSETS.wordmark.dark);
   });
 
   test('uses the gradient variant for the submit button', () => {
     renderLogin();
     const submit = screen.getByRole('button', { name: 'Sign in' });
-    expect(submit).toHaveClass('bg-galaxy-gradient');
+    expect(submit).toHaveClass('bg-action-gradient');
   });
 
   test('submits valid credentials without showing an error', async () => {

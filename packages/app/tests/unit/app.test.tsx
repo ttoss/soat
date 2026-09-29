@@ -12,7 +12,9 @@ describe('App', () => {
   test('shows the workspace when a session is restored', async () => {
     localStorage.setItem('soat_token', 'test-token');
     render(<App />);
-    expect(await screen.findByText('SOAT')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'SOAT' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('Sign in to SOAT')).not.toBeInTheDocument();
   });
 });

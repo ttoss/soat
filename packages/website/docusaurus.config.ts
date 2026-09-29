@@ -48,7 +48,7 @@ const config: Config = {
   // qualifying words are what make the site resolvable — and they only
   // consolidate onto one entity if every property repeats them verbatim
   // (the published packages, the GitHub description, the JSON-LD below).
-  tagline: 'Infrastructure for production-ready AI agents',
+  tagline: 'Open-source infrastructure for production-ready AI agents',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future

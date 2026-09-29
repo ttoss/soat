@@ -1,22 +1,26 @@
 import Link from '@docusaurus/Link';
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import VectorGalaxy from '@site/src/components/VectorGalaxy';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+import ThemedImage from '@theme/ThemedImage';
 import type * as React from 'react';
 
 import styles from './styles.module.css';
 
 /**
- * The navbar brand with the animated Vector Galaxy. It keeps the classes the
- * stock component renders, so the theme's navbar layout and truncation apply.
+ * The navbar brand: the S[•]AT wordmark from the brand masters, in the variant
+ * for the active colour mode. It keeps the class the stock component renders,
+ * so the theme's navbar layout applies.
  */
 const NavbarLogo = (): React.ReactNode => {
-  const { siteConfig } = useDocusaurusContext();
   return (
     <Link to="/" className="navbar__brand">
-      <span className="navbar__logo">
-        <VectorGalaxy className={styles.galaxy} loading="eager" />
-      </span>
-      <b className="navbar__title text--truncate">{siteConfig.title}</b>
+      <ThemedImage
+        className={styles.wordmark}
+        alt="SOAT"
+        sources={{
+          light: useBaseUrl('/img/brand/soat-wordmark-light.svg'),
+          dark: useBaseUrl('/img/brand/soat-wordmark-dark.svg'),
+        }}
+      />
     </Link>
   );
 };

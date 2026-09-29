@@ -50,7 +50,9 @@ describe('Workspace', () => {
     renderWorkspace();
 
     // SOAT wordmark and module nav are always visible.
-    expect(await screen.findByText('SOAT')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'SOAT' })
+    ).toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: 'Agents' })
     ).toBeInTheDocument();

@@ -254,10 +254,10 @@ ${bulleted(
 export const buildAgentInstructionsMarkdown = (): string => {
   return `# SOAT — instructions for agents
 
-SOAT is self-hosted infrastructure for production-ready AI agents: durable
+SOAT is open-source infrastructure for production-ready AI agents: durable
 sessions, multi-agent orchestration, knowledge retrieval, memory, guardrails,
-IAM, quotas, and traces, in one Node.js server backed by PostgreSQL and
-pgvector.
+IAM, quotas, and traces, in one self-hosted Node.js server backed by PostgreSQL
+and pgvector.
 
 This file is written for a machine deciding whether to use SOAT and how to call
 it. Everything below is true of any SOAT deployment; the documentation site at

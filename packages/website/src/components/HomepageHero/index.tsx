@@ -2,7 +2,6 @@ import Link from '@docusaurus/Link';
 import PrimaryAction from '@site/src/components/HomepageShared/PrimaryAction';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
 import HomepageTerminal from '@site/src/components/HomepageTerminal';
-import VectorGalaxy from '@site/src/components/VectorGalaxy';
 import Heading from '@theme/Heading';
 import clsx from 'clsx';
 import type * as React from 'react';
@@ -48,9 +47,6 @@ const NOT_WIRED = [
 const HomepageHero = (): React.ReactNode => {
   return (
     <header className={clsx(shared.bleed, styles.hero)}>
-      <div className={styles.galaxy} aria-hidden="true">
-        <VectorGalaxy />
-      </div>
       <div className={clsx('container', styles.inner)}>
         <div className={styles.copy}>
           <p className={clsx(shared.eyebrow, styles.eyebrow)}>

@@ -7,15 +7,22 @@ describe('Button', () => {
     render(<Button>Save</Button>);
     const btn = screen.getByRole('button', { name: 'Save' });
     expect(btn.className).toContain('bg-primary');
-    expect(btn.className).not.toContain('bg-galaxy-gradient');
+    expect(btn.className).not.toContain('bg-brand-gradient');
   });
 
-  test('gradient variant uses the galaxy gradient, white text and dark glow', () => {
+  test('gradient variant paints the action gradient with its text color and dark glow', () => {
     render(<Button variant="gradient">Get started</Button>);
     const btn = screen.getByRole('button', { name: 'Get started' });
-    expect(btn.className).toContain('bg-galaxy-gradient');
-    expect(btn.className).toContain('text-white');
+    expect(btn.className).toContain('bg-action-gradient');
+    expect(btn.className).toContain('text-action-foreground');
+    expect(btn.className).not.toContain('text-white');
     expect(btn.className).toContain('dark:shadow-glow');
+  });
+
+  test('gradient variant does not brighten on hover, which would drop its text contrast', () => {
+    render(<Button variant="gradient">Bright</Button>);
+    const btn = screen.getByRole('button', { name: 'Bright' });
+    expect(btn.className).not.toMatch(/brightness/);
   });
 
   test('gradient variant lifts on hover', () => {
