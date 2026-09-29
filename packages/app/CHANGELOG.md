@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.68.0](https://github.com/ttoss/soat/compare/v0.67.0...v0.68.0) (2026-09-29)
+
+### Features
+
+* **brand:** adopt the [•] mark; fix contrast, descriptor and offline console brand ([#1488](https://github.com/ttoss/soat/issues/1488)) ([19ad832](https://github.com/ttoss/soat/commit/19ad832f2d794c87ff5d072edd899b5c438c9873))
+
 # [0.67.0](https://github.com/ttoss/soat/compare/v0.66.0...v0.67.0) (2026-09-29)
 
 **Note:** Version bump only for package @soat/app

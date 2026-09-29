@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.68.0](https://github.com/ttoss/soat/compare/v0.67.0...v0.68.0) (2026-09-29)
+
+### Features
+
+* **evaluations:** report pass-rate intervals and paired p-values on eval runs ([#1487](https://github.com/ttoss/soat/issues/1487)) ([8131859](https://github.com/ttoss/soat/commit/813185968a4714ccfa2e5eaa1128234eec19216a))
+* **evaluations:** roll eval run scores up per item metadata key ([#1486](https://github.com/ttoss/soat/issues/1486)) ([9b4842c](https://github.com/ttoss/soat/commit/9b4842c9db3d822ee92671d600cc9766a8115306))
+
 # [0.67.0](https://github.com/ttoss/soat/compare/v0.66.0...v0.67.0) (2026-09-29)
 
 ### Features
