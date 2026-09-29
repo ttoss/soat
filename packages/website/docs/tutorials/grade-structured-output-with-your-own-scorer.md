@@ -723,7 +723,7 @@ done
 </TabItem>
 </Tabs>
 
-`baseline.scorers` carries a `refund-policy` entry with its own `pass_rate_delta`, so the rule's movement reads apart from shape and category. `baseline.grouping` carries the same deltas per `kind`, so a fix to refunds that broke questions shows as two groups moving apart. The delta can come back negative: `qwen2.5:0.5b` does not reliably follow the added instruction, and with four items one item is `0.25` of the pass rate. A delta is a fix only once it clears the [noise floor](/docs/advanced/eval-design#noise-before-signal).
+`baseline.scorers` carries a `refund-policy` entry with its own `pass_rate_delta`, so the rule's movement reads apart from shape and category. `baseline.grouping` carries the same deltas per `kind`, so a fix to refunds that broke questions shows as two groups moving apart. The delta can come back negative: `qwen2.5:0.5b` does not reliably follow the added instruction, and with four items one item is `0.25` of the pass rate. A delta is a fix only once its `baseline.p_value` says it is not noise; with four items no split can get there, so a real suite needs more ([Eval Design — Noise before signal](/docs/advanced/eval-design#noise-before-signal)).
 
 ---
 

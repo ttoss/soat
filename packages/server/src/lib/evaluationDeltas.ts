@@ -12,6 +12,7 @@ import createDebug from 'debug';
 
 import type { BaselineGrouping } from './evaluationGrouping';
 import type { ScorerOutcome } from './evaluationScorers';
+import { exactMcNemarPValue } from './evaluationStatistics';
 
 const log = createDebug('soat:evaluations');
 
@@ -50,6 +51,18 @@ export type BaselineComparison = {
    * as "no change".
    */
   pass_rate_delta: number | null;
+  /**
+   * Compared items that changed verdict: `improved` passed here and failed in
+   * the baseline, `regressed` the reverse. `pass_rate_delta` is their
+   * difference over `compared_item_count`.
+   */
+  flipped: { improved: number; regressed: number };
+  /**
+   * Exact McNemar p-value of the `flipped` split — how likely a split at least
+   * this uneven is when a flip is equally likely either way. `1` when nothing
+   * flipped; `null`, like `pass_rate_delta`, when no item was compared.
+   */
+  p_value: number | null;
   /**
    * Per-scorer deltas, keyed by scorer type. A scorer present in only one of the
    * two runs (the Eval's scorers were edited between runs) is omitted rather
@@ -115,6 +128,20 @@ const comparedScorerTypes = (args: {
   return [...types].sort();
 };
 
+/** Items whose verdict changed, over two index-aligned compared lists. */
+const countFlips = (args: {
+  current: ComparableResult[];
+  baseline: ComparableResult[];
+}): BaselineComparison['flipped'] => {
+  const flipped = { improved: 0, regressed: 0 };
+  for (const [index, result] of args.current.entries()) {
+    const before = args.baseline[index]!.passed;
+    if (result.passed && !before) flipped.improved += 1;
+    if (!result.passed && before) flipped.regressed += 1;
+  }
+  return flipped;
+};
+
 /**
  * Compares a finished run against a baseline run of the same Eval.
  *
@@ -171,6 +198,11 @@ export const computeBaselineComparison = (args: {
           baselineCompared.length
         );
 
+  const flipped = countFlips({
+    current: currentCompared,
+    baseline: baselineCompared,
+  });
+
   log(
     'computeBaselineComparison: baseline=%s compared=%d added=%d removed=%d',
     args.baselineRunPublicId,
@@ -185,6 +217,8 @@ export const computeBaselineComparison = (args: {
     added_item_count: currentByItem.size - comparedItemIds.length,
     removed_item_count: baselineByItem.size - comparedItemIds.length,
     pass_rate_delta: passRateDelta,
+    flipped,
+    p_value: comparedItemIds.length === 0 ? null : exactMcNemarPValue(flipped),
     scorers,
   };
 };

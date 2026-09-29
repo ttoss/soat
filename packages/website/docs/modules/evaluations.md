@@ -93,7 +93,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `canceled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
-| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
+| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
 | `metadata` | object \| null | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
@@ -726,6 +726,8 @@ Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another ev
 | `added_item_count` | Scorable here but not in the baseline (added since, or errored there) |
 | `removed_item_count` | Scorable in the baseline but not here (removed since, or errored here) |
 | `pass_rate_delta` | Run-level pass-rate delta over the intersection; `null` when the two runs share no comparable item |
+| `flipped` | `improved` (passed here, failed in the baseline) and `regressed` (the reverse) among the compared items |
+| `p_value` | Exact McNemar p-value of the `flipped` split; see [Uncertainty](#uncertainty) |
 | `scorers` | Per scorer type, `mean_delta` and `pass_rate_delta` |
 
 Positive deltas mean this run scored **higher**. Every number is computed over the
@@ -744,13 +746,22 @@ the run-level figures:
 ```json
 {
   "pass_rate": 0.6,
-  "scorers": { "contains": { "mean": 0.6, "pass_rate": 0.6 } },
   "scored_item_count": 5,
   "grouping": {
     "group_by": "kind",
     "groups": {
-      "multi_step": { "pass_rate": 1, "scored_item_count": 1, "scorers": { "contains": { "mean": 1, "pass_rate": 1 } } },
-      "refusal": { "pass_rate": 0.5, "scored_item_count": 2, "scorers": { "contains": { "mean": 0.5, "pass_rate": 0.5 } } }
+      "multi_step": {
+        "pass_rate": 1,
+        "pass_rate_interval": { "low": 0.21, "high": 1, "level": 0.95 },
+        "scored_item_count": 1,
+        "scorers": { "contains": { "mean": 1, "pass_rate": 1 } }
+      },
+      "refusal": {
+        "pass_rate": 0.5,
+        "pass_rate_interval": { "low": 0.09, "high": 0.91, "level": 0.95 },
+        "scored_item_count": 2,
+        "scorers": { "contains": { "mean": 0.5, "pass_rate": 0.5 } }
+      }
     },
     "ungrouped_item_count": 2
   }
@@ -760,7 +771,7 @@ the run-level figures:
 | Field | Meaning |
 | --- | --- |
 | `grouping.group_by` | The key the groups were read from |
-| `grouping.groups` | Group value → its `pass_rate`, `scored_item_count` and per-scorer `mean` / `pass_rate`, computed as the run's own are |
+| `grouping.groups` | Group value → its `pass_rate`, `pass_rate_interval`, `scored_item_count` and per-scorer `mean` / `pass_rate`, computed as the run's own are |
 | `grouping.ungrouped_item_count` | Scored items that name no group |
 
 - **Only a string names a group.** An item whose `metadata` lacks the key, holds a
@@ -772,7 +783,7 @@ the run-level figures:
   stored with the aggregate. With a baseline, both runs' items are grouped by those same
   labels, so `baseline.grouping.groups` compares each group over the items both runs
   scored, with the same `compared_item_count` / `added_item_count` /
-  `removed_item_count` / `pass_rate_delta` / `scorers` fields as
+  `removed_item_count` / `pass_rate_delta` / `flipped` / `p_value` / `scorers` fields as
   [Baseline deltas](#baseline-deltas). Its `ungrouped_item_count` counts the compared items
   that name no group.
 - **The verdict does not read groups.** `passed` gates on the run's pass rate only
@@ -782,6 +793,43 @@ the run-level figures:
 `group_by` is set on create or update (`null` clears it) and applies to the runs that
 settle afterwards; a settled run keeps the grouping it was stored with. Omitted, a run
 reports no `grouping`.
+
+### Uncertainty
+
+A pass rate measured over 20 items moves by `0.05` per item, and an agent that is not
+deterministic answers the same item differently from run to run. Every run reports how far
+its figures can be trusted, with no extra call:
+
+```json
+{
+  "pass_rate": 0.75,
+  "pass_rate_interval": { "low": 0.63, "high": 0.84, "level": 0.95 },
+  "baseline": {
+    "pass_rate_delta": 0.05,
+    "compared_item_count": 60,
+    "flipped": { "improved": 9, "regressed": 6 },
+    "p_value": 0.61
+  }
+}
+```
+
+| Figure | Reads |
+| --- | --- |
+| `pass_rate_interval` | The 95% [Wilson score interval](https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval) around `pass_rate`: where the pass rate of this agent over items like these plausibly lies, given how many were scored. It stays inside 0–1 and keeps its coverage on a handful of items. `null` exactly when `pass_rate` is |
+| `baseline.flipped` | The compared items that changed verdict; `pass_rate_delta` is `(improved − regressed) / compared_item_count` |
+| `baseline.p_value` | The exact two-sided [McNemar](https://en.wikipedia.org/wiki/McNemar%27s_test) p-value of that split: how likely a split at least this uneven is when an item is equally likely to flip either way, which is what an unchanged agent produces, whether the flips come from the model's randomness or from borderline items. `1` when nothing flipped; `null` when the runs share no compared item |
+
+- **A small `p_value` says the change is real, not that it is large.** `9` improved against
+  `6` regressed is `p = 0.61`: indistinguishable from noise. `6` against `0` is
+  `p = 0.03`.
+- **A wide interval says the dataset is too small to decide.** At 12 items and a pass
+  rate of `0.5` the interval is `0.25`–`0.75`: add items before reading a delta.
+- **Groups carry both.** Each `grouping.groups` entry has its own `pass_rate_interval`, and
+  each `baseline.grouping.groups` entry its own `flipped` and `p_value`, so a kind that
+  regressed shows as significant even when the overall delta is not.
+- **The verdict reads neither.** `passed` gates on `pass_rate` alone
+  ([Pass semantics](#pass-semantics)); the figures are there to read beside it. Choosing a
+  `pass_threshold` with them: [Eval Design — Noise before signal](../advanced/eval-design.md#noise-before-signal).
 
 ### Lifecycle webhooks
 

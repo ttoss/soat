@@ -8112,7 +8112,11 @@ if ! printf '%s\n' "$EVAL_BASELINE_RESP" | jq -e --arg base "$EVAL_RUN_ID" \
    and .aggregate_scores.baseline.run_id == $base
    and .aggregate_scores.baseline.compared_item_count <= 1
    and (.aggregate_scores.baseline.added_item_count | type == "number")
-   and (.aggregate_scores.baseline.removed_item_count | type == "number")' \
+   and (.aggregate_scores.baseline.removed_item_count | type == "number")
+   and (.aggregate_scores.baseline.flipped.improved | type == "number")
+   and (.aggregate_scores.baseline.flipped.regressed | type == "number")
+   and (.aggregate_scores.baseline.p_value | type == "number" or type == "null")
+   and (.aggregate_scores.pass_rate_interval | type == "object" or type == "null")' \
   >/dev/null 2>&1; then
   echo "ERROR: eval run did not report a baseline comparison" >&2
   printf '%s\n' "$EVAL_BASELINE_RESP" >&2

@@ -1624,6 +1624,8 @@ components:
           type: number
           nullable: true
           description: Passed items over non-errored items; null when nothing was scorable
+        pass_rate_interval:
+          $ref: '#/components/schemas/PassRateInterval'
         scored_item_count:
           type: integer
           description: Items that produced a score — errored items are excluded
@@ -1648,9 +1650,41 @@ components:
           type: number
           nullable: true
           description: Passed items over non-errored items in the group
+        pass_rate_interval:
+          $ref: '#/components/schemas/PassRateInterval'
         scored_item_count:
           type: integer
           description: Non-errored items in the group
+    PassRateInterval:
+      type: object
+      nullable: true
+      description: >-
+        95% Wilson score interval around `pass_rate`: the range the pass rate
+        of this agent over items like these plausibly spans, given how many
+        items were scored. Null exactly when `pass_rate` is.
+      properties:
+        low:
+          type: number
+          example: 0.63
+        high:
+          type: number
+          example: 0.84
+        level:
+          type: number
+          description: The confidence level, always 0.95
+          example: 0.95
+    FlippedItems:
+      type: object
+      description: >-
+        Compared items that changed verdict. `pass_rate_delta` is
+        `(improved - regressed) / compared_item_count`.
+      properties:
+        improved:
+          type: integer
+          description: Passed in this run, failed in the baseline
+        regressed:
+          type: integer
+          description: Failed in this run, passed in the baseline
     RunGrouping:
       type: object
       description: >-
@@ -1684,6 +1718,11 @@ components:
         removed_item_count:
           type: integer
         pass_rate_delta:
+          type: number
+          nullable: true
+        flipped:
+          $ref: '#/components/schemas/FlippedItems'
+        p_value:
           type: number
           nullable: true
         scorers:
@@ -1745,6 +1784,17 @@ components:
           description: >-
             Run-level pass-rate delta over the intersection; null when the two
             runs share no comparable item
+        flipped:
+          $ref: '#/components/schemas/FlippedItems'
+        p_value:
+          type: number
+          nullable: true
+          description: >-
+            Exact McNemar p-value of the `flipped` split: the probability of a
+            split at least this uneven were an item equally likely to flip
+            either way, which is what an unchanged agent produces. `1` when no
+            item flipped; null when the runs share no comparable item.
+          example: 0.03
         scorers:
           type: object
           description: >-

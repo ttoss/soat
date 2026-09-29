@@ -662,7 +662,12 @@ describe('evaluation scorers', () => {
 
   describe('resolveRunPassed', () => {
     const aggregate = (passRate: number | null) => {
-      return { scorers: {}, pass_rate: passRate, scored_item_count: 1 };
+      return {
+        scorers: {},
+        pass_rate: passRate,
+        pass_rate_interval: null,
+        scored_item_count: 1,
+      };
     };
 
     test('is null when the eval declares no threshold', () => {
