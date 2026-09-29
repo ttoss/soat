@@ -26,8 +26,19 @@ const APP = path.join(ROOT, 'packages/app');
 /** App copy → the website original it mirrors. */
 export const MIRRORED_BRAND_FILES = {
   'packages/app/public/favicon.ico': 'packages/website/static/img/favicon.ico',
-  'packages/app/src/assets/soat-logo-no-bg.png':
-    'packages/website/static/img/soat-logo-no-bg.png',
+  'packages/app/public/favicon.svg':
+    'packages/website/static/img/brand/favicon.svg',
+  ...Object.fromEntries(
+    ['symbol', 'wordmark'].flatMap((master) => {
+      return ['dark', 'light'].map((theme) => {
+        const file = `soat-${master}-${theme}.svg`;
+        return [
+          `packages/app/src/assets/brand/${file}`,
+          `packages/website/static/img/brand/${file}`,
+        ];
+      });
+    })
+  ),
 };
 
 /**

@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { GuideChat } from '@/chat/guideChat';
+import { BrandImage } from '@/components/brandImage';
 import { EngineView } from '@/engine/engineView';
 import { useNavigation } from '@/engine/navigationContext';
 import { useSpec } from '@/engine/specContext';
@@ -16,7 +17,6 @@ import {
   opAcceptsProjectIdQuery,
 } from '@/engine/specUtils';
 import type { ModuleInfo } from '@/engine/types';
-import { BRAND_ASSETS } from '@/lib/brandAssets';
 
 import type { Project } from './navComponents';
 import { ModuleList, NavItem, ProjectPicker } from './navComponents';
@@ -160,14 +160,8 @@ const LeftNav = ({
   return (
     <nav className="flex h-full w-56 shrink-0 flex-col overflow-hidden border-r bg-muted/20">
       <div className="flex items-center gap-2 px-3.5 pb-3 pt-4">
-        <img
-          src={BRAND_ASSETS.logoMark}
-          alt=""
-          aria-hidden="true"
-          className="h-6 w-6 object-contain"
-        />
-        <h1 className="w-fit bg-galaxy-gradient bg-clip-text text-base font-bold tracking-heading text-transparent">
-          {'SOAT'}
+        <h1>
+          <BrandImage variant="wordmark" alt="SOAT" className="h-5 w-auto" />
         </h1>
       </div>
 
@@ -243,12 +237,7 @@ const SelectProjectPrompt = ({
 }) => {
   return (
     <div className="flex flex-col items-center justify-center gap-6 py-16">
-      <img
-        src={BRAND_ASSETS.logoMark}
-        alt=""
-        aria-hidden="true"
-        className="h-20 w-20 object-contain"
-      />
+      <BrandImage variant="symbol" alt="" className="h-20 w-20" />
       <div className="text-center">
         <p className="font-heading text-xl font-bold text-foreground">
           {'Select a project first'}

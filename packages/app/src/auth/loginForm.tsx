@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { BrandImage } from '@/components/brandImage';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -10,7 +11,6 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { BRAND_ASSETS } from '@/lib/brandAssets';
 
 import { useAuth } from './authContext';
 
@@ -38,23 +38,9 @@ export const LoginForm = () => {
           'radial-gradient(circle at 70% 20%, hsl(var(--brand-violet) / 0.14) 0%, transparent 42%), radial-gradient(circle at 20% 80%, hsl(var(--brand-cyan) / 0.08) 0%, transparent 42%)',
       }}
     >
-      {/* Floating galaxy mark — purely decorative. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-[8%] top-[10%] h-72 w-72 rounded-full bg-galaxy-gradient opacity-10 blur-3xl dark:shadow-glow"
-      />
-
       <div className="relative z-10 flex w-full max-w-sm flex-col gap-8">
-        <div className="flex items-center justify-center gap-3">
-          <img
-            src={BRAND_ASSETS.logoMark}
-            alt=""
-            aria-hidden="true"
-            className="h-10 w-10 object-contain"
-          />
-          <span className="bg-galaxy-gradient bg-clip-text font-heading text-3xl font-bold tracking-heading text-transparent">
-            {'SOAT'}
-          </span>
+        <div className="flex items-center justify-center">
+          <BrandImage variant="wordmark" alt="SOAT" className="h-8 w-auto" />
         </div>
 
         <Card className="w-full">

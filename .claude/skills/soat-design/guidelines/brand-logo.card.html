@@ -1,4 +1,4 @@
-<!-- @dsCard group="Brand" viewport="700x240" name="Vector Galaxy logo" subtitle="Dark-mode first — the mark emits its own light" -->
+<!-- @dsCard group="Brand" viewport="760x300" name="The mark" subtitle="S◻AT wordmark and the boundary-and-core symbol, from the SVG masters" -->
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -6,18 +6,31 @@
 <link rel="stylesheet" href="../styles.css" />
 <style>
   body { padding: 0; }
-  .stage { display: grid; grid-template-columns: 1.4fr 1fr; min-height: 240px; }
-  .dark { background: radial-gradient(circle at 50% 40%, rgba(142,68,173,0.22), #080c14 60%); display: grid; place-items: center; }
-  .light { background: #ffffff; display: grid; place-items: center; }
-  .dark img, .light img { width: 200px; height: auto; }
-  .light img { width: 150px; }
-  .cap { position: absolute; margin-top: 88px; font: 500 11px/1.4 var(--font-mono); color: var(--text-faint); }
+  .stage { display: grid; grid-template-columns: 1fr 1fr; min-height: 300px; }
+  .panel { display: flex; flex-direction: column; justify-content: center; gap: 32px; padding: 36px; }
+  .dark { background: var(--space-black); }
+  .light { background: var(--pure-white); }
+  .wordmark { height: 44px; width: auto; align-self: flex-start; }
+  .symbols { display: flex; align-items: flex-end; gap: 22px; }
 </style>
 </head>
 <body>
 <div class="stage">
-  <div class="dark"><img src="../../../../packages/website/static/img/soat-logo-no-bg.png" alt="SOAT logo on dark" /></div>
-  <div class="light"><img src="../../../../packages/website/static/img/soat-logo-no-bg.png" alt="SOAT logo on light" /></div>
+  <div class="panel dark">
+    <img class="wordmark" src="../../../../packages/website/static/img/brand/soat-wordmark-dark.svg" alt="SOAT wordmark on dark" />
+    <div class="symbols">
+      <img src="../../../../packages/website/static/img/brand/soat-symbol-dark.svg" width="96" height="96" alt="SOAT symbol on dark, 96 px" />
+      <img src="../../../../packages/website/static/img/brand/soat-symbol-dark.svg" width="32" height="32" alt="SOAT symbol on dark, 32 px" />
+      <img src="../../../../packages/website/static/img/brand/favicon.svg" width="16" height="16" alt="SOAT favicon, 16 px" />
+    </div>
+  </div>
+  <div class="panel light">
+    <img class="wordmark" src="../../../../packages/website/static/img/brand/soat-wordmark-light.svg" alt="SOAT wordmark on light" />
+    <div class="symbols">
+      <img src="../../../../packages/website/static/img/brand/soat-symbol-light.svg" width="96" height="96" alt="SOAT symbol on light, 96 px" />
+      <img src="../../../../packages/website/static/img/brand/soat-symbol-light.svg" width="32" height="32" alt="SOAT symbol on light, 32 px" />
+    </div>
+  </div>
 </div>
 </body>
 </html>

@@ -7,7 +7,7 @@ describe('Button', () => {
     render(<Button>Save</Button>);
     const btn = screen.getByRole('button', { name: 'Save' });
     expect(btn.className).toContain('bg-primary');
-    expect(btn.className).not.toContain('bg-galaxy-gradient');
+    expect(btn.className).not.toContain('bg-brand-gradient');
   });
 
   test('gradient variant paints the action gradient with its text color and dark glow', () => {

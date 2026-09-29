@@ -15,7 +15,7 @@ describe('Switch', () => {
     render(<Switch checked onCheckedChange={() => {}} />);
     const sw = screen.getByRole('switch');
     expect(sw).toHaveAttribute('aria-checked', 'true');
-    expect(sw.className).toContain('bg-galaxy-gradient');
+    expect(sw.className).toContain('bg-brand-gradient');
     expect(sw.className).toMatch(/shadow-glow/);
   });
 

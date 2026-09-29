@@ -41,6 +41,11 @@
   --color-accent: #8e44ad; /* Deep Violet */
   --color-glow: #00e5ff; /* decorative only in light mode */
 
+  /* The mark: the process boundary and its core (S◻AT and the symbol).
+     Graphic colours, 3:1 minimum on the page. */
+  --process-boundary: #1a73e8;
+  --process-core: #1a1f2c;
+
   /* Surfaces */
   --surface-page: #ffffff; /* Pure White */
   --surface-raised: #f5f7fa; /* Pale Cosmos — cards, sidebars, code */
@@ -102,6 +107,9 @@
   --color-primary-contrast: #080c14;
   --color-accent: #8e44ad;
   --color-glow: #00e5ff;
+
+  --process-boundary: #00e5ff;
+  --process-core: #f0f8ff;
 
   --surface-page: #080c14; /* Space Black */
   --surface-raised: #161b22; /* Nebula Navy */

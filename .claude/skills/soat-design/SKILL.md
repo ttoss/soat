@@ -16,6 +16,6 @@ Key starting points:
 - `components/` — React primitives: Button, Badge, MethodBadge, Tag, Input, Switch, Card, CodeBlock.
 - `guidelines/` — foundation specimen cards (color, type, spacing, brand).
 
-> Imagery (Vector Galaxy logo, hero, architecture, social card) lives in `packages/website/static/img/`; this skill holds tokens, components and specimen cards only.
+> The mark (S◻AT wordmark and boundary-and-core symbol) has SVG masters in `packages/website/static/img/brand/`; other imagery lives in `packages/website/static/img/`. This skill holds tokens, components and specimen cards only.
 
 Brand essentials: dark-mode-first, luminous (cyan/violet glow on deep space backgrounds); Space Grotesk headings + Inter body + JetBrains Mono code; engineered, precise, confident voice; NO emojis.

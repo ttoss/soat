@@ -16,6 +16,16 @@ import type { Config } from '@docusaurus/types';
 
 export const HEAD_TAGS: Config['headTags'] = [
   {
+    // The SVG favicon follows the reader's colour scheme; the config's
+    // `favicon` stays the `.ico` fallback for browsers that take no SVG icon.
+    tagName: 'link',
+    attributes: {
+      rel: 'icon',
+      type: 'image/svg+xml',
+      href: '/img/brand/favicon.svg',
+    },
+  },
+  {
     // Lift Google's default snippet cap so full passages are eligible to
     // ground AI Overviews / AI Mode answers (and regular rich snippets).
     tagName: 'meta',

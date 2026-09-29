@@ -67,21 +67,6 @@ html[data-theme='dark'] .hero {
   pointer-events: none;
 }
 
-.galaxy {
-  position: absolute;
-  top: 50%;
-  right: -8%;
-  width: min(900px, 70vw);
-  transform: translateY(-58%);
-  opacity: 0.16;
-  pointer-events: none;
-}
-
-html[data-theme='dark'] .galaxy {
-  opacity: 0.32;
-  filter: drop-shadow(0 0 40px rgba(0, 229, 255, 0.25));
-}
-
 .inner {
   position: relative;
   display: grid;
@@ -244,13 +229,6 @@ html[data-theme='dark'] .titleGlow {
   .inner {
     grid-template-columns: minmax(0, 1fr);
     gap: 2.25rem;
-  }
-
-  .galaxy {
-    top: 0;
-    right: -30%;
-    width: 110vw;
-    transform: none;
   }
 
   .facts {
