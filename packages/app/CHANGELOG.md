@@ -7,7 +7,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ### Features
 
-* **brand:** adopt the [•] mark; fix contrast, descriptor and offline console brand ([#1488](https://github.com/ttoss/soat/issues/1488)) ([19ad832](https://github.com/ttoss/soat/commit/19ad832f2d794c87ff5d072edd899b5c438c9873)), closes [2563eb/#c2410c](https://github.com/ttoss/soat/issues/c2410c) [#B06AD0](https://github.com/ttoss/soat/issues/B06AD0)
+* **brand:** adopt the [•] mark; fix contrast, descriptor and offline console brand ([#1488](https://github.com/ttoss/soat/issues/1488)) ([19ad832](https://github.com/ttoss/soat/commit/19ad832f2d794c87ff5d072edd899b5c438c9873))
 
 # [0.67.0](https://github.com/ttoss/soat/compare/v0.66.0...v0.67.0) (2026-09-29)
 
