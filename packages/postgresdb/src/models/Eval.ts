@@ -107,6 +107,13 @@ export class Eval extends Model {
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare passThreshold: string | null;
 
+  /**
+   * A key of the items' `metadata`. A run rolls its scores up per string
+   * value of that key beside the run-level figures; null reports none.
+   */
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare groupBy: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

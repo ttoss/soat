@@ -670,6 +670,16 @@ paths:
                     non-errored items — is at least this. Null reports scores
                     without gating on them.
                   example: 0.8
+                group_by:
+                  type: string
+                  nullable: true
+                  minLength: 1
+                  maxLength: 255
+                  description: >-
+                    A key of the items' `metadata`. A run rolls its scores up
+                    per string value of that key in
+                    `aggregate_scores.grouping`. Null reports no grouping.
+                  example: kind
       responses:
         '201':
           description: Eval created successfully
@@ -762,6 +772,15 @@ paths:
                   type: number
                   nullable: true
                   example: 0.8
+                group_by:
+                  type: string
+                  nullable: true
+                  minLength: 1
+                  maxLength: 255
+                  description: >-
+                    A key of the items' `metadata` to group run scores by; null
+                    clears it, omitting it leaves it unchanged.
+                  example: kind
       responses:
         '200':
           description: Eval updated successfully
@@ -1574,6 +1593,13 @@ components:
         pass_threshold:
           type: number
           nullable: true
+        group_by:
+          type: string
+          nullable: true
+          description: >-
+            The item `metadata` key a run rolls its scores up by; null when
+            the eval groups nothing
+          example: kind
         created_at:
           type: string
           format: date-time
@@ -1603,6 +1629,89 @@ components:
           description: Items that produced a score — errored items are excluded
         baseline:
           $ref: '#/components/schemas/BaselineComparison'
+        grouping:
+          $ref: '#/components/schemas/RunGrouping'
+    ScoreRollup:
+      type: object
+      description: One group's figures, computed as the run-level ones are
+      properties:
+        scorers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              mean:
+                type: number
+              pass_rate:
+                type: number
+        pass_rate:
+          type: number
+          nullable: true
+          description: Passed items over non-errored items in the group
+        scored_item_count:
+          type: integer
+          description: Non-errored items in the group
+    RunGrouping:
+      type: object
+      description: >-
+        Scores rolled up per value of the eval's `group_by` key; absent when
+        the eval declares none. An item belongs to the group its `metadata`
+        names under that key, read when the run settles; only a string names
+        a group. Errored items count in no group.
+      properties:
+        group_by:
+          type: string
+          description: The metadata key the groups were read from
+          example: kind
+        groups:
+          type: object
+          description: Group value → that group's figures
+          additionalProperties:
+            $ref: '#/components/schemas/ScoreRollup'
+        ungrouped_item_count:
+          type: integer
+          description: >-
+            Scored items whose `metadata` holds no string under `group_by`, or
+            whose dataset item was deleted
+    GroupComparison:
+      type: object
+      description: One group's baseline comparison, computed as the run-level one is
+      properties:
+        compared_item_count:
+          type: integer
+        added_item_count:
+          type: integer
+        removed_item_count:
+          type: integer
+        pass_rate_delta:
+          type: number
+          nullable: true
+        scorers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              mean_delta:
+                type: number
+              pass_rate_delta:
+                type: number
+    BaselineGrouping:
+      type: object
+      description: >-
+        The baseline comparison per group; absent when the eval declares no
+        `group_by`. Both runs' items are grouped by the same labels, so an item
+        relabelled between the runs is compared within one group.
+      properties:
+        group_by:
+          type: string
+          example: kind
+        groups:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/GroupComparison'
+        ungrouped_item_count:
+          type: integer
+          description: Items scorable in both runs that name no group
     BaselineComparison:
       type: object
       nullable: true
@@ -1648,6 +1757,8 @@ components:
                 type: number
               pass_rate_delta:
                 type: number
+        grouping:
+          $ref: '#/components/schemas/BaselineGrouping'
     EvalRun:
       type: object
       properties:

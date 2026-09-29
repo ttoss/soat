@@ -453,7 +453,7 @@ No item carries an `expected_output`: every scorer here grades the object, not a
 | `json_logic` | Is `category` the one the item's `metadata` expects? |
 | `tool` (`refund-policy`) | Does the refund stay within the price paid? |
 
-An item passes only when all three pass ([Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics)). The `tool` scorer's own `passed` decides its verdict, so it needs no `pass_threshold`.
+An item passes only when all three pass ([Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics)). The `tool` scorer's own `passed` decides its verdict, so it needs no `pass_threshold`. `group_by: kind` rolls every run up per `metadata.kind` too ([Evaluations — Grouped aggregates](/docs/modules/evaluations#grouped-aggregates)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -465,9 +465,10 @@ EVAL_ID=$(soat create-eval \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
   --scorers '[{"type":"output_schema","schema":{"type":"object","properties":{"refund_amount":{"type":"number","minimum":0}}}},{"type":"json_logic","expression":{"==":[{"var":"object.category"},{"var":"item.metadata.expected_category"}]}},{"type":"tool","name":"refund-policy","tool_id":"'"$SCORER_TOOL_ID"'"}]' \
-  --pass-threshold 0.75 | jq -r '.id')
+  --pass-threshold 0.75 \
+  --group-by kind | jq -r '.id')
 
-soat get-eval --eval-id "$EVAL_ID" | jq '.scorers | map(.name // .type)'
+soat get-eval --eval-id "$EVAL_ID" | jq '{scorers: .scorers | map(.name // .type), group_by}'
 ```
 
 </TabItem>
@@ -497,6 +498,7 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
       { type: 'tool', name: 'refund-policy', tool_id: scorerTool.id },
     ],
     pass_threshold: 0.75,
+    group_by: 'kind',
   },
 });
 ```
@@ -507,7 +509,7 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
 ```bash
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"refund-triage\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"output_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"refund_amount\":{\"type\":\"number\",\"minimum\":0}}}},{\"type\":\"json_logic\",\"expression\":{\"==\":[{\"var\":\"object.category\"},{\"var\":\"item.metadata.expected_category\"}]}},{\"type\":\"tool\",\"name\":\"refund-policy\",\"tool_id\":\"$SCORER_TOOL_ID\"}],\"pass_threshold\":0.75}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"refund-triage\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"output_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"refund_amount\":{\"type\":\"number\",\"minimum\":0}}}},{\"type\":\"json_logic\",\"expression\":{\"==\":[{\"var\":\"object.category\"},{\"var\":\"item.metadata.expected_category\"}]}},{\"type\":\"tool\",\"name\":\"refund-policy\",\"tool_id\":\"$SCORER_TOOL_ID\"}],\"pass_threshold\":0.75,\"group_by\":\"kind\"}" | jq -r '.id')
 ```
 
 </TabItem>
@@ -586,41 +588,27 @@ A well-formed, correctly classified object still fails: only your rule knew the 
 
 ## Step 8 — Read the pass rate per kind
 
-A run aggregates per scorer, not per kind ([Evaluations — Eval result](/docs/modules/evaluations#eval-result)). Join each result's `dataset_item_id` to the item's `metadata.kind` and group client-side.
+The run's `aggregate_scores.grouping` holds one rollup per `kind`, computed like the run's own figures ([Evaluations — Grouped aggregates](/docs/modules/evaluations#grouped-aggregates)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-dataset-items --dataset-id "$DATASET_ID" \
-  | jq '.data | map({key: .id, value: .metadata.kind}) | from_entries' > refund-kinds.json
-
-soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
-  | jq --slurpfile kinds refund-kinds.json '[.data[] | select(.error == null) | {kind: $kinds[0][.dataset_item_id], passed}]
-      | group_by(.kind) | map({kind: .[0].kind, items: length, pass_rate: ((map(select(.passed)) | length) / length)})'
+soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
+  | jq '.aggregate_scores.grouping | {groups: (.groups | map_values({scored_item_count, pass_rate})), ungrouped_item_count}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: items } = await adminSoat.evaluations.listDatasetItems({
-  path: { dataset_id: dataset.id },
+const { data: settled } = await adminSoat.evaluations.getEvalRun({
+  path: { eval_id: evaluation.id, eval_run_id: baselineRun.id },
 });
 
-const kindOf = new Map(items.data.map((item) => [item.id, String(item.metadata?.kind)]));
-
-const byKind = new Map<string, { items: number; passed: number }>();
-for (const result of results.data.filter((r) => !r.error)) {
-  const kind = kindOf.get(result.dataset_item_id ?? '') ?? 'unknown';
-  const row = byKind.get(kind) ?? { items: 0, passed: 0 };
-  row.items += 1;
-  row.passed += result.passed ? 1 : 0;
-  byKind.set(kind, row);
-}
-
-for (const [kind, row] of byKind) {
-  console.log(kind, row.items, row.passed / row.items);
+const grouping = settled.aggregate_scores?.grouping;
+for (const [kind, group] of Object.entries(grouping?.groups ?? {})) {
+  console.log(kind, group.scored_item_count, group.pass_rate);
 }
 ```
 
@@ -628,24 +616,22 @@ for (const [kind, row] of byKind) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/datasets/$DATASET_ID/items" \
+curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '.data | map({key: .id, value: .metadata.kind}) | from_entries' > refund-kinds.json
-
-curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID/results" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq --slurpfile kinds refund-kinds.json '[.data[] | select(.error == null) | {kind: $kinds[0][.dataset_item_id], passed}]
-      | group_by(.kind) | map({kind: .[0].kind, items: length, pass_rate: ((map(select(.passed)) | length) / length)})'
+  | jq '.aggregate_scores.grouping | {groups: (.groups | map_values({scored_item_count, pass_rate})), ungrouped_item_count}'
 ```
 
 </TabItem>
 </Tabs>
 
 ```json
-[
-  { "kind": "question", "items": 2, "pass_rate": 0.5 },
-  { "kind": "refund", "items": 2, "pass_rate": 0.5 }
-]
+{
+  "groups": {
+    "question": { "scored_item_count": 2, "pass_rate": 0.5 },
+    "refund": { "scored_item_count": 2, "pass_rate": 0.5 }
+  },
+  "ungrouped_item_count": 0
+}
 ```
 
 The two kinds fail for different reasons: a question read as a refund fails `json_logic`, an over-limit refund fails `refund-policy`. One overall pass rate cannot say which moved. When kinds need their own thresholds, give each its own dataset and eval.
@@ -709,7 +695,7 @@ CANDIDATE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
 </TabItem>
 </Tabs>
 
-`baseline.scorers` carries a `refund-policy` entry with its own `pass_rate_delta`, so the rule's movement reads apart from shape and category. The delta can come back negative: `qwen2.5:0.5b` does not reliably follow the added instruction, and with four items one item is `0.25` of the pass rate. A delta is a fix only once it clears the [noise floor](/docs/advanced/eval-design#noise-before-signal).
+`baseline.scorers` carries a `refund-policy` entry with its own `pass_rate_delta`, so the rule's movement reads apart from shape and category. `baseline.grouping` carries the same deltas per `kind`, so a fix to refunds that broke questions shows as two groups moving apart. The delta can come back negative: `qwen2.5:0.5b` does not reliably follow the added instruction, and with four items one item is `0.25` of the pass rate. A delta is a fix only once it clears the [noise floor](/docs/advanced/eval-design#noise-before-signal).
 
 ---
 

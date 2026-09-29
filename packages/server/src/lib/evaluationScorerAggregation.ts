@@ -13,6 +13,7 @@
 import createDebug from 'debug';
 
 import type { BaselineComparison } from './evaluationDeltas';
+import type { RunGrouping } from './evaluationGrouping';
 import type { ScorerOutcome } from './evaluationScorers';
 
 const log = createDebug('soat:evaluations');
@@ -28,6 +29,8 @@ export type AggregateScores = {
    * clean comparison when the two runs' item sets differ (`evaluationDeltas.ts`).
    */
   baseline?: BaselineComparison;
+  /** Present only when the Eval declares a `group_by` (`evaluationGrouping.ts`). */
+  grouping?: RunGrouping;
 };
 
 const ratio = (numerator: number, denominator: number): number => {

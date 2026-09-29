@@ -22,6 +22,7 @@ export const evalsFormationModule = defineFormationModule({
       datasetId: properties.dataset_id,
       scorers: properties.scorers,
       passThreshold: properties.pass_threshold,
+      groupBy: properties.group_by,
     });
   },
 
@@ -38,6 +39,7 @@ export const evalsFormationModule = defineFormationModule({
         properties.pass_threshold === undefined
           ? undefined
           : toNullableNumber(properties.pass_threshold),
+      groupBy: properties.group_by,
     });
   },
 

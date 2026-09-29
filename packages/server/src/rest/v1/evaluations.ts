@@ -360,6 +360,7 @@ evaluationsRouter.post('/evals', async (ctx: Context) => {
     datasetId: body.dataset_id,
     scorers: body.scorers,
     passThreshold: body.pass_threshold,
+    groupBy: body.group_by,
   });
 });
 
@@ -415,6 +416,7 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
     datasetId: body.dataset_id,
     scorers: body.scorers,
     passThreshold: body.pass_threshold,
+    groupBy: body.group_by,
   });
 });
 

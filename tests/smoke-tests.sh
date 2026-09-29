@@ -8083,9 +8083,30 @@ if ! printf '%s\n' "$EVAL_RESULTS_RESP" | jq -e --arg item "$DATASET_ITEM_ID" \
   exit 1
 fi
 
+echo "--- Grouping runs by an item metadata key ---"
+EVAL_GROUPED_RESP=$($SOAT_CLI update-eval --eval_id "$EVAL_ID" --group_by topic)
+if ! printf '%s\n' "$EVAL_GROUPED_RESP" | jq -e '.group_by == "topic"' >/dev/null 2>&1; then
+  echo "ERROR: update-eval did not store group_by" >&2
+  printf '%s\n' "$EVAL_GROUPED_RESP" >&2
+  exit 1
+fi
+
 echo "--- Running against a baseline reports deltas over the item intersection ---"
 EVAL_BASELINE_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait true \
   --baseline_run_id "$EVAL_RUN_ID")
+# The one item is labelled `greeting`; whether it scored or errored is the
+# model's business, so the groups are checked to account for what scored.
+if ! printf '%s\n' "$EVAL_BASELINE_RESP" | jq -e \
+  '.aggregate_scores.grouping.group_by == "topic"
+   and ((.aggregate_scores.grouping.groups.greeting.scored_item_count // 0)
+        + .aggregate_scores.grouping.ungrouped_item_count)
+       == .aggregate_scores.scored_item_count
+   and .aggregate_scores.baseline.grouping.group_by == "topic"' \
+  >/dev/null 2>&1; then
+  echo "ERROR: eval run did not report its grouping" >&2
+  printf '%s\n' "$EVAL_BASELINE_RESP" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$EVAL_BASELINE_RESP" | jq -e --arg base "$EVAL_RUN_ID" \
   '.baseline_run_id == $base
    and .aggregate_scores.baseline.run_id == $base

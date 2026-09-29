@@ -4803,6 +4803,60 @@ resources:
       ).body.id;
     });
 
+    test('a template declares and changes an eval group_by', async () => {
+      const groupedTemplate = (groupBy: string) => {
+        const template = evalTemplate(0.7);
+        return {
+          resources: {
+            ...template.resources,
+            Regression: {
+              ...template.resources.Regression,
+              properties: {
+                ...template.resources.Regression.properties,
+                group_by: groupBy,
+              },
+            },
+          },
+        };
+      };
+
+      const create = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `eval-grouped-${Date.now()}`,
+          template: groupedTemplate('kind'),
+        });
+      expect(create.status).toBe(201);
+      const evalId = (
+        create.body.resources as Array<{
+          logical_id: string;
+          physical_resource_id: string;
+        }>
+      ).find((resource) => {
+        return resource.logical_id === 'Regression';
+      })!.physical_resource_id;
+
+      const created = await authenticatedTestClient(userToken).get(
+        `/api/v1/evals/${evalId}`
+      );
+      expect(created.body.group_by).toBe('kind');
+
+      const update = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({ template: groupedTemplate('topic') });
+      expect(update.status).toBe(200);
+
+      const updated = await authenticatedTestClient(userToken).get(
+        `/api/v1/evals/${evalId}`
+      );
+      expect(updated.body.group_by).toBe('topic');
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${create.body.id}`
+      );
+    });
+
     test('a template provisions the dataset, its item, and the eval bound by ref', async () => {
       const create = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')

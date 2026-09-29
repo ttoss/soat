@@ -1162,6 +1162,14 @@ components:
           description: >-
             0–1. A run passes when its pass rate over non-errored items reaches
             this. Omit for a run that reports scores without a verdict.
+        group_by:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+          description: >-
+            A key of the items' `metadata`; a run rolls its scores up per
+            string value of it. Omit for no grouping.
 
     DocumentResourceProperties:
       description: >-

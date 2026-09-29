@@ -16,6 +16,7 @@ import { validateScorers } from './evaluationScorers';
 import {
   assertValid,
   requireName,
+  validateGroupBy,
   validatePassThreshold,
 } from './evaluationValidation';
 import type { ResourceIncludes } from './modelIncludes';
@@ -44,6 +45,7 @@ export const mapEval = (evaluation: EvalRow) => {
       evaluation.passThreshold === null
         ? null
         : Number(evaluation.passThreshold),
+    group_by: evaluation.groupBy,
     created_at: evaluation.createdAt,
     updated_at: evaluation.updatedAt,
   };
@@ -129,6 +131,7 @@ export const createEval = async (args: {
   datasetId: unknown;
   scorers: unknown;
   passThreshold?: unknown;
+  groupBy?: unknown;
 }): Promise<ReturnType<typeof mapEval>> => {
   const name = requireName(args.name);
   log('createEval: projectId=%d name=%s', args.projectId, name);
@@ -159,6 +162,7 @@ export const createEval = async (args: {
     projectId: args.projectId,
   });
   assertValid(validatePassThreshold(args.passThreshold));
+  assertValid(validateGroupBy(args.groupBy));
 
   let evaluation;
   try {
@@ -172,6 +176,7 @@ export const createEval = async (args: {
         args.passThreshold === undefined || args.passThreshold === null
           ? null
           : String(args.passThreshold),
+      groupBy: args.groupBy ?? null,
     });
   } catch (error) {
     throw rethrowAsConflict(
@@ -267,6 +272,7 @@ export const updateEval = async (args: {
   datasetId?: unknown;
   scorers?: unknown;
   passThreshold?: unknown;
+  groupBy?: unknown;
 }): Promise<ReturnType<typeof mapEval>> => {
   log('updateEval: id=%s', args.id);
 
@@ -307,6 +313,11 @@ export const updateEval = async (args: {
     assertValid(validatePassThreshold(args.passThreshold));
     updates.passThreshold =
       args.passThreshold === null ? null : String(args.passThreshold);
+  }
+
+  if (args.groupBy !== undefined) {
+    assertValid(validateGroupBy(args.groupBy));
+    updates.groupBy = args.groupBy;
   }
 
   try {

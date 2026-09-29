@@ -23,6 +23,7 @@ import { usageEventGenerationPublicId } from './2026-09-25-usageEventGenerationP
 import { usageEventDocumentAndMemoryStore } from './2026-09-26-usageEventDocumentAndMemoryStore';
 import { usageEventDurablePublicIds } from './2026-09-26-usageEventDurablePublicIds';
 import { deciderToolBackend } from './2026-09-27-deciderToolBackend';
+import { evalGroupBy } from './2026-09-29-evalGroupBy';
 import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
 
 /**
@@ -69,4 +70,5 @@ export const MIGRATIONS: Migration[] = [
   usageEventDurablePublicIds,
   deciderToolBackend,
   evalRunDeciderVersions,
+  evalGroupBy,
 ];
