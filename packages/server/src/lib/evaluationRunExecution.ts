@@ -21,14 +21,10 @@ import {
   type DeciderScoring,
   runDeciderScorerCall,
 } from './evaluationDeciderScorer';
-import { computeBaselineComparison } from './evaluationDeltas';
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { runJudgeCompletion } from './evaluationJudge';
-import {
-  type AggregateScores,
-  aggregateScores,
-  resolveRunPassed,
-} from './evaluationScorerAggregation';
+import { buildRunAggregate } from './evaluationRunAggregate';
+import { resolveRunPassed } from './evaluationScorerAggregation';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { runToolScorerCall } from './evaluationToolScorer';
 import type { GenerationInputMessage } from './generationInputMessages';
@@ -338,48 +334,23 @@ export const recountEvalRunProgress = async (args: {
 
 // ── Finalization ───────────────────────────────────────────────────────────
 
-type ResultRow = InstanceType<(typeof db)['EvalResult']>;
-
-/**
- * `scores` is a NOT NULL JSONB column only ever written from `scoreOutput`, so it
- * is always an array — there is no absent-value case to defend against.
- */
-const resultScores = (row: ResultRow): ScorerOutcome[] => {
-  return row.scores as ScorerOutcome[];
+/** What finalize reads off the Eval: the gate and the grouping key. */
+export type EvalSettlement = {
+  passThreshold: number | null;
+  groupBy: string | null;
 };
 
-const toComparable = (row: ResultRow) => {
+/** The one transcription of an Eval row into its {@link EvalSettlement}. */
+export const evalSettlement = (args: {
+  evaluation: { passThreshold: string | null; groupBy: string | null };
+}): EvalSettlement => {
   return {
-    datasetItemId: row.datasetItemId,
-    scores: resultScores(row),
-    errored: row.error !== null,
-    passed: row.passed,
+    passThreshold:
+      args.evaluation.passThreshold === null
+        ? null
+        : Number(args.evaluation.passThreshold),
+    groupBy: args.evaluation.groupBy,
   };
-};
-
-/** Loads the baseline's results and computes the comparison, or null if absent. */
-const buildBaselineComparison = async (args: {
-  baselineRunDbId: number | null;
-  current: ResultRow[];
-}): Promise<AggregateScores['baseline']> => {
-  if (args.baselineRunDbId === null) return undefined;
-
-  const baselineRun = await db.EvalRun.findByPk(args.baselineRunDbId, {
-    attributes: ['id', 'publicId'],
-  });
-  /* istanbul ignore next -- the FK is ON DELETE SET NULL, so a surviving id
-     always resolves to a row. */
-  if (!baselineRun) return undefined;
-
-  const baselineResults = await db.EvalResult.findAll({
-    where: { evalRunId: args.baselineRunDbId },
-  });
-
-  return computeBaselineComparison({
-    baselineRunPublicId: baselineRun.publicId,
-    current: args.current.map(toComparable),
-    baseline: baselineResults.map(toComparable),
-  });
 };
 
 /**
@@ -394,30 +365,20 @@ export const finalizeEvalRun = async (args: {
   run: EvalRunRowInstance;
   evalPublicId: string;
   projectId: number;
-  passThreshold: number | null;
+  settlement: EvalSettlement;
 }): Promise<void> => {
   const results = await db.EvalResult.findAll({
     where: { evalRunId: args.run.id as number },
   });
 
-  const aggregate: AggregateScores = aggregateScores({
-    results: results.map((row) => {
-      return {
-        scores: resultScores(row),
-        passed: row.passed,
-        errored: row.error !== null,
-      };
-    }),
+  const aggregate = await buildRunAggregate({
+    run: args.run,
+    groupBy: args.settlement.groupBy,
+    results,
   });
-
-  const baseline = await buildBaselineComparison({
-    baselineRunDbId: args.run.baselineRunId,
-    current: results,
-  });
-  if (baseline) aggregate.baseline = baseline;
 
   const passed = resolveRunPassed({
-    passThreshold: args.passThreshold,
+    passThreshold: args.settlement.passThreshold,
     aggregate,
   });
 
@@ -523,7 +484,7 @@ export const finalizeIfUnclaimed = async (args: {
   run: EvalRunRowInstance;
   evalPublicId: string;
   projectId: number;
-  passThreshold: number | null;
+  settlement: EvalSettlement;
   now?: Date;
 }): Promise<boolean> => {
   if (
@@ -540,7 +501,7 @@ export const finalizeIfUnclaimed = async (args: {
     run: args.run,
     evalPublicId: args.evalPublicId,
     projectId: args.projectId,
-    passThreshold: args.passThreshold,
+    settlement: args.settlement,
   });
   return true;
 };

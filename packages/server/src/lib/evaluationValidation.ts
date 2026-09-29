@@ -76,6 +76,21 @@ export const validatePassThreshold = (value: unknown): string | null => {
   return null;
 };
 
+/** A column-sized `varchar`, so a longer key is refused rather than truncated. */
+const GROUP_BY_MAX_LENGTH = 255;
+
+/** A key of the items' `metadata`, or null for no grouping. */
+export const validateGroupBy = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' || value === '') {
+    return 'group_by must be a non-empty metadata key, or null.';
+  }
+  if (value.length > GROUP_BY_MAX_LENGTH) {
+    return `group_by must be at most ${GROUP_BY_MAX_LENGTH} characters.`;
+  }
+  return null;
+};
+
 /** Turns a validator's message into the `400` the route surfaces. */
 export const assertValid = (message: string | null): void => {
   if (message) throw new DomainError('VALIDATION_FAILED', message);

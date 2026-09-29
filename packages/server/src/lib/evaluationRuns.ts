@@ -15,6 +15,7 @@ import { DomainError } from '../errors';
 import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
 import {
+  evalSettlement,
   executeAndRecordItem,
   failEvalRun,
   finalizeEvalRun,
@@ -310,10 +311,7 @@ const executeSyncRun = async (args: {
     run,
     evalPublicId: plan.evaluation.publicId,
     projectId,
-    passThreshold:
-      plan.evaluation.passThreshold === null
-        ? null
-        : Number(plan.evaluation.passThreshold),
+    settlement: evalSettlement({ evaluation: plan.evaluation }),
   });
 };
 

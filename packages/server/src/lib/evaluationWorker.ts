@@ -22,6 +22,8 @@ import {
 } from './evaluationQueue';
 import {
   claimRunFinalization,
+  type EvalSettlement,
+  evalSettlement,
   executeAndRecordItem,
   failEvalRun,
   finalizeIfUnclaimed,
@@ -70,7 +72,7 @@ type LoadedRun = {
   run: InstanceType<(typeof db)['EvalRun']>;
   evalPublicId: string;
   projectId: number;
-  passThreshold: number | null;
+  settlement: EvalSettlement;
 };
 
 /** Loads a run together with the Eval fields execution and finalize need. */
@@ -92,10 +94,7 @@ const loadRunContext = async (args: {
     run,
     evalPublicId: evaluation.publicId,
     projectId: evaluation.projectId as number,
-    passThreshold:
-      evaluation.passThreshold === null
-        ? null
-        : Number(evaluation.passThreshold),
+    settlement: evalSettlement({ evaluation }),
   };
 };
 

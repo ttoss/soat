@@ -22,7 +22,7 @@ The dataset is the specification: an agent that passes it is correct only in the
 
 ### Label each item's kind
 
-Put the kind in `metadata` (`{"kind": "refusal"}`, `{"kind": "multi_step"}`). A run aggregates per scorer, never per kind, and an overall pass rate hides a kind that collapsed.
+Put the kind in `metadata` (`{"kind": "refusal"}`, `{"kind": "multi_step"}`) and set the eval's `group_by` to `kind`. An overall pass rate hides a kind that collapsed; `aggregate_scores.grouping` reports each kind's pass rate beside it, and `baseline.grouping` each kind's delta ([Grouped aggregates](../modules/evaluations.md#grouped-aggregates)).
 
 A scorer that applies to one kind reads `item.metadata` and passes the others vacuously:
 
@@ -39,7 +39,7 @@ A scorer that applies to one kind reads `item.metadata` and passes the others va
 }
 ```
 
-An item passes when every scorer passes, so the vacuous `true` costs no other kind its verdict; it does inflate that scorer's own `mean` and `pass_rate`. To read a pass rate per kind, list the run's results, join `dataset_item_id` to each item's `metadata`, and group client-side ([Grade Structured Output with Your Own Scorer — Step 8](/docs/tutorials/grade-structured-output-with-your-own-scorer#step-8--read-the-pass-rate-per-kind)). When kinds need different thresholds, give each its own dataset and eval.
+An item passes when every scorer passes, so the vacuous `true` costs no other kind its verdict; it does inflate that scorer's own `mean` and `pass_rate` in the run and in every other kind's group, so read it inside its own kind's group ([Grade Structured Output with Your Own Scorer — Step 8](/docs/tutorials/grade-structured-output-with-your-own-scorer#step-8--read-the-pass-rate-per-kind)). The verdict gates on the run's pass rate only: when kinds need different thresholds, give each its own dataset and eval.
 
 ## Choosing a scorer
 
@@ -115,7 +115,7 @@ A run costs `items × (agent generation + one judge completion per llm_judge + o
 
 ## Checklist
 
-- [ ] Dataset weighted toward failures, each item's kind in `metadata`
+- [ ] Dataset weighted toward failures, each item's kind in `metadata`, `group_by` set to it
 - [ ] Curated items carry a correct `expected_output`
 - [ ] The cheapest scorer per criterion; `llm_judge` only where no rule decides
 - [ ] Noise floor measured; `pass_threshold` below the current pass rate minus the floor

@@ -77,6 +77,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `dataset_id` | string | The dataset to run it against — must be in the same project |
 | `scorers` | array | Scorer configs; see [Scorers](#scorers) |
 | `pass_threshold` | number | 0–1, or `null` to report without gating; see [Pass semantics](#pass-semantics) |
+| `group_by` | string | A key of the items' `metadata` a run rolls its scores up by, or `null`; see [Grouped aggregates](#grouped-aggregates) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 An `agent_id` or `dataset_id` naming a resource in another project is rejected with `400`.
@@ -92,7 +93,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `canceled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
-| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
+| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
 | `metadata` | object \| null | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
@@ -704,7 +705,7 @@ Datasets, their items, and evals are declarable in a [Formation](./formations.md
 | --- | --- |
 | `dataset` | `name`, `description` |
 | `dataset_item` | `dataset_id`, `input`, `expected_output`, `metadata` |
-| `eval` | `name`, `agent_id`, `dataset_id`, `scorers`, `pass_threshold` |
+| `eval` | `name`, `agent_id`, `dataset_id`, `scorers`, `pass_threshold`, `group_by` |
 
 Items are their own resource, so an item curated through the API is never collateral of a
 formation apply. `dataset_id` is immutable on a `dataset_item`. Running the suite gives
@@ -730,6 +731,57 @@ Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another ev
 Positive deltas mean this run scored **higher**. Every number is computed over the
 **item intersection**, recomputing both sides, so dataset drift shows up in the counts. A
 scorer that only one run ran is omitted.
+
+When the eval declares a `group_by`, `baseline.grouping` holds the same comparison per
+group; see [Grouped aggregates](#grouped-aggregates).
+
+### Grouped aggregates
+
+A run's pass rate can hold steady while one kind of item collapses. `group_by` names a key
+of the items' `metadata`, and every run rolls its scores up per value of that key beside
+the run-level figures:
+
+```json
+{
+  "pass_rate": 0.6,
+  "scorers": { "contains": { "mean": 0.6, "pass_rate": 0.6 } },
+  "scored_item_count": 5,
+  "grouping": {
+    "group_by": "kind",
+    "groups": {
+      "multi_step": { "pass_rate": 1, "scored_item_count": 1, "scorers": { "contains": { "mean": 1, "pass_rate": 1 } } },
+      "refusal": { "pass_rate": 0.5, "scored_item_count": 2, "scorers": { "contains": { "mean": 0.5, "pass_rate": 0.5 } } }
+    },
+    "ungrouped_item_count": 2
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `grouping.group_by` | The key the groups were read from |
+| `grouping.groups` | Group value → its `pass_rate`, `scored_item_count` and per-scorer `mean` / `pass_rate`, computed as the run's own are |
+| `grouping.ungrouped_item_count` | Scored items that name no group |
+
+- **Only a string names a group.** An item whose `metadata` lacks the key, holds a
+  non-string under it (`7`, `true`, an object), or whose dataset item was deleted counts in
+  `ungrouped_item_count`. Values are not coerced, so `"1"` and `1` never merge.
+- **Errored items count in no group**, as they count in no run-level figure
+  ([Errors are not zeros](#errors-are-not-zeros)).
+- **Labels are read when the run settles**, from the items' `metadata` at that moment, and
+  stored with the aggregate. With a baseline, both runs' items are grouped by those same
+  labels, so `baseline.grouping.groups` compares each group over the items both runs
+  scored, with the same `compared_item_count` / `added_item_count` /
+  `removed_item_count` / `pass_rate_delta` / `scorers` fields as
+  [Baseline deltas](#baseline-deltas). Its `ungrouped_item_count` counts the compared items
+  that name no group.
+- **The verdict does not read groups.** `passed` gates on the run's pass rate only
+  ([Pass semantics](#pass-semantics)). A kind that needs its own threshold gets its own
+  dataset and eval.
+
+`group_by` is set on create or update (`null` clears it) and applies to the runs that
+settle afterwards; a settled run keeps the grouping it was stored with. Omitted, a run
+reports no `grouping`.
 
 ### Lifecycle webhooks
 

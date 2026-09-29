@@ -10,6 +10,7 @@
  */
 import createDebug from 'debug';
 
+import type { BaselineGrouping } from './evaluationGrouping';
 import type { ScorerOutcome } from './evaluationScorers';
 
 const log = createDebug('soat:evaluations');
@@ -55,6 +56,8 @@ export type BaselineComparison = {
    * than compared against nothing.
    */
   scorers: Record<string, ScorerDelta>;
+  /** Present only when the Eval declares a `group_by` (`evaluationGrouping.ts`). */
+  grouping?: BaselineGrouping;
 };
 
 const ratio = (numerator: number, denominator: number): number => {

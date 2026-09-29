@@ -2771,6 +2771,20 @@ describe('MCP tools - happy path', () => {
       expect(created.pass_threshold).toBe(0.5);
     });
 
+    test('create-eval accepts a group_by key', async () => {
+      const res = await mcpCall('create-eval', {
+        project_id: projectId,
+        name: 'MCP Grouped Eval',
+        agent_id: evalAgentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'contains', value: 'invoice' }],
+        group_by: 'kind',
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).group_by).toBe('kind');
+    });
+
     test('get-eval and list-eval-runs read the eval back', async () => {
       const get = await mcpCall('get-eval', { eval_id: evalId });
       expect(get.status).toBe(200);
