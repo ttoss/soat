@@ -69,6 +69,14 @@ export class EvalRun extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare agentVersion: number;
 
+  /**
+   * The decider version each `decider` scorer grades under, keyed by scorer
+   * name and resolved at run start for the same reason as `agentVersion`.
+   * Null when the eval has no decider scorer.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare deciderVersions: Record<string, number> | null;
+
   /** `queued` | `running` | `completed` | `failed` | `canceled`. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare status: string;

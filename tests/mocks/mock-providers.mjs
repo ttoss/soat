@@ -8,6 +8,7 @@
 //   GET  /health        — readiness probe for docker-compose.
 //   POST /v1/responses  — Responses API (agent converter, image OCR).
 //   POST /v1/stt        — speech-to-text REST endpoint (tool converter).
+//   POST /v1/systemone  — TypeSafe Jev evaluation endpoint (decider tutorial).
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -81,6 +82,66 @@ const parseMultipart = (buffer, boundary) => {
       };
     })
     .filter(Boolean);
+};
+
+// Jev's answer shapes, deterministic so the tutorial's scores are stable: a
+// noul is 0.85, a choice favours its first option, a score its top level.
+// Anything Jev itself refuses (a `boolean` type, more than 10 levels) is null.
+const answerJevChoice = (question) => {
+  const options = Object.keys(question.criteria ?? {});
+  const probabilities = Object.fromEntries(
+    options.map((option, i) => {
+      return [option, i === 0 ? 0.9 : 0.1 / (options.length - 1)];
+    })
+  );
+  return {
+    type: 'choice',
+    choice: options[0],
+    probabilities,
+    confidence: 0.8,
+  };
+};
+
+const answerJevScore = (question) => {
+  const levels = question.criteria ?? [];
+  if (levels.length < 2 || levels.length > 10) return null;
+  const top = levels.length - 1;
+  const weightOf = (i) => {
+    if (i === top) return 0.9;
+    return i === top - 1 ? 0.1 : 0;
+  };
+  return {
+    type: 'score',
+    score: top - 0.1,
+    legend: Object.fromEntries(
+      levels.map((level, i) => {
+        return [String(i), level];
+      })
+    ),
+    probabilities: Object.fromEntries(
+      levels.map((_level, i) => {
+        return [String(i), weightOf(i)];
+      })
+    ),
+    confidence: 0.85,
+  };
+};
+
+const answerJevQuestion = (question) => {
+  if (question?.type === 'noul') return { type: 'noul', noul: 0.85 };
+  if (question?.type === 'choice') return answerJevChoice(question);
+  if (question?.type === 'score') return answerJevScore(question);
+  return null;
+};
+
+const answerJevQuestions = (body) => {
+  const answers = {};
+  for (const [id, question] of Object.entries(body.questions ?? {})) {
+    const answer = answerJevQuestion(question);
+    if (answer === null) return null;
+    answers[id] = answer;
+  }
+  return answers;
 };
 
 const server = http.createServer(async (req, res) => {
@@ -180,6 +241,28 @@ const server = http.createServer(async (req, res) => {
           start: i * 0.3,
           end: i * 0.3 + 0.25,
         })),
+      })
+    );
+    return;
+  }
+
+  if (req.method === 'POST' && pathname.endsWith('/systemone')) {
+    if (!/^Bearer \S+/.test(req.headers.authorization ?? '')) {
+      jsonError(res, 401, 'missing bearer token');
+      return;
+    }
+    const body = parseJson((await readRawBuffer(req)).toString('utf8'));
+    const answers = answerJevQuestions(body);
+    if (!body.model || answers === null) {
+      jsonError(res, 400, 'Invalid request.');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        model: 'jev-1.13.0',
+        answers,
+        usage: { input_tokens: 300, output_tokens: 20 },
       })
     );
     return;

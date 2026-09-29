@@ -12,6 +12,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
 import {
   executeAndRecordItem,
@@ -180,6 +181,7 @@ type RunPlan = {
   agent: AgentRow;
   items: Array<InstanceType<(typeof db)['DatasetItem']>>;
   agentVersion: number;
+  deciderVersions: Record<string, number> | null;
   baselineRunDbId: number | null;
 };
 
@@ -249,6 +251,10 @@ const planRun = async (args: {
       agent,
       requestedVersion: args.agentVersion,
     }),
+    deciderVersions: await pinDeciderVersions({
+      scorers: evaluation.scorers,
+      projectId: evaluation.projectId as number,
+    }),
     baselineRunDbId: await resolveBaselineRun({
       evalDbId: evaluation.id as number,
       baselineRunId: args.baselineRunId,
@@ -278,6 +284,11 @@ const executeSyncRun = async (args: {
         agent: plan.agent,
         agentVersion: plan.agentVersion,
         scorers: scorerList(plan.evaluation.scorers),
+        deciderScoring: {
+          versions: plan.deciderVersions,
+          evalId: plan.evaluation.publicId,
+          runId: run.publicId,
+        },
         item,
         toolContext: args.toolContext,
       });
@@ -350,6 +361,7 @@ export const startEvalRun = async (args: {
   const run = await db.EvalRun.create({
     evalId: plan.evaluation.id as number,
     agentVersion: plan.agentVersion,
+    deciderVersions: plan.deciderVersions,
     // A queued run has not started yet — `startedAt` is stamped by the first
     // worker that picks up one of its items.
     status: wait ? 'running' : 'queued',

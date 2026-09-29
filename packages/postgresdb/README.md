@@ -78,6 +78,7 @@ The flow they follow is
 | `2026-09-26-usage-event-document-and-memory-store` | `usage_events.document_id` and `usage_events.memory_store_id`, what an embedding event embedded; not backfilled |
 | `2026-09-26-usage-event-durable-public-ids` | a public id beside every other attribution FK on `usage_events` (`agent`, `trace`, `orchestration_run`, `actor`, `session`, `ai_provider`, `tool`, `document`, `memory_store`), which `totals.distinct` counts, backfilled from the rows the FKs still name |
 | `2026-09-27-decider-tool-backend` | `deciders.tool_id`, the tool backend (`RESTRICT`), and `deciders.agent_id` nullable |
+| `2026-09-29-eval-run-decider-versions` | `eval_runs.decider_versions`, the decider version each `decider` scorer grades under |
 
 Run them from the server package, which owns the entrypoint:
 

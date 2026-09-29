@@ -21,6 +21,7 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 ## Related Tutorials
 
 - [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer's actor tags, and an orchestration branches on its answer
+- [Grade an Eval with a Decider](/docs/tutorials/grade-an-eval-with-a-decider) — a decider backed by TypeSafe Jev reviews a live reply, then grades every item of an eval
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -378,6 +379,10 @@ A decision is evaluated by the process that accepted it. One still unsettled whe
 ### Metering
 
 A decision's generation is metered like any other, with `source: decider`, so decision spend is separable in [usage](./usage.md) rollups. A tool-backed decision is a `tool_execution` event with the same `source`; it has no generation, so it admits no generation quota. Decision rows count toward the project's `record_gb_day`.
+
+### Grading an eval
+
+A [`decider` scorer](./evaluations.md#decider-scorers-decider) grades each item of an eval run with a decision, pinned to the decider version the run started under, so the questions production asks are the ones the eval measures.
 
 ### Events
 
