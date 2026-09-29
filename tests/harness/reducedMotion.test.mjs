@@ -7,9 +7,9 @@ import * as url from 'node:url';
 import { listCss, parseRules, splitAtRule } from './cssRules.mjs';
 
 /**
- * The brand allows continuous motion in three places only — the Vector Galaxy
- * mark, background marks and data-flow connectors (`soat-design` readme,
- * Animation) — and every such loop stops for a reader who asked the OS for
+ * The brand allows continuous motion in two places only — faint background
+ * marks and data-flow connectors (`soat-design` readme, Animation) — and
+ * every such loop stops for a reader who asked the OS for
  * reduced motion. The stop lives in the same stylesheet as the loop, so the
  * two are edited together.
  */

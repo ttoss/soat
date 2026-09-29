@@ -6,7 +6,7 @@ import * as url from 'node:url';
 
 /**
  * The web console ships inside the self-hosted server image, and the quick
- * start runs that server offline. Its brand — favicon, Vector Galaxy mark and
+ * start runs that server offline. Its brand — favicon, the `[•]` mark and
  * the three typefaces — therefore has to ship in the bundle: a remote URL
  * renders as a broken image and fallback fonts on an offline install, and on
  * every other install it reports each console load to a third-party origin.

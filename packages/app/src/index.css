@@ -86,7 +86,7 @@
 }
 
 /*
- * SOAT theme — derived from the `soat-design` skill (Vector Galaxy palette).
+ * SOAT theme — derived from the `soat-design` skill.
  * Dual-theme by design: light mode uses Electric Blue as the functional
  * primary; dark mode shifts to Core Cyan. Colors are stored as HSL channels
  * so Tailwind can compose them with opacity modifiers.

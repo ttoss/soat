@@ -14,9 +14,9 @@ import { parseRules } from './cssRules.mjs';
  * `--process-core` tokens of `soat-design` and nothing else.
  *
  * The mark is a graphic, so each colour needs 3:1 against the page it sits on
- * (WCAG 1.4.11). The retired Vector Galaxy rasters stay at their URLs because
- * released servers and consoles still load them, but they now carry the new
- * mark and no current source draws them.
+ * (WCAG 1.4.11). The legacy raster URLs (`soat-logo-no-bg.png`) stay served
+ * because released servers and consoles load them; they carry the `[•]` mark
+ * and no current source references them.
  */
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
