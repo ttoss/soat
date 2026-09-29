@@ -32,6 +32,7 @@ algorithm layer, including [custom scorers](#custom-scorers-tool) implemented as
 - [Evaluate an Agent - Step 6 (Measure a prompt change against a baseline)](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)
 - [Judge Open-Ended Answers - Step 3 (Bind an llm_judge scorer)](/docs/tutorials/judge-open-ended-answers#step-3--bind-the-judge)
 - [Judge Open-Ended Answers - Step 5 (Run queued and poll)](/docs/tutorials/judge-open-ended-answers#step-5--run-it-queued-instead-of-blocking)
+- [Grade an Eval with a Decider - Step 8 (Bind a decider scorer)](/docs/tutorials/grade-an-eval-with-a-decider#step-8--bind-the-decider-as-a-scorer-and-run)
 - [Gate a Canary Promotion on an Eval - Step 4 (Set a promotion gate)](/docs/tutorials/gate-a-canary-promotion-on-an-eval#step-4--start-a-gated-canary-release)
 - [Gate a Canary Promotion on an Eval - Step 8 (Schedule nightly runs)](/docs/tutorials/gate-a-canary-promotion-on-an-eval#step-8--keep-feeding-the-gate-after-you-stop-watching)
 
@@ -83,6 +84,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `id` | string | Public identifier (e.g. `evrun_…`) |
 | `eval_id` | string | ID of the eval this run belongs to |
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
+| `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `canceled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
@@ -106,7 +108,7 @@ One row per dataset item per run.
 | `expected_output` | string | **Frozen copy** of the item's expected output at run time |
 | `generation_id` | string | The generation that produced the output, or `null` |
 | `output` | string | The agent's final output text. `null` only when there is none — the generation failed or never completed — or once the linked generation's content is [purged](#retention-and-erasure). An item errored by a **scorer** keeps the output it was graded on |
-| `scores` | array | `[{ scorer, score, passed, reasoning? }]`, one entry per scorer in the order the eval declares them. `scorer` is the type — or the scorer's `name` for a [`tool` scorer](#custom-scorers-tool). `reasoning` is present for `llm_judge`, and for `tool` scorers whose tool returned one |
+| `scores` | array | `[{ scorer, score, passed, reasoning?, decision_id? }]`, one entry per scorer in the order the eval declares them. `scorer` is the type — or the scorer's `name` for a [`tool`](#custom-scorers-tool) or [`decider`](#decider-scorers-decider) scorer. `reasoning` is present for `llm_judge`, and for `tool` scorers whose tool returned one; `decision_id` for `decider` scorers |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
 | `error` | string | Item-level failure reason; set instead of scoring, never alongside it |
 | `created_at` | string | ISO 8601 creation timestamp |
@@ -128,8 +130,8 @@ The engine's guarantees hold identically for built-in and custom scorers.
 `scorers` is a discriminated union on `type`. Every scorer produces
 `{ score: 0–1, passed: boolean }` (binary scorers emit 0 or 1), so aggregation, thresholds
 and baseline deltas are scorer-agnostic. Each built-in type may appear **at most once** per
-eval; `tool` scorers may appear several times, each under a distinct `name` (outcomes and
-aggregate scores key on the type, or on the `name` for `tool` scorers).
+eval; `tool` and `decider` scorers may appear several times, each under a distinct `name`
+(outcomes and aggregate scores key on the type, or on the `name` for those two).
 
 | `type` | Config | Scores |
 | --- | --- | --- |
@@ -140,6 +142,7 @@ aggregate scores key on the type, or on the `name` for `tool` scorers).
 | `embedding_similarity` | `pass_threshold` | The cosine similarity between the embeddings of the output text and `expected_output`, clamped to 0–1; see [Embedding similarity](#embedding-similarity) |
 | `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
 | `tool` | `name`, `tool_id`, `action` (builtin/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
+| `decider` | `name`, `decider_id`, `score`, `pass_threshold`, `state` (optional) | `score` evaluated over the answers of a [decision](./deciders.md); see [Decider scorers](#decider-scorers-decider) |
 
 `exact_match`, `contains`, `embedding_similarity` and `llm_judge` read the final **text**;
 `output_schema` validates the **structured object** the platform parsed. `json_logic` sees
@@ -304,6 +307,107 @@ curl -X POST https://api.example.com/api/v1/evals \
 
 Calls are real, one per item: point scorer tools at infrastructure that tolerates the
 volume, and at a staging target if the algorithm has side effects.
+
+### Decider scorers (`decider`)
+
+A `decider` scorer grades each item with a decision of a project [decider](./deciders.md):
+the questions are the decider's, versioned and shared with every other caller of it, so
+the eval grades exactly what production asks the same decider.
+
+| Config field | Required | Meaning |
+| --- | --- | --- |
+| `name` | yes | Keys this scorer's outcomes and aggregate buckets, as for a `tool` scorer |
+| `decider_id` | yes | A decider in the eval's project; checked at eval create, update and run start |
+| `score` | yes | [JSON Logic](https://jsonlogic.com) over `{ answers }`, the decision's answers keyed by question id, yielding the item's 0–1 score |
+| `pass_threshold` | yes | The item passes when `score >= pass_threshold`. No default, as on `llm_judge` |
+| `state` | no | JSON Logic over the item context (`input`, `output`, `object`, `expected`, `item`) building what the decider judges. Omitted, the state is that context itself |
+
+A `probabilities` entry a tool backend returns is the natural score — a distribution over
+the answer space, so the score keeps the certainty a bare choice drops:
+
+```json
+{
+  "type": "decider",
+  "name": "reply_review",
+  "decider_id": "dcd_…",
+  "state": { "customer": { "var": "input.0.content" }, "reply": { "var": "output" } },
+  "score": {
+    "*": [
+      { "var": "answers.resolves_issue.probabilities.true" },
+      { "-": [1, { "var": "answers.policy_violation.probabilities.true" }] }
+    ]
+  },
+  "pass_threshold": 0.7
+}
+```
+
+- **Pinned per run.** The run resolves each decider's version when it starts and records
+  it in `decider_versions`; every item is answered under that question set, so an edit
+  landing mid-run cannot grade half the items under other criteria. A baseline graded
+  under another version is still compared: read `decider_versions` on both runs.
+- **One decision per item attempt**, requested as the run with `metadata` `{ eval_id,
+  eval_run_id, dataset_item_id }` and read back through `decision_id`. Its spend is the
+  decision's own (`source: decider` in [usage](./usage.md)).
+- **No credential.** Like every scorer, the decision is requested with none, so a
+  `builtin` step in a pipeline behind the decider fails the decision; `http` tools,
+  pipelines of them and a tool-less agent answer.
+- **Errors are not zeros.** A failed decision, or a `score` that is not a number in 0–1,
+  errors the item with the decision's id and code in `error`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-eval --project-id "$PROJECT_ID" --name reply-suite \
+  --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --scorers '[{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers.resolves_issue.probabilities.true"},"pass_threshold":0.7}]' \
+  --pass-threshold 0.8
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.evaluations.createEval({
+  body: {
+    project_id: projectId,
+    name: 'reply-suite',
+    agent_id: agentId,
+    dataset_id: datasetId,
+    scorers: [
+      {
+        type: 'decider',
+        name: 'reply_review',
+        decider_id: deciderId,
+        score: { var: 'answers.resolves_issue.probabilities.true' },
+        pass_threshold: 0.7,
+      },
+    ],
+    pass_threshold: 0.8,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/evals \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "reply-suite",
+    "agent_id": "'"$AGENT_ID"'",
+    "dataset_id": "'"$DATASET_ID"'",
+    "scorers": [{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers.resolves_issue.probabilities.true"},"pass_threshold":0.7}],
+    "pass_threshold": 0.8
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Frozen inputs
 

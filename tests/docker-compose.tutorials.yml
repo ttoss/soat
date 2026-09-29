@@ -220,6 +220,8 @@ services:
       OPENAI_API_KEY: 'test-openai-key'
       XAI_BASE_URL: 'http://mock-providers:8090/v1'
       XAI_API_KEY: 'test-xai-key'
+      TYPESAFE_BASE_URL: 'http://mock-providers:8090'
+      TYPESAFE_API_KEY: 'test-typesafe-key'
       # The converter tutorial reads its fixtures straight off disk (see
       # fixtures/ under the mounted /tutorials volume below) instead of
       # embedding base64 blobs inline.

@@ -13,7 +13,8 @@ import {
   type DeciderQuestions,
   toDecisionAnswers,
 } from './deciderQuestions';
-import { deciderQuestionsOf, type DeciderRow, deciders } from './deciders';
+import { deciderQuestionSetAt } from './deciderQuestionSet';
+import { type DeciderRow, deciders } from './deciders';
 import { answerWithTool, assertDeciderToolCallable } from './deciderTool';
 import { emitResourceEvent } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
@@ -284,11 +285,12 @@ type Evaluation = {
 const admitBackend = async (args: {
   projectIds?: number[];
   decider: DeciderRow;
+  questions: DeciderQuestions;
+  storedQuestions: object;
   state: unknown;
   authHeader?: string;
 }): Promise<Evaluation> => {
-  const { decider } = args;
-  const questions = deciderQuestionsOf(decider);
+  const { decider, questions } = args;
   const { agent, tool } = decider;
   if (tool) {
     assertDeciderToolCallable(tool);
@@ -301,7 +303,7 @@ const admitBackend = async (args: {
             projectId: decider.projectId,
             toolPublicId: tool.publicId,
             questions,
-            storedQuestions: decider.questions,
+            storedQuestions: args.storedQuestions,
             state: args.state,
             authHeader: args.authHeader,
           }),
@@ -346,6 +348,8 @@ export const createDecision = async (args: {
    * interrupted decision is failed rather than re-run.
    */
   authHeader?: string;
+  /** Answer under this archived question set rather than the live one. */
+  version?: number;
 }): Promise<MappedDecision> => {
   log('createDecision: deciderId=%s wait=%s', args.deciderId, args.wait);
 
@@ -353,9 +357,15 @@ export const createDecision = async (args: {
     projectIds: args.projectIds,
     id: args.deciderId,
   });
+  const questionSet = await deciderQuestionSetAt({
+    decider,
+    version: args.version,
+  });
   const evaluation = await admitBackend({
     projectIds: args.projectIds,
     decider,
+    questions: questionSet.questions,
+    storedQuestions: questionSet.stored,
     state: args.state,
     authHeader: args.authHeader,
   });
@@ -363,7 +373,7 @@ export const createDecision = async (args: {
   const decision = await db.Decision.create({
     projectId: decider.projectId,
     deciderId: decider.publicId,
-    deciderVersion: decider.version,
+    deciderVersion: questionSet.version,
     status: 'queued',
     metadata: args.metadata ?? null,
     leaseExpiresAt: new Date(Date.now() + DECISION_LEASE_MS),

@@ -17,6 +17,10 @@ import { db } from '../db';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import { getEmbeddings, projectEmbeddingBilling } from './embedding';
+import {
+  type DeciderScoring,
+  runDeciderScorerCall,
+} from './evaluationDeciderScorer';
 import { computeBaselineComparison } from './evaluationDeltas';
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { runJudgeCompletion } from './evaluationJudge';
@@ -91,7 +95,11 @@ const erroredOutcome = (
  * completions and tool scorer calls. Injected into `scoreOutput` so the kernel
  * itself stays pure.
  */
-const buildScorerRunners = (args: { projectId: number }) => {
+const buildScorerRunners = (args: {
+  projectId: number;
+  deciderScoring: DeciderScoring;
+  datasetItemId: string;
+}) => {
   return {
     runJudge: (judge: {
       scorer: Record<string, unknown>;
@@ -117,6 +125,14 @@ const buildScorerRunners = (args: { projectId: number }) => {
         subject: null,
       });
     },
+    runDecider: (call: { scorer: Record<string, unknown>; state: unknown }) => {
+      return runDeciderScorerCall({
+        projectId: args.projectId,
+        ...call,
+        scoring: args.deciderScoring,
+        datasetItemId: args.datasetItemId,
+      });
+    },
   };
 };
 
@@ -138,6 +154,8 @@ export const runEvalItem = async (args: {
   agentVersion: number;
   agentOutputSchema: unknown;
   scorers: unknown[];
+  deciderScoring: DeciderScoring;
+  datasetItemId: string;
   input: unknown;
   expectedOutput: string | null;
   itemMetadata: unknown;
@@ -196,7 +214,11 @@ export const runEvalItem = async (args: {
       expectedOutput: args.expectedOutput,
       itemMetadata: args.itemMetadata,
       agentOutputSchema: args.agentOutputSchema,
-      ...buildScorerRunners({ projectId: args.projectId }),
+      ...buildScorerRunners({
+        projectId: args.projectId,
+        deciderScoring: args.deciderScoring,
+        datasetItemId: args.datasetItemId,
+      }),
     });
   } catch (error) {
     // An ungraded answer is an item error, not a 0 — recording 0 would
@@ -237,6 +259,7 @@ export const executeAndRecordItem = async (args: {
   agent: AgentRow;
   agentVersion: number;
   scorers: unknown[];
+  deciderScoring: DeciderScoring;
   item: DatasetItemRow;
   toolContext?: Record<string, string>;
 }): Promise<ItemOutcome> => {
@@ -247,6 +270,8 @@ export const executeAndRecordItem = async (args: {
     agentVersion: args.agentVersion,
     agentOutputSchema: args.agent.outputSchema,
     scorers: args.scorers,
+    deciderScoring: args.deciderScoring,
+    datasetItemId: args.item.publicId,
     input: args.item.input,
     expectedOutput: args.item.expectedOutput,
     itemMetadata: args.item.metadata,

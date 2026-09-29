@@ -48,6 +48,7 @@ export const mapEvalRun = (run: EvalRunRow) => {
     id: run.publicId,
     eval_id: run.eval?.publicId,
     agent_version: run.agentVersion,
+    decider_versions: run.deciderVersions ?? null,
     status: run.status,
     baseline_run_id: run.baselineRun?.publicId ?? null,
     trigger_id: run.triggerId ?? null,
