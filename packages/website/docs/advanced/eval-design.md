@@ -10,7 +10,7 @@ keywords:
 
 # Eval Design
 
-[Evaluations](../modules/evaluations.md) guarantees the mechanics: every item runs against the real agent, inputs are frozen, one version is pinned, errors are counted apart. What a verdict _means_ is decided by the items, the scorers and the threshold you choose. This page covers those choices; [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) runs the loop end to end.
+[Evaluations](../modules/evaluations.md) guarantees the mechanics: every item runs against the real agent, inputs are frozen, one version is pinned, errors are counted apart. What a verdict _means_ is decided by the items, the scorers and the threshold you choose. This page covers those choices and shows no calls: new to evals, complete [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) first, which builds a dataset, binds scorers, runs the eval and compares two runs.
 
 ## The dataset
 
@@ -39,7 +39,7 @@ A scorer that applies to one kind reads `item.metadata` and passes the others va
 }
 ```
 
-An item passes when every scorer passes, so the vacuous `true` costs no other kind its verdict; it does inflate that scorer's own `mean` and `pass_rate`. To read a pass rate per kind, list the run's results, join `dataset_item_id` to each item's `metadata`, and group client-side. When kinds need different thresholds, give each its own dataset and eval.
+An item passes when every scorer passes, so the vacuous `true` costs no other kind its verdict; it does inflate that scorer's own `mean` and `pass_rate`. To read a pass rate per kind, list the run's results ([Evaluate an Agent — Step 5](/docs/tutorials/evaluate-an-agent#step-5--run-it-and-read-the-verdict)), join `dataset_item_id` to each item's `metadata`, and group client-side. When kinds need different thresholds, give each its own dataset and eval.
 
 ## Choosing a scorer
 
@@ -63,7 +63,7 @@ Use the cheapest scorer that decides the item.
 
 Agents are stochastic: two runs of one version over one dataset do not produce one pass rate. A delta means nothing until you know how far the figure moves on its own.
 
-1. Run the unchanged version twice, the second with `baseline_run_id` naming the first. That run's `pass_rate_delta` is noise. Repeat a few times; the largest absolute delta is your **noise floor**.
+1. Run the unchanged version twice, the second with `baseline_run_id` naming the first ([Evaluate an Agent — Step 6](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)). That run's `pass_rate_delta` is noise. Repeat a few times; the largest absolute delta is your **noise floor**.
 2. A change is signal only when its delta exceeds the floor. Below it, run again or add items.
 3. Set `pass_threshold` below the current version's pass rate minus the floor. A threshold of `1.0` fails on noise.
 
@@ -79,7 +79,7 @@ Measure the agent at the `temperature` production serves. Temperature is part of
 An `llm_judge` or `embedding_similarity` score is a model's opinion; its `pass_threshold` means nothing until it agrees with human grades.
 
 1. Grade 20–30 items by hand, pass or fail, borderline cases included.
-2. Run the eval and list the results; compare each scorer's `passed` with your grade.
+2. Run the eval and list the results ([Judge Open-Ended Answers — Step 4](/docs/tutorials/judge-open-ended-answers#step-4--run-it-and-read-the-reasoning)); compare each scorer's `passed` with your grade.
 3. Move the threshold or rewrite the prompt until the disagreements are few and understood. The judge's `reasoning` on each one says which of the two is wrong.
 
 For an `llm_judge` ([LLM judge](../modules/evaluations.md#llm-judge)):
