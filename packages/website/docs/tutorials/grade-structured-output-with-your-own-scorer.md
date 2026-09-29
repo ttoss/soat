@@ -519,13 +519,16 @@ EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
 
 ## Step 7 — Run it and read each scorer
 
-Outcomes and aggregates key on the scorer type, or on `name` for a `tool` scorer. The tool's `reasoning` is stored on the result.
+The run is queued and polled to `completed`: four real generations plus a tool call per item can outlast one HTTP request ([Sync and Async](/docs/advanced/sync-and-async)). Outcomes and aggregates key on the scorer type, or on `name` for a `tool` scorer. The tool's `reasoning` is stored on the result.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-BASELINE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true | jq -r '.id')
+BASELINE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait false | jq -r '.id')
+
+# → retry 300
+soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
   | jq '{passed, completed_count, errored_count, scorers: .aggregate_scores.scorers}'
@@ -538,10 +541,21 @@ soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: baselineRun } = await adminSoat.evaluations.startEvalRun({
+const settle = async (runId: string) => {
+  for (;;) {
+    const { data } = await adminSoat.evaluations.getEvalRun({
+      path: { eval_id: evaluation.id, eval_run_id: runId },
+    });
+    if (data.status !== 'queued' && data.status !== 'running') return data;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+};
+
+const { data: queuedBaseline } = await adminSoat.evaluations.startEvalRun({
   path: { eval_id: evaluation.id },
-  body: { wait: true },
+  body: { wait: false },
 });
+const baselineRun = await settle(queuedBaseline.id);
 
 const { data: results } = await adminSoat.evaluations.listEvalResults({
   path: { eval_id: evaluation.id, eval_run_id: baselineRun.id },
@@ -558,7 +572,12 @@ for (const result of results.data) {
 ```bash
 BASELINE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"wait":true}' | jq -r '.id')
+  -d '{"wait":false}' | jq -r '.id')
+
+until curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "completed"' >/dev/null; do
+  sleep 2
+done
 
 curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID/results" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -650,8 +669,11 @@ soat update-agent --agent-id "$AGENT_ID" \
   --instructions "Classify the customer message. category is refund when the customer asks for money back, otherwise question. refund_amount is the amount the customer asks for, never more than the price they say they paid, or 0." \
   --version-label "caps-refund" | jq '{version}'
 
-CANDIDATE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true \
+CANDIDATE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait false \
   --baseline-run-id "$BASELINE_RUN_ID" | jq -r '.id')
+
+# → retry 300
+soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$CANDIDATE_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$CANDIDATE_RUN_ID" \
   | jq '{passed, errored_count, baseline: .aggregate_scores.baseline}'
@@ -671,10 +693,11 @@ await adminSoat.agents.updateAgent({
   },
 });
 
-const { data: candidateRun } = await adminSoat.evaluations.startEvalRun({
+const { data: queuedCandidate } = await adminSoat.evaluations.startEvalRun({
   path: { eval_id: evaluation.id },
-  body: { wait: true, baseline_run_id: baselineRun.id },
+  body: { wait: false, baseline_run_id: baselineRun.id },
 });
+const candidateRun = await settle(queuedCandidate.id);
 
 console.log(candidateRun.passed, candidateRun.aggregate_scores?.baseline);
 ```
@@ -689,7 +712,12 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID" \
 
 CANDIDATE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"wait\":true,\"baseline_run_id\":\"$BASELINE_RUN_ID\"}" | jq -r '.id')
+  -d "{\"wait\":false,\"baseline_run_id\":\"$BASELINE_RUN_ID\"}" | jq -r '.id')
+
+until curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$CANDIDATE_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "completed"' >/dev/null; do
+  sleep 2
+done
 ```
 
 </TabItem>
