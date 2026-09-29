@@ -1,5 +1,4 @@
 import Link from '@docusaurus/Link';
-import useBaseUrl from '@docusaurus/useBaseUrl';
 import PrimaryAction from '@site/src/components/HomepageShared/PrimaryAction';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
 import Heading from '@theme/Heading';
@@ -11,14 +10,6 @@ import styles from './styles.module.css';
 const HomepageFinalCta = (): React.ReactNode => {
   return (
     <section className={clsx(shared.bleed, shared.dark, styles.section)}>
-      <div className={styles.backdrop} aria-hidden="true">
-        <img
-          className={styles.mark}
-          src={useBaseUrl('/img/brand/soat-symbol-dark.svg')}
-          alt=""
-          loading="lazy"
-        />
-      </div>
       <div className={clsx('container', styles.inner)}>
         <Heading as="h2" className={styles.title}>
           Stop rebuilding agent infrastructure.

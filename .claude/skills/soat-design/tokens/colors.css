@@ -41,7 +41,7 @@
   --color-accent: #8e44ad; /* Deep Violet */
   --color-glow: #00e5ff; /* decorative only in light mode */
 
-  /* The mark: the process boundary and its core (S◻AT and the symbol).
+  /* The mark: the brackets and the core they hold (S[•]AT and [•]).
      Graphic colours, 3:1 minimum on the page. */
   --process-boundary: #1a73e8;
   --process-core: #1a1f2c;

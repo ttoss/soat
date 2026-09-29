@@ -8,8 +8,8 @@ import wordmarkLight from '@/assets/brand/soat-wordmark-light.svg';
 // `packages/website/static/img/brand/` byte for byte
 // (`tests/harness/appBrandAssets.test.mjs`).
 export const BRAND_ASSETS = {
-  /** The S◻AT wordmark: the O is the process boundary with its core. */
+  /** The S[•]AT wordmark: the O is the core held between two brackets. */
   wordmark: { light: wordmarkLight, dark: wordmarkDark },
-  /** The boundary-and-core symbol, for square placements. */
+  /** The [•] symbol, for square placements. */
   symbol: { light: symbolLight, dark: symbolDark },
 } as const;

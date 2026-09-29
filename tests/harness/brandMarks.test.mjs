@@ -7,8 +7,8 @@ import * as url from 'node:url';
 import { parseRules } from './cssRules.mjs';
 
 /**
- * The SOAT mark is the process boundary with its core: an outlined
- * `S◻AT` wordmark and the boundary-and-core symbol, one SVG master per theme in
+ * The SOAT mark is the core held between two brackets: an outlined
+ * `S[•]AT` wordmark and the `[•]` symbol, one SVG master per theme in
  * `packages/website/static/img/brand/`. Every surface draws the mark from
  * those masters, so the colours they paint are the `--process-boundary` and
  * `--process-core` tokens of `soat-design` and nothing else.

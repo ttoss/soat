@@ -6,7 +6,7 @@ import type * as React from 'react';
 import styles from './styles.module.css';
 
 /**
- * The navbar brand: the S◻AT wordmark from the brand masters, in the variant
+ * The navbar brand: the S[•]AT wordmark from the brand masters, in the variant
  * for the active colour mode. It keeps the class the stock component renders,
  * so the theme's navbar layout applies.
  */

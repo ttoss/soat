@@ -43,23 +43,24 @@ SOAT's voice is **a systems engineer describing something powerful** — technic
 
 ## Visual Foundations
 
-The system descends from the mark: **one process** — a boundary with a core inside it. Everything an agent needs runs inside one self-hosted Node.js process on PostgreSQL, and the mark, the diagrams and the imagery all draw that boundary. Visuals should feel like *plumbing for intelligence* — invisible yet indispensable.
+The system descends from the mark: **one process** — a core held between two brackets, `[•]`. Everything an agent needs runs inside one self-hosted Node.js process on PostgreSQL, and the mark, the diagrams and the imagery all draw that boundary. Visuals should feel like *plumbing for intelligence* — invisible yet indispensable.
 
 ### The mark
 
 | Element | Role | Token |
 |---|---|---|
-| **Boundary** | the process: a rounded square, one stroke | `--process-boundary` (Core Cyan dark, Electric Blue light) |
+| **Boundary** | the process: a pair of square brackets, one flat colour | `--process-boundary` (Core Cyan dark, Electric Blue light) |
 | **Core** | the one thing it runs, centred | `--process-core` (Starlight White dark, Deep Space Grey light) |
 | **Inlets** | the four callers (REST, MCP, CLI, SDK) entering the boundary | diagrams only, `--soat-violet` lines |
 | **Strike** | a line through what you do not have to run | diagrams only, Core Cyan |
 
-- **Masters** live in `packages/website/static/img/brand/`: `soat-wordmark-{dark,light,mono}.svg` (S◻AT, outlined Space Grotesk 700 with the O replaced by boundary and core) and `soat-symbol-{dark,light,mono}.svg`, plus `favicon.svg` (a 16 px pixel-aligned cut that follows the colour scheme). Use a master; never retype the wordmark or redraw the symbol.
+- **Masters** live in `packages/website/static/img/brand/`: `soat-wordmark-{dark,light,mono}.svg` (`S[•]AT`, outlined Space Grotesk 700 with the O replaced by the brackets and core; the brackets are punctuation, drawn lighter than the letters — 96 units against the 132-unit stem) and `soat-symbol-{dark,light,mono}.svg`, plus `favicon.svg` (a 16 px pixel-aligned cut that follows the colour scheme). Use a master; never retype the wordmark or redraw the symbol.
 - **Wordmark first.** Headers and navbars show the wordmark alone; the symbol stands in only where the space is square (favicon, avatar, app icon, empty states).
 - **Solid, never a gradient.** The boundary is one flat colour. The brand gradient belongs to buttons and decorative bars, not to the mark.
-- **Clear space:** the boundary's stroke width on every side of the symbol; the height of the O around the wordmark. **Minimum size:** wordmark 16 px tall, symbol 16 px (the favicon cut).
+- **Never close the brackets into a box.** A closed rounded square with a centred dot reads as another company's camera glyph; the open sides are what make the mark SOAT's.
+- **Clear space:** the bracket's arm length on every side of the symbol; the height of the O around the wordmark. **Minimum size:** wordmark 16 px tall, symbol 16 px (the favicon cut).
 - **Rasters:** `static/img/soat-logo.png` is the 512 px avatar (symbol on Space Black) used as the MCP server icon and in JSON-LD; `soat-logo-no-bg.png` is the transparent symbol in Electric Blue; `favicon.ico` carries 16/32/48 px.
-- **Diagrams extend the mark:** a caller enters the boundary through an inlet, PostgreSQL sits outside it, and what SOAT replaces is struck. Draw them from real module names, ports and commands.
+- **Diagrams extend the mark:** the process is drawn between brackets, a caller enters through an inlet, PostgreSQL sits outside it, and what SOAT replaces is struck. Draw them from real module names, ports and commands.
 
 **Theme strategy — dual-theme by design.** SOAT does not invert; it *shifts the functional hue*. **Dark mode is the native environment** (deep space, luminous accents). Light mode is accessibility-first on white.
 
