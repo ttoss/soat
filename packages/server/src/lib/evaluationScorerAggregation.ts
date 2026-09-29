@@ -15,6 +15,7 @@ import createDebug from 'debug';
 import type { BaselineComparison } from './evaluationDeltas';
 import type { RunGrouping } from './evaluationGrouping';
 import type { ScorerOutcome } from './evaluationScorers';
+import { type PassRateInterval, wilsonInterval } from './evaluationStatistics';
 
 const log = createDebug('soat:evaluations');
 
@@ -22,6 +23,8 @@ const log = createDebug('soat:evaluations');
 export type AggregateScores = {
   scorers: Record<string, { mean: number; pass_rate: number }>;
   pass_rate: number | null;
+  /** 95% Wilson interval around `pass_rate`; null exactly when it is. */
+  pass_rate_interval: PassRateInterval | null;
   scored_item_count: number;
   /**
    * Present only when the run named a `baseline_run_id`. Computed over the item
@@ -99,6 +102,10 @@ export const aggregateScores = (args: {
   return {
     scorers,
     pass_rate: scored.length === 0 ? null : ratio(passedItems, scored.length),
+    pass_rate_interval: wilsonInterval({
+      passed: passedItems,
+      total: scored.length,
+    }),
     scored_item_count: scored.length,
   };
 };

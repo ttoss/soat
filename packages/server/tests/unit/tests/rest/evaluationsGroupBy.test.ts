@@ -288,11 +288,21 @@ describe('Evaluations — group_by', () => {
         groups: {
           refusal: {
             pass_rate: 0.5,
+            pass_rate_interval: {
+              low: expect.closeTo(0.094531, 6),
+              high: expect.closeTo(0.905469, 6),
+              level: 0.95,
+            },
             scored_item_count: 2,
             scorers: { contains: { mean: 0.5, pass_rate: 0.5 } },
           },
           multi_step: {
             pass_rate: 1,
+            pass_rate_interval: {
+              low: expect.closeTo(0.206549, 6),
+              high: 1,
+              level: 0.95,
+            },
             scored_item_count: 1,
             scorers: { contains: { mean: 1, pass_rate: 1 } },
           },
@@ -336,6 +346,8 @@ describe('Evaluations — group_by', () => {
             added_item_count: 0,
             removed_item_count: 0,
             pass_rate_delta: 0.5,
+            flipped: { improved: 1, regressed: 0 },
+            p_value: 1,
             scorers: { contains: { mean_delta: 0.5, pass_rate_delta: 0.5 } },
           },
           multi_step: {
@@ -343,6 +355,8 @@ describe('Evaluations — group_by', () => {
             added_item_count: 0,
             removed_item_count: 0,
             pass_rate_delta: 0,
+            flipped: { improved: 0, regressed: 0 },
+            p_value: 1,
             scorers: { contains: { mean_delta: 0, pass_rate_delta: 0 } },
           },
         },
@@ -381,6 +395,8 @@ describe('Evaluations — group_by', () => {
           added_item_count: 0,
           removed_item_count: 0,
           pass_rate_delta: 0,
+          flipped: { improved: 0, regressed: 0 },
+          p_value: 1,
           scorers: { contains: { mean_delta: 0, pass_rate_delta: 0 } },
         },
         late: {
@@ -388,6 +404,8 @@ describe('Evaluations — group_by', () => {
           added_item_count: 1,
           removed_item_count: 0,
           pass_rate_delta: null,
+          flipped: { improved: 0, regressed: 0 },
+          p_value: null,
           scorers: {},
         },
       });
@@ -431,6 +449,8 @@ describe('Evaluations — group_by', () => {
             added_item_count: 0,
             removed_item_count: 0,
             pass_rate_delta: 0,
+            flipped: { improved: 0, regressed: 0 },
+            p_value: 1,
             scorers: { contains: { mean_delta: 0, pass_rate_delta: 0 } },
           },
         },

@@ -1,5 +1,5 @@
 ---
-description: 'How to design an eval whose verdict means something: a dataset weighted toward failures, the cheapest scorer that decides each item, a noise floor measured before a delta is trusted, judges calibrated against human grades, and a held-out set behind the promotion gate.'
+description: 'How to design an eval whose verdict means something: a dataset weighted toward failures, the cheapest scorer that decides each item, a delta read against its p-value and interval before it is trusted, judges calibrated against human grades, and a held-out set behind the promotion gate.'
 keywords:
   - eval design
   - evaluation dataset
@@ -65,11 +65,12 @@ Use the cheapest scorer that decides the item.
 
 ## Noise before signal
 
-Agents are stochastic: two runs of one version over one dataset do not produce one pass rate. A delta means nothing until you know how far the figure moves on its own.
+Agents are stochastic, and a dataset is a sample: two runs of one version over one dataset do not produce one pass rate. Every run reports how far its figures move on their own ([Evaluations — Uncertainty](../modules/evaluations.md#uncertainty)).
 
-1. Run the unchanged version twice, the second with `baseline_run_id` naming the first ([Evaluate an Agent — Step 6](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)). That run's `pass_rate_delta` is noise. Repeat a few times; the largest absolute delta is your **noise floor**.
-2. A change is signal only when its delta exceeds the floor. Below it, run again or add items.
-3. Set `pass_threshold` below the current version's pass rate minus the floor. A threshold of `1.0` fails on noise.
+1. **Read `baseline.p_value` before the delta.** Run the change with `baseline_run_id` naming the current version's run ([Evaluate an Agent — Step 6](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)). A delta whose `p_value` is above `0.05` is not yet distinguishable from items flipping at random: run again or add items. Read `flipped` beside it: `9` improved against `6` regressed is a different change from `3` against `0`.
+2. **Read it per kind.** With `group_by` set, each `baseline.grouping.groups` entry has its own `p_value`, and a kind that regressed can be significant while the overall delta is not.
+3. **Set `pass_threshold` below the current version's `pass_rate_interval.low`.** A threshold inside the interval passes or fails on which items the model happened to get right. A threshold of `1.0` fails on noise.
+4. **Size the dataset by the interval.** When `pass_rate_interval` is wider than the change you need to see, no delta can show it: add items, weighted toward failures.
 
 Measure the agent at the `temperature` production serves. Temperature is part of the [agent version](../modules/agents.md#versioning-and-staged-rollout); an eval-only setting measures a different agent.
 
@@ -118,7 +119,7 @@ A run costs `items × (agent generation + one judge completion per llm_judge + o
 - [ ] Dataset weighted toward failures, each item's kind in `metadata`, `group_by` set to it
 - [ ] Curated items carry a correct `expected_output`
 - [ ] The cheapest scorer per criterion; `llm_judge` only where no rule decides
-- [ ] Noise floor measured; `pass_threshold` below the current pass rate minus the floor
+- [ ] Deltas read with `baseline.p_value`, overall and per kind; `pass_threshold` below the current `pass_rate_interval.low`
 - [ ] Judge model pinned, decider versions matched across compared runs, thresholds calibrated against human grades
 - [ ] `errored_count` read before trusting `passed`
 - [ ] A held-out set behind the promotion gate
