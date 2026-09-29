@@ -227,6 +227,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'tutorials/evaluate-an-agent',
         'tutorials/judge-open-ended-answers',
+        'tutorials/grade-structured-output-with-your-own-scorer',
         'tutorials/gate-a-canary-promotion-on-an-eval',
         'tutorials/replay-a-bad-turn',
       ],

@@ -33,7 +33,9 @@ algorithm layer, including [custom scorers](#custom-scorers-tool) implemented as
 - [Evaluate an Agent - Step 3 (Build a dataset)](/docs/tutorials/evaluate-an-agent#step-3--build-a-dataset)
 - [Evaluate an Agent - Step 6 (Measure a prompt change against a baseline)](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)
 - [Judge Open-Ended Answers - Step 3 (Bind an llm_judge scorer)](/docs/tutorials/judge-open-ended-answers#step-3--bind-the-judge)
-- [Judge Open-Ended Answers - Step 5 (Run queued and poll)](/docs/tutorials/judge-open-ended-answers#step-5--run-it-queued-instead-of-blocking)
+- [Judge Open-Ended Answers - Step 5 (Check the judge against your own grades)](/docs/tutorials/judge-open-ended-answers#step-5--check-the-judge-against-your-own-grades)
+- [Judge Open-Ended Answers - Step 6 (Run queued and poll)](/docs/tutorials/judge-open-ended-answers#step-6--run-it-queued-instead-of-blocking)
+- [Grade Structured Output with Your Own Scorer - Step 6 (Bind output_schema, json_logic and tool scorers)](/docs/tutorials/grade-structured-output-with-your-own-scorer#step-6--bind-three-scorers)
 - [Gate a Canary Promotion on an Eval - Step 4 (Set a promotion gate)](/docs/tutorials/gate-a-canary-promotion-on-an-eval#step-4--start-a-gated-canary-release)
 - [Gate a Canary Promotion on an Eval - Step 8 (Schedule nightly runs)](/docs/tutorials/gate-a-canary-promotion-on-an-eval#step-8--keep-feeding-the-gate-after-you-stop-watching)
 
