@@ -133,7 +133,7 @@ The ratchet acts on the other three layers and needs no graph. Order in practice
 
 [Evaluations](/docs/modules/evaluations): a project-scoped **dataset** holds the cases; **scorers** grade each output (deterministic: exact match, substring, JSON Logic, schema validation; an LLM judge for fuzzy criteria; or [your own algorithm as a tool](/docs/modules/evaluations#custom-scorers-tool)); a **run** executes the real agent (its true instructions, tools, model, and knowledge) against every item. Compared against a named baseline it yields per-scorer deltas and a pass/fail verdict; every result links to its [generation](/docs/modules/generations) and [trace](/docs/modules/traces).
 
-Eval runs are real generations; eval spend is attributed separately from production spend in [usage](/docs/modules/usage) rollups. Agents are stochastic: judge aggregates over a dataset, not single items, and set a pass threshold below `1.0`.
+Eval runs are real generations; eval spend is attributed separately from production spend in [usage](/docs/modules/usage) rollups. Agents are stochastic: judge aggregates over a dataset, not single items, and set a pass threshold below `1.0` ([Eval Design](/docs/advanced/eval-design)).
 
 ### Change that cannot slide backward
 

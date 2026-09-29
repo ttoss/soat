@@ -150,6 +150,7 @@ const sidebars: SidebarsConfig = {
         'advanced/single-source-of-truth',
         'advanced/memory-and-knowledge-engine',
         'advanced/retrieval-quality',
+        'advanced/eval-design',
         'advanced/tool-context',
       ],
     },
