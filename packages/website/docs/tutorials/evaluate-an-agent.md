@@ -625,5 +625,6 @@ An item whose generation did not complete is an **error**: excluded from `aggreg
 ## What's next
 
 - [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) — answers with no single right string.
+- [Grade Structured Output with Your Own Scorer](/docs/tutorials/grade-structured-output-with-your-own-scorer) — a business rule in your own code.
 - [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that waits for a green suite.
 - [Evaluations](/docs/modules/evaluations) — full data model.

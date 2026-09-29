@@ -150,6 +150,7 @@ const sidebars: SidebarsConfig = {
         'advanced/single-source-of-truth',
         'advanced/memory-and-knowledge-engine',
         'advanced/retrieval-quality',
+        'advanced/eval-design',
         'advanced/tool-context',
       ],
     },
@@ -226,6 +227,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'tutorials/evaluate-an-agent',
         'tutorials/judge-open-ended-answers',
+        'tutorials/grade-structured-output-with-your-own-scorer',
+        'tutorials/grade-an-eval-with-a-decider',
         'tutorials/gate-a-canary-promotion-on-an-eval',
         'tutorials/replay-a-bad-turn',
       ],

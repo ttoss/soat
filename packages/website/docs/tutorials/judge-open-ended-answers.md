@@ -1,11 +1,12 @@
 ---
-description: 'Score answers that have no single correct string: an llm_judge scorer with a required threshold, run queued instead of blocking, polled to a verdict, and cancellable mid-flight.'
+description: 'Score answers that have no single correct string: an llm_judge scorer with a pinned model and a rubric, checked against your own grades, run queued instead of blocking, polled to a verdict, and cancellable mid-flight.'
 keywords:
   - LLM as a judge
   - LLM judge scorer
   - grading AI output
   - queued eval run
   - AI evaluation threshold
+  - judge calibration
   - cancel eval run
 sidebar_position: 27
 ---
@@ -17,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 `exact_match` and `contains` need a known right string; summaries, explanations and rewrites have many correct forms. An `llm_judge` [scorer](/docs/modules/evaluations#llm-judge) grades the answer with a tool-less model completion through the same [AI providers](/docs/modules/ai-providers) path, returning a 0–1 score plus reasoning.
 
-Bind an `llm_judge` scorer next to a deterministic one, read each item's `score` and `reasoning`, see why an unparseable verdict is an error rather than a zero, run the eval queued and poll, and cancel a run mid-flight. Assumes [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
+Bind an `llm_judge` scorer next to a deterministic one, read each item's `score` and `reasoning`, see why an unparseable verdict is an error rather than a zero, check the judge against your own grades, run the eval queued and poll, and cancel a run mid-flight. Assumes [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
 
 ## Prerequisites
 
@@ -203,6 +204,8 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/datasets/$DATASET_ID/items" \
 
 The judge's `prompt` has three per-item slots: `{{input}}`, `{{output}}`, `{{expected}}` ([Evaluations — LLM judge](/docs/modules/evaluations#llm-judge)). `pass_threshold` on the scorer is required, no default. Keep a deterministic scorer alongside as a structural floor.
 
+`model` pins the judge, so a change to the provider's default model cannot move the scores. The prompt carries a rubric saying what each score means; a judge asked for "a score" drifts toward the top ([Eval Design — Calibrating a judge](/docs/advanced/eval-design#calibrating-a-judge)).
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -212,7 +215,7 @@ EVAL_ID=$(soat create-eval \
   --name "reply-quality" \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"llm_judge","ai_provider_id":"'"$AI_PROVIDER_ID"'","prompt":"You grade customer support drafts. Reply with only JSON: {\"score\": <number 0-1>, \"reasoning\": \"<one sentence>\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}","pass_threshold":0.7}]' \
+  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"llm_judge","ai_provider_id":"'"$AI_PROVIDER_ID"'","model":"qwen2.5:0.5b","prompt":"You grade a customer support draft against a reference answer. Score 1 when the draft apologizes and offers the fix the reference names, 0.5 when it offers the fix without apologizing, 0 when it offers no fix. Reply with only JSON: {\"score\": <1, 0.5 or 0>, \"reasoning\": \"<one sentence>\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}","pass_threshold":0.7}]' \
   --pass-threshold 0.5 | jq -r '.id')
 
 soat get-eval --eval-id "$EVAL_ID" | jq '.scorers | map({type, pass_threshold})'
@@ -233,8 +236,12 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
       {
         type: 'llm_judge',
         ai_provider_id: provider.id,
+        model: 'qwen2.5:0.5b',
         prompt:
-          'You grade customer support drafts. Reply with only JSON: {"score": <number 0-1>, "reasoning": "<one sentence>"}. ' +
+          'You grade a customer support draft against a reference answer. ' +
+          'Score 1 when the draft apologizes and offers the fix the reference names, ' +
+          '0.5 when it offers the fix without apologizing, 0 when it offers no fix. ' +
+          'Reply with only JSON: {"score": <1, 0.5 or 0>, "reasoning": "<one sentence>"}. ' +
           'Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}',
         pass_threshold: 0.7,
       },
@@ -250,7 +257,7 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
 ```bash
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"reply-quality\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"llm_judge\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"prompt\":\"You grade customer support drafts. Reply with only JSON: {\\\"score\\\": <number 0-1>, \\\"reasoning\\\": \\\"<one sentence>\\\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}\",\"pass_threshold\":0.7}],\"pass_threshold\":0.5}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"reply-quality\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"llm_judge\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\",\"prompt\":\"You grade a customer support draft against a reference answer. Score 1 when the draft apologizes and offers the fix the reference names, 0.5 when it offers the fix without apologizing, 0 when it offers no fix. Reply with only JSON: {\\\"score\\\": <1, 0.5 or 0>, \\\"reasoning\\\": \\\"<one sentence>\\\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}\",\"pass_threshold\":0.7}],\"pass_threshold\":0.5}" | jq -r '.id')
 ```
 
 </TabItem>
@@ -333,11 +340,96 @@ The judge must reply with a JSON object carrying a numeric `score` between 0 and
 
 :::
 
-The judge model is pinned per scorer config; re-run the baseline when you change it. The judge's `ai_provider_id` must belong to the eval's project; the project's default [model route](/docs/modules/model-routes) applies when the scorer pins none.
+Re-run the baseline when you change the judge's `model`. The judge's `ai_provider_id` must belong to the eval's project; the project's default [model route](/docs/modules/model-routes) applies when the scorer pins none.
 
 ---
 
-## Step 5 — Run it queued instead of blocking
+## Step 5 — Check the judge against your own grades
+
+A judge's `pass_threshold` means nothing until the judge agrees with your own verdicts ([Eval Design — Calibrating a judge](/docs/advanced/eval-design#calibrating-a-judge)). Export each draft with the judge's verdict, record yours next to it, and count the agreement.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
+  | jq '[.data[] | {output, judge_passed: ([.scores[]? | select(.scorer == "llm_judge") | .passed] | first), human_passed: null}]' \
+  > judge-grades.json
+
+jq '.[0].human_passed = true | .[1].human_passed = false' judge-grades.json > judge-graded.json
+
+jq '{
+  graded: map(select(.judge_passed != null)) | length,
+  agreed: map(select(.judge_passed != null and .judge_passed == .human_passed)) | length,
+  disagreements: map(select(.judge_passed != null and .judge_passed != .human_passed))
+}' judge-graded.json
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: graded } = await adminSoat.evaluations.listEvalResults({
+  path: { eval_id: evaluation.id, eval_run_id: run.id },
+});
+
+// Your own verdict per draft, in result order.
+const humanPassed = [true, false];
+
+const rows = graded.data.map((result, index) => ({
+  output: result.output,
+  judge_passed: result.scores?.find((s) => s.scorer === 'llm_judge')?.passed ?? null,
+  human_passed: humanPassed[index] ?? null,
+}));
+
+const judged = rows.filter((row) => row.judge_passed !== null);
+console.log({
+  graded: judged.length,
+  agreed: judged.filter((row) => row.judge_passed === row.human_passed).length,
+  disagreements: judged.filter((row) => row.judge_passed !== row.human_passed),
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {output, judge_passed: ([.scores[]? | select(.scorer == "llm_judge") | .passed] | first), human_passed: null}]' \
+  > judge-grades.json
+
+jq '.[0].human_passed = true | .[1].human_passed = false' judge-grades.json > judge-graded.json
+
+jq '{
+  graded: map(select(.judge_passed != null)) | length,
+  agreed: map(select(.judge_passed != null and .judge_passed == .human_passed)) | length,
+  disagreements: map(select(.judge_passed != null and .judge_passed != .human_passed))
+}' judge-graded.json
+```
+
+</TabItem>
+</Tabs>
+
+```json
+{
+  "graded": 2,
+  "agreed": 1,
+  "disagreements": [
+    {
+      "output": "We apologize for any inconvenience and appreciate your understanding.",
+      "judge_passed": true,
+      "human_passed": false
+    }
+  ]
+}
+```
+
+The second command stands in for your review: set `human_passed` on each draft to your own verdict. Items the judge could not grade (Step 4) carry `judge_passed: null` and are left out of the count. On each disagreement, read the judge's `reasoning`, then fix the rubric or move `pass_threshold` with [`update-eval`](/docs/api/evaluations/update-eval) and run again. Grade 20–30 drafts, borderline ones included, before gating on the judge.
+
+---
+
+## Step 6 — Run it queued instead of blocking
 
 A judged suite makes two provider calls per item. `wait` selects the mode; both share one execution path, so runs are comparable.
 
@@ -404,7 +496,7 @@ An empty dataset is rejected in both modes; a `wait: true` run over 25 items is 
 
 ---
 
-## Step 6 — Cancel a run mid-flight
+## Step 7 — Cancel a run mid-flight
 
 Cancelling drops the run's outstanding tasks and settles it `canceled` ([Evaluations — Canceling a run](/docs/modules/evaluations#canceling-a-run)).
 
@@ -468,6 +560,7 @@ Written results are kept; `completed_count` / `errored_count` report what ran; `
 
 ## Next steps
 
+- [Grade Structured Output with Your Own Scorer](/docs/tutorials/grade-structured-output-with-your-own-scorer) — a business rule in your own code.
 - [Evaluations — Eval spend](/docs/modules/evaluations#eval-spend-is-separable-from-production-spend) — metered as `source: "eval"` / `"eval_judge"`.
 - [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that depends on a green suite.
 - [Evaluations — LLM judge](/docs/modules/evaluations#llm-judge) — full contract.

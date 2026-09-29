@@ -154,12 +154,13 @@ services:
       # Tool egress is default-deny for non-public destinations (see
       # packages/server/src/lib/toolEgress.ts), so these sibling containers are
       # exactly the case an operator has to declare: `server` for soat self-call
-      # tools, `tutorials:8788` for the echo listener, `tutorials:8787` for the
+      # tools, `tutorials:8788` for the echo listener, `tutorials:8789` for the
+      # eval scorer service, `tutorials:8787` for the
       # webhook listener a delivery is sent to, and `mock-providers` for the
       # speech-to-text tool an ingestion converter drives (a converter invokes a
       # tool, so it is egress-checked like any other tool call) and for the
       # `base_url` the vision provider is created with.
-      TOOL_EGRESS_ALLOWED_HOSTS: server:5047,tutorials:8787,tutorials:8788,mock-providers:8090
+      TOOL_EGRESS_ALLOWED_HOSTS: server:5047,tutorials:8787,tutorials:8788,tutorials:8789,mock-providers:8090
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: tutorials-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
@@ -208,9 +209,11 @@ services:
       # Tutorials run in parallel inside this one container, so a listener port
       # can only belong to one of them. 8787 is the webhook listener
       # (chat-with-llm); 8788 is the tool-context tutorial's header-echo
-      # endpoint. A second tutorial that needs its own listener takes the next
-      # port and its own variable rather than sharing one of these.
+      # endpoint; 8789 is the structured-output tutorial's scorer service. A
+      # tutorial that needs its own listener takes the next port and its own
+      # variable rather than sharing one of these.
       SOAT_TOOL_ECHO_BASE_URL: 'http://tutorials:8788'
+      SOAT_SCORER_BASE_URL: 'http://tutorials:8789'
       TUTORIAL_ID: '${TUTORIAL_ID:-}'
       VERBOSE: '0'
       # Point the converter tutorial's provider endpoints at the mock service.
