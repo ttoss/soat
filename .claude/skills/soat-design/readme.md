@@ -1,20 +1,20 @@
 # SOAT Design System
 
-**SOAT — Infrastructure for production-ready AI agents.**
+**SOAT — open-source infrastructure for production-ready AI agents.**
 
 SOAT is open-source infrastructure for building AI applications. One self-hostable Node.js server provides IAM, file and document storage with vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full Model Context Protocol (MCP) server — backed by PostgreSQL. Every operation is exposed through four equivalent surfaces — **REST, MCP, CLI, and TypeScript SDK** — so the same call runs the same way from a backend, Claude Desktop, a CI script, or a UI.
 
-This design system translates SOAT's identity — *robust, precise infrastructure that powers intelligent applications* — into reusable tokens, components, and full-screen recreations.
+This design system translates SOAT's identity — *robust, precise infrastructure that powers intelligent applications* — into reusable tokens, components, and specimen cards.
 
 ---
 
 ## Sources
 
-This system was built from the official SOAT repository. Explore these to extend or verify the work:
+The tokens and components mirror the SOAT repository, which stays the source of truth:
 
 - **GitHub:** [`ttoss/soat`](https://github.com/ttoss/soat) — the monorepo. Key inputs:
   - `packages/website/src/css/custom.css` — the live Docusaurus theme (Infima variable overrides, dual-theme).
-  - `packages/website/src/pages/index.tsx` + `index.module.css` — the marketing homepage.
+  - `packages/website/src/pages/index.tsx` + `src/components/Homepage*/` — the marketing homepage.
   - `packages/website/docusaurus.config.ts` — navbar, footer, color mode config.
   - `packages/website/docs/**` — module documentation (real product copy).
   - `packages/website/static/img/` — logo, hero, and architecture imagery.
@@ -53,7 +53,9 @@ The entire system descends from the **Vector Galaxy** logo: a swirling nebula of
   - Dark: page Space Black `#080C14`, surfaces Nebula Navy `#161B22` / code `#0D1117`, text Starlight White `#F0F8FF`, **functional primary = Core Cyan**.
   - **The 4.5:1 rule:** Core Cyan is *never functional text* in light mode — decorative glow only. Use Electric Blue for interactive UI on light.
   - Imagery is cool — cyan/violet over deep navy/black. Light mode prefers transparent/faded cosmic imagery so it feels embedded, not pasted on.
-- **Gradients (Vector Galaxy flow):** light = Violet → Electric Blue; dark = Violet → Core Cyan. Used on primary buttons, hero headline text-clip, and switch on-states. Page backgrounds are never flat black — a subtle radial cosmic wash implies depth.
+- **Gradients (Vector Galaxy flow):** light = Violet → Electric Blue; dark = Violet → Core Cyan (`--gradient-brand`). Used for hero headline text-clip, switch on-states and decorative bars. Page backgrounds are never flat black — a subtle radial cosmic wash implies depth.
+- **Action gradient — the gradient under solid text.** Primary buttons paint `--gradient-action` with `--text-on-action`, never `--gradient-brand` with a hard-coded color. Light: Violet → Electric Blue with white text. Dark: lifted violet `#B06AD0` → Core Cyan with Space Black text, because white on Core Cyan is 1.54:1. Every stop clears 4.5:1 against its text.
+- **Method badges** (API reference): white labels on the light fills, Space Black labels on the brighter dark fills (`--method-fg`); every pair clears 4.5:1.
 - **Type.** Headings: **Space Grotesk** (700/600/500), letter-spacing `0.02–0.03em` — engineered, geometric. Body/UI: **Inter** (400/500/600). Code: **JetBrains Mono**. Body line-height is generous (1.7) for long-form docs.
 - **Spacing.** 4px base grid. Section padding is generous (≈80px). The logo wants clear space — the UI follows suit: calm, structured, never cramped.
 - **Corner radii.** Soft and engineered, not pill-round. `md` (8px) is the workhorse for buttons/cards/inputs; code blocks and admonitions use `lg` (12px); feature cards `xl` (16px); only avatars/status dots/pills are fully round.
@@ -62,7 +64,9 @@ The entire system descends from the **Vector Galaxy** logo: a swirling nebula of
 - **Glassmorphism (HUD feel).** Navbars and floating panels use `backdrop-filter: blur(16px)` over low-opacity surfaces.
 - **Hover states.** Primary buttons lift `translateY(-2px)` and intensify their glow; secondary buttons shift border/text to the primary hue; cards lift `-4px` and gain a cyan-edged glow. Nav links glow on hover in dark mode.
 - **Press / active.** Color deepens (primary-active token); no aggressive shrink.
-- **Animation.** Restrained and purposeful — fades and short translate-lifts (150–300ms), eased with `cubic-bezier(0.16,1,0.3,1)`. No bounces, no infinite decorative loops on content. Motion suggests *data flow and retrieval*.
+- **Animation.** Restrained and purposeful — fades and short translate-lifts (150–300ms), eased with `cubic-bezier(0.16,1,0.3,1)`. No bounces. Motion suggests *data flow and retrieval*.
+  - **Continuous loops** belong to three places only: the Vector Galaxy mark (a slow turn of 180s per revolution and a core pulse), faint background marks, and data-flow connectors (dashes moving along a line). Never on text, controls or content blocks.
+  - Every continuous loop stops under `@media (prefers-reduced-motion: reduce)`, declared in the same stylesheet as the loop (`tests/harness/reducedMotion.test.mjs`).
 - **Cards.** Surface fill + 1px border + soft shadow (light) / glow-on-hover (dark), `xl` radius. Glass variant for HUD panels. **No** colored left-border-accent cards.
 - **App sidebar navigation — flat modules.** Modules render as a single **flat list** in the app sidebar — one row per module with its own stroke icon, no collapsible groups, no indentation. The active row carries a left accent border in `--color-primary` plus a low-opacity primary tint; hover applies a fainter tint. Do **not** nest modules under collapsible category headers or chevrons. (Project picker and the `Admin` section remain distinct blocks above/below the flat module list.)
 - **Imagery — use:** node-and-connection constellations, light trails, dark clean space, abstract geometry (hexagons, spheres, spirals of light). **Avoid:** literal brain icons, classic database cylinders, bright sunny stock photography, and bluish-purple "AI slop" gradients that aren't the brand's violet→cyan flow.
@@ -77,7 +81,7 @@ SOAT favors **thin, geometric, stroke-based icons** with no fills — matching t
   - *Substitution flag:* SOAT does not ship a packaged icon font; the repo contains only a few bespoke inline SVGs. Lucide is a close-matching stand-in for general use. If SOAT later publishes an icon set, swap the CDN link.
 - **Stroke icons render in `currentColor`** — they pick up `--color-primary` (Electric Blue in light, Core Cyan in dark) and glow in dark contexts.
 - **No emoji** as icons, anywhere. No unicode-glyph icons. A few text glyphs appear only as inert affordances (e.g. `⌘K` in search, `✓` in checklists).
-- Logo and imagery (galaxy, hero, architecture) are raster PNGs in `assets/`. Never redraw the Vector Galaxy as SVG — use the supplied asset.
+- Logo and imagery (galaxy, hero, architecture, social card) are raster PNGs in `packages/website/static/img/`. Never redraw the Vector Galaxy as SVG — use the supplied asset.
 
 ---
 
@@ -100,14 +104,11 @@ SOAT favors **thin, geometric, stroke-based icons** with no fills — matching t
 - `core/` — `Button`, `Badge`, `MethodBadge`, `Tag`
 - `forms/` — `Input`, `Switch`
 - `surfaces/` — `Card`, `CodeBlock`
+- `_ds_bundle.js` (skill root) — the primitives bundled for the specimen cards; generated by `pnpm run design-bundle`, never edited by hand.
 
 **`guidelines/`** — foundation specimen cards (Design System tab): Colors, Type, Spacing, Brand.
 
-**`ui_kits/`** — full-screen product recreations
-- `website/` — the marketing homepage (theme-toggleable).
-- `docs/` — the documentation site (sidebar-navigable, API reference).
-
-**`assets/`** — `soat-logo.png` (transparent Vector Galaxy), `soat-logo-dark-bg.png`, `hero.png`, `architecture.png`, `social-card.png`.
+**Imagery** lives in the repository, not in this skill: `packages/website/static/img/` holds `soat-logo-no-bg.png` (transparent Vector Galaxy), `soat-logo.png` (on its own backdrop), `hero.png`, `soat-architecture.png`, `social-card.png` and `favicon.ico`.
 
 ---
 
@@ -115,4 +116,3 @@ SOAT favors **thin, geometric, stroke-based icons** with no fills — matching t
 
 - **Fonts** load from the Google Fonts CDN (all three are Google Fonts). To self-host, replace the `@import` in `tokens/fonts.css` with `@font-face` rules pointing at local binaries.
 - **Icons** use Lucide as a documented stand-in (see Iconography). Flag for the SOAT team if an official set exists.
-- UI kits are cosmetic recreations for design work — not production code. They compose the real token system and primitives but stub data and navigation.

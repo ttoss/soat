@@ -50,6 +50,14 @@
     hsl(var(--brand-violet)),
     hsl(var(--primary))
   );
+  /* The gradient under solid text: every stop clears 4.5:1 against
+     --action-foreground (tests/harness/brandContrast.test.mjs). */
+  --background-image-action-gradient: linear-gradient(
+    135deg,
+    hsl(var(--action-start)),
+    hsl(var(--primary))
+  );
+  --color-action-foreground: hsl(var(--action-foreground));
 
   --radius-sm: 0.4rem;
   --radius-md: 0.5rem;
@@ -92,7 +100,7 @@
     --card-foreground: 222 26% 14%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 26% 14%;
-    --primary: 214 82% 51%; /* Electric Blue #1A73E8 */
+    --primary: 214.1 81.7% 50.6%; /* Electric Blue #1A73E8, exact: white on it is 4.51:1 */
     --primary-foreground: 0 0% 100%;
     --secondary: 216 33% 97%; /* Pale Cosmos #F5F7FA */
     --secondary-foreground: 222 26% 14%;
@@ -108,6 +116,8 @@
     /* Brand DNA — decorative only in light mode (never functional text) */
     --brand-violet: 282 44% 47%; /* Deep Violet #8E44AD */
     --brand-cyan: 186 100% 50%; /* Core Cyan #00E5FF */
+    --action-start: 282 44% 47%; /* Deep Violet #8E44AD */
+    --action-foreground: 0 0% 100%;
     --radius: 0.5rem;
   }
 
@@ -134,6 +144,9 @@
     --ring: 186 100% 50%; /* Core Cyan focus ring */
     --brand-violet: 282 44% 47%;
     --brand-cyan: 186 100% 50%;
+    /* White on Core Cyan is 1.54:1: dark text, from a lifted violet #B06AD0. */
+    --action-start: 281 52% 62%;
+    --action-foreground: 220 43% 6%;
   }
 
   /* Respect the OS preference out of the box when no theme class is set. */
@@ -158,6 +171,8 @@
       --border: 215 21% 18%;
       --input: 215 21% 18%;
       --ring: 186 100% 50%;
+      --action-start: 281 52% 62%;
+      --action-foreground: 220 43% 6%;
     }
   }
 }

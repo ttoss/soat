@@ -1,6 +1,6 @@
 /* ===================================================================
    SOAT — COLOR TOKENS
-   Source of truth: SOAT Brand System v1.1 + website theme.
+   Mirrors the website theme (packages/website/src/css/custom.css).
    Dual-theme by design: light mode uses Electric Blue as the functional
    primary; dark mode (the native environment) uses Core Cyan.
    We do not invert — we shift the functional hue to keep contrast high.
@@ -70,15 +70,19 @@
 
   /* HTTP method badge palette (from docs API reference) */
   --method-get: #1a73e8;
-  --method-post: #10a37f;
-  --method-delete: #ef4444;
-  --method-put: #3b82f6;
-  --method-patch: #f97316;
-  --method-fg: #ffffff; /* method-badge text — backgrounds are dark enough for white */
+  --method-post: #047857;
+  --method-delete: #dc2626;
+  --method-put: #2563eb;
+  --method-patch: #c2410c;
+  --method-fg: #ffffff; /* every light method fill clears 4.5:1 against white */
   --method-border: rgba(255, 255, 255, 0.22);
 
   /* Brand gradient (light): Deep Violet -> Electric Blue */
   --gradient-brand: linear-gradient(135deg, #8e44ad 0%, #1a73e8 100%); /* @kind color */
+  /* Action fill: the brand gradient under solid text (primary buttons). Every
+     stop clears 4.5:1 against --text-on-action. */
+  --gradient-action: linear-gradient(135deg, #8e44ad 0%, #1a73e8 100%); /* @kind color */
+  --text-on-action: #ffffff;
   /* Cosmic depth wash for page backgrounds */
   --gradient-cosmos: radial-gradient(
     circle at 75% 35%,
@@ -132,6 +136,10 @@
 
   /* Brand gradient (dark): Deep Violet -> Core Cyan */
   --gradient-brand: linear-gradient(135deg, #8e44ad 0%, #00e5ff 100%); /* @kind color */
+  /* Core Cyan is too light for white text: the dark action fill takes dark
+     text and starts from a lifted violet that clears 4.5:1 against it. */
+  --gradient-action: linear-gradient(135deg, #b06ad0 0%, #00e5ff 100%); /* @kind color */
+  --text-on-action: #080c14;
   --gradient-cosmos: radial-gradient(
     circle at 50% 0%,
     rgba(142, 68, 173, 0.18) 0%,

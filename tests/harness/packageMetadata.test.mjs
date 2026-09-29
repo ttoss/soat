@@ -42,12 +42,34 @@ export const RETIRED_TAGLINE = 'Infrastructure for AI Apps';
 /** The files that state what SOAT is to a crawler, a registry, or an agent. */
 export const SELF_DESCRIBING_SOURCES = [
   'packages/website/docusaurus.config.ts',
+  'packages/website/src/data/structuredData.ts',
+  'packages/website/src/data/agentInstructions.ts',
+  'packages/website/src/data/solutions/soat.json',
+  'packages/website/docs/introduction.md',
+  'packages/website/src/pages/about.md',
   'packages/server/src/mcp/server.ts',
+  '.claude/skills/soat-design/readme.md',
+  '.claude/skills/soat-design/SKILL.md',
   'README.md',
 ];
 
+/**
+ * The tail of the descriptor. A self-description that says it without the
+ * canonical qualifier ("Infrastructure for…", "the infrastructure layer
+ * for…", "self-hosted infrastructure for…") is a second wording.
+ */
+const DESCRIPTOR_TAIL =
+  /infrastructure(?: layer)? for production-ready AI agents/gi;
+
+const readSource = (file) => {
+  return fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf-8');
+};
+
 /** The workflow that publishes to npm, and therefore the list of record. */
-const RELEASE_WORKFLOW = path.resolve(__dirname, '../../.github/workflows/main.yml');
+const RELEASE_WORKFLOW = path.resolve(
+  __dirname,
+  '../../.github/workflows/main.yml'
+);
 
 /**
  * The packages the release job actually runs `pnpm publish` for, read off the
@@ -56,11 +78,11 @@ const RELEASE_WORKFLOW = path.resolve(__dirname, '../../.github/workflows/main.y
  */
 const publishedByWorkflow = () => {
   const workflow = fs.readFileSync(RELEASE_WORKFLOW, 'utf-8');
-  return [
-    ...workflow.matchAll(/pnpm --filter (\S+) publish\b/g),
-  ].map((match) => {
-    return match[1];
-  });
+  return [...workflow.matchAll(/pnpm --filter (\S+) publish\b/g)].map(
+    (match) => {
+      return match[1];
+    }
+  );
 };
 
 const readPackages = () => {
@@ -195,5 +217,43 @@ describe('published package metadata', () => {
       });
 
     assert.deepEqual(offenders, []);
+  });
+});
+
+/** Mentions of the descriptor tail in `file` that drop the canonical qualifier. */
+const descriptorDrift = (file) => {
+  const source = readSource(file);
+  return [...source.matchAll(DESCRIPTOR_TAIL)]
+    .filter((match) => {
+      const start = match.index - 'open-source '.length;
+      return (
+        start < 0 ||
+        source.slice(start, match.index + match[0].length).toLowerCase() !==
+          CANONICAL_PHRASE.toLowerCase()
+      );
+    })
+    .map((match) => {
+      const line = source.slice(0, match.index).split('\n').length;
+      const excerpt = source
+        .slice(Math.max(0, match.index - 30), match.index + match[0].length)
+        .replace(/\s+/g, ' ')
+        .trim();
+      return `${file}:${line}: ${excerpt}`;
+    });
+};
+
+describe('self-descriptions', () => {
+  test('every self-describing source states the canonical phrase', () => {
+    const offenders = SELF_DESCRIBING_SOURCES.filter((file) => {
+      return !readSource(file)
+        .toLowerCase()
+        .includes(CANONICAL_PHRASE.toLowerCase());
+    });
+
+    assert.deepEqual(offenders, []);
+  });
+
+  test('every mention of the descriptor carries the canonical phrase', () => {
+    assert.deepEqual(SELF_DESCRIBING_SOURCES.flatMap(descriptorDrift), []);
   });
 });

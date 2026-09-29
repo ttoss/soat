@@ -17,7 +17,7 @@ export default function Home(): React.ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
     <Layout
-      title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
+      title={`${siteConfig.title} — ${siteConfig.tagline}`}
       description="Sessions, knowledge, memory, orchestration, guardrails, IAM, evaluations and traces from one self-hosted Node.js server on PostgreSQL. Reachable over REST, MCP, CLI and SDK."
     >
       {/* The homepage is the only page with no Markdown twin of its own, so it

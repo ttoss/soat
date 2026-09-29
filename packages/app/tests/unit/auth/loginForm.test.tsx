@@ -5,12 +5,13 @@ import { describe, expect, test } from 'vitest';
 import { AuthProvider } from '@/auth/authContext';
 import { LoginForm } from '@/auth/loginForm';
 
-const renderLogin = () =>
-  render(
+const renderLogin = () => {
+  return render(
     <AuthProvider>
       <LoginForm />
     </AuthProvider>
   );
+};
 
 describe('LoginForm', () => {
   test('renders the username and password fields', () => {
@@ -39,7 +40,7 @@ describe('LoginForm', () => {
   test('uses the gradient variant for the submit button', () => {
     renderLogin();
     const submit = screen.getByRole('button', { name: 'Sign in' });
-    expect(submit).toHaveClass('bg-galaxy-gradient');
+    expect(submit).toHaveClass('bg-action-gradient');
   });
 
   test('submits valid credentials without showing an error', async () => {

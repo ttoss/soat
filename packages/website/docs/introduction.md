@@ -1,5 +1,5 @@
 ---
-description: 'SOAT is a self-hostable infrastructure layer for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.'
+description: 'SOAT is open-source infrastructure for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.'
 sidebar_position: 1
 ---
 
@@ -8,7 +8,7 @@ import TabItem from '@theme/TabItem';
 
 # Introduction
 
-**SOAT is the infrastructure layer for production-ready AI agents**: IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, RAG, declarative stack deployment, and a full MCP server in one self-hostable Node.js service backed by PostgreSQL.
+**SOAT is open-source infrastructure for production-ready AI agents**: IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, RAG, declarative stack deployment, and a full MCP server in one self-hostable Node.js service backed by PostgreSQL.
 
 The platform is organized around the [four layers of an agent system](/docs/agent-system-layers): **harness** (what an agent can reach), **loop** (what proves a run did the job), **graph** (what happens next), **ratchet** (what proves a change was an improvement). The ratchet is the active build front: [Where SOAT is going](#where-soat-is-going).
 

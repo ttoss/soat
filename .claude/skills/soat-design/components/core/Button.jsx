@@ -2,9 +2,10 @@ import React from 'react';
 
 /**
  * SOAT Button — the primary interactive control.
- * Primary variant uses the brand gradient (Deep Violet -> Electric Blue in
- * light, -> Core Cyan in dark) and lifts on hover; in dark mode it emits a
- * cyan glow. Secondary is a bordered surface button; ghost is text-only.
+ * Primary variant uses the action gradient (Deep Violet -> Electric Blue with
+ * white text in light, lifted violet -> Core Cyan with dark text in dark) and
+ * lifts on hover; in dark mode it emits a cyan glow. Secondary is a bordered
+ * surface button; ghost is text-only.
  */
 export function Button({
   children,
@@ -43,8 +44,8 @@ export function Button({
 
   const variants = {
     primary: {
-      background: 'var(--gradient-brand)',
-      color: '#ffffff', /* gradient stays dark in both themes, so white is the correct contrast (not --color-primary-contrast, which flips dark in dark mode) */
+      background: 'var(--gradient-action)',
+      color: 'var(--text-on-action)',
       boxShadow: 'var(--shadow-sm)',
     },
     secondary: {

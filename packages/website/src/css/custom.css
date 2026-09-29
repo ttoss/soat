@@ -2,7 +2,7 @@
 
 /**
  * SOAT Brand Theme
- * Based on SOAT Brand Identity Guidelines v1.1
+ * Follows the soat-design skill (.claude/skills/soat-design/).
  * 
  * Implements Infima variable overrides for Docusaurus.
  */
@@ -17,6 +17,16 @@
   --soat-violet-dark: #7d3c9d;
   --soat-violet-light: #a855c7;
   --soat-core-cyan: #00e5ff; /* Decorative in light mode */
+
+  /* Action fill: the brand gradient under solid text (primary buttons, the
+     permission-engine bar). Every stop clears 4.5:1 against --soat-on-action;
+     tests/harness/brandContrast.test.mjs measures it. */
+  --soat-action-gradient: linear-gradient(
+    135deg,
+    var(--soat-violet) 0%,
+    var(--ifm-color-primary) 100%
+  );
+  --soat-on-action: #ffffff;
 
   /* Primary Color - Electric Blue (#1A73E8) */
   --ifm-color-primary: #1a73e8;
@@ -120,6 +130,12 @@
 html[data-theme='dark'] {
   /* Brand Colors */
   --soat-violet: #8e44ad;
+
+  /* Core Cyan is too light for white text, so the dark action fill carries
+     Space Black text and starts from a lifted violet that clears 4.5:1
+     against it. */
+  --soat-action-gradient: linear-gradient(135deg, #b06ad0 0%, #00e5ff 100%);
+  --soat-on-action: #080c14;
 
   /* Primary Color - Core Cyan (#00E5FF) */
   --ifm-color-primary: #00e5ff;
@@ -277,13 +293,9 @@ html[data-theme='dark']
    =================================================================== */
 
 .button--primary {
-  background: linear-gradient(
-    135deg,
-    var(--soat-violet) 0%,
-    var(--ifm-color-primary) 100%
-  );
+  background: var(--soat-action-gradient);
   border: none;
-  color: #ffffff;
+  color: var(--soat-on-action);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition:
     transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -296,7 +308,7 @@ html[data-theme='dark'] .button--primary {
 
 .button--primary:hover {
   transform: translateY(-2px);
-  color: #ffffff;
+  color: var(--soat-on-action);
 }
 
 html[data-theme='dark'] .button--primary:hover {
@@ -351,12 +363,18 @@ html[data-theme='dark'] .blog-wrapper article:hover {
 /* ===================================================================
    API METHOD BADGES
    =================================================================== */
-:root {
-  --openapi-code-green: #10a37f;
-  --openapi-code-red: #ef4444;
-  --openapi-code-blue: #3b82f6;
-  --openapi-code-orange: #f97316;
+/* The API theme declares these on :root in a stylesheet that loads later, so
+   the light fills need the more specific selector to apply. Deep enough for
+   white labels at 4.5:1; the dark theme's fills are bright and take dark
+   labels instead. */
+html[data-theme='light'] {
+  --openapi-code-green: #047857;
+  --openapi-code-red: #dc2626;
+  --openapi-code-blue: #2563eb;
+  --openapi-code-orange: #c2410c;
   --openapi-code-neutral: var(--ifm-font-color-base);
+  --soat-method-fg: #ffffff;
+  --soat-method-border: rgba(255, 255, 255, 0.2);
 }
 
 html[data-theme='dark'] {
@@ -365,6 +383,8 @@ html[data-theme='dark'] {
   --openapi-code-blue: #60a5fa;
   --openapi-code-orange: #fb923c;
   --openapi-code-neutral: var(--ifm-color-emphasis-300);
+  --soat-method-fg: #080c14;
+  --soat-method-border: rgba(8, 12, 20, 0.2);
 }
 
 .api-method > .menu__link::before,
@@ -376,11 +396,11 @@ html[data-theme='dark'] {
   text-transform: uppercase;
   font-weight: 600;
   border-radius: 0.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--soat-method-border);
   margin-right: var(--ifm-spacing-horizontal);
   text-align: center;
   flex-shrink: 0;
-  color: white;
+  color: var(--soat-method-fg);
   display: inline-block;
 }
 
@@ -415,6 +435,13 @@ html[data-theme='dark'] {
 .schema > .menu__link::before {
   content: 'schema';
   background-color: var(--openapi-code-neutral);
+}
+
+/* The neutral fill is dark in both themes, so its label stays light. */
+.head > .menu__link::before,
+.event > .menu__link::before,
+.schema > .menu__link::before {
+  color: #ffffff;
 }
 
 html[data-theme='dark'] .get > .menu__link::before {

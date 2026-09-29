@@ -2,7 +2,7 @@
   "name": "SOAT",
   "slug": "soat",
   "archetype": "infrastructure",
-  "summary": "Self-hosted infrastructure layer for production-ready AI agents: IAM, storage, knowledge, memory, orchestration, guardrails, and traces from one Node.js server backed by PostgreSQL.",
+  "summary": "Open-source infrastructure for production-ready AI agents: IAM, storage, knowledge, memory, orchestration, guardrails, and traces from one self-hosted Node.js server backed by PostgreSQL.",
   "website": "https://soat.ttoss.dev",
   "license": "Apache-2.0",
   "deployment": ["self-hosted"],

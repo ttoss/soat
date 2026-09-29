@@ -140,20 +140,12 @@ html[data-theme='dark'] .server {
   margin: 0.6rem 0 0.9rem;
   padding: 0.6rem 0.8rem;
   border-radius: 0.4rem;
-  background: linear-gradient(
-    135deg,
-    var(--soat-violet) 0%,
-    var(--ifm-color-primary) 100%
-  );
-  color: #ffffff;
+  background: var(--soat-action-gradient);
+  color: var(--soat-on-action);
   font-family: var(--ifm-heading-font-family);
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-}
-
-html[data-theme='dark'] .engine {
-  color: #080c14;
 }
 
 .enginePlus {
