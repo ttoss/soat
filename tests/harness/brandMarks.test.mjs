@@ -25,6 +25,19 @@ const ROOT = path.resolve(__dirname, '../..');
 
 const BRAND_DIR = path.join(ROOT, 'packages/website/static/img/brand');
 
+const STATIC_DIR = path.join(ROOT, 'packages/website/static');
+
+/** Width and height from a PNG's IHDR chunk. */
+const pngSize = (file) => {
+  const header = fs.readFileSync(file).subarray(0, 24);
+  assert.equal(
+    header.toString('latin1', 12, 16),
+    'IHDR',
+    `${file} is not a PNG`
+  );
+  return [header.readUInt32BE(16), header.readUInt32BE(20)];
+};
+
 const DESIGN_COLORS = path.join(
   ROOT,
   '.claude/skills/soat-design/tokens/colors.css'
@@ -181,5 +194,57 @@ describe('brand marks', () => {
       });
 
     assert.deepEqual(offenders, []);
+  });
+});
+
+describe('device icons', () => {
+  /**
+   * The icons a device takes from the site: iOS a 180 px touch icon, Android
+   * and install prompts the manifest, the browser chrome a theme colour per
+   * scheme. A declared size that disagrees with the file is resized by the
+   * device, which blurs the 16 px-accurate strokes.
+   */
+  test('the touch icon and the manifest icons are the sizes they declare', () => {
+    const touch = pngSize(path.join(STATIC_DIR, 'apple-touch-icon.png'));
+    assert.deepEqual(touch, [180, 180]);
+
+    const manifest = JSON.parse(
+      read(path.join(STATIC_DIR, 'site.webmanifest'))
+    );
+    assert.ok(Array.isArray(manifest.icons) && manifest.icons.length > 0);
+    for (const icon of manifest.icons) {
+      const [w, h] = icon.sizes.split('x').map(Number);
+      assert.deepEqual(
+        pngSize(path.join(STATIC_DIR, icon.src.replace(/^\//, ''))),
+        [w, h],
+        icon.src
+      );
+    }
+    assert.equal(manifest.theme_color.toLowerCase(), THEMES.dark.page);
+    assert.equal(manifest.background_color.toLowerCase(), THEMES.dark.page);
+  });
+
+  test('the site head links the touch icon, the manifest and both theme colours', () => {
+    const head = read(
+      path.join(ROOT, 'packages/website/src/data/structuredData.ts')
+    );
+
+    assert.match(
+      head,
+      /rel: 'apple-touch-icon',\s*href: '\/apple-touch-icon\.png'/
+    );
+    assert.match(head, /rel: 'manifest',\s*href: '\/site\.webmanifest'/);
+    for (const [scheme, page] of [
+      ['light', THEMES.light.page],
+      ['dark', THEMES.dark.page],
+    ]) {
+      assert.match(
+        head,
+        new RegExp(
+          `name: 'theme-color',\\s*content: '${page}',\\s*media: '\\(prefers-color-scheme: ${scheme}\\)'`
+        ),
+        scheme
+      );
+    }
   });
 });

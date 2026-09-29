@@ -26,6 +26,39 @@ export const HEAD_TAGS: Config['headTags'] = [
     },
   },
   {
+    // iOS home screen. The symbol sits in the middle 60%, so the corner
+    // rounding iOS applies never reaches it.
+    tagName: 'link',
+    attributes: {
+      rel: 'apple-touch-icon',
+      href: '/apple-touch-icon.png',
+    },
+  },
+  {
+    // Android and install prompts; its icons are safe to mask as well.
+    tagName: 'link',
+    attributes: {
+      rel: 'manifest',
+      href: '/site.webmanifest',
+    },
+  },
+  {
+    tagName: 'meta',
+    attributes: {
+      name: 'theme-color',
+      content: '#ffffff',
+      media: '(prefers-color-scheme: light)',
+    },
+  },
+  {
+    tagName: 'meta',
+    attributes: {
+      name: 'theme-color',
+      content: '#080c14',
+      media: '(prefers-color-scheme: dark)',
+    },
+  },
+  {
     // Lift Google's default snippet cap so full passages are eligible to
     // ground AI Overviews / AI Mode answers (and regular rich snippets).
     tagName: 'meta',
