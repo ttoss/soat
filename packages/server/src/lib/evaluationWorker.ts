@@ -131,6 +131,7 @@ const loadItemTarget = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
   item: InstanceType<(typeof db)['DatasetItem']>;
   scorers: unknown[];
+  evalPublicId: string;
 } | null> => {
   const evaluation = (await db.Eval.findByPk(args.evalDbId, {
     include: [{ model: db.Agent, as: 'agent' }],
@@ -149,6 +150,7 @@ const loadItemTarget = async (args: {
     agent: evaluation.agent,
     item,
     scorers: scorerList(evaluation.scorers),
+    evalPublicId: evaluation.publicId,
   };
 };
 
@@ -196,7 +198,7 @@ const handleEvalItemTask = async (args: {
   /* istanbul ignore next -- the agent FK is NOT NULL, and a deleted item
      cascades its task away before it can be claimed. */
   if (!target) return;
-  const { agent, item, scorers } = target;
+  const { agent, item, scorers, evalPublicId } = target;
 
   log(
     'handleEvalItemTask: run=%s item=%s attempt=%d',
@@ -211,6 +213,11 @@ const handleEvalItemTask = async (args: {
     agent,
     agentVersion: run.agentVersion as number,
     scorers,
+    deciderScoring: {
+      versions: run.deciderVersions,
+      evalId: evalPublicId,
+      runId: run.publicId,
+    },
     item,
     // Re-read from the row per item: this process has no request behind it, and
     // the bag is what makes the item's generation match production.

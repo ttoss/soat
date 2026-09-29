@@ -716,5 +716,6 @@ CANDIDATE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
 ## What's next
 
 - [Eval Design](/docs/advanced/eval-design) — choosing items, scorers and thresholds.
+- [Grade an Eval with a Decider](/docs/tutorials/grade-an-eval-with-a-decider) — grade with the questions production already asks.
 - [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that waits for this suite.
 - [Evaluations — Custom scorers](/docs/modules/evaluations#custom-scorers-tool) — the full tool scorer contract.

@@ -54,12 +54,14 @@ Use the cheapest scorer that decides the item.
 | It paraphrases a reference answer | `embedding_similarity` | embeddings | per embedding model |
 | Quality has no reference string (tone, helpfulness, faithfulness) | `llm_judge` | one completion | no |
 | A business rule needs code or data (totals add up, an id exists) | `tool` | one tool call | as your code |
+| Production already asks the question (a decider reviews live output) | `decider` | one decision | as its backend |
 
 - **Decompose before you judge.** "Mentions the 30-day refund window" is a `contains`, not a judge. Keep `llm_judge` for criteria no rule decides.
 - **Every scorer narrows.** An item's verdict is the AND of its scorers, so a judge bound alongside a `contains` only ever fails items the `contains` passed.
 - **`output_schema` needs the agent's own `output_schema`**; without it the scorer is refused ([Scorers](../modules/evaluations.md#scorers)).
+- **Reuse the decider production asks.** A `decider` scorer grades with the same versioned questions as every other caller of that decider, so the eval cannot drift from what is enforced ([Decider scorers](../modules/evaluations.md#decider-scorers-decider)).
 
-[Grade Structured Output with Your Own Scorer](/docs/tutorials/grade-structured-output-with-your-own-scorer) binds `output_schema`, `json_logic` and `tool` on one eval.
+[Grade Structured Output with Your Own Scorer](/docs/tutorials/grade-structured-output-with-your-own-scorer) binds `output_schema`, `json_logic` and `tool` on one eval; [Grade an Eval with a Decider](/docs/tutorials/grade-an-eval-with-a-decider) binds a `decider`.
 
 ## Noise before signal
 
@@ -75,6 +77,7 @@ Measure the agent at the `temperature` production serves. Temperature is part of
 
 - **Compare deltas, not raw pass rates.** [Baseline deltas](../modules/evaluations.md#baseline-deltas) are computed over the items both runs scored (`compared_item_count`); a run's own `pass_rate` includes items added since. Nonzero `added_item_count` or `removed_item_count` means the dataset moved under you.
 - **Read `errored_count` next to `passed`.** The pass rate is passed items over _non-errored_ items, and the verdict does not read the error count: a run whose items mostly errored passes on the few that scored ([Errors are not zeros](../modules/evaluations.md#errors-are-not-zeros)). Check it before promoting on a run.
+- **Match `decider_versions` across the two runs.** A run pins each decider's version, and a baseline graded under another version is still compared: a delta across versions moves the criteria, not only the agent.
 
 ## Calibrating a judge
 
@@ -91,6 +94,8 @@ For an `llm_judge` ([LLM judge](../modules/evaluations.md#llm-judge)):
 - **Grade against `{{expected}}`** when a reference exists; it is more repeatable than grading in the abstract.
 - **Judge with a different model than the agent's.** Models tend to rate their own output higher.
 
+For a `decider`, calibrate its `score` expression and `pass_threshold` the same way; the pinned decider version is what stays fixed between runs.
+
 For `embedding_similarity`, calibrate on your own data and re-run the baseline whenever `EMBEDDING_MODEL` changes ([Embedding similarity](../modules/evaluations.md#embedding-similarity)).
 
 ## Overfitting to the dataset
@@ -106,7 +111,7 @@ A change that lifts dev and leaves held-out flat fit the items, not the task. Re
 
 ## Cost and side effects
 
-A run costs `items × (agent generation + one judge completion per llm_judge + one call per tool scorer)`. Eval spend is metered apart from production ([Eval spend](../modules/evaluations.md#eval-spend-is-separable-from-production-spend)); read it before scheduling a suite nightly. Every item is a real generation, so a write-capable tool performs real writes: point the agent's tools, and any `tool` scorer with side effects, at staging.
+A run costs `items × (agent generation + one judge completion per llm_judge + one call per tool scorer + one decision per decider scorer)`. Eval spend is metered apart from production ([Eval spend](../modules/evaluations.md#eval-spend-is-separable-from-production-spend)); read it before scheduling a suite nightly. Every item is a real generation, so a write-capable tool performs real writes: point the agent's tools, and any `tool` scorer with side effects, at staging.
 
 ## Checklist
 
@@ -114,6 +119,6 @@ A run costs `items × (agent generation + one judge completion per llm_judge + o
 - [ ] Curated items carry a correct `expected_output`
 - [ ] The cheapest scorer per criterion; `llm_judge` only where no rule decides
 - [ ] Noise floor measured; `pass_threshold` below the current pass rate minus the floor
-- [ ] Judge model pinned and threshold calibrated against human grades
+- [ ] Judge model pinned, decider versions matched across compared runs, thresholds calibrated against human grades
 - [ ] `errored_count` read before trusting `passed`
 - [ ] A held-out set behind the promotion gate

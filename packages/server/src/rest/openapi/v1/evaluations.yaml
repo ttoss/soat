@@ -1232,6 +1232,11 @@ components:
         the engine invokes once per item with the item's context. Unlike the
         built-in types it may appear several times, each under a distinct
         `name` — outcomes and aggregates key on the name.
+
+
+        `decider` grades each item with a decision of a project decider: its
+        `score` expression reads the decision's `answers`. Like `tool`, it
+        keys on its `name` and may appear several times.
       items:
         oneOf:
           - $ref: '#/components/schemas/ExactMatchScorer'
@@ -1241,6 +1246,7 @@ components:
           - $ref: '#/components/schemas/EmbeddingSimilarityScorer'
           - $ref: '#/components/schemas/LlmJudgeScorer'
           - $ref: '#/components/schemas/ToolScorer'
+          - $ref: '#/components/schemas/DeciderScorer'
     ExactMatchScorer:
       type: object
       required:
@@ -1420,6 +1426,58 @@ components:
             the tool omits `passed` and no threshold is set, the item is
             recorded as errored — the scorer produced no verdict.
           example: 0.5
+    DeciderScorer:
+      type: object
+      description: >-
+        Grades each item with a decision of a project decider, under the
+        decider version pinned when the run started (`decider_versions` on
+        the run). The decision is requested as the run, with `metadata`
+        naming the eval, run and dataset item. A failed decision, or a
+        `score` that is not a number between 0 and 1, marks the **item**
+        errored, never a score of 0.
+      required:
+        - type
+        - name
+        - decider_id
+        - score
+        - pass_threshold
+      properties:
+        type:
+          type: string
+          enum: [decider]
+        name:
+          type: string
+          description: >-
+            Keys this scorer's outcomes and aggregate scores, so it must be
+            unique within the eval and must not shadow a built-in scorer type.
+          example: review
+        decider_id:
+          x-soat-ref: deciders
+          type: string
+          description: The decider that judges each item; it must belong to the eval's project.
+          example: dcd_V1StGXR8Z5jdHi6B
+        state:
+          description: >-
+            JSON Logic mapping over `{ input, output, object, expected, item }`
+            building the state the decider judges. Omitted, the state is that
+            item context itself.
+          example:
+            customer: { var: 'input.0.content' }
+            reply: { var: 'output' }
+        score:
+          description: >-
+            JSON Logic expression over `{ answers }`, the decision's answers
+            keyed by question id, that evaluates to the item's score in 0–1.
+          example: { var: 'answers.resolves_issue.probabilities.true' }
+        pass_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >-
+            The item passes this scorer when `score` is greater than or equal
+            to this value. Required: a score read from a distribution says
+            nothing about where "good enough" is.
+          example: 0.7
     ScorerResult:
       type: object
       properties:
@@ -1439,6 +1497,10 @@ components:
           description: >-
             The stated rationale; present for `llm_judge` and for `tool`
             scorers whose tool returned one
+        decision_id:
+          type: string
+          description: The decision that graded this entry; present for `decider` scorers
+          example: dec_V1StGXR8Z5jdHi6B
     Dataset:
       type: object
       properties:
@@ -1599,6 +1661,17 @@ components:
           type: integer
           description: The one agent version every item in this run executed against
           example: 3
+        decider_versions:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: integer
+          description: >-
+            The decider version each `decider` scorer grades under, keyed by
+            scorer name and resolved when the run started. Null when the eval
+            has no decider scorer.
+          example:
+            review: 2
         status:
           type: string
           enum: [queued, running, completed, failed, canceled]

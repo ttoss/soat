@@ -228,6 +228,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/evaluate-an-agent',
         'tutorials/judge-open-ended-answers',
         'tutorials/grade-structured-output-with-your-own-scorer',
+        'tutorials/grade-an-eval-with-a-decider',
         'tutorials/gate-a-canary-promotion-on-an-eval',
         'tutorials/replay-a-bad-turn',
       ],
