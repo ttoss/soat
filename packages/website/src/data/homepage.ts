@@ -76,3 +76,15 @@ export const NOT_WIRED = [
   'a trace collector',
   'a scheduler',
 ];
+
+export type HomeMeta = {
+  /** The whole `<title>`: the homepage skips the site's " | SOAT" suffix. */
+  title: string;
+  description: string;
+};
+
+export const HOME_META: HomeMeta = {
+  title: 'SOAT — open-source infrastructure for production-ready AI agents',
+  description:
+    'Memory, knowledge, permissions, orchestration, evaluations and traces for AI agents in one open-source server you run yourself. Bring any model.',
+};

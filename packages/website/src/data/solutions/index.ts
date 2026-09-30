@@ -184,6 +184,11 @@ export const solutions: Solution[] = [
  */
 export const PINNED_SLUG = 'soat';
 
+/** The page that reads one solution against SOAT, generated from this dataset. */
+export const comparePath = (slug: string): string => {
+  return `/docs/compare/${slug}`;
+};
+
 export const orderSolutions = (entries: Solution[]): Solution[] => {
   return [...entries].sort((a, b) => {
     if (a.slug === PINNED_SLUG) {

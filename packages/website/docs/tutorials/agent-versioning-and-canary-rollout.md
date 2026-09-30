@@ -1,5 +1,5 @@
 ---
-description: "Treat an agent's prompt like deployable code: archive every config change as a version, roll a new prompt out to a slice of traffic, attribute behavior to a version, and promote or roll back in one call."
+description: "Treat an agent's prompt like deployable code: version every config change, roll a new prompt out to a slice of traffic, and promote or roll back."
 keywords:
   - prompt versioning
   - canary deploy AI agent

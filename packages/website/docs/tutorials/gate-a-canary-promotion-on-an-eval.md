@@ -1,5 +1,5 @@
 ---
-description: 'Make a canary rollout wait for evidence: declare a suite alongside the agent in a formation, pin a run to the canary version, and let promotion succeed only once that run passes.'
+description: 'Make a canary rollout wait for evidence: declare an eval suite in a formation, pin a run to the canary, and promote only once that run passes.'
 keywords:
   - eval gated promotion
   - canary promotion gate

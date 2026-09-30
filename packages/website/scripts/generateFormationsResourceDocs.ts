@@ -12,6 +12,7 @@ import * as url from 'node:url';
 
 import { load } from 'js-yaml';
 import { escapeMdx } from './mdx';
+import { fitDescription, plainText } from './seoMetadata';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -325,8 +326,15 @@ const renderResourcePage = (args: {
     `Properties for the \`${resourceType}\` resource type.`;
   const operationNote = OPERATION_NOTES[resourceType];
 
+  const metaDescription = fitDescription({
+    text: plainText({ markdown: schema.description ?? '' }),
+    context: `The ${resourceType} resource type in a SOAT formation template.`,
+  });
+
   const lines: string[] = [
     '---',
+    `title: ${JSON.stringify(`${title} Formation Resource`)}`,
+    `description: ${JSON.stringify(metaDescription)}`,
     `sidebar_label: ${title}`,
     `sidebar_position: ${position}`,
     '---',
@@ -402,6 +410,7 @@ const renderIndexPage = (
 ): string => {
   const lines: string[] = [
     '---',
+    'description: "Every resource type a SOAT formation template can declare, with the properties each one takes."',
     'sidebar_label: Resource Types',
     'sidebar_position: 1',
     // Slash-less route, so the canonical matches the URL every link uses.

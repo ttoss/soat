@@ -1,5 +1,5 @@
 ---
-description: "Give an agent a tool that calls a real AWS or Google Cloud API — SigV4 signed per request, or a service account access token minted and cached for you — without writing a proxy."
+description: "Give an agent a tool that calls a real AWS or Google Cloud API, SigV4-signed or with a cached service account token, without writing a proxy."
 keywords:
   - AWS SigV4 agent tool
   - GCP service account agent

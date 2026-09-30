@@ -1,5 +1,5 @@
 ---
-description: 'Score answers that have no single correct string: an llm_judge scorer with a pinned model and a rubric, checked against your own grades, run queued instead of blocking, polled to a verdict, and cancellable mid-flight.'
+description: "Score answers with no single correct string: an llm_judge scorer with a pinned model and rubric, checked against your own grades, run queued."
 keywords:
   - LLM as a judge
   - LLM judge scorer

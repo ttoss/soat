@@ -1,5 +1,5 @@
 ---
-description: "Usage events record the cost of every metered occurrence — a whole generation, an orchestration node's compute, API requests, and stored bytes — attributed to a project, agent, and generation."
+description: "Usage events record the cost of every metered occurrence (generations, orchestration compute, API requests, stored bytes) per project and agent."
 ---
 
 import Tabs from '@theme/Tabs';

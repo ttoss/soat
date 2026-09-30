@@ -1,5 +1,5 @@
 ---
-description: "First-class action-class policies that classify each agent tool call — execute, require approval, or block — with non-LLM guard expressions and project / agent / tool attach scopes that compose stricter-wins."
+description: "Policies that classify each agent tool call as execute, require approval or block, with non-LLM guard expressions composed stricter-wins."
 ---
 
 import Tabs from '@theme/Tabs';

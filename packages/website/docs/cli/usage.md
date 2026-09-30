@@ -3,7 +3,7 @@ description: "Common SOAT CLI workflows and command examples for agents, session
 sidebar_position: 2
 ---
 
-# Usage Examples
+# CLI Usage Examples
 
 All examples assume a configured profile ([setup](./introduction.md)).
 

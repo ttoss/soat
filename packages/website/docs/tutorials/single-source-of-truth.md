@@ -1,5 +1,5 @@
 ---
-description: 'Let two writers edit one report without a lost update, read the version a run cited, withdraw and restore a document, retract a fact, relate two reports and export the corpus.'
+description: 'Two writers editing one report without a lost update: read the version a run cited, withdraw and restore a document, retract a fact, export the corpus.'
 keywords:
   - single source of truth
   - optimistic concurrency
@@ -13,7 +13,7 @@ sidebar_position: 31
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Single Source of Truth
+# Build a Single Source of Truth
 
 Several agents write reports into one project and read each other's. Two of them edit the same report at once, one report is produced from another, a fact stops holding, and at the end the corpus has to leave as a file. This tutorial runs that sequence against one project and shows what the record keeps of each step.
 

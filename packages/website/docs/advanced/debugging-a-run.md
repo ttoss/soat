@@ -1,5 +1,5 @@
 ---
-description: 'Which observability surface answers which question: a symptom-to-surface map, the id graph that joins them, and the four reasons a surface is legitimately empty.'
+description: "Which observability surface answers which question: a symptom-to-surface map, the id graph that joins them, and why a surface can be empty."
 sidebar_label: Debugging a Run
 ---
 

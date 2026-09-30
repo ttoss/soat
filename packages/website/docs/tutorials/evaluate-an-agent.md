@@ -1,5 +1,5 @@
 ---
-description: 'Turn "did my prompt change make the agent worse?" into a number: build a dataset of test cases, score real runs with deterministic scorers, and compare two runs over the item intersection.'
+description: 'Turn "did my prompt change make the agent worse?" into a number: a dataset of test cases, deterministic scorers, and two runs compared.'
 keywords:
   - AI agent evaluation
   - LLM regression testing

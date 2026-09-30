@@ -1,5 +1,5 @@
 ---
-description: 'How knowledge search ranking is measured: recall@k and MRR over raw result positions, the three rules for reading a per-slice table, what a score multiplier costs on fused RRF output, and the contributor baseline that gates ranking changes.'
+description: "How knowledge search ranking is measured: recall@k and MRR over raw positions, reading a per-slice table, and the baseline that gates ranking changes."
 keywords:
   - retrieval quality
   - recall@k

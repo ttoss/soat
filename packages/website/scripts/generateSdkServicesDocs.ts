@@ -136,7 +136,9 @@ const writeModulePage = (args: {
   const { mod, entries, outputFile } = args;
   const sections: string[] = [
     '---',
-    `title: ${mod.label}`,
+    `title: ${mod.label} SDK Methods`,
+    `sidebar_label: ${mod.label}`,
+    `description: "The soat.${mod.accessor} methods of the SOAT TypeScript SDK for the ${mod.label} module, each linked to its REST operation."`,
     // Explicit slug (relative to the `/docs` base) for deterministic routing,
     // matching the MCP tools pages.
     `slug: /sdk/services/${mod.file}`,
@@ -191,6 +193,7 @@ const main = (): void => {
   const sections: string[] = [
     '---',
     'sidebar_position: 3',
+    'description: "Every service and method of the SOAT TypeScript SDK, grouped by module, each method mapped to one REST endpoint."',
     '---',
     '',
     '# Services Reference',

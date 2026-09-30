@@ -8,6 +8,7 @@ import type { Archetype, Rating, Solution } from '../data/solutions';
 import {
   ARCHETYPE_LABELS,
   CLUSTERS,
+  comparePath,
   orderSolutions,
   PINNED_SLUG,
   RATING_COLORS,
@@ -90,6 +91,11 @@ const SolutionCardBody = (props: {
             {props.isSelected ? 'Remove from comparison' : 'Compare'}
           </span>
         )}
+        {props.isPinned ? null : (
+          <Link className={styles.cardLink} to={comparePath(solution.slug)}>
+            vs SOAT
+          </Link>
+        )}
         <Link className={styles.cardLink} to={solution.website}>
           Website
         </Link>
@@ -99,7 +105,7 @@ const SolutionCardBody = (props: {
 };
 
 /**
- * The `Website` link keeps its own click, so a card-level handler has to ignore
+ * The card's links keep their own click, so a card-level handler has to ignore
  * anything that came from inside it.
  */
 const cameFromLink = (target: EventTarget | null) => {
@@ -368,7 +374,7 @@ export default function Benchmark(): React.ReactNode {
 
   return (
     <Layout
-      title="Benchmark — How SOAT compares"
+      title="AI Agent Platforms, Frameworks and Infrastructure Compared"
       description="A clustered directory of AI agent platforms, frameworks, and infrastructure — filter the landscape, then compare capability coverage side by side with SOAT."
     >
       <main className="container">
