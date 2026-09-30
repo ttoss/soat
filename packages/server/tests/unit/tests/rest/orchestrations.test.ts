@@ -3211,6 +3211,14 @@ describe('Orchestrations', () => {
       );
       expect(response.status).toBe(403);
     });
+
+    test('an orchestration that does not exist returns 404', async () => {
+      const response = await authenticatedTestClient(userToken).delete(
+        '/api/v1/orchestrations/orch_doesnotexist'
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
+    });
   });
 
   describe('POST /api/v1/orchestration-runs/:orchestration_run_id/cancel', () => {

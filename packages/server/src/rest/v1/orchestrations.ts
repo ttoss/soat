@@ -235,16 +235,13 @@ orchestrationsRouter.patch(
 orchestrationsRouter.delete(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const { projectIds } = await authorizeOrchestrationWrite({
+    const { projectIds, projectPublicId } = await authorizeOrchestrationWrite({
       ctx,
       action: 'orchestrations:DeleteOrchestration',
     });
-    const target = {
-      id: ctx.params['orchestration_id'] as string,
-      projectIds: projectIds ?? undefined,
-    };
-    await hintAuditResourceForOrchestration({ ctx, ...target });
-    await deleteOrchestration(target);
+    const id = ctx.params['orchestration_id'] as string;
+    hintAuditResourceForOrchestration({ ctx, id, projectPublicId });
+    await deleteOrchestration({ id, projectIds });
 
     ctx.status = 204;
   }
