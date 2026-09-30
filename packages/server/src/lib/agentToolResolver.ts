@@ -996,7 +996,7 @@ const resolvePipelineTool = (
         // The agent surface gates by wrapping this `execute`
         // (`gateResolvedToolsWithGuardrails`), so the call arrives classified.
         guardrails: 'already-adjudicated',
-        projectIds: args.projectIds,
+        projectIds: [typedTool.projectId],
         id: typedTool.publicId,
         input,
         authHeader: args.authHeader,
@@ -1249,17 +1249,16 @@ type ResolveToolByTypeArgs = {
 // its complexity budget.
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
-  projectIds?: number[];
+  projectId: number;
   resolveArgs: ResolveToolByTypeArgs;
   guardrail?: ResolverGuardrailContext;
   activity?: ActivityCallContext;
 }): Promise<Record<string, Tool>> => {
-  const toolWhere: Record<string, unknown> = { publicId: args.toolPublicId };
-  if (args.projectIds !== undefined) {
-    toolWhere.projectId = args.projectIds;
-  }
-
-  const agentTool = await db.Tool.findOne({ where: toolWhere });
+  // The agent's project, never the caller's scope: a credential reaching
+  // several projects must not widen what an agent's binding resolves to.
+  const agentTool = await db.Tool.findOne({
+    where: { publicId: args.toolPublicId, projectId: args.projectId },
+  });
   if (!agentTool) return {};
 
   const typedTool = agentTool as unknown as AgentToolRow;
@@ -1317,7 +1316,8 @@ const resolveReferenceBinding = async (args: {
 export const resolveAgentTools = async (args: {
   toolIds: string[];
   tools?: InlineToolDefinition[] | null;
-  projectId?: number;
+  /** The agent's project: every binding resolves in it. */
+  projectId: number;
   /**
    * The generation's project on the wire. Pins `project_id` on every builtin
    * action that names one, so the model cannot move the call to another
@@ -1352,7 +1352,7 @@ export const resolveAgentTools = async (args: {
       resolvedTools,
       await resolveReferenceBinding({
         toolPublicId,
-        projectIds: args.projectIds,
+        projectId: args.projectId,
         resolveArgs: args,
         guardrail: args.guardrail,
         activity: args.activity,
@@ -1360,25 +1360,23 @@ export const resolveAgentTools = async (args: {
     );
   }
 
-  if (args.projectId !== undefined) {
-    for (const definition of args.tools ?? []) {
-      const ephemeralTools = await resolveEphemeralAgentTool({
-        definition,
-        projectId: args.projectId,
-        boundaryPolicy: args.boundaryPolicy,
-        authHeader: args.authHeader,
-        toolContext: args.toolContext,
-        traceId: args.traceId,
-        parentTraceId: args.parentTraceId,
-        rootTraceId: args.rootTraceId,
-        remainingDepth: args.remainingDepth,
-        guardrail: args.guardrail,
-        activity: args.activity,
-        unavailable: args.unavailable,
-        attribution: args.attribution,
-      });
-      Object.assign(resolvedTools, ephemeralTools);
-    }
+  for (const definition of args.tools ?? []) {
+    const ephemeralTools = await resolveEphemeralAgentTool({
+      definition,
+      projectId: args.projectId,
+      boundaryPolicy: args.boundaryPolicy,
+      authHeader: args.authHeader,
+      toolContext: args.toolContext,
+      traceId: args.traceId,
+      parentTraceId: args.parentTraceId,
+      rootTraceId: args.rootTraceId,
+      remainingDepth: args.remainingDepth,
+      guardrail: args.guardrail,
+      activity: args.activity,
+      unavailable: args.unavailable,
+      attribution: args.attribution,
+    });
+    Object.assign(resolvedTools, ephemeralTools);
   }
 
   return resolvedTools;

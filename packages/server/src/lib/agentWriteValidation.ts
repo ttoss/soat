@@ -16,42 +16,8 @@ import {
   resolveModelRouteDbId,
   validateModelRouteExclusivity,
 } from './modelRoutes';
+import { assertToolsInProject } from './toolReferences';
 import { validateAgentTraceContentMode } from './traceContentPolicy';
-
-/**
- * Rejects an `active_tool_ids` entry that names no tool in the project, so a
- * typo surfaces as a `400` on write instead of silently narrowing the agent's
- * tool surface at generation time. Mirrors `assertGuardrailsExist` — both
- * fields are declared references (`x-soat-ref`), so both are checked. A
- * null/empty list is a no-op: it clears the restriction.
- */
-const assertActiveToolsExist = async (args: {
-  activeToolIds: string[] | null | undefined;
-  projectId: number;
-}): Promise<void> => {
-  const ids = args.activeToolIds ?? [];
-  if (ids.length === 0) return;
-
-  const found = await db.Tool.findAll({
-    where: { publicId: ids, projectId: args.projectId },
-    attributes: ['publicId'],
-  });
-  const foundSet = new Set(
-    found.map((tool) => {
-      return tool.publicId;
-    })
-  );
-  const missing = ids.filter((id) => {
-    return !foundSet.has(id);
-  });
-  if (missing.length > 0) {
-    throw new DomainError(
-      'TOOL_NOT_FOUND',
-      `Tool(s) not found in the project: ${missing.join(', ')}.`,
-      { missing }
-    );
-  }
-};
 
 /**
  * Every declared cross-resource reference on an agent write, checked together.
@@ -117,8 +83,10 @@ export const assertAgentReferencesExist = async (args: {
     guardrailIds: args.guardrailIds,
     projectId: args.projectId,
   });
-  await assertActiveToolsExist({
-    activeToolIds: args.activeToolIds,
+  // A typo surfaces as a `400` on write instead of silently narrowing the
+  // agent's tool surface at generation time.
+  await assertToolsInProject({
+    toolIds: args.activeToolIds ?? [],
     projectId: args.projectId,
   });
   await assertTraceContentModeAllowed({

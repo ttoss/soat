@@ -167,7 +167,7 @@ Each entry in `tool_bindings` is an object:
 }
 ```
 
-Neither or both is `400 VALIDATION_FAILED`. On update the list is replaced whole. `active_tool_ids` and `step_rules[].active_tool_ids` reference `tool_id` entries only; inline entries have no ID.
+Neither or both is `400 VALIDATION_FAILED`. A `tool_id` names a tool in the agent's own project, whatever else the caller can reach; any other is `400 TOOL_NOT_FOUND` with `meta.missing`, and a generation resolves bindings in the agent's project only. On update the list is replaced whole. `active_tool_ids` and `step_rules[].active_tool_ids` reference `tool_id` entries only; inline entries have no ID.
 
 #### Inline (Ephemeral) Tool Definitions
 

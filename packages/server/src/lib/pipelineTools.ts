@@ -1,7 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
-import { scopedWhere } from './resourceAccessor';
 import { mergePresetParameters } from './toolPresetParameters';
 import {
   assertEphemeralTypeSupported,
@@ -259,14 +258,13 @@ export const validatePipelineConfig = (pipeline: unknown): PipelineConfig => {
  * an inline `tool` step must pass the same business-rule validation as a
  * persisted tool (name, secret refs, soat actions — see
  * `tools.ts#validateToolDefinition`) and cannot itself be of type `pipeline`.
- * `projectId` scopes inline-tool validation (always the owning pipeline
- * tool's own project); `projectIds` scopes `tool_id` DB lookups. Throws
+ * `projectId` is the owning pipeline tool's own project: inline steps are
+ * validated in it and `tool_id` steps must name a tool in it. Throws
  * `PIPELINE_INVALID_STEP` / `VALIDATION_FAILED`.
  */
 export const assertPipelineStepToolsValid = async (args: {
   steps: PipelineStep[];
   projectId: number;
-  projectIds?: number[];
 }): Promise<void> => {
   for (const step of args.steps) {
     if (step.tool) {
@@ -281,12 +279,7 @@ export const assertPipelineStepToolsValid = async (args: {
     // `parseStepToolReference` rejects a step carrying neither an inline `tool`
     // (handled above) nor a non-empty `toolId`, so this branch always has one.
     const stepTool = await db.Tool.findOne({
-      // A step's tool miss is a `PIPELINE_INVALID_STEP` carrying step context,
-      // not a generic not-found, so only the scope rule is borrowed.
-      where: scopedWhere({
-        id: step.toolId as string,
-        projectIds: args.projectIds,
-      }),
+      where: { publicId: step.toolId as string, projectId: args.projectId },
     });
     if (!stepTool) {
       throw new DomainError(

@@ -335,7 +335,7 @@ Each step's output is captured under `steps.<id>`; a step may reference only ear
 
 For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), which share the JSON Logic mapping model.
 
-**Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool) and `validate-formation` check the structure: every step needs a `tool_id` or an inline `tool` with a `name`; a `{ "ref": … }` `tool_id` is accepted in a formation template only (direct `POST`/`PATCH` need a literal string). `validate-formation` also warns (not errors) on a `parameters` property no step `input` or `output` reads via `{ "var": "input.<name>" }`.
+**Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool) and `validate-formation` check the structure: every step needs a `tool_id` or an inline `tool` with a `name`, and a `tool_id` names a tool in the pipeline's own project (`400 PIPELINE_INVALID_STEP` otherwise), which is also where it resolves at call time, whoever calls the pipeline; a `{ "ref": … }` `tool_id` is accepted in a formation template only (direct `POST`/`PATCH` need a literal string). `validate-formation` also warns (not errors) on a `parameters` property no step `input` or `output` reads via `{ "var": "input.<name>" }`.
 
 ### Output Mapping
 

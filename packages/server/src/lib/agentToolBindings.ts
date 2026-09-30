@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
+import { assertToolsInProject } from './toolReferences';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -239,7 +240,8 @@ export const toWireToolBinding = (
 
 /**
  * Validates newly provided `tool_bindings` entries: entry shape (exactly one
- * of `tool_id` / `tool`) and each inline definition. Returns the bindings with
+ * of `tool_id` / `tool`), each inline definition, and that every `tool_id`
+ * names a tool in the agent's project. Returns the bindings with
  * only their defined keys, ready to persist.
  */
 export const validateToolBindings = async (args: {
@@ -265,6 +267,10 @@ export const validateToolBindings = async (args: {
       await validateBindingEntry({ entry, projectId: args.projectId })
     );
   }
+  await assertToolsInProject({
+    toolIds: splitToolBindings(sanitized).toolIds,
+    projectId: args.projectId,
+  });
   return sanitized;
 };
 

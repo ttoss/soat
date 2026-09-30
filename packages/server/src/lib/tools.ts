@@ -180,7 +180,6 @@ export const validateToolDefinition = async (args: {
     await assertPipelineStepToolsValid({
       steps: config.steps,
       projectId,
-      projectIds: [projectId],
     });
   }
 
@@ -362,7 +361,6 @@ const validateToolUpdate = async (params: {
     await assertPipelineStepToolsValid({
       steps: config.steps,
       projectId: tool.projectId,
-      projectIds: args.projectIds,
     });
   }
   if (args.actions !== undefined && (args.type ?? tool.type) === 'builtin') {
@@ -454,7 +452,6 @@ export const callTool = async (args: {
     input: args.input,
     authHeader: args.authHeader,
     remainingDepth: args.remainingDepth,
-    projectIds: args.projectIds,
     idempotencyKey: args.idempotencyKey,
     toolContext: args.toolContext,
     attribution: args.attribution,
