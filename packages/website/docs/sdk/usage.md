@@ -3,7 +3,7 @@ description: "Examples for common SOAT SDK operations across every module, using
 sidebar_position: 2
 ---
 
-# Usage Examples
+# SDK Usage Examples
 
 All examples assume a `SoatClient` instance ([setup](./introduction.md)).
 

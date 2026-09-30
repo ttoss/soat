@@ -1,5 +1,5 @@
 ---
-description: 'Deciders: versioned question sets a tool-less agent or an http or pipeline tool answers against a state, producing append-only decisions confined to each question’s answer space.'
+description: "Deciders: versioned question sets an agent or tool answers against a state, producing append-only decisions confined to each answer space."
 ---
 
 import Tabs from '@theme/Tabs';

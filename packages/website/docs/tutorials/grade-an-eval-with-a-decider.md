@@ -1,5 +1,5 @@
 ---
-description: 'One versioned judgment in two layers: a decider backed by TypeSafe Jev reviews a live support reply, then grades every item of an eval as a decider scorer, pinned to the version the run started under.'
+description: "One versioned judgment in two layers: a decider reviews a live support reply, then grades every item of an eval as a decider scorer."
 keywords:
   - deciders
   - decider scorer

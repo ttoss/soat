@@ -1,5 +1,5 @@
 ---
-description: "Neither, an orchestration, or a workflow? Decide whether the work needs a graph at all, then compare SOAT's two automation models — a cyclic state machine a task lives in, and an acyclic pipeline that runs and ends — and see how they compose."
+description: "Nothing, an orchestration or a workflow? Compare SOAT's cyclic state machine a task lives in with the acyclic pipeline that runs and ends."
 title: Choosing an Automation Model
 ---
 

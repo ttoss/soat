@@ -1,5 +1,5 @@
 ---
-description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and how the layers map onto autonomy maturity grades."
+description: "The layers of an agent system (harness, loop, graph, ratchet), which SOAT module owns each, and why the graph should be the last thing you build."
 sidebar_position: 2
 sidebar_label: Layers of an Agent System
 title: The Layers of an Agent System

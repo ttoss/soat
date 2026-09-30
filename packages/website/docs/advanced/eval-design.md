@@ -1,5 +1,5 @@
 ---
-description: 'How to design an eval whose verdict means something: a dataset weighted toward failures, the cheapest scorer that decides each item, a delta read against its p-value and interval before it is trusted, judges calibrated against human grades, and a held-out set behind the promotion gate.'
+description: "Design an eval whose verdict means something: a failure-weighted dataset, the cheapest scorer per item, deltas read with p-values, calibrated judges."
 keywords:
   - eval design
   - evaluation dataset

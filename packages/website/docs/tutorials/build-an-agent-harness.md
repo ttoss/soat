@@ -1,5 +1,5 @@
 ---
-description: 'Build an agent harness on SOAT: declare what the agent can reach as a client tool, cap what its runner identity may do with a policy, and run the pause-and-resume execution loop from your own process.'
+description: "Build an agent harness on SOAT: client tools for what the agent can reach, a policy for what its runner may do, and the pause-and-resume loop."
 keywords:
   - agent harness
   - harness layer

@@ -1,5 +1,5 @@
 ---
-description: 'Grade an agent that returns structured output: an output_schema scorer for shape, a json_logic scorer over item metadata for correctness, and a business rule in your own code as a tool scorer, read per kind and measured against a baseline.'
+description: "Grade structured agent output: an output_schema scorer for shape, json_logic over item metadata for correctness, and your own rule as a tool scorer."
 keywords:
   - custom eval scorer
   - structured output evaluation

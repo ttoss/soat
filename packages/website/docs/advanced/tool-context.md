@@ -1,5 +1,5 @@
 ---
-description: 'How session and actor context reaches a tool endpoint as X-Soat-Context-* request headers: the exact key-to-header rule, the auto-populated keys, precedence, and validation.'
+description: "How session and actor context reaches a tool endpoint as X-Soat-Context-* headers: the key-to-header rule, auto-populated keys and precedence."
 ---
 
 import Tabs from '@theme/Tabs';

@@ -5,6 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
 
+import { gitLastmod, withLastmod } from './scripts/sitemapLastmod';
 import { buildLlmsRootContent } from './src/data/agentInstructions';
 import { HEAD_TAGS } from './src/data/structuredData';
 
@@ -85,6 +86,9 @@ const config: Config = {
     mermaid: true,
   },
 
+  // The brand typefaces ship in the bundle (src/fonts.ts).
+  clientModules: ['./src/fonts.ts'],
+
   presets: [
     [
       'classic',
@@ -104,21 +108,20 @@ const config: Config = {
           // Emit <lastmod> from the same git-derived last-update data, so
           // crawlers can prioritize recently changed pages.
           lastmod: 'date',
+          // Generated references and src/pages have no git history of their
+          // own; they take the date of the file they are built from.
+          createSitemapItems: async ({
+            defaultCreateSitemapItems,
+            ...rest
+          }) => {
+            return withLastmod({
+              items: await defaultCreateSitemapItems(rest),
+              lastmodOf: gitLastmod(),
+            });
+          },
         },
-        // blog: {
-        //   showReadingTime: true,
-        //   feedOptions: {
-        //     type: ['rss', 'atom'],
-        //     xslt: true,
-        //   },
-        //   // Please change this to your repo.
-        //   // Remove this to remove the "edit this page" links.
-        //   editUrl: 'https://github.com/ttoss/soat/edit/main/',
-        //   // Useful options to enforce blogging best practices
-        //   onInlineTags: 'warn',
-        //   onInlineAuthors: 'warn',
-        //   onUntruncatedBlogPosts: 'warn',
-        // },
+        // No posts are published, and an empty list page is a thin page.
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },

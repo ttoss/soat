@@ -76,7 +76,9 @@ const writeModulePage = (args: {
   const { mod, tools, outputFile } = args;
   const sections: string[] = [
     '---',
-    `title: ${mod.label}`,
+    `title: ${mod.label} MCP Tools`,
+    `sidebar_label: ${mod.label}`,
+    `description: "The MCP tools the SOAT server exposes for the ${mod.label} module, with the arguments each tool takes."`,
     // Explicit slug (relative to the `/docs` base) so routing never depends on
     // the category-index convention — a module whose file basename equals its
     // folder (e.g. `tools/tools.md`) would otherwise lose its own route.
@@ -136,6 +138,7 @@ const main = (): void => {
   const sections: string[] = [
     '---',
     'sidebar_position: 3',
+    'description: "Every MCP tool the SOAT server exposes, grouped by module, with its tools/call name and inputSchema arguments."',
     '---',
     '',
     '# Tools Reference',

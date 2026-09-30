@@ -1,5 +1,4 @@
 import Head from '@docusaurus/Head';
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import HomepageAgentManifest from '@site/src/components/HomepageAgentManifest';
 import HomepageCompare from '@site/src/components/HomepageCompare';
 import HomepageDefinition from '@site/src/components/HomepageDefinition';
@@ -10,16 +9,13 @@ import HomepageLayers from '@site/src/components/HomepageLayers';
 import HomepageOnboarding from '@site/src/components/HomepageOnboarding';
 import HomepageSurfaces from '@site/src/components/HomepageSurfaces';
 import HomepageWhenToUse from '@site/src/components/HomepageWhenToUse';
+import { HOME_META } from '@site/src/data/homepage';
 import Layout from '@theme/Layout';
 import type * as React from 'react';
 
 export default function Home(): React.ReactNode {
-  const { siteConfig } = useDocusaurusContext();
   return (
-    <Layout
-      title={`${siteConfig.title} — ${siteConfig.tagline}`}
-      description="Sessions, knowledge, memory, orchestration, guardrails, IAM, evaluations and traces from one self-hosted Node.js server on PostgreSQL. Reachable over REST, MCP, CLI and SDK."
-    >
+    <Layout description={HOME_META.description}>
       {/* The homepage is the only page with no Markdown twin of its own, so it
           is the one place the agent instruction file can be advertised as an
           alternate without competing with a page's own `.md` link. The edge
@@ -27,6 +23,10 @@ export default function Home(): React.ReactNode {
           (`cloudfront/viewerRequest.js`), so what the page advertises and what
           negotiation returns are one thing. */}
       <Head>
+        {/* Layout appends " | SOAT" to any title it is given; the homepage
+            title already opens with the name, so it is set here whole. */}
+        <title>{HOME_META.title}</title>
+        <meta property="og:title" content={HOME_META.title} />
         <link
           rel="alternate"
           type="text/markdown"

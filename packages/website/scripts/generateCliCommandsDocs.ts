@@ -611,7 +611,9 @@ const writeModuleDocs = (args: {
 
   const sections: string[] = [
     '---',
-    `title: ${moduleLabel} Commands`,
+    `title: ${moduleLabel} CLI Commands`,
+    `sidebar_label: ${moduleLabel} Commands`,
+    `description: "The soat CLI commands for the ${moduleLabel} module, with usage and every option, generated from the OpenAPI spec."`,
     '---',
     '',
     `# ${moduleLabel} Commands`,
@@ -677,6 +679,7 @@ const main = async () => {
   const sections: string[] = [
     '---',
     'sidebar_position: 3',
+    'description: "Every soat CLI command, grouped by module, with usage and option details derived from the SOAT OpenAPI specs."',
     '---',
     '',
     '# Commands Reference',

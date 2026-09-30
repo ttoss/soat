@@ -1,5 +1,5 @@
 ---
-description: 'Optimistic concurrency on versioned resources: expected_version or If-Match refuses a write whose author read a version that has since moved, and concurrent writes to one resource are serialized whether or not anybody opted in.'
+description: "Optimistic concurrency on versioned resources: expected_version or If-Match refuses a stale write, and writes to one resource are serialized."
 ---
 
 import Tabs from '@theme/Tabs';

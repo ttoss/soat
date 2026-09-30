@@ -1,5 +1,5 @@
 ---
-description: 'The wait toggle: every long-running endpoint runs in the background by default and returns a handle to poll; wait=true blocks. One contract, one polarity, one default.'
+description: "The wait toggle: every long-running endpoint runs in the background by default and returns a handle to poll; wait=true blocks until it settles."
 ---
 
 import Tabs from '@theme/Tabs';

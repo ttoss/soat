@@ -1,5 +1,5 @@
 ---
-description: 'Take one bad answer from production and close the loop on it: read the turn back step by step, freeze it as an eval fixture, fork the session at that message, and re-run the same context against a different agent.'
+description: 'Take one bad production answer and close the loop: read the turn step by step, freeze it as an eval fixture, fork the session and re-run it.'
 keywords:
   - session forking
   - replay agent turn

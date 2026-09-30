@@ -1,5 +1,5 @@
 ---
-description: 'How SOAT creates, stores, retrieves, and injects knowledge: the write and read pipelines end to end, every algorithm the engine runs today with its exact knobs, and the seams where custom and future algorithms plug in.'
+description: "How SOAT creates, stores, retrieves and injects knowledge: the write and read pipelines, every algorithm and its knobs, and where custom ones plug in."
 keywords:
   - agent memory engine
   - knowledge retrieval

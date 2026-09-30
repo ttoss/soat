@@ -1,5 +1,5 @@
 ---
-description: "Erase prompt and completion content from agent logs on demand, expire it automatically with a retention window, or never store it at all — while cost, usage and audit records survive intact."
+description: "Erase prompt and completion content from agent logs on demand, expire it with a retention window, or never store it, while cost and audit records stay."
 keywords:
   - GDPR AI agents
   - LGPD AI agents

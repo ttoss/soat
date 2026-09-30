@@ -1,5 +1,5 @@
 ---
-description: 'Hand a per-user credential to an orchestration run with tool_context, land it as a real Authorization header with a {{context:...}} token, and confine it to one tool with context_keys.'
+description: "Pass a per-user credential to an orchestration run with tool_context, send it as an Authorization header, and confine it to one tool with context_keys."
 keywords:
   - tool context
   - per-user credentials

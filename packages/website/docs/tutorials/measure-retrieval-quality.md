@@ -1,5 +1,5 @@
 ---
-description: "Measure knowledge search on your own corpus with recall@k and MRR: build a golden set, run it through search-knowledge, read the per-slice table, and see what a ranking knob costs."
+description: "Measure knowledge search on your own corpus with recall@k and MRR: build a golden set, run it, read the per-slice table, and price a ranking knob."
 keywords:
   - retrieval quality
   - recall@k

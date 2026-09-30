@@ -1,5 +1,5 @@
 ---
-description: 'Implement function calling with SOAT client tools: the agent pauses at requires_action, your app executes the function locally, then submits the tool output to resume the run.'
+description: "Function calling with SOAT client tools: the agent pauses at requires_action, your app runs the function, then submits the output to resume."
 keywords:
   - function calling
   - client tools

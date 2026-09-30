@@ -5,7 +5,7 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "dev": "pnpm generate-all && docusaurus start",
-    "build": "pnpm generate-all && docusaurus build && pnpm advertise-markdown-twins && pnpm check-agent-surfaces",
+    "build": "pnpm generate-all && docusaurus build && pnpm advertise-markdown-twins && pnpm check-agent-surfaces && pnpm check-seo-metadata",
     "swizzle": "docusaurus swizzle",
     "deploy": "carlin deploy static-app",
     "deploy-report": "carlin deploy report --channel=github-pr",
@@ -16,7 +16,7 @@
     "typecheck": "tsc",
     "test": "node --import tsx --test scripts/*.test.ts",
     "clean-api-docs": "docusaurus clean-api-docs all",
-    "generate-api-docs": "docusaurus gen-api-docs all",
+    "generate-api-docs": "docusaurus gen-api-docs all && tsx scripts/normalizeApiDescriptions.ts",
     "generate-all": "pnpm generate-openapi-specs-page && pnpm generate-agent-surfaces && pnpm generate-page-twins && pnpm generate-error-codes-page && pnpm generate-api-docs && pnpm generate-mcp-tools-docs && pnpm generate-sdk-services-docs && pnpm generate-cli-commands-docs && pnpm generate-permissions-page && pnpm generate-webhook-events-page && pnpm generate-formations-resource-docs",
     "generate-formations-resource-docs": "tsx scripts/generateFormationsResourceDocs.ts",
     "generate-mcp-tools-docs": "tsx scripts/generateMcpToolsDocs.ts",
@@ -30,7 +30,8 @@
     "generate-error-codes-page": "tsx scripts/generateErrorCodesPage.ts",
     "advertise-markdown-twins": "tsx scripts/advertiseMarkdownTwins.ts",
     "check-agent-surfaces": "tsx scripts/checkAgentSurfaces.ts",
-    "check-client-examples": "tsx scripts/checkClientExamples.ts"
+    "check-client-examples": "tsx scripts/checkClientExamples.ts",
+    "check-seo-metadata": "tsx scripts/checkSeoMetadata.ts"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
@@ -38,6 +39,9 @@
     "@docusaurus/plugin-client-redirects": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
     "@docusaurus/theme-mermaid": "3.10.2",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
     "@mdx-js/react": "^3.1.1",
     "clsx": "^2.1.1",
     "docusaurus-plugin-openapi-docs": "^5.2.0",
