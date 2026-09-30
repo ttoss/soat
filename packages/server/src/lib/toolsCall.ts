@@ -133,7 +133,6 @@ type CallResolvedToolArgs = {
   input?: Record<string, unknown>;
   authHeader?: string;
   remainingDepth?: number;
-  projectIds?: number[];
   idempotencyKey?: string;
   // The caller's `tool_context` — an orchestration run's bag on a `tool`/`poll`
   // node, the parent call's on a pipeline step. It resolves `{{context:}}` in
@@ -199,7 +198,9 @@ export const callResolvedTool = async (
           });
         }
         return callTool({
-          projectIds: args.projectIds,
+          // A step names a tool in the pipeline's own project, whoever calls
+          // the pipeline.
+          projectIds: [args.toolProjectId],
           id: step.toolId as string,
           // A step is a call of that tool like any other: its own guardrails
           // govern it here exactly as they would a direct call.

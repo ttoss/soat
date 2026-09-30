@@ -1366,7 +1366,7 @@ components:
         tool_id:
           x-soat-ref: tools
           type: string
-          description: Public ID of a persisted tool. Exactly one of `tool_id`/`tool`.
+          description: Public ID of a persisted tool in the agent's own project (`400 TOOL_NOT_FOUND` otherwise). Exactly one of `tool_id`/`tool`.
           example: tool_V1StGXR8Z5jdHi6B
         tool:
           # Inline (ephemeral) tool definition — resolved fresh at generation

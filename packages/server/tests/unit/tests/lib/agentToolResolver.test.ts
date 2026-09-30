@@ -35,6 +35,7 @@ const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
 describe('resolveAgentTools', () => {
   let adminToken: string;
   let projectId: string;
+  let projectDbId: number;
   let httpToolId: string;
   let clientToolId: string;
 
@@ -49,6 +50,9 @@ describe('resolveAgentTools', () => {
       .post('/api/v1/projects')
       .send({ name: 'Tool Resolver Test Project' });
     projectId = projectRes.body.id;
+    projectDbId = (await db.Project.findOne({
+      where: { publicId: projectId },
+    }))!.id as number;
 
     const httpToolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
@@ -90,6 +94,7 @@ describe('resolveAgentTools', () => {
 
   test('resolves http tool and returns tool with execute function', async () => {
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -99,6 +104,7 @@ describe('resolveAgentTools', () => {
 
   test('resolves client tool and returns tool without execute function', async () => {
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [clientToolId],
     });
@@ -108,6 +114,7 @@ describe('resolveAgentTools', () => {
 
   test('skips unknown tool IDs', async () => {
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: ['agt_tl_unknown000'],
     });
@@ -116,6 +123,7 @@ describe('resolveAgentTools', () => {
 
   test('resolves multiple tools at once', async () => {
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId, clientToolId],
     });
@@ -132,6 +140,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -171,6 +180,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [postToolRes.body.id],
     });
@@ -210,6 +220,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [siblingToolRes.body.id],
     });
@@ -284,6 +295,7 @@ describe('resolveAgentTools', () => {
     expect(multipartToolRes.body.execute.body_mode).toBe('multipart');
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [multipartToolRes.body.id],
     });
@@ -372,6 +384,7 @@ describe('resolveAgentTools', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [contextToolRes.body.id],
       toolContext: {
@@ -472,6 +485,7 @@ describe('resolveAgentTools', () => {
       toolContext?: Record<string, string>;
     }) => {
       const tools = await resolveAgentTools({
+        projectId: projectDbId,
         attribution: {},
         toolIds: [args.toolId],
         toolContext: args.toolContext,
@@ -840,6 +854,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -886,6 +901,7 @@ describe('resolveAgentTools', () => {
       .mockResolvedValueOnce(new Response('Forbidden', { status: 403 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -917,6 +933,7 @@ describe('resolveAgentTools', () => {
     );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -938,6 +955,7 @@ describe('resolveAgentTools', () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -986,6 +1004,7 @@ describe('resolveAgentTools', () => {
     const fetchMock = jest.spyOn(global, 'fetch');
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [stringExecuteRes.body.id],
     });
@@ -1012,6 +1031,7 @@ describe('resolveAgentTools', () => {
       .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -1056,6 +1076,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [deleteToolRes.body.id],
     });
@@ -1092,6 +1113,7 @@ describe('resolveAgentTools', () => {
       .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -1122,6 +1144,7 @@ describe('resolveAgentTools', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [invalidToolRes.body.id],
     });
@@ -1157,6 +1180,7 @@ describe('resolveAgentTools', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mappedToolRes.body.id],
     });
@@ -1202,6 +1226,7 @@ describe('resolveAgentTools', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [pipelineToolRes.body.id],
     });
@@ -1282,6 +1307,7 @@ describe('resolveAgentTools', () => {
         expect(toolRes.status).toBe(201);
 
         const tools = await resolveAgentTools({
+          projectId: projectDbId,
           attribution: {},
           toolIds: [toolRes.body.id],
         });
@@ -1327,6 +1353,7 @@ describe('resolveAgentTools', () => {
       expect(toolRes.status).toBe(201);
 
       const tools = await resolveAgentTools({
+        projectId: projectDbId,
         attribution: {},
         toolIds: [toolRes.body.id],
       });
@@ -1423,15 +1450,6 @@ describe('resolveAgentTools - ephemeral tools', () => {
         projectId: internalProjectId,
       })
     ).rejects.toThrow(/pipeline/i);
-  });
-
-  test('does not resolve ephemeral tools when projectId is not provided', async () => {
-    const tools = await resolveAgentTools({
-      attribution: {},
-      toolIds: [],
-      tools: [{ name: 'orphanedEphemeralTool' }],
-    });
-    expect(Object.keys(tools)).toHaveLength(0);
   });
 });
 
@@ -2037,6 +2055,7 @@ describe('resolveBodyParamInterpolations', () => {
 describe('resolveAgentTools - mcp and soat types', () => {
   let adminToken: string;
   let projectId: string;
+  let projectDbId: number;
   let mcpToolId: string;
   let httpToolId: string;
 
@@ -2048,6 +2067,9 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .post('/api/v1/projects')
       .send({ name: 'MCP Tool Resolver Project' });
     projectId = projectRes.body.id;
+    projectDbId = (await db.Project.findOne({
+      where: { publicId: projectId },
+    }))!.id as number;
 
     const mcpToolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
@@ -2099,6 +2121,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mcpToolId],
     });
@@ -2113,6 +2136,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .mockResolvedValueOnce(new Response('', { status: 500 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mcpToolId],
     });
@@ -2126,6 +2150,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .mockRejectedValueOnce(new Error('Network error'));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mcpToolId],
     });
@@ -2171,6 +2196,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     await resolveAgentTools({
       attribution: {},
       toolIds: [mcpToolId],
+      projectId: projectDbId,
       activity: {
         projectId: project!.id as number,
         agentId: 'agent_resolverfail01',
@@ -2226,6 +2252,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     const tools = await resolveAgentTools({
       attribution: {},
       toolIds: [args.toolId],
+      projectId: projectDbId,
       activity: {
         projectId: project!.id as number,
         agentId: 'agent_resolverfail01',
@@ -2326,6 +2353,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
     const toolId = await createMcpTool('mcpSseServer');
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [toolId],
     });
@@ -2353,6 +2381,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .mockResolvedValueOnce(new Response('{}', { status: 200 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [urlWithQueryRes.body.id],
     });
@@ -2382,6 +2411,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .mockResolvedValueOnce(new Response('{}', { status: 200 }));
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [httpToolId],
     });
@@ -2425,6 +2455,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mcpToolId],
     });
@@ -2464,6 +2495,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mcpToolId],
     });
@@ -2503,6 +2535,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [mcpToolId],
     });
@@ -2516,11 +2549,19 @@ describe('resolveAgentTools - mcp and soat types', () => {
     }
   });
 
-  test('resolveAgentTools applies projectIds filter when provided', async () => {
+  test("a binding resolves only in the agent's project, whatever the caller reaches", async () => {
+    const otherProject = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Binding Scope Other Project' });
+    const otherProjectDbId = (await db.Project.findOne({
+      where: { publicId: otherProject.body.id },
+    }))!.id as number;
+
     const tools = await resolveAgentTools({
       attribution: {},
       toolIds: [httpToolId],
-      projectIds: [],
+      projectId: otherProjectDbId,
+      projectIds: [projectDbId, otherProjectDbId],
     });
 
     expect(Object.keys(tools)).toHaveLength(0);
@@ -2537,6 +2578,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
@@ -2566,6 +2608,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [deniedSoatRes.body.id],
       // A real permission, not a name like `files:ListFiles` that no action
@@ -2601,6 +2644,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [allowedSoatRes.body.id],
       authHeader: `Bearer ${adminToken}`,
@@ -2632,6 +2676,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(soatToolRes.status).toBe(201);
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [soatToolRes.body.id],
     });
@@ -2671,6 +2716,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(soatToolRes.status).toBe(201);
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
@@ -2718,6 +2764,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(soatToolRes.status).toBe(201);
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
@@ -2741,6 +2788,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [soatToolRes.body.id],
       authHeader: `Bearer ${adminToken}`,
@@ -2782,6 +2830,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [pipelineToolRes.body.id],
     });
@@ -2804,6 +2853,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [brokenMcpRes.body.id],
     });
@@ -2829,6 +2879,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       );
 
     const tools = await resolveAgentTools({
+      projectId: projectDbId,
       attribution: {},
       toolIds: [getToolRes.body.id],
     });
@@ -2920,6 +2971,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       toolContext?: Record<string, string>;
     }) => {
       const tools = await resolveAgentTools({
+        projectId: projectDbId,
         attribution: {},
         toolIds: [args.toolId],
         toolContext: args.toolContext,
