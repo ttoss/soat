@@ -1,17 +1,6 @@
 .section {
   border-top: 1px solid rgba(0, 229, 255, 0.08);
-  background:
-    radial-gradient(
-      ellipse at 12% 10%,
-      rgba(142, 68, 173, 0.22) 0%,
-      transparent 40%
-    ),
-    radial-gradient(
-      ellipse at 92% 92%,
-      rgba(0, 229, 255, 0.12) 0%,
-      transparent 40%
-    ),
-    #080c14;
+  background: #080c14;
 }
 
 .header {
@@ -33,9 +22,10 @@
 
 /* Each stratum steps in a little further than the one above it, so the four
    read as a staircase toward the ratchet rather than as a stack of cards. */
+/* Each layer is one solid diagram colour, in the investment order:
+   violet, blue, cyan, then white for the ratchet. */
 .stratum {
-  --hue-start: #8e44ad;
-  --hue-end: #a855c7;
+  --hue: #b06ad0;
   position: relative;
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1.4fr) minmax(0, 1fr);
@@ -53,25 +43,22 @@
   left: 0;
   width: 4.5rem;
   height: 2px;
-  background: linear-gradient(90deg, var(--hue-start), var(--hue-end));
-  box-shadow: 0 0 14px var(--hue-end);
+  background: var(--hue);
+  box-shadow: 0 0 14px var(--hue);
 }
 
 .stratum:nth-child(2) {
-  --hue-start: #a855c7;
-  --hue-end: #1a73e8;
+  --hue: #1a73e8;
   margin-left: 4%;
 }
 
 .stratum:nth-child(3) {
-  --hue-start: #1a73e8;
-  --hue-end: #00e5ff;
+  --hue: #00e5ff;
   margin-left: 8%;
 }
 
 .stratum:nth-child(4) {
-  --hue-start: #00e5ff;
-  --hue-end: #ffffff;
+  --hue: #f0f8ff;
   margin-left: 12%;
 }
 

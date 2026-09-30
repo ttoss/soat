@@ -12,20 +12,18 @@
      COLOR PALETTE - Light Theme (Accessibility First)
      =================================================================== */
 
-  /* Brand Colors */
+  /* Brand Colors. Violet is a diagram colour only, never a fill behind text
+     or a gradient stop (tests/harness/brandPalette.test.mjs). */
   --soat-violet: #8e44ad;
   --soat-violet-dark: #7d3c9d;
   --soat-violet-light: #a855c7;
   --soat-core-cyan: #00e5ff; /* Decorative in light mode */
 
-  /* Action fill: the brand gradient under solid text (primary buttons, the
-     permission-engine bar). Every stop clears 4.5:1 against --soat-on-action;
-     tests/harness/brandContrast.test.mjs measures it. */
-  --soat-action-gradient: linear-gradient(
-    135deg,
-    var(--soat-violet) 0%,
-    var(--ifm-color-primary) 100%
-  );
+  /* Action fill: one solid colour under solid text (primary buttons, the
+     permission-engine bar), the mark's blue a step darker so white text clears
+     4.5:1 with margin; tests/harness/brandContrast.test.mjs measures it. */
+  --soat-action: #1567d3;
+  --soat-action-hover: #1050a4;
   --soat-on-action: #ffffff;
 
   /* Primary Color - Electric Blue (#1A73E8) */
@@ -132,9 +130,9 @@ html[data-theme='dark'] {
   --soat-violet: #8e44ad;
 
   /* Core Cyan is too light for white text, so the dark action fill carries
-     Space Black text and starts from a lifted violet that clears 4.5:1
-     against it. */
-  --soat-action-gradient: linear-gradient(135deg, #b06ad0 0%, #00e5ff 100%);
+     Space Black text. */
+  --soat-action: #00e5ff;
+  --soat-action-hover: #5cefff;
   --soat-on-action: #080c14;
 
   /* Primary Color - Core Cyan (#00E5FF) */
@@ -216,22 +214,6 @@ body {
   overflow-x: clip;
 }
 
-body {
-  background-image: radial-gradient(
-    circle at 75% 35%,
-    rgba(0, 229, 255, 0.06) 0%,
-    transparent 36%
-  );
-}
-
-html[data-theme='dark'] body {
-  background-image: radial-gradient(
-    circle at 50% 0%,
-    rgba(142, 68, 173, 0.18) 0%,
-    rgba(8, 12, 20, 0) 60%
-  );
-}
-
 h1,
 h2,
 h3,
@@ -293,7 +275,7 @@ html[data-theme='dark']
    =================================================================== */
 
 .button--primary {
-  background: var(--soat-action-gradient);
+  background: var(--soat-action);
   border: none;
   color: var(--soat-on-action);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -308,6 +290,7 @@ html[data-theme='dark'] .button--primary {
 
 .button--primary:hover {
   transform: translateY(-2px);
+  background: var(--soat-action-hover);
   color: var(--soat-on-action);
 }
 

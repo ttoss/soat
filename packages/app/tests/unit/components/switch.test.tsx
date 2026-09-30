@@ -11,11 +11,12 @@ describe('Switch', () => {
     expect(sw).toHaveAttribute('aria-checked', 'false');
   });
 
-  test('on state fills with gradient and cyan glow', () => {
+  test('on state fills with the primary colour and cyan glow', () => {
     render(<Switch checked onCheckedChange={() => {}} />);
     const sw = screen.getByRole('switch');
     expect(sw).toHaveAttribute('aria-checked', 'true');
-    expect(sw.className).toContain('bg-brand-gradient');
+    expect(sw.className).toContain('bg-primary');
+    expect(sw.className).not.toMatch(/gradient/);
     expect(sw.className).toMatch(/shadow-glow/);
   });
 

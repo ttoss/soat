@@ -7,33 +7,35 @@ describe('Button', () => {
     render(<Button>Save</Button>);
     const btn = screen.getByRole('button', { name: 'Save' });
     expect(btn.className).toContain('bg-primary');
-    expect(btn.className).not.toContain('bg-brand-gradient');
+    expect(btn.className).not.toContain('bg-action');
   });
 
-  test('gradient variant paints the action gradient with its text color and dark glow', () => {
-    render(<Button variant="gradient">Get started</Button>);
+  test('action variant paints the solid action colour with its text color and dark glow', () => {
+    render(<Button variant="action">Get started</Button>);
     const btn = screen.getByRole('button', { name: 'Get started' });
-    expect(btn.className).toContain('bg-action-gradient');
+    expect(btn.className).toContain('bg-action');
+    expect(btn.className).not.toMatch(/gradient/);
     expect(btn.className).toContain('text-action-foreground');
     expect(btn.className).not.toContain('text-white');
     expect(btn.className).toContain('dark:shadow-glow');
   });
 
-  test('gradient variant does not brighten on hover, which would drop its text contrast', () => {
-    render(<Button variant="gradient">Bright</Button>);
+  test('action variant steps to the measured hover shade, not a brightness filter', () => {
+    render(<Button variant="action">Bright</Button>);
     const btn = screen.getByRole('button', { name: 'Bright' });
+    expect(btn.className).toContain('hover:bg-action-hover');
     expect(btn.className).not.toMatch(/brightness/);
   });
 
-  test('gradient variant lifts on hover', () => {
-    render(<Button variant="gradient">Lift</Button>);
+  test('action variant lifts on hover', () => {
+    render(<Button variant="action">Lift</Button>);
     const btn = screen.getByRole('button', { name: 'Lift' });
     expect(btn.className).toMatch(/hover:-translate-y/);
   });
 
   test('forwards arbitrary props and merges className', () => {
     render(
-      <Button variant="gradient" className="custom" disabled>
+      <Button variant="action" className="custom" disabled>
         X
       </Button>
     );

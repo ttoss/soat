@@ -373,7 +373,7 @@ export const ListView = ({
             {'Refresh'}
           </Button>
           {module.createOp && (
-            <Button variant="gradient" size="sm" onClick={handleCreate}>
+            <Button variant="action" size="sm" onClick={handleCreate}>
               {'Create'}
             </Button>
           )}

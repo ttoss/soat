@@ -1,5 +1,6 @@
 import Link from '@docusaurus/Link';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
+import { NOT_WIRED } from '@site/src/data/homepage';
 import Heading from '@theme/Heading';
 import clsx from 'clsx';
 import type * as React from 'react';
@@ -56,10 +57,21 @@ const HomepageDefinition = (): React.ReactNode => {
               You bring the product; SOAT handles the layer underneath it.
             </p>
             <p className={clsx(shared.lead, styles.leadSecond)}>
-              The REST API and the MCP endpoint are one process calling the same
-              business logic through the same permission engine, so a resource
-              created on one surface is already visible on the others. Each
+              The REST API and the MCP endpoint are one Node.js process calling
+              the same business logic through the same permission engine, so a
+              resource created on one surface is already visible on the others.
+              The server and its PostgreSQL database are the whole stack. Each
               module below links to its documentation.
+            </p>
+            <p className={styles.notWired}>
+              <span className={styles.notWiredLabel}>Nothing else to run:</span>
+              {NOT_WIRED.map((item) => {
+                return (
+                  <s className={styles.struck} key={item}>
+                    {item}
+                  </s>
+                );
+              })}
             </p>
           </div>
 

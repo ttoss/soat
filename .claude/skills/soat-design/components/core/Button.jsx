@@ -2,10 +2,10 @@ import React from 'react';
 
 /**
  * SOAT Button — the primary interactive control.
- * Primary variant uses the action gradient (Deep Violet -> Electric Blue with
- * white text in light, lifted violet -> Core Cyan with dark text in dark) and
- * lifts on hover; in dark mode it emits a cyan glow. Secondary is a bordered
- * surface button; ghost is text-only.
+ * Primary variant paints the solid action colour (a deep Electric Blue with
+ * white text in light, Core Cyan with Space Black text in dark), steps to the
+ * hover shade and lifts on hover. Secondary is a bordered surface button;
+ * ghost is text-only.
  */
 export function Button({
   children,
@@ -44,7 +44,7 @@ export function Button({
 
   const variants = {
     primary: {
-      background: 'var(--gradient-action)',
+      background: 'var(--color-action)',
       color: 'var(--text-on-action)',
       boxShadow: 'var(--shadow-sm)',
     },
@@ -62,7 +62,7 @@ export function Button({
   const [hover, setHover] = React.useState(false);
   const hoverStyle = !disabled && hover
     ? variant === 'primary'
-      ? { transform: 'translateY(-2px)', boxShadow: 'var(--glow-cyan-md)' }
+      ? { transform: 'translateY(-2px)', background: 'var(--color-action-hover)', boxShadow: 'var(--glow-cyan-md)' }
       : variant === 'secondary'
         ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }
         : { background: 'var(--surface-raised)' }

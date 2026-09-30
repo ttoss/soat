@@ -130,7 +130,7 @@ var SOATDesignSystem_de1198 = (() => {
     };
     const variants = {
       primary: {
-        background: "var(--gradient-action)",
+        background: "var(--color-action)",
         color: "var(--text-on-action)",
         boxShadow: "var(--shadow-sm)"
       },
@@ -145,7 +145,7 @@ var SOATDesignSystem_de1198 = (() => {
       }
     };
     const [hover, setHover] = import_react2.default.useState(false);
-    const hoverStyle = !disabled && hover ? variant === "primary" ? { transform: "translateY(-2px)", boxShadow: "var(--glow-cyan-md)" } : variant === "secondary" ? { borderColor: "var(--color-primary)", color: "var(--color-primary)" } : { background: "var(--surface-raised)" } : {};
+    const hoverStyle = !disabled && hover ? variant === "primary" ? { transform: "translateY(-2px)", background: "var(--color-action-hover)", boxShadow: "var(--glow-cyan-md)" } : variant === "secondary" ? { borderColor: "var(--color-primary)", color: "var(--color-primary)" } : { background: "var(--surface-raised)" } : {};
     return /* @__PURE__ */ import_react2.default.createElement(
       "button",
       {
@@ -321,7 +321,7 @@ var SOATDesignSystem_de1198 = (() => {
             borderRadius: "var(--radius-full)",
             border: "1px solid",
             borderColor: checked ? "transparent" : "var(--border-strong)",
-            background: checked ? "var(--gradient-brand)" : "var(--surface-sunken)",
+            background: checked ? "var(--color-primary)" : "var(--surface-sunken)",
             boxShadow: checked ? "var(--glow-cyan-sm)" : "none",
             cursor: "inherit",
             transition: "background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)"

@@ -12,10 +12,10 @@ If the user invokes this skill without any other guidance, ask them what they wa
 
 Key starting points:
 - `styles.css` — link this one file to inherit all SOAT tokens (colors, type, spacing, effects). Dual-theme: default is light; add `data-theme="dark"` to `<html>` for the native dark environment.
-- `tokens/` — the CSS custom properties to reference (`--color-primary`, `--surface-page`, `--font-display`, `--gradient-brand`, `--glow-cyan-md`, etc).
+- `tokens/` — the CSS custom properties to reference (`--color-primary`, `--color-action`, `--surface-page`, `--font-display`, `--glow-cyan-md`, etc).
 - `components/` — React primitives: Button, Badge, MethodBadge, Tag, Input, Switch, Card, CodeBlock.
 - `guidelines/` — foundation specimen cards (color, type, spacing, brand).
 
 > The mark (`S[•]AT` wordmark and `[•]` symbol) has SVG masters in `packages/website/static/img/brand/`; other imagery lives in `packages/website/static/img/`. This skill holds tokens, components and specimen cards only.
 
-Brand essentials: dark-mode-first, luminous (cyan/violet glow on deep space backgrounds); Space Grotesk headings + Inter body + JetBrains Mono code; engineered, precise, confident voice; NO emojis.
+Brand essentials: dark-mode-first, one brand hue (Core Cyan in dark, Electric Blue in light) on flat deep space backgrounds, violet only in diagrams; Space Grotesk headings + Inter body + JetBrains Mono code; engineered, precise, confident voice; NO emojis.

@@ -41,10 +41,10 @@ describe('LoginForm', () => {
     expect(darkSource?.getAttribute('srcset')).toBe(BRAND_ASSETS.wordmark.dark);
   });
 
-  test('uses the gradient variant for the submit button', () => {
+  test('uses the action variant for the submit button', () => {
     renderLogin();
     const submit = screen.getByRole('button', { name: 'Sign in' });
-    expect(submit).toHaveClass('bg-action-gradient');
+    expect(submit).toHaveClass('bg-action');
   });
 
   test('submits valid credentials without showing an error', async () => {

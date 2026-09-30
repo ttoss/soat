@@ -11,5 +11,5 @@ export interface SwitchProps {
   id?: string;
 }
 
-/** Boolean toggle switch with brand-gradient on-state and dark-mode glow. */
+/** Boolean toggle switch with a primary-colour on-state and dark-mode glow. */
 export function Switch(props: SwitchProps): React.ReactElement;

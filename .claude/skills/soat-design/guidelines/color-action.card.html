@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="900x180" name="Action, diagram & glow" subtitle="The solid action fill per theme, violet as the diagram colour and the cyan neon glow" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { padding: 20px; }
+  .row { display: flex; gap: 14px; align-items: stretch; }
+  .sw { flex: 1; display: flex; flex-direction: column; }
+  .chip { height: 72px; border-radius: var(--radius-md); }
+  .name { font: 600 12px/1.4 var(--font-display); color: var(--text-strong); margin-top: 8px; letter-spacing: 0.02em; }
+  .hex { font: 500 11px/1.45 var(--font-mono); color: var(--text-muted); }
+  .glow { display: grid; place-items: center; }
+  .orb { width: 48px; height: 48px; border-radius: 50%; background: #00e5ff; box-shadow: 0 0 30px rgba(0,229,255,0.6); }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:#1567d3;display:grid;place-items:center;font:600 14px var(--font-body);color:#ffffff">Run it locally</div><div class="name">Action · Light</div><div class="hex">#1567D3, white text</div></div>
+  <div class="sw"><div class="chip" style="background:#00e5ff;display:grid;place-items:center;font:600 14px var(--font-body);color:#080c14">Run it locally</div><div class="name">Action · Dark</div><div class="hex">Core Cyan, Space Black text</div></div>
+  <div class="sw"><div class="chip" style="background:#080c14;border:1px solid var(--border-default);display:grid;place-items:center"><svg width="120" height="40" viewBox="0 0 120 40" aria-hidden="true"><line x1="4" y1="20" x2="76" y2="20" stroke="#b06ad0" stroke-width="2"/><rect x="78" y="6" width="36" height="28" rx="4" fill="none" stroke="#00e5ff" stroke-width="2"/></svg></div><div class="name">Diagram violet</div><div class="hex">Inlet lines only, never a gradient</div></div>
+  <div class="sw"><div class="chip glow" style="background:#080c14;border:1px solid var(--border-default)"><div class="orb"></div></div><div class="name">Neon glow</div><div class="hex">box-shadow 0 0 30px cyan</div></div>
+</div>
+</body>
+</html>

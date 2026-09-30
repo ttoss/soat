@@ -56,7 +56,7 @@ The system descends from the mark: **one process** — a core held between two b
 
 - **Masters** live in `packages/website/static/img/brand/`: `soat-wordmark-{dark,light,mono}.svg` (`S[•]AT`, outlined Space Grotesk 700 with the O replaced by the brackets and core; the brackets are punctuation, drawn lighter than the letters — 96 units against the 132-unit stem) and `soat-symbol-{dark,light,mono}.svg`, plus `favicon.svg` (a 16 px pixel-aligned cut that follows the colour scheme). Use a master; never retype the wordmark or redraw the symbol.
 - **Wordmark first.** Headers and navbars show the wordmark alone; the symbol stands in only where the space is square (favicon, avatar, app icon, empty states).
-- **Solid, never a gradient.** The boundary is one flat colour. The brand gradient belongs to buttons and decorative bars, not to the mark.
+- **Solid, never a gradient.** The boundary is one flat colour, and so is everything else the brand fills.
 - **Never close the brackets into a box.** A closed rounded square with a centred dot reads as another company's camera glyph; the open sides are what make the mark SOAT's.
 - **Clear space:** the bracket's arm length on every side of the symbol; the height of the O around the wordmark. **Minimum size:** wordmark 16 px tall, symbol 16 px (the favicon cut).
 - **Rasters:** `static/img/soat-logo.png` is the 512 px avatar (symbol on Space Black) used as the MCP server icon and in JSON-LD; `soat-logo-no-bg.png` is the transparent symbol in Electric Blue; `favicon.ico` carries 16/32/48 px.
@@ -65,13 +65,14 @@ The system descends from the mark: **one process** — a core held between two b
 **Theme strategy — dual-theme by design.** SOAT does not invert; it *shifts the functional hue*. **Dark mode is the native environment** (deep space, luminous accents). Light mode is accessibility-first on white.
 
 - **Color.**
-  - Brand DNA (constant): Deep Violet `#8E44AD`, Core Cyan `#00E5FF`, Electric Blue `#1A73E8`.
+  - **One brand hue:** Electric Blue `#1A73E8` in light, Core Cyan `#00E5FF` in dark — the mark, links, focus and the primary action.
+  - **Deep Violet `#8E44AD`** is a diagram colour only: the inlet lines, one layer among others. Never a fill behind text, never a gradient stop (`tests/harness/brandPalette.test.mjs`).
   - Light: page `#FFFFFF`, surfaces Pale Cosmos `#F5F7FA`, text Deep Space Grey `#1A1F2C`, **functional primary = Electric Blue**.
   - Dark: page Space Black `#080C14`, surfaces Nebula Navy `#161B22` / code `#0D1117`, text Starlight White `#F0F8FF`, **functional primary = Core Cyan**.
   - **The 4.5:1 rule:** Core Cyan is *never functional text* in light mode — decorative glow only. Use Electric Blue for interactive UI on light.
-  - Imagery is cool — cyan/violet over deep navy/black. Light mode prefers transparent/faded cosmic imagery so it feels embedded, not pasted on.
-- **Gradients (brand flow):** light = Violet → Electric Blue; dark = Violet → Core Cyan (`--gradient-brand`). Used for hero headline text-clip, switch on-states and decorative bars. Page backgrounds are never flat black — a subtle radial cosmic wash implies depth.
-- **Action gradient — the gradient under solid text.** Primary buttons paint `--gradient-action` with `--text-on-action`, never `--gradient-brand` with a hard-coded color. Light: Violet → Electric Blue with white text. Dark: lifted violet `#B06AD0` → Core Cyan with Space Black text, because white on Core Cyan is 1.54:1. Every stop clears 4.5:1 against its text.
+  - Imagery is cool — cyan and blue over deep navy/black, violet only inside diagrams.
+- **No gradients, no background glows.** Fills are flat and page and section backgrounds are flat Space Black or white. A dot grid is a pattern and may stay; a radial wash behind a section is not.
+- **The action colour.** Primary buttons paint `--color-action` with `--text-on-action` and step to `--color-action-hover`. Light: `#1567D3` (the mark's blue a step darker) with white text, 5.37:1. Dark: Core Cyan with Space Black text, 12.7:1, because white on Core Cyan is 1.54:1.
 - **Method badges** (API reference): white labels on the light fills, Space Black labels on the brighter dark fills (`--method-fg`); every pair clears 4.5:1.
 - **Type.** Headings: **Space Grotesk** (700/600/500), letter-spacing `0.02–0.03em` — engineered, geometric. Body/UI: **Inter** (400/500/600). Code: **JetBrains Mono**. Body line-height is generous (1.7) for long-form docs.
 - **Spacing.** 4px base grid. Section padding is generous (≈80px). The logo wants clear space — the UI follows suit: calm, structured, never cramped.
@@ -111,7 +112,7 @@ SOAT favors **thin, geometric, stroke-based icons** with no fills — matching t
 
 **`tokens/`** — CSS custom properties (all `@import`ed by `styles.css`)
 - `fonts.css` — Space Grotesk / Inter / JetBrains Mono (Google Fonts CDN).
-- `colors.css` — brand DNA, neutral ramps, dual-theme semantic aliases, gradients.
+- `colors.css` — brand DNA, neutral ramps, dual-theme semantic aliases, the action colour.
 - `typography.css` — families, weights, type scale, line-heights, tracking.
 - `spacing.css` — 4px spacing scale + layout sizes.
 - `effects.css` — radii, shadows, neon glows, glass blur, motion easings.

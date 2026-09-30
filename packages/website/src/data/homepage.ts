@@ -53,3 +53,26 @@ export const QUICKSTART_COMMANDS: QuickstartCommand[] = [
     ],
   },
 ];
+
+export type HeroCopy = {
+  /** The headline up to its emphasised ending. */
+  title: string;
+  emphasis: string;
+  subtitle: string;
+};
+
+export const HERO: HeroCopy = {
+  title: 'Everything an agent needs,',
+  emphasis: 'except the model.',
+  subtitle:
+    'Memory, knowledge, permissions, orchestration, evaluations and traces in one open-source server you run yourself. The model comes from the provider you choose, hosted or local.',
+};
+
+/** The services a SOAT install does not need beside it. */
+export const NOT_WIRED = [
+  'a message queue',
+  'a vector database',
+  'an auth server',
+  'a trace collector',
+  'a scheduler',
+];
