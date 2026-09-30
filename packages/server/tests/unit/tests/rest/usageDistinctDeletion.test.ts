@@ -138,6 +138,42 @@ describe('GET /api/v1/usage/aggregate — totals.distinct across deletions', () 
     });
     await post(`/api/v1/tools/${tool.id}/call`, { input: {} });
 
+    // A tool node calling a tool another project shares attributes that
+    // project as publisher.
+    const publisher = await post('/api/v1/projects', { name: 'Publisher' });
+    const sharedTool = await post('/api/v1/tools', {
+      project_id: publisher.id,
+      name: 'shared-tool',
+      type: 'http',
+      execute: { url: `${stubBaseUrl}/shared`, method: 'POST' },
+    });
+    const share = await post('/api/v1/shares', {
+      project_id: publisher.id,
+      resource: `srn:${publisher.id}:tool:${sharedTool.id}`,
+      actions: ['tools:CallTool'],
+      grantee: projectId,
+    });
+    const granteeKey = await post('/api/v1/api-keys', {
+      name: 'Grantee key',
+      project_id: projectId,
+    });
+    const accepted = await authenticatedTestClient(granteeKey.key).post(
+      `/api/v1/shares/${share.id}/accept`
+    );
+    expect(accepted.status).toBe(200);
+    const sharedOrchestration = await post('/api/v1/orchestrations', {
+      project_id: projectId,
+      name: 'Shared Tool Orchestration',
+      nodes: [{ id: 'call', type: 'tool', tool_id: sharedTool.id }],
+      edges: [],
+    });
+    const sharedRun = await post('/api/v1/orchestration-runs', {
+      wait: true,
+      orchestration_id: sharedOrchestration.id,
+      input: {},
+    });
+    expect(sharedRun.status).toBe('succeeded');
+
     // Embedding a document's chunks and a memory's content attributes the
     // document and the memory store.
     const document = await post('/api/v1/documents', {
@@ -171,6 +207,7 @@ describe('GET /api/v1/usage/aggregate — totals.distinct across deletions', () 
     await remove(`/api/v1/actors/${actor.id}`);
     await remove(`/api/v1/agents/${agent.id}?force=true`);
     await remove(`/api/v1/ai-providers/${provider.id}?force=true`);
+    await remove(`/api/v1/projects/${publisher.id}?force=true`);
 
     after = await readTotals();
   }, 90000);
