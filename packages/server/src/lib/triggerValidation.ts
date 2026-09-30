@@ -2,6 +2,7 @@ import { Cron } from 'croner';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { agentReferences, toolReferences } from './resourceReferences';
 import { SOAT_EVENT_TYPES } from './soatEvents';
 
 export const TRIGGER_TYPES = [
@@ -241,7 +242,10 @@ export const resolveAndValidateTarget = async (args: {
   }
 
   if (args.targetType === 'agent') {
-    const agent = await db.Agent.findOne({ where });
+    const agent = await agentReferences.find({
+      id: args.targetId,
+      projectId: args.projectId,
+    });
     await assertTargetExists({
       found: Boolean(agent),
       targetId: args.targetId,
@@ -260,7 +264,10 @@ export const resolveAndValidateTarget = async (args: {
     return;
   }
 
-  const tool = await db.Tool.findOne({ where });
+  const tool = await toolReferences.find({
+    id: args.targetId,
+    projectId: args.projectId,
+  });
   await assertTargetExists({
     found: Boolean(tool),
     targetId: args.targetId,

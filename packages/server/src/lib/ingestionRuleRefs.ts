@@ -1,22 +1,16 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-// Keeps its own throws because a referenced-entity miss is a `400`, not the
-// `404` a top-level lookup returns — and borrows the scope rule alone, which is
-// the half that must not drift.
-import { scopedWhere } from './resourceAccessor';
+import { agentReferences, toolReferences } from './resourceReferences';
 
 /**
  * Resolves the public tool/agent ids from a REST request to the internal
- * numeric ids the CRUD functions expect, scoped to the caller's projects.
- * `undefined` is preserved (field omitted — keep existing on update); `null` is
- * preserved (explicit clear). Throws `TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` when a
- * provided public id has no row in scope. Keeps DB access in the lib layer.
+ * numeric ids the CRUD functions expect, in the rule's project. `undefined` is
+ * preserved (field omitted — keep existing on update); `null` is preserved
+ * (explicit clear). Throws `TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` when a provided
+ * public id has no row in that project.
  */
 export const resolveConverterRefs = async (args: {
-  // `undefined` means unrestricted (admin) — matches the `!== undefined`
-  // scoping convention used throughout ingestionRules.ts, and avoids ever
-  // putting a literal `undefined` into a Sequelize `where` clause.
-  projectIds?: number[];
+  projectId: number;
   toolId?: string | null;
   agentId?: string | null;
 }): Promise<{ toolId?: number | null; agentId?: number | null }> => {
@@ -26,11 +20,9 @@ export const resolveConverterRefs = async (args: {
     if (args.toolId === null) {
       result.toolId = null;
     } else {
-      const tool = await db.Tool.findOne({
-        where: scopedWhere({
-          id: args.toolId,
-          projectIds: args.projectIds,
-        }),
+      const tool = await toolReferences.find({
+        id: args.toolId,
+        projectId: args.projectId,
       });
       if (!tool) {
         throw new DomainError(
@@ -46,11 +38,9 @@ export const resolveConverterRefs = async (args: {
     if (args.agentId === null) {
       result.agentId = null;
     } else {
-      const agent = await db.Agent.findOne({
-        where: scopedWhere({
-          id: args.agentId,
-          projectIds: args.projectIds,
-        }),
+      const agent = await agentReferences.find({
+        id: args.agentId,
+        projectId: args.projectId,
       });
       if (!agent) {
         throw new DomainError(

@@ -67,7 +67,6 @@ const runLoopBatches = async (args: {
         const itemInput: Record<string, unknown> = { [itemVariable]: item };
         return startNestedRun({
           orchestrationPublicId: orchestrationId,
-          projectId: projectIds[0],
           projectIds,
           input: itemInput,
           authHeader,
@@ -157,7 +156,6 @@ export const executeSubOrchestrationNode = async (args: {
   const input = applyInputMapping(node.inputMapping, state);
   const run = await startNestedRun({
     orchestrationPublicId: orchestrationId,
-    projectId: projectIds[0],
     projectIds,
     input,
     authHeader,

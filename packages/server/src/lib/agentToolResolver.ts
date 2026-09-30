@@ -7,7 +7,6 @@ import {
   validatePolicyDocument,
 } from 'src/lib/iam';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   type ActivityCallContext,
@@ -25,6 +24,7 @@ import type { UnavailableToolSink } from './agentToolUnavailable';
 import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
+import { toolReferences } from './resourceReferences';
 import { resolveSecretRefsInString } from './secrets';
 import {
   applyHttpToolAuth,
@@ -1256,8 +1256,9 @@ const resolveReferenceBinding = async (args: {
 }): Promise<Record<string, Tool>> => {
   // The agent's project, never the caller's scope: a credential reaching
   // several projects must not widen what an agent's binding resolves to.
-  const agentTool = await db.Tool.findOne({
-    where: { publicId: args.toolPublicId, projectId: args.projectId },
+  const agentTool = await toolReferences.find({
+    id: args.toolPublicId,
+    projectId: args.projectId,
   });
   if (!agentTool) return {};
 

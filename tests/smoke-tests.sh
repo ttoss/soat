@@ -2511,16 +2511,23 @@ if [ "$(printf '%s\n' "$QUEUE_DRAINED" | jq -r '.queue_depth')" != "0" ]; then
 fi
 echo "Queue drained to empty: OK"
 
-# Exceptions module coverage: a run that fails (nonexistent tool) auto-files a
-# run_failed exception, which we then acknowledge and resolve. The exception is
-# filed fire-and-forget off the failed event, so poll for it.
+# Exceptions module coverage: a run whose tool was deleted after the
+# orchestration saved it fails and auto-files a run_failed exception, which we
+# then acknowledge and resolve. The exception is filed fire-and-forget off the
+# failed event, so poll for it.
 echo "--- Exceptions: a failed run files a run_failed exception ---"
+FAIL_TOOL_ID=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke_exception_gone" \
+  --type http \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\"}" | jq -r '.id')
 ORCH_FAIL_RESP=$($SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-exception-fail" \
-  --nodes '[{"id":"boom","type":"tool","tool_id":"tool_doesnotexist","input_mapping":{}}]' \
+  --nodes "[{\"id\":\"boom\",\"type\":\"tool\",\"tool_id\":\"$FAIL_TOOL_ID\",\"input_mapping\":{}}]" \
   --edges '[]')
 ORCH_FAIL_ID=$(printf '%s\n' "$ORCH_FAIL_RESP" | jq -r '.id')
+$SOAT_CLI delete-tool --tool-id "$FAIL_TOOL_ID" >/dev/null
 FAIL_RUN_RESP=$($SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_FAIL_ID" --input '{}' --wait true)
 FAIL_RUN_ID=$(printf '%s\n' "$FAIL_RUN_RESP" | jq -r '.id')

@@ -119,7 +119,7 @@ To gate several tools differently, create a guardrail per tool and [attach](#att
 | `context.*` | The **effective guardrail context** — application-owned, see below                                             |
 | `runtime.*`    | Platform-computed values (fixed catalog below); reserved — never writable by the caller or the context tool     |
 
-The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. A guardrail may also name a `context_tool_id`, an ordinary [tool](./tools.md) the platform calls immediately before classifying each gated call, so long-parked runs read fresh context. `context_mode` combines the two: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning; `replace` substitutes it entirely.
+The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. A guardrail may also name a `context_tool_id`, an ordinary [tool](./tools.md) in its own project (`400 TOOL_NOT_FOUND` otherwise) the platform calls immediately before classifying each gated call, so long-parked runs read fresh context. `context_mode` combines the two: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning; `replace` substitutes it entirely.
 
 The context tool is called on every gated call, uncached, with the proposed call as its input, nested under one key:
 

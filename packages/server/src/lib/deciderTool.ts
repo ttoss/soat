@@ -1,11 +1,12 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
+import type { db } from '../db';
 import { DomainError } from '../errors';
 import type { DeciderQuestions, DecisionAnswer } from './deciderQuestions';
 import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { parseToolAnswers } from './deciderToolAnswer';
 import { isPlainObject } from './plainObject';
+import { toolReferences } from './resourceReferences';
 import { callTool } from './tools';
 
 const log = createDebug('soat:deciders');
@@ -55,8 +56,9 @@ export const findDeciderTool = async (args: {
   if (typeof args.toolPublicId !== 'string' || args.toolPublicId === '') {
     throw new DomainError('VALIDATION_FAILED', 'tool_id must be a string.');
   }
-  const tool = await db.Tool.findOne({
-    where: { publicId: args.toolPublicId, projectId: args.projectId },
+  const tool = await toolReferences.find({
+    id: args.toolPublicId,
+    projectId: args.projectId,
   });
   if (!tool) {
     throw new DomainError(

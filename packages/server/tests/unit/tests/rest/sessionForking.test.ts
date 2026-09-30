@@ -462,7 +462,7 @@ describe('Session forking', () => {
       expect(response.body.error.code).toBe('AGENT_NOT_FOUND');
     });
 
-    test('forking onto an agent in another project is refused', async () => {
+    test('forking onto an agent in another project answers as an unknown agent', async () => {
       const parentId = await seedSession({
         name: 'Fork Cross Project',
         count: 1,
@@ -473,7 +473,7 @@ describe('Session forking', () => {
         .send({ agent_id: otherProjectAgentId });
 
       expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.code).toBe('AGENT_NOT_FOUND');
     });
 
     test('unknown session returns 404', async () => {

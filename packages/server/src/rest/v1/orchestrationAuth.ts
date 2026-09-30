@@ -1,41 +1,33 @@
 import type { Context } from 'src/Context';
 import { buildSrn } from 'src/lib/iam';
-import { findOrchestration } from 'src/lib/orchestrations';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { requireAuth, requireProjectAccess } from './helpers';
 
 /**
- * Resolves the target orchestration's project/SRN and hands it to the audit
- * middleware before a `204`-returning mutation runs — the response body it
- * would otherwise backfill from is empty (see `setAuditResourceHint`).
- * No-ops when the orchestration cannot be found under `projectIds`; the
- * subsequent delete call surfaces the same not-found error to the caller.
+ * Hands the target orchestration's project/SRN to the audit middleware before
+ * a `204`-returning mutation runs — the response body it would otherwise
+ * backfill from is empty (see `setAuditResourceHint`).
  */
-export const hintAuditResourceForOrchestration = async (args: {
+export const hintAuditResourceForOrchestration = (args: {
   ctx: Context;
   id: string;
-  projectIds?: number[];
-}): Promise<void> => {
-  const orchestration = await findOrchestration({
-    id: args.id,
-    projectIds: args.projectIds,
-  });
-  if (!orchestration) return;
+  projectPublicId: string;
+}): void => {
   setAuditResourceHint(args.ctx, {
-    projectPublicId: orchestration.project_id,
+    projectPublicId: args.projectPublicId,
     resourceSrn: buildSrn({
-      projectPublicId: orchestration.project_id,
+      projectPublicId: args.projectPublicId,
       resourceType: 'orchestration',
-      resourceId: orchestration.id,
+      resourceId: args.id,
     }),
-    resourcePublicId: orchestration.id,
+    resourcePublicId: args.id,
   });
 };
 
 export const resolveStartRunScope = async (
   ctx: Context
-): Promise<{ projectIds?: number[]; primaryId?: number }> => {
+): Promise<{ projectIds?: number[] }> => {
   requireAuth(ctx);
 
   const projectIds = await requireProjectAccess({
@@ -44,12 +36,5 @@ export const resolveStartRunScope = async (
     resourceType: 'orchestration',
   });
 
-  // `projectIds` is either `undefined` (unrestricted admin JWT) or non-empty —
-  // `requireProjectAccess` has already refused the empty scope.
-  const resolvedProjectIds =
-    projectIds ??
-    (ctx.authUser.apiKeyProjectId ? [ctx.authUser.apiKeyProjectId] : undefined);
-
-  const primaryId = resolvedProjectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
-  return { projectIds: resolvedProjectIds, primaryId };
+  return { projectIds };
 };

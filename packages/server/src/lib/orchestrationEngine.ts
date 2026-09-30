@@ -659,7 +659,7 @@ const claimRunRecord = async (args: {
 
 export type StartOrchestrationRunArgs = {
   orchestrationPublicId: string;
-  projectId?: number;
+  /** Where the orchestration is looked up; the run belongs to its project. */
   projectIds?: number[];
   input?: Record<string, unknown>;
   // Validated here, not just at generation time: an async run answers 201 long
@@ -713,8 +713,6 @@ export const startOrchestrationRun = async (
   });
   const { effectiveProjectId, effectiveProjectIds } =
     resolveStartRunProjectScope({
-      projectId: args.projectId,
-      projectIds: args.projectIds,
       orchestrationProjectId: orch.projectId as number,
     });
 

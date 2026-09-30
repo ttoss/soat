@@ -13,6 +13,7 @@ import {
 import { expireChainIfSettled } from './generationChains';
 import { buildRunAuthHeader } from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
+import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
 import { callTool } from './tools';
 
@@ -150,11 +151,14 @@ const buildContinuationMessage = (args: {
  * read live rather than captured. An agent that no longer exists cannot react,
  * so a missing row terminates.
  */
-const reportsExpiryToAgent = async (item: MappedApproval): Promise<boolean> => {
-  if (!item.agent_id) return false;
-  const agent = await db.Agent.findOne({
-    where: { publicId: item.agent_id },
-    attributes: ['onApprovalExpiry'],
+const reportsExpiryToAgent = async (args: {
+  item: MappedApproval;
+  projectInternalId: number;
+}): Promise<boolean> => {
+  if (!args.item.agent_id) return false;
+  const agent = await agentReferences.find({
+    id: args.item.agent_id,
+    projectId: args.projectInternalId,
   });
   return reactsToExpiredApproval(agent?.onApprovalExpiry);
 };
@@ -201,8 +205,9 @@ const fireContinuation = async (args: {
   const message = buildContinuationMessage({ item, decision: args.decision });
 
   if (item.session_id) {
-    const agent = await db.Agent.findOne({
-      where: { publicId: item.agent_id },
+    const agent = await agentReferences.find({
+      id: item.agent_id,
+      projectId: args.projectInternalId,
     });
     if (!agent) return;
     log('fireContinuation: session id=%s session=%s', item.id, item.session_id);
@@ -290,7 +295,7 @@ export const runToolCallContinuation = async (args: {
     // calls, which expire, which continue again.
     if (
       args.decision.decision === 'expired' &&
-      !(await reportsExpiryToAgent(item))
+      !(await reportsExpiryToAgent({ item, projectInternalId }))
     ) {
       log('runToolCallContinuation: expiry is terminal id=%s', item.id);
       await recordChainExpiry(item);

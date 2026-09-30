@@ -5,6 +5,7 @@ import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
+import { agentReferences } from './resourceReferences';
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -180,8 +181,9 @@ export const resolveConversationAndAgent = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
   }
 
-  const generatingAgent = await db.Agent.findOne({
-    where: { publicId: args.agentId, projectId: conversation.projectId },
+  const generatingAgent = await agentReferences.find({
+    id: args.agentId,
+    projectId: conversation.projectId,
   });
 
   if (!generatingAgent) {

@@ -298,7 +298,7 @@ Validated on write: an unknown `type`, a `has_tool_call` without `tool_name`, or
 
 ### Active Tools
 
-`active_tool_ids` restricts which bound tools the model sees at every step; [Step Rules](#step-rules) restrict per step. It must be a subset of the persisted tool IDs in `tool_bindings` (an id naming no project tool is `400 TOOL_NOT_FOUND`). Omitted, `null` or `[]` leaves all bound tools active. Inline `tool` bindings have no ID and stay active; drop the binding to exclude one.
+`active_tool_ids` restricts which bound tools the model sees at every step; [Step Rules](#step-rules) restrict per step. It must be a subset of the persisted tool IDs in `tool_bindings` (an id naming no project tool is `400 TOOL_NOT_FOUND`); the same check applies to each `step_rules[].active_tool_ids` on an agent write. Omitted, `null` or `[]` leaves all bound tools active. Inline `tool` bindings have no ID and stay active; drop the binding to exclude one.
 
 ### Generation Loop
 

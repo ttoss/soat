@@ -514,15 +514,22 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
   });
 
   test('a failing context tool fails closed (caller context only)', async () => {
+    const goneTool = await db.Tool.create({
+      projectId,
+      type: 'http',
+      name: 'gone-context',
+      execute: { url: `${toolBaseUrl}/context`, method: 'POST' },
+    });
     const id = await makeGuardrail(
       {
         class: {
           if: [{ '==': [{ var: 'context.tier' }, 'high'] }, 'C', 'A'],
         },
       },
-      // A context tool id that does not resolve — callTool throws, caught as null.
-      { contextToolId: 'tool_missing0000000', contextMode: 'merge' }
+      { contextToolId: goneTool.publicId, contextMode: 'merge' }
     );
+    // Deleted after the guardrail names it — callTool throws, caught as null.
+    await goneTool.destroy();
     const refund = await resolveGuarded({ toolGuardrailIds: [id] });
     // No caller context + failed tool → context.tier is null → class A → execute.
     const result = await invokeExecute(refund, { amount: 1 });

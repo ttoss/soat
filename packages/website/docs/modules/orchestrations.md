@@ -512,7 +512,7 @@ A `loop` / `sub_orchestration` child settling **non-success terminal** (`failed`
 
 ### Static Validation
 
-Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `errors` and `warnings` arrays. `validate-orchestration` runs the same checks without persisting and returns `{ valid, errors, warnings }`.
+Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `errors` and `warnings` arrays. A `tool`, `poll` or `approval` node's `tool_id` and an `agent` node's `agent_id` must name a resource in the orchestration's own project (`400 TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` with `meta.missing`). A run always belongs to the orchestration's project, whichever projects the caller can reach, and its nodes resolve their references there. `validate-orchestration` runs the same checks without persisting and returns `{ valid, errors, warnings }`.
 
 **Errors (block create/update):**
 
@@ -631,7 +631,7 @@ curl https://api.example.com/api/v1/orchestrations/$ORCH_ID/versions/3 \
 
 Versions: `list-orchestration-versions`, `get-orchestration-version`, `restore-orchestration-version`.
 
-**Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's graph back as **v3**; a run pinned to v2 still resolves its graph. Only the graph rolls back; `name` and `description` are untouched. A restored graph passes the same static validation. Node references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run reaches the node, not at write time, so restoring a graph whose target was deleted succeeds and surfaces as a failed run.
+**Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's graph back as **v3**; a run pinned to v2 still resolves its graph. Only the graph rolls back; `name` and `description` are untouched. A restored graph passes the same static validation. Restore does not re-check node references, and a run resolves each one when it reaches the node, so restoring a graph whose target was deleted succeeds and surfaces as a failed run.
 
 Pinning is per run: a `loop` / `sub_orchestration` node starts a **new** child run pinned to the child's version at that moment, so editing a sub-orchestration reaches iterations not yet started. Version parent and child together to freeze a nested pipeline.
 

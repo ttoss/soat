@@ -278,6 +278,120 @@ describe('Cross-project tool references', () => {
     });
   });
 
+  describe('POST /api/v1/orchestrations', () => {
+    const createOrchestration = (node: Record<string, unknown>) => {
+      return authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectAId,
+          name: `Foreign ${String(node.type)} node`,
+          nodes: [{ id: 'node', ...node }],
+          edges: [],
+        });
+    };
+
+    test("refuses a tool node naming another project's tool", async () => {
+      const response = await createOrchestration({
+        type: 'tool',
+        tool_id: foreignToolId,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('TOOL_NOT_FOUND');
+    });
+
+    test("refuses a poll node naming another project's tool", async () => {
+      const response = await createOrchestration({
+        type: 'poll',
+        tool_id: foreignToolId,
+        interval: '1s',
+        exit_condition: true,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('TOOL_NOT_FOUND');
+    });
+
+    test("refuses an agent node naming another project's agent", async () => {
+      const provider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectBId,
+          name: 'Foreign Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      const foreignAgent = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectBId, ai_provider_id: provider.body.id });
+      expect(foreignAgent.status).toBe(201);
+
+      const response = await createOrchestration({
+        type: 'agent',
+        agent_id: foreignAgent.body.id,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AGENT_NOT_FOUND');
+    });
+  });
+
+  describe('POST /api/v1/workflows', () => {
+    test("refuses a tool dispatch naming another project's tool", async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/workflows')
+        .send({
+          project_id: projectAId,
+          name: 'foreign-tool-dispatch',
+          states: [
+            {
+              name: 'calling',
+              initial: true,
+              on_enter: { dispatch: { kind: 'tool', tool_id: foreignToolId } },
+            },
+            { name: 'done', terminal: true },
+          ],
+          transitions: [{ name: 'to_done', from: ['calling'], to: 'done' }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
+    });
+  });
+
+  describe('POST /api/v1/guardrails', () => {
+    test("refuses a context_tool_id naming another project's tool", async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectAId,
+          name: 'Foreign context tool',
+          document: { default_class: 'C', class: 'C' },
+          context_tool_id: foreignToolId,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('TOOL_NOT_FOUND');
+    });
+  });
+
+  describe('step_rules on POST /api/v1/agents', () => {
+    test("refuses an active_tool_ids entry naming another project's tool", async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectAId,
+          ai_provider_id: aiProviderId,
+          model: 'claude-haiku-4-5',
+          tool_bindings: [{ tool_id: ownToolId }],
+          step_rules: [{ step: 1, active_tool_ids: [foreignToolId] }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('TOOL_NOT_FOUND');
+    });
+  });
+
   describe('PUT /api/v1/formations/:formation_id', () => {
     test("refuses a pipeline step naming another project's tool", async () => {
       const pipelineTemplate = (toolId: string) => {

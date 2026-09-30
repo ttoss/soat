@@ -35,7 +35,6 @@ export type NestedRunParent = {
 
 export type NestedRunStarter = (args: {
   orchestrationPublicId: string;
-  projectId?: number;
   projectIds: number[];
   input: Record<string, unknown>;
   authHeader?: string;

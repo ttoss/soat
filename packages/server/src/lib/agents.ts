@@ -213,6 +213,7 @@ export const createAgent = async (
   await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
     activeToolIds: args.activeToolIds,
+    stepRules: args.stepRules,
     traceContentMode: args.traceContentMode,
     projectId: args.projectId,
   });
@@ -375,6 +376,7 @@ export const updateAgent = async (
   await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
     activeToolIds: args.activeToolIds,
+    stepRules: args.stepRules,
     traceContentMode: args.traceContentMode,
     projectId: agent.projectId,
   });

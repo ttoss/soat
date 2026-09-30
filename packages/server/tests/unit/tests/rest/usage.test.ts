@@ -3408,7 +3408,6 @@ describe('Usage', () => {
 
       const run = await startOrchestrationRun({
         orchestrationPublicId: createRes.body.id,
-        projectId: project?.id as number,
         projectIds: [project?.id as number],
         input: {},
         authHeader: `Bearer ${userToken}`,

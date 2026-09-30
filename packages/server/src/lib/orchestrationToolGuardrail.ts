@@ -19,6 +19,7 @@ import type {
   NodeExecutionResult,
 } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
+import { toolReferences } from './resourceReferences';
 
 const log = createDebug('soat:guardrails');
 
@@ -59,10 +60,7 @@ const collectToolNodeGuardrails = async (args: {
   projectPublicId: string;
 }> => {
   const [tool, project] = await Promise.all([
-    db.Tool.findOne({
-      where: { publicId: args.toolId, projectId: args.projectId },
-      attributes: ['name', 'guardrailIds'],
-    }),
+    toolReferences.find({ id: args.toolId, projectId: args.projectId }),
     db.Project.findOne({
       where: { id: args.projectId },
       attributes: ['publicId', 'guardrailIds'],

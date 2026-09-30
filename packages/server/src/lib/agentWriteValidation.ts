@@ -9,6 +9,7 @@
  */
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { collectStepRuleActiveToolIds } from './agentStepRules';
 import { assertGuardrailsExist } from './guardrails';
 import { validatePolicyActions } from './iam';
 import {
@@ -16,7 +17,7 @@ import {
   resolveModelRouteDbId,
   validateModelRouteExclusivity,
 } from './modelRoutes';
-import { assertToolsInProject } from './toolReferences';
+import { toolReferences } from './resourceReferences';
 import { validateAgentTraceContentMode } from './traceContentPolicy';
 
 /**
@@ -76,6 +77,7 @@ export const assertBoundaryPolicyActionsKnown = (
 export const assertAgentReferencesExist = async (args: {
   guardrailIds: string[] | null | undefined;
   activeToolIds: string[] | null | undefined;
+  stepRules?: unknown;
   traceContentMode?: string | null;
   projectId: number;
 }): Promise<void> => {
@@ -85,8 +87,11 @@ export const assertAgentReferencesExist = async (args: {
   });
   // A typo surfaces as a `400` on write instead of silently narrowing the
   // agent's tool surface at generation time.
-  await assertToolsInProject({
-    toolIds: args.activeToolIds ?? [],
+  await toolReferences.requireMany({
+    ids: [
+      ...(args.activeToolIds ?? []),
+      ...collectStepRuleActiveToolIds(args.stepRules),
+    ],
     projectId: args.projectId,
   });
   await assertTraceContentModeAllowed({

@@ -18,6 +18,7 @@ import {
   makeResourceAccessor,
   type ResourceAccessor,
 } from './resourceAccessor';
+import { agentReferences } from './resourceReferences';
 
 const log = createDebug('soat:quotas');
 
@@ -123,7 +124,10 @@ const SCOPE_REF_TARGETS: Record<
   agent: {
     label: 'an agent',
     find: (where) => {
-      return db.Agent.findOne({ where, attributes: ['id'] });
+      return agentReferences.find({
+        id: String(where.publicId),
+        projectId: Number(where.projectId),
+      });
     },
   },
   actor: {

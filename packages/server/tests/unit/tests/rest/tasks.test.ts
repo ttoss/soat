@@ -149,6 +149,42 @@ describe('Tasks', () => {
     ).body.id;
   });
 
+  // An agent node whose agent is deleted after the graph is written fails the
+  // run deterministically, with no external dependency.
+  const createFailingOrchestration = async (name: string): Promise<string> => {
+    const provider = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: `${name} provider ${Math.random()}`,
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    const agent = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({ project_id: projectId, ai_provider_id: provider.body.id });
+    const orchestration = await authenticatedTestClient(userToken)
+      .post('/api/v1/orchestrations')
+      .send({
+        project_id: projectId,
+        name: `${name}-${Math.random().toString(36).slice(2)}`,
+        nodes: [
+          {
+            id: 'write',
+            type: 'agent',
+            agent_id: agent.body.id,
+            input_mapping: { prompt: { var: 'topic' } },
+          },
+        ],
+        edges: [],
+      });
+    expect(orchestration.status).toBe(201);
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/agents/${agent.body.id}`
+    );
+    return orchestration.body.id as string;
+  };
+
   // Drain any detached on_enter automation before teardown so trailing DB
   // writes never outlive the worker (jest force-exits on leaked handles).
   afterEach(async () => {
@@ -2211,25 +2247,8 @@ describe('Tasks', () => {
     });
 
     test('a failed orchestration dispatch sets automation_status and follows on_failure, not on_complete', async () => {
-      // An agent node with a nonexistent agent_id deterministically fails the
-      // run without any external HTTP dependency (see orchestrations.test.ts).
-      const orchestrationId = (
-        await authenticatedTestClient(userToken)
-          .post('/api/v1/orchestrations')
-          .send({
-            project_id: projectId,
-            name: `failing-pipeline-${Math.random().toString(36).slice(2)}`,
-            nodes: [
-              {
-                id: 'write',
-                type: 'agent',
-                agent_id: 'agt_nonexistent12345',
-                input_mapping: { prompt: { var: 'topic' } },
-              },
-            ],
-            edges: [],
-          })
-      ).body.id;
+      const orchestrationId =
+        await createFailingOrchestration('failing-pipeline');
 
       const wf = await dispatchWorkflow({
         name: 'orch-failure',
@@ -2279,23 +2298,9 @@ describe('Tasks', () => {
     });
 
     test('a failed orchestration dispatch with no on_failure leaves the task parked, not routed by on_complete', async () => {
-      const orchestrationId = (
-        await authenticatedTestClient(userToken)
-          .post('/api/v1/orchestrations')
-          .send({
-            project_id: projectId,
-            name: `failing-pipeline-unrouted-${Math.random().toString(36).slice(2)}`,
-            nodes: [
-              {
-                id: 'write',
-                type: 'agent',
-                agent_id: 'agt_nonexistent12345',
-                input_mapping: { prompt: { var: 'topic' } },
-              },
-            ],
-            edges: [],
-          })
-      ).body.id;
+      const orchestrationId = await createFailingOrchestration(
+        'failing-pipeline-unrouted'
+      );
 
       const wf = await dispatchWorkflow({
         name: 'orch-failure-unrouted',
@@ -2630,23 +2635,8 @@ describe('Tasks', () => {
       // A recovered outcome must pick the same branch a live one would. The
       // classification is shared with the dispatcher (NON_SUCCESS_TERMINAL_
       // STATUSES), so a failed run can never be recovered as a success.
-      const orchestrationId = (
-        await authenticatedTestClient(userToken)
-          .post('/api/v1/orchestrations')
-          .send({
-            project_id: projectId,
-            name: `orphan-failing-${Math.random().toString(36).slice(2)}`,
-            nodes: [
-              {
-                id: 'write',
-                type: 'agent',
-                agent_id: 'agt_nonexistent12345',
-                input_mapping: { prompt: { var: 'topic' } },
-              },
-            ],
-            edges: [],
-          })
-      ).body.id;
+      const orchestrationId =
+        await createFailingOrchestration('orphan-failing');
 
       const workflowId = (
         await authenticatedTestClient(userToken)

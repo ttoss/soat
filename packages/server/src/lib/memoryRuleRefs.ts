@@ -1,6 +1,7 @@
 import { db } from '../db';
 import type { ErrorCode } from '../errors';
 import { DomainError } from '../errors';
+import { agentReferences, toolReferences } from './resourceReferences';
 
 /**
  * Resolves the public ids a memory-rule request carries to the internal ids the
@@ -12,11 +13,10 @@ import { DomainError } from '../errors';
  * `null` as `null` (an explicit clear).
  */
 const resolveRef = async (args: {
-  model: {
-    findOne: (options: {
-      where: { publicId: string; projectId: number };
-    }) => Promise<{ id: number } | null>;
-  };
+  find: (where: {
+    id: string;
+    projectId: number;
+  }) => Promise<{ id?: number } | null>;
   errorCode: ErrorCode;
   label: string;
   publicId?: string | null;
@@ -25,8 +25,9 @@ const resolveRef = async (args: {
   if (args.publicId === undefined) return undefined;
   if (args.publicId === null) return null;
 
-  const row = await args.model.findOne({
-    where: { publicId: args.publicId, projectId: args.projectId },
+  const row = await args.find({
+    id: args.publicId,
+    projectId: args.projectId,
   });
   if (!row) {
     throw new DomainError(
@@ -34,7 +35,7 @@ const resolveRef = async (args: {
       `${args.label} '${args.publicId}' not found in this project.`
     );
   }
-  return row.id;
+  return row.id as number;
 };
 
 export const resolveMemoryRuleRefs = async (args: {
@@ -49,21 +50,25 @@ export const resolveMemoryRuleRefs = async (args: {
 }> => {
   const [agentId, toolId, aiProviderId] = await Promise.all([
     resolveRef({
-      model: db.Agent,
+      find: agentReferences.find,
       errorCode: 'AGENT_NOT_FOUND',
       label: 'Agent',
       publicId: args.agentId,
       projectId: args.projectId,
     }),
     resolveRef({
-      model: db.Tool,
+      find: toolReferences.find,
       errorCode: 'TOOL_NOT_FOUND',
       label: 'Tool',
       publicId: args.toolId,
       projectId: args.projectId,
     }),
     resolveRef({
-      model: db.AiProvider,
+      find: (where) => {
+        return db.AiProvider.findOne({
+          where: { publicId: where.id, projectId: where.projectId },
+        });
+      },
       errorCode: 'AI_PROVIDER_NOT_FOUND',
       label: 'AI provider',
       publicId: args.aiProviderId,
@@ -91,15 +96,10 @@ export const assertSourceAgentIds = async (args: {
 }): Promise<void> => {
   if (!args.sourceAgentIds?.length) return;
 
-  const agents = await db.Agent.findAll({
-    attributes: ['publicId'],
-    where: { publicId: args.sourceAgentIds, projectId: args.projectId },
+  const found = await agentReferences.findMany({
+    ids: args.sourceAgentIds,
+    projectId: args.projectId,
   });
-  const found = new Set(
-    agents.map((agent) => {
-      return agent.publicId;
-    })
-  );
   const missing = args.sourceAgentIds.find((id) => {
     return !found.has(id);
   });

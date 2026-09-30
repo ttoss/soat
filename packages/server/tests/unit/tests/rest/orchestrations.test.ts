@@ -13,6 +13,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Orchestrations', () => {
   let adminToken: string;
+  let stubToolId: string;
   let userToken: string;
   let projectId: string;
   let noPermToken: string;
@@ -112,6 +113,36 @@ describe('Orchestrations', () => {
     edges: [],
   };
 
+  // A node must name a tool or agent in the orchestration's project when the
+  // graph is written. Tests that stub `callTool` point at `stubToolId`; a test
+  // that needs a node to fail at run time deletes its target after writing.
+  const createProjectTool = async (name: string) => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name,
+        type: 'http',
+        execute: { url: 'https://example.com/stub', method: 'POST' },
+      });
+    return res.body.id as string;
+  };
+
+  const createProjectAgent = async () => {
+    const provider = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: `Orchestration Agent Provider ${Math.random()}`,
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    const agent = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({ project_id: projectId, ai_provider_id: provider.body.id });
+    return agent.body.id as string;
+  };
+
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'orch',
@@ -137,6 +168,8 @@ describe('Orchestrations', () => {
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId as string;
     noPermToken = setup.noPermToken as string;
+
+    stubToolId = await createProjectTool('orchestrationStubTool');
   });
 
   // Creates a project-scoped API key whose policy excludes `excludedAction`,
@@ -1230,6 +1263,7 @@ describe('Orchestrations', () => {
     });
 
     test('agent node with fake agentId causes run to fail', async () => {
+      const deletedAgentId = await createProjectAgent();
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1238,7 +1272,7 @@ describe('Orchestrations', () => {
             {
               id: 'agent_node',
               type: 'agent',
-              agent_id: 'agt_nonexistent12345',
+              agent_id: deletedAgentId,
               input_mapping: { prompt: { var: 'question' } },
             },
           ],
@@ -1246,6 +1280,9 @@ describe('Orchestrations', () => {
           project_id: projectId,
         });
       expect(createRes.status).toBe(201);
+      await authenticatedTestClient(adminToken).delete(
+        `/api/v1/agents/${deletedAgentId}`
+      );
 
       const runRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
@@ -2473,6 +2510,14 @@ describe('Orchestrations', () => {
     });
 
     test('records the failing node with its input and error', async () => {
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'deletedBeforeRun',
+          type: 'http',
+          execute: { url: 'https://example.com/gone', method: 'POST' },
+        });
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -2481,9 +2526,7 @@ describe('Orchestrations', () => {
             {
               id: 'boom',
               type: 'tool',
-              // structurally valid (passes create-time validation) but the
-              // tool does not exist, so callTool throws at run time.
-              tool_id: 'tool_doesnotexist',
+              tool_id: toolRes.body.id,
               input_mapping: { name: 'widget' },
             },
           ],
@@ -2491,6 +2534,10 @@ describe('Orchestrations', () => {
           project_id: projectId,
         });
       expect(createRes.status).toBe(201);
+      // Deleted after the graph is written, so callTool throws at run time.
+      await authenticatedTestClient(adminToken).delete(
+        `/api/v1/tools/${toolRes.body.id}`
+      );
 
       const runRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
@@ -3163,6 +3210,14 @@ describe('Orchestrations', () => {
         `/api/v1/orchestrations/${orchestrationId}`
       );
       expect(response.status).toBe(403);
+    });
+
+    test('an orchestration that does not exist returns 404', async () => {
+      const response = await authenticatedTestClient(userToken).delete(
+        '/api/v1/orchestrations/orch_doesnotexist'
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
     });
   });
 
@@ -4112,7 +4167,7 @@ describe('Orchestrations', () => {
               {
                 id: 'wait',
                 type: 'poll',
-                tool_id: 'tool_status',
+                tool_id: stubToolId,
                 interval: '0s',
                 exit_condition: {
                   '==': [{ var: 'response.status' }, 'completed'],
@@ -4154,7 +4209,7 @@ describe('Orchestrations', () => {
               {
                 id: 'wait',
                 type: 'poll',
-                tool_id: 'tool_status',
+                tool_id: stubToolId,
                 interval: '0s',
                 max_iterations: 2,
                 exit_condition: {
@@ -4185,18 +4240,21 @@ describe('Orchestrations', () => {
 
   describe('Cancel run terminal-status edge cases', () => {
     test('cancelling a failed run returns 409', async () => {
-      // Create an orchestration that immediately fails at run time. The graph
-      // is structurally valid (so it passes create-time validation) but the
-      // referenced tool does not exist, so the node throws during the run.
+      const deletedToolId = await createProjectTool('cancelDeletedTool');
+      // Create an orchestration that immediately fails at run time: its tool
+      // is deleted after the graph is written, so the node throws.
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
           name: 'Fail For Cancel Test',
-          nodes: [{ id: 'bad', type: 'tool', tool_id: 'tool_doesnotexist' }],
+          nodes: [{ id: 'bad', type: 'tool', tool_id: deletedToolId }],
           edges: [],
           project_id: projectId,
         });
       expect(createRes.status).toBe(201);
+      await authenticatedTestClient(adminToken).delete(
+        `/api/v1/tools/${deletedToolId}`
+      );
       const failOrchId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
@@ -5014,7 +5072,7 @@ describe('Orchestrations', () => {
             {
               id: 'wait',
               type: 'poll',
-              tool_id: 'tool_status',
+              tool_id: stubToolId,
               interval: '1s',
               max_iterations: 5,
               exit_condition: {
@@ -5231,7 +5289,7 @@ describe('Orchestrations', () => {
             {
               id: 'call',
               type: 'tool',
-              tool_id: 'tool_x',
+              tool_id: stubToolId,
               retry: { max_attempts: 2, backoff: { delay_ms: 1000 } },
             },
           ],
@@ -5268,7 +5326,7 @@ describe('Orchestrations', () => {
             {
               id: 'call',
               type: 'tool',
-              tool_id: 'tool_x',
+              tool_id: stubToolId,
               retry: { max_attempts: 2, backoff: { delay_ms: 1000 } },
             },
           ],
@@ -5304,7 +5362,7 @@ describe('Orchestrations', () => {
             {
               id: 'call',
               type: 'tool',
-              tool_id: 'tool_x',
+              tool_id: stubToolId,
               retry: { max_attempts: 5, backoff: { delay_ms: 1000 } },
             },
           ],

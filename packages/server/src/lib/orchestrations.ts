@@ -13,6 +13,7 @@ import type {
   mapOrchestrationNode,
 } from './orchestrationGraphWire';
 import { mapOrchestrationGraph } from './orchestrationGraphWire';
+import { assertNodeReferencesInProject } from './orchestrationNodeReferences';
 import {
   assertOrchestrationUpdateValid,
   assertOrchestrationValid,
@@ -396,6 +397,10 @@ export const createOrchestration = async (
     edges: args.edges,
     inputSchema: args.inputSchema,
   });
+  await assertNodeReferencesInProject({
+    nodes: args.nodes,
+    projectId: args.projectId,
+  });
 
   const orch = await db.Orchestration.create({
     projectId: args.projectId,
@@ -522,6 +527,12 @@ export const updateOrchestration = async (
       inputSchema: orch.inputSchema as object | null,
     },
   });
+  if (args.nodes !== undefined) {
+    await assertNodeReferencesInProject({
+      nodes: args.nodes,
+      projectId: orch.projectId,
+    });
+  }
 
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) updates['name'] = args.name;
