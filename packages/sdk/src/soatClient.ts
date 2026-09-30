@@ -35,6 +35,7 @@ import {
   Quotas as QuotasSdk,
   Secrets as SecretsSdk,
   Sessions as SessionsSdk,
+  Shares as SharesSdk,
   Tasks as TasksSdk,
   Tools as ToolsSdk,
   Traces as TracesSdk,
@@ -147,6 +148,7 @@ export class SoatClient {
   readonly quotas: typeof QuotasSdk;
   readonly secrets: typeof SecretsSdk;
   readonly sessions: typeof SessionsSdk;
+  readonly shares: typeof SharesSdk;
   readonly tasks: typeof TasksSdk;
   readonly tools: typeof ToolsSdk;
   readonly traces: typeof TracesSdk;
@@ -201,6 +203,7 @@ export class SoatClient {
     this.quotas = bindResource(QuotasSdk, httpClient);
     this.secrets = bindResource(SecretsSdk, httpClient);
     this.sessions = bindResource(SessionsSdk, httpClient);
+    this.shares = bindResource(SharesSdk, httpClient);
     this.tasks = bindResource(TasksSdk, httpClient);
     this.tools = bindResource(ToolsSdk, httpClient);
     this.traces = bindResource(TracesSdk, httpClient);
