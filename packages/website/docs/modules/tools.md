@@ -405,7 +405,7 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 
 ### Deleting a tool
 
-[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) refuses a tool that is a [decider's backend](./deciders.md#the-tool-backend) with `409 TOOL_HAS_DEPENDENTS`; `meta.decider_count` counts the deciders to delete or repoint first.
+[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) refuses a tool that is a [decider's backend](./deciders.md#the-tool-backend) with `409 TOOL_HAS_DEPENDENTS`; `meta.decider_count` counts the deciders to delete or repoint first. A tool another project accepted a [share](./shares.md#accepted-shares-are-dependents) of is refused the same way, with `meta.accepted_share_count`, until `force=true` revokes the shares.
 
 ### Who may act on a tool
 

@@ -98,6 +98,11 @@ export const PROJECT_CASCADE_ORDER = [
   // Memory cascades at the DB level.
   'MemoryStore',
 
+  // This project's acceptances of other projects' shares; the acceptances of
+  // its own shares cascade from Share at the DB level.
+  'ShareAcceptance',
+  'Share',
+
   'Secret',
   'File',
   'UploadToken',
@@ -158,6 +163,7 @@ export const PROJECT_COUNTED_MODELS = [
   'Quota',
   'Secret',
   'Session',
+  'Share',
   'Tool',
   'Trace',
   'UploadToken',

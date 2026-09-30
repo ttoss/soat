@@ -140,7 +140,7 @@ export const ERROR_CODES = {
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The agent is referenced by one or more generations, traces or deciders and cannot be deleted. `meta.decider_count` names the deciders, which block deletion even under `force=true` and must be deleted or repointed first; generations and traces block only until `force=true`.',
+      'The agent is referenced by one or more generations, traces, deciders or accepted shares and cannot be deleted. `meta.decider_count` names the deciders, which block deletion even under `force=true` and must be deleted or repointed first; generations, traces and accepted shares (`meta.accepted_share_count`) block only until `force=true`, which revokes the shares.',
   },
   DECIDER_AGENT_NOT_TOOL_LESS: {
     httpStatus: 400,
@@ -165,7 +165,17 @@ export const ERROR_CODES = {
   TOOL_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The tool is the backend of one or more deciders and cannot be deleted. `meta.decider_count` counts them; delete them or point them at another backend first.',
+      'The tool is the backend of one or more deciders, or another project has accepted a share of it, and it cannot be deleted. `meta.decider_count` counts the deciders, which block even under `force=true`: delete them or point them at another backend first. `meta.accepted_share_count` counts the accepted shares, which block only until `force=true` revokes them.',
+  },
+  SHARE_REVOKED: {
+    httpStatus: 403,
+    description:
+      "The share was revoked by its publisher, or the publisher revoked this project's acceptance of it. A revoked share accepts nothing and cannot be suspended or resumed; a revoked acceptance refuses a new accept from the same project until the publisher deletes it.",
+  },
+  PUBLIC_SHARES_DISABLED: {
+    httpStatus: 403,
+    description:
+      'A share with `grantee: "*"` offers the resource to every project, which this deployment does not allow. Name one grantee project, or set `SHARES_ALLOW_PUBLIC=true` on the server.',
   },
   PROMOTION_GATE_UNMET: {
     httpStatus: 409,

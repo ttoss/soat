@@ -126,6 +126,7 @@ Grant a **user** (JWT) a project with `resource: ["srn:proj_ABC:*:*"]`. API keys
 | `ingestionRule` | `igr_`           | Ingestion Rules |
 | `audit`         | `audit_`         | Audit Log       |
 | `usage`         | `uthr_`          | Usage           |
+| `share`         | `shr_`           | Shares          |
 
 A child resource has no type of its own: it is named through the parent its
 routes authorize against. A **memory** and a **memory rule** are named by their
@@ -248,6 +249,14 @@ A denial's status code depends on what the route does, not on which policy faile
 A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
 The `403`/`404` split on a write is about **which project**, not which resource. Being told plainly that one agent in a project you work in is off limits tells you nothing you could not already work out, so that stays `403`. A resource in a project none of your policies name is `404`: a `403` there would confirm it exists to someone with no business knowing it does — including to a caller whose policies name no project at all, for whom every project is someone else's. A denied write never says more than a denied read of the same resource would.
+
+## Cross-project shares
+
+A policy grants actions inside the projects it names; it never lets one project act on another's resources. A [share](./shares.md) is the resource-side counterpart: the publishing project records that another project may invoke one of its tools or agents with a fixed set of actions, and the grantee accepts it.
+
+The two sides authorize in their own projects. The publisher's `shares:*` actions are evaluated against `srn:<publisher>:share:<id>`, the grantee's `shares:AcceptShare`, `shares:GetShare` and `shares:RevokeShare` against `srn:<grantee>:share:<id>`. A scoped key or OAuth token acts for its own project on either side, so it creates shares only for that project and accepts them only into it.
+
+A share grants only what its [type allows](./shares.md#shareable-types) — never a write action — and grants nothing while it is unaccepted, suspended or revoked.
 
 ## Policy Evaluation
 

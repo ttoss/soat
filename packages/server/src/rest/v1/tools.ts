@@ -326,6 +326,7 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   await deleteTool({
     projectIds,
     id: ctx.params.tool_id,
+    force: ctx.query.force === 'true',
   });
 
   ctx.status = 204;

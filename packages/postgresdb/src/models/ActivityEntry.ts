@@ -86,6 +86,9 @@ export class ActivityEntry extends Model {
       'approval_resolved',
       'exception_created',
       'schedule_fired',
+      'share_resumed',
+      'share_revoked',
+      'share_suspended',
       'tool_resolution_failed'
     ),
     allowNull: false,
@@ -96,6 +99,9 @@ export class ActivityEntry extends Model {
     | 'approval_resolved'
     | 'exception_created'
     | 'schedule_fired'
+    | 'share_resumed'
+    | 'share_revoked'
+    | 'share_suspended'
     | 'tool_resolution_failed';
 
   // ExceptionItem's vocabulary, so the two surfaces stay consistent.

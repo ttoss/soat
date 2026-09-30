@@ -65,6 +65,7 @@ const sidebars: SidebarsConfig = {
             'modules/iam',
             'modules/policies',
             'modules/api-keys',
+            'modules/shares',
             'modules/oauth',
           ],
         },

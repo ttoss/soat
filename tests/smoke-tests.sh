@@ -5599,6 +5599,65 @@ expect_cli_error_status 404 get-agent --agent-id "$CONVO_GEN_AGENT_ID"
 echo "Agent force-delete: OK (agent and dependents removed)"
 echo "Conversations generate coverage: OK"
 
+# ── Shares ────────────────────────────────────────────────────────────────
+
+echo ""
+echo "=== Shares ==="
+
+SHARE_GRANTEE_ID=$($SOAT_CLI create-project --name smoke-share-grantee | jq -r '.id')
+SHARED_TOOL_ID=$($SOAT_CLI create-tool --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-shared-tool --type client | jq -r '.id')
+
+echo "--- Creating share ---"
+SHARE_RESP=$($SOAT_CLI create-share --project-id "$PROJECT_PUBLIC_ID" \
+  --resource "srn:$PROJECT_PUBLIC_ID:tool:$SHARED_TOOL_ID" \
+  --actions '["tools:CallTool"]' --grantee "$SHARE_GRANTEE_ID")
+SHARE_ID=$(printf '%s\n' "$SHARE_RESP" | jq -r '.id')
+if [ -z "$SHARE_ID" ] || [ "$SHARE_ID" = "null" ]; then
+  echo "ERROR: Failed to create share" >&2
+  echo "$SHARE_RESP" >&2
+  exit 1
+fi
+expect_cli_error_status 400 create-share --project-id "$PROJECT_PUBLIC_ID" \
+  --resource "srn:$PROJECT_PUBLIC_ID:tool:$SHARED_TOOL_ID" \
+  --actions '["tools:UpdateTool"]' --grantee "$SHARE_GRANTEE_ID"
+
+echo "--- Accepting share as the grantee ---"
+ACCEPTANCE_ID=$($SOAT_CLI accept-share --share-id "$SHARE_ID" \
+  --project-id "$SHARE_GRANTEE_ID" | jq -r '.id')
+RECEIVED_RESP=$($SOAT_CLI list-shares --project-id "$SHARE_GRANTEE_ID" --role grantee)
+if ! printf '%s\n' "$RECEIVED_RESP" | jq -e --arg id "$SHARE_ID" \
+  '.data | any(.id == $id and .acceptance.status == "active")' >/dev/null; then
+  echo "ERROR: Accepted share missing from the grantee's list" >&2
+  echo "$RECEIVED_RESP" >&2
+  exit 1
+fi
+
+echo "--- Suspending and resuming ---"
+$SOAT_CLI suspend-share --share-id "$SHARE_ID" >/dev/null
+$SOAT_CLI resume-share --share-id "$SHARE_ID" >/dev/null
+if ! $SOAT_CLI get-share --share-id "$SHARE_ID" --project-id "$SHARE_GRANTEE_ID" \
+  | jq -e '.suspended_at == null and .acceptance.status == "active"' >/dev/null; then
+  echo "ERROR: Resume did not restore the acceptance" >&2
+  exit 1
+fi
+
+echo "--- Cutting and restoring the consumer ---"
+$SOAT_CLI revoke-share-acceptance --share-id "$SHARE_ID" --acceptance-id "$ACCEPTANCE_ID" >/dev/null
+expect_cli_error_status 403 accept-share --share-id "$SHARE_ID" --project-id "$SHARE_GRANTEE_ID"
+$SOAT_CLI delete-share-acceptance --share-id "$SHARE_ID" --acceptance-id "$ACCEPTANCE_ID" >/dev/null
+$SOAT_CLI accept-share --share-id "$SHARE_ID" --project-id "$SHARE_GRANTEE_ID" >/dev/null
+
+echo "--- Deleting a shared tool ---"
+expect_cli_error_status 409 delete-tool --tool-id "$SHARED_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$SHARED_TOOL_ID" --force true >/dev/null
+if ! $SOAT_CLI get-share --share-id "$SHARE_ID" | jq -e '.revoked_at != null' >/dev/null; then
+  echo "ERROR: Deleting the tool did not revoke its share" >&2
+  exit 1
+fi
+$SOAT_CLI delete-share --share-id "$SHARE_ID" >/dev/null
+echo "Shares: OK"
+
 # ── Webhooks ──────────────────────────────────────────────────────────────
 
 echo ""
