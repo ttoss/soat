@@ -36,6 +36,7 @@ import {
   assertValidToolContextKeys,
   buildContextHeaderName,
   buildContextHeaders,
+  pinCallingProject,
 } from './toolContext';
 import { fetchWithEgressGuard } from './toolEgress';
 import {
@@ -1257,6 +1258,7 @@ type ResolveToolByTypeArgs = {
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
   projectId: number;
+  projectPublicId?: string;
   resolveArgs: ResolveToolByTypeArgs;
   guardrail?: ResolverGuardrailContext;
   activity?: ActivityCallContext;
@@ -1268,18 +1270,36 @@ const resolveReferenceBinding = async (args: {
     projectId: args.projectId,
     reach: 'shares',
   });
-  if (!agentTool) return {};
+  if (!agentTool) {
+    // A tool that left the reach — a share suspended or revoked, or the tool
+    // gone — drops like an unreachable one, and says so on both surfaces.
+    recordToolResolutionFailure({
+      toolId: args.toolPublicId,
+      toolType: 'unknown',
+      toolName: args.toolPublicId,
+      reason:
+        "The tool is not in the agent's project and no accepted share reaches it.",
+      activity: args.activity,
+    });
+    args.resolveArgs.unavailable?.({ toolName: args.toolPublicId });
+    return {};
+  }
 
   const typedTool = agentTool as unknown as AgentToolRow;
+  const ownTool = typedTool.projectId === args.projectId;
   // A shared tool's own guardrails name guardrails in its owner's project; the
   // agent's project and agent guardrails govern the call instead.
   const guardrails = await collectBindingGuardrails({
     context: args.guardrail,
-    toolGuardrailIds:
-      typedTool.projectId === args.projectId ? typedTool.guardrailIds : null,
+    toolGuardrailIds: ownTool ? typedTool.guardrailIds : null,
+  });
+  const toolContext = pinCallingProject({
+    toolContext: args.resolveArgs.toolContext,
+    callingProjectPublicId: ownTool ? null : (args.projectPublicId ?? null),
   });
   const resolved = await resolveToolByType(typedTool, {
     ...args.resolveArgs,
+    toolContext,
     callerProjectId: args.projectId,
     activity: args.activity,
     attribution: releasedBy({
@@ -1317,7 +1337,7 @@ const resolveReferenceBinding = async (args: {
     // against `{{context:ocaAdAccountId}}` gates nothing.
     presetParameters: resolvePresetParametersForGate({
       presetParameters: typedTool.presetParameters,
-      toolContext: args.resolveArgs.toolContext,
+      toolContext,
       toolName: typedTool.name,
       schema: typedTool.parameters,
     }),
@@ -1366,6 +1386,7 @@ export const resolveAgentTools = async (args: {
       await resolveReferenceBinding({
         toolPublicId,
         projectId: args.projectId,
+        projectPublicId: args.projectPublicId,
         resolveArgs: args,
         guardrail: args.guardrail,
         activity: args.activity,

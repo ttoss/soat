@@ -104,12 +104,28 @@ Once a project accepts a share of a tool, it names that tool by id like one of i
 - a trigger's tool target;
 - an ingestion rule's `tool_id`, including one declared in a [formation](./formations.md) template.
 
-Every other reference to a tool — a decider or eval scorer backend, a memory rule, a workflow dispatch, a guardrail's `context_tool_id` — names one of the project's own tools only. A share that is not accepted, suspended or revoked resolves nothing: a write naming it is `400 TOOL_NOT_FOUND`, and a stored reference is skipped when it runs, as a deleted tool's is.
+Every other reference to a tool — a decider or eval scorer backend, a memory rule, a workflow dispatch, a guardrail's `context_tool_id` — names one of the project's own tools only.
+
+A key or OAuth token scoped to the grantee project also reaches the shared tool on its own routes, when its policies allow the action in that project:
+
+- [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) runs it in the grantee project;
+- [`GET /api/v1/tools/{tool_id}`](/docs/api/tools/get-tool) and [`GET /api/v1/agents/{agent_id}`](/docs/api/agents/get-agent) answer the consumer projection: `id`, `name`, `description` and `parameters` for a tool, `id` and `name` for an agent;
+- every write answers `403 API_KEY_PROJECT_SCOPE`.
+
+A share that is not accepted, suspended or revoked resolves nothing, and nothing runs, so nothing is metered:
+
+- a write naming it is `400 TOOL_NOT_FOUND`, and a call or read on its own route answers `403 API_KEY_PROJECT_SCOPE`;
+- an agent's binding to it is left out of the turn: the model is told the tool is unavailable, and a `tool_resolution_failed` [activity](./activity.md) entry records why;
+- an ingestion rule converting with it fails the document with `CONVERTER_FAILED`;
+- a [formation](./formations.md) naming it fails to deploy with `Tool not found: <tool_id>`.
+
+A call already running when the share goes away completes and is metered.
 
 A call through a share:
 
 - **Runs as the publisher's tool**: its endpoint, its `{{secret:...}}` references and its presets resolve in the publisher's project.
 - **Is governed by the caller**: the calling project's guardrails apply, and so do the calling agent's; the tool's own `guardrail_ids` name guardrails in the publisher's project and do not.
+- **Names the caller**: the tool receives the calling project's id as the `calling_project_id` [tool context](../advanced/tool-context.md) key, so it can refuse by grantee. The key is reserved: a caller cannot set it, and a call in the tool's own project carries none.
 - **Is metered in the calling project**: its `tool_execution` event belongs to the caller, with `publisher_project_id` naming the publisher. See [Usage](./usage.md#calls-through-a-share).
 
 ### Accepted shares are dependents

@@ -211,6 +211,10 @@ The three auto-populated keys (`session_id`, `actor_id`, `actor_external_id`) ar
 
 Where no generation runs — an orchestration `tool` or `poll` node, a trigger whose target is a tool, a task dispatch, [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) — the three keys are dropped from the caller's bag instead, in any casing, and no value replaces them. So a `X-Soat-Context-session_id` header is always server-derived: it is present only when a session is behind the call.
 
+### Calls through a share
+
+A call to another project's tool through a [share](../modules/shares.md#using-a-shared-tool) carries `calling_project_id`, the public ID of the project making the call, as `X-Soat-Context-calling_project_id`. It is reserved the same way: a caller-supplied value is dropped in any casing, and a call in the tool's own project carries none, so the header is present only when a share is behind the call.
+
 ## Validation
 
 A key becomes an HTTP header name, so it must be a valid one. A `tool_context` violating either rule is rejected with **`400 INVALID_TOOL_CONTEXT_KEY`** at write time (`create-session`, `update-session`) or before the provider call (generation endpoints):

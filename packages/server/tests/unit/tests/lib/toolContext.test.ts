@@ -11,11 +11,12 @@ import {
 // generation path. This is the pure pinning algorithm; the chokepoint
 // wiring is covered by generationContextPinning.test.ts.
 describe('pinServerIdentityToolContext', () => {
-  test('reserves exactly the three identity keys', () => {
+  test('reserves exactly the server-owned keys', () => {
     expect([...RESERVED_TOOL_CONTEXT_KEYS]).toEqual([
       'session_id',
       'actor_id',
       'actor_external_id',
+      'calling_project_id',
     ]);
   });
 

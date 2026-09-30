@@ -191,6 +191,7 @@ export const RESERVED_TOOL_CONTEXT_KEYS = [
   'session_id',
   'actor_id',
   'actor_external_id',
+  'calling_project_id',
 ] as const;
 
 export type ServerToolContextIdentity = {
@@ -241,6 +242,28 @@ export const pinServerIdentityToolContext = (args: {
   }
 
   return { ...stripped, ...identity };
+};
+
+/**
+ * The bag a call forwards once its calling project is settled: any
+ * `calling_project_id` already in it is dropped in every casing, and the
+ * calling project is stamped when the call runs through a share, so the
+ * owner's tool can tell grantees apart and no caller can claim to be one.
+ */
+export const pinCallingProject = (args: {
+  toolContext?: Record<string, string>;
+  callingProjectPublicId: string | null;
+}): Record<string, string> | undefined => {
+  if (!args.toolContext && !args.callingProjectPublicId) return undefined;
+  const stripped = Object.fromEntries(
+    Object.entries(args.toolContext ?? {}).filter(([key]) => {
+      return key.toLowerCase() !== 'calling_project_id';
+    })
+  );
+  if (args.callingProjectPublicId) {
+    stripped.calling_project_id = args.callingProjectPublicId;
+  }
+  return stripped;
 };
 
 /**

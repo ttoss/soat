@@ -155,7 +155,10 @@ paths:
       tags:
         - Agents
       summary: Get an agent
-      description: Returns a single agent by ID.
+      description: >
+        Returns a single agent by ID. A credential scoped to a project the
+        agent is shared with, through an accepted share, reads its `id` and
+        `name` only.
       operationId: getAgent
       x-soat-resource:
         kind: agent

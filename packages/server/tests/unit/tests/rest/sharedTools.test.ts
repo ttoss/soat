@@ -13,6 +13,7 @@ describe('Shared tools', () => {
   let providerStub: Server;
   let toolStub: Server;
   let toolHits: IncomingHttpHeaders[];
+  let providerBodies: Array<Record<string, unknown>>;
   let adminToken: string;
   let publisherId: string;
   let granteeId: string;
@@ -31,6 +32,7 @@ describe('Shared tools', () => {
       });
       req.on('end', () => {
         const body = JSON.parse(raw) as Record<string, unknown>;
+        providerBodies.push(body);
         const offered = Array.isArray(body.tools)
           ? (body.tools as Array<{ name: string }>).map((tool) => {
               return tool.name;
@@ -131,6 +133,7 @@ describe('Shared tools', () => {
 
   beforeAll(async () => {
     toolHits = [];
+    providerBodies = [];
     const providerBaseUrl = await startProviderStub();
     toolUrl = await startToolStub();
 
@@ -355,6 +358,9 @@ describe('Shared tools', () => {
       expect(response.status).toBe(200);
       expect(toolHits.length).toBe(before + 1);
       expect(toolHits.at(-1)?.authorization).toBe('Bearer publisher-token');
+      expect(toolHits.at(-1)?.['x-soat-context-calling_project_id']).toBe(
+        granteeId
+      );
       const events = await toolEvents();
       expect(events.length).toBe(eventsBefore + 1);
       expect(events[0].project_id).toBe(granteeId);
@@ -379,6 +385,9 @@ describe('Shared tools', () => {
 
       expect(run.body.status).toBe('succeeded');
       expect(toolHits.length).toBe(before + 1);
+      expect(toolHits.at(-1)?.['x-soat-context-calling_project_id']).toBe(
+        granteeId
+      );
     });
 
     test("the publisher's tool guardrail does not gate the grantee's call", async () => {
@@ -446,6 +455,109 @@ describe('Shared tools', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.totals.distinct.publisher_projects).toBe(1);
+    });
+  });
+
+  describe('formations in the grantee', () => {
+    const deploy = (toolId: string, name: string) => {
+      return authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: granteeId,
+          name,
+          template: {
+            resources: {
+              Rule: {
+                type: 'ingestion_rule',
+                properties: {
+                  content_type_glob: `audio/x-${name}`,
+                  tool_id: toolId,
+                },
+              },
+            },
+          },
+        });
+    };
+
+    test('a template names a shared tool, and fails naming it once the share is revoked', async () => {
+      const shared = await shareTool('formationTool');
+      await accept(shared.shareId);
+
+      const deployed = await deploy(shared.toolId, 'shared-ok');
+      await authenticatedTestClient(adminToken).post(
+        `/api/v1/shares/${shared.shareId}/revoke`
+      );
+      const refused = await deploy(shared.toolId, 'shared-gone');
+
+      expect(deployed.status).toBe(201);
+      expect(deployed.body.status).toBe('active');
+      expect(refused.body.status).toBe('failed');
+      expect(refused.body.error.message).toBe(
+        `Tool not found: ${shared.toolId}`
+      );
+    });
+  });
+
+  describe('when the share goes away', () => {
+    test('a converter behind a revoked share fails the document', async () => {
+      const gone = await shareTool('goneConverter');
+      await accept(gone.shareId);
+      const rule = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: granteeId,
+          content_type_glob: 'audio/x-shared-gone',
+          tool_id: gone.toolId,
+        });
+      expect(rule.status).toBe(201);
+      await authenticatedTestClient(adminToken).post(
+        `/api/v1/shares/${gone.shareId}/revoke`
+      );
+      const file = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('bytes'), {
+          filename: 'gone.bin',
+          contentType: 'audio/x-shared-gone',
+        })
+        .field('project_id', granteeId);
+
+      const ingest = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({ project_id: granteeId, file_id: file.body.id });
+
+      expect(ingest.body.status).toBe('failed');
+      const status = await authenticatedTestClient(adminToken).get(
+        `/api/v1/documents/${ingest.body.id}/status`
+      );
+      expect(status.body.error).toBe('CONVERTER_FAILED');
+    });
+
+    test("an agent's binding drops, the turn is told, and the feed records why", async () => {
+      const gone = await shareTool('goneTool');
+      await accept(gone.shareId);
+      const agent = await bindInQ(gone.toolId);
+      await authenticatedTestClient(adminToken).post(
+        `/api/v1/shares/${gone.shareId}/revoke`
+      );
+      const before = toolHits.length;
+
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agent.body.id}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'go' }] });
+
+      expect(response.status).toBe(200);
+      expect(toolHits.length).toBe(before);
+      expect(JSON.stringify(providerBodies.at(-1)?.system)).toContain(
+        gone.toolId
+      );
+      const feed = await authenticatedTestClient(adminToken)
+        .get('/api/v1/activity')
+        .query({ project_id: granteeId, kind: 'tool_resolution_failed' });
+      expect(
+        (feed.body.data as Array<{ agent_id: string }>).some((entry) => {
+          return entry.agent_id === agent.body.id;
+        })
+      ).toBe(true);
     });
   });
 });
