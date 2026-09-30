@@ -316,9 +316,9 @@ paths:
           in: query
           required: false
           description: >
-            When `true`, deletes the agent's dependent generations and traces
-            and revokes its accepted shares instead of returning
-            `409 AGENT_HAS_DEPENDENTS`.
+            When `true`, deletes the agent's dependent generations and traces,
+            revokes its accepted shares and leaves its ingestion rules naming
+            it instead of returning `409 AGENT_HAS_DEPENDENTS`.
           schema:
             type: boolean
             default: false
@@ -345,11 +345,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >
-            Agent has dependent generations, traces or accepted shares in its
-            own project (pass `force=true` to delete anyway; records another
-            project made through a share are kept). `error.meta` carries
-            `generation_count`, `trace_count` and `accepted_share_count` so a
-            caller can tell which one is nonzero.
+            Agent has dependent generations, traces, accepted shares or
+            ingestion rules in its own project (pass `force=true` to delete
+            anyway; records and rules another project made through a share are
+            kept). `error.meta` carries `generation_count`, `trace_count`,
+            `accepted_share_count` and `ingestion_rule_count` so a caller can
+            tell which one is nonzero.
           content:
             application/json:
               schema:

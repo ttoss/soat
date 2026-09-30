@@ -140,7 +140,7 @@ export const ERROR_CODES = {
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The agent is referenced by one or more generations, traces, deciders or accepted shares and cannot be deleted. `meta.decider_count` names the deciders, which block deletion even under `force=true` and must be deleted or repointed first; generations, traces and accepted shares (`meta.accepted_share_count`) block only until `force=true`, which revokes the shares.',
+      "The agent is referenced by one or more generations, traces, deciders, accepted shares or ingestion rules and cannot be deleted. `meta.decider_count` names the deciders, which block deletion even under `force=true` and must be deleted or repointed first; generations, traces, accepted shares (`meta.accepted_share_count`) and its own project's ingestion rules (`meta.ingestion_rule_count`) block only until `force=true`, which revokes the shares and leaves the rules naming a converter that is gone.",
   },
   DECIDER_AGENT_NOT_TOOL_LESS: {
     httpStatus: 400,
@@ -165,7 +165,7 @@ export const ERROR_CODES = {
   TOOL_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The tool is the backend of one or more deciders, or another project has accepted a share of it, and it cannot be deleted. `meta.decider_count` counts the deciders, which block even under `force=true`: delete them or point them at another backend first. `meta.accepted_share_count` counts the accepted shares, which block only until `force=true` revokes them.',
+      "The tool is the backend of one or more deciders, or another project has accepted a share of it, and it cannot be deleted. `meta.decider_count` counts the deciders, which block even under `force=true`: delete them or point them at another backend first. `meta.accepted_share_count` counts the accepted shares and `meta.ingestion_rule_count` the ingestion rules of the tool's own project converting with it; both block only until `force=true`, which revokes the shares and leaves the rules naming a converter that is gone.",
   },
   SHARE_IN_USE: {
     httpStatus: 409,

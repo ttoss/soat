@@ -11,6 +11,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
 import { agentVersionStore } from './agentVersionSnapshot';
+import { countConverterRules } from './converterRuleDependents';
 import type { Transaction } from './dbTransaction';
 import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
@@ -130,20 +131,44 @@ const forceDeleteAgentWithDependents = async (args: {
   );
 };
 
-const countAgentDependents = async (
-  agent: InstanceType<typeof db.Agent>
-): Promise<{
+const countAgentDependents = async (args: {
+  agent: InstanceType<typeof db.Agent>;
+  /** Rules a formation teardown deletes alongside the agent. */
+  excludingPublicIds: ReadonlySet<string>;
+}): Promise<{
   generationCount: number;
   traceCount: number;
   acceptedShareCount: number;
+  ingestionRuleCount: number;
 }> => {
+  const { agent } = args;
   const own = { agentId: agent.id as number, projectId: agent.projectId };
-  const [generationCount, traceCount, acceptedShareCount] = await Promise.all([
-    db.Generation.count({ where: own }),
-    db.Trace.count({ where: own }),
-    countAcceptedShares({ resourceType: 'agent', resourceId: agent.publicId }),
-  ]);
-  return { generationCount, traceCount, acceptedShareCount };
+  const [generationCount, traceCount, acceptedShareCount, ingestionRuleCount] =
+    await Promise.all([
+      db.Generation.count({ where: own }),
+      db.Trace.count({ where: own }),
+      countAcceptedShares({
+        resourceType: 'agent',
+        resourceId: agent.publicId,
+      }),
+      countConverterRules({
+        converter: { agentId: own.agentId },
+        projectId: own.projectId,
+        excludingPublicIds: args.excludingPublicIds,
+      }),
+    ]);
+  return {
+    generationCount,
+    traceCount,
+    acceptedShareCount,
+    ingestionRuleCount,
+  };
+};
+
+const hasDependents = (counts: Record<string, number>): boolean => {
+  return Object.values(counts).some((count) => {
+    return count > 0;
+  });
 };
 
 /**
@@ -193,17 +218,16 @@ export const findAgentDeletionBlocker = async (args: {
   if (deciderCount > 0) {
     return `Agent '${args.id}' is the agent of ${String(deciderCount)} decider(s), so it cannot be deleted.`;
   }
-  const { generationCount, traceCount, acceptedShareCount } =
-    await countAgentDependents(agent);
-
-  if (generationCount === 0 && traceCount === 0 && acceptedShareCount === 0) {
-    return null;
-  }
+  const counts = await countAgentDependents({
+    agent,
+    excludingPublicIds: args.alsoDeleting,
+  });
+  if (!hasDependents(counts)) return null;
 
   return (
-    `Agent '${args.id}' has ${String(generationCount)} dependent generation(s), ` +
-    `${String(traceCount)} trace(s) and ${String(acceptedShareCount)} accepted ` +
-    `share(s), so it cannot be deleted.`
+    `Agent '${args.id}' has ${String(counts.generationCount)} dependent generation(s), ` +
+    `${String(counts.traceCount)} trace(s), ${String(counts.acceptedShareCount)} accepted ` +
+    `share(s) and ${String(counts.ingestionRuleCount)} ingestion rule(s), so it cannot be deleted.`
   );
 };
 
@@ -220,20 +244,21 @@ export const deleteAgent = async (args: {
 
   await assertNoDeciders({ agentId, publicId: args.id });
 
-  const { generationCount, traceCount, acceptedShareCount } =
-    await countAgentDependents(agent);
+  const counts = await countAgentDependents({
+    agent,
+    excludingPublicIds: new Set(),
+  });
+  const { generationCount, traceCount } = counts;
 
-  if (
-    !args.force &&
-    (generationCount > 0 || traceCount > 0 || acceptedShareCount > 0)
-  ) {
+  if (!args.force && hasDependents(counts)) {
     throw new DomainError(
       'AGENT_HAS_DEPENDENTS',
-      `Agent '${args.id}' has dependent generations, traces or accepted shares and cannot be deleted without force=true.`,
+      `Agent '${args.id}' has dependent generations, traces, accepted shares or ingestion rules and cannot be deleted without force=true.`,
       {
         generation_count: generationCount,
         trace_count: traceCount,
-        accepted_share_count: acceptedShareCount,
+        accepted_share_count: counts.acceptedShareCount,
+        ingestion_rule_count: counts.ingestionRuleCount,
       }
     );
   }

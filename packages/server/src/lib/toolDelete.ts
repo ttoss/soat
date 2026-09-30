@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { countConverterRules } from './converterRuleDependents';
 import { countBackendDeciders } from './deciderDependents';
 import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
 import { tools } from './tools';
@@ -27,12 +28,22 @@ export const deleteTool = async (args: {
     );
   }
   const shareRef = { resourceType: 'tool', resourceId: tool.publicId };
-  const acceptedShareCount = await countAcceptedShares(shareRef);
-  if (acceptedShareCount > 0 && !args.force) {
+  const [acceptedShareCount, ingestionRuleCount] = await Promise.all([
+    countAcceptedShares(shareRef),
+    countConverterRules({
+      converter: { toolId: tool.id as number },
+      projectId: tool.projectId,
+      excludingPublicIds: new Set(),
+    }),
+  ]);
+  if ((acceptedShareCount > 0 || ingestionRuleCount > 0) && !args.force) {
     throw new DomainError(
       'TOOL_HAS_DEPENDENTS',
-      `Tool '${tool.publicId}' is shared with ${acceptedShareCount} project(s) that accepted it; retry with force=true to revoke the shares.`,
-      { accepted_share_count: acceptedShareCount }
+      `Tool '${tool.publicId}' is shared with ${acceptedShareCount} project(s) that accepted it and converts for ${ingestionRuleCount} ingestion rule(s); retry with force=true to revoke the shares and leave the rules without a converter.`,
+      {
+        accepted_share_count: acceptedShareCount,
+        ingestion_rule_count: ingestionRuleCount,
+      }
     );
   }
   await revokeResourceShares(shareRef);
@@ -55,10 +66,14 @@ export const findToolDeletionBlocker = async (args: {
   if (deciderCount > 0) {
     return `Tool '${args.id}' is the backend of ${String(deciderCount)} decider(s), so it cannot be deleted.`;
   }
-  const acceptedShareCount = await countAcceptedShares({
-    resourceType: 'tool',
-    resourceId: tool.publicId,
-  });
-  if (acceptedShareCount === 0) return null;
-  return `Tool '${args.id}' is shared with ${String(acceptedShareCount)} project(s) that accepted it, so it cannot be deleted.`;
+  const [acceptedShareCount, ingestionRuleCount] = await Promise.all([
+    countAcceptedShares({ resourceType: 'tool', resourceId: tool.publicId }),
+    countConverterRules({
+      converter: { toolId: tool.id as number },
+      projectId: tool.projectId,
+      excludingPublicIds: args.alsoDeleting,
+    }),
+  ]);
+  if (acceptedShareCount === 0 && ingestionRuleCount === 0) return null;
+  return `Tool '${args.id}' is shared with ${String(acceptedShareCount)} project(s) that accepted it and converts for ${String(ingestionRuleCount)} ingestion rule(s), so it cannot be deleted.`;
 };

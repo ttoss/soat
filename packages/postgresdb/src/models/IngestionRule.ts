@@ -7,6 +7,7 @@ import {
   Table,
 } from '@ttoss/postgresdb';
 
+import { fillConverterPublicIds } from '../utils/converterPublicIds';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Agent } from './Agent';
 import { Project } from './Project';
@@ -24,7 +25,12 @@ import { Tool } from './Tool';
           'IngestionRule cannot reference both a tool and an agent at the same time'
         );
       }
-      if (!instance.toolId && !instance.agentId) {
+    },
+    // `beforeSave`, not `beforeValidate`: only fields a save hook changes are
+    // added to a partial `update`.
+    beforeSave: async (instance: IngestionRule, options: object) => {
+      await fillConverterPublicIds(instance, options);
+      if (!instance.toolPublicId && !instance.agentPublicId) {
         throw new Error(
           'IngestionRule must reference either a tool or an agent'
         );
@@ -75,9 +81,13 @@ export class IngestionRule extends Model {
     () => {
       return Tool;
     },
-    { onDelete: 'RESTRICT' }
+    { onDelete: 'SET NULL' }
   )
   declare tool: Tool | null;
+
+  // Kept once the tool is deleted, so the rule still names its converter.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare toolPublicId: string | null;
 
   @ForeignKey(() => {
     return Agent;
@@ -89,9 +99,12 @@ export class IngestionRule extends Model {
     () => {
       return Agent;
     },
-    { onDelete: 'RESTRICT' }
+    { onDelete: 'SET NULL' }
   )
   declare agent: Agent | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare agentPublicId: string | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare action: string | null;

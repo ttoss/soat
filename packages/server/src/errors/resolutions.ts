@@ -48,7 +48,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   DECISION_ANSWER_INVALID:
     "Make the tool answer `{ answers: { <question id>: { choice | score | value, probabilities? } } }` for every question; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
   TOOL_HAS_DEPENDENTS:
-    'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`.',
+    'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
   SHARE_IN_USE:
     'Repoint or remove the resources `meta.references` lists, or pass `force=true` to revoke anyway and let them degrade.',
   SHARE_REVOKED:
