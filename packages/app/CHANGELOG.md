@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.69.0](https://github.com/ttoss/soat/compare/v0.68.0...v0.69.0) (2026-09-30)
+
+### Features
+
+* **brand:** value-led hero and one solid action colour ([#1490](https://github.com/ttoss/soat/issues/1490)) ([223a80a](https://github.com/ttoss/soat/commit/223a80a52568f49ed63e0b4e346e84d22f661867)), closes [#1567d3](https://github.com/ttoss/soat/issues/1567d3) [#1a73e8](https://github.com/ttoss/soat/issues/1a73e8)
+
 # [0.68.0](https://github.com/ttoss/soat/compare/v0.67.0...v0.68.0) (2026-09-29)
 
 ### Features
