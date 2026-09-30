@@ -1,4 +1,4 @@
-Boolean toggle; on-state fills with the brand gradient and glows cyan in dark mode.
+Boolean toggle; on-state fills with the primary colour and glows cyan in dark mode.
 
 ```jsx
 <Switch checked={dark} onChange={setDark} label="Dark mode" />

@@ -8,13 +8,7 @@
   --band-ground: var(--ifm-background-color);
 
   border-top: 1px solid var(--ifm-color-emphasis-200);
-  background:
-    radial-gradient(
-      ellipse at 85% 15%,
-      rgba(142, 68, 173, 0.08) 0%,
-      transparent 42%
-    ),
-    var(--ifm-background-surface-color);
+  background: var(--ifm-background-surface-color);
 }
 
 html[data-theme='dark'] .section {
@@ -24,18 +18,7 @@ html[data-theme='dark'] .section {
   --band-ground: #080c14;
 
   border-top-color: rgba(0, 229, 255, 0.08);
-  background:
-    radial-gradient(
-      ellipse at 85% 15%,
-      rgba(142, 68, 173, 0.24) 0%,
-      transparent 42%
-    ),
-    radial-gradient(
-      ellipse at 10% 70%,
-      rgba(0, 229, 255, 0.1) 0%,
-      transparent 38%
-    ),
-    #080c14;
+  background: #080c14;
 }
 
 .pair {
@@ -187,12 +170,7 @@ html[data-theme='dark'] .section {
   bottom: 0;
   left: 0;
   width: 1px;
-  background: linear-gradient(
-    180deg,
-    #8e44ad 0%,
-    #00e5ff 60%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg, var(--band-accent) 0%, transparent 100%);
   opacity: 0.6;
 }
 

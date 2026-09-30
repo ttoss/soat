@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * SOAT Switch — accessible boolean toggle. On-state fills with the
- * brand gradient and emits a soft cyan glow in dark mode. Controlled via
+ * primary colour and emits a soft cyan glow in dark mode. Controlled via
  * `checked` / `onCheckedChange`.
  */
 export interface SwitchProps {
@@ -41,7 +41,7 @@ export const Switch = ({
       className={cn(
         'relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full border transition-all focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
         checked
-          ? 'border-transparent bg-brand-gradient shadow-glow-cyan-sm'
+          ? 'border-transparent bg-primary shadow-glow-cyan-sm'
           : 'border-border bg-muted'
       )}
     >

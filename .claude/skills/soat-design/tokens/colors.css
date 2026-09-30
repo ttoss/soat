@@ -8,7 +8,7 @@
 
 :root {
   /* ---- Core brand DNA (constant across themes, used in logo & imagery) ---- */
-  --soat-violet: #8e44ad; /* Deep Violet — complexity, depth, gradients */
+  --soat-violet: #8e44ad; /* Deep Violet — diagram colour only, never a gradient stop */
   --soat-violet-dark: #7d3c9d;
   --soat-violet-light: #a855c7;
   --soat-cyan: #00e5ff; /* Core Cyan — the glow; decorative in light mode */
@@ -38,7 +38,7 @@
   --color-primary-hover: #1567d3;
   --color-primary-active: #1050a4;
   --color-primary-contrast: #ffffff;
-  --color-accent: #8e44ad; /* Deep Violet */
+  --color-accent: #8e44ad; /* Deep Violet — diagrams only */
   --color-glow: #00e5ff; /* decorative only in light mode */
 
   /* The mark: the brackets and the core they hold (S[•]AT and [•]).
@@ -82,18 +82,11 @@
   --method-fg: #ffffff; /* every light method fill clears 4.5:1 against white */
   --method-border: rgba(255, 255, 255, 0.22);
 
-  /* Brand gradient (light): Deep Violet -> Electric Blue */
-  --gradient-brand: linear-gradient(135deg, #8e44ad 0%, #1a73e8 100%); /* @kind color */
-  /* Action fill: the brand gradient under solid text (primary buttons). Every
-     stop clears 4.5:1 against --text-on-action. */
-  --gradient-action: linear-gradient(135deg, #8e44ad 0%, #1a73e8 100%); /* @kind color */
+  /* Action fill: one solid colour under solid text (primary buttons), the
+     mark's blue a step darker so white clears 4.5:1 with margin. */
+  --color-action: #1567d3;
+  --color-action-hover: #1050a4;
   --text-on-action: #ffffff;
-  /* Cosmic depth wash for page backgrounds */
-  --gradient-cosmos: radial-gradient(
-    circle at 75% 35%,
-    rgba(0, 229, 255, 0.1) 0%,
-    transparent 36%
-  ); /* @kind color */
 }
 
 /* =================================================================
@@ -105,7 +98,7 @@
   --color-primary-hover: #1ae8ff;
   --color-primary-active: #00a0b3;
   --color-primary-contrast: #080c14;
-  --color-accent: #8e44ad;
+  --color-accent: #8e44ad; /* diagrams only */
   --color-glow: #00e5ff;
 
   --process-boundary: #00e5ff;
@@ -142,15 +135,9 @@
   --method-fg: #080c14; /* dark text — dark-mode method colors are bright (cyan/green) and need dark fg for contrast */
   --method-border: rgba(8, 12, 20, 0.2);
 
-  /* Brand gradient (dark): Deep Violet -> Core Cyan */
-  --gradient-brand: linear-gradient(135deg, #8e44ad 0%, #00e5ff 100%); /* @kind color */
-  /* Core Cyan is too light for white text: the dark action fill takes dark
-     text and starts from a lifted violet that clears 4.5:1 against it. */
-  --gradient-action: linear-gradient(135deg, #b06ad0 0%, #00e5ff 100%); /* @kind color */
+  /* Core Cyan is too light for white text: the dark action fill takes
+     Space Black text. */
+  --color-action: #00e5ff;
+  --color-action-hover: #5cefff;
   --text-on-action: #080c14;
-  --gradient-cosmos: radial-gradient(
-    circle at 50% 0%,
-    rgba(142, 68, 173, 0.18) 0%,
-    rgba(8, 12, 20, 0) 60%
-  ); /* @kind color */
 }

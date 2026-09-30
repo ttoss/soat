@@ -15,6 +15,6 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 /**
  * Primary interactive control for SOAT surfaces.
- * @startingPoint section="Core" subtitle="Brand-gradient button with variants & sizes" viewport="700x180"
+ * @startingPoint section="Core" subtitle="Solid action button with variants & sizes" viewport="700x180"
  */
 export function Button(props: ButtonProps): React.ReactElement;

@@ -2,6 +2,7 @@ import Link from '@docusaurus/Link';
 import PrimaryAction from '@site/src/components/HomepageShared/PrimaryAction';
 import shared from '@site/src/components/HomepageShared/styles.module.css';
 import HomepageTerminal from '@site/src/components/HomepageTerminal';
+import { HERO } from '@site/src/data/homepage';
 import Heading from '@theme/Heading';
 import clsx from 'clsx';
 import type * as React from 'react';
@@ -36,14 +37,6 @@ const FACTS = [
   },
 ];
 
-const NOT_WIRED = [
-  'a message queue',
-  'a vector database',
-  'an auth server',
-  'a trace collector',
-  'a scheduler',
-];
-
 const HomepageHero = (): React.ReactNode => {
   return (
     <header className={clsx(shared.bleed, styles.hero)}>
@@ -53,25 +46,10 @@ const HomepageHero = (): React.ReactNode => {
             Open source · Self-hosted
           </p>
           <Heading as="h1" className={styles.title}>
-            Every layer an AI agent needs, in{' '}
-            <span className={styles.titleGlow}>one process</span> on PostgreSQL.
+            {HERO.title}{' '}
+            <span className={styles.emphasis}>{HERO.emphasis}</span>
           </Heading>
-          <p className={styles.subtitle}>
-            Memory, retrieval, orchestration, permissions, evaluations and
-            traces run inside one self-hosted Node.js server. The server and its
-            database are the whole stack; models come from the provider you
-            configure.
-          </p>
-          <p className={styles.notWired}>
-            <span className={styles.notWiredLabel}>Nothing else to run:</span>
-            {NOT_WIRED.map((item) => {
-              return (
-                <s className={styles.struck} key={item}>
-                  {item}
-                </s>
-              );
-            })}
-          </p>
+          <p className={styles.subtitle}>{HERO.subtitle}</p>
           <div className={styles.actions}>
             <PrimaryAction />
             <Link

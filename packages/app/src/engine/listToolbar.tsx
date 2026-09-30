@@ -118,7 +118,7 @@ export const EmptyState = ({
         </p>
       </div>
       {!filtered && canCreate && (
-        <Button variant="gradient" size="sm" onClick={onCreate}>
+        <Button variant="action" size="sm" onClick={onCreate}>
           {`Create your first ${singular}`}
         </Button>
       )}

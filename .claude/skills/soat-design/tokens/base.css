@@ -18,8 +18,6 @@ body {
   letter-spacing: var(--tracking-body);
   color: var(--text-body);
   background-color: var(--surface-page);
-  background-image: var(--gradient-cosmos);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

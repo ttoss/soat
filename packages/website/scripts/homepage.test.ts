@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
-import { QUICKSTART_COMMANDS } from '../src/data/homepage';
+import { HERO, NOT_WIRED, QUICKSTART_COMMANDS } from '../src/data/homepage';
 import {
   capabilityRows,
   CLUSTERS,
@@ -96,4 +96,38 @@ test('capability rows put the baseline first and follow the cluster order', () =
       }).length
     );
   }
+});
+
+/** How SOAT is built: the call-flow band draws it, so the hero never has to. */
+const ARCHITECTURE_TERMS = ['PostgreSQL', 'pgvector', 'Node.js', 'process'];
+
+const readComponent = (file: string): string => {
+  return fs.readFileSync(path.join(COMPONENTS_DIR, file), 'utf8');
+};
+
+test('the hero says what an agent gets, not how SOAT is built', () => {
+  const copy = [HERO.title, HERO.emphasis, HERO.subtitle].join(' ');
+  const named = ARCHITECTURE_TERMS.filter((term) => {
+    return copy.includes(term);
+  });
+
+  assert.deepEqual(named, [], 'the hero copy names the architecture');
+  assert.ok(
+    readComponent(path.join('HomepageHero', 'index.tsx')).includes('HERO.title')
+  );
+});
+
+test('the stack SOAT replaces is listed where the call flow is drawn', () => {
+  assert.ok(NOT_WIRED.length > 0);
+  assert.ok(
+    readComponent(path.join('HomepageDefinition', 'index.tsx')).includes(
+      'NOT_WIRED'
+    )
+  );
+  assert.ok(
+    !readComponent(path.join('HomepageHero', 'index.tsx')).includes(
+      'NOT_WIRED'
+    ),
+    'the hero lists the services SOAT replaces; that detail belongs to the call-flow band'
+  );
 });

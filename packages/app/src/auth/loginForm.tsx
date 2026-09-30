@@ -31,13 +31,7 @@ export const LoginForm = () => {
   };
 
   return (
-    <div
-      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4"
-      style={{
-        backgroundImage:
-          'radial-gradient(circle at 70% 20%, hsl(var(--brand-violet) / 0.14) 0%, transparent 42%), radial-gradient(circle at 20% 80%, hsl(var(--brand-cyan) / 0.08) 0%, transparent 42%)',
-      }}
-    >
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
       <div className="relative z-10 flex w-full max-w-sm flex-col gap-8">
         <div className="flex items-center justify-center">
           <BrandImage variant="wordmark" alt="SOAT" className="h-8 w-auto" />
@@ -81,7 +75,7 @@ export const LoginForm = () => {
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button
                 type="submit"
-                variant="gradient"
+                variant="action"
                 className="w-full"
                 disabled={loading}
               >

@@ -4,18 +4,19 @@ import * as path from 'node:path';
 import { describe, test } from 'node:test';
 import * as url from 'node:url';
 
-import { listCss, normalizeSelector, readRules } from './cssRules.mjs';
+import { normalizeSelector, readRules } from './cssRules.mjs';
 
 /**
  * Text the brand paints on a colored fill must clear WCAG AA (4.5:1) in both
  * themes: the HTTP method badges of the API reference and the primary action
- * button, on the website and in the `soat-design` tokens the website follows.
+ * button, on the website, in the console and in the `soat-design` tokens they
+ * follow.
  *
  * These pairs are where the dual theme is easy to get wrong. The fill shifts
  * hue per theme (Electric Blue in light, Core Cyan in dark) while a hard-coded
  * text color stays put, so a pair that passes in one theme silently fails in
- * the other. A gradient fill is checked along its whole length, since the text
- * sits across it.
+ * the other. The primary action is one solid colour, the mark's hue, at rest
+ * and on hover; a gradient there fails as not solid.
  *
  * The CSS reader handles the flat rule blocks these files use; a rule nested
  * in `@media` is read as unconditional, which is why only theme-scoped
@@ -155,6 +156,15 @@ const fillSamples = (fill) => {
   return samples;
 };
 
+/** A fill that paints exactly one colour. */
+const assertSolid = (args) => {
+  assert.equal(
+    fillSamples(args.fill).length,
+    1,
+    `${args.label} is not one solid colour: ${args.fill}`
+  );
+};
+
 const worstRatio = (args) => {
   const text = toRgb(args.text);
   return Math.min(
@@ -227,25 +237,6 @@ const failures = (pairs) => {
     });
 };
 
-/** Rules in `file` that paint solid text on a gradient rebuilt from `--soat-violet`. */
-const gradientTextRules = (file) => {
-  return readRules(file)
-    .filter((rule) => {
-      const d = rule.declarations;
-      const fill = `${d.background ?? ''} ${d['background-image'] ?? ''}`;
-      return (
-        fill.includes('linear-gradient') &&
-        fill.includes('--soat-violet') &&
-        !/\btext\b/.test(d['background-clip'] ?? '') &&
-        d.color !== undefined &&
-        d.color !== 'transparent'
-      );
-    })
-    .map((rule) => {
-      return `${path.relative(ROOT, file)}: ${rule.selectors.join(', ')}`;
-    });
-};
-
 describe('website brand contrast', () => {
   for (const theme of ['light', 'dark']) {
     test(`website API method badges are legible (${theme})`, () => {
@@ -274,8 +265,8 @@ describe('website brand contrast', () => {
       assert.deepEqual(failures(pairs), []);
     });
 
-    test(`website primary button is legible (${theme})`, () => {
-      const fill = websiteValue({
+    test(`website primary button is one legible solid colour (${theme})`, () => {
+      const rest = websiteValue({
         theme,
         selector: '.button--primary',
         properties: ['background', 'background-color'],
@@ -284,12 +275,18 @@ describe('website brand contrast', () => {
         (selector) => {
           return {
             label: selector,
-            fill,
+            fill: websiteOwnValue({
+              theme,
+              selector,
+              property: 'background',
+              fallback: rest,
+            }),
             text: websiteValue({ theme, selector, properties: ['color'] }),
           };
         }
       );
 
+      for (const pair of pairs) assertSolid(pair);
       assert.deepEqual(failures(pairs), []);
     });
   }
@@ -316,21 +313,6 @@ describe('website brand contrast', () => {
 
     assert.deepEqual(missing, []);
   });
-
-  /**
-   * The brand gradient under solid text is one decision — which stops, which
-   * text color — so it lives in the action tokens that the button check above
-   * measures. A rule that rebuilds the gradient from `--soat-violet` carries
-   * its own unmeasured answer.
-   */
-  test('website text on the brand gradient goes through the action tokens', () => {
-    assert.deepEqual(
-      listCss(path.join(ROOT, 'packages/website/src')).flatMap(
-        gradientTextRules
-      ),
-      []
-    );
-  });
 });
 
 describe('design-token brand contrast', () => {
@@ -348,18 +330,19 @@ describe('design-token brand contrast', () => {
       assert.deepEqual(failures(pairs), []);
     });
 
-    test(`design tokens: the action gradient is legible (${theme})`, () => {
+    test(`design tokens: the action colour is solid and legible (${theme})`, () => {
       const vars = designVars(theme);
-      assert.ok(vars['--gradient-action'], '--gradient-action is not defined');
-      assert.ok(vars['--text-on-action'], '--text-on-action is not defined');
-      const pairs = [
-        {
-          label: '--gradient-action',
+      const pairs = ['--color-action', '--color-action-hover'].map((name) => {
+        assert.ok(vars[name], `${name} is not defined`);
+        assert.ok(vars['--text-on-action'], '--text-on-action is not defined');
+        return {
+          label: name,
           text: resolveVars({ value: vars['--text-on-action'], vars }),
-          fill: resolveVars({ value: vars['--gradient-action'], vars }),
-        },
-      ];
+          fill: resolveVars({ value: vars[name], vars }),
+        };
+      });
 
+      for (const pair of pairs) assertSolid(pair);
       assert.deepEqual(failures(pairs), []);
     });
   }
@@ -367,14 +350,15 @@ describe('design-token brand contrast', () => {
   test('the design-system Button paints the action tokens', () => {
     const source = fs.readFileSync(DESIGN_BUTTON, 'utf-8');
 
-    assert.match(source, /background: 'var\(--gradient-action\)'/);
+    assert.match(source, /background: 'var\(--color-action\)'/);
+    assert.match(source, /'var\(--color-action-hover\)'/);
     assert.match(source, /color: 'var\(--text-on-action\)'/);
   });
 });
 
 describe('console brand contrast', () => {
   for (const theme of ['light', 'dark', 'dark-by-preference']) {
-    test(`console action gradient is legible (${theme})`, () => {
+    test(`console action colour is legible (${theme})`, () => {
       const vars = declarationsFor({
         rules: readRules(APP_CSS),
         selectors: APP_THEMES[theme],
@@ -383,24 +367,24 @@ describe('console brand contrast', () => {
         assert.ok(vars[name], `${name} is not defined for ${theme}`);
         return hslToHex(vars[name]);
       };
-      const pairs = [
-        {
-          label: '--action-start → --primary',
+      const pairs = ['--action', '--action-hover'].map((name) => {
+        return {
+          label: name,
           text: channel('--action-foreground'),
-          fill: `${channel('--action-start')} ${channel('--primary')}`,
-        },
-      ];
+          fill: channel(name),
+        };
+      });
 
       assert.deepEqual(failures(pairs), []);
     });
   }
 
-  test('the console gradient Button paints the action tokens', () => {
+  test('the console action Button paints the action tokens', () => {
     const source = fs.readFileSync(APP_BUTTON, 'utf-8');
 
     assert.match(
       source,
-      /gradient:\s*'[^']*\bbg-action-gradient\b[^']*\btext-action-foreground\b/
+      /action:\s*'[^']*\bbg-action\b[^']*\btext-action-foreground\b[^']*\bhover:bg-action-hover\b/
     );
   });
 });

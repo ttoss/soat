@@ -18,6 +18,28 @@
   margin-top: 1.25rem;
 }
 
+.notWired {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.8rem;
+  margin: 1.25rem 0 0;
+  font-size: 0.92rem;
+}
+
+.notWiredLabel {
+  color: var(--ifm-heading-color);
+  font-weight: 600;
+}
+
+.struck {
+  color: var(--ifm-font-color-secondary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.86rem;
+  text-decoration-color: var(--ifm-color-primary);
+  text-decoration-thickness: 1.5px;
+}
+
 /* The diagram: callers on the left, one server box in the middle, one
    database on the right, tied together by the lanes' pseudo-element lines. */
 .diagram {
@@ -140,7 +162,7 @@ html[data-theme='dark'] .server {
   margin: 0.6rem 0 0.9rem;
   padding: 0.6rem 0.8rem;
   border-radius: 0.4rem;
-  background: var(--soat-action-gradient);
+  background: var(--soat-action);
   color: var(--soat-on-action);
   font-family: var(--ifm-heading-font-family);
   font-size: 0.9rem;
