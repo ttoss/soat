@@ -127,7 +127,10 @@ const assembleContextMessages = async (args: {
       base: readKnowledgeConfig(args.typedAgent.knowledgeConfig),
       override: readKnowledgeConfig(args.knowledgeConfig),
     }),
-    projectIds: args.projectIds,
+    // A shared agent's knowledge is its owner's.
+    projectIds: args.typedAgent.ownerProject
+      ? [args.typedAgent.ownerProject.id]
+      : args.projectIds,
     embeddingBilling:
       typeof projectId === 'number'
         ? { projectId, generationId: args.generationId }
@@ -183,6 +186,7 @@ const resolvePinnedToolContext = async (args: {
 export type BuildGenerationContextArgs = {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
   messages: GenerationInputMessage[];
   authHeader?: string;
   authUser?: AuthUser;
@@ -208,6 +212,7 @@ export const buildGenerationContext = async (
   const liveAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
   });
 
   if (!liveAgent)

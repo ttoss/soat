@@ -1176,6 +1176,7 @@ const releasedBy = (args: {
 export const resolveEphemeralAgentTool = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
+  callerProjectId?: number;
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
@@ -1258,6 +1259,7 @@ type ResolveToolByTypeArgs = {
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
   projectId: number;
+  callerProjectId: number;
   projectPublicId?: string;
   resolveArgs: ResolveToolByTypeArgs;
   guardrail?: ResolverGuardrailContext;
@@ -1286,7 +1288,7 @@ const resolveReferenceBinding = async (args: {
   }
 
   const typedTool = agentTool as unknown as AgentToolRow;
-  const ownTool = typedTool.projectId === args.projectId;
+  const ownTool = typedTool.projectId === args.callerProjectId;
   // A shared tool's own guardrails name guardrails in its owner's project; the
   // agent's project and agent guardrails govern the call instead.
   const guardrails = await collectBindingGuardrails({
@@ -1300,7 +1302,7 @@ const resolveReferenceBinding = async (args: {
   const resolved = await resolveToolByType(typedTool, {
     ...args.resolveArgs,
     toolContext,
-    callerProjectId: args.projectId,
+    callerProjectId: args.callerProjectId,
     activity: args.activity,
     attribution: releasedBy({
       attribution: args.resolveArgs.attribution,
@@ -1352,6 +1354,11 @@ export const resolveAgentTools = async (args: {
   /** The agent's project: every binding resolves in it. */
   projectId: number;
   /**
+   * The project the turn runs in, where its calls are gated and metered, when
+   * it is not the agent's own: a shared agent run by a grantee.
+   */
+  callerProjectId?: number;
+  /**
    * The generation's project on the wire. Pins `project_id` on every builtin
    * action that names one, so the model cannot move the call to another
    * project the caller's bearer happens to reach.
@@ -1386,6 +1393,7 @@ export const resolveAgentTools = async (args: {
       await resolveReferenceBinding({
         toolPublicId,
         projectId: args.projectId,
+        callerProjectId: args.callerProjectId ?? args.projectId,
         projectPublicId: args.projectPublicId,
         resolveArgs: args,
         guardrail: args.guardrail,
@@ -1398,6 +1406,7 @@ export const resolveAgentTools = async (args: {
     const ephemeralTools = await resolveEphemeralAgentTool({
       definition,
       projectId: args.projectId,
+      callerProjectId: args.callerProjectId,
       boundaryPolicy: args.boundaryPolicy,
       authHeader: args.authHeader,
       toolContext: args.toolContext,

@@ -81,6 +81,7 @@ The flow they follow is
 | `2026-09-29-eval-run-decider-versions` | `eval_runs.decider_versions`, the decider version each `decider` scorer grades under |
 | `2026-09-29-eval-group-by` | `evals.group_by`, the item `metadata` key a run rolls its scores up by |
 | `2026-09-30-usage-event-publisher-project` | `usage_events.publisher_project_id` (`SET NULL`) and its durable public id, the project that owns a resource called through a share |
+| `2026-09-30-agent-records-outlive-agent` | `agent_id` on generations, traces and sessions becomes nullable and `SET NULL`, with a backfilled, not-null `agent_public_id`, so a shared agent's records survive its owner deleting it |
 
 Run them from the server package, which owns the entrypoint:
 

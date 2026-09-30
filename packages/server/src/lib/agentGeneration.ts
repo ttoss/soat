@@ -2,15 +2,11 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 
-import { DomainError } from '../errors';
 import {
   buildGenerationContext,
   type GenerationContext,
 } from './agentGenerationContext';
-import {
-  buildDepthGuardResult,
-  resolveAgentForGeneration,
-} from './agentGenerationRecovery';
+import { buildDepthGuardIfExhausted } from './agentGenerationRecovery';
 import { type GenerationResult } from './agentGenerationTypes';
 import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
@@ -29,7 +25,7 @@ import { createGenerationRecord } from './generations';
 import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
-import { assertAgentProjectAcceptsWork } from './projectPause';
+import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { assertValidToolContextKeys } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
@@ -85,6 +81,7 @@ const dispatchGeneration = (args: {
 type ResolveContextArgs = {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
   messages: GenerationInputMessage[];
   authHeader?: string;
   authUser?: AuthUser;
@@ -117,6 +114,7 @@ const resolveContextAndRecord = async (
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
     messages: args.messages,
     authHeader: args.authHeader,
     authUser: args.authUser,
@@ -198,42 +196,11 @@ const resolveContextAndRecord = async (
   return ctx;
 };
 
-// Returns a stop-here depth-guard result when the recursion budget is spent,
-// or null to proceed. Extracted so `createGeneration` stays within its length
-// budget.
-const buildDepthGuardIfExhausted = async (args: {
-  agentId: string;
-  projectIds?: number[];
-  maxDepth: number;
-  traceId: string;
-  parentTraceId?: string | null;
-  rootTraceId?: string | null;
-}): Promise<GenerationResult | null> => {
-  if (args.maxDepth > 0) return null;
-
-  const depthAgent = await resolveAgentForGeneration({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-  });
-  if (!depthAgent) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.agentId}' not found.`
-    );
-  }
-  return buildDepthGuardResult({
-    traceId: args.traceId,
-    projectId: depthAgent.project.id as number,
-    projectPublicId: depthAgent.project.publicId,
-    agentId: args.agentId,
-    generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
-    parentTraceId: args.parentTraceId ?? null,
-    rootTraceId: args.rootTraceId ?? null,
-  });
-};
-
 export type CreateGenerationArgs = {
   projectIds?: number[];
+  // The project the turn runs and is recorded in, when the caller knows it;
+  // the agent is then that project's own or one shared with it.
+  runProjectId?: number;
   agentId: string;
   messages: GenerationInputMessage[];
   stream?: boolean;
@@ -302,7 +269,10 @@ const prepareGeneration = async (
   const admitted =
     args.source === EVAL_USAGE_SOURCE || args.source === DECIDER_USAGE_SOURCE;
   if (!args.orchestrationRunId && !admitted) {
-    await assertAgentProjectAcceptsWork({ agentPublicId: args.agentId });
+    await assertGenerationProjectAcceptsWork({
+      agentPublicId: args.agentId,
+      runProjectId: args.runProjectId,
+    });
   }
 
   const maxDepth = args.remainingDepth ?? 10;
@@ -311,6 +281,7 @@ const prepareGeneration = async (
   const depthGuard = await buildDepthGuardIfExhausted({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
     maxDepth,
     traceId,
     parentTraceId: args.parentTraceId,
@@ -323,6 +294,7 @@ const prepareGeneration = async (
   const chain = await resolveChainOrRefuse({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
     initiatorGenerationId: args.initiatorGenerationId,
     traceId,
     parentTraceId: args.parentTraceId,
@@ -339,6 +311,7 @@ const prepareGeneration = async (
   const quotaBreach = await checkGenerationQuota({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
     // Carries the end user for `actor`-scope caps; the actor is derived from
     // the session, so this is the same attribution the usage event will record.
     sessionId: args.sessionId,
@@ -348,6 +321,7 @@ const prepareGeneration = async (
   const ctx = await resolveContextAndRecord({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
     messages: args.messages,
     authHeader: args.authHeader,
     authUser: args.authUser,

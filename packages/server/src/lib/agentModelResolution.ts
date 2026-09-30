@@ -13,7 +13,7 @@
 import type { LanguageModel } from 'ai';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
-import type { TypedAgent } from './agentGenerationTypes';
+import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildModel } from './agentModel';
 import {
   buildRoutedModel,
@@ -47,7 +47,7 @@ export const resolveAgentModel = async (
   // `resolveConsumerModelRoute` returns null as soon as a pin is present, so a
   // project-wide default can never override a deliberate binding.
   const route = await resolveConsumerModelRoute({
-    projectId: typedAgent.project.id as number,
+    projectId: ownerProjectId(typedAgent),
     modelRouteId: typedAgent.modelRoute?.publicId,
     aiProviderId: typedAgent.aiProvider?.publicId,
   });
@@ -55,7 +55,7 @@ export const resolveAgentModel = async (
     return {
       model: await buildRoutedModel({
         route,
-        projectId: typedAgent.project.id as number,
+        projectId: ownerProjectId(typedAgent),
       }),
       provider: ROUTED_PROVIDER_LABEL,
     };
@@ -69,7 +69,7 @@ export const resolveAgentModel = async (
 
   const resolved = await resolveAiProviderSecret({
     aiProviderId: typedAgent.aiProvider.publicId,
-    projectId: typedAgent.project.id as number,
+    projectId: ownerProjectId(typedAgent),
   });
 
   if (!resolved) return { failure: 'provider_unresolvable' };

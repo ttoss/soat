@@ -19,7 +19,7 @@ const getSessionAgentInternalId = async (
   const session = await db.Session.findOne({
     where: { publicId: sessionPublicId },
   });
-  if (!session) {
+  if (!session?.agentId) {
     throw new Error(`Session not found: ${sessionPublicId}`);
   }
   return session.agentId;

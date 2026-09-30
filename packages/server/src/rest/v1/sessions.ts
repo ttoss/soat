@@ -17,6 +17,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { requireAuth, requireProjectAccess } from './helpers';
 import { sessionSubResourcesRouter } from './sessionSubResources';
+import { authorizeSharedUse } from './sharedAccess';
 
 export const sessionsRouter = new Router<Context>();
 
@@ -75,6 +76,24 @@ export const checkSessionAccess = async (
 
 // ── Create Session ───────────────────────────────────────────────────────
 
+/**
+ * The caller's own agent a session opens on. Searched inside the caller's
+ * projects only, so an agent elsewhere answers exactly as an id that names
+ * nothing.
+ */
+const resolveOwnAgentTarget = async (args: {
+  ctx: Context;
+  agentId: string;
+}): Promise<{ projectId: number; agentId: number }> => {
+  const projectIds = await requireProjectAccess({
+    ctx: args.ctx,
+    action: 'agents:CreateSession',
+    resourceType: 'session',
+  });
+  const agent = await agents.getByPublicId({ id: args.agentId, projectIds });
+  return { projectId: agent.projectId, agentId: agent.id as number };
+};
+
 sessionsRouter.post('/sessions', async (ctx: Context) => {
   requireAuth(ctx);
 
@@ -88,22 +107,21 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     message_delay_seconds?: number | null;
   };
 
-  const projectIds = await requireProjectAccess({
+  // A credential confined to a grantee project opens the session there, on an
+  // agent shared with it.
+  const shared = await authorizeSharedUse({
     ctx,
+    resourceType: 'agent',
+    resourceId: String(body.agent_id),
     action: 'agents:CreateSession',
-    resourceType: 'session',
   });
-
-  // Searched inside the caller's projects only, so an agent elsewhere answers
-  // exactly as an id that names nothing.
-  const agent = await agents.getByPublicId({
-    id: String(body.agent_id),
-    projectIds,
-  });
+  const target = shared
+    ? { projectId: shared.projectId, agentId: shared.resourceDbId }
+    : await resolveOwnAgentTarget({ ctx, agentId: String(body.agent_id) });
 
   const result = await createSession({
-    projectId: agent.projectId,
-    agentId: agent.id as number,
+    projectId: target.projectId,
+    agentId: target.agentId,
     name: body.name,
     actorId: body.actor_id,
     autoGenerate: body.auto_generate,

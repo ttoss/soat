@@ -98,3 +98,18 @@ export const assertAgentProjectAcceptsWork = async (args: {
   if (!agent) return;
   await assertProjectAcceptsWork({ projectId: agent.projectId as number });
 };
+
+/**
+ * The pause check for a turn: the project it runs in when the caller names
+ * one, the agent's own otherwise.
+ */
+export const assertGenerationProjectAcceptsWork = async (args: {
+  agentPublicId: string;
+  runProjectId?: number;
+}): Promise<void> => {
+  if (args.runProjectId === undefined) {
+    await assertAgentProjectAcceptsWork({ agentPublicId: args.agentPublicId });
+    return;
+  }
+  await assertProjectAcceptsWork({ projectId: args.runProjectId });
+};

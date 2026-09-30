@@ -66,8 +66,12 @@ const buildTypedAgentFromConfig = (args: {
     knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
     promptCaching: configObject(config.prompt_caching),
-    guardrailIds: configArray<string>(config.guardrail_ids),
+    // A shared agent's own guardrails name guardrails in its owner's project.
+    guardrailIds: live.ownerProject
+      ? null
+      : configArray<string>(config.guardrail_ids),
     project: live.project,
+    ownerProject: live.ownerProject,
     aiProvider: joinRef(configString(config.ai_provider_id)),
     modelRoute: joinRef(configString(config.model_route_id)),
     id: live.id,
@@ -104,6 +108,7 @@ export const withOutputSchema = (args: {
     promptCaching: typedAgent.promptCaching,
     guardrailIds: typedAgent.guardrailIds,
     project: typedAgent.project,
+    ownerProject: typedAgent.ownerProject,
     aiProvider: typedAgent.aiProvider,
     modelRoute: typedAgent.modelRoute,
     id: typedAgent.id,

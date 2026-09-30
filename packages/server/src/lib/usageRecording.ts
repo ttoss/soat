@@ -47,13 +47,14 @@ type Attribution = {
  */
 const resolveBillingProvider = async (args: {
   generation: GenerationWithAgent;
+  agentProjectId: number;
   servedAiProviderId?: string | null;
 }): Promise<{ id: number; provider: string } | null> => {
   if (args.servedAiProviderId) {
     const served = await db.AiProvider.findOne({
       where: {
         publicId: args.servedAiProviderId,
-        projectId: args.generation.projectId,
+        projectId: args.agentProjectId,
       },
     });
     // Falls through to the pin when the row is gone (a delete racing the turn),
@@ -160,10 +161,14 @@ const writeGenerationEvent = async (args: {
     return;
   }
 
+  // The agent's own project: a route's targets live beside the agent, and its
+  // provider is priced in that project's book, which a grantee's turn is not.
+  const agentProjectId = generation.agent?.projectId ?? generation.projectId;
   const attribution = resolveEventAttribution({
     generation,
     aiProvider: await resolveBillingProvider({
       generation,
+      agentProjectId,
       servedAiProviderId: args.aiProviderId,
     }),
   });
@@ -173,7 +178,7 @@ const writeGenerationEvent = async (args: {
     provider: attribution.provider,
     aiProviderId: attribution.aiProviderId,
     model,
-    projectId: generation.projectId,
+    projectId: agentProjectId,
   });
 
   const idempotencyKey = buildIdempotencyKey({
@@ -290,6 +295,7 @@ export const recordCompletionUsage = async (args: {
         actionId: null,
         documentId: null,
         memoryStoreId: null,
+        publisherProjectId: null,
         // A generation-less completion has no generation or agent row to
         // identify the workload by, so it labels itself: the same value that
         // names it in the idempotency key.

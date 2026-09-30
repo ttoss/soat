@@ -5677,6 +5677,26 @@ if [ "$SHARED_CALLS" -lt 1 ]; then
 fi
 $SOAT_CLI delete-tool --tool-id "$CALLED_TOOL_ID" --force true >/dev/null
 
+echo "--- A grantee session on a shared agent outlives the agent ---"
+SHARED_AGENT_ID=$($SOAT_CLI create-agent --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" --name smoke-shared-agent | jq -r '.id')
+SHARED_AGENT_SHARE_ID=$($SOAT_CLI create-share --project-id "$PROJECT_PUBLIC_ID" \
+  --resource "srn:$PROJECT_PUBLIC_ID:agent:$SHARED_AGENT_ID" \
+  --actions '["agents:CreateAgentGeneration"]' --grantee "$SHARE_GRANTEE_ID" | jq -r '.id')
+$SOAT_CLI accept-share --share-id "$SHARED_AGENT_SHARE_ID" --project-id "$SHARE_GRANTEE_ID" >/dev/null
+SHARED_SESSION_ID=$(SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI create-session \
+  --agent_id "$SHARED_AGENT_ID" | jq -r '.id')
+if [ -z "$SHARED_SESSION_ID" ] || [ "$SHARED_SESSION_ID" = "null" ]; then
+  echo "ERROR: The grantee could not open a session on the shared agent" >&2
+  exit 1
+fi
+$SOAT_CLI delete-agent --agent-id "$SHARED_AGENT_ID" --force true >/dev/null
+if ! SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI get-session --session-id "$SHARED_SESSION_ID" \
+  | jq -e --arg agent "$SHARED_AGENT_ID" '.agent_id == $agent' >/dev/null; then
+  echo "ERROR: Deleting the shared agent removed the grantee's session" >&2
+  exit 1
+fi
+
 echo "--- Deleting a shared tool ---"
 expect_cli_error_status 409 delete-tool --tool-id "$SHARED_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$SHARED_TOOL_ID" --force true >/dev/null

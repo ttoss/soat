@@ -128,6 +128,29 @@ A call through a share:
 - **Names the caller**: the tool receives the calling project's id as the `calling_project_id` [tool context](../advanced/tool-context.md) key, so it can refuse by grantee. The key is reserved: a caller cannot set it, and a call in the tool's own project carries none.
 - **Is metered in the calling project**: its `tool_execution` event belongs to the caller, with `publisher_project_id` naming the publisher. See [Usage](./usage.md#calls-through-a-share).
 
+### Using a shared agent
+
+Once a project accepts a share of an agent, the agent runs in that project from:
+
+- [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), with a key or OAuth token scoped to the grantee project;
+- a conversation's generation, naming it as `agent_id`, and a message it authors;
+- a [session](./sessions.md), opened with a key or OAuth token scoped to the grantee project;
+- an orchestration `agent` node;
+- an ingestion rule's `agent_id`, as its converter.
+
+Every other reference to an agent — a decider, an eval, a memory rule, a workflow dispatch — names one of the project's own agents only.
+
+A turn through a share:
+
+- **Runs on the publisher's configuration**: its instructions, provider credential or model route, version and rollout, tools and knowledge resolve in the publisher's project. Its own tools are called through the share, carrying `calling_project_id`.
+- **Is governed by the grantee**: the grantee project's quotas, pause state and guardrails apply; the agent's own `guardrail_ids` name guardrails in the publisher's project and do not. The agent is offered no `write_memory` tool, so the grantee's conversation is never written into the publisher's memory store.
+- **Is recorded in the grantee**: its generation, trace and content are the grantee project's, under its zero-retention mode, retention and purge; the publisher holds no copy.
+- **Is metered in the grantee**: its `llm_tokens` events belong to the grantee, with `publisher_project_id` naming the publisher and `ai_provider_id` the publisher's provider, priced from the publisher's price book. See [Usage](./usage.md#calls-through-a-share).
+
+A turn that pauses for client tool outputs or a tool-call approval is resumed on the agent's own routes, which a grantee-scoped credential does not reach.
+
+Deleting the agent in the publisher's project leaves the grantee's records in place: its generations, traces and sessions keep `agent_id`, and a session whose agent is gone answers a new turn with `400 AGENT_NOT_FOUND`.
+
 ### Accepted shares are dependents
 
 [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` and [`DELETE /api/v1/agents/{agent_id}`](/docs/api/agents/delete-agent) answers `409 AGENT_HAS_DEPENDENTS` while another project has an active acceptance of a live share, with `meta.accepted_share_count`. `force=true` revokes the shares, then deletes. Any delete of a shared resource revokes its remaining shares, accepted or not.

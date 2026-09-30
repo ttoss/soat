@@ -621,7 +621,8 @@ components:
         agent_id:
           x-soat-ref: agents
           type: string
-          description: Agent public ID
+          description: >
+            Agent public ID, kept after a shared agent is deleted by its owner.
           example: agent_V1StGXR8Z5jdHi6B
         conversation_id:
           x-soat-ref: conversations
@@ -758,7 +759,10 @@ components:
         agent_id:
           x-soat-ref: agents
           type: string
-          description: Agent this session belongs to
+          description: >
+            Agent this session belongs to. With a credential scoped to a
+            project, it may also be an agent another project shares with that
+            project; the session is then that project's.
           example: agent_V1StGXR8Z5jdHi6B
         name:
           type: string

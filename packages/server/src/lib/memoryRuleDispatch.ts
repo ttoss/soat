@@ -95,7 +95,9 @@ const isRuleDriven = async (generation: GenerationRow): Promise<boolean> => {
   const handlerAgentIds = await findHandlerAgentIds({
     projectId: generation.projectId,
   });
-  return handlerAgentIds.includes(generation.agentId);
+  return (
+    generation.agentId !== null && handlerAgentIds.includes(generation.agentId)
+  );
 };
 
 const handlerFor = (

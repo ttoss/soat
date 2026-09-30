@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { systemPath } from './filePaths';
 import { upsertFileByPath } from './files';
 import { readFileBuffer } from './fileStorage';
+import { agentReferences } from './resourceReferences';
 import {
   resolveAgentTraceContentMode,
   resolveTraceContentModeForAgent,
@@ -73,6 +74,7 @@ export const recordTraceError = async (args: {
 
   const mode = await resolveAgentTraceContentMode({
     agentDbId: trace.agentId,
+    projectDbId: trace.projectId,
   });
 
   if (mode === 'none') {
@@ -178,8 +180,11 @@ const upsertTraceRecord = async (args: {
   });
 
   const [agent, fileId, parentTraceDbId, rootTraceDbId] = await Promise.all([
-    db.Agent.findOne({
-      where: { publicId: args.agentId, projectId: args.projectId },
+    // The agent that is running: the project's own, or one shared with it.
+    agentReferences.find({
+      id: args.agentId,
+      projectId: args.projectId,
+      reach: 'shares',
     }),
     findFileId(args.filePublicId),
     findTraceId(args.parentTraceId),

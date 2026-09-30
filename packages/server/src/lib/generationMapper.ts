@@ -70,7 +70,7 @@ const linkedPublicId = (
 export const mapGeneration = (
   gen: InstanceType<(typeof db)['Generation']> & {
     project?: InstanceType<(typeof db)['Project']>;
-    agent?: InstanceType<(typeof db)['Agent']>;
+    agent?: InstanceType<(typeof db)['Agent']> | null;
     trace?: InstanceType<(typeof db)['Trace']>;
     initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
     session?: InstanceType<(typeof db)['Session']> | null;
@@ -78,14 +78,15 @@ export const mapGeneration = (
     conversation?: InstanceType<(typeof db)['Conversation']> | null;
   }
 ): PersistedGeneration => {
-  if (!gen.project || !gen.agent || !gen.trace) {
+  if (!gen.project || !gen.trace) {
     throw new Error('Generation associations are required for serialization.');
   }
 
   return {
     id: gen.publicId,
     project_id: gen.project.publicId,
-    agent_id: gen.agent.publicId,
+    // The durable id outlives a shared agent its owner deleted.
+    agent_id: gen.agentPublicId,
     trace_id: gen.trace.publicId,
     initiator_generation_id: linkedPublicId(gen.initiatorGeneration),
     // The continuation chain this turn belongs to; null when it is not one. The

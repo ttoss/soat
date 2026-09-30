@@ -30,7 +30,7 @@ export const sessionIncludes = (): ResourceIncludes => {
  */
 export type SessionRow = InstanceType<(typeof db)['Session']> & {
   project?: InstanceType<(typeof db)['Project']>;
-  agent?: InstanceType<(typeof db)['Agent']>;
+  agent?: InstanceType<(typeof db)['Agent']> | null;
   conversation?: InstanceType<(typeof db)['Conversation']>;
   actor?: InstanceType<(typeof db)['Actor']> | null;
   forkedFrom?: InstanceType<(typeof db)['Session']> | null;

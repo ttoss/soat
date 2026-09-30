@@ -184,7 +184,11 @@ export const findSharedUse = async (args: {
   resourceType: 'tool' | 'agent';
   id: string;
   projectPublicId: string;
-}): Promise<{ projectId: number; ownerProjectId: number } | null> => {
+}): Promise<{
+  projectId: number;
+  ownerProjectId: number;
+  resourceDbId: number;
+} | null> => {
   const project = await db.Project.findOne({
     where: { publicId: args.projectPublicId },
     attributes: ['id'],
@@ -198,5 +202,9 @@ export const findSharedUse = async (args: {
     reach: 'shares',
   });
   if (!row || row.projectId === project.id) return null;
-  return { projectId: project.id, ownerProjectId: row.projectId };
+  return {
+    projectId: project.id,
+    ownerProjectId: row.projectId,
+    resourceDbId: row.id as number,
+  };
 };

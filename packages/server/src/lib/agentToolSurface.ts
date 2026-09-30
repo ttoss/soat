@@ -13,7 +13,7 @@
  */
 import type { Tool } from 'ai';
 
-import type { TypedAgent } from './agentGenerationTypes';
+import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeTools } from './agentKnowledge';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
@@ -56,7 +56,10 @@ export const resolveAgentToolSurface = async (args: {
    */
   sessionId?: string | null;
 }): Promise<ResolvedToolSurface> => {
+  // Bindings resolve in the agent's own project; the turn's calls are gated,
+  // metered and recorded in the project it runs in.
   const projectId = args.typedAgent.project.id as number;
+  const ownerId = ownerProjectId(args.typedAgent);
   const unavailable = collectUnavailableTools();
 
   // No branch on presence — resolveAgentTools no-ops on empty input, so this
@@ -72,7 +75,8 @@ export const resolveAgentToolSurface = async (args: {
       activeToolIds: args.typedAgent.activeToolIds,
     }),
     tools: bound.tools,
-    projectId,
+    projectId: ownerId,
+    callerProjectId: projectId,
     projectPublicId: args.typedAgent.project.publicId,
     projectIds: args.projectIds,
     boundaryPolicy: args.typedAgent.boundaryPolicy,
@@ -108,16 +112,19 @@ export const resolveAgentToolSurface = async (args: {
 
   // Mutates `resolvedTools` in place, adding the tools derived from the agent's
   // `knowledge_config` (`write_memory`) on top of the bound ones.
-  buildKnowledgeTools({
-    agentId: args.agentId,
-    // The generation was already required here for the guardrail and activity
-    // contexts; forwarding it is what lets a `write_memory` call record which
-    // turn asserted the fact.
-    generationId: args.generationId,
-    projectIds: args.projectIds,
-    typedAgent: args.typedAgent,
-    resolvedTools,
-  });
+  // A shared agent's memory store is its owner's: the grantee's turn is never
+  // written into it.
+  if (ownerId === projectId)
+    buildKnowledgeTools({
+      agentId: args.agentId,
+      // The generation was already required here for the guardrail and activity
+      // contexts; forwarding it is what lets a `write_memory` call record which
+      // turn asserted the fact.
+      generationId: args.generationId,
+      projectIds: args.projectIds,
+      typedAgent: args.typedAgent,
+      resolvedTools,
+    });
 
   return { tools: resolvedTools, unavailableToolNames: unavailable.names };
 };

@@ -30,7 +30,7 @@ Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./a
 | Field                    | Type            | Description                                                                                                      |
 | ------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `id`                     | string          | Public identifier prefixed with `sess_`                                                                          |
-| `agent_id`               | string          | Public ID of the agent this session belongs to                                                                   |
+| `agent_id`               | string          | Public ID of the agent this session belongs to; kept after a [shared](./shares.md#using-a-shared-agent) agent is deleted by its owner |
 | `conversation_id`        | string          | Public ID of the underlying conversation                                                                         |
 | `status`                 | string          | `open` (default), `closed`, or `expired`                                                                         |
 | `name`                   | string          | Optional display name                                                                                            |
@@ -93,6 +93,10 @@ For a window, a split by day or model, or one end user across every session, use
 ### Lifecycle
 
 A session starts `open` and can be updated to `closed`. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. See [Deletion](#deletion).
+
+### Sessions on a shared agent
+
+A key or OAuth token scoped to a project that accepted a [share](./shares.md#using-a-shared-agent) of an agent opens a session on it in that project: the turns run on the publisher's configuration and are recorded, metered and governed in the grantee. Deleting the agent in the publisher's project leaves the session readable, and a new turn answers `400 AGENT_NOT_FOUND`.
 
 ### Deletion
 

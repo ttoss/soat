@@ -158,6 +158,7 @@ const dispatchNodeExecution = async (
         node: nodeDefn,
         state,
         projectIds,
+        projectId,
         traceId,
         authHeader,
         runPublicId,

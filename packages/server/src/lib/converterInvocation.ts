@@ -219,6 +219,7 @@ const invokeAgentConverter = async (args: {
   try {
     result = await createGeneration({
       projectIds: [args.projectId],
+      runProjectId: args.projectId,
       agentId: args.rule.agent_id!,
       messages: [
         {

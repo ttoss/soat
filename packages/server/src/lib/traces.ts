@@ -36,7 +36,7 @@ export type TraceTreeNode = Trace & {
 
 type TraceRow = InstanceType<(typeof db)['Trace']> & {
   project?: InstanceType<(typeof db)['Project']>;
-  agent?: InstanceType<(typeof db)['Agent']>;
+  agent?: InstanceType<(typeof db)['Agent']> | null;
   file?: InstanceType<(typeof db)['File']> | null;
   parentTrace?: InstanceType<(typeof db)['Trace']> | null;
   rootTrace?: InstanceType<(typeof db)['Trace']> | null;
@@ -59,14 +59,11 @@ export const traceRows = makeResourceAccessor<TraceRow>({
 });
 
 export const mapTrace = (row: TraceRow): Trace => {
-  if (!row.agent) {
-    throw new Error('Trace agent association is required for serialization.');
-  }
-
   return {
     id: row.publicId,
     project_id: (row.project?.publicId ?? String(row.projectId)) as string,
-    agent_id: row.agent.publicId,
+    // The durable id outlives a shared agent its owner deleted.
+    agent_id: row.agentPublicId,
     file_id: row.file?.publicId ?? null,
     step_count: row.stepCount,
     parent_trace_id: row.parentTrace?.publicId ?? null,

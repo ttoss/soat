@@ -266,7 +266,7 @@ export const findSessionAccess = async (args: {
     return null;
   }
   const row = session as InstanceType<(typeof db)['Session']> & {
-    agent?: InstanceType<(typeof db)['Agent']>;
+    agent?: InstanceType<(typeof db)['Agent']> | null;
     project?: InstanceType<(typeof db)['Project']>;
   };
   return {
