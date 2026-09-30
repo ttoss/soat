@@ -47,15 +47,14 @@ type Attribution = {
  */
 const resolveBillingProvider = async (args: {
   generation: GenerationWithAgent;
+  agentProjectId: number;
   servedAiProviderId?: string | null;
 }): Promise<{ id: number; provider: string } | null> => {
   if (args.servedAiProviderId) {
-    // A route's targets live beside the agent, which a grantee's turn does not.
     const served = await db.AiProvider.findOne({
       where: {
         publicId: args.servedAiProviderId,
-        projectId:
-          args.generation.agent?.projectId ?? args.generation.projectId,
+        projectId: args.agentProjectId,
       },
     });
     // Falls through to the pin when the row is gone (a delete racing the turn),
@@ -162,10 +161,14 @@ const writeGenerationEvent = async (args: {
     return;
   }
 
+  // The agent's own project: a route's targets live beside the agent, and its
+  // provider is priced in that project's book, which a grantee's turn is not.
+  const agentProjectId = generation.agent?.projectId ?? generation.projectId;
   const attribution = resolveEventAttribution({
     generation,
     aiProvider: await resolveBillingProvider({
       generation,
+      agentProjectId,
       servedAiProviderId: args.aiProviderId,
     }),
   });
@@ -175,8 +178,7 @@ const writeGenerationEvent = async (args: {
     provider: attribution.provider,
     aiProviderId: attribution.aiProviderId,
     model,
-    // The agent's own provider is priced in its own project's book.
-    projectId: generation.agent?.projectId ?? generation.projectId,
+    projectId: agentProjectId,
   });
 
   const idempotencyKey = buildIdempotencyKey({
