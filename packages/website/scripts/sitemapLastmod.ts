@@ -5,8 +5,8 @@ import * as path from 'node:path';
 /**
  * Docusaurus dates a doc's `<lastmod>` from the git history of its source
  * file, so a page generated at build time (the API, SDK, MCP, CLI and
- * formations references, the permissions and error-code pages) and every
- * `src/pages` page go out undated. Each of those is dated here from the git
+ * formations references, the comparisons, the permissions and error-code
+ * pages) and every `src/pages` page go out undated. Each of those is dated here from the git
  * history of the file it is generated from: an operation page moves when its
  * OpenAPI spec does, and not when an unrelated doc is edited.
  */
@@ -14,6 +14,8 @@ import * as path from 'node:path';
 export const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 const SPECS = 'packages/server/src/rest/openapi/v1';
+
+const SOLUTIONS = 'packages/website/src/data/solutions';
 
 const spec = (slug: string): string[] => {
   const file = `${SPECS}/${slug}.yaml`;
@@ -50,6 +52,7 @@ const FIXED_SOURCES: Record<string, string[]> = {
   '/docs/permissions': ['packages/server/src/permissions'],
   '/docs/error-codes': ['packages/server/src/errors/codes.ts'],
   '/docs/webhook-events': ['packages/server/src/lib/soatEvents.ts'],
+  '/docs/compare': [SOLUTIONS],
 };
 
 /** The repository paths a page is built from, or none when git dates it. */
@@ -57,6 +60,9 @@ export const sourcesForPath = (args: { pathname: string }): string[] => {
   const pathname = args.pathname.replace(/\/$/, '') || '/';
   if (FIXED_SOURCES[pathname]) return FIXED_SOURCES[pathname];
   if (pathname.startsWith('/docs/formations-types')) return spec('formations');
+  const compare = /^\/docs\/compare\/([^/]+)$/.exec(pathname);
+  if (compare)
+    return [`${SOLUTIONS}/${compare[1]}.json`, `${SOLUTIONS}/soat.json`];
   for (const family of SPEC_FAMILIES) {
     const match = family.exec(pathname);
     if (match) return spec(match[1]);

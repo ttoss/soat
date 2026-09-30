@@ -46,6 +46,8 @@ test('every source a page maps to exists in the repository', () => {
     '/docs/openapi-specs',
     '/docs/formations-types',
     '/docs/formations-types/agent',
+    '/docs/compare',
+    '/docs/compare/letta',
     '/docs/sdk/services',
     '/docs/mcp/tools',
     '/docs/cli/commands',
