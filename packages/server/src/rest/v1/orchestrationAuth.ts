@@ -35,7 +35,7 @@ export const hintAuditResourceForOrchestration = async (args: {
 
 export const resolveStartRunScope = async (
   ctx: Context
-): Promise<{ projectIds?: number[]; primaryId?: number }> => {
+): Promise<{ projectIds?: number[] }> => {
   requireAuth(ctx);
 
   const projectIds = await requireProjectAccess({
@@ -50,6 +50,5 @@ export const resolveStartRunScope = async (
     projectIds ??
     (ctx.authUser.apiKeyProjectId ? [ctx.authUser.apiKeyProjectId] : undefined);
 
-  const primaryId = resolvedProjectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
-  return { projectIds: resolvedProjectIds, primaryId };
+  return { projectIds: resolvedProjectIds };
 };

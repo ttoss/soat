@@ -9,6 +9,7 @@ import { createDocument, deleteDocument } from './documents';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { makeResourceAccessor } from './resourceAccessor';
+import { agentReferences } from './resourceReferences';
 
 const readStoredFileContent = async (
   file?: InstanceType<(typeof db)['File']>
@@ -107,9 +108,7 @@ const resolveParticipantDbIds = async (args: {
         })
       : null,
     args.agentId
-      ? db.Agent.findOne({
-          where: { publicId: args.agentId, projectId: args.projectId },
-        })
+      ? agentReferences.find({ id: args.agentId, projectId: args.projectId })
       : null,
   ]);
   if (args.actorId && !actor) return null;

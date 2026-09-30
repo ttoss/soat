@@ -1,6 +1,6 @@
-import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
+import { toolReferences } from './resourceReferences';
 import { mergePresetParameters } from './toolPresetParameters';
 import {
   assertEphemeralTypeSupported,
@@ -278,8 +278,9 @@ export const assertPipelineStepToolsValid = async (args: {
 
     // `parseStepToolReference` rejects a step carrying neither an inline `tool`
     // (handled above) nor a non-empty `toolId`, so this branch always has one.
-    const stepTool = await db.Tool.findOne({
-      where: { publicId: step.toolId as string, projectId: args.projectId },
+    const stepTool = await toolReferences.find({
+      id: step.toolId as string,
+      projectId: args.projectId,
     });
     if (!stepTool) {
       throw new DomainError(

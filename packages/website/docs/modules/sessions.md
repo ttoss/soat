@@ -13,7 +13,7 @@ A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 Sessions hide the underlying [Conversation](./conversations.md) and generation plumbing; the [Actor](./actors.md) is not hidden and not created for you (link one with `actor_id`). An interaction takes three calls (create a session, save a user message, trigger generation), or two with `auto_generate`. See [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
 
-Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./agents.md): set `agent_id` on create and filter by it with [`GET /sessions?agent_id=`](/docs/api/sessions/list-sessions). Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via [`GET /conversations/:conversation_id/messages`](/docs/api/conversations/list-conversation-messages) (governed by `conversations:GetConversation`, not the `agents:*` session actions).
+Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./agents.md): set `agent_id` on create (an agent outside the projects the caller reaches is `404`, the same as one that does not exist) and filter by it with [`GET /sessions?agent_id=`](/docs/api/sessions/list-sessions). Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via [`GET /conversations/:conversation_id/messages`](/docs/api/conversations/list-conversation-messages) (governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -159,7 +159,7 @@ curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
 | Field              | Default            | Meaning                                                                     |
 | ------------------ | ------------------ | --------------------------------------------------------------------------- |
 | `fork_at_position` | branch at the tip  | Parent `position` to branch **after**; positions `0..N` are carried over     |
-| `agent_id`         | the parent's agent | The agent the fork runs against. Must be in the same project                 |
+| `agent_id`         | the parent's agent | The agent the fork runs against. Must be in the same project (`400 AGENT_NOT_FOUND`) |
 | `name`, `tags`     | —                  | Set on the new session                                                       |
 | `tool_context`     | inherited          | Overrides the parent's [tool context](#tool-context) on the fork             |
 

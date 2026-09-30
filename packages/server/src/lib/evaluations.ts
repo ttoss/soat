@@ -23,6 +23,7 @@ import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { isPlainObject } from './plainObject';
 import { makeResourceAccessor } from './resourceAccessor';
+import { agentReferences } from './resourceReferences';
 import { rethrowAsConflict } from './uniqueViolation';
 
 const log = createDebug('soat:evaluations');
@@ -92,11 +93,15 @@ const resolveReference = async (args: {
   publicId: string;
   projectId: number;
 }): Promise<{ id: number; outputSchema?: unknown }> => {
-  const where = { publicId: args.publicId, projectId: args.projectId };
   const row =
     args.model === 'Agent'
-      ? await db.Agent.findOne({ where })
-      : await db.Dataset.findOne({ where });
+      ? await agentReferences.find({
+          id: args.publicId,
+          projectId: args.projectId,
+        })
+      : await db.Dataset.findOne({
+          where: { publicId: args.publicId, projectId: args.projectId },
+        });
 
   if (!row) {
     throw new DomainError(

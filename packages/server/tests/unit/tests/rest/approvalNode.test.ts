@@ -15,44 +15,47 @@ describe('Approval node (orchestration producer)', () => {
   // gate → done  (on approved)
   // gate → nope  (on rejected)
   // gate → stale (on expired)
-  const approvalOrchestration = {
-    name: 'Approval Gate Pipeline',
-    nodes: [
-      {
-        id: 'gate',
-        type: 'approval',
-        tool_id: 'tool_issuerefund0001',
-        arguments: { amount: { var: 'input.amount' } },
-        reasoning: 'Refund exceeds the auto-approve threshold.',
-        expires_in: 3600,
-      },
-      {
-        id: 'done',
-        type: 'transform',
-        expression: 'approved!',
-        state_mapping: { 'state.result': { var: 'output.result' } },
-      },
-      {
-        id: 'nope',
-        type: 'transform',
-        expression: 'rejected!',
-        state_mapping: { 'state.result': { var: 'output.result' } },
-      },
-      {
-        id: 'stale',
-        type: 'transform',
-        expression: 'expired!',
-        state_mapping: { 'state.result': { var: 'output.result' } },
-      },
-    ],
-    edges: [
-      { from: 'gate', to: 'done', condition: 'approved' },
-      { from: 'gate', to: 'nope', condition: 'rejected' },
-      { from: 'gate', to: 'stale', condition: 'expired' },
-    ],
+  const approvalOrchestration = (toolId: string) => {
+    return {
+      name: 'Approval Gate Pipeline',
+      nodes: [
+        {
+          id: 'gate',
+          type: 'approval',
+          tool_id: toolId,
+          arguments: { amount: { var: 'input.amount' } },
+          reasoning: 'Refund exceeds the auto-approve threshold.',
+          expires_in: 3600,
+        },
+        {
+          id: 'done',
+          type: 'transform',
+          expression: 'approved!',
+          state_mapping: { 'state.result': { var: 'output.result' } },
+        },
+        {
+          id: 'nope',
+          type: 'transform',
+          expression: 'rejected!',
+          state_mapping: { 'state.result': { var: 'output.result' } },
+        },
+        {
+          id: 'stale',
+          type: 'transform',
+          expression: 'expired!',
+          state_mapping: { 'state.result': { var: 'output.result' } },
+        },
+      ],
+      edges: [
+        { from: 'gate', to: 'done', condition: 'approved' },
+        { from: 'gate', to: 'nope', condition: 'rejected' },
+        { from: 'gate', to: 'stale', condition: 'expired' },
+      ],
+    };
   };
 
   let orchestrationId: string;
+  let refundToolId: string;
 
   const startRun = async (): Promise<{
     orchestrationRunId: string;
@@ -114,9 +117,22 @@ describe('Approval node (orchestration producer)', () => {
     userToken = setup.userToken;
     projectId = setup.projectId;
 
+    // The node proposes this tool; nothing calls it until the item is settled.
+    const toolRes = await authenticatedTestClient(setup.adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'issueRefund',
+        type: 'http',
+        execute: { url: 'https://example.com/refunds', method: 'POST' },
+      });
+    refundToolId = toolRes.body.id;
     const createRes = await authenticatedTestClient(userToken)
       .post('/api/v1/orchestrations')
-      .send({ ...approvalOrchestration, project_id: projectId });
+      .send({
+        ...approvalOrchestration(refundToolId),
+        project_id: projectId,
+      });
     expect(createRes.status).toBe(201);
     orchestrationId = createRes.body.id;
   });
@@ -136,7 +152,7 @@ describe('Approval node (orchestration producer)', () => {
     expect(item.origin).toBe('node');
     expect(item.orchestration_run_id).toBe(orchestrationRunId);
     expect(item.node_id).toBe('gate');
-    expect(item.proposed_action.tool_id).toBe('tool_issuerefund0001');
+    expect(item.proposed_action.tool_id).toBe(refundToolId);
     expect(item.proposed_action.arguments).toEqual({ amount: 500 });
     expect(item.reasoning).toBe('Refund exceeds the auto-approve threshold.');
   });

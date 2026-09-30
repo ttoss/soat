@@ -100,7 +100,7 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
     resourceType: 'ingestionRule',
   });
   const refs = await resolveConverterRefs({
-    projectIds: [Number(targetProjectId)],
+    projectId: Number(targetProjectId),
     toolId: body.tool_id,
     agentId: body.agent_id,
   });
@@ -134,7 +134,8 @@ ingestionRulesRouter.patch(
     const body = ctx.request.body as UpdateBody;
 
     const refs = await resolveConverterRefs({
-      projectIds,
+      // The item authorizer pins the scope to the rule's own project.
+      projectId: projectIds[0],
       toolId: body.tool_id,
       agentId: body.agent_id,
     });

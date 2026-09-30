@@ -174,7 +174,6 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       const run = await startOrchestrationRun({
         orchestrationPublicId: orchId,
-        projectId: projectPk,
         projectIds: [projectPk],
         input: {},
       });
@@ -253,7 +252,6 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       const started = await startOrchestrationRun({
         orchestrationPublicId: orchId,
-        projectId: projectPk,
         projectIds: [projectPk],
         input: {},
       });
@@ -593,7 +591,6 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       const started = await startOrchestrationRun({
         orchestrationPublicId: orchId,
-        projectId: projectPk,
         projectIds: [projectPk],
         input: {},
       });
@@ -626,7 +623,6 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
           nodes: [{ id: 'start', type: 'transform', expression: 'done' }],
           edges: [],
         }),
-        projectId: projectPk,
         projectIds: [projectPk],
         input: {},
       });
@@ -1090,7 +1086,6 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       for (let i = 0; i < 5; i += 1) {
         await startOrchestrationRun({
           orchestrationPublicId: orchId,
-          projectId: projectPk,
           projectIds: [projectPk],
           input: {},
         });

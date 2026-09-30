@@ -288,6 +288,14 @@ describe('Exceptions', () => {
 
   describe('producers', () => {
     test('a failed orchestration run files a run_failed exception', async () => {
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'deletedBeforeRun',
+          type: 'http',
+          execute: { url: 'https://example.com/gone', method: 'POST' },
+        });
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -297,13 +305,17 @@ describe('Exceptions', () => {
             {
               id: 'boom',
               type: 'tool',
-              tool_id: 'tool_doesnotexist',
+              tool_id: toolRes.body.id,
               input_mapping: {},
             },
           ],
           edges: [],
         });
       expect(createRes.status).toBe(201);
+      // Deleted after the graph is written, so the node fails at run time.
+      await authenticatedTestClient(adminToken).delete(
+        `/api/v1/tools/${toolRes.body.id}`
+      );
 
       const runRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')

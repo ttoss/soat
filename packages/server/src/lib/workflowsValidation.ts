@@ -2,6 +2,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
+import { agentReferences, toolReferences } from './resourceReferences';
 import {
   assertRetryPolicyValid,
   type RetryPolicy,
@@ -327,9 +328,27 @@ export const assertWorkflowValid = (args: {
   validateTransitions({ states: args.states, transitions: args.transitions });
 };
 
+/** How each dispatch kind's target is found in the workflow's project. */
+const DISPATCH_TARGET_LOOKUPS: Record<
+  WorkflowDispatch['kind'],
+  {
+    noun: string;
+    find: (args: { id: string; projectId: number }) => Promise<unknown>;
+  }
+> = {
+  agent: { noun: 'agent', find: agentReferences.find },
+  tool: { noun: 'tool', find: toolReferences.find },
+  orchestration: {
+    noun: 'orchestration',
+    find: ({ id, projectId }) => {
+      return db.Orchestration.findOne({ where: { publicId: id, projectId } });
+    },
+  },
+};
+
 /**
- * Verifies every on_enter dispatch target (agent / orchestration) exists in the
- * owning project. Kept separate from the pure structural checks so the
+ * Verifies every on_enter dispatch target (agent / tool / orchestration) exists
+ * in the owning project. Kept separate from the pure structural checks so the
  * definition can be validated without a project context where needed.
  */
 export const assertDispatchTargetsValid = async (args: {
@@ -340,33 +359,21 @@ export const assertDispatchTargetsValid = async (args: {
     const dispatch = state.onEnter?.dispatch;
     if (!dispatch) continue;
 
-    if (dispatch.kind === 'agent' && dispatch.agentId) {
-      const agent = await db.Agent.findOne({
-        where: { publicId: dispatch.agentId, projectId: args.projectId },
-      });
-      if (!agent) {
-        throw new DomainError(
-          'WORKFLOW_VALIDATION_FAILED',
-          `State '${state.name}' references agent '${dispatch.agentId}', which does not exist in this project.`,
-          { state: state.name, agentId: dispatch.agentId }
-        );
-      }
-    }
+    const { field } = DISPATCH_REQUIRED_ID[dispatch.kind];
+    const targetId = dispatch[field];
+    if (!targetId) continue;
 
-    if (dispatch.kind === 'orchestration' && dispatch.orchestrationId) {
-      const orch = await db.Orchestration.findOne({
-        where: {
-          publicId: dispatch.orchestrationId,
-          projectId: args.projectId,
-        },
-      });
-      if (!orch) {
-        throw new DomainError(
-          'WORKFLOW_VALIDATION_FAILED',
-          `State '${state.name}' references orchestration '${dispatch.orchestrationId}', which does not exist in this project.`,
-          { state: state.name, orchestrationId: dispatch.orchestrationId }
-        );
-      }
+    const lookup = DISPATCH_TARGET_LOOKUPS[dispatch.kind];
+    const target = await lookup.find({
+      id: targetId,
+      projectId: args.projectId,
+    });
+    if (!target) {
+      throw new DomainError(
+        'WORKFLOW_VALIDATION_FAILED',
+        `State '${state.name}' references ${lookup.noun} '${targetId}', which does not exist in this project.`,
+        { state: state.name, [field]: targetId }
+      );
     }
   }
 };

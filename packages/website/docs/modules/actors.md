@@ -61,7 +61,7 @@ This makes creation safe to repeat from event-driven pipelines (e.g. an inbound 
 
 An Actor links to an Agent or a Chat, not both; the link selects the AI backend for generate calls for the actor.
 
-- `agent_id` links an Agent; `chat_id` a Chat.
+- `agent_id` links an Agent; `chat_id` a Chat. Either must be in the actor's project.
 - `null` in [`PATCH /actors/:id`](/docs/api/actors/update-actor) unlinks.
 - Both in one request: `400 Bad Request`.
 

@@ -6,7 +6,7 @@
  * reaching them there would make the generation modules import the CRUD module,
  * which is an import-cycle edge.
  */
-import { db } from '../db';
+import { toolReferences } from './resourceReferences';
 
 /**
  * The bound tool ids a generation may resolve after applying the agent's
@@ -40,7 +40,7 @@ export const narrowToActiveTools = (args: {
  * keyed by tool **name**, while the persisted rule holds tool **ids** — this is
  * the id→name map `buildPrepareStep` needs to translate one into the other.
  *
- * Unlike `assertActiveToolsExist` (`agents.ts`), this runs at generation time
+ * Unlike the write-time check on `active_tool_ids`, this runs at generation time
  * rather than on write: an id naming no tool in the project (typo, wrong
  * project, a tool deleted after the rule was written) is silently dropped from
  * the map instead of rejected, so a step rule with mixed valid/stale ids still
@@ -50,15 +50,13 @@ export const resolveToolIdsToNames = async (args: {
   toolIds: string[];
   projectId: number;
 }): Promise<Record<string, string>> => {
-  if (args.toolIds.length === 0) return {};
-
-  const found = await db.Tool.findAll({
-    where: { publicId: args.toolIds, projectId: args.projectId },
-    attributes: ['publicId', 'name'],
+  const found = await toolReferences.findMany({
+    ids: args.toolIds,
+    projectId: args.projectId,
   });
 
   const map: Record<string, string> = {};
-  for (const foundTool of found) {
+  for (const foundTool of found.values()) {
     map[foundTool.publicId] = foundTool.name;
   }
   return map;

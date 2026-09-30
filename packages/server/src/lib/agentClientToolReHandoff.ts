@@ -1,7 +1,6 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { buildGenerationContext } from './agentGenerationContext';
 import { savePendingGeneration } from './agentGenerationHelpers';
 import type { MappedApproval } from './approvals';
@@ -9,6 +8,7 @@ import { resolveChainLineage } from './generationChain';
 import { createGenerationRecord } from './generations';
 import { readRunTokenPrincipal } from './orchestrationRunToken';
 import { startedByPrincipalColumns } from './principals';
+import { toolReferences } from './resourceReferences';
 
 const log = createDebug('soat:approvals');
 
@@ -101,7 +101,10 @@ export const emitClientToolReHandoff = async (args: {
   // Inline-tool proposals carry no persisted id to re-resolve the tool surface.
   if (!proposed?.tool_id || !agentId) return false;
 
-  const tool = await db.Tool.findOne({ where: { publicId: proposed.tool_id } });
+  const tool = await toolReferences.find({
+    id: proposed.tool_id,
+    projectId: args.projectInternalId,
+  });
   if (!tool || tool.type !== 'client') return false;
 
   const frozenArgs = (args.item.edited_arguments ??

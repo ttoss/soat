@@ -246,7 +246,7 @@ Archive nothing: a metadata-only edit (`name`, `description`); re-writing the de
 | Fetch one version | [`GET /api/v1/workflows/{workflow_id}/versions/{version}`](/docs/api/workflows/get-workflow-version) |
 | Roll back to a version | [`POST /api/v1/workflows/{workflow_id}/versions/{version}/restore`](/docs/api/workflows/restore-workflow-version) |
 
-**Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's definition back as **v3**; a task pinned to v2 still runs on it. Only the definition rolls back; `name` and `description` are untouched. A restored definition passes the same validation, including resolving every `on_enter` dispatch target, so a version whose agent or orchestration was deleted fails with `WORKFLOW_VALIDATION_FAILED` (400).
+**Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's definition back as **v3**; a task pinned to v2 still runs on it. Only the definition rolls back; `name` and `description` are untouched. A restored definition passes the same validation, including resolving every `on_enter` dispatch target (agent, tool or orchestration) in the workflow's project, so a version whose target was deleted fails with `WORKFLOW_VALIDATION_FAILED` (400).
 
 ### Alternate entry points
 

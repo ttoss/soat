@@ -11,6 +11,7 @@ import {
 } from './guardrailVersionSnapshot';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { toolReferences } from './resourceReferences';
 import { toResourceRef } from './resourceVersions';
 import type { VersionedWrite } from './writePrecondition';
 
@@ -207,6 +208,10 @@ export const createGuardrail = async (
 
   validateGuardrailDocument(args.document);
   validateContextMode(args.contextMode);
+  await toolReferences.requireMany({
+    ids: args.contextToolId ? [args.contextToolId] : [],
+    projectId: args.projectId,
+  });
 
   const guardrail = await db.Guardrail.create({
     projectId: args.projectId,
@@ -314,6 +319,10 @@ export const updateGuardrail = async (
   if (args.name !== undefined) updates.name = args.name;
   if (args.description !== undefined) updates.description = args.description;
   if (args.contextToolId !== undefined) {
+    await toolReferences.requireMany({
+      ids: args.contextToolId ? [args.contextToolId] : [],
+      projectId: guardrail.projectId,
+    });
     updates.contextToolId = args.contextToolId;
   }
   if (args.contextMode !== undefined) {

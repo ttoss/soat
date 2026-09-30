@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
-import { assertToolsInProject } from './toolReferences';
+import { toolReferences } from './resourceReferences';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -267,8 +267,8 @@ export const validateToolBindings = async (args: {
       await validateBindingEntry({ entry, projectId: args.projectId })
     );
   }
-  await assertToolsInProject({
-    toolIds: splitToolBindings(sanitized).toolIds,
+  await toolReferences.requireMany({
+    ids: splitToolBindings(sanitized).toolIds,
     projectId: args.projectId,
   });
   return sanitized;

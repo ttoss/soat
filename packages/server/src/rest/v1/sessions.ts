@@ -1,7 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { agents } from 'src/lib/agentAccessor';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import {
@@ -94,15 +94,12 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     resourceType: 'session',
   });
 
-  const agent = await db.Agent.findOne({ where: { publicId: body.agent_id } });
-  if (!agent) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
-  }
-
-  // Verify agent belongs to an allowed project
-  if (projectIds && !projectIds.includes(agent.projectId)) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  // Searched inside the caller's projects only, so an agent elsewhere answers
+  // exactly as an id that names nothing.
+  const agent = await agents.getByPublicId({
+    id: String(body.agent_id),
+    projectIds,
+  });
 
   const result = await createSession({
     projectId: agent.projectId,

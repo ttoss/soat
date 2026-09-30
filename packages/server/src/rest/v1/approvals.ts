@@ -11,6 +11,7 @@ import {
   type WireProposedAction,
 } from 'src/lib/approvals';
 import { buildSrn } from 'src/lib/iam';
+import { toolReferences } from 'src/lib/resourceReferences';
 import { soatTools } from 'src/lib/soatTools';
 
 import type { ProjectOwned } from './helpers';
@@ -51,9 +52,9 @@ const proposedBuiltinIamAction = async (args: {
   });
   if (!project) return undefined;
 
-  const tool = await db.Tool.findOne({
-    where: { publicId: args.proposed.tool_id, projectId: project.id },
-    attributes: ['type'],
+  const tool = await toolReferences.find({
+    id: args.proposed.tool_id,
+    projectId: project.id,
   });
   if (tool?.type !== 'builtin') return undefined;
 

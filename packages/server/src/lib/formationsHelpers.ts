@@ -8,6 +8,7 @@ import type {
   RefExpression,
   SubExpression,
 } from './formationsTypes';
+import { agentReferences, toolReferences } from './resourceReferences';
 
 // ── Ref Utilities ─────────────────────────────────────────────────────────
 
@@ -453,16 +454,28 @@ export const lookupActorInternalId = (
   return lookupInternalId({ model: db.Actor, label: 'Actor', ...args });
 };
 
-export const lookupAgentInternalId = (
+// Tools and agents resolve through `resourceReferences`, like every other
+// reference to them, with the same error as `lookupInternalId`.
+export const lookupAgentInternalId = async (
   args: ScopedLookupArgs
 ): Promise<number> => {
-  return lookupInternalId({ model: db.Agent, label: 'Agent', ...args });
+  const agent = await agentReferences.find({
+    id: args.publicId,
+    projectId: args.projectId,
+  });
+  if (!agent) throw new Error(`Agent not found: ${args.publicId}`);
+  return agent.id as number;
 };
 
-export const lookupToolInternalId = (
+export const lookupToolInternalId = async (
   args: ScopedLookupArgs
 ): Promise<number> => {
-  return lookupInternalId({ model: db.Tool, label: 'Tool', ...args });
+  const tool = await toolReferences.find({
+    id: args.publicId,
+    projectId: args.projectId,
+  });
+  if (!tool) throw new Error(`Tool not found: ${args.publicId}`);
+  return tool.id as number;
 };
 
 export const lookupPolicyInternalIds = async (

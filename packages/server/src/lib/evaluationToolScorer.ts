@@ -10,10 +10,10 @@
  */
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ToolScorerVerdict } from './evaluationToolScorerContract';
 import { isPlainObject } from './plainObject';
+import { toolReferences } from './resourceReferences';
 import { callTool } from './tools';
 
 const log = createDebug('soat:evaluations');
@@ -130,9 +130,9 @@ export const validateToolScorerRefs = async (args: {
       toolId
     );
 
-    const tool = await db.Tool.findOne({
-      where: { publicId: toolId, projectId: args.projectId },
-      attributes: ['type'],
+    const tool = await toolReferences.find({
+      id: toolId,
+      projectId: args.projectId,
     });
 
     if (!tool) {

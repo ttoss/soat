@@ -288,7 +288,6 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
 
   const result = await startOrchestrationRun({
     orchestrationPublicId: orchestrationId,
-    projectId: scope.primaryId,
     projectIds: scope.projectIds,
     input,
     // Persisted on the run, not borrowed from this request: the run's later

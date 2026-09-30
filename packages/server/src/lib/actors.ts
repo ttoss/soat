@@ -14,6 +14,7 @@ import {
 } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
 import { makeResourceAccessor } from './resourceAccessor';
+import { agentReferences } from './resourceReferences';
 import { applyTagFilter, mergeTags } from './tags';
 
 const log = createDebug('soat:actors');
@@ -81,16 +82,20 @@ export const validateActorExclusivity = (args: {
 
 const resolveSingleLinkedId = async (args: {
   publicId?: string | null;
-  projectId?: number;
-  findFn: (where: Record<string, unknown>) => Promise<{ id?: unknown } | null>;
+  projectId: number;
+  findFn: (where: {
+    publicId: string;
+    projectId: number;
+  }) => Promise<{ id?: unknown } | null>;
   errorCode: ErrorCode;
   notFoundMessage: string;
 }): Promise<number | null | undefined> => {
   if (args.publicId === undefined) return undefined;
   if (args.publicId === null) return null;
-  const where: Record<string, unknown> = { publicId: args.publicId };
-  if (args.projectId !== undefined) where.projectId = args.projectId;
-  const entity = await args.findFn(where);
+  const entity = await args.findFn({
+    publicId: args.publicId,
+    projectId: args.projectId,
+  });
   if (!entity) throw new DomainError(args.errorCode, args.notFoundMessage);
   return entity.id as number;
 };
@@ -98,7 +103,7 @@ const resolveSingleLinkedId = async (args: {
 export const resolveActorLinkedIds = async (args: {
   agentId?: string | null;
   chatId?: string | null;
-  projectId?: number;
+  projectId: number;
 }): Promise<{
   agentId?: number | null;
   chatId?: number | null;
@@ -109,7 +114,10 @@ export const resolveActorLinkedIds = async (args: {
       publicId: args.agentId,
       projectId: args.projectId,
       findFn: (where) => {
-        return db.Agent.findOne({ where });
+        return agentReferences.find({
+          id: where.publicId,
+          projectId: where.projectId,
+        });
       },
       errorCode: 'AGENT_NOT_FOUND',
       notFoundMessage: `Agent '${args.agentId}' not found.`,
@@ -309,6 +317,7 @@ export const updateActor = async (args: {
   const resolved = await resolveActorLinkedIds({
     agentId: args.agentId,
     chatId: args.chatId,
+    projectId: actor.projectId,
   });
 
   if (resolved.agentId !== undefined) updates.agentId = resolved.agentId;

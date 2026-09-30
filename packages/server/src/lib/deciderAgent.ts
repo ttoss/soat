@@ -1,8 +1,9 @@
-import { db } from '../db';
+import type { db } from '../db';
 import { DomainError } from '../errors';
 import { readKnowledgeConfig } from './agentKnowledge';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { narrowToActiveTools } from './agentToolSelection';
+import { agentReferences } from './resourceReferences';
 
 export type DeciderAgentRow = InstanceType<(typeof db)['Agent']>;
 
@@ -52,8 +53,9 @@ export const findDeciderAgent = async (args: {
   if (typeof args.agentPublicId !== 'string' || args.agentPublicId === '') {
     throw new DomainError('VALIDATION_FAILED', 'agent_id is required.');
   }
-  const agent = await db.Agent.findOne({
-    where: { publicId: args.agentPublicId, projectId: args.projectId },
+  const agent = await agentReferences.find({
+    id: args.agentPublicId,
+    projectId: args.projectId,
   });
   if (!agent) {
     throw new DomainError(

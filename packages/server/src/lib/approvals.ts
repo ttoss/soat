@@ -12,6 +12,7 @@ import {
   resolvePagination,
 } from './pagination';
 import { isPlainObject } from './plainObject';
+import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -672,9 +673,9 @@ const assertEditMatchesToolSchema = async (args: {
   const toolId = args.proposedAction?.toolId;
   if (args.editedArguments == null || !toolId) return;
 
-  const tool = await db.Tool.findOne({
-    where: { publicId: toolId, projectId: args.projectId },
-    attributes: ['parameters'],
+  const tool = await toolReferences.find({
+    id: toolId,
+    projectId: args.projectId,
   });
   if (!isPlainObject(tool?.parameters)) return;
 

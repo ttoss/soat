@@ -19,6 +19,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
 import { paginatedList } from './pagination';
+import { agentReferences } from './resourceReferences';
 import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
 import { mapSession } from './sessionMapper';
 import { acceptStoredToolContextUpdate } from './toolContextCarrier';
@@ -65,19 +66,14 @@ const resolveForkAgentId = async (args: {
 }): Promise<number> => {
   if (!args.agentPublicId) return args.parent.agentId as number;
 
-  const agent = await db.Agent.findOne({
-    where: { publicId: args.agentPublicId },
+  const agent = await agentReferences.find({
+    id: args.agentPublicId,
+    projectId: args.parent.projectId as number,
   });
   if (!agent) {
     throw new DomainError(
       'AGENT_NOT_FOUND',
-      `Agent '${args.agentPublicId}' not found.`
-    );
-  }
-  if (agent.projectId !== args.parent.projectId) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `Agent '${args.agentPublicId}' belongs to a different project than the session being forked.`
+      `Agent '${args.agentPublicId}' not found in this project.`
     );
   }
 

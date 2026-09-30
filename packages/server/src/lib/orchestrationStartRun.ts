@@ -24,19 +24,16 @@ export const findOrchestrationForStartRun = async (args: {
   return orchestration;
 };
 
+/**
+ * A run belongs to its orchestration's project, and its nodes resolve their
+ * references there — never across the other projects a caller can reach.
+ */
 export const resolveStartRunProjectScope = (args: {
-  projectId?: number;
-  projectIds?: number[];
   orchestrationProjectId: number;
 }) => {
-  const effectiveProjectIds =
-    args.projectIds && args.projectIds.length > 0
-      ? args.projectIds
-      : [args.orchestrationProjectId];
-
   return {
-    effectiveProjectId: args.projectId ?? args.orchestrationProjectId,
-    effectiveProjectIds,
+    effectiveProjectId: args.orchestrationProjectId,
+    effectiveProjectIds: [args.orchestrationProjectId],
   };
 };
 
