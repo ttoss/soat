@@ -1109,7 +1109,8 @@ describe('executePollNode', () => {
       expect.objectContaining({
         id: 'tool_status',
         input: { id: 'job_123' },
-        projectIds: [7],
+        projectId: 7,
+        reach: 'shares',
         authHeader: 'Bearer t',
       })
     );

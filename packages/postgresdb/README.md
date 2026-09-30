@@ -80,6 +80,7 @@ The flow they follow is
 | `2026-09-27-decider-tool-backend` | `deciders.tool_id`, the tool backend (`RESTRICT`), and `deciders.agent_id` nullable |
 | `2026-09-29-eval-run-decider-versions` | `eval_runs.decider_versions`, the decider version each `decider` scorer grades under |
 | `2026-09-29-eval-group-by` | `evals.group_by`, the item `metadata` key a run rolls its scores up by |
+| `2026-09-30-usage-event-publisher-project` | `usage_events.publisher_project_id` (`SET NULL`) and its durable public id, the project that owns a resource called through a share |
 
 Run them from the server package, which owns the entrypoint:
 

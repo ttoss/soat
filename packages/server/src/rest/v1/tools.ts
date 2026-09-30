@@ -389,7 +389,9 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
 
   const result = await startToolCall({
     guardrails: 'apply',
-    projectIds,
+    // The item authorizer pins the scope to the tool's own project.
+    projectId: projectIds[0],
+    reach: 'project',
     id: ctx.params.tool_id,
     action: typeof action === 'string' ? action : undefined,
     input: parsedInput,

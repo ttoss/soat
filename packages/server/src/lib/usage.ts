@@ -72,6 +72,7 @@ export type PersistedUsageEvent = {
   trigger_id: string | null;
   action_id: string | null;
   tool_id: string | null;
+  publisher_project_id: string | null;
   // What an embedding event embedded; null on a query and every other meter.
   document_id: string | null;
   memory_store_id: string | null;
@@ -145,6 +146,7 @@ const mapUsageEvent = (
     trigger_id: event.triggerId,
     action_id: event.actionId,
     tool_id: assocPublicId(event.tool),
+    publisher_project_id: event.publisherProjectPublicId ?? null,
     document_id: assocPublicId(event.document),
     memory_store_id: assocPublicId(event.memoryStore),
     outcome: event.outcome ?? null,
@@ -167,6 +169,7 @@ type ScopedFilterArgs = {
   aiProviderId?: string;
   orchestrationRunId?: string;
   toolId?: string;
+  publisherProjectId?: string;
 };
 
 // The publicId filters that resolve to an internal FK on the event, and the
@@ -185,6 +188,7 @@ const SCOPED_FILTERS: ReadonlyArray<{
   { key: 'aiProviderId', resource: 'aiProvider' },
   { key: 'orchestrationRunId', resource: 'orchestrationRun' },
   { key: 'toolId', resource: 'tool' },
+  { key: 'publisherProjectId', resource: 'publisherProject' },
 ];
 
 // Resolves the publicId filters into `where` (mutating it). Returns false when

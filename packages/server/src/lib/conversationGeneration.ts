@@ -184,6 +184,7 @@ export const resolveConversationAndAgent = async (args: {
   const generatingAgent = await agentReferences.find({
     id: args.agentId,
     projectId: conversation.projectId,
+    reach: 'project',
   });
 
   if (!generatingAgent) {

@@ -133,8 +133,17 @@ paths:
           in: query
           required: false
           description: >
-            Filter by the tool a `tool_execution` event metered. A tool that
-            does not exist in scope yields an empty page.
+            Filter by the tool a `tool_execution` event metered, including a
+            tool another project shares with one in scope. A tool that does not
+            exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: publisher_project_id
+          in: query
+          required: false
+          description: >
+            Filter to the calls made through a share of a resource the named
+            project owns. A project that does not exist yields an empty page.
           schema:
             type: string
         - name: outcome
@@ -228,8 +237,9 @@ paths:
       description: >
         Returns a project's usage rolled up over an optional `[from, to]` time
         window, optionally bucketed by a single dimension and narrowed by any
-        combination of fifteen filters — session, actor, agent, AI provider,
-        orchestration run, orchestration, generation, trace, tool, meter type,
+        combination of sixteen filters — session, actor, agent, AI provider,
+        orchestration run, orchestration, generation, trace, tool, publisher
+        project, meter type,
         model, source, trigger, action and outcome. That is how "what did this conversation
         cost", "what has this end user cost" and "what did this agent cost" are
         answered. Each group and the grand total carry an `event_count`,
@@ -242,8 +252,9 @@ paths:
 
         Narrowings intersect and apply to the whole rollup — every bucket,
         `totals` and `totals.distinct` alike — so each composes with any
-        `group_by`, and all fifteen are echoed back under `filters`. The nine
-        naming a resource are resolved against the project, and one naming
+        `group_by`, and all sixteen are echoed back under `filters`. The ten
+        naming a resource are resolved against the project (a tool also
+        through an accepted share), and one naming
         nothing there empties the rollup rather than being dropped: a mistyped
         id must never read back as the project's whole spend. The other six
         are matched against the value the event recorded.
@@ -442,8 +453,17 @@ paths:
           in: query
           required: false
           description: >
-            Narrow to the executions of one tool. An id naming no tool in this
-            project yields an empty rollup.
+            Narrow to the executions of one tool, including one another project
+            shares with this one. An id naming no tool in reach yields an empty
+            rollup.
+          schema:
+            type: string
+        - name: publisher_project_id
+          in: query
+          required: false
+          description: >
+            Narrow to the calls made through a share of a resource the named
+            project owns. A project that does not exist yields an empty rollup.
           schema:
             type: string
         - name: outcome
@@ -915,6 +935,14 @@ components:
             Public ID of the tool a `tool_execution` event metered. Null on
             every other meter, for an inline tool definition, and once the tool
             is deleted.
+        publisher_project_id:
+          x-soat-ref: projects
+          type: string
+          nullable: true
+          description: >
+            The project that owns the resource this event metered, when the
+            call reached it through a share. The event itself belongs to the
+            calling project. Null for a call on the project's own resources.
         document_id:
           x-soat-ref: documents
           type: string
@@ -1045,6 +1073,8 @@ components:
           type: integer
         memory_stores:
           type: integer
+        publisher_projects:
+          type: integer
 
     UsageAggregateComponent:
       type: object
@@ -1117,7 +1147,7 @@ components:
         sent it and null when unset. Echoed because a rollup of zeros is
         otherwise indistinguishable from a project that spent nothing, and
         always complete so a caller reading one key can tell "not filtered"
-        from "this endpoint does not know that filter". The nine naming a
+        from "this endpoint does not know that filter". The ten naming a
         resource are resolved against the project and empty the rollup when
         they name nothing in it; the other six are matched against the value
         the event recorded.
@@ -1171,6 +1201,10 @@ components:
           nullable: true
         tool_id:
           x-soat-ref: tools
+          type: string
+          nullable: true
+        publisher_project_id:
+          x-soat-ref: projects
           type: string
           nullable: true
         outcome:

@@ -969,7 +969,7 @@ const wrapToolsWithOutputMapping = (
 const resolvePipelineTool = (
   typedTool: AgentToolRow,
   args: {
-    projectIds?: number[];
+    callerProjectId?: number;
     authHeader?: string;
     remainingDepth?: number;
     attribution: ToolCallAttribution;
@@ -996,7 +996,8 @@ const resolvePipelineTool = (
         // The agent surface gates by wrapping this `execute`
         // (`gateResolvedToolsWithGuardrails`), so the call arrives classified.
         guardrails: 'already-adjudicated',
-        projectIds: [typedTool.projectId],
+        projectId: args.callerProjectId ?? typedTool.projectId,
+        reach: 'shares',
         id: typedTool.publicId,
         input,
         authHeader: args.authHeader,
@@ -1038,6 +1039,7 @@ const resolveToolByType = async (
   const toolType = typedTool.type;
   const meter: ToolExecutionMeter = {
     projectId: typedTool.projectId,
+    callerProjectId: args.callerProjectId,
     toolId: typedTool.publicId || null,
     attribution: args.attribution,
   };
@@ -1067,7 +1069,7 @@ const resolveToolByType = async (
     case 'pipeline':
       return {
         [typedTool.name]: resolvePipelineTool(typedTool, {
-          projectIds: args.projectIds,
+          callerProjectId: args.callerProjectId,
           authHeader: args.authHeader,
           remainingDepth: args.remainingDepth,
           attribution: args.attribution,
@@ -1232,6 +1234,11 @@ export const resolveEphemeralAgentTool = async (args: {
 
 type ResolveToolByTypeArgs = {
   projectIds?: number[];
+  /**
+   * The agent's project, where the turn's calls are metered and gated; the
+   * tool's own project when that is where the tool lives.
+   */
+  callerProjectId?: number;
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
@@ -1259,16 +1266,21 @@ const resolveReferenceBinding = async (args: {
   const agentTool = await toolReferences.find({
     id: args.toolPublicId,
     projectId: args.projectId,
+    reach: 'shares',
   });
   if (!agentTool) return {};
 
   const typedTool = agentTool as unknown as AgentToolRow;
+  // A shared tool's own guardrails name guardrails in its owner's project; the
+  // agent's project and agent guardrails govern the call instead.
   const guardrails = await collectBindingGuardrails({
     context: args.guardrail,
-    toolGuardrailIds: typedTool.guardrailIds,
+    toolGuardrailIds:
+      typedTool.projectId === args.projectId ? typedTool.guardrailIds : null,
   });
   const resolved = await resolveToolByType(typedTool, {
     ...args.resolveArgs,
+    callerProjectId: args.projectId,
     activity: args.activity,
     attribution: releasedBy({
       attribution: args.resolveArgs.attribution,

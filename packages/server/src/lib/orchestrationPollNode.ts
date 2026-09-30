@@ -68,7 +68,9 @@ export const executePollNode = async (args: {
     // A poll node calls the same tool its `tool` sibling does, so the same
     // guardrails govern it.
     guardrails: 'apply',
-    projectIds,
+    // A run's scope is its orchestration's project alone.
+    projectId: projectIds[0],
+    reach: 'shares',
     id: toolId,
     action: node.operationId,
     input: inputs,

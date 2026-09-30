@@ -462,6 +462,7 @@ export const lookupAgentInternalId = async (
   const agent = await agentReferences.find({
     id: args.publicId,
     projectId: args.projectId,
+    reach: 'project',
   });
   if (!agent) throw new Error(`Agent not found: ${args.publicId}`);
   return agent.id as number;
@@ -473,6 +474,7 @@ export const lookupToolInternalId = async (
   const tool = await toolReferences.find({
     id: args.publicId,
     projectId: args.projectId,
+    reach: 'shares',
   });
   if (!tool) throw new Error(`Tool not found: ${args.publicId}`);
   return tool.id as number;

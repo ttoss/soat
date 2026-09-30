@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { scopedWhere } from './resourceAccessor';
+import { toolReferences } from './resourceReferences';
 
 /**
  * Resolving the public ids a listing or a rollup filters on into the internal
@@ -9,7 +10,8 @@ import { scopedWhere } from './resourceAccessor';
  * failure mode — the usage event listing, the generation listing and the usage
  * rollup — and each held its own copy of it. A filter naming a resource that
  * does not exist in the caller's project scope resolves to `null` and empties
- * the answer instead of being dropped: a narrowing silently ignored reads back
+ * the answer instead of being dropped (a publisher project is looked up by id
+ * alone: the listing is already confined to the caller's projects): a narrowing silently ignored reads back
  * as the project's whole traffic, a wrong answer rather than a missing one.
  */
 
@@ -29,6 +31,7 @@ export type ScopedIdResource =
   | 'generation'
   | 'orchestration'
   | 'orchestrationRun'
+  | 'publisherProject'
   | 'session'
   | 'tool'
   | 'trace';
@@ -52,6 +55,9 @@ const SCOPED_ID_MODELS: Record<ScopedIdResource, Finder> = {
   },
   orchestrationRun: (where) => {
     return db.OrchestrationRun.findOne({ where });
+  },
+  publisherProject: (where) => {
+    return db.Project.findOne({ where: { publicId: where.publicId } });
   },
   session: (where) => {
     return db.Session.findOne({ where });
@@ -82,7 +88,20 @@ const resolveOne = async (args: {
       ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
     })
   );
-  return row?.id ?? null;
+  if (row || args.resource !== 'tool' || args.projectIds === undefined) {
+    return row?.id ?? null;
+  }
+  // A tool another project shares with one in scope is metered in that
+  // project's events, so it narrows them like one of its own.
+  for (const projectId of args.projectIds) {
+    const shared = await toolReferences.find({
+      id: args.publicId,
+      projectId,
+      reach: 'shares',
+    });
+    if (shared) return shared.id ?? null;
+  }
+  return null;
 };
 
 /**

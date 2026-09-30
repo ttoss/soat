@@ -281,6 +281,7 @@ export const assertPipelineStepToolsValid = async (args: {
     const stepTool = await toolReferences.find({
       id: step.toolId as string,
       projectId: args.projectId,
+      reach: 'shares',
     });
     if (!stepTool) {
       throw new DomainError(

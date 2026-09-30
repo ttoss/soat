@@ -25,6 +25,7 @@ import { usageEventDurablePublicIds } from './2026-09-26-usageEventDurablePublic
 import { deciderToolBackend } from './2026-09-27-deciderToolBackend';
 import { evalGroupBy } from './2026-09-29-evalGroupBy';
 import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
+import { usageEventPublisherProject } from './2026-09-30-usageEventPublisherProject';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -71,4 +72,5 @@ export const MIGRATIONS: Migration[] = [
   deciderToolBackend,
   evalRunDeciderVersions,
   evalGroupBy,
+  usageEventPublisherProject,
 ];

@@ -124,9 +124,23 @@ describe('project delete lists vs the schema', () => {
   });
 
   test('a SET NULL dependent is neither counted nor destroyed', () => {
+    // A row that also names its own project through a cascading FK goes with
+    // that project; the SET NULL one only detaches it from another project.
+    const ownedTables = new Set(
+      foreignKeys
+        .filter((fk) => {
+          return (
+            fk.parentTable === PROJECTS_TABLE && fk.deleteRule !== 'SET NULL'
+          );
+        })
+        .map((fk) => {
+          return fk.childTable;
+        })
+    );
     for (const fk of foreignKeys) {
       if (fk.parentTable !== PROJECTS_TABLE) continue;
       if (fk.deleteRule !== 'SET NULL') continue;
+      if (ownedTables.has(fk.childTable)) continue;
 
       const model = modelByTable.get(fk.childTable);
       expect(PROJECT_CASCADE_ORDER).not.toContain(model);

@@ -69,6 +69,7 @@ const resolveForkAgentId = async (args: {
   const agent = await agentReferences.find({
     id: args.agentPublicId,
     projectId: args.parent.projectId as number,
+    reach: 'project',
   });
   if (!agent) {
     throw new DomainError(

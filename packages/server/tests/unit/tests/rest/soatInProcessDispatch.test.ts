@@ -332,6 +332,8 @@ describe('SOAT in-process dispatch', () => {
     const result = await callTool({
       attribution: {},
       guardrails: 'apply',
+      projectId: project!.id as number,
+      reach: 'project',
       id: toolRes.body.id,
       action: 'transition-task',
       input: { task_id: taskRes.body.id, transition: 'to_pong' },
@@ -362,10 +364,15 @@ describe('SOAT in-process dispatch', () => {
     // No `authHeader`: the dispatch runs the real auth middleware, so an
     // uncredentialed self-call is rejected exactly as it was over the wire.
     // Sharing the process must never imply sharing the caller's authority.
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
     await expect(
       callTool({
         attribution: {},
         guardrails: 'apply',
+        projectId: project!.id as number,
+        reach: 'project',
         id: toolRes.body.id,
         action: 'list-tools',
         input: {},

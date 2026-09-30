@@ -211,6 +211,7 @@ export const createGuardrail = async (
   await toolReferences.requireMany({
     ids: args.contextToolId ? [args.contextToolId] : [],
     projectId: args.projectId,
+    reach: 'project',
   });
 
   const guardrail = await db.Guardrail.create({
@@ -322,6 +323,7 @@ export const updateGuardrail = async (
     await toolReferences.requireMany({
       ids: args.contextToolId ? [args.contextToolId] : [],
       projectId: guardrail.projectId,
+      reach: 'project',
     });
     updates.contextToolId = args.contextToolId;
   }

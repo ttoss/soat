@@ -254,7 +254,8 @@ const fetchContextTool = async (args: {
         // A guardrail's own context fetch: gating it would run the guardrails
         // that decide this call in order to decide this call.
         guardrails: 'already-adjudicated',
-        projectIds: [args.projectId],
+        projectId: args.projectId,
+        reach: 'project',
         id: args.contextToolId,
         // Nested, never flat: a `builtin` tool with no explicit action reads a
         // top-level `action` off its input as the operation to run.

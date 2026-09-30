@@ -87,7 +87,9 @@ const executeApprovedAction = async (args: {
     // human then approved these arguments; re-classifying would re-decide what
     // the sign-off already settled.
     guardrails: 'already-adjudicated',
-    projectIds: [args.projectInternalId],
+    // The agent's binding may name a tool another project shares with it.
+    projectId: args.projectInternalId,
+    reach: 'shares',
     id: proposed.tool_id,
     action: proposed.action,
     input,
@@ -159,6 +161,7 @@ const reportsExpiryToAgent = async (args: {
   const agent = await agentReferences.find({
     id: args.item.agent_id,
     projectId: args.projectInternalId,
+    reach: 'project',
   });
   return reactsToExpiredApproval(agent?.onApprovalExpiry);
 };
@@ -208,6 +211,7 @@ const fireContinuation = async (args: {
     const agent = await agentReferences.find({
       id: item.agent_id,
       projectId: args.projectInternalId,
+      reach: 'project',
     });
     if (!agent) return;
     log('fireContinuation: session id=%s session=%s', item.id, item.session_id);

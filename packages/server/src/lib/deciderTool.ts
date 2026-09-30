@@ -59,6 +59,7 @@ export const findDeciderTool = async (args: {
   const tool = await toolReferences.find({
     id: args.toolPublicId,
     projectId: args.projectId,
+    reach: 'project',
   });
   if (!tool) {
     throw new DomainError(
@@ -87,7 +88,8 @@ export const answerWithTool = async (args: {
 }): Promise<Record<string, DecisionAnswer>> => {
   log('answerWithTool: toolId=%s', args.toolPublicId);
   const raw = await callTool({
-    projectIds: [args.projectId],
+    projectId: args.projectId,
+    reach: 'project',
     id: args.toolPublicId,
     guardrails: 'apply',
     input: { state: args.state, questions: args.storedQuestions },

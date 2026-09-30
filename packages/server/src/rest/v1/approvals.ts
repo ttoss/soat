@@ -55,6 +55,7 @@ const proposedBuiltinIamAction = async (args: {
   const tool = await toolReferences.find({
     id: args.proposed.tool_id,
     projectId: project.id,
+    reach: 'project',
   });
   if (tool?.type !== 'builtin') return undefined;
 

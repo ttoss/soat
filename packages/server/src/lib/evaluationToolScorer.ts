@@ -133,6 +133,7 @@ export const validateToolScorerRefs = async (args: {
     const tool = await toolReferences.find({
       id: toolId,
       projectId: args.projectId,
+      reach: 'project',
     });
 
     if (!tool) {
@@ -188,7 +189,8 @@ export const runToolScorerCall = async (args: {
   const raw = await callTool({
     // Grading with a tool still runs the tool.
     guardrails: 'apply',
-    projectIds: [args.projectId],
+    projectId: args.projectId,
+    reach: 'project',
     id: toolId,
     action:
       typeof args.scorer.action === 'string' ? args.scorer.action : undefined,

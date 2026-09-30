@@ -91,6 +91,7 @@ const adjudicate = async (gateArgs: {
   args: {
     tool: CallableToolDefinition;
     toolProjectId: number;
+    callerProjectId?: number;
     guardrails: ToolCallGuardrailMode;
     toolPublicId?: string | null;
     toolGuardrailIds?: string[] | null;
@@ -105,14 +106,17 @@ const adjudicate = async (gateArgs: {
     return { input: args.input ?? {}, guardrailIds: [] };
   }
 
+  const crossProject =
+    args.callerProjectId !== undefined &&
+    args.callerProjectId !== args.toolProjectId;
   return assertToolCallAllowed({
     toolId: args.toolPublicId ?? null,
     toolName: args.tool.name,
-    toolGuardrailIds: args.toolGuardrailIds,
+    toolGuardrailIds: crossProject ? null : args.toolGuardrailIds,
     action: args.action,
     input: args.input ?? {},
     presetParameters,
-    projectId: args.toolProjectId,
+    projectId: args.callerProjectId ?? args.toolProjectId,
     authHeader: args.authHeader,
   });
 };
@@ -120,6 +124,12 @@ const adjudicate = async (gateArgs: {
 type CallResolvedToolArgs = {
   tool: CallableToolDefinition;
   toolProjectId: number;
+  /**
+   * The project the call is metered and gated in when the tool is another
+   * project's, reached through a share. The tool's own guardrails name
+   * guardrails in its project, so they do not apply to such a call.
+   */
+  callerProjectId?: number;
   /**
    * Whether a guardrail gate has already adjudicated this call. Required, so a
    * dispatch path cannot reach a tool without saying which it is — every path
@@ -140,6 +150,53 @@ type CallResolvedToolArgs = {
   toolContext?: Record<string, string>;
   // Who the call's executions are metered against; a pipeline's steps inherit it.
   attribution: ToolCallAttribution;
+};
+
+/**
+ * One pipeline step: an inline definition runs in the pipeline's project, a
+ * `tool_id` resolves in the pipeline's reach. Either is still the pipeline
+ * caller's work, metered and gated where the pipeline was called.
+ */
+const callPipelineStep = (args: {
+  step: Parameters<PipelineStepCaller>[0];
+  pipeline: CallResolvedToolArgs;
+  attribution: ToolCallAttribution;
+  // `callResolvedTool` itself, passed in so the two need no forward reference.
+  callResolved: (args: CallResolvedToolArgs) => Promise<unknown>;
+}): Promise<unknown> => {
+  const { step, pipeline, attribution } = args;
+  // A step is the pipeline's own work, so it inherits the context the pipeline
+  // was called with — the same rule a nested orchestration run follows.
+  const shared = {
+    action: step.action,
+    input: step.input,
+    authHeader: pipeline.authHeader,
+    remainingDepth: step.remainingDepth,
+    toolContext: pipeline.toolContext,
+    attribution,
+  };
+  if (step.tool) {
+    assertEphemeralTypeSupported(step.tool);
+    return args.callResolved({
+      tool: step.tool,
+      toolProjectId: pipeline.toolProjectId,
+      callerProjectId: pipeline.callerProjectId,
+      // An inline step definition has no Tool row and so no tool-scoped
+      // guardrail of its own, but the project's still governs it.
+      guardrails: 'apply',
+      ...shared,
+    });
+  }
+  return callTool({
+    projectId: pipeline.toolProjectId,
+    reach: 'shares',
+    callerProjectId: pipeline.callerProjectId,
+    id: step.toolId as string,
+    // A step is a call of that tool like any other: its own guardrails govern
+    // it here exactly as they would a direct call.
+    guardrails: 'apply',
+    ...shared,
+  });
 };
 
 export const callResolvedTool = async (
@@ -178,39 +235,11 @@ export const callResolvedTool = async (
       input,
       remainingDepth: args.remainingDepth,
       callStep: (step: Parameters<PipelineStepCaller>[0]) => {
-        if (step.tool) {
-          assertEphemeralTypeSupported(step.tool);
-          return callResolvedTool({
-            tool: step.tool,
-            toolProjectId: args.toolProjectId,
-            // An inline step definition has no Tool row and so no tool-scoped
-            // guardrail of its own, but the project's still governs it.
-            guardrails: 'apply',
-            action: step.action,
-            input: step.input,
-            authHeader: args.authHeader,
-            remainingDepth: step.remainingDepth,
-            // A step is the pipeline's own work, so it inherits the context the
-            // pipeline was called with — the same rule a nested orchestration
-            // run follows.
-            toolContext: args.toolContext,
-            attribution,
-          });
-        }
-        return callTool({
-          // A step names a tool in the pipeline's own project, whoever calls
-          // the pipeline.
-          projectIds: [args.toolProjectId],
-          id: step.toolId as string,
-          // A step is a call of that tool like any other: its own guardrails
-          // govern it here exactly as they would a direct call.
-          guardrails: 'apply',
-          action: step.action,
-          input: step.input,
-          authHeader: args.authHeader,
-          remainingDepth: step.remainingDepth,
-          toolContext: args.toolContext,
+        return callPipelineStep({
+          step,
+          pipeline: args,
           attribution,
+          callResolved: callResolvedTool,
         });
       },
     });
@@ -229,6 +258,7 @@ export const callResolvedTool = async (
     authHeader: args.authHeader,
     meter: {
       projectId: args.toolProjectId,
+      callerProjectId: args.callerProjectId,
       toolId: args.toolPublicId ?? null,
       attribution,
     },

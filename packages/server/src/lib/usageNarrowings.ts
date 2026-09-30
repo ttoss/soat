@@ -32,6 +32,7 @@ export type UsageNarrowings = {
   generationId?: string;
   traceId?: string;
   toolId?: string;
+  publisherProjectId?: string;
 };
 
 /**
@@ -67,6 +68,7 @@ const WIRE_NAMES = {
   generationId: 'generation_id',
   traceId: 'trace_id',
   toolId: 'tool_id',
+  publisherProjectId: 'publisher_project_id',
 } as const satisfies Record<keyof UsageNarrowings, string>;
 
 type WireName<K extends keyof UsageNarrowings> = (typeof WIRE_NAMES)[K];
@@ -80,7 +82,8 @@ type IdNarrowingKey =
   | 'orchestrationRunId'
   | 'sessionId'
   | 'toolId'
-  | 'traceId';
+  | 'traceId'
+  | 'publisherProjectId';
 
 // Which table each id narrowing resolves against.
 const ID_NARROWINGS: ReadonlyArray<{
@@ -96,6 +99,7 @@ const ID_NARROWINGS: ReadonlyArray<{
   { key: 'generationId', resource: 'generation' },
   { key: 'traceId', resource: 'trace' },
   { key: 'toolId', resource: 'tool' },
+  { key: 'publisherProjectId', resource: 'publisherProject' },
 ];
 
 /** The rest: matched against the event's own column, no lookup. */

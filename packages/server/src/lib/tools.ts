@@ -11,6 +11,7 @@ import {
 } from './pipelineTools';
 import { assertProjectAcceptsWork } from './projectPause';
 import { makeResourceAccessor } from './resourceAccessor';
+import { type ReferenceReach, toolReferences } from './resourceReferences';
 import { assertSecretRefsExist } from './secrets';
 import { validateSoatActions } from './soatActionValidation';
 import { validateExecuteAuth } from './toolAuth';
@@ -411,7 +412,16 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
 // A thin DB-backed wrapper around `callResolvedTool` (toolsCall.ts), which
 // holds the actual per-type dispatch logic shared with `callEphemeralTool`.
 export const callTool = async (args: {
-  projectIds?: number[];
+  /** The project that references the tool; also where the call is metered. */
+  projectId: number;
+  /** Whether the reference may be a tool another project shares with it. */
+  reach: ReferenceReach;
+  /**
+   * Where the call is metered and gated when that is not `projectId`: a
+   * pipeline step resolves in the pipeline's project but is still its
+   * caller's work.
+   */
+  callerProjectId?: number;
   id: string;
   /**
    * Whether a guardrail gate has already adjudicated this call — see
@@ -436,15 +446,19 @@ export const callTool = async (args: {
    */
   attribution: ToolCallAttribution;
 }): Promise<unknown> => {
-  const toolInstance = await tools.getByPublicId({
-    projectIds: args.projectIds,
+  const referenced = await toolReferences.find({
     id: args.id,
+    projectId: args.projectId,
+    reach: args.reach,
   });
+  if (!referenced) throw tools.notFound(args.id);
+  const toolInstance = await tools.reload(referenced);
   const foundTool = mapTool(toolInstance);
 
   return callResolvedTool({
     tool: toCallableTool(foundTool),
     toolProjectId: toolInstance.projectId,
+    callerProjectId: args.callerProjectId ?? args.projectId,
     guardrails: args.guardrails,
     toolPublicId: foundTool.id,
     toolGuardrailIds: foundTool.guardrail_ids,
@@ -460,20 +474,14 @@ export const callTool = async (args: {
 
 /**
  * {@link callTool} for a call that is new work in its own right — the direct
- * `POST /tools/{id}/call` — refused while the tool's project is paused. The
- * calls a generation, a run node or a scorer makes are the work of something
- * already admitted, so they go through `callTool` and stop at that owner's own
- * checkpoint.
+ * `POST /tools/{id}/call`, a trigger firing — refused while the calling
+ * project is paused. The calls a generation, a run node or a scorer makes are
+ * the work of something already admitted, so they go through `callTool` and
+ * stop at that owner's own checkpoint.
  */
 export const startToolCall = async (
   args: Parameters<typeof callTool>[0]
 ): Promise<unknown> => {
-  const toolInstance = await tools.getByPublicId({
-    projectIds: args.projectIds,
-    id: args.id,
-  });
-  await assertProjectAcceptsWork({
-    projectId: toolInstance.projectId as number,
-  });
+  await assertProjectAcceptsWork({ projectId: args.projectId });
   return callTool(args);
 };

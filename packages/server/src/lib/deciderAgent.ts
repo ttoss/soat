@@ -56,6 +56,7 @@ export const findDeciderAgent = async (args: {
   const agent = await agentReferences.find({
     id: args.agentPublicId,
     projectId: args.projectId,
+    reach: 'project',
   });
   if (!agent) {
     throw new DomainError(

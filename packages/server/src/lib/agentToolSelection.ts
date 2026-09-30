@@ -53,6 +53,7 @@ export const resolveToolIdsToNames = async (args: {
   const found = await toolReferences.findMany({
     ids: args.toolIds,
     projectId: args.projectId,
+    reach: 'shares',
   });
 
   const map: Record<string, string> = {};
