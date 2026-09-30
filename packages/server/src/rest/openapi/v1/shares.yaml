@@ -415,11 +415,23 @@ paths:
         terminal. Each project whose acceptance was active gets a
         `share_revoked` activity entry. As a grantee (`project_id`, or a
         credential scoped to it), revokes that project's own acceptance, which
-        it may accept again later. Idempotent.
+        it may accept again later; while the project's own resources still name
+        the shared resource (see `GET /api/v1/shares/{share_id}/references`),
+        that answers `409 SHARE_IN_USE` unless `force=true`. A publisher's
+        revoke is never refused on that account. Idempotent.
       operationId: revokeShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
+        - name: force
+          in: query
+          required: false
+          description: >-
+            As a grantee, revoke even while the project's resources name the
+            shared resource; they degrade as for a revoked share.
+          schema:
+            type: boolean
+            default: false
       requestBody:
         required: false
         content:
@@ -461,6 +473,68 @@ paths:
           description: >-
             Share not found, not addressed to the project, or never accepted by
             it
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            `SHARE_IN_USE`: the grantee's resources still name the shared
+            resource. `error.meta.references` lists them.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/references:
+    get:
+      tags:
+        - Shares
+      summary: List a grantee's references to a shared resource
+      description: >-
+        The grantee project's own resources that name the resource the share
+        grants: agents binding a shared tool, pipelines stepping through it,
+        ingestion rules converting with it, orchestrations, triggers and
+        formations naming it. What degrades if the project revokes its
+        acceptance, and what `409 SHARE_IN_USE` lists. The grantee is named by
+        `project_id` or by its scoped credential; the publisher holds none of
+        these and is answered `400`.
+      operationId: listShareReferences
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+        - name: project_id
+          in: query
+          description: The grantee project whose references to list.
+          schema:
+            type: string
+            example: proj_Q1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The grantee's references
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShareReference'
+        '400':
+          description: The caller acts as the publisher
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found, or not addressed to the project
           content:
             application/json:
               schema:
@@ -626,6 +700,27 @@ components:
         type: string
         example: shr_acc_V1StGXR8Z5jdHi6B
   schemas:
+    ShareReference:
+      type: object
+      description: One of the grantee project's resources naming the shared resource.
+      required:
+        - type
+        - id
+      properties:
+        type:
+          type: string
+          enum:
+            - agent
+            - tool
+            - ingestion_rule
+            - orchestration
+            - trigger
+            - formation
+          description: The kind of the grantee's resource.
+        id:
+          type: string
+          description: Its public ID.
+          example: agent_V1StGXR8Z5jdHi6B
     Share:
       type: object
       properties:

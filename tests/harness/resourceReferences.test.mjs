@@ -45,6 +45,8 @@ describe('tool and agent references', () => {
     'lib/sessions.ts':
       'narrows a listing already scoped to the caller, and reads by internal id',
     'lib/shareableTypes.ts': 'the publisher reading its own resource',
+    'lib/shareReferences.ts':
+      "finds a grantee's resources naming a shared resource",
     'lib/tools.ts': "lists the caller's tools",
     'lib/traceContentPolicy.ts': "reads the running agent's own policy",
     'lib/usageGenerationAttribution.ts':

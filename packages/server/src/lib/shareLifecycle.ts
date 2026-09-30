@@ -14,6 +14,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { type ActivityKind, emitActivityEntry } from './activity';
+import { findShareReferences } from './shareReferences';
 import {
   acceptanceIncludes,
   findOwnAcceptance,
@@ -265,10 +266,34 @@ export const revokeResourceShares = async (args: {
   }
 };
 
-/** A grantee withdrawing its own acceptance; it may accept again later. */
+const assertNotInUse = async (args: {
+  share: ShareRow;
+  projectId: number;
+  force?: boolean;
+}): Promise<void> => {
+  if (args.force) return;
+  const references = await findShareReferences({
+    resourceType: args.share.resourceType,
+    resourceId: args.share.resourceId,
+    projectId: args.projectId,
+  });
+  if (references.length === 0) return;
+  throw new DomainError(
+    'SHARE_IN_USE',
+    `This project still names the resource of share '${args.share.publicId}'; pass force=true to revoke anyway.`,
+    { references }
+  );
+};
+
+/**
+ * A grantee withdrawing its own acceptance; it may accept again later. Refused
+ * with `SHARE_IN_USE` while the project still names the resource, unless
+ * `force`.
+ */
 export const revokeOwnAcceptance = async (args: {
   id: string;
   projectId: number;
+  force?: boolean;
 }): Promise<MappedShare> => {
   const share = await shares.getByPublicId({ id: args.id });
   const acceptance = await findOwnAcceptance({
@@ -282,6 +307,11 @@ export const revokeOwnAcceptance = async (args: {
     );
   }
   if (acceptance.status === 'active') {
+    await assertNotInUse({
+      share,
+      projectId: args.projectId,
+      force: args.force,
+    });
     await acceptance.update({
       status: 'revoked',
       revokedBy: 'consumer',

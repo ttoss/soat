@@ -85,10 +85,12 @@ The publisher authorizes against `srn:<publisher>:share:<id>`, a grantee against
 Revoke applies to one acceptance or to the whole share:
 
 - [`POST /api/v1/shares/{share_id}/revoke`](/docs/api/shares/revoke-share) as the publisher revokes the whole share and every acceptance.
-- The same route as a grantee revokes that project's own acceptance (`revoked_by: consumer`). The project may accept again later.
+- The same route as a grantee revokes that project's own acceptance (`revoked_by: consumer`). The project may accept again later. While any of the project's own resources still names the shared resource, it answers `409 SHARE_IN_USE` with those resources in `meta.references`; `force=true` revokes anyway, and each of them then resolves nothing, as below.
 - [`POST /api/v1/shares/{share_id}/acceptances/{acceptance_id}/revoke`](/docs/api/shares/revoke-share-acceptance) is the publisher cutting one consumer (`revoked_by: publisher`). That project's next accept is `403 SHARE_REVOKED` until the publisher deletes the acceptance with [`DELETE /api/v1/shares/{share_id}/acceptances/{acceptance_id}`](/docs/api/shares/delete-share-acceptance).
 
 Accepting a suspended share records the acceptance, which grants nothing until the share is resumed.
+
+[`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources: every agent, pipeline, ingestion rule, orchestration, trigger and formation of that project naming the shared resource, as `{ type, id }`. The publisher's revoke is never refused.
 
 ### Consumers are told
 

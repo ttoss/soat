@@ -5675,6 +5675,22 @@ if [ "$SHARED_CALLS" -lt 1 ]; then
   echo "ERROR: The grantee's call through the share was not metered in the grantee" >&2
   exit 1
 fi
+
+echo "--- A grantee revoke is held while its resources name the shared tool ---"
+REFERRING_TRIGGER_ID=$($SOAT_CLI create-trigger --project-id "$SHARE_GRANTEE_ID" \
+  --name smoke-share-ref-trigger --type manual \
+  --target-type tool --target-id "$CALLED_TOOL_ID" | jq -r '.id')
+if ! $SOAT_CLI list-share-references --share-id "$CALLED_SHARE_ID" \
+  --project-id "$SHARE_GRANTEE_ID" \
+  | jq -e --arg id "$REFERRING_TRIGGER_ID" '.data | any(.id == $id)' >/dev/null; then
+  echo "ERROR: The grantee's trigger is missing from the share's references" >&2
+  exit 1
+fi
+expect_cli_error_status 409 revoke-share --share-id "$CALLED_SHARE_ID" \
+  --project-id "$SHARE_GRANTEE_ID"
+$SOAT_CLI revoke-share --share-id "$CALLED_SHARE_ID" \
+  --project-id "$SHARE_GRANTEE_ID" --force true >/dev/null
+$SOAT_CLI delete-trigger --trigger-id "$REFERRING_TRIGGER_ID" >/dev/null
 $SOAT_CLI delete-tool --tool-id "$CALLED_TOOL_ID" --force true >/dev/null
 
 echo "--- A grantee session on a shared agent outlives the agent ---"

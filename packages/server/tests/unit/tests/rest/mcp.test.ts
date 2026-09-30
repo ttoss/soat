@@ -1412,7 +1412,7 @@ describe('MCP tools - happy path', () => {
       expect(result.projection.name).toBe('mcp-shared');
     });
 
-    test('accept-share, suspend-share, resume-share and revoke-share', async () => {
+    test('accept-share, list-share-references, suspend-share, resume-share and revoke-share', async () => {
       const accepted = parseResult(
         await mcpCall('accept-share', {
           share_id: shareId,
@@ -1420,6 +1420,14 @@ describe('MCP tools - happy path', () => {
         })
       );
       expect(accepted.status).toBe('active');
+
+      const references = parseResult(
+        await mcpCall('list-share-references', {
+          share_id: shareId,
+          project_id: granteeProjectId,
+        })
+      );
+      expect(references.data).toEqual([]);
 
       const listed = parseResult(
         await mcpCall('list-share-acceptances', { share_id: shareId })
