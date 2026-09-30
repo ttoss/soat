@@ -65,6 +65,7 @@ const UNATTRIBUTED: GenerationEventAttribution = {
   sessionId: null,
   triggerId: null,
   actionId: null,
+  publisherProjectId: null,
 };
 
 /**

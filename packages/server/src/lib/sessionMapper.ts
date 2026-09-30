@@ -11,7 +11,8 @@ import type { UsageTotals } from './usageTotals';
 
 const extractSessionIds = (session: SessionRow) => {
   return {
-    agent_id: session.agent?.publicId ?? null,
+    // The durable id outlives a shared agent its owner deleted.
+    agent_id: session.agentPublicId,
     conversation_id: session.conversation?.publicId ?? null,
     actor_id: session.actor?.publicId ?? null,
     // Null on a session that was not forked, and also on a fork whose parent

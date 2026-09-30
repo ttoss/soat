@@ -19,6 +19,7 @@ export type GenerationEventAttribution = Pick<
   | 'sessionId'
   | 'triggerId'
   | 'actionId'
+  | 'publisherProjectId'
 >;
 
 // Resolves the run's public id to its internal FK. Returns null when absent or
@@ -34,10 +35,24 @@ const resolveOrchestrationRunId = async (
   return (run?.id as number | undefined) ?? null;
 };
 
+// The agent's own project when it is not the generation's: the turn ran a
+// shared agent, recorded in the grantee.
+const resolvePublisherProjectId = async (
+  generation: InstanceType<(typeof db)['Generation']>
+): Promise<number | null> => {
+  if (!generation.agentId) return null;
+  const agent = await db.Agent.findByPk(generation.agentId, {
+    attributes: ['projectId'],
+  });
+  if (!agent || agent.projectId === generation.projectId) return null;
+  return agent.projectId;
+};
+
 export const readGenerationEventAttribution = async (
   generation: InstanceType<(typeof db)['Generation']>
 ): Promise<GenerationEventAttribution> => {
   return {
+    publisherProjectId: await resolvePublisherProjectId(generation),
     orchestrationRunId: await resolveOrchestrationRunId(
       generation.orchestrationRunId
     ),

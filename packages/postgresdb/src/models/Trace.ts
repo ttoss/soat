@@ -7,6 +7,7 @@ import {
   Table,
 } from '@ttoss/postgresdb';
 
+import { fillAgentPublicId } from '../utils/agentPublicId';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Agent } from './Agent';
 import { File } from './File';
@@ -31,10 +32,11 @@ import { Project } from './Project';
     { name: 'traces_root_trace_id_idx', fields: ['root_trace_id'] },
   ],
   hooks: {
-    beforeValidate: (instance: Trace) => {
+    beforeValidate: async (instance: Trace, options) => {
       if (!instance.publicId) {
         instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.trace);
       }
+      await fillAgentPublicId(instance, options);
     },
   },
 })
@@ -56,19 +58,24 @@ export class Trace extends Model {
   })
   declare project: Project;
 
+  // Null once the agent is deleted from another project: a shared agent's
+  // records belong to the project it ran in, and outlive the agent.
   @ForeignKey(() => {
     return Agent;
   })
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare agentId: number;
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare agentId: number | null;
 
   @BelongsTo(
     () => {
       return Agent;
     },
-    { onDelete: 'RESTRICT' }
+    { onDelete: 'SET NULL' }
   )
-  declare agent: Agent;
+  declare agent: Agent | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: false })
+  declare agentPublicId: string;
 
   @ForeignKey(() => {
     return File;

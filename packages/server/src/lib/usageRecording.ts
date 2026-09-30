@@ -50,10 +50,12 @@ const resolveBillingProvider = async (args: {
   servedAiProviderId?: string | null;
 }): Promise<{ id: number; provider: string } | null> => {
   if (args.servedAiProviderId) {
+    // A route's targets live beside the agent, which a grantee's turn does not.
     const served = await db.AiProvider.findOne({
       where: {
         publicId: args.servedAiProviderId,
-        projectId: args.generation.projectId,
+        projectId:
+          args.generation.agent?.projectId ?? args.generation.projectId,
       },
     });
     // Falls through to the pin when the row is gone (a delete racing the turn),
@@ -173,7 +175,8 @@ const writeGenerationEvent = async (args: {
     provider: attribution.provider,
     aiProviderId: attribution.aiProviderId,
     model,
-    projectId: generation.projectId,
+    // The agent's own provider is priced in its own project's book.
+    projectId: generation.agent?.projectId ?? generation.projectId,
   });
 
   const idempotencyKey = buildIdempotencyKey({
@@ -290,6 +293,7 @@ export const recordCompletionUsage = async (args: {
         actionId: null,
         documentId: null,
         memoryStoreId: null,
+        publisherProjectId: null,
         // A generation-less completion has no generation or agent row to
         // identify the workload by, so it labels itself: the same value that
         // names it in the idempotency key.

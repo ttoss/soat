@@ -149,6 +149,8 @@ export const executeAgentNode = async (args: {
   node: OrchestrationNode;
   state: Record<string, unknown>;
   projectIds: number[];
+  // The run's project, where the node's turn runs and is recorded.
+  projectId?: number;
   traceId: string | null;
   authHeader?: string;
   // Stamped onto the generation's usage event so spend rolls up per run, per
@@ -187,6 +189,7 @@ export const executeAgentNode = async (args: {
 
   const result = await createGeneration({
     projectIds,
+    runProjectId: args.projectId ?? projectIds[0],
     agentId,
     messages,
     parentTraceId: traceId,

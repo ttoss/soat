@@ -1,3 +1,7 @@
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
+
+import { db } from '../db';
+import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
 import {
   type ClientToolResult,
@@ -11,20 +15,59 @@ import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
 import { getGenerationPendingState } from './generationPendingState';
 import { getGeneration, updateGenerationRecord } from './generations';
+import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
 
+/**
+ * The agent a turn runs, as configured for the project it runs in.
+ *
+ * `runProjectId` names that project: the agent is its own, or another
+ * project's reached through an accepted share. A shared agent runs on its
+ * owner's configuration, with the run project in `project` and its own in
+ * `ownerProject`; its own guardrails name guardrails in its owner's project,
+ * so they do not apply.
+ */
 export const resolveAgentForGeneration = async (args: {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
 }): Promise<TypedAgent | null> => {
+  const reference =
+    args.runProjectId === undefined
+      ? null
+      : await agentReferences.find({
+          id: args.agentId,
+          projectId: args.runProjectId,
+          reach: 'shares',
+        });
+  if (args.runProjectId !== undefined && !reference) return null;
   const agent = await agents.findByPublicId({
     id: args.agentId,
-    projectIds: args.projectIds,
+    projectIds: reference ? [reference.projectId] : args.projectIds,
   });
+  if (!agent || !reference || agent.projectId === args.runProjectId) {
+    return agent as unknown as TypedAgent | null;
+  }
 
-  return agent as unknown as TypedAgent | null;
+  const runProject = await db.Project.findByPk(args.runProjectId);
+  if (!runProject) return null;
+  return {
+    ...agent.get(),
+    project: {
+      id: runProject.id,
+      publicId: runProject.publicId,
+      guardrailIds: runProject.guardrailIds,
+      maxChainGenerations: runProject.maxChainGenerations,
+      requirePricedModel: runProject.requirePricedModel,
+    },
+    ownerProject: {
+      id: agent.projectId,
+      publicId: agent.project.publicId,
+    },
+    guardrailIds: null,
+  };
 };
 
 // ── Recursion and chain guards ─────────────────────────────────────────────
@@ -100,6 +143,43 @@ export const buildChainGuardResult = (
   args: Omit<Parameters<typeof buildGuardResult>[0], 'kind'>
 ): GenerationResult => {
   return buildGuardResult({ ...args, kind: 'chain_limit' });
+};
+
+/**
+ * A stop-here depth-guard result when the recursion budget is spent, or null
+ * to proceed.
+ */
+export const buildDepthGuardIfExhausted = async (args: {
+  agentId: string;
+  projectIds?: number[];
+  runProjectId?: number;
+  maxDepth: number;
+  traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+}): Promise<GenerationResult | null> => {
+  if (args.maxDepth > 0) return null;
+
+  const depthAgent = await resolveAgentForGeneration({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
+  });
+  if (!depthAgent) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent '${args.agentId}' not found.`
+    );
+  }
+  return buildDepthGuardResult({
+    traceId: args.traceId,
+    projectId: depthAgent.project.id as number,
+    projectPublicId: depthAgent.project.publicId,
+    agentId: args.agentId,
+    generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
+  });
 };
 
 // ── DB Recovery ───────────────────────────────────────────────────────────

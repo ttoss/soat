@@ -152,7 +152,7 @@ POST /api/v1/conversations/:id/generate?wait=true
 { "agent_id": "agent_...", "stream": false }
 ```
 
-By default the call runs in the background and returns `202 Accepted` (`{ "status": "accepted", "conversation_id": "conv_..." }`); poll [`GET /conversations/:id/messages`](/docs/api/conversations/list-conversation-messages) for the reply. The agent is resolved **synchronously**, so an unknown `agent_id` is a `404`.
+By default the call runs in the background and returns `202 Accepted` (`{ "status": "accepted", "conversation_id": "conv_..." }`); poll [`GET /conversations/:id/messages`](/docs/api/conversations/list-conversation-messages) for the reply. The agent is resolved **synchronously**, so an unknown `agent_id` is a `404`. It is one of the conversation's project's own agents or one another project [shares](./shares.md#using-a-shared-agent) with it; a shared agent's turn is recorded and metered in the conversation's project.
 
 `?wait=true` blocks and returns the result inline; it is required to observe `requires_action` (client tools). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract.
 

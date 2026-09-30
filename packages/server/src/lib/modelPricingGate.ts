@@ -20,7 +20,7 @@
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { TypedAgent } from './agentGenerationTypes';
+import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import type { UnpricedRow } from './costEnforceability';
 import { resolveConsumerModelRoute } from './modelRouteDefaults';
 import { getEffectivePrice } from './priceBook';
@@ -59,7 +59,7 @@ type CandidateBinding = {
 const resolveCandidates = async (
   typedAgent: TypedAgent
 ): Promise<ModelCandidate[]> => {
-  const projectId = typedAgent.project.id as number;
+  const projectId = ownerProjectId(typedAgent);
   const route = await resolveConsumerModelRoute({
     projectId,
     modelRouteId: typedAgent.modelRoute?.publicId,
@@ -156,7 +156,8 @@ export const assertGenerationModelPriced = async (args: {
 }): Promise<void> => {
   if (args.typedAgent.project.requirePricedModel !== true) return;
 
-  const projectId = args.typedAgent.project.id as number;
+  // The price book the agent's own provider is priced in.
+  const projectId = ownerProjectId(args.typedAgent);
   const rows = await unpricedRows({
     projectId,
     candidates: await resolveCandidates(args.typedAgent),

@@ -130,6 +130,22 @@ const checkSessionExpiry = async (
   }
 };
 
+/**
+ * The agent a session runs. A grantee's session on a shared agent outlives the
+ * agent when its owner deletes it; such a session can be read but not run.
+ */
+const requireSessionAgent = (
+  session: InstanceType<(typeof db)['Session']>
+): InstanceType<(typeof db)['Agent']> => {
+  if (!session.agent) {
+    throw new DomainError(
+      'AGENT_NOT_FOUND',
+      `Session '${session.publicId}' names agent '${session.agentPublicId}', which no longer exists.`
+    );
+  }
+  return session.agent;
+};
+
 export const generateSessionResponse = async (args: {
   agentId: number;
   sessionId: string;
@@ -174,12 +190,7 @@ export const generateSessionResponse = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
-  // `agentId` is a NOT NULL foreign key with onDelete: 'CASCADE' (see
-  // Session model), so a Session row can never outlive its Agent — the
-  // `agent` include is always populated here. No null guard needed.
-  const agent = (
-    session as unknown as { agent: InstanceType<(typeof db)['Agent']> }
-  ).agent;
+  const agent = requireSessionAgent(session);
   // Both layers are caller-owned and a request value wins. The server-derived
   // identity keys are deliberately not pinned here — they are stamped at the
   // generation chokepoint, which covers every entry point uniformly;
@@ -363,14 +374,7 @@ const fetchSessionAndConversation = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
-  // `agentId` is a NOT NULL foreign key with onDelete: 'CASCADE' (see
-  // Session model), so a Session row can never outlive its Agent — the
-  // `agent` include is always populated here. No null guard needed.
-  const agent = (
-    session as unknown as {
-      agent: InstanceType<(typeof db)['Agent']>;
-    }
-  ).agent;
+  const agent = requireSessionAgent(session);
 
   return { session, conversation, agent };
 };

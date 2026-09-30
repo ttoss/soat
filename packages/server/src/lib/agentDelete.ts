@@ -11,6 +11,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
 import { agentVersionStore } from './agentVersionSnapshot';
+import type { Transaction } from './dbTransaction';
 import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
@@ -18,8 +19,11 @@ import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
 
 const log = createDebug('soat:agents');
 
+// The agent's own records. A shared agent's records in another project belong
+// to that project; its FK is `SET NULL`, so they outlive the agent.
 const findDependentIds = async (args: {
   agentId: number;
+  projectId: number;
 }): Promise<{
   generationIds: number[];
   traceIds: number[];
@@ -27,11 +31,11 @@ const findDependentIds = async (args: {
 }> => {
   const [generationRows, traceRows] = await Promise.all([
     db.Generation.findAll({
-      where: { agentId: args.agentId },
+      where: { agentId: args.agentId, projectId: args.projectId },
       attributes: ['id'],
     }),
     db.Trace.findAll({
-      where: { agentId: args.agentId },
+      where: { agentId: args.agentId, projectId: args.projectId },
       attributes: ['id', 'fileId'],
     }),
   ]);
@@ -57,12 +61,25 @@ const findDependentIds = async (args: {
 // self-referencing FKs are RESTRICT. Storage objects behind the traces' step
 // files are cleaned up only once the transaction commits: the row must be gone
 // before the object, or a concurrent read references bytes mid-delete.
+// The agent's sessions in its own project go with it; a grantee's sessions on
+// a shared agent keep their durable `agent_public_id`.
+const destroyOwnSessions = async (args: {
+  agent: InstanceType<typeof db.Agent>;
+  transaction?: Transaction;
+}): Promise<void> => {
+  await db.Session.destroy({
+    where: { agentId: args.agent.id, projectId: args.agent.projectId },
+    transaction: args.transaction,
+  });
+};
+
 const forceDeleteAgentWithDependents = async (args: {
   agent: InstanceType<typeof db.Agent>;
   agentId: number;
 }): Promise<void> => {
   const { generationIds, traceIds, fileIds } = await findDependentIds({
     agentId: args.agentId,
+    projectId: args.agent.projectId,
   });
 
   const files =
@@ -91,11 +108,8 @@ const forceDeleteAgentWithDependents = async (args: {
       );
     }
 
-    await db.Generation.destroy({
-      where: { agentId: args.agentId },
-      transaction,
-    });
-    await db.Trace.destroy({ where: { agentId: args.agentId }, transaction });
+    await db.Generation.destroy({ where: { id: generationIds }, transaction });
+    await db.Trace.destroy({ where: { id: traceIds }, transaction });
     if (fileIds.length > 0) {
       await db.File.destroy({ where: { id: fileIds }, transaction });
     }
@@ -105,6 +119,7 @@ const forceDeleteAgentWithDependents = async (args: {
       resourceDbId: args.agentId,
       transaction,
     });
+    await destroyOwnSessions({ agent: args.agent, transaction });
     await args.agent.destroy({ transaction });
   });
 
@@ -122,10 +137,10 @@ const countAgentDependents = async (
   traceCount: number;
   acceptedShareCount: number;
 }> => {
-  const agentId = agent.id as number;
+  const own = { agentId: agent.id as number, projectId: agent.projectId };
   const [generationCount, traceCount, acceptedShareCount] = await Promise.all([
-    db.Generation.count({ where: { agentId } }),
-    db.Trace.count({ where: { agentId } }),
+    db.Generation.count({ where: own }),
+    db.Trace.count({ where: own }),
     countAcceptedShares({ resourceType: 'agent', resourceId: agent.publicId }),
   ]);
   return { generationCount, traceCount, acceptedShareCount };
@@ -239,6 +254,7 @@ export const deleteAgent = async (args: {
     // RESTRICT); Actor.agentId is cleared automatically by the DB via
     // onDelete: 'SET NULL' on its own FK.
     await db.AgentVersion.destroy({ where: { agentId } });
+    await destroyOwnSessions({ agent });
     await agent.destroy();
   }
 

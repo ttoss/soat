@@ -33,6 +33,6 @@ export const assertNodeReferencesInProject = async (args: {
   await agentReferences.requireMany({
     ids: agentIds,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
 };

@@ -111,7 +111,7 @@ const resolveParticipantDbIds = async (args: {
       ? agentReferences.find({
           id: args.agentId,
           projectId: args.projectId,
-          reach: 'project',
+          reach: 'shares',
         })
       : null,
   ]);

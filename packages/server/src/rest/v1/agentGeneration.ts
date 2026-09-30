@@ -21,6 +21,7 @@ import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import { authorizeAgentWrite } from './agentAccess';
 import { parseIdempotencyKey } from './idempotencyKey';
+import { authorizeSharedUse } from './sharedAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
 const pipeStreamToResponse = async (
@@ -136,10 +137,12 @@ const buildGenerationArgs = (args: {
   ctx: Context;
   body: GenerateRequestBody;
   projectIds?: number[];
+  runProjectId?: number;
 }) => {
   const { ctx, body } = args;
   return {
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
     agentId: ctx.params.agent_id,
     messages: body.messages as GenerationInputMessage[],
     traceId: body.trace_id,
@@ -209,10 +212,21 @@ const resolveWait = (args: { ctx: Context; stream?: boolean }): boolean => {
 agentGenerationRouter.post(
   '/agents/:agent_id/generate',
   async (ctx: Context) => {
-    const { projectIds } = await authorizeAgentWrite({
+    // Through a share the turn runs, and is recorded, in the grantee project.
+    const shared = await authorizeSharedUse({
       ctx,
+      resourceType: 'agent',
+      resourceId: ctx.params.agent_id,
       action: 'agents:CreateAgentGeneration',
     });
+    const projectIds = shared
+      ? [shared.projectId]
+      : (
+          await authorizeAgentWrite({
+            ctx,
+            action: 'agents:CreateAgentGeneration',
+          })
+        ).projectIds;
 
     const body = ctx.request.body as GenerateRequestBody;
 
@@ -228,7 +242,12 @@ agentGenerationRouter.post(
       remedy: AGENT_SYSTEM_MESSAGE_REMEDY,
     });
 
-    const generationArgs = buildGenerationArgs({ ctx, body, projectIds });
+    const generationArgs = buildGenerationArgs({
+      ctx,
+      body,
+      projectIds,
+      runProjectId: shared?.projectId,
+    });
 
     if (!resolveWait({ ctx, stream: body.stream })) {
       respondAccepted({ ctx, accepted: await startGeneration(generationArgs) });

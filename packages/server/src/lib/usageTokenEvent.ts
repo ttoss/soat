@@ -141,6 +141,8 @@ export type TokenEventAttribution = {
   // What an embedding event embedded; null on every other event.
   documentId: number | null;
   memoryStoreId: number | null;
+  /** The project owning the agent, when the turn ran another project's. */
+  publisherProjectId: number | null;
   /**
    * The workload behind the spend when it is not production traffic (`eval`,
    * `eval_judge`); `null` for ordinary traffic. Required rather than optional so
@@ -182,6 +184,7 @@ export const persistTokenEvent = async (args: {
         actionId: attribution.actionId,
         documentId: attribution.documentId,
         memoryStoreId: attribution.memoryStoreId,
+        publisherProjectId: attribution.publisherProjectId,
         source: attribution.source,
         meterType: 'llm_tokens',
         provider: args.provider,

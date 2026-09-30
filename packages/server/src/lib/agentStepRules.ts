@@ -11,7 +11,7 @@
 import type { Tool, ToolChoice } from 'ai';
 import createDebug from 'debug';
 
-import type { TypedAgent } from './agentGenerationTypes';
+import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { resolveToolIdsToNames } from './agentToolSelection';
 import { readPromptCachingConfig } from './promptCaching';
 
@@ -182,7 +182,7 @@ export const resolveAgentStepRuleToolIdToName = async (
 ): Promise<Record<string, string>> => {
   return resolveStepRuleToolIdToName({
     stepRules: typedAgent.stepRules,
-    projectId: typedAgent.project.id as number,
+    projectId: ownerProjectId(typedAgent),
   });
 };
 

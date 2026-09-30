@@ -16,7 +16,8 @@ const log = createDebug('soat:generation-content');
  * write, so there is no second, unfiltered copy for a later edit to reach for.
  */
 export const suppressContentWrites = async (args: {
-  agentDbId: number;
+  agentDbId: number | null;
+  projectDbId: number;
   alreadyRedacted: boolean;
   updates: Record<string, unknown>;
 }): Promise<void> => {
@@ -31,6 +32,7 @@ export const suppressContentWrites = async (args: {
 
   const mode = await resolveAgentTraceContentMode({
     agentDbId: args.agentDbId,
+    projectDbId: args.projectDbId,
   });
   if (mode !== 'none') return;
 
@@ -57,6 +59,7 @@ export const suppressContentWrites = async (args: {
  */
 export const buildCreateContentColumns = async (args: {
   agentDbId: number;
+  projectDbId: number;
   metadata?: Record<string, unknown> | null;
   inputMessages?: unknown[] | null;
 }): Promise<Record<string, unknown>> => {
@@ -66,6 +69,7 @@ export const buildCreateContentColumns = async (args: {
   };
   await suppressContentWrites({
     agentDbId: args.agentDbId,
+    projectDbId: args.projectDbId,
     alreadyRedacted: false,
     updates: columns,
   });

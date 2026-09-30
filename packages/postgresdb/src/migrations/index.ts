@@ -25,6 +25,7 @@ import { usageEventDurablePublicIds } from './2026-09-26-usageEventDurablePublic
 import { deciderToolBackend } from './2026-09-27-deciderToolBackend';
 import { evalGroupBy } from './2026-09-29-evalGroupBy';
 import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
+import { agentRecordsOutliveAgent } from './2026-09-30-agentRecordsOutliveAgent';
 import { usageEventPublisherProject } from './2026-09-30-usageEventPublisherProject';
 
 /**
@@ -73,4 +74,5 @@ export const MIGRATIONS: Migration[] = [
   evalRunDeciderVersions,
   evalGroupBy,
   usageEventPublisherProject,
+  agentRecordsOutliveAgent,
 ];

@@ -58,15 +58,21 @@ export const generationRequestDigest = (args: CreateGenerationArgs): string => {
 export const replayIdempotentGeneration = async (args: {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
   idempotency: GenerationIdempotency;
 }): Promise<ReplayedGeneration | null> => {
-  const agent = await agents.getByPublicId({
-    id: args.agentId,
-    projectIds: args.projectIds,
-  });
+  // A key is scoped to the project the turn is recorded in.
+  const projectId =
+    args.runProjectId ??
+    (
+      await agents.getByPublicId({
+        id: args.agentId,
+        projectIds: args.projectIds,
+      })
+    ).projectId;
   const generation = await db.Generation.findOne({
     where: {
-      projectId: agent.projectId,
+      projectId,
       idempotencyKey: args.idempotency.key,
     },
     include: [{ model: db.Trace, as: 'trace' }],
@@ -124,6 +130,7 @@ export const claimKeyedGeneration = async <Prep>(args: {
       return replayIdempotentGeneration({
         agentId: request.agentId,
         projectIds: request.projectIds,
+        runProjectId: request.runProjectId,
         idempotency,
       });
     },

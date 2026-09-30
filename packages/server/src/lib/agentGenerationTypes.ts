@@ -56,6 +56,11 @@ export type TypedAgent = {
   version?: number;
   /** Staged rollout pointer, read by the served-version resolver. */
   activeRelease?: unknown;
+  /**
+   * The project the turn runs in: its records, usage, quotas, pause state and
+   * guardrails. The agent's own project, unless the agent is another
+   * project's, reached through a share.
+   */
   project: {
     id: unknown;
     publicId: string;
@@ -64,6 +69,12 @@ export type TypedAgent = {
     /** Absent on a config rebuilt without the project row; only `true` gates. */
     requirePricedModel?: boolean;
   };
+  /**
+   * The agent's own project, where its provider, model route, versions, tools
+   * and knowledge resolve. Set only when it is not {@link TypedAgent.project};
+   * read it through {@link ownerProjectId}.
+   */
+  ownerProject?: { id: number; publicId: string };
   // Exactly one of these is set (enforced on every agent write path by
   // `validateModelRouteExclusivity`): a pinned provider, or a model route whose
   // ordered targets resolve the completion model with failover.
@@ -220,4 +231,9 @@ export type AgentRunResult = {
   finishReason: string;
   output?: unknown;
   usage?: LanguageModelUsage;
+};
+
+/** The project the agent's own resources resolve in. */
+export const ownerProjectId = (typedAgent: TypedAgent): number => {
+  return (typedAgent.ownerProject?.id ?? typedAgent.project.id) as number;
 };

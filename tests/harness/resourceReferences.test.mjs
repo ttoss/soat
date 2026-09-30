@@ -28,7 +28,6 @@ describe('tool and agent references', () => {
     'lib/aiProviders.ts': "lists a provider's dependents",
     'lib/completionModel.ts':
       'reads back the internal id of an agent already resolved',
-    'lib/generations.ts': 'writes the record of the agent that is running',
     'lib/guardrailDryRun.ts': 'reads a display name for a report',
     'lib/guardrailRuntimeMetrics.ts': 'reads display names for a report',
     'lib/guardrails.ts': "lists a project's tools and agents",
@@ -48,7 +47,8 @@ describe('tool and agent references', () => {
     'lib/shareableTypes.ts': 'the publisher reading its own resource',
     'lib/tools.ts': "lists the caller's tools",
     'lib/traceContentPolicy.ts': "reads the running agent's own policy",
-    'lib/traceWrite.ts': 'writes the trace of the agent that is running',
+    'lib/usageGenerationAttribution.ts':
+      "reads a generation's own agent to name its publisher",
     'lib/usageToolRecording.ts': 'maps a metered call to its internal ids',
   };
 

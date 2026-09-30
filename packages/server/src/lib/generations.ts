@@ -28,6 +28,7 @@ import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { agentReferences } from './resourceReferences';
 import { rollUpUsageTotals } from './usageAggregate';
 import { withGenerationEmbeddingUsage } from './usageEmbeddingRecording';
 
@@ -173,8 +174,11 @@ const insertGenerationRecord = async (
   }
 ) => {
   const [agent, initiatorGeneration] = await Promise.all([
-    db.Agent.findOne({
-      where: { publicId: args.agentId, projectId: args.projectId },
+    // The agent that is running: the project's own, or one shared with it.
+    agentReferences.find({
+      id: args.agentId,
+      projectId: args.projectId,
+      reach: 'shares',
     }),
     findInitiatorGeneration({
       initiatorGenerationId: args.initiatorGenerationId,
@@ -199,6 +203,7 @@ const insertGenerationRecord = async (
   // is still created — the skeleton is what metering and audit read.
   const contentColumns = await buildCreateContentColumns({
     agentDbId: agent.id as number,
+    projectDbId: args.projectId,
     metadata: args.metadata,
     inputMessages: args.inputMessages,
   });
@@ -296,6 +301,7 @@ export const updateGenerationRecord = async (
   // written, so a future caller inherits the guarantee.
   await suppressContentWrites({
     agentDbId: gen.agentId,
+    projectDbId: gen.projectId,
     alreadyRedacted: gen.contentRedactedAt !== null,
     updates,
   });

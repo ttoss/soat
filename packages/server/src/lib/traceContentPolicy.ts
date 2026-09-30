@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { agentReferences } from './resourceReferences';
 
 const log = createDebug('soat:trace-content-policy');
 
@@ -242,16 +243,40 @@ const cachedMode = (cacheKey: string): TraceContentMode | undefined => {
   return cached.mode;
 };
 
+/**
+ * The mode of a record another project's shared agent wrote: the record is the
+ * run project's, so its project mode alone governs it.
+ */
+const runProjectModeSource = async (
+  projectDbId: number
+): Promise<{
+  traceContentMode: null;
+  project: InstanceType<(typeof db)['Project']>;
+} | null> => {
+  const project = await db.Project.findByPk(projectDbId, {
+    attributes: ['traceContentMode'],
+  });
+  return project ? { traceContentMode: null, project } : null;
+};
+
 /** Effective mode for an agent named by its **internal** id — the generation
- * update path, which reads the id off the generation row it already loaded. */
+ * update path, which reads the ids off the row it already loaded. */
 export const resolveAgentTraceContentMode = async (args: {
-  agentDbId: number;
+  agentDbId: number | null;
+  projectDbId: number;
 }): Promise<TraceContentMode> => {
-  const key = `db:${args.agentDbId}`;
+  const key = `db:${args.projectDbId}:${args.agentDbId}`;
   const hit = cachedMode(key);
   if (hit) return hit;
 
+  // A record whose agent is gone is a shared agent's, deleted by its owner.
+  if (args.agentDbId === null) {
+    return modeOf(await runProjectModeSource(args.projectDbId), key);
+  }
   const agent = await db.Agent.findByPk(args.agentDbId, projectInclude());
+  if (agent && agent.projectId !== args.projectDbId) {
+    return modeOf(await runProjectModeSource(args.projectDbId), key);
+  }
   return modeOf(agent, key);
 };
 
@@ -269,5 +294,14 @@ export const resolveTraceContentModeForAgent = async (args: {
     where: { publicId: args.agentPublicId, projectId: args.projectDbId },
     ...projectInclude(),
   });
-  return modeOf(agent, key);
+  if (agent) return modeOf(agent, key);
+  const shared = await agentReferences.find({
+    id: args.agentPublicId,
+    projectId: args.projectDbId,
+    reach: 'shares',
+  });
+  return modeOf(
+    shared ? await runProjectModeSource(args.projectDbId) : null,
+    key
+  );
 };

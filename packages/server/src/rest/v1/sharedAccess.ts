@@ -5,8 +5,15 @@ import { findSharedUse } from 'src/lib/resourceReferences';
 
 import { requireAuth } from './helpers';
 
-/** The grantee project a call runs in, and the project owning the resource. */
-export type SharedAccess = { projectId: number; ownerProjectId: number };
+/**
+ * The grantee project a call runs in, the project owning the resource, and the
+ * resource's internal id.
+ */
+export type SharedAccess = {
+  projectId: number;
+  ownerProjectId: number;
+  resourceDbId: number;
+};
 
 /**
  * The access a credential confined to one project has to another project's

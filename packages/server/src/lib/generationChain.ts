@@ -317,6 +317,7 @@ const resolveEffectiveLimit = (
 export const resolveChainOrRefuse = async (args: {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
   initiatorGenerationId?: string | null;
   traceId: string;
   parentTraceId?: string | null;
@@ -344,6 +345,7 @@ export const resolveChainOrRefuse = async (args: {
   const chainAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
   });
 
   const { limit, limitSource } = resolveEffectiveLimit(chainAgent);

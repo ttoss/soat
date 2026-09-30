@@ -975,7 +975,9 @@ Two fields are read from the live agent even during a rollout, consumed outside 
 
 ### Deletion
 
-Deleting an agent with dependent generations or traces, or one another project accepted a [share](./shares.md#accepted-shares-are-dependents) of, is `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generation_count` / `meta.trace_count` / `meta.accepted_share_count`; `?force=true` deletes the generations and traces with the agent, along with archived versions and each deleted trace's backing [file](./files.md) and stored bytes, and revokes the shares.
+Deleting an agent with dependent generations or traces, or one another project accepted a [share](./shares.md#accepted-shares-are-dependents) of, is `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generation_count` / `meta.trace_count` / `meta.accepted_share_count`; `?force=true` deletes the generations and traces with the agent, along with archived versions and each deleted trace's backing [file](./files.md) and stored bytes, and revokes the shares. The agent's sessions go with it.
+
+Only the agent's own project is counted and deleted. Generations, traces and sessions a grantee project recorded while running it through a [share](./shares.md#using-a-shared-agent) belong to that project, and keep `agent_id` after the agent is gone.
 
 ### Webhook Events
 

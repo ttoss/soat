@@ -471,26 +471,32 @@ const evaluateGenerationQuota = async (args: {
 export const evaluateGenerationQuotas = async (args: {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
   sessionId?: string;
 }): Promise<WindowedQuotaBreach | null> => {
   const now = new Date();
 
+  // A turn run in a named project is capped by that project's quotas, whoever
+  // owns the agent; the context builder settles whether it may run there.
   const agentWhere: Record<string, unknown> = { publicId: args.agentId };
-  if (args.projectIds !== undefined) agentWhere.projectId = args.projectIds;
+  if (args.runProjectId === undefined && args.projectIds !== undefined) {
+    agentWhere.projectId = args.projectIds;
+  }
   const agent = await db.Agent.findOne({
     where: agentWhere,
     attributes: ['id', 'projectId', 'publicId'],
   });
   if (!agent) return null;
+  const projectId = args.runProjectId ?? agent.projectId;
 
   const agentPublicId = agent.publicId;
   const actor = await resolveSessionActor({
-    projectId: agent.projectId,
+    projectId,
     sessionId: args.sessionId,
   });
 
   const quotas = (await db.Quota.findAll({
-    where: { projectId: agent.projectId, metric: ['tokens', 'cost_usd'] },
+    where: { projectId, metric: ['tokens', 'cost_usd'] },
   })) as QuotaInstance[];
 
   const matching = quotas.filter((quota) => {
@@ -511,7 +517,7 @@ export const evaluateGenerationQuotas = async (args: {
       quota,
       agentInternalId: agent.id,
       actorInternalId: actor?.id ?? null,
-      projectId: agent.projectId,
+      projectId,
       now,
     });
     if (breach) breaches.push(breach);
@@ -534,6 +540,7 @@ export const evaluateGenerationQuotas = async (args: {
 export const checkGenerationQuota = async (args: {
   agentId: string;
   projectIds?: number[];
+  runProjectId?: number;
   sessionId?: string;
 }): Promise<WindowedQuotaBreach | null> => {
   try {

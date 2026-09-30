@@ -92,6 +92,8 @@ type InternalGenerationResult =
 const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
   conversationId: string;
+  // The conversation's project, where the turn runs and is recorded.
+  runProjectId: number;
   messagesForModel: Array<{ role: string; content: unknown }>;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
@@ -101,6 +103,7 @@ const runAgentGeneration = async (args: {
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
+    runProjectId: args.runProjectId,
     messages: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
@@ -142,6 +145,7 @@ const runAgentGeneration = async (args: {
 const runGenerationForAgent = async (args: {
   generatingAgent: GenerationContext['generatingAgent'];
   conversationId: string;
+  runProjectId: number;
   messagesForModel: Array<{ role: string; content: unknown }>;
   model?: string;
   toolContext?: Record<string, string>;
@@ -153,6 +157,7 @@ const runGenerationForAgent = async (args: {
   return runAgentGeneration({
     agent: args.generatingAgent,
     conversationId: args.conversationId,
+    runProjectId: args.runProjectId,
     messagesForModel: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
@@ -184,7 +189,7 @@ export const resolveConversationAndAgent = async (args: {
   const generatingAgent = await agentReferences.find({
     id: args.agentId,
     projectId: conversation.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
 
   if (!generatingAgent) {
@@ -331,6 +336,7 @@ export const generateConversationMessage = async (args: {
   const genResult = await runGenerationForAgent({
     generatingAgent,
     conversationId: args.conversationId,
+    runProjectId: conversation.projectId,
     messagesForModel,
     model: args.model,
     toolContext: args.toolContext,

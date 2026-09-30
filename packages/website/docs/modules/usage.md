@@ -157,7 +157,9 @@ Every outbound tool call writes one `tool_execution` event: one `tool_call` comp
 
 #### Calls through a share
 
-A call on a tool another project [shares](./shares.md#using-a-shared-tool) with this one is metered here, in the calling project: its quotas, thresholds and `/usage` count it. The event names the publisher in `publisher_project_id` and the publisher's tool in `tool_id`; the publisher's project records nothing of the call. `publisher_project_id` narrows both [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and the aggregate, and `tool_id` accepts a shared tool's id. A call refused before it is sent is not metered, as for any tool. [Guardrails](./guardrails.md#guards-and-guardrail-context) read the same events live through `runtime.<module>.tool_calls.<window>` and `runtime.<module>.errors.<window>`.
+A call on a tool another project [shares](./shares.md#using-a-shared-tool) with this one is metered here, in the calling project: its quotas, thresholds and `/usage` count it. The event names the publisher in `publisher_project_id` and the publisher's tool in `tool_id`; the publisher's project records nothing of the call. `publisher_project_id` narrows both [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and the aggregate, and `tool_id` accepts a shared tool's id. A call refused before it is sent is not metered, as for any tool.
+
+A turn of an agent another project [shares](./shares.md#using-a-shared-agent) with this one is metered the same way: its `llm_tokens` events belong here, with `publisher_project_id` naming the publisher, `agent_id` its agent and `ai_provider_id` its provider, priced from the publisher's price book. The agent's own tool calls in that turn are calls through a share too. [Guardrails](./guardrails.md#guards-and-guardrail-context) read the same events live through `runtime.<module>.tool_calls.<window>` and `runtime.<module>.errors.<window>`.
 
 ### Storage metering
 

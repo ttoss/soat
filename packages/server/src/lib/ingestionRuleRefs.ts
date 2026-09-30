@@ -42,7 +42,7 @@ export const resolveConverterRefs = async (args: {
       const agent = await agentReferences.find({
         id: args.agentId,
         projectId: args.projectId,
-        reach: 'project',
+        reach: 'shares',
       });
       if (!agent) {
         throw new DomainError(
