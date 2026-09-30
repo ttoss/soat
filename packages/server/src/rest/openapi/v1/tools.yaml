@@ -370,7 +370,9 @@ paths:
       summary: Delete a tool
       description: >-
         Deletes a tool by ID. A tool that is a decider's backend is refused with
-        `409 TOOL_HAS_DEPENDENTS`.
+        `409 TOOL_HAS_DEPENDENTS`, and so is one another project has accepted a
+        share of, until `force=true`. Every share of the tool is revoked when
+        it is deleted.
       operationId: deleteTool
       x-soat-resource:
         kind: tool
@@ -381,6 +383,15 @@ paths:
           required: true
           schema:
             type: string
+        - name: force
+          in: query
+          required: false
+          description: >-
+            Delete the tool even when another project has accepted a share of
+            it, revoking those shares. A decider backend still refuses.
+          schema:
+            type: boolean
+            default: false
       responses:
         '204':
           description: Deleted
@@ -403,7 +414,9 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: The tool is a decider's backend
+          description: >-
+            The tool is a decider's backend, or has accepted shares and `force`
+            is not set
           content:
             application/json:
               schema:

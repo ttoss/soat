@@ -43,6 +43,7 @@ const UNSCOPED_SPECS = [
   'policies.yaml',
   'projects.yaml',
   'secrets.yaml',
+  'shares.yaml',
   'tags.yaml',
   'tasks.yaml',
   'triggers.yaml',

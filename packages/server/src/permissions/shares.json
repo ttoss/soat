@@ -1,0 +1,60 @@
+{
+  "module": "shares",
+  "operations": [
+    {
+      "operationId": "createShare",
+      "action": "shares:CreateShare",
+      "description": "Share one of the project's resources with another project"
+    },
+    {
+      "operationId": "listShares",
+      "action": "shares:ListShares",
+      "description": "List the shares a project published or received"
+    },
+    {
+      "operationId": "getShare",
+      "action": "shares:GetShare",
+      "description": "Get a share, as its publisher or as a grantee"
+    },
+    {
+      "operationId": "acceptShare",
+      "action": "shares:AcceptShare",
+      "description": "Accept a share addressed to the project"
+    },
+    {
+      "operationId": "suspendShare",
+      "action": "shares:SuspendShare",
+      "description": "Suspend a share, denying every acceptance until it is resumed"
+    },
+    {
+      "operationId": "resumeShare",
+      "action": "shares:SuspendShare",
+      "description": "Resume a suspended share"
+    },
+    {
+      "operationId": "revokeShare",
+      "action": "shares:RevokeShare",
+      "description": "Revoke a whole share as its publisher, or the project's own acceptance as a grantee"
+    },
+    {
+      "operationId": "listShareAcceptances",
+      "action": "shares:ListShares",
+      "description": "List the projects that accepted a share"
+    },
+    {
+      "operationId": "revokeShareAcceptance",
+      "action": "shares:RevokeShare",
+      "description": "Revoke one project's acceptance of a share"
+    },
+    {
+      "operationId": "deleteShare",
+      "action": "shares:DeleteShare",
+      "description": "Delete a share and its acceptances"
+    },
+    {
+      "operationId": "deleteShareAcceptance",
+      "action": "shares:DeleteShare",
+      "description": "Delete one project's acceptance, letting it accept again"
+    }
+  ]
+}

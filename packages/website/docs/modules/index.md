@@ -18,6 +18,7 @@ Who can do what, and with which credentials.
 - [IAM & Policies](./iam.md) — how permissions are evaluated
 - [Policies](./policies.md) — reusable policy documents granting `resource:Action` permissions
 - [API Keys](./api-keys.md) — project-scoped and personal keys with policy attachments
+- [Shares](./shares.md) — grant another project actions on one of your tools or agents
 - [OAuth](./oauth.md) — the OAuth flow used by MCP connectors
 
 ## Storage & Retrieval

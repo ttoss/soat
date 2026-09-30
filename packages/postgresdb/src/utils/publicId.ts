@@ -71,6 +71,8 @@ export const PUBLIC_ID_PREFIXES = {
   decider: 'dcd_',
   deciderVersion: 'dcd_ver_',
   decision: 'dec_',
+  share: 'shr_',
+  shareAcceptance: 'shr_acc_',
 } as const;
 
 /**

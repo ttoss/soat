@@ -25,14 +25,14 @@ No public create endpoint; entries are platform-written. The feed is read-only, 
 |---|---|---|
 | `id` | string | Public ID, `acte_` prefix |
 | `project_id` | string | Owning project |
-| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `tool_resolution_failed` |
+| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `share_resumed`, `share_revoked`, `share_suspended`, `tool_resolution_failed` |
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
 | `detail` | object \| null | Kind-specific structured context (tool id, node id, guardrail policy version) |
 | `orchestration_run_id` | string \| null | Originating orchestration run, if any |
 | `agent_id` | string \| null | Associated agent, if any |
 | `generation_id` | string \| null | Agent generation the entry was produced during, if any |
-| `ref_id` | string \| null | Producer-specific reference (the approval, exception, or trigger id the entry came from, or the executed tool's id) |
+| `ref_id` | string \| null | Producer-specific reference (the approval, exception, share or trigger id the entry came from, or the executed tool's id) |
 | `created_at` | string | Append-only timestamp |
 
 `orchestration_run_id` / `agent_id` / `generation_id` / `guardrail_version` are bare public ids, not foreign keys, matching [Exceptions](./exceptions.md#exceptionitem). Node id and guardrail policy version live in `detail`; the provenance every kind may share (`orchestration_run_id`, `agent_id`, `generation_id`, `ref_id`) are indexed columns.
@@ -77,6 +77,9 @@ Severity defaults per kind, and a producer may override it:
 | `approval_resolved` | `info` | Routine autonomous operation |
 | `exception_created` | `warning` | An exception was already filed — an anomaly, by definition |
 | `schedule_fired` | `info` | Routine autonomous operation |
+| `share_resumed` | `info` | An accepted share is granted again |
+| `share_revoked` | `warning` | Something the project accepted stopped being granted, for good |
+| `share_suspended` | `warning` | Something the project accepted stopped being granted |
 | `tool_resolution_failed` | `warning` | The turn ran without tools it was configured to have |
 
 `exception_created` **inherits the filed [exception](./exceptions.md#severity)'s severity**, so a `run_failed` exception (`critical`) records a `critical` entry; the `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity=critical` surfaces entries a `kind` filter cannot.
@@ -117,6 +120,7 @@ One producer per kind:
 - **`approval_resolved`** — subscribes to `approvals.approved` / `approvals.rejected`.
 - **`exception_created`** — subscribes to `exceptions.created` ([Exceptions](./exceptions.md#producers)).
 - **`schedule_fired`** — from the trigger scheduler's due-firing sweep, `source === 'schedule'` only; a manual or webhook [trigger](./triggers.md) fire does not produce it.
+- **`share_suspended`, `share_resumed`, `share_revoked`** — from the [shares](./shares.md#consumers-are-told) lifecycle, in each consumer project whose acceptance the publisher's suspend, resume, revoke or delete reached. `ref_id` is the share; `detail` carries `share_id`, `resource` and `publisher_project_id`.
 - **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding contributed no tool to the turn. `detail` carries `tool_id`, `tool_type`, `tool_name` and `reason`, and the entry's `generation_id` names the turn. The `reason` separates the cases:
 
   | `reason` | What happened |

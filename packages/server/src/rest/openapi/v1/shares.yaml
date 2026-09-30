@@ -1,0 +1,719 @@
+openapi: 3.0.3
+info:
+  title: SOAT Shares API
+  version: 1.0.0
+  description: >-
+    API for granting actions on one resource to another project (Shares
+    resource)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Shares
+    description: Share a tool or an agent with another project
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/shares:
+    post:
+      tags:
+        - Shares
+      summary: Create a share
+      description: >-
+        Offers one of the project's resources to another project — or, with
+        `grantee: "*"`, to every project — with the listed actions. The share
+        grants nothing until the grantee accepts it. `grantee: "*"` is refused
+        with `403 PUBLIC_SHARES_DISABLED` unless the deployment sets
+        `SHARES_ALLOW_PUBLIC=true`.
+      operationId: createShare
+      x-soat-agent-exclude: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - resource
+                - actions
+                - grantee
+              additionalProperties: false
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: >-
+                    The publishing project (required if not using project key
+                    auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                resource:
+                  type: string
+                  description: >-
+                    The SRN of one resource in the publishing project,
+                    `srn:<project_id>:<type>:<id>`. No wildcard.
+                  example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
+                actions:
+                  type: array
+                  minItems: 1
+                  description: >-
+                    The actions granted: `tools:CallTool` for a `tool`,
+                    `agents:CreateAgentGeneration` for an `agent`. Any other
+                    action is `400 VALIDATION_FAILED`.
+                  items:
+                    type: string
+                  example: [tools:CallTool]
+                grantee:
+                  type: string
+                  description: >-
+                    The project the share is offered to, or `*` for every
+                    project. Never the publishing project itself.
+                  example: proj_Q1StGXR8Z5jdHi6B
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          description: >-
+            The resource is not one shareable SRN in the project, an action is
+            not grantable for its type, the grantee is invalid, or the resource
+            does not exist (`TOOL_NOT_FOUND` / `AGENT_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden, or a public share on a deployment that disables them
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Shares
+      summary: List shares
+      description: >-
+        With `role=publisher` (the default), the shares the project published.
+        With `role=grantee`, the shares addressed to the project and the public
+        shares it accepted, each with the project's own `acceptance`. A public
+        share the project never accepted is not listed.
+      operationId: listShares
+      parameters:
+        - name: project_id
+          in: query
+          description: >-
+            Project ID (required if not using project key auth, and always for
+            `role=grantee`)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: role
+          in: query
+          description: Which side of the shares to list
+          schema:
+            type: string
+            enum: [publisher, grantee]
+            default: publisher
+        - name: resource
+          in: query
+          description: Only shares of this resource SRN (`role=publisher` only)
+          schema:
+            type: string
+            example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of shares
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Share'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '400':
+          description: '`role=grantee` with no project'
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}:
+    get:
+      tags:
+        - Shares
+      summary: Get a share
+      description: >-
+        Returns a share with the grantee's view of the resource in
+        `projection`. The publisher reads any of its shares; a grantee project,
+        named by `project_id` or by its scoped credential, reads a share
+        addressed to it or a public one, with its own `acceptance`.
+      operationId: getShare
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+        - name: project_id
+          in: query
+          description: >-
+            The project the caller reads as. Omit, or name the publisher, for
+            the publisher's view; name a grantee project for its view.
+          schema:
+            type: string
+            example: proj_Q1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Share details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            Share not found, or not addressed to the project the caller reads as
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Shares
+      summary: Delete a share
+      description: >-
+        Deletes a share and every acceptance of it. Each project whose
+        acceptance was active gets a `share_revoked` activity entry.
+      operationId: deleteShare
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/accept:
+    post:
+      tags:
+        - Shares
+      summary: Accept a share
+      description: >-
+        Records the grantee project's acceptance, which is what makes the share
+        grant anything. Idempotent. A project that revoked its own acceptance
+        may accept again; one whose acceptance the publisher revoked answers
+        `403 SHARE_REVOKED` until the publisher deletes that acceptance. A
+        suspended share can be accepted and grants nothing until resumed.
+      operationId: acceptShare
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: >-
+                    The accepting project (required if not using project key
+                    auth)
+                  example: proj_Q1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The project's acceptance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareAcceptance'
+        '400':
+          description: No accepting project, or the publisher accepting its own share
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: >-
+            Forbidden, or `SHARE_REVOKED`: the share, or this project's
+            acceptance, was revoked by the publisher
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found, or not addressed to the project
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/suspend:
+    post:
+      tags:
+        - Shares
+      summary: Suspend a share
+      description: >-
+        Sets `suspended_at`, which denies every acceptance without removing
+        any. Reversible with resume; nobody re-accepts. Each project with an
+        active acceptance gets a `share_suspended` activity entry. Idempotent.
+      operationId: suspendShare
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+      responses:
+        '200':
+          description: Share suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden, or `SHARE_REVOKED`
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/resume:
+    post:
+      tags:
+        - Shares
+      summary: Resume a share
+      description: >-
+        Clears `suspended_at`. Each project with an active acceptance gets a
+        `share_resumed` activity entry. Idempotent.
+      operationId: resumeShare
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+      responses:
+        '200':
+          description: Share resumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden, or `SHARE_REVOKED`
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/revoke:
+    post:
+      tags:
+        - Shares
+      summary: Revoke a share
+      description: >-
+        As the publisher, revokes the whole share and every acceptance of it;
+        terminal. Each project whose acceptance was active gets a
+        `share_revoked` activity entry. As a grantee (`project_id`, or a
+        credential scoped to it), revokes that project's own acceptance, which
+        it may accept again later. Idempotent.
+      operationId: revokeShare
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: >-
+                    The project the caller revokes for. Omit, or name the
+                    publisher, to revoke the share; name a grantee project to
+                    revoke its acceptance.
+                  example: proj_Q1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: >-
+            The share after the revoke, with the grantee's `acceptance` when a
+            grantee revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            Share not found, not addressed to the project, or never accepted by
+            it
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/acceptances:
+    get:
+      tags:
+        - Shares
+      summary: List a share's acceptances
+      description: The projects that accepted the share, for its publisher.
+      operationId: listShareAcceptances
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+        - name: status
+          in: query
+          description: Only acceptances in this status
+          schema:
+            type: string
+            enum: [active, revoked]
+        - name: limit
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of acceptances
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShareAcceptance'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/acceptances/{acceptance_id}/revoke:
+    post:
+      tags:
+        - Shares
+      summary: Revoke an acceptance
+      description: >-
+        The publisher cutting one consumer. The acceptance is kept with
+        `revoked_by: publisher`, and a new accept from that project answers
+        `403 SHARE_REVOKED` until the publisher deletes it. The project gets a
+        `share_revoked` activity entry if the acceptance was active.
+      operationId: revokeShareAcceptance
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+        - $ref: '#/components/parameters/acceptance_id'
+      responses:
+        '200':
+          description: The revoked acceptance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareAcceptance'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share or acceptance not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  /api/v1/shares/{share_id}/acceptances/{acceptance_id}:
+    delete:
+      tags:
+        - Shares
+      summary: Delete an acceptance
+      description: >-
+        Removes one project's acceptance, which lets a project the publisher
+        revoked accept again. The project gets a `share_revoked` activity entry
+        if the acceptance was active.
+      operationId: deleteShareAcceptance
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+        - $ref: '#/components/parameters/acceptance_id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share or acceptance not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  parameters:
+    share_id:
+      name: share_id
+      in: path
+      required: true
+      description: Share ID
+      schema:
+        type: string
+        example: shr_V1StGXR8Z5jdHi6B
+    acceptance_id:
+      name: acceptance_id
+      in: path
+      required: true
+      description: Share acceptance ID
+      schema:
+        type: string
+        example: shr_acc_V1StGXR8Z5jdHi6B
+  schemas:
+    Share:
+      type: object
+      properties:
+        id:
+          type: string
+          example: shr_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: The publishing project
+        resource:
+          type: string
+          description: SRN of the shared resource
+          example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
+        actions:
+          type: array
+          items:
+            type: string
+          description: The actions the share grants
+        grantee:
+          type: string
+          description: The project the share is offered to, or `*`
+        suspended_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set while the share is suspended
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set once the publisher revoked the share
+        acceptance:
+          allOf:
+            - $ref: '#/components/schemas/ShareAcceptance'
+          nullable: true
+          description: >-
+            On a grantee's read only: that project's acceptance, or `null` when
+            it has none
+        projection:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: >-
+            On a single-share read only: what a grantee sees of the resource —
+            `id`, `name`, `description` and `parameters` for a tool; `id` and
+            `name` for an agent. `null` once the resource is gone.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ShareAcceptance:
+      type: object
+      properties:
+        id:
+          type: string
+          example: shr_acc_V1StGXR8Z5jdHi6B
+        share_id:
+          type: string
+          example: shr_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: The accepting project
+        status:
+          type: string
+          enum: [active, revoked]
+        revoked_by:
+          type: string
+          nullable: true
+          # `null` is a real value here (not revoked), so it belongs in the
+          # enum — otherwise the generated SDK type omits it.
+          enum: [publisher, consumer, null]
+          description: >-
+            Who revoked the acceptance. `publisher` refuses a new accept from
+            the same project until the publisher deletes the acceptance.
+        accepted_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

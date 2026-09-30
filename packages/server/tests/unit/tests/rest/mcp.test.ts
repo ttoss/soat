@@ -1364,6 +1364,103 @@ describe('MCP tools - happy path', () => {
     });
   });
 
+  // ── Shares ───────────────────────────────────────────────────────────────
+
+  describe('Shares tools', () => {
+    let granteeProjectId: string;
+    let shareId: string;
+    let createShareResult: { id: string; [key: string]: unknown };
+
+    beforeAll(async () => {
+      const granteeRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'MCP Share Grantee' });
+      granteeProjectId = granteeRes.body.id;
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({ project_id: projectId, name: 'mcp-shared', type: 'client' });
+
+      const res = await mcpCall('create-share', {
+        project_id: projectId,
+        resource: `srn:${projectId}:tool:${toolRes.body.id}`,
+        actions: ['tools:CallTool'],
+        grantee: granteeProjectId,
+      });
+      createShareResult = parseResult(res);
+      shareId = createShareResult.id;
+    });
+
+    test('create-share creates a share', () => {
+      expect(createShareResult.id).toMatch(/^shr_/);
+      expect(createShareResult.grantee).toBe(granteeProjectId);
+    });
+
+    test('list-shares returns the published share', async () => {
+      const res = await mcpCall('list-shares', { project_id: projectId });
+      expect(res.status).toBe(200);
+      const ids = parseResult(res).data.map((share: { id: string }) => {
+        return share.id;
+      });
+      expect(ids).toContain(shareId);
+    });
+
+    test('get-share returns the share with its projection', async () => {
+      const res = await mcpCall('get-share', { share_id: shareId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(shareId);
+      expect(result.projection.name).toBe('mcp-shared');
+    });
+
+    test('accept-share, suspend-share, resume-share and revoke-share', async () => {
+      const accepted = parseResult(
+        await mcpCall('accept-share', {
+          share_id: shareId,
+          project_id: granteeProjectId,
+        })
+      );
+      expect(accepted.status).toBe('active');
+
+      const listed = parseResult(
+        await mcpCall('list-share-acceptances', { share_id: shareId })
+      );
+      expect(listed.total).toBe(1);
+
+      expect(
+        parseResult(await mcpCall('suspend-share', { share_id: shareId }))
+          .suspended_at
+      ).not.toBeNull();
+      expect(
+        parseResult(await mcpCall('resume-share', { share_id: shareId }))
+          .suspended_at
+      ).toBeNull();
+
+      const cut = parseResult(
+        await mcpCall('revoke-share-acceptance', {
+          share_id: shareId,
+          acceptance_id: accepted.id,
+        })
+      );
+      expect(cut.revoked_by).toBe('publisher');
+
+      const deleted = await mcpCall('delete-share-acceptance', {
+        share_id: shareId,
+        acceptance_id: accepted.id,
+      });
+      expect(deleted.status).toBe(200);
+
+      expect(
+        parseResult(await mcpCall('revoke-share', { share_id: shareId }))
+          .revoked_at
+      ).not.toBeNull();
+    });
+
+    test('delete-share deletes the share', async () => {
+      const res = await mcpCall('delete-share', { share_id: shareId });
+      expect(res.status).toBe(200);
+    });
+  });
+
   // ── AI Providers ──────────────────────────────────────────────────────────
 
   describe('AI Providers tools', () => {

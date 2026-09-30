@@ -48,7 +48,11 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   DECISION_ANSWER_INVALID:
     "Make the tool answer `{ answers: { <question id>: { choice | score | value, probabilities? } } }` for every question; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
   TOOL_HAS_DEPENDENTS:
-    'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool.',
+    'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`.',
+  SHARE_REVOKED:
+    'A revoked share cannot be used again: ask the publisher for a new share. If the publisher revoked only your acceptance, it must delete that acceptance before you can accept again.',
+  PUBLIC_SHARES_DISABLED:
+    'Create the share with a project id as `grantee`, or ask the operator to set `SHARES_ALLOW_PUBLIC=true`.',
   DECISION_INTERRUPTED:
     'Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions`; nothing about the interrupted one can be resumed.',
   PROJECT_PAUSED:

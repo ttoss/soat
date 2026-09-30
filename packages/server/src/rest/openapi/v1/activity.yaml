@@ -58,6 +58,9 @@ paths:
                 approval_resolved,
                 exception_created,
                 schedule_fired,
+                share_resumed,
+                share_revoked,
+                share_suspended,
                 tool_resolution_failed,
               ]
         - name: severity
@@ -223,6 +226,9 @@ components:
               approval_resolved,
               exception_created,
               schedule_fired,
+              share_resumed,
+              share_revoked,
+              share_suspended,
               tool_resolution_failed,
             ]
           description: >-
@@ -232,6 +238,10 @@ components:
             nothing to attach — so the turn ran without it. The generation
             itself completes, carrying no error, so this is the only signal
             that it answered with fewer tools than it was configured to have.
+            `share_suspended`, `share_resumed` and `share_revoked` land in a
+            consumer project when the publisher of a share it accepted
+            suspends, resumes or revokes it; `ref_id` is the share and `detail`
+            names the resource and the publisher project.
         severity:
           type: string
           enum: [info, warning, critical]

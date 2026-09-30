@@ -14,6 +14,7 @@ import { agentVersionStore } from './agentVersionSnapshot';
 import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
+import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
 
 const log = createDebug('soat:agents');
 
@@ -115,13 +116,19 @@ const forceDeleteAgentWithDependents = async (args: {
 };
 
 const countAgentDependents = async (
-  agentId: number
-): Promise<{ generationCount: number; traceCount: number }> => {
-  const [generationCount, traceCount] = await Promise.all([
+  agent: InstanceType<typeof db.Agent>
+): Promise<{
+  generationCount: number;
+  traceCount: number;
+  acceptedShareCount: number;
+}> => {
+  const agentId = agent.id as number;
+  const [generationCount, traceCount, acceptedShareCount] = await Promise.all([
     db.Generation.count({ where: { agentId } }),
     db.Trace.count({ where: { agentId } }),
+    countAcceptedShares({ resourceType: 'agent', resourceId: agent.publicId }),
   ]);
-  return { generationCount, traceCount };
+  return { generationCount, traceCount, acceptedShareCount };
 };
 
 /**
@@ -171,15 +178,17 @@ export const findAgentDeletionBlocker = async (args: {
   if (deciderCount > 0) {
     return `Agent '${args.id}' is the agent of ${String(deciderCount)} decider(s), so it cannot be deleted.`;
   }
-  const { generationCount, traceCount } = await countAgentDependents(
-    agent.id as number
-  );
+  const { generationCount, traceCount, acceptedShareCount } =
+    await countAgentDependents(agent);
 
-  if (generationCount === 0 && traceCount === 0) return null;
+  if (generationCount === 0 && traceCount === 0 && acceptedShareCount === 0) {
+    return null;
+  }
 
   return (
-    `Agent '${args.id}' has ${String(generationCount)} dependent generation(s) ` +
-    `and ${String(traceCount)} trace(s), so it cannot be deleted.`
+    `Agent '${args.id}' has ${String(generationCount)} dependent generation(s), ` +
+    `${String(traceCount)} trace(s) and ${String(acceptedShareCount)} accepted ` +
+    `share(s), so it cannot be deleted.`
   );
 };
 
@@ -196,17 +205,27 @@ export const deleteAgent = async (args: {
 
   await assertNoDeciders({ agentId, publicId: args.id });
 
-  const { generationCount, traceCount } = await countAgentDependents(agentId);
+  const { generationCount, traceCount, acceptedShareCount } =
+    await countAgentDependents(agent);
+
+  if (
+    !args.force &&
+    (generationCount > 0 || traceCount > 0 || acceptedShareCount > 0)
+  ) {
+    throw new DomainError(
+      'AGENT_HAS_DEPENDENTS',
+      `Agent '${args.id}' has dependent generations, traces or accepted shares and cannot be deleted without force=true.`,
+      {
+        generation_count: generationCount,
+        trace_count: traceCount,
+        accepted_share_count: acceptedShareCount,
+      }
+    );
+  }
+
+  await revokeResourceShares({ resourceType: 'agent', resourceId: args.id });
 
   if (generationCount > 0 || traceCount > 0) {
-    if (!args.force) {
-      throw new DomainError(
-        'AGENT_HAS_DEPENDENTS',
-        `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`,
-        { generation_count: generationCount, trace_count: traceCount }
-      );
-    }
-
     log(
       'deleteAgent: force-cascading id=%s generations=%d traces=%d',
       args.id,
