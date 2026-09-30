@@ -117,6 +117,7 @@ export const resolveActorLinkedIds = async (args: {
         return agentReferences.find({
           id: where.publicId,
           projectId: where.projectId,
+          reach: 'project',
         });
       },
       errorCode: 'AGENT_NOT_FOUND',

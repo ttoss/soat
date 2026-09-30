@@ -127,6 +127,7 @@ const SCOPE_REF_TARGETS: Record<
       return agentReferences.find({
         id: String(where.publicId),
         projectId: Number(where.projectId),
+        reach: 'project',
       });
     },
   },

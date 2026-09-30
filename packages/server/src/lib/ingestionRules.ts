@@ -202,7 +202,6 @@ export const createIngestionRule = async (args: {
   );
 
   const toolType = await resolveConverterToolType({
-    projectId: args.projectId,
     toolId: args.toolId,
     agentId: args.agentId,
   });
@@ -346,7 +345,6 @@ export const updateIngestionRule = async (args: {
     args.chunkStrategy !== undefined ? args.chunkStrategy : rule.chunkStrategy;
 
   const toolType = await resolveConverterToolType({
-    projectId: rule.projectId,
     toolId: finalToolId,
     agentId: finalAgentId,
   });

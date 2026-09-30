@@ -93,6 +93,7 @@ export const assertAgentReferencesExist = async (args: {
       ...collectStepRuleActiveToolIds(args.stepRules),
     ],
     projectId: args.projectId,
+    reach: 'shares',
   });
   await assertTraceContentModeAllowed({
     traceContentMode: args.traceContentMode,

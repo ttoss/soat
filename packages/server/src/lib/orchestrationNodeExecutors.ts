@@ -257,7 +257,8 @@ export const executeToolNode = async (args: {
   const result = await callTool({
     // `runToolNodeGate` adjudicated this node's call before dispatch.
     guardrails: 'already-adjudicated',
-    projectIds,
+    projectId: args.projectId ?? projectIds[0],
+    reach: 'shares',
     id: toolId,
     action: node.operationId,
     input: gated.input,

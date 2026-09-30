@@ -245,6 +245,7 @@ export const resolveAndValidateTarget = async (args: {
     const agent = await agentReferences.find({
       id: args.targetId,
       projectId: args.projectId,
+      reach: 'project',
     });
     await assertTargetExists({
       found: Boolean(agent),
@@ -267,6 +268,7 @@ export const resolveAndValidateTarget = async (args: {
   const tool = await toolReferences.find({
     id: args.targetId,
     projectId: args.projectId,
+    reach: 'shares',
   });
   await assertTargetExists({
     found: Boolean(tool),

@@ -23,6 +23,7 @@ export const resolveConverterRefs = async (args: {
       const tool = await toolReferences.find({
         id: args.toolId,
         projectId: args.projectId,
+        reach: 'shares',
       });
       if (!tool) {
         throw new DomainError(
@@ -41,6 +42,7 @@ export const resolveConverterRefs = async (args: {
       const agent = await agentReferences.find({
         id: args.agentId,
         projectId: args.projectId,
+        reach: 'project',
       });
       if (!agent) {
         throw new DomainError(
@@ -57,33 +59,32 @@ export const resolveConverterRefs = async (args: {
 
 /**
  * Looks up the converter's tool type (needed by `validateIngestionRule`) and
- * confirms the referenced tool/agent exists in the project.
+ * confirms the referenced tool/agent still exists.
  */
 export const resolveConverterToolType = async (args: {
-  projectId: number;
   toolId?: number | null;
   agentId?: number | null;
 }): Promise<string | null> => {
+  // The internal ids arrive already resolved in the rule's reach — its own
+  // project or an accepted share — so only their existence is read here.
   if (args.toolId) {
-    const tool = await db.Tool.findOne({
-      where: { id: args.toolId, projectId: args.projectId },
-    });
+    const tool = await db.Tool.findByPk(args.toolId, { attributes: ['type'] });
     if (!tool) {
       throw new DomainError(
         'TOOL_NOT_FOUND',
-        `Tool '${args.toolId}' not found in this project.`
+        `Tool '${args.toolId}' not found.`
       );
     }
     return tool.type;
   }
   if (args.agentId) {
-    const agent = await db.Agent.findOne({
-      where: { id: args.agentId, projectId: args.projectId },
+    const agent = await db.Agent.findByPk(args.agentId, {
+      attributes: ['id'],
     });
     if (!agent) {
       throw new DomainError(
         'AGENT_NOT_FOUND',
-        `Agent '${args.agentId}' not found in this project.`
+        `Agent '${args.agentId}' not found.`
       );
     }
   }

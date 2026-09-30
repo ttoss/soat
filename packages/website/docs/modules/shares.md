@@ -94,6 +94,24 @@ Accepting a suspended share records the acceptance, which grants nothing until t
 
 Suspend, resume and every publisher-side revoke write a `share_suspended`, `share_resumed` or `share_revoked` entry in the [activity](./activity.md) feed of each affected consumer project. `ref_id` is the share, and `detail` carries `share_id`, `resource` and `publisher_project_id`. Deleting a share, or an active acceptance, writes `share_revoked` too. A consumer revoking its own acceptance writes nothing.
 
+### Using a shared tool
+
+Once a project accepts a share of a tool, it names that tool by id like one of its own in:
+
+- an agent's `tool_bindings`, `active_tool_ids` and `step_rules[].active_tool_ids`;
+- a pipeline step's `tool_id`;
+- an orchestration `tool`, `poll` or `approval` node;
+- a trigger's tool target;
+- an ingestion rule's `tool_id`, including one declared in a [formation](./formations.md) template.
+
+Every other reference to a tool — a decider or eval scorer backend, a memory rule, a workflow dispatch, a guardrail's `context_tool_id` — names one of the project's own tools only. A share that is not accepted, suspended or revoked resolves nothing: a write naming it is `400 TOOL_NOT_FOUND`, and a stored reference is skipped when it runs, as a deleted tool's is.
+
+A call through a share:
+
+- **Runs as the publisher's tool**: its endpoint, its `{{secret:...}}` references and its presets resolve in the publisher's project.
+- **Is governed by the caller**: the calling project's guardrails apply, and so do the calling agent's; the tool's own `guardrail_ids` name guardrails in the publisher's project and do not.
+- **Is metered in the calling project**: its `tool_execution` event belongs to the caller, with `publisher_project_id` naming the publisher. See [Usage](./usage.md#calls-through-a-share).
+
 ### Accepted shares are dependents
 
 [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` and [`DELETE /api/v1/agents/{agent_id}`](/docs/api/agents/delete-agent) answers `409 AGENT_HAS_DEPENDENTS` while another project has an active acceptance of a live share, with `meta.accepted_share_count`. `force=true` revokes the shares, then deletes. Any delete of a shared resource revokes its remaining shares, accepted or not.

@@ -129,7 +129,8 @@ const dispatchToTool = async (
     // is not a way to reach a tool the project has classified as forbidden.
     guardrails: 'apply',
     id: args.targetId,
-    projectIds: [args.projectId],
+    projectId: args.projectId,
+    reach: 'shares',
     action: args.action ?? undefined,
     input: args.input,
     toolContext: args.toolContext,

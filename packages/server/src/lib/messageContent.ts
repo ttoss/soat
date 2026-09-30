@@ -11,7 +11,7 @@ import {
 import { resolveSoatActionBoundaryScope } from './soatActionBoundary';
 import { soatTools } from './soatTools';
 import { buildResourceTagContext } from './tags';
-import { callTool, getTool } from './tools';
+import { callTool, tools } from './tools';
 
 export type ToolOutputMessageContent = {
   type: 'tool_output';
@@ -275,10 +275,11 @@ const resolveToolOutputContent = async (args: {
     toolId: args.content.tool_id,
   });
 
-  const tool = await getTool({
+  const toolRow = await tools.getByPublicId({
     projectIds: args.projectIds,
     id: args.content.tool_id,
   });
+  const tool = { project_id: toolRow.project.publicId, type: toolRow.type };
 
   await assertCallerAllowed({
     authUser: args.authUser,
@@ -305,7 +306,8 @@ const resolveToolOutputContent = async (args: {
 
   const toolResult = await callTool({
     guardrails: 'apply',
-    projectIds: args.projectIds,
+    projectId: toolRow.projectId,
+    reach: 'project',
     id: args.content.tool_id,
     action: args.content.action,
     input: args.content.input,

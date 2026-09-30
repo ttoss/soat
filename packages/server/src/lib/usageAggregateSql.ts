@@ -194,6 +194,7 @@ type IdNarrowings = {
   generationId?: number;
   traceId?: number;
   toolId?: number;
+  publisherProjectId?: number;
 };
 
 export type EventFilter = {
@@ -231,6 +232,7 @@ const NARROWING_COLUMNS: {
   generationId: 'generation_id',
   traceId: 'trace_id',
   toolId: 'tool_id',
+  publisherProjectId: 'publisher_project_id',
 };
 
 const NARROWING_KEYS = Object.keys(NARROWING_COLUMNS) as Array<
@@ -324,6 +326,7 @@ export const DISTINCT_COUNT_COLUMNS = {
   tools: 'tool_public_id',
   documents: 'document_public_id',
   memory_stores: 'memory_store_public_id',
+  publisher_projects: 'publisher_project_public_id',
 } as const;
 
 /**

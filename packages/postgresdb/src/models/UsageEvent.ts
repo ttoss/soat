@@ -59,6 +59,11 @@ export const USAGE_EVENT_DURABLE_IDS = [
     publicId: 'memoryStorePublicId',
     table: 'memory_stores',
   },
+  {
+    foreignKey: 'publisherProjectId',
+    publicId: 'publisherProjectPublicId',
+    table: 'projects',
+  },
 ] as const;
 
 /**
@@ -107,6 +112,10 @@ export const USAGE_EVENT_DURABLE_IDS = [
     { name: 'usage_events_tool_id_idx', fields: ['tool_id'] },
     { name: 'usage_events_document_id_idx', fields: ['document_id'] },
     { name: 'usage_events_memory_store_id_idx', fields: ['memory_store_id'] },
+    {
+      name: 'usage_events_publisher_project_id_idx',
+      fields: ['publisher_project_id'],
+    },
     // Guardrail evaluation counts a tool's (or the project's) executions over a
     // window while the gated call waits, so the window read must be an index
     // range, not a scan of the project's events.
@@ -163,9 +172,32 @@ export class UsageEvent extends Model {
     () => {
       return Project;
     },
-    { onDelete: 'CASCADE' }
+    { foreignKey: 'projectId', onDelete: 'CASCADE' }
   )
   declare project: Project;
+
+  // The project that owns the resource this event metered, when the call
+  // reached it through a share; the event itself belongs to the caller.
+  @ForeignKey(() => {
+    return Project;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare publisherProjectId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Project;
+    },
+    {
+      foreignKey: 'publisherProjectId',
+      as: 'publisherProject',
+      onDelete: 'SET NULL',
+    }
+  )
+  declare publisherProject: Project | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare publisherProjectPublicId: string | null;
 
   // Orchestration run that initiated the occurrence, when it ran inside a run.
   // Null for standalone events.

@@ -39,6 +39,7 @@ Every metered occurrence writes one **usage event** (attribution, total cost) pl
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
 | `tool_id`        | string \| null  | [Tool](./tools.md) a `tool_execution` event metered; `null` on every other meter, for an inline tool, and once the tool is deleted |
+| `publisher_project_id` | string \| null | Project that owns the resource this event metered, when the call reached it through a [share](./shares.md); `null` for a call on the project's own resources |
 | `document_id`    | string \| null  | [Document](./documents.md) an [embedding](./embeddings.md#metering) event embedded a chunk of; `null` on a query embedding, every other meter, and once the document is deleted |
 | `memory_store_id` | string \| null | [Memory store](./memories.md) an embedding event embedded written content for; `null` on a query embedding, every other meter, and once the store is deleted |
 | `outcome`        | string \| null  | How a `tool_execution` call ended: `ok`, `error` or `timeout`; `null` on every other meter |
@@ -152,7 +153,11 @@ Every outbound tool call writes one `tool_execution` event: one `tool_call` comp
 - **Attribution** is what the call site holds: `tool_id` and `project_id` always; inside a generation its `generation_id`, `agent_id`, run, node, trigger, actor, session and `source` are read off the generation; an orchestration node sets `orchestration_run_id` and `node_id`; a trigger sets `trigger_id`; an eval `tool` scorer sets `source: eval_scorer`.
 - **No replay identity**: a retry is a second call on the wire, so the idempotency key is unique per execution (`tool:<uuid>`).
 
-[`GET /api/v1/usage/aggregate?meter_type=tool_execution&group_by=tool`](/docs/api/usage/get-usage-aggregate) counts calls per tool; `tool_id` and `outcome` narrow it. [Guardrails](./guardrails.md#guards-and-guardrail-context) read the same events live through `runtime.<module>.tool_calls.<window>` and `runtime.<module>.errors.<window>`.
+[`GET /api/v1/usage/aggregate?meter_type=tool_execution&group_by=tool`](/docs/api/usage/get-usage-aggregate) counts calls per tool; `tool_id` and `outcome` narrow it.
+
+#### Calls through a share
+
+A call on a tool another project [shares](./shares.md#using-a-shared-tool) with this one is metered here, in the calling project: its quotas, thresholds and `/usage` count it. The event names the publisher in `publisher_project_id` and the publisher's tool in `tool_id`; the publisher's project records nothing of the call. `publisher_project_id` narrows both [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and the aggregate, and `tool_id` accepts a shared tool's id. A call refused before it is sent is not metered, as for any tool. [Guardrails](./guardrails.md#guards-and-guardrail-context) read the same events live through `runtime.<module>.tool_calls.<window>` and `runtime.<module>.errors.<window>`.
 
 ### Storage metering
 
@@ -296,7 +301,7 @@ A `loop` or `sub_orchestration` node starts child runs whose events are attribut
 
 #### Narrowing a rollup
 
-Fifteen filters narrow the rollup before bucketing. They intersect and apply to the **whole** rollup (every bucket, `totals`, `totals.distinct`), so each composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, with `group_by=model` the same spend by model.
+Sixteen filters narrow the rollup before bucketing. They intersect and apply to the **whole** rollup (every bucket, `totals`, `totals.distinct`), so each composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, with `group_by=model` the same spend by model.
 
 | Filter | Selects |
 | --- | --- |
@@ -306,9 +311,10 @@ Fifteen filters narrow the rollup before bucketing. They intersect and apply to 
 | `generation_id`, `trace_id` | One generation's events; everything recorded under one trace |
 | `meter_type`, `model`, `source` | One meter, one as-billed SKU, one [workload source](#workload-source) |
 | `trigger_id`, `action_id` | The spend one trigger initiated; one caller-supplied action label |
-| `tool_id`, `outcome` | One tool's [executions](#tool-executions); the ones that ended `ok`, `error` or `timeout` |
+| `tool_id`, `outcome` | One tool's [executions](#tool-executions), a shared one included; the ones that ended `ok`, `error` or `timeout` |
+| `publisher_project_id` | The calls made [through a share](#calls-through-a-share) of one publisher's resources |
 
-The **nine naming a resource** are resolved against the project first; an id naming nothing empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. The **six carrying a value** are matched as the event recorded them, so an unrecognised meter, model, source or outcome selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
+The **ten naming a resource** are resolved against the project first (a publisher project by id alone, since the events are already the project's own); an id naming nothing empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. The **six carrying a value** are matched as the event recorded them, so an unrecognised meter, model, source or outcome selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
 
 `orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started (metered against the child orchestration), so summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
 
@@ -343,7 +349,8 @@ GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
       "ai_providers": 2,
       "tools": 0,
       "documents": 37,
-      "memory_stores": 3
+      "memory_stores": 3,
+      "publisher_projects": 0
     }
   }
 }

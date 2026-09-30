@@ -98,6 +98,7 @@ const resolveReference = async (args: {
       ? await agentReferences.find({
           id: args.publicId,
           projectId: args.projectId,
+          reach: 'project',
         })
       : await db.Dataset.findOne({
           where: { publicId: args.publicId, projectId: args.projectId },

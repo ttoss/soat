@@ -270,6 +270,7 @@ export const validateToolBindings = async (args: {
   await toolReferences.requireMany({
     ids: splitToolBindings(sanitized).toolIds,
     projectId: args.projectId,
+    reach: 'shares',
   });
   return sanitized;
 };

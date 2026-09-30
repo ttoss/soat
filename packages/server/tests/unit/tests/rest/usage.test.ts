@@ -769,6 +769,7 @@ describe('Usage', () => {
         generation_id: null,
         trace_id: null,
         tool_id: null,
+        publisher_project_id: null,
         outcome: null,
       });
     });

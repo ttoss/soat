@@ -336,8 +336,18 @@ const DISPATCH_TARGET_LOOKUPS: Record<
     find: (args: { id: string; projectId: number }) => Promise<unknown>;
   }
 > = {
-  agent: { noun: 'agent', find: agentReferences.find },
-  tool: { noun: 'tool', find: toolReferences.find },
+  agent: {
+    noun: 'agent',
+    find: ({ id, projectId }) => {
+      return agentReferences.find({ id, projectId, reach: 'project' });
+    },
+  },
+  tool: {
+    noun: 'tool',
+    find: ({ id, projectId }) => {
+      return toolReferences.find({ id, projectId, reach: 'project' });
+    },
+  },
   orchestration: {
     noun: 'orchestration',
     find: ({ id, projectId }) => {

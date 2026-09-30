@@ -25,9 +25,14 @@ export const assertNodeReferencesInProject = async (args: {
   const agentIds = args.nodes.flatMap((node) => {
     return node.type === 'agent' && node.agentId ? [node.agentId] : [];
   });
-  await toolReferences.requireMany({ ids: toolIds, projectId: args.projectId });
+  await toolReferences.requireMany({
+    ids: toolIds,
+    projectId: args.projectId,
+    reach: 'shares',
+  });
   await agentReferences.requireMany({
     ids: agentIds,
     projectId: args.projectId,
+    reach: 'project',
   });
 };

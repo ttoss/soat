@@ -42,7 +42,13 @@ export type ToolCallAttribution = {
 
 /** The meter a primitive records against: the tool, its project, and the caller. */
 export type ToolExecutionMeter = {
+  /** The tool's own project, where its secrets resolve. */
   projectId: number;
+  /**
+   * The project the call is metered in, when the tool is another project's
+   * reached through a share; the event then names `projectId` as publisher.
+   */
+  callerProjectId?: number;
   // Public id; null for an inline (unpersisted) definition.
   toolId: string | null;
   attribution: ToolCallAttribution;
@@ -122,13 +128,21 @@ const internalId = async (args: {
   return (row?.id as number | undefined) ?? null;
 };
 
+/** The project an event belongs to: the caller's, which pays for the call. */
+const eventProjectId = (meter: ToolExecutionMeter): number => {
+  return meter.callerProjectId ?? meter.projectId;
+};
+
 const resolveAttribution = async (
   meter: ToolExecutionMeter
 ): Promise<ResolvedAttribution> => {
-  const { projectId, attribution } = meter;
+  const { attribution } = meter;
+  const projectId = eventProjectId(meter);
+  // The tool lives in its own project; the caller's turn, agent and run in the
+  // caller's.
   const toolId = await internalId({
     model: 'Tool',
-    projectId,
+    projectId: meter.projectId,
     publicId: meter.toolId,
   });
 
@@ -194,9 +208,12 @@ const persistToolExecution = async (args: {
   const idempotencyKey = `tool:${randomUUID()}`;
 
   await db.sequelize.transaction(async (transaction) => {
+    const projectId = eventProjectId(args.meter);
     const [event, created] = await insertUsageEvent({
       defaults: {
-        projectId: args.meter.projectId,
+        projectId,
+        publisherProjectId:
+          projectId === args.meter.projectId ? null : args.meter.projectId,
         ...resolved,
         aiProviderId: null,
         outcome: args.outcome,

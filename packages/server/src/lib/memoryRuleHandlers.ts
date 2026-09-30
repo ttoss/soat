@@ -144,7 +144,8 @@ const runToolHandler = async (args: {
 }): Promise<MemoryFact[]> => {
   const raw = await callTool({
     guardrails: 'apply',
-    projectIds: [args.turn.projectId],
+    projectId: args.turn.projectId,
+    reach: 'project',
     id: args.toolId,
     action: args.action ?? undefined,
     input: {

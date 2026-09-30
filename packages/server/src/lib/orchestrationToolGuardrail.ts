@@ -60,7 +60,11 @@ const collectToolNodeGuardrails = async (args: {
   projectPublicId: string;
 }> => {
   const [tool, project] = await Promise.all([
-    toolReferences.find({ id: args.toolId, projectId: args.projectId }),
+    toolReferences.find({
+      id: args.toolId,
+      projectId: args.projectId,
+      reach: 'shares',
+    }),
     db.Project.findOne({
       where: { id: args.projectId },
       attributes: ['publicId', 'guardrailIds'],
@@ -70,7 +74,10 @@ const collectToolNodeGuardrails = async (args: {
   const guardrails = await collectApplicableGuardrails({
     projectId: args.projectId,
     projectGuardrailIds: project?.guardrailIds ?? null,
-    toolGuardrailIds: tool?.guardrailIds ?? null,
+    // A shared tool's own guardrails name guardrails in its owner's project;
+    // the run's project governs the call instead.
+    toolGuardrailIds:
+      tool?.projectId === args.projectId ? tool.guardrailIds : null,
   });
 
   return {

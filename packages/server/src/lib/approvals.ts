@@ -676,6 +676,7 @@ const assertEditMatchesToolSchema = async (args: {
   const tool = await toolReferences.find({
     id: toolId,
     projectId: args.projectId,
+    reach: 'project',
   });
   if (!isPlainObject(tool?.parameters)) return;
 

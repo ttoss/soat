@@ -50,14 +50,18 @@ export const resolveMemoryRuleRefs = async (args: {
 }> => {
   const [agentId, toolId, aiProviderId] = await Promise.all([
     resolveRef({
-      find: agentReferences.find,
+      find: ({ id, projectId }) => {
+        return agentReferences.find({ id, projectId, reach: 'project' });
+      },
       errorCode: 'AGENT_NOT_FOUND',
       label: 'Agent',
       publicId: args.agentId,
       projectId: args.projectId,
     }),
     resolveRef({
-      find: toolReferences.find,
+      find: ({ id, projectId }) => {
+        return toolReferences.find({ id, projectId, reach: 'project' });
+      },
       errorCode: 'TOOL_NOT_FOUND',
       label: 'Tool',
       publicId: args.toolId,
@@ -99,6 +103,7 @@ export const assertSourceAgentIds = async (args: {
   const found = await agentReferences.findMany({
     ids: args.sourceAgentIds,
     projectId: args.projectId,
+    reach: 'project',
   });
   const missing = args.sourceAgentIds.find((id) => {
     return !found.has(id);

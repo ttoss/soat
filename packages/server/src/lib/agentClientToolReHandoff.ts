@@ -104,6 +104,7 @@ export const emitClientToolReHandoff = async (args: {
   const tool = await toolReferences.find({
     id: proposed.tool_id,
     projectId: args.projectInternalId,
+    reach: 'project',
   });
   if (!tool || tool.type !== 'client') return false;
 
