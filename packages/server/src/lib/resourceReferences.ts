@@ -174,3 +174,29 @@ export const agentReferences: ReferenceResolver<AgentRow> =
     notFoundCode: 'AGENT_NOT_FOUND',
     label: 'Agent',
   });
+
+/**
+ * Where a tool or agent is used through a share by a caller confined to
+ * `projectPublicId`: that project's id and the owner's, or `null` when the
+ * resource is the project's own or no accepted share reaches it.
+ */
+export const findSharedUse = async (args: {
+  resourceType: 'tool' | 'agent';
+  id: string;
+  projectPublicId: string;
+}): Promise<{ projectId: number; ownerProjectId: number } | null> => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectPublicId },
+    attributes: ['id'],
+  });
+  if (!project) return null;
+  const resolver =
+    args.resourceType === 'tool' ? toolReferences : agentReferences;
+  const row = await resolver.find({
+    id: args.id,
+    projectId: project.id,
+    reach: 'shares',
+  });
+  if (!row || row.projectId === project.id) return null;
+  return { projectId: project.id, ownerProjectId: row.projectId };
+};

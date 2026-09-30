@@ -5655,6 +5655,28 @@ expect_cli_error_status 403 accept-share --share-id "$SHARE_ID" --project-id "$S
 $SOAT_CLI delete-share-acceptance --share-id "$SHARE_ID" --acceptance-id "$ACCEPTANCE_ID" >/dev/null
 $SOAT_CLI accept-share --share-id "$SHARE_ID" --project-id "$SHARE_GRANTEE_ID" >/dev/null
 
+echo "--- Calling a shared tool from the grantee ---"
+CALLED_TOOL_ID=$($SOAT_CLI create-tool --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-shared-http-tool --type http \
+  --parameters '{"type":"object","properties":{}}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  | jq -r '.id')
+CALLED_SHARE_ID=$($SOAT_CLI create-share --project-id "$PROJECT_PUBLIC_ID" \
+  --resource "srn:$PROJECT_PUBLIC_ID:tool:$CALLED_TOOL_ID" \
+  --actions '["tools:CallTool"]' --grantee "$SHARE_GRANTEE_ID" | jq -r '.id')
+$SOAT_CLI accept-share --share-id "$CALLED_SHARE_ID" --project-id "$SHARE_GRANTEE_ID" >/dev/null
+GRANTEE_KEY=$($SOAT_CLI create-api-key --name smoke-share-grantee-key \
+  --project_id "$SHARE_GRANTEE_ID" | jq -r '.key')
+SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI call-tool --tool-id "$CALLED_TOOL_ID" --input '{}' >/dev/null
+SHARED_CALLS=$(SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI list-usage-events \
+  --meter-type tool_execution --publisher-project-id "$PROJECT_PUBLIC_ID" --limit 1 \
+  | sanitize_json | jq -r '.total')
+if [ "$SHARED_CALLS" -lt 1 ]; then
+  echo "ERROR: The grantee's call through the share was not metered in the grantee" >&2
+  exit 1
+fi
+$SOAT_CLI delete-tool --tool-id "$CALLED_TOOL_ID" --force true >/dev/null
+
 echo "--- Deleting a shared tool ---"
 expect_cli_error_status 409 delete-tool --tool-id "$SHARED_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$SHARED_TOOL_ID" --force true >/dev/null

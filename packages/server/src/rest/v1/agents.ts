@@ -7,6 +7,7 @@ import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledge';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
+import { getShareProjection } from 'src/lib/shareableTypes';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
@@ -23,6 +24,7 @@ import {
   resolveReadProjectIds,
   writePreconditionOf,
 } from './helpers';
+import { authorizeSharedUse } from './sharedAccess';
 
 export const agentsRouter = new Router<Context>();
 
@@ -267,6 +269,21 @@ agentsRouter.get('/agents', async (ctx: Context) => {
 });
 
 agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
+  const shared = await authorizeSharedUse({
+    ctx,
+    resourceType: 'agent',
+    resourceId: ctx.params.agent_id,
+    action: 'agents:GetAgent',
+  });
+  if (shared) {
+    ctx.body = await getShareProjection({
+      resourceType: 'agent',
+      id: ctx.params.agent_id,
+      ownerProjectId: shared.ownerProjectId,
+    });
+    return;
+  }
+
   const { projectIds } = await authorizeAgentRead({
     ctx,
     action: 'agents:GetAgent',

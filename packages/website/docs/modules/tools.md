@@ -149,7 +149,7 @@ A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted
 | --- | --- |
 | Omitted or `null` | Every key is forwarded. This is the default. |
 | `[]` | No caller key is forwarded. |
-| Identity keys | `session_id`, `actor_id` and `actor_external_id` are server-derived and always forwarded regardless of the list. |
+| Identity keys | `session_id`, `actor_id`, `actor_external_id` and `calling_project_id` are server-derived and always forwarded regardless of the list. |
 | `{{context:<key>}}` tokens | Substituted regardless of the list: the tool declared that header itself. A key used only in a token need not be listed. |
 | `builtin` tools | The list also bounds the `tool_context` propagated in the action's request body, so a nested generation inherits only the listed keys. |
 | Matching | Case-insensitive (a key names a header). |
@@ -405,7 +405,7 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 
 ### Sharing a tool
 
-A tool can be offered to another project with a [share](./shares.md). The grantee names it by id wherever a reference to a tool can be shared, the call runs on this tool's endpoint and secrets, and it is metered in the grantee's project: see [Using a shared tool](./shares.md#using-a-shared-tool).
+A tool can be offered to another project with a [share](./shares.md). The grantee names it by id wherever a reference to a tool can be shared, or calls it on its own route with a key scoped to the grantee project; the call runs on this tool's endpoint and secrets, carries the grantee's id as `calling_project_id`, and is metered in the grantee's project. The grantee reads the tool's `id`, `name`, `description` and `parameters` only. See [Using a shared tool](./shares.md#using-a-shared-tool).
 
 ### Deleting a tool
 

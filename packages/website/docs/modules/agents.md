@@ -175,7 +175,7 @@ Neither or both is `400 VALIDATION_FAILED`. A `tool_id` names a tool in the agen
 
 #### A binding that cannot be resolved
 
-A binding whose source cannot be reached — an [MCP](./tools.md) server that refuses the credential or is down, an unresolvable `{{secret:...}}` in a URL or header template — contributes no tool and is dropped rather than failing the turn: one flaky third-party server must not take an agent down.
+A binding whose source cannot be reached — an [MCP](./tools.md) server that refuses the credential or is down, an unresolvable `{{secret:...}}` in a URL or header template, a [shared](./shares.md#using-a-shared-tool) tool whose share was suspended or revoked — contributes no tool and is dropped rather than failing the turn: one flaky third-party server must not take an agent down.
 
 The turn is told. A system note naming the unavailable tools is added to the prompt, so the model can say it could not reach the tool instead of answering that it has no such capability or inventing a cause. The note names the tools and no reason: the recorded reason is operator-grade (an upstream status code, an exception message) and would otherwise become text the model may repeat to an end user. That reason goes to the [activity](./activity.md) feed instead, as a `tool_resolution_failed` entry carrying the generation id.
 

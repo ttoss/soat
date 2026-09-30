@@ -282,7 +282,10 @@ paths:
       tags:
         - Tools
       summary: Get a tool
-      description: Returns a single tool by ID.
+      description: >
+        Returns a single tool by ID. A credential scoped to a project the tool
+        is shared with, through an accepted share, reads its `id`, `name`,
+        `description` and `parameters` only.
       operationId: getTool
       x-soat-resource:
         kind: tool
@@ -452,6 +455,13 @@ paths:
         `meta` carries the `tool_id` and the `outcome`. A `pipeline` tool is
         adjudicated before its first step runs, and every step is adjudicated as
         the call of that tool it is.
+
+
+        A credential scoped to a project the tool is shared with, through an
+        accepted share, calls it in that project: the calling project's
+        guardrails adjudicate it, it is metered there with
+        `publisher_project_id`, and the tool receives the calling project as
+        the `calling_project_id` tool context key.
       operationId: callTool
       x-soat-resource:
         kind: tool

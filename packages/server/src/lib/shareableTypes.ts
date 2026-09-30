@@ -8,7 +8,7 @@
  * (`shareLifecycle.ts`) in its module's delete, never a new route.
  */
 import { db } from '../db';
-import type { ErrorCode } from '../errors';
+import { DomainError, type ErrorCode } from '../errors';
 
 /** The fields of a shared resource a grantee may see — never its internals. */
 export type ShareProjection = Record<string, unknown>;
@@ -70,4 +70,22 @@ export const findShareableType = (
   return Object.hasOwn(SHAREABLE_TYPES, resourceType)
     ? SHAREABLE_TYPES[resourceType]
     : undefined;
+};
+
+/** What a grantee reads of a resource shared with it. */
+export const getShareProjection = async (args: {
+  resourceType: string;
+  id: string;
+  ownerProjectId: number;
+}): Promise<ShareProjection> => {
+  const projection = await findShareableType(args.resourceType)?.findProjection(
+    { projectId: args.ownerProjectId, id: args.id }
+  );
+  if (!projection) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Resource '${args.id}' not found.`
+    );
+  }
+  return projection;
 };

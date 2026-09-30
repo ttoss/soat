@@ -533,7 +533,7 @@ The check runs over the whole template **before anything is applied**: no format
 
 ### Ids a Template Names Are Resolved Within Its Own Project
 
-A property naming an existing resource by id (an `ai_provider`'s `secret_id`, a `session`'s `agent_id`, an `ingestion_rule`'s `tool_id`) resolves only within the deployment project. Another project's id fails the apply as though it did not exist, so the lookup cannot probe other projects.
+A property naming an existing resource by id (an `ai_provider`'s `secret_id`, a `session`'s `agent_id`, an `ingestion_rule`'s `tool_id`) resolves only within the deployment project. Another project's id fails the apply as though it did not exist, so the lookup cannot probe other projects. The exception is a tool another project [shares](./shares.md#using-a-shared-tool) with the deployment project: an `ingestion_rule`'s `tool_id` names it like one of the project's own while the share is accepted, and fails the apply with `Tool not found: <tool_id>` once it is not.
 
 ### Custom Resource Types
 

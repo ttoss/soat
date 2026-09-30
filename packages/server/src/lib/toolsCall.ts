@@ -1,3 +1,4 @@
+import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
@@ -6,6 +7,7 @@ import {
   assertToolCallAllowed,
   type ToolCallGuardrailMode,
 } from './toolCallGuardrail';
+import { pinCallingProject } from './toolContext';
 import { mergePresetParameters } from './toolPresetParameters';
 import { callTool } from './tools';
 import { dispatchDirectTool } from './toolsCallDispatch';
@@ -83,6 +85,17 @@ export const assertEphemeralTypeSupported = (
  * a single self-recursive function instead of two consts referencing each
  * other out of declaration order.
  */
+/** Whether the call runs another project's tool, reached through a share. */
+const isCrossProject = (args: {
+  toolProjectId: number;
+  callerProjectId?: number;
+}): boolean => {
+  return (
+    args.callerProjectId !== undefined &&
+    args.callerProjectId !== args.toolProjectId
+  );
+};
+
 /**
  * Runs the guardrail gate unless a gate upstream already classified this call,
  * and answers with the arguments dispatch should carry.
@@ -106,13 +119,10 @@ const adjudicate = async (gateArgs: {
     return { input: args.input ?? {}, guardrailIds: [] };
   }
 
-  const crossProject =
-    args.callerProjectId !== undefined &&
-    args.callerProjectId !== args.toolProjectId;
   return assertToolCallAllowed({
     toolId: args.toolPublicId ?? null,
     toolName: args.tool.name,
-    toolGuardrailIds: crossProject ? null : args.toolGuardrailIds,
+    toolGuardrailIds: isCrossProject(args) ? null : args.toolGuardrailIds,
     action: args.action,
     input: args.input ?? {},
     presetParameters,
@@ -161,7 +171,7 @@ const callPipelineStep = (args: {
   step: Parameters<PipelineStepCaller>[0];
   pipeline: CallResolvedToolArgs;
   attribution: ToolCallAttribution;
-  // `callResolvedTool` itself, passed in so the two need no forward reference.
+  // `runResolvedTool`, passed in so the two need no forward reference.
   callResolved: (args: CallResolvedToolArgs) => Promise<unknown>;
 }): Promise<unknown> => {
   const { step, pipeline, attribution } = args;
@@ -199,7 +209,7 @@ const callPipelineStep = (args: {
   });
 };
 
-export const callResolvedTool = async (
+const runResolvedTool = async (
   args: CallResolvedToolArgs
 ): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
@@ -239,7 +249,7 @@ export const callResolvedTool = async (
           step,
           pipeline: args,
           attribution,
-          callResolved: callResolvedTool,
+          callResolved: runResolvedTool,
         });
       },
     });
@@ -271,6 +281,23 @@ export const callResolvedTool = async (
     rawResult,
     mergedInput
   );
+};
+
+export const callResolvedTool = async (
+  args: CallResolvedToolArgs
+): Promise<unknown> => {
+  const caller = isCrossProject(args)
+    ? await db.Project.findByPk(args.callerProjectId, {
+        attributes: ['publicId'],
+      })
+    : null;
+  return runResolvedTool({
+    ...args,
+    toolContext: pinCallingProject({
+      toolContext: args.toolContext,
+      callingProjectPublicId: caller?.publicId ?? null,
+    }),
+  });
 };
 
 /**

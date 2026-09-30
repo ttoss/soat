@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { getShareProjection } from 'src/lib/shareableTypes';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { deleteTool } from 'src/lib/toolDelete';
 import {
@@ -27,6 +28,7 @@ import {
   resolveReadProjectIds,
 } from './helpers';
 import { makeItemRouteAuthorizer } from './resourceAccess';
+import { authorizeSharedUse } from './sharedAccess';
 
 export const toolsRouter = new Router<Context>();
 
@@ -204,6 +206,21 @@ toolsRouter.get('/tools', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/get'
  */
 toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
+  const shared = await authorizeSharedUse({
+    ctx,
+    resourceType: 'tool',
+    resourceId: ctx.params.tool_id,
+    action: 'tools:GetTool',
+  });
+  if (shared) {
+    ctx.body = await getShareProjection({
+      resourceType: 'tool',
+      id: ctx.params.tool_id,
+      ownerProjectId: shared.ownerProjectId,
+    });
+    return;
+  }
+
   const { projectIds } = await toolAccess.authorizeRead({
     ctx,
     action: 'tools:GetTool',
@@ -362,10 +379,18 @@ const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}~1call/post'
  */
 toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
-  const { projectIds } = await toolAccess.authorizeWrite({
+  const shared = await authorizeSharedUse({
     ctx,
+    resourceType: 'tool',
+    resourceId: ctx.params.tool_id,
     action: 'tools:CallTool',
   });
+  // Through a share the call runs in the grantee project; otherwise the item
+  // authorizer pins the scope to the tool's own project.
+  const projectId =
+    shared?.projectId ??
+    (await toolAccess.authorizeWrite({ ctx, action: 'tools:CallTool' }))
+      .projectIds[0];
 
   const {
     action,
@@ -389,9 +414,8 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
 
   const result = await startToolCall({
     guardrails: 'apply',
-    // The item authorizer pins the scope to the tool's own project.
-    projectId: projectIds[0],
-    reach: 'project',
+    projectId,
+    reach: shared ? 'shares' : 'project',
     id: ctx.params.tool_id,
     action: typeof action === 'string' ? action : undefined,
     input: parsedInput,
