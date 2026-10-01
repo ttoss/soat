@@ -188,12 +188,14 @@ describe('webhook delivery outbox', () => {
     const claimed = await sweepDueWebhookDeliveries();
     expect(claimed).toBeGreaterThan(0);
 
-    await waitFor(() => {
-      return callsToUrl(url).length > 0;
+    // The outcome is written after the response body is read, so wait on the
+    // row rather than on the call.
+    await waitFor(async () => {
+      await stranded.reload();
+      return stranded.status === 'success';
     });
 
-    await stranded.reload();
-    expect(stranded.status).toBe('success');
+    expect(callsToUrl(url)).toHaveLength(1);
   });
 
   test('a delivery still inside its lease is left alone', async () => {
