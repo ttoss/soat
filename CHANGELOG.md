@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.70.1](https://github.com/ttoss/soat/compare/v0.70.0...v0.70.1) (2026-10-01)
+
+### Bug Fixes
+
+* **usage:** let the agent_id filter name a shared agent ([#1512](https://github.com/ttoss/soat/issues/1512)) ([2d99365](https://github.com/ttoss/soat/commit/2d99365adab7e2ce49f4d07827310911db46c9ca))
+
+### Features
+
+* **approvals:** forward a tool_context supplied on approve ([#1513](https://github.com/ttoss/soat/issues/1513)) ([697ecf4](https://github.com/ttoss/soat/commit/697ecf41a83b49ff016217c3af975fa8bda23324))
+
 # [0.70.0](https://github.com/ttoss/soat/compare/v0.69.0...v0.70.0) (2026-10-01)
 
 ### Bug Fixes
