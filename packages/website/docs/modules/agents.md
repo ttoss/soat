@@ -973,6 +973,10 @@ Every generation record carries the serving version in the server-owned top-leve
 
 Two fields are read from the live agent even during a rollout, consumed outside the generation path: `single_session_per_actor` (session creation) and `max_context_messages` (conversation path before dispatch).
 
+### Pricing an agent
+
+A project prices an agent it owns with [resource price rows](./usage.md#resource-prices): each adds a component to the agent's `llm_tokens` events beside the provider's token cost, its quantity read off the turn's token usage, input modalities, provider cost, steps, tool calls, stop reason or outcome. A turn through a share is priced from the owner's rows.
+
 ### Deletion
 
 Deleting an agent with dependent generations or traces, or one another project accepted a [share](./shares.md#accepted-shares-are-dependents) of, is `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generation_count` / `meta.trace_count` / `meta.accepted_share_count`. So is one its own project's [ingestion rules](./ingestion-rules.md#when-the-converter-is-deleted) convert with, with `meta.ingestion_rule_count`; `?force=true` deletes the generations and traces with the agent, along with archived versions and each deleted trace's backing [file](./files.md) and stored bytes, and revokes the shares. The agent's sessions go with it.

@@ -304,6 +304,33 @@ const markGenerationCompleted = (args: {
   }).catch(() => {});
 };
 
+// A turn that completed in one `generateText` call is one metered segment.
+const meterCompletedTurn = (args: {
+  generationId: string;
+  modelId: string;
+  model?: LanguageModel;
+  typedAgent: TypedAgent;
+  result: {
+    steps: unknown[];
+    finishReason: string;
+    usage?: LanguageModelUsage;
+  };
+}): Promise<void> => {
+  return recordGenerationUsage({
+    generationId: args.generationId,
+    model: args.modelId,
+    usage: args.result.usage,
+    aiProviderId: args.model ? routedAiProviderId(args.model) : null,
+    stepsAlreadySpent: 0,
+    turn: {
+      steps: args.result.steps,
+      finishReason: args.result.finishReason,
+      maxSteps: args.typedAgent.maxSteps,
+      outcome: 'ok',
+    },
+  });
+};
+
 export const buildCompletedGenerationResult = async (args: {
   generationId: string;
   traceId: string;
@@ -375,13 +402,7 @@ export const buildCompletedGenerationResult = async (args: {
     },
   };
 
-  await recordGenerationUsage({
-    generationId: args.generationId,
-    model,
-    usage: args.result.usage,
-    aiProviderId: args.model ? routedAiProviderId(args.model) : null,
-    stepsAlreadySpent: 0,
-  });
+  await meterCompletedTurn({ ...args, modelId: model });
 
   emitResourceEvent({
     type: 'agents.generation.completed',

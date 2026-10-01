@@ -2,10 +2,15 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { isLogic } from './jsonLogicMapping';
 import { DEFAULT_METER_TYPE } from './priceCompute';
-import { toolReferences } from './resourceReferences';
+import { agentReferences, toolReferences } from './resourceReferences';
 
-/** The meter a resource row prices: a tool's `tool_execution` events. */
-export const RESOURCE_METER_TYPE = 'tool_execution';
+/** The meter each priceable resource type's rows price. */
+export const RESOURCE_METER_TYPES = {
+  tool: 'tool_execution',
+  agent: 'llm_tokens',
+} as const;
+
+type PriceableType = keyof typeof RESOURCE_METER_TYPES;
 
 /** The SKU vendor a resource row is filed under; `model` carries the SRN. */
 export const RESOURCE_PROVIDER = 'soat';
@@ -26,23 +31,65 @@ const invalid = (message: string): DomainError => {
   return new DomainError('VALIDATION_FAILED', message);
 };
 
-const parseToolSrn = (
+const isPriceableType = (type: string): type is PriceableType => {
+  return Object.hasOwn(RESOURCE_METER_TYPES, type);
+};
+
+const parseResourceSrn = (
   resource: string
-): { projectPublicId: string; toolId: string } => {
+): { projectPublicId: string; type: PriceableType; id: string } => {
   const parts = resource.split(':');
-  if (parts.length !== 4 || parts[0] !== 'srn' || parts[2] !== 'tool') {
+  if (parts.length !== 4 || parts[0] !== 'srn' || !isPriceableType(parts[2])) {
     throw invalid(
-      `resource '${resource}' must be one tool's SRN, srn:<project_id>:tool:<tool_id>.`
+      `resource '${resource}' must be one tool's or agent's SRN, srn:<project_id>:<tool|agent>:<id>.`
     );
   }
-  return { projectPublicId: parts[1], toolId: parts[3] };
+  return { projectPublicId: parts[1], type: parts[2], id: parts[3] };
 };
 
 const assertPriceableTool = async (args: {
+  projectId: number | null;
+  id: string;
+}): Promise<void> => {
+  const tool = args.projectId
+    ? await toolReferences.find({
+        id: args.id,
+        projectId: args.projectId,
+        reach: 'project',
+      })
+    : null;
+  if (!tool) {
+    throw new DomainError('TOOL_NOT_FOUND', `Tool '${args.id}' not found.`);
+  }
+  if (UNPRICEABLE_TOOL_TYPES.has(tool.type)) {
+    throw invalid(
+      `A ${tool.type} tool has no execution of its own to price; price the tools it runs.`
+    );
+  }
+};
+
+const assertPriceableAgent = async (args: {
+  projectId: number | null;
+  id: string;
+}): Promise<void> => {
+  const agent = args.projectId
+    ? await agentReferences.find({
+        id: args.id,
+        projectId: args.projectId,
+        reach: 'project',
+      })
+    : null;
+  if (!agent) {
+    throw new DomainError('AGENT_NOT_FOUND', `Agent '${args.id}' not found.`);
+  }
+};
+
+/** The resource's type, once it is known to exist and to be priceable. */
+const assertPriceable = async (args: {
   resource: string;
   ownerProjectPublicId: string | null;
-}): Promise<void> => {
-  const { projectPublicId, toolId } = parseToolSrn(args.resource);
+}): Promise<PriceableType> => {
+  const { projectPublicId, type, id } = parseResourceSrn(args.resource);
   if (
     args.ownerProjectPublicId &&
     projectPublicId !== args.ownerProjectPublicId
@@ -56,24 +103,12 @@ const assertPriceableTool = async (args: {
     where: { publicId: projectPublicId },
     attributes: ['id'],
   });
-  const tool = project
-    ? await toolReferences.find({
-        id: toolId,
-        projectId: project.id as number,
-        reach: 'project',
-      })
-    : null;
-  if (!tool) {
-    throw new DomainError(
-      'TOOL_NOT_FOUND',
-      `Tool '${toolId}' not found in project '${projectPublicId}'.`
-    );
-  }
-  if (UNPRICEABLE_TOOL_TYPES.has(tool.type)) {
-    throw invalid(
-      `A ${tool.type} tool has no execution of its own to price; price the tools it runs.`
-    );
-  }
+  const projectId = (project?.id as number | undefined) ?? null;
+  await (type === 'tool' ? assertPriceableTool : assertPriceableAgent)({
+    projectId,
+    id,
+  });
+  return type;
 };
 
 const resourceKey = async (args: {
@@ -89,15 +124,16 @@ const resourceKey = async (args: {
       'A resource row names its resource, not a provider or model.'
     );
   }
-  if ((args.meterType ?? RESOURCE_METER_TYPE) !== RESOURCE_METER_TYPE) {
-    throw invalid(`A tool's resource row prices '${RESOURCE_METER_TYPE}'.`);
-  }
   if (args.quantity !== undefined && !isLogic(args.quantity)) {
     throw invalid('quantity must be a JSON Logic expression.');
   }
-  await assertPriceableTool(args);
+  const type = await assertPriceable(args);
+  const meterType = RESOURCE_METER_TYPES[type];
+  if ((args.meterType ?? meterType) !== meterType) {
+    throw invalid(`A ${type}'s resource row prices '${meterType}'.`);
+  }
   return {
-    meterType: RESOURCE_METER_TYPE,
+    meterType,
     provider: RESOURCE_PROVIDER,
     model: args.resource,
     resource: args.resource,
@@ -107,7 +143,7 @@ const resourceKey = async (args: {
 
 /**
  * The SKU key one price row writes under. A row naming a `resource` prices one
- * tool, of `ownerProjectPublicId` when set; any other row prices a SKU, whose
+ * tool or agent, of `ownerProjectPublicId` when set; any other row prices a SKU, whose
  * meter type is one of `skuMeterTypes` when given.
  */
 export const resolvePriceRowKey = async (args: {

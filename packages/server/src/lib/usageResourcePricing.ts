@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { emitActivityEntry } from './activity';
 import { applyToolOutputMapping, evaluateLogic } from './jsonLogicMapping';
 import { RESOURCE_PROVIDER } from './priceBookResource';
 import { computeComponentCostUsd } from './priceCompute';
@@ -21,8 +22,9 @@ export type ToolCallRecord = SentToolCall & {
 
 export type PricedResourceComponent = {
   component: string;
-  quantity: string;
+  quantity: number;
   unit: string;
+  billable: true;
   unitPrice: string;
   costUsd: string | null;
   priceId: number;
@@ -110,14 +112,16 @@ const buildToolContext = async (args: {
 };
 
 /**
- * The components a tool's resource rows add to one of its calls. A quantity
- * that is not a finite number >= 0 is recorded as `0` with no cost and
- * reported in `invalid`, so metering never fails the call it measures.
+ * The components a resource's rows add to one of its metered events. The
+ * context is built only when a row prices the resource. A quantity that is not
+ * a finite number >= 0 is recorded as `0` with no cost and reported in
+ * `invalid`, so metering never fails the call it measures.
  */
-export const priceToolResource = async (args: {
-  toolId: string;
+export const priceResource = async (args: {
+  type: 'tool' | 'agent';
+  id: string;
   ownerProjectId: number;
-  call: ToolCallRecord;
+  buildContext: () => Promise<Record<string, unknown>>;
 }): Promise<{
   components: PricedResourceComponent[];
   invalid: InvalidQuantity[];
@@ -126,16 +130,16 @@ export const priceToolResource = async (args: {
     attributes: ['publicId'],
   });
   if (!owner) return { components: [], invalid: [] };
-  const resource = `srn:${owner.publicId}:tool:${args.toolId}`;
+  const resource = `srn:${owner.publicId}:${args.type}:${args.id}`;
   const rows = await findEffectiveResourceRows({
     resource,
     ownerProjectId: args.ownerProjectId,
     at: new Date(),
   });
   if (rows.length === 0) return { components: [], invalid: [] };
-  log('priceToolResource: %s rows=%d', resource, rows.length);
+  log('priceResource: %s rows=%d', resource, rows.length);
 
-  const context = await buildToolContext(args);
+  const context = await args.buildContext();
   const components: PricedResourceComponent[] = [];
   const invalid: InvalidQuantity[] = [];
   for (const row of rows) {
@@ -149,8 +153,9 @@ export const priceToolResource = async (args: {
     }
     components.push({
       component: row.component,
-      quantity: String(quantity ?? 0),
+      quantity: quantity ?? 0,
       unit: row.unit,
+      billable: true,
       unitPrice: row.unitPrice,
       costUsd:
         quantity === null
@@ -163,4 +168,40 @@ export const priceToolResource = async (args: {
     });
   }
   return { components, invalid };
+};
+
+/** The components a tool's resource rows add to one of its calls. */
+export const priceToolResource = (args: {
+  toolId: string;
+  ownerProjectId: number;
+  call: ToolCallRecord;
+}) => {
+  return priceResource({
+    type: 'tool',
+    id: args.toolId,
+    ownerProjectId: args.ownerProjectId,
+    buildContext: () => {
+      return buildToolContext(args);
+    },
+  });
+};
+
+/**
+ * One `usage_quantity_invalid` entry per unreadable quantity, in the project
+ * the event is metered in; `refId` names the tool or agent.
+ */
+export const reportInvalidQuantities = async (args: {
+  projectId: number;
+  refId: string;
+  invalid: InvalidQuantity[];
+}): Promise<void> => {
+  for (const entry of args.invalid) {
+    await emitActivityEntry({
+      projectId: args.projectId,
+      kind: 'usage_quantity_invalid',
+      summary: `Price ${entry.priceId} of ${entry.resource} read no valid quantity for '${entry.component}'`,
+      detail: { ...entry },
+      refId: args.refId,
+    });
+  }
 };

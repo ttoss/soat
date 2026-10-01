@@ -4,12 +4,11 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { emitActivityEntry } from './activity';
 import { sumComponentCostUsd } from './priceCompute';
 import { insertUsageEvent } from './usageEventWrite';
 import {
-  type InvalidQuantity,
   priceToolResource,
+  reportInvalidQuantities,
   type SentToolCall,
   type ToolCallRecord,
 } from './usageResourcePricing';
@@ -206,22 +205,6 @@ const resolveAttribution = async (
   };
 };
 
-const reportInvalidQuantities = async (args: {
-  projectId: number;
-  toolId: string;
-  invalid: InvalidQuantity[];
-}): Promise<void> => {
-  for (const entry of args.invalid) {
-    await emitActivityEntry({
-      projectId: args.projectId,
-      kind: 'usage_quantity_invalid',
-      summary: `Price ${entry.priceId} of ${entry.resource} read no valid quantity for '${entry.component}'`,
-      detail: { ...entry },
-      refId: args.toolId,
-    });
-  }
-};
-
 const persistToolExecution = async (args: {
   meter: ToolExecutionMeter;
   call: ToolCallRecord;
@@ -290,7 +273,7 @@ const persistToolExecution = async (args: {
   if (toolId && priced.invalid.length > 0) {
     await reportInvalidQuantities({
       projectId: eventProjectId(args.meter),
-      toolId,
+      refId: toolId,
       invalid: priced.invalid,
     });
   }

@@ -271,7 +271,7 @@ Each `PUT` takes a batch and stops at the first refused row. Both refusals, an u
 
 ### Resource prices
 
-A project prices a tool it owns with **resource rows**: rows naming the tool's SRN in `resource` instead of a `provider` and `model`, with `meter_type: tool_execution`. Each adds one component to every `tool_execution` event of the tool, beside its unpriced `tool_call`; it never replaces one. A tool may carry several, one per `component`.
+A project prices a tool or agent it owns with **resource rows**: rows naming its SRN in `resource` instead of a `provider` and `model`. A tool's rows carry `meter_type: tool_execution` and add a component to every `tool_execution` event of the tool, beside its unpriced `tool_call`. An agent's carry `meter_type: llm_tokens` and add a component to every `llm_tokens` event of the agent, one per metered turn segment, beside the token components its provider's rows price. A row adds a component and never replaces one; a resource may carry several, one per `component`.
 
 ```json
 { "meter_type": "tool_execution", "resource": "srn:proj_P:tool:tool_ocr",
@@ -280,7 +280,7 @@ A project prices a tool it owns with **resource rows**: rows naming the tool's S
   "effective_from": "2026-10-01T00:00:00Z" }
 ```
 
-`quantity` is JSON Logic over the call, and absent it prices one per call:
+`quantity` is JSON Logic over the call or turn, and absent it prices one per event. A tool call reads:
 
 | Key | What it is |
 | --- | --- |
@@ -290,11 +290,29 @@ A project prices a tool it owns with **resource rows**: rows naming the tool's S
 | `outcome` | `ok`, `error` or `timeout` |
 | `duration_ms` | How long the call took |
 
-Secrets, resolved headers and `tool_context` are never in it. A result that is not a finite number `>= 0` records the component with quantity `0` and `cost_usd: null`, and writes a `usage_quantity_invalid` [activity](./activity.md) entry in the project the call is metered in; the call itself succeeds.
+An agent turn segment reads:
 
-- **Who writes them.** A project writes rows for its own tools through [`PUT /api/v1/projects/{project_id}/prices`](/docs/api/projects/update-project-prices); a row naming another project's tool is `403 FORBIDDEN`. Admins write global ones through [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). A pipeline (metered per step) or client tool (run by the caller) has no execution of its own and is `400`.
+```json
+{ "meter_type": "llm_tokens", "resource": "srn:proj_P:agent:agent_triage",
+  "component": "image_turn", "unit": "count",
+  "quantity": { "if": [{ "in": ["image", { "var": "response.usage.input_modalities" }] }, 1, 0] },
+  "unit_price": 0.01, "effective_from": "2026-10-01T00:00:00Z" }
+```
+
+| Key | What it is |
+| --- | --- |
+| `response.usage` | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, and `input_modalities`: the sorted part types of the input (`text`, `image`, `audio`, `file`) |
+| `response.cost_usd` | What the provider's rows priced the segment at; `null` when unpriced |
+| `response.steps` | Steps the segment ran |
+| `response.tool_calls` | Tool calls those steps made |
+| `response.stop_reason` | The segment's [stop reason](./agents.md#stop-reason) |
+| `outcome` | `ok` or `error` |
+
+Secrets, resolved headers, `tool_context` and message content are never in it. A result that is not a finite number `>= 0` records the component with quantity `0` and `cost_usd: null`, and writes a `usage_quantity_invalid` [activity](./activity.md) entry in the project the event is metered in; the call or turn itself succeeds.
+
+- **Who writes them.** A project writes rows for its own tools and agents through [`PUT /api/v1/projects/{project_id}/prices`](/docs/api/projects/update-project-prices); a row naming another project's resource is `403 FORBIDDEN`, and a row whose `meter_type` is not its resource's is `400`. Admins write global ones through [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). A pipeline (metered per step) or client tool (run by the caller) has no execution of its own and is `400`.
 - **The price book's rules apply unchanged**, keyed on `(resource, component)`: a now-dated row on a priced key is `400`, corrections are future-dated, a component is removed with a future-dated `unit_price: 0`, the first row may be dated now or earlier, and the row in effect is resolved per call, at metering time.
-- **The owner's rows price every call.** A call through a [share](#calls-through-a-share) is metered in the calling project but priced from the owner's rows, then the global ones; the calling project's rows never apply, so a caller cannot underprice the owner's tool.
+- **The owner's rows price every call.** A call or turn through a [share](#calls-through-a-share) is metered in the calling project but priced from the owner's rows, then the global ones; the calling project's rows never apply, so a caller cannot underprice the owner's resource. A shared agent's turn carries the owner's provider cost plus the owner's resource components.
 
 ### One shape at every altitude
 

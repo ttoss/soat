@@ -685,11 +685,11 @@ components:
           description: Always null for a project + provider-slug price
         meter_type:
           type: string
-          description: '`llm_tokens` for a token row, `tool_execution` for a resource row'
+          description: '`llm_tokens` for a token row or an agent''s resource row, `tool_execution` for a tool''s'
         resource:
           type: string
           nullable: true
-          description: The tool SRN a resource row prices; null for a SKU row
+          description: The tool or agent SRN a resource row prices; null for a SKU row
         quantity:
           type: object
           nullable: true
@@ -746,26 +746,29 @@ components:
                 enum: [llm_tokens, tool_execution]
                 default: llm_tokens
                 description: >-
-                  `llm_tokens` for a token row naming `provider` and `model`;
-                  `tool_execution` for a resource row naming `resource`.
+                  `llm_tokens` for a token row naming `provider` and `model`,
+                  or for an agent's resource row; `tool_execution` for a tool's
+                  resource row.
               resource:
                 type: string
                 description: >-
-                  The SRN of one tool, `srn:<project_id>:tool:<tool_id>`, for a
-                  resource row. It prices that tool's `tool_execution` events,
-                  adding a component beside `tool_call`; omit `provider` and
-                  `model`. A pipeline or client tool has no execution of its
-                  own and cannot be priced.
+                  The SRN of one tool or agent, `srn:<project_id>:<tool|agent>:<id>`,
+                  for a resource row; omit `provider` and `model`. A tool's row
+                  prices its `tool_execution` events, beside `tool_call`; an
+                  agent's prices its `llm_tokens` events, beside the provider
+                  cost. A pipeline or client tool has no execution of its own
+                  and cannot be priced.
                 example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
               quantity:
                 type: object
                 additionalProperties: true
                 description: >-
-                  On a resource row only: JSON Logic over `{ input, action,
-                  response, outcome, duration_ms }` giving the quantity
-                  `unit_price` multiplies. Omit to price one per call. A result
-                  that is not a finite number >= 0 records quantity `0` and no
-                  cost.
+                  On a resource row only: JSON Logic giving the quantity
+                  `unit_price` multiplies, over `{ input, action, response,
+                  outcome, duration_ms }` for a tool and `{ response: { usage,
+                  cost_usd, steps, tool_calls, stop_reason }, outcome }` for an
+                  agent. Omit to price one per call. A result that is not a
+                  finite number >= 0 records quantity `0` and no cost.
                 example: { var: response.page_count }
               provider:
                 type: string

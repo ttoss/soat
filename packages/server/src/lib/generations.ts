@@ -24,6 +24,7 @@ import {
   type PersistedGeneration,
 } from './generationMapper';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
+import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
@@ -71,6 +72,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
     toolSurface?: Record<string, unknown> | null;
+    inputModalities: string[];
     retrieval?: KnowledgeRetrieval;
     idempotency?: GenerationIdempotency;
   };
@@ -129,6 +131,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         // Not a content column: three integers describing the request, which a
         // purge and zero-retention both leave standing.
         toolSurface: args.toolSurface ?? null,
+        // Part types, not content — see the column.
+        inputModalities: args.inputModalities,
         // Pointers, not text — see the column.
         retrieval: args.retrieval ?? null,
         idempotencyKey: args.idempotency?.key ?? null,
@@ -216,7 +220,10 @@ const insertGenerationRecord = async (
     : null;
 
   const gen = await commitGenerationWithTrace({
-    args,
+    args: {
+      ...args,
+      inputModalities: readInputModalities(args.inputMessages),
+    },
     agentDbId: agent.id as number,
     initiatorDbId: initiatorGeneration?.id ?? null,
     conversationDbId: await findConversationDbId(args.conversationId),
