@@ -188,11 +188,10 @@ export const priceToolResource = (args: {
 
 /**
  * One `usage_quantity_invalid` entry per unreadable quantity, in the project
- * the event is metered in; `refId` names the tool or agent.
+ * the event is metered in, referencing the tool or agent its SRN names.
  */
 export const reportInvalidQuantities = async (args: {
   projectId: number;
-  refId: string;
   invalid: InvalidQuantity[];
 }): Promise<void> => {
   for (const entry of args.invalid) {
@@ -201,7 +200,7 @@ export const reportInvalidQuantities = async (args: {
       kind: 'usage_quantity_invalid',
       summary: `Price ${entry.priceId} of ${entry.resource} read no valid quantity for '${entry.component}'`,
       detail: { ...entry },
-      refId: args.refId,
+      refId: entry.resource.slice(entry.resource.lastIndexOf(':') + 1),
     });
   }
 };

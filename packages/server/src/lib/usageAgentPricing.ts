@@ -15,14 +15,15 @@ export type GenerationTurnFacts = {
   outcome: 'ok' | 'error';
 };
 
+// Steps are the SDK's step results, carried untyped through the generation path.
 const countToolCalls = (steps: readonly unknown[]): number => {
-  return steps.reduce<number>((count, step) => {
-    const calls =
-      step && typeof step === 'object' && 'toolCalls' in step
-        ? step.toolCalls
-        : null;
-    return count + (Array.isArray(calls) ? calls.length : 0);
-  }, 0);
+  return steps
+    .flatMap((step): unknown => {
+      return Reflect.get(Object(step), 'toolCalls');
+    })
+    .filter((call) => {
+      return call !== undefined;
+    }).length;
 };
 
 /**
@@ -37,12 +38,12 @@ export const priceAgentResource = (args: {
   tokens: UsageTokens;
   providerCostUsd: string | null;
   inputModalities: readonly string[];
-  turn?: GenerationTurnFacts;
+  turn: GenerationTurnFacts;
 }): Promise<{
   components: PricedResourceComponent[];
   invalid: InvalidQuantity[];
 }> => {
-  const steps = args.turn?.steps ?? [];
+  const { steps } = args.turn;
   return priceResource({
     type: 'agent',
     id: args.agentId,
@@ -62,15 +63,13 @@ export const priceAgentResource = (args: {
             args.providerCostUsd === null ? null : Number(args.providerCostUsd),
           steps: steps.length,
           tool_calls: countToolCalls(steps),
-          stop_reason: args.turn
-            ? resolveStopReason({
-                finishReason: args.turn.finishReason,
-                stepCount: steps.length,
-                maxSteps: args.turn.maxSteps,
-              })
-            : null,
+          stop_reason: resolveStopReason({
+            finishReason: args.turn.finishReason,
+            stepCount: steps.length,
+            maxSteps: args.turn.maxSteps,
+          }),
         },
-        outcome: args.turn?.outcome ?? 'ok',
+        outcome: args.turn.outcome,
       });
     },
   });

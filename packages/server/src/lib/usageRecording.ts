@@ -152,7 +152,7 @@ const priceGenerationEvent = async (args: {
   aiProviderId: number | null;
   model: string;
   usage: LanguageModelUsage | undefined;
-  turn?: GenerationTurnFacts;
+  turn: GenerationTurnFacts;
 }) => {
   const tokens = await priceTokens({
     usage: args.usage,
@@ -168,7 +168,7 @@ const priceGenerationEvent = async (args: {
         ownerProjectId: args.agentProjectId,
         tokens: extractUsageTokens(args.usage),
         providerCostUsd: tokens.costUsd,
-        inputModalities: args.generation.inputModalities ?? [],
+        inputModalities: args.generation.inputModalities,
         turn: args.turn,
       })
     : { components: [], invalid: [] };
@@ -190,7 +190,7 @@ const writeGenerationEvent = async (args: {
   usage: LanguageModelUsage | undefined;
   aiProviderId?: string | null;
   stepsAlreadySpent: number;
-  turn?: GenerationTurnFacts;
+  turn: GenerationTurnFacts;
 }): Promise<void> => {
   const generation = await db.Generation.findOne({
     where: { publicId: args.generationId },
@@ -268,11 +268,7 @@ const writeGenerationEvent = async (args: {
   // written event can move a windowed total across a threshold, so a replayed
   // (idempotent no-op) event never re-fires. Best-effort — never throws.
   if (created) {
-    await reportInvalidQuantities({
-      projectId: generation.projectId,
-      refId: generation.agent?.publicId ?? args.generationId,
-      invalid,
-    });
+    await reportInvalidQuantities({ projectId: generation.projectId, invalid });
     await evaluateProjectThresholds({ projectId: generation.projectId });
   }
 };
@@ -405,7 +401,7 @@ export const recordGenerationUsage = async (args: {
    */
   stepsAlreadySpent: number;
   /** What the segment did, for the agent's resource rows to read. */
-  turn?: GenerationTurnFacts;
+  turn: GenerationTurnFacts;
 }): Promise<void> => {
   log(
     'recordGenerationUsage: generationId=%s model=%s stepsAlreadySpent=%d',

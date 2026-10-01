@@ -2,7 +2,7 @@ import { defineMigration } from '@ttoss/postgresdb';
 
 /**
  * `generations.input_modalities`, the part types a turn's input carried.
- * Nullable, no backfill: a turn recorded before it reads as unknown.
+ * Rows recorded before it read as `[]`, the same as a turn naming no part.
  */
 export const generationInputModalities = defineMigration({
   name: '2026-10-01-generation-input-modalities',
@@ -18,7 +18,7 @@ export const generationInputModalities = defineMigration({
   up: async (context) => {
     context.say('adding generations.input_modalities');
     await context.run({
-      sql: 'ALTER TABLE generations ADD COLUMN IF NOT EXISTS input_modalities jsonb;',
+      sql: "ALTER TABLE generations ADD COLUMN IF NOT EXISTS input_modalities jsonb NOT NULL DEFAULT '[]'::jsonb;",
     });
   },
 });

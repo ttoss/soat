@@ -270,13 +270,10 @@ const persistToolExecution = async (args: {
       { transaction }
     );
   });
-  if (toolId && priced.invalid.length > 0) {
-    await reportInvalidQuantities({
-      projectId: eventProjectId(args.meter),
-      refId: toolId,
-      invalid: priced.invalid,
-    });
-  }
+  await reportInvalidQuantities({
+    projectId: eventProjectId(args.meter),
+    invalid: priced.invalid,
+  });
 };
 
 /**

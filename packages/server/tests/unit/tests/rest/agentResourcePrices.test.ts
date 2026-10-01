@@ -30,6 +30,7 @@ describe('Agent resource prices', () => {
   let granteeId: string;
   let granteeKey: string;
   let providerId: string;
+  let unpricedProviderId: string;
   let agentCount = 0;
 
   const admin = () => {
@@ -80,6 +81,7 @@ describe('Agent resource prices', () => {
     component?: string;
     quantity?: unknown;
     unitPrice?: number;
+    aiProviderId?: string;
   }) => {
     agentCount += 1;
     const agent = await admin()
@@ -87,7 +89,7 @@ describe('Agent resource prices', () => {
       .send({
         project_id: publisherId,
         name: `Priced Agent ${String(agentCount)}`,
-        ai_provider_id: providerId,
+        ai_provider_id: row.aiProviderId ?? providerId,
         model: 'stub-model',
       });
     expect(agent.status).toBe(201);
@@ -201,6 +203,15 @@ describe('Agent resource prices', () => {
         base_url: providerBaseUrl,
       })
     ).body.id;
+    unpricedProviderId = (
+      await admin().post('/api/v1/ai-providers').send({
+        project_id: publisherId,
+        name: 'Unpriced stub provider',
+        provider: 'ollama',
+        default_model: 'stub-model',
+        base_url: providerBaseUrl,
+      })
+    ).body.id;
     const prices = await admin()
       .put(`/api/v1/ai-providers/${providerId}/prices`)
       .send({
@@ -309,6 +320,19 @@ describe('Agent resource prices', () => {
         quantity: 8,
         cost_usd: 4,
       });
+    });
+
+    test('reads a null provider cost when no provider row priced the tokens', async () => {
+      const agentId = await pricedSharedAgent({
+        quantity: {
+          if: [{ '==': [{ var: 'response.cost_usd' }, null] }, 1, 0],
+        },
+        aiProviderId: unpricedProviderId,
+      });
+
+      const event = await eventOf({ generation_id: await generate(agentId) });
+
+      expect(componentOf(event, 'turn')?.quantity).toBe(1);
     });
 
     test('reads steps, tool calls and the stop reason', async () => {

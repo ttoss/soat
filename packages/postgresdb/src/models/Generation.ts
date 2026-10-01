@@ -320,8 +320,8 @@ export class Generation extends Model {
   // The part types the turn's input carried (`text`, `image`, `file`,
   // `audio`), never their content, so zero retention still writes it: a price
   // row reads it after the content is gone.
-  @Column({ type: DataType.JSONB, allowNull: true })
-  declare inputModalities: string[] | null;
+  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  declare inputModalities: string[];
 
   // The caller's deduplication key, claimed for as long as this row exists.
   @Column({ type: DataType.STRING(255), allowNull: true })
