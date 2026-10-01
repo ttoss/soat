@@ -80,6 +80,8 @@ A versioned unit price for one billable **component** of a SKU. Three scopes liv
 | `component`      | string          | The component this row prices (`input_tokens`, `compute_second`, …)   |
 | `unit`           | string          | Unit `unit_price` is denominated in (`token`, `compute_second`, …)   |
 | `unit_price`     | number          | USD per `unit` (for token components, USD per token)               |
+| `resource`       | string \| null  | The tool a [resource row](#resource-prices) prices, as an SRN; `null` for a SKU row |
+| `quantity`       | object \| null  | A resource row's JSON Logic quantity; `null` prices one per call    |
 | `effective_from` | string          | ISO 8601; the latest row `<= now()` prices a call                  |
 | `created_at`     | string          | ISO 8601 creation timestamp                                        |
 
@@ -145,7 +147,7 @@ Every orchestration node execution that actively ran writes one `compute_executi
 
 ### Tool executions
 
-Every outbound tool call writes one `tool_execution` event: one `tool_call` component of quantity `1`, `cost_usd` `null` (no price row). It is recorded at the three protocol primitives — the `http` request, the `mcp` `tools/call`, the `builtin` action — which every server-side execution passes through: a direct [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), a tool the model calls inside a generation, an [orchestration](./orchestrations.md) `tool` or `poll` node, a [trigger](./triggers.md) targeting a tool, a [workflow](./workflows.md) task dispatch, an [eval](./evaluations.md) `tool` scorer, a [guardrail](./guardrails.md) context tool and an [ingestion](./ingestion-rules.md) converter.
+Every outbound tool call writes one `tool_execution` event: one `tool_call` component of quantity `1`, unpriced, plus one component per [resource row](#resource-prices) the tool's owner prices it with. With no resource row, `cost_usd` is `null`. It is recorded at the three protocol primitives — the `http` request, the `mcp` `tools/call`, the `builtin` action — which every server-side execution passes through: a direct [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), a tool the model calls inside a generation, an [orchestration](./orchestrations.md) `tool` or `poll` node, a [trigger](./triggers.md) targeting a tool, a [workflow](./workflows.md) task dispatch, an [eval](./evaluations.md) `tool` scorer, a [guardrail](./guardrails.md) context tool and an [ingestion](./ingestion-rules.md) converter.
 
 - **When the call went out, whatever it answered.** `outcome` is `ok`, `error` (a non-2xx answer, an MCP error result, a transport failure) or `timeout`, so failures are counted without a second meter.
 - **Not an execution:** a call refused before it was sent (a guardrail decision other than execute, an [egress](./tools.md) block, an approval pending, an unresolvable template), and a [client tool](./tools.md), which never runs server-side.
@@ -266,6 +268,51 @@ SOAT ships **no default prices**. Prices are managed where their scope lives:
 Past-effective prices are immutable; corrections ship as future-dated rows. A **first** price is the exception: when nothing prices a `(provider, model, component)` in the scope being written or any broader one it resolves through, `effective_from` may be now or earlier (a forced future date would charge `null` until it lands). Prices can also be **declared in a formation** with the `project_price` resource type, keyed on `(provider, model, component, effective_from)`, where `effective_from` is optional and defaults to deploy time. See [Formations Types → Project Price](/docs/formations-types/project-price).
 
 Each `PUT` takes a batch and stops at the first refused row. Both refusals, an unparseable `effective_from` and a now-or-past-dated write onto an already priced `(provider, model, component)`, return `400 VALIDATION_FAILED` with the failing row in `error.meta` as `provider`, `model`, `component` and `effective_from`.
+
+### Resource prices
+
+A project prices a tool or agent it owns with **resource rows**: rows naming its SRN in `resource` instead of a `provider` and `model`. A tool's rows carry `meter_type: tool_execution` and add a component to every `tool_execution` event of the tool, beside its unpriced `tool_call`. An agent's carry `meter_type: llm_tokens` and add a component to every `llm_tokens` event of the agent, one per metered turn segment, beside the token components its provider's rows price. A row adds a component and never replaces one; a resource may carry several, one per `component`.
+
+```json
+{ "meter_type": "tool_execution", "resource": "srn:proj_P:tool:tool_ocr",
+  "component": "page", "unit": "count",
+  "quantity": { "var": "response.page_count" }, "unit_price": 0.002,
+  "effective_from": "2026-10-01T00:00:00Z" }
+```
+
+`quantity` is JSON Logic over the call or turn, and absent it prices one per event. A tool call reads:
+
+| Key | What it is |
+| --- | --- |
+| `input` | The arguments sent, presets merged |
+| `action` | The `mcp` or `builtin` action called; `null` for `http` |
+| `response` | The tool's answer after its `output_mapping`; `null` unless `outcome` is `ok` |
+| `outcome` | `ok`, `error` or `timeout` |
+| `duration_ms` | How long the call took |
+
+An agent turn segment reads:
+
+```json
+{ "meter_type": "llm_tokens", "resource": "srn:proj_P:agent:agent_triage",
+  "component": "image_turn", "unit": "count",
+  "quantity": { "if": [{ "in": ["image", { "var": "response.usage.input_modalities" }] }, 1, 0] },
+  "unit_price": 0.01, "effective_from": "2026-10-01T00:00:00Z" }
+```
+
+| Key | What it is |
+| --- | --- |
+| `response.usage` | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, and `input_modalities`: the sorted part types of the input (`text`, `image`, `audio`, `file`) |
+| `response.cost_usd` | What the provider's rows priced the segment at; `null` when unpriced |
+| `response.steps` | Steps the segment ran |
+| `response.tool_calls` | Tool calls those steps made |
+| `response.stop_reason` | The segment's [stop reason](./agents.md#stop-reason) |
+| `outcome` | `ok` or `error` |
+
+Secrets, resolved headers, `tool_context` and message content are never in it. A result that is not a finite number `>= 0` records the component with quantity `0` and `cost_usd: null`, and writes a `usage_quantity_invalid` [activity](./activity.md) entry in the project the event is metered in; the call or turn itself succeeds.
+
+- **Who writes them.** A project writes rows for its own tools and agents through [`PUT /api/v1/projects/{project_id}/prices`](/docs/api/projects/update-project-prices); a row naming another project's resource is `403 FORBIDDEN`, and a row whose `meter_type` is not its resource's is `400`. Admins write global ones through [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). A pipeline (metered per step) or client tool (run by the caller) has no execution of its own and is `400`.
+- **The price book's rules apply unchanged**, keyed on `(resource, component)`: a now-dated row on a priced key is `400`, corrections are future-dated, a component is removed with a future-dated `unit_price: 0`, the first row may be dated now or earlier, and the row in effect is resolved per call, at metering time.
+- **The owner's rows price every call.** A call or turn through a [share](#calls-through-a-share) is metered in the calling project but priced from the owner's rows, then the global ones; the calling project's rows never apply, so a caller cannot underprice the owner's resource. A shared agent's turn carries the owner's provider cost plus the owner's resource components.
 
 ### One shape at every altitude
 

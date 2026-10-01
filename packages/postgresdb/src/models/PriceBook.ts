@@ -128,6 +128,15 @@ export class PriceBook extends Model {
   @Column({ type: DataType.DECIMAL, allowNull: false })
   declare unitPrice: string;
 
+  // The SRN of the one tool this row prices, which `model` also carries so the
+  // SKU key and its rules cover resource rows unchanged.
+  @Column({ type: DataType.STRING(128), allowNull: true })
+  declare resource: string | null;
+
+  // JSON Logic over the call's context giving the quantity; absent prices one.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare quantity: unknown;
+
   // The row with the latest effectiveFrom <= now() prices a call.
   @Column({ type: DataType.DATE, allowNull: false })
   declare effectiveFrom: Date;

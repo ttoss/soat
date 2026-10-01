@@ -25,7 +25,7 @@ No public create endpoint; entries are platform-written. The feed is read-only, 
 |---|---|---|
 | `id` | string | Public ID, `acte_` prefix |
 | `project_id` | string | Owning project |
-| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `share_cap_exceeded`, `share_resumed`, `share_revoked`, `share_suspended`, `tool_resolution_failed` |
+| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `share_cap_exceeded`, `share_resumed`, `share_revoked`, `share_suspended`, `tool_resolution_failed`, `usage_quantity_invalid` |
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
 | `detail` | object \| null | Kind-specific structured context (tool id, node id, guardrail policy version) |
@@ -82,6 +82,7 @@ Severity defaults per kind, and a producer may override it:
 | `share_revoked` | `warning` | Something the project accepted stopped being granted, for good |
 | `share_suspended` | `warning` | Something the project accepted stopped being granted |
 | `tool_resolution_failed` | `warning` | The turn ran without tools it was configured to have |
+| `usage_quantity_invalid` | `warning` | A tool call went unpriced because its price row read no valid quantity |
 
 `exception_created` **inherits the filed [exception](./exceptions.md#severity)'s severity**, so a `run_failed` exception (`critical`) records a `critical` entry; the `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity=critical` surfaces entries a `kind` filter cannot.
 
@@ -137,6 +138,7 @@ One producer per kind:
   The last two are not transport failures, but the turn still ran without the tools the agent is configured to have, which is the outcome worth monitoring.
 
   The binding is dropped rather than failing the turn — one flaky server must not take an agent down — so the generation **completes, with no error and no warning of its own**, having answered with fewer tools than it was configured to have. This entry is the operator's signal, and it is the only one that carries the `reason`: the turn itself is told only that the named tools are unavailable (see [A binding that cannot be resolved](./agents.md#a-binding-that-cannot-be-resolved)), so an upstream status code never becomes text the model can repeat to an end user. SOAT never routes or filters tools per turn, so a turn missing its tools is always this, never a decision the platform made.
+- **`usage_quantity_invalid`** — from [tool metering](./usage.md#resource-prices), in the project a call is metered in, when a resource price row's `quantity` reads no finite number `>= 0`; the component is recorded with quantity `0` and no cost. `ref_id` is the tool; `detail` carries `resource`, `component` and `price_id`.
 
 Every producer is fire-and-forget: a recording failure is logged and never disturbs the action, as in the [audit log](./audit-log.md).
 

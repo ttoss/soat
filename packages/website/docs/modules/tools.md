@@ -407,6 +407,10 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 
 A tool can be offered to another project with a [share](./shares.md). The grantee names it by id wherever a reference to a tool can be shared, or calls it on its own route with a key scoped to the grantee project; the call runs on this tool's endpoint and secrets, carries the grantee's id as `calling_project_id`, and is metered in the grantee's project. The grantee reads the tool's `id`, `name`, `description` and `parameters` only. See [Using a shared tool](./shares.md#using-a-shared-tool).
 
+### Pricing a tool
+
+A project prices a tool it owns with [resource price rows](./usage.md#resource-prices): each adds a component to the tool's `tool_execution` events, its quantity read off the call's `input`, `response` (after `output_mapping`), `outcome` or `duration_ms`. A call through a share is priced from the owner's rows. A `pipeline` or `client` tool has no execution of its own to price.
+
 ### Deleting a tool
 
 [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) refuses a tool that is a [decider's backend](./deciders.md#the-tool-backend) with `409 TOOL_HAS_DEPENDENTS`; `meta.decider_count` counts the deciders to delete or repoint first. A tool another project accepted a [share](./shares.md#accepted-shares-are-dependents) of is refused the same way, with `meta.accepted_share_count`, until `force=true` revokes the shares. So is a tool one of its own project's [ingestion rules](./ingestion-rules.md#when-the-converter-is-deleted) converts with, with `meta.ingestion_rule_count`, until `force=true`.

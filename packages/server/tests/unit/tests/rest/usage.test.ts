@@ -30,6 +30,13 @@ import {
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
+const TURN = {
+  steps: [],
+  finishReason: 'stop',
+  maxSteps: undefined,
+  outcome: 'ok',
+} as const;
+
 /**
  * Usage metering, end-to-end. A local OpenAI-compatible stub returns a
  * completion whose `usage` carries reasoning and cached token breakdowns, so a
@@ -996,6 +1003,7 @@ describe('Usage', () => {
           model: 'stub-model',
           usage: undefined,
           stepsAlreadySpent: 0,
+          turn: TURN,
         })
       ).resolves.toBeUndefined();
       // Without this the test is vacuous: the real write also resolves, so a
@@ -1036,6 +1044,7 @@ describe('Usage', () => {
           model: 'stub-model',
           usage: undefined,
           stepsAlreadySpent: 0,
+          turn: TURN,
         })
       ).resolves.toBeUndefined();
       expect(spy).toHaveBeenCalledTimes(1);
@@ -1049,6 +1058,7 @@ describe('Usage', () => {
         model: 'stub-model',
         usage: undefined,
         stepsAlreadySpent: 0,
+        turn: TURN,
       });
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/events?generation_id=${generationId}`
@@ -1064,6 +1074,7 @@ describe('Usage', () => {
           model: 'm',
           usage: undefined,
           stepsAlreadySpent: 0,
+          turn: TURN,
         })
       ).resolves.toBeUndefined();
     });

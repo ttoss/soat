@@ -7,6 +7,13 @@ import { recordGenerationUsage } from 'src/lib/usage';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
+const TURN = {
+  steps: [],
+  finishReason: 'stop',
+  maxSteps: undefined,
+  outcome: 'ok',
+} as const;
+
 type WireEvent = {
   generation_id: string | null;
   meter_type: string;
@@ -284,12 +291,14 @@ describe('Usage of a generation that pauses on a client tool', () => {
       model: 'stub-model',
       usage: undefined,
       stepsAlreadySpent: 0,
+      turn: TURN,
     });
     await recordGenerationUsage({
       generationId: paused.id,
       model: 'stub-model',
       usage: undefined,
       stepsAlreadySpent: 1,
+      turn: TURN,
     });
 
     expect(await eventsOf(paused.id)).toHaveLength(2);

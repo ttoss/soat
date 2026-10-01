@@ -200,6 +200,12 @@ const settlePartition = async (args: {
       args.save.result.response.modelId ?? args.save.typedAgent.model ?? '',
     usage: args.save.result.usage,
     stepsAlreadySpent: args.save.priorSteps?.length ?? 0,
+    turn: {
+      steps: args.save.result.steps,
+      finishReason: args.save.result.finishReason,
+      maxSteps: args.save.typedAgent.maxSteps,
+      outcome: 'ok',
+    },
   });
   if (args.partition.released.length > 0) {
     return savePendingGeneration({

@@ -14,6 +14,15 @@ import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
+import type { GenerationTurnFacts } from './usageAgentPricing';
+
+// A failed segment's facts: no step completed, and it stopped on the error.
+const FAILED_TURN: GenerationTurnFacts = {
+  steps: [],
+  finishReason: 'error',
+  maxSteps: null,
+  outcome: 'error',
+};
 
 const log = createDebug('soat:generation');
 
@@ -30,6 +39,26 @@ const modelIdOf = (model: LanguageModel | undefined): string => {
  * rethrow. DomainErrors are enriched with the generation and trace IDs so
  * callers can debug the failure post-mortem.
  */
+// The tokens a failed segment spent, when the provider reported any.
+const meterFailedSegment = (args: {
+  generationId: string;
+  model?: LanguageModel;
+  usage: LanguageModelUsage | undefined;
+  stepsAlreadySpent: number;
+}): Promise<void>[] => {
+  if (!args.usage) return [];
+  return [
+    recordGenerationUsage({
+      generationId: args.generationId,
+      model: modelIdOf(args.model),
+      usage: args.usage,
+      aiProviderId: args.model ? routedAiProviderId(args.model) : null,
+      stepsAlreadySpent: args.stepsAlreadySpent,
+      turn: FAILED_TURN,
+    }),
+  ];
+};
+
 export const recordGenerationFailure = async (args: {
   generationId: string;
   traceId: string;
@@ -87,17 +116,7 @@ export const recordGenerationFailure = async (args: {
     saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
     // The provider billed for the tokens whether or not the answer could be
     // used, so omitting them understates every roll-up that reads them.
-    ...(usage
-      ? [
-          recordGenerationUsage({
-            generationId: args.generationId,
-            model: modelIdOf(args.model),
-            usage,
-            aiProviderId: args.model ? routedAiProviderId(args.model) : null,
-            stepsAlreadySpent: args.stepsAlreadySpent,
-          }),
-        ]
-      : []),
+    ...meterFailedSegment({ ...args, usage }),
   ]);
 
   // Without this, the only way to learn a background generation died is to poll
@@ -222,6 +241,7 @@ export const meterTurnSegment = (args: {
   modelId: string;
   usage: LanguageModelUsage | undefined;
   stepsAlreadySpent: number;
+  turn: GenerationTurnFacts;
 }): Promise<void> => {
   if (args.usage === undefined) return Promise.resolve();
   return recordGenerationUsage({
@@ -230,6 +250,7 @@ export const meterTurnSegment = (args: {
     usage: args.usage,
     aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: args.stepsAlreadySpent,
+    turn: args.turn,
   });
 };
 
@@ -237,7 +258,12 @@ export const meterTurnSegment = (args: {
 export const meterContinuationSegment = (args: {
   generationId: string;
   pending: PendingGeneration;
-  result: { response?: { modelId?: string }; usage?: LanguageModelUsage };
+  result: {
+    steps: unknown[];
+    finishReason: string;
+    response?: { modelId?: string };
+    usage?: LanguageModelUsage;
+  };
 }): Promise<void> => {
   return meterTurnSegment({
     generationId: args.generationId,
@@ -245,6 +271,12 @@ export const meterContinuationSegment = (args: {
     modelId: args.result.response?.modelId ?? '',
     usage: args.result.usage,
     stepsAlreadySpent: priorStepsOf(args.pending).length,
+    turn: {
+      steps: args.result.steps,
+      finishReason: args.result.finishReason,
+      maxSteps: args.pending.agentConfig.maxSteps,
+      outcome: 'ok',
+    },
   });
 };
 

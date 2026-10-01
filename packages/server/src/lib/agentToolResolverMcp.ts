@@ -66,7 +66,11 @@ export const buildMcpToolExecute = (args: {
                 params: { name: args.mcpToolName, arguments: callArgs },
               }),
             },
-            { onRequest: markSent }
+            {
+              onRequest: () => {
+                markSent({ input: callArgs });
+              },
+            }
           );
           return readMcpCallResult({
             body: await parseJsonRpcBody(callResponse),

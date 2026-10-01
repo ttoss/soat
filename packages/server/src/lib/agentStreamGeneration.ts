@@ -157,6 +157,12 @@ const fireStreamEndSideEffects = (args: {
     usage: args.usage,
     aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: 0,
+    turn: {
+      steps: args.steps,
+      finishReason: args.finishReason,
+      maxSteps: args.typedAgent.maxSteps,
+      outcome: args.failed ? 'error' : 'ok',
+    },
   });
 };
 

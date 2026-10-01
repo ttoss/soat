@@ -90,7 +90,8 @@ export class ActivityEntry extends Model {
       'share_resumed',
       'share_revoked',
       'share_suspended',
-      'tool_resolution_failed'
+      'tool_resolution_failed',
+      'usage_quantity_invalid'
     ),
     allowNull: false,
   })
@@ -104,7 +105,8 @@ export class ActivityEntry extends Model {
     | 'share_resumed'
     | 'share_revoked'
     | 'share_suspended'
-    | 'tool_resolution_failed';
+    | 'tool_resolution_failed'
+    | 'usage_quantity_invalid';
 
   // ExceptionItem's vocabulary, so the two surfaces stay consistent.
   @Column({

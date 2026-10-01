@@ -5,7 +5,12 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { sumComponentCostUsd } from './priceCompute';
+import {
+  type GenerationTurnFacts,
+  priceAgentResource,
+} from './usageAgentPricing';
 import { readGenerationEventAttribution } from './usageGenerationAttribution';
+import { reportInvalidQuantities } from './usageResourcePricing';
 import { evaluateProjectThresholds } from './usageThresholds';
 import type { PricedComponent } from './usageTokenEvent';
 import {
@@ -138,12 +143,54 @@ const priceTokens = async (args: {
   };
 };
 
+// The provider cost of the tokens, plus the agent's own resource rows priced on
+// top of it.
+const priceGenerationEvent = async (args: {
+  generation: GenerationWithAgent;
+  agentProjectId: number;
+  provider: string;
+  aiProviderId: number | null;
+  model: string;
+  usage: LanguageModelUsage | undefined;
+  turn: GenerationTurnFacts;
+}) => {
+  const tokens = await priceTokens({
+    usage: args.usage,
+    provider: args.provider,
+    aiProviderId: args.aiProviderId,
+    model: args.model,
+    projectId: args.agentProjectId,
+  });
+  const agentId = args.generation.agent?.publicId;
+  const resource = agentId
+    ? await priceAgentResource({
+        agentId,
+        ownerProjectId: args.agentProjectId,
+        tokens: extractUsageTokens(args.usage),
+        providerCostUsd: tokens.costUsd,
+        inputModalities: args.generation.inputModalities,
+        turn: args.turn,
+      })
+    : { components: [], invalid: [] };
+  const priced: PricedComponent[] = [...tokens.priced, ...resource.components];
+  return {
+    priced,
+    costUsd: sumComponentCostUsd(
+      priced.map((component) => {
+        return component.costUsd;
+      })
+    ),
+    invalid: resource.invalid,
+  };
+};
+
 const writeGenerationEvent = async (args: {
   generationId: string;
   model: string;
   usage: LanguageModelUsage | undefined;
   aiProviderId?: string | null;
   stepsAlreadySpent: number;
+  turn: GenerationTurnFacts;
 }): Promise<void> => {
   const generation = await db.Generation.findOne({
     where: { publicId: args.generationId },
@@ -173,12 +220,14 @@ const writeGenerationEvent = async (args: {
     }),
   });
   const model = args.model || 'unknown';
-  const { priced, costUsd } = await priceTokens({
-    usage: args.usage,
+  const { priced, costUsd, invalid } = await priceGenerationEvent({
+    generation,
+    agentProjectId,
     provider: attribution.provider,
     aiProviderId: attribution.aiProviderId,
     model,
-    projectId: agentProjectId,
+    usage: args.usage,
+    turn: args.turn,
   });
 
   const idempotencyKey = buildIdempotencyKey({
@@ -219,6 +268,7 @@ const writeGenerationEvent = async (args: {
   // written event can move a windowed total across a threshold, so a replayed
   // (idempotent no-op) event never re-fires. Best-effort — never throws.
   if (created) {
+    await reportInvalidQuantities({ projectId: generation.projectId, invalid });
     await evaluateProjectThresholds({ projectId: generation.projectId });
   }
 };
@@ -350,6 +400,8 @@ export const recordGenerationUsage = async (args: {
    * first `generateText` call, the paused steps' count for a resumed one.
    */
   stepsAlreadySpent: number;
+  /** What the segment did, for the agent's resource rows to read. */
+  turn: GenerationTurnFacts;
 }): Promise<void> => {
   log(
     'recordGenerationUsage: generationId=%s model=%s stepsAlreadySpent=%d',

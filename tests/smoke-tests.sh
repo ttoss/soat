@@ -5676,6 +5676,18 @@ if [ "$SHARED_CALLS" -lt 1 ]; then
   exit 1
 fi
 
+echo "--- A call through a share is priced from the owner's resource rows ---"
+$SOAT_CLI update-project-prices --project-id "$PROJECT_PUBLIC_ID" \
+  --prices "[{\"meter_type\":\"tool_execution\",\"resource\":\"srn:$PROJECT_PUBLIC_ID:tool:$CALLED_TOOL_ID\",\"component\":\"call\",\"unit\":\"count\",\"unit_price\":0.05,\"effective_from\":\"2026-01-01T00:00:00Z\"}]" >/dev/null
+SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI call-tool --tool-id "$CALLED_TOOL_ID" --input '{}' >/dev/null
+PRICED_CALL_COST=$(SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI list-usage-events \
+  --meter-type tool_execution --tool-id "$CALLED_TOOL_ID" --limit 1 \
+  | sanitize_json | jq -r '.data[0].cost_usd')
+if [ "$PRICED_CALL_COST" != "0.05" ]; then
+  echo "ERROR: The grantee's call was not priced from the owner's row (cost $PRICED_CALL_COST)" >&2
+  exit 1
+fi
+
 echo "--- A share's cap refuses the grantee's call past it ---"
 $SOAT_CLI update-share --share-id "$CALLED_SHARE_ID" \
   --cap '{"calls":1,"window":"calendar_month"}' >/dev/null
