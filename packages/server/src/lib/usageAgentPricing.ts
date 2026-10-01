@@ -15,15 +15,12 @@ export type GenerationTurnFacts = {
   outcome: 'ok' | 'error';
 };
 
-// Steps are the SDK's step results, carried untyped through the generation path.
+// Steps are the SDK's step results, carried untyped; a step without
+// `toolCalls` counts none.
 const countToolCalls = (steps: readonly unknown[]): number => {
-  return steps
-    .flatMap((step): unknown => {
-      return Reflect.get(Object(step), 'toolCalls');
-    })
-    .filter((call) => {
-      return call !== undefined;
-    }).length;
+  return steps.flatMap((step) => {
+    return Object.values(Object(Reflect.get(Object(step), 'toolCalls')));
+  }).length;
 };
 
 /**
