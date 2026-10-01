@@ -8,6 +8,7 @@ import {
   chunkDocumentText,
   createDocumentTextFile,
   prepareDocumentChunkChanges,
+  readDocumentText,
   readFileContent,
 } from './documentContent';
 import { type DocumentFiling, resolveDocumentFiling } from './documentFiling';
@@ -191,25 +192,7 @@ export const getDocument = async (args: { id: string }) => {
 
   await recoverStaleDocument(doc);
 
-  const mapped = mapDocument(doc);
-
-  const chunks = await db.DocumentChunk.findAll({
-    where: { documentId: doc.id },
-    order: [['chunkIndex', 'ASC']],
-  });
-
-  if (chunks.length > 0) {
-    const content = chunks
-      .map((c) => {
-        return c.content;
-      })
-      .join('\n');
-    return { ...mapped, content };
-  }
-
-  // Fallback: try reading from file for legacy documents without chunks
-  const content = await readFileContent(doc.file);
-  return { ...mapped, content };
+  return { ...mapDocument(doc), content: await readDocumentText(doc) };
 };
 
 export const createDocument = async (

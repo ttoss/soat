@@ -51,7 +51,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
 | `metadata`   | object \| null | Caller-supplied JSON, read by the server only to judge it against the project's [metadata schemas](#metadata-schemas) — see [Tags and metadata](iam.md#tags-and-metadata). Stored as JSON, so the structure written is the structure held; `null` on an update clears it. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) instead — see [Polling Ingestion Status](#polling-ingestion-status). |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
-| `content`    | string \| null | Joined chunk content — only present in [`GET /documents/:id`](/docs/api/documents/get-document) responses when `status` is `ready`                     |
+| `content`    | string \| null | The document's text exactly as written; for an ingested binary (PDF), the extracted text, each window's overlap counted once — only present in [`GET /documents/:id`](/docs/api/documents/get-document) responses |
 | `chunk_strategy` | string | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). Absent when the default (`whole`) was used — the key is omitted rather than sent as `null`. |
 | `chunk_size`   | number | Window size in characters used when `chunk_strategy` is `size`. Absent otherwise.                                |
 | `chunk_overlap`| number | Overlap in characters between consecutive windows used when `chunk_strategy` is `size`. Absent otherwise.        |
@@ -60,7 +60,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 
 ### DocumentChunk (internal)
 
-Chunks are not exposed directly; they are returned joined with newlines as `content` on [`GET /documents/:id`](/docs/api/documents/get-document) and used for embedding-based search.
+Chunks are not exposed directly; they are used for embedding-based search. `content` on [`GET /documents/:id`](/docs/api/documents/get-document) is the stored text, not the chunks.
 
 | Field          | Type   | Description                                      |
 | -------------- | ------ | ------------------------------------------------ |
