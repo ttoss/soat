@@ -785,7 +785,6 @@ components:
           type: string
           enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
           description: The fixed window the calls are counted in
-          example: rolling_1h
     ShareReference:
       type: object
       description: One of the grantee project's resources naming the shared resource.
