@@ -84,6 +84,10 @@ export class Share extends Model {
   @Column({ type: DataType.STRING(32), allowNull: false })
   declare grantee: string;
 
+  /** `{ calls, window }`: the calls each acceptance may make per window. */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare cap: { calls: number; window: string } | null;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare suspendedAt: Date | null;
 

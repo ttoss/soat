@@ -28,6 +28,7 @@ import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
 import { agentRecordsOutliveAgent } from './2026-09-30-agentRecordsOutliveAgent';
 import { ingestionRulesOutliveConverter } from './2026-09-30-ingestionRulesOutliveConverter';
 import { usageEventPublisherProject } from './2026-09-30-usageEventPublisherProject';
+import { shareCap } from './2026-10-01-shareCap';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -77,4 +78,5 @@ export const MIGRATIONS: Migration[] = [
   usageEventPublisherProject,
   agentRecordsOutliveAgent,
   ingestionRulesOutliveConverter,
+  shareCap,
 ];

@@ -28,6 +28,7 @@ A share is the record and its lifecycle. What a share lets a grantee reference a
 | `resource`     | string         | SRN of the shared resource, `srn:<project_id>:<type>:<id>`                               |
 | `actions`      | string[]       | The actions granted                                                                      |
 | `grantee`      | string         | The project the share is offered to, or `*`                                              |
+| `cap`          | object \| null | `{ calls, window }`: the calls each accepting project may make per window; `null` for none |
 | `suspended_at` | string \| null | Set while the share is suspended                                                         |
 | `revoked_at`   | string \| null | Set once the publisher revoked the share                                                 |
 | `acceptance`   | object \| null | On a grantee's read only: that project's acceptance                                      |
@@ -91,6 +92,18 @@ Revoke applies to one acceptance or to the whole share:
 Accepting a suspended share records the acceptance, which grants nothing until the share is resumed.
 
 [`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources: every agent, pipeline, ingestion rule, orchestration, trigger and formation of that project naming the shared resource, as `{ type, id }`. The publisher's revoke is never refused.
+
+### Cap
+
+A share's `cap` bounds what each accepting project may spend of the publisher's credentials and the target's rate limit: `{ "calls": 1000, "window": "rolling_1h" }` admits 1,000 calls per acceptance per window. `window` is one of `rolling_1m`, `rolling_1h`, `rolling_24h` and `calendar_month`, fixed and aligned like a [quota](./quotas.md)'s window: `rolling_1h` resets on the hour. Set it on create or with [`PATCH /api/v1/shares/{share_id}`](/docs/api/shares/update-share) (`shares:UpdateShare`); `null` removes it, and the next call reads the new value.
+
+A call is one tool call or one agent turn through the share, wherever it starts. A call past the cap reaches nothing and is not metered:
+
+- a direct call answers `429 SHARE_CAP_EXCEEDED` with a `Retry-After` header and `meta.retry_after`;
+- inside a generation it is the call's tool error, and the turn goes on;
+- in an ingestion converter the document fails with `CONVERTER_FAILED`.
+
+Each refusal writes a `share_cap_exceeded` [activity](./activity.md) entry in the consumer project, with the share as `ref_id`. The publisher's own calls are never capped.
 
 ### Consumers are told
 

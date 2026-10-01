@@ -13,6 +13,7 @@ import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
 import { makeResourceAccessor, type ResourceScope } from './resourceAccessor';
 import { findShareableType, type ShareProjection } from './shareableTypes';
+import { parseShareCap } from './shareCapShape';
 
 const log = createDebug('soat:shares');
 
@@ -83,6 +84,7 @@ export const mapShare = (
     resource: shareResourceSrn(share),
     actions: share.actions,
     grantee: share.grantee,
+    cap: share.cap ?? null,
     suspended_at: share.suspendedAt,
     revoked_at: share.revokedAt,
     ...(extras.acceptance === undefined
@@ -184,8 +186,10 @@ export const createShare = async (args: {
   resource: string;
   actions: string[];
   grantee: string;
+  cap?: unknown;
 }): Promise<MappedShare> => {
   const { resourceType, resourceId } = parseShareResource(args);
+  const cap = args.cap === undefined ? null : parseShareCap(args.cap);
   const shareable = findShareableType(resourceType);
   if (!shareable) {
     throw invalid(
@@ -221,9 +225,23 @@ export const createShare = async (args: {
     resourceId,
     actions: [...new Set(args.actions)],
     grantee: args.grantee,
+    cap,
   });
   log('createShare: id=%s resource=%s', share.publicId, args.resource);
   return mapShare(await shares.reload(share), { projection });
+};
+
+/** The publisher changing a share's `cap`; the next call reads the new one. */
+export const updateShare = async (args: {
+  id: string;
+  cap: unknown;
+}): Promise<MappedShare> => {
+  log('updateShare: id=%s', args.id);
+  const share = await shares.getByPublicId({ id: args.id });
+  if (args.cap !== undefined) {
+    await share.update({ cap: parseShareCap(args.cap) });
+  }
+  return mapShare(await shares.reload(share));
 };
 
 const findProjection = async (

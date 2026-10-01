@@ -1395,6 +1395,18 @@ describe('MCP tools - happy path', () => {
       expect(createShareResult.grantee).toBe(granteeProjectId);
     });
 
+    test('update-share sets the cap', async () => {
+      const res = await mcpCall('update-share', {
+        share_id: shareId,
+        cap: { calls: 100, window: 'rolling_1h' },
+      });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).cap).toEqual({
+        calls: 100,
+        window: 'rolling_1h',
+      });
+    });
+
     test('list-shares returns the published share', async () => {
       const res = await mcpCall('list-shares', { project_id: projectId });
       expect(res.status).toBe(200);

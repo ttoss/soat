@@ -83,6 +83,7 @@ The flow they follow is
 | `2026-09-30-usage-event-publisher-project` | `usage_events.publisher_project_id` (`SET NULL`) and its durable public id, the project that owns a resource called through a share |
 | `2026-09-30-agent-records-outlive-agent` | `agent_id` on generations, traces and sessions becomes nullable and `SET NULL`, with a backfilled, not-null `agent_public_id`, so a shared agent's records survive its owner deleting it |
 | `2026-09-30-ingestion-rules-outlive-converter` | `ingestion_rules.tool_id` and `agent_id` become `SET NULL` on delete, with `tool_public_id` and `agent_public_id` kept beside them |
+| `2026-10-01-share-cap` | `shares.cap`, the calls each acceptance may make per window |
 
 Run them from the server package, which owns the entrypoint:
 

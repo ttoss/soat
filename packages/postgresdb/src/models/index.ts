@@ -59,6 +59,7 @@ export { Secret } from './Secret';
 export { Session } from './Session';
 export { Share } from './Share';
 export { ShareAcceptance } from './ShareAcceptance';
+export { ShareCapCounter } from './ShareCapCounter';
 export { Task } from './Task';
 export { TaskTransition } from './TaskTransition';
 export { Tool } from './Tool';

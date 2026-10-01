@@ -5676,6 +5676,14 @@ if [ "$SHARED_CALLS" -lt 1 ]; then
   exit 1
 fi
 
+echo "--- A share's cap refuses the grantee's call past it ---"
+$SOAT_CLI update-share --share-id "$CALLED_SHARE_ID" \
+  --cap '{"calls":1,"window":"calendar_month"}' >/dev/null
+SOAT_TOKEN="$GRANTEE_KEY"
+$SOAT_CLI call-tool --tool-id "$CALLED_TOOL_ID" --input '{}' >/dev/null
+expect_cli_error_status 429 call-tool --tool-id "$CALLED_TOOL_ID" --input '{}'
+SOAT_TOKEN="$TOKEN"
+
 echo "--- A grantee revoke is held while its resources name the shared tool ---"
 REFERRING_TRIGGER_ID=$($SOAT_CLI create-trigger --project-id "$SHARE_GRANTEE_ID" \
   --name smoke-share-ref-trigger --type manual \

@@ -3,6 +3,7 @@ import { DomainError } from '../errors';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
+import { admitSharedCall } from './shareCaps';
 import {
   assertToolCallAllowed,
   type ToolCallGuardrailMode,
@@ -286,7 +287,15 @@ const runResolvedTool = async (
 export const callResolvedTool = async (
   args: CallResolvedToolArgs
 ): Promise<unknown> => {
-  const caller = isCrossProject(args)
+  const crossProject = isCrossProject(args);
+  if (crossProject && args.toolPublicId && args.callerProjectId) {
+    await admitSharedCall({
+      resourceType: 'tool',
+      resourceId: args.toolPublicId,
+      projectId: args.callerProjectId,
+    });
+  }
+  const caller = crossProject
     ? await db.Project.findByPk(args.callerProjectId, {
         attributes: ['publicId'],
       })

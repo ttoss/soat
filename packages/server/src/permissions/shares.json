@@ -17,6 +17,11 @@
       "description": "Get a share, as its publisher or as a grantee"
     },
     {
+      "operationId": "updateShare",
+      "action": "shares:UpdateShare",
+      "description": "Change a share's cap, as its publisher"
+    },
+    {
       "operationId": "listShareReferences",
       "action": "shares:GetShare",
       "description": "List the grantee project's resources that name a shared resource"
