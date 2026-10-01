@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.70.0](https://github.com/ttoss/soat/compare/v0.69.0...v0.70.0) (2026-10-01)
+
+### Features
+
+* **shares:** grant actions on one resource to another project ([#1499](https://github.com/ttoss/soat/issues/1499)) ([0ea8249](https://github.com/ttoss/soat/commit/0ea8249bbd3c8a360f6454dcabf4660a1c898eef)), closes [ttoss/soat#1496](https://github.com/ttoss/soat/issues/1496) [#1495](https://github.com/ttoss/soat/issues/1495)
+
 # [0.69.0](https://github.com/ttoss/soat/compare/v0.68.0...v0.69.0) (2026-09-30)
 
 **Note:** Version bump only for package @soat/sdk

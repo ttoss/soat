@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.70.0](https://github.com/ttoss/soat/compare/v0.69.0...v0.70.0) (2026-10-01)
+
+### Bug Fixes
+
+* **ingestion-rules:** let a rule outlive the tool or agent it converts with ([#1506](https://github.com/ttoss/soat/issues/1506)) ([3d59f13](https://github.com/ttoss/soat/commit/3d59f130079f071db65009c66fee91cc74b1466f))
+
+### Features
+
+* **shares:** cap the calls each accepting project makes through a share ([#1508](https://github.com/ttoss/soat/issues/1508)) ([7cb8944](https://github.com/ttoss/soat/commit/7cb89443b8fde24cef6dec20e286c3d80667cdbe))
+* **shares:** grant actions on one resource to another project ([#1499](https://github.com/ttoss/soat/issues/1499)) ([0ea8249](https://github.com/ttoss/soat/commit/0ea8249bbd3c8a360f6454dcabf4660a1c898eef)), closes [ttoss/soat#1496](https://github.com/ttoss/soat/issues/1496) [#1495](https://github.com/ttoss/soat/issues/1495)
+* **shares:** resolve and call tools shared with a project ([#1502](https://github.com/ttoss/soat/issues/1502)) ([041cbe5](https://github.com/ttoss/soat/commit/041cbe5960f823bdc99df6f9453ee24bd2748baf)), closes [#1496](https://github.com/ttoss/soat/issues/1496)
+* **shares:** run an agent shared with a project ([#1504](https://github.com/ttoss/soat/issues/1504)) ([a7023de](https://github.com/ttoss/soat/commit/a7023dee6ffc00c9f91a4ecb01978e879742fefd)), closes [#1496](https://github.com/ttoss/soat/issues/1496)
+* **usage:** price a tool or agent with resource rows read off the call ([#1510](https://github.com/ttoss/soat/issues/1510)) ([1a96b3d](https://github.com/ttoss/soat/commit/1a96b3d1467a1318c41ed54b5639e5660dd87345))
+
 # [0.69.0](https://github.com/ttoss/soat/compare/v0.68.0...v0.69.0) (2026-09-30)
 
 **Note:** Version bump only for package @soat/postgresdb
