@@ -8,7 +8,11 @@ import type {
   RefExpression,
   SubExpression,
 } from './formationsTypes';
-import { agentReferences, toolReferences } from './resourceReferences';
+import {
+  agentReferences,
+  type ReferenceReach,
+  toolReferences,
+} from './resourceReferences';
 
 // ── Ref Utilities ─────────────────────────────────────────────────────────
 
@@ -456,25 +460,26 @@ export const lookupActorInternalId = (
 
 // Tools and agents resolve through `resourceReferences`, like every other
 // reference to them, with the same error as `lookupInternalId`.
+/** `reach` is the referencing field's, as its REST route resolves it. */
 export const lookupAgentInternalId = async (
-  args: ScopedLookupArgs
+  args: ScopedLookupArgs & { reach: ReferenceReach }
 ): Promise<number> => {
   const agent = await agentReferences.find({
     id: args.publicId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: args.reach,
   });
   if (!agent) throw new Error(`Agent not found: ${args.publicId}`);
   return agent.id as number;
 };
 
 export const lookupToolInternalId = async (
-  args: ScopedLookupArgs
+  args: ScopedLookupArgs & { reach: ReferenceReach }
 ): Promise<number> => {
   const tool = await toolReferences.find({
     id: args.publicId,
     projectId: args.projectId,
-    reach: 'shares',
+    reach: args.reach,
   });
   if (!tool) throw new Error(`Tool not found: ${args.publicId}`);
   return tool.id as number;
