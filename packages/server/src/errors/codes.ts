@@ -167,6 +167,11 @@ export const ERROR_CODES = {
     description:
       'The tool is the backend of one or more deciders, or another project has accepted a share of it, and it cannot be deleted. `meta.decider_count` counts the deciders, which block even under `force=true`: delete them or point them at another backend first. `meta.accepted_share_count` counts the accepted shares, which block only until `force=true` revokes them.',
   },
+  SHARE_IN_USE: {
+    httpStatus: 409,
+    description:
+      'The grantee project still names the shared resource. `meta.references` lists each of its resources that does; revoking the acceptance leaves them degraded.',
+  },
   SHARE_REVOKED: {
     httpStatus: 403,
     description:

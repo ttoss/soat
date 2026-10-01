@@ -13,6 +13,7 @@ import {
   revokeShareAcceptance,
   suspendShare,
 } from 'src/lib/shareLifecycle';
+import { listShareReferences } from 'src/lib/shareReferences';
 import {
   createShare,
   getShare,
@@ -147,6 +148,32 @@ sharesRouter.get('/shares/:share_id', async (ctx: Context) => {
 
 /**
  * @openapi
+ * /api/v1/shares/{share_id}/references:
+ *   get:
+ *     $ref: 'openapi/v1/shares.yaml#/paths/~1api~1v1~1shares~1{share_id}~1references/get'
+ */
+sharesRouter.get('/shares/:share_id/references', async (ctx: Context) => {
+  const party = await authorizeShareParty({
+    ctx,
+    action: 'shares:GetShare',
+    onDenied: 'hide',
+    projectPublicId: ctx.query.project_id as string | undefined,
+  });
+  if (party.side === 'publisher') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      "References are a grantee's own resources; name the grantee project in project_id.",
+      { field: 'project_id' }
+    );
+  }
+  ctx.body = await listShareReferences({
+    id: ctx.params.share_id,
+    projectId: party.projectId,
+  });
+});
+
+/**
+ * @openapi
  * /api/v1/shares/{share_id}:
  *   delete:
  *     $ref: 'openapi/v1/shares.yaml#/paths/~1api~1v1~1shares~1{share_id}/delete'
@@ -246,6 +273,7 @@ sharesRouter.post('/shares/:share_id/revoke', async (ctx: Context) => {
       ? await revokeOwnAcceptance({
           id: ctx.params.share_id,
           projectId: party.projectId,
+          force: ctx.query.force === 'true',
         })
       : await revokeShare({ id: ctx.params.share_id });
 });
