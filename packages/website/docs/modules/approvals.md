@@ -121,6 +121,13 @@ approvals in the chain re-mint from there. A chain with no recorded principal
 (started by a trigger or an OAuth token) gets no credential; its self-calls
 stay unauthenticated.
 
+The proposing turn's [`tool_context`](./agents.md#tool-context) is not stored
+on the item. A tool that authorizes through a context header gets its value
+from the approver: `tool_context` on the approve call is forwarded on the
+approved action and on every tool call of the continuation turn, exactly as on
+a generation. Use it when the credential is minted at decision time, since a
+per-turn token may have expired while the item waited.
+
 ### Duplicate proposals (dedup)
 
 Tool-call items carry a `dedup_key` derived from agent, tool, action and
@@ -167,6 +174,13 @@ Expiry is enforced server-side in **both directions**:
   (`400 APPROVAL_INVALID_EDIT` otherwise); the original stays in
   `proposed_action`, the edit in `edited_arguments`. Editing needs more
   authority; see [Who may resolve](#who-may-resolve).
+- **`tool_context`** on the approve call is forwarded to the approved action
+  and the continuation turn, never stored (see
+  [Continuation identity](#continuation-identity)). The server-pinned identity
+  keys (`session_id`, `actor_id`, `actor_external_id`) are dropped from it: the
+  approver decides whether the action runs, not who it runs for. A key that is
+  not a valid header name answers `400 INVALID_TOOL_CONTEXT_KEY` and nothing is
+  resolved.
 - **Reject** requires a `reason`, preserved on the item.
 
 ### Decision output

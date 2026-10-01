@@ -229,4 +229,52 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
     });
     expect(seeded).toBeDefined();
   });
+
+  test('the approver tool_context rides the re-handoff, alongside its session', async () => {
+    const approval = await emitApproval({
+      projectId,
+      origin: 'tool_call',
+      proposedAction: {
+        toolId: clientToolId,
+        action: 'write_local_file',
+        arguments: { path: '/etc/context' },
+      },
+      expiresInSeconds: 3600,
+      agentId: agentPublicId,
+      generationId: 'gen_original_rehandoff',
+    });
+    const handled = await emitClientToolReHandoff({
+      item: { ...approval, session_id: 'sess_rehandoff_ctx' },
+      projectInternalId: projectId,
+      toolContext: { turn_token: 'fresh-456' },
+    });
+    expect(handled).toBe(true);
+
+    const seeded = [...pendingGenerations.values()].find((pending) => {
+      return pending.pendingToolCalls.some((call) => {
+        return (call.args as { path?: string }).path === '/etc/context';
+      });
+    });
+    expect(seeded).toBeDefined();
+
+    // A client resumes this generation from its persisted pending state, so
+    // that is where the bag must be. It is written fire-and-forget.
+    const persistedToolContext = async (): Promise<unknown> => {
+      for (let i = 0; i < 80; i += 1) {
+        const row = await db.Generation.findOne({
+          where: { publicId: seeded!.generationId },
+        });
+        const bag = row?.pendingState?.toolContext;
+        if (bag) return bag;
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 25);
+        });
+      }
+      return undefined;
+    };
+    expect(await persistedToolContext()).toEqual({
+      turn_token: 'fresh-456',
+      sessionId: 'sess_rehandoff_ctx',
+    });
+  });
 });

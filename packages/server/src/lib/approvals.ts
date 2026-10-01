@@ -14,6 +14,7 @@ import {
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
+import { sanitizeCallerToolContext } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:approvals');
@@ -147,6 +148,11 @@ const buildDecisionOutput = (item: MappedApproval): DecisionOutput => {
 export type ApprovalResumeHandler = (args: {
   item: MappedApproval;
   decision: DecisionOutput;
+  /**
+   * The approver's `tool_context` bag, for the execution the resolution
+   * resumes. Held only for this call, never on the item.
+   */
+  toolContext?: Record<string, string>;
 }) => Promise<void>;
 
 const resumeHandlers: ApprovalResumeHandler[] = [];
@@ -166,11 +172,12 @@ export const registerApprovalResumeHandler = (
  */
 const notifyResume = async (
   item: MappedApproval,
-  decision: DecisionOutput
+  decision: DecisionOutput,
+  toolContext?: Record<string, string>
 ): Promise<void> => {
   for (const handler of resumeHandlers) {
     try {
-      await handler({ item, decision });
+      await handler({ item, decision, toolContext });
     } catch (error) {
       log('notifyResume: handler failed id=%s %o', item.id, error);
     }
@@ -697,6 +704,7 @@ const finalizeResolution = async (args: {
   id: string;
   projectId: number;
   eventType: SoatEventTypeFor<'approval'>;
+  toolContext?: Record<string, string>;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   const refreshed = await findApprovalOrThrow(args.id);
   const mapped = mapApproval(refreshed);
@@ -706,7 +714,7 @@ const finalizeResolution = async (args: {
     item: mapped,
     projectId: args.projectId,
   });
-  await notifyResume(mapped, decision);
+  await notifyResume(mapped, decision, args.toolContext);
   return { item: mapped, decision };
 };
 
@@ -724,6 +732,7 @@ export const approveApproval = async (args: {
   id: string;
   editedArguments?: object | null;
   resolvedByUserId: number;
+  toolContext?: Record<string, string>;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   log(
     'approveApproval: id=%s edited=%s',
@@ -734,6 +743,9 @@ export const approveApproval = async (args: {
   assertResolvable(item);
   await assertNotExpiredOrExpire(item, 'approved');
   assertValidEditedArgs(args.editedArguments);
+  // The approved action runs outside any generation, so nothing would stamp
+  // the server's identity over a forged `session_id`; strip it here.
+  const toolContext = sanitizeCallerToolContext(args.toolContext);
   await assertEditMatchesToolSchema({
     editedArguments: args.editedArguments,
     proposedAction: item.proposedAction as ProposedAction | undefined,
@@ -749,6 +761,7 @@ export const approveApproval = async (args: {
     id: args.id,
     projectId: item.projectId,
     eventType: APPROVAL_EVENT_TYPES.approved,
+    toolContext,
   });
 };
 
