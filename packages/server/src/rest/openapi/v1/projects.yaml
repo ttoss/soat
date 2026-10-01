@@ -685,7 +685,7 @@ components:
           description: Always null for a project + provider-slug price
         meter_type:
           type: string
-          description: '`llm_tokens` for a token row or an agent''s resource row, `tool_execution` for a tool''s'
+          description: "`llm_tokens` for a token row or an agent's resource row, `tool_execution` for a tool's"
         resource:
           type: string
           nullable: true
@@ -786,7 +786,7 @@ components:
                   `cache_write_tokens`), or a resource row's own (`page`)
               unit:
                 type: string
-                description: '`token` for token pricing; the resource component''s unit otherwise'
+                description: "`token` for token pricing; the resource component's unit otherwise"
               unit_price:
                 type: number
                 description: USD per `unit`

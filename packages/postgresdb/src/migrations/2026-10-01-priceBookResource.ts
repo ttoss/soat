@@ -18,7 +18,10 @@ export const priceBookResource = defineMigration({
   isApplied: async (context) => {
     if (!(await context.tableExists({ table: 'price_books' }))) return true;
     return (
-      (await context.columnExists({ table: 'price_books', column: 'resource' })) &&
+      (await context.columnExists({
+        table: 'price_books',
+        column: 'resource',
+      })) &&
       (await context.columnExists({ table: 'price_books', column: 'quantity' }))
     );
   },
