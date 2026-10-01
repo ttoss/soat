@@ -27,23 +27,49 @@ export type PreparedChunk = {
 export const DEFAULT_CHUNK_SIZE = 1000;
 export const DEFAULT_CHUNK_OVERLAP = 200;
 
-const chunkBySize = (args: {
-  text: string;
-  chunkSize: number;
-  chunkOverlap: number;
-}): string[] => {
+const sizeStep = (args: { chunkSize: number; chunkOverlap: number }) => {
   const size = Math.max(1, Math.floor(args.chunkSize));
   const overlap = Math.max(
     0,
     Math.min(Math.floor(args.chunkOverlap), size - 1)
   );
-  const step = size - overlap;
+  return { size, step: size - overlap };
+};
+
+const chunkBySize = (args: {
+  text: string;
+  chunkSize: number;
+  chunkOverlap: number;
+}): string[] => {
+  const { size, step } = sizeStep(args);
 
   const chunks: string[] = [];
   for (let start = 0; start < args.text.length; start += step) {
     chunks.push(args.text.slice(start, start + size));
   }
   return chunks.length > 0 ? chunks : [''];
+};
+
+/**
+ * The text a document's chunks were cut from. `size` windows overlap, so every
+ * window but the last contributes only its first `step` characters.
+ */
+export const joinChunks = (args: {
+  chunks: string[];
+  strategy: ChunkStrategy | null;
+  chunkSize?: number | null;
+  chunkOverlap?: number | null;
+}): string => {
+  if (args.strategy !== 'size') return args.chunks.join('\n');
+  const { step } = sizeStep({
+    chunkSize: args.chunkSize ?? DEFAULT_CHUNK_SIZE,
+    chunkOverlap: args.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP,
+  });
+  return args.chunks
+    .map((chunk, i) => {
+      return i < args.chunks.length - 1 ? chunk.slice(0, step) : chunk;
+    })
+    .join('');
 };
 
 /**

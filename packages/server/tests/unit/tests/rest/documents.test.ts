@@ -292,6 +292,29 @@ describe('Documents', () => {
       expect(response.body.content).toBe('Fetch this document back.');
     });
 
+    test('a size-chunked document returns the text it was written with', async () => {
+      const content = Array.from({ length: 500 }, (_, i) => {
+        return `${String(i).padStart(4, '0')}|`;
+      }).join('');
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content,
+          chunk_strategy: 'size',
+          chunk_size: 1000,
+          chunk_overlap: 200,
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${created.body.id}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.content).toBe(content);
+    });
+
     test('unauthenticated request cannot get a document', async () => {
       const response = await testClient.get(`/api/v1/documents/${documentId}`);
 
@@ -1043,6 +1066,34 @@ describe('Documents', () => {
       );
       const status = await getDocumentStatus(doc.id as string);
       expect(status.chunk_count).toBe(3);
+    });
+
+    test('a size-chunked PDF returns its extracted text, overlap once', async () => {
+      const pages = ['a'.repeat(70), 'b'.repeat(70)];
+      extractPdfPagesSpy.mockResolvedValueOnce(pages);
+      const fileId = await uploadFile({
+        buffer: THREE_PAGE_PDF_BUFFER,
+        filename: 'size-read.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({
+          file_id: fileId,
+          project_id: projectId,
+          chunk_strategy: 'size',
+          chunk_size: 60,
+          chunk_overlap: 10,
+        });
+      expect(ingestRes.status).toBe(202);
+
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'ready'
+      );
+
+      expect(doc.content).toBe(pages.join('\n'));
     });
 
     test('ingests a text/markdown file as a single chunk by default', async () => {

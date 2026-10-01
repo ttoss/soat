@@ -6,6 +6,7 @@ import {
   type ChunkStrategy,
   embedChunks,
   type EmbeddedChunk,
+  joinChunks,
   persistChunks,
 } from './chunking';
 import type { Transaction } from './dbTransaction';
@@ -76,13 +77,7 @@ export const createDocumentTextFile = async (args: {
   return file;
 };
 
-/**
- * Read a document's original source text from file storage. Unlike the
- * chunk-reconstructed content `getDocument` returns, this is the exact text the
- * document was created with — the `size` strategy joins overlapping windows with
- * newlines, so reconstructing from chunks would not match the original. Formation
- * `read` uses this so a document's `content` round-trips regardless of strategy.
- */
+/** Read a file's stored bytes as UTF-8 text. */
 export const readFileContent = async (
   file: DocWithFile['file']
 ): Promise<string | null> => {
@@ -91,6 +86,34 @@ export const readFileContent = async (
   const object = await provider.read({ storagePath: file.storagePath });
   if (!object) return null;
   return (await streamToBuffer(object.stream)).toString('utf-8');
+};
+
+/**
+ * A document's text: the stored text when the file holds it, else the text its
+ * chunks were cut from (an ingested binary keeps only the extracted pages).
+ */
+export const readDocumentText = async (
+  doc: DocWithFile
+): Promise<string | null> => {
+  if (doc.file && holdsDocumentText(doc.file)) {
+    const stored = await readFileContent(doc.file);
+    if (stored !== null) return stored;
+  }
+
+  const chunks = await db.DocumentChunk.findAll({
+    where: { documentId: doc.id },
+    order: [['chunkIndex', 'ASC']],
+  });
+  if (chunks.length === 0) return readFileContent(doc.file);
+
+  return joinChunks({
+    chunks: chunks.map((c) => {
+      return c.content;
+    }),
+    strategy: doc.chunkStrategy,
+    chunkSize: doc.chunkSize,
+    chunkOverlap: doc.chunkOverlap,
+  });
 };
 
 /**
