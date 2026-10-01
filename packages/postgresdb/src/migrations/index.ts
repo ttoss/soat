@@ -26,6 +26,7 @@ import { deciderToolBackend } from './2026-09-27-deciderToolBackend';
 import { evalGroupBy } from './2026-09-29-evalGroupBy';
 import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
 import { agentRecordsOutliveAgent } from './2026-09-30-agentRecordsOutliveAgent';
+import { ingestionRulesOutliveConverter } from './2026-09-30-ingestionRulesOutliveConverter';
 import { usageEventPublisherProject } from './2026-09-30-usageEventPublisherProject';
 
 /**
@@ -75,4 +76,5 @@ export const MIGRATIONS: Migration[] = [
   evalGroupBy,
   usageEventPublisherProject,
   agentRecordsOutliveAgent,
+  ingestionRulesOutliveConverter,
 ];

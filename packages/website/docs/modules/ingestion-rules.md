@@ -73,6 +73,10 @@ Exactly one of:
 - **Tool converter** (`tool_id`): ingestion calls the tool with the JSON contract below and reads text from its response. Suits audio, specialized OCR APIs and long async jobs (the tool can defer via the callback). The tool may be another project's, reached through an accepted [share](./shares.md#using-a-shared-tool); once the share is suspended or revoked, the document fails with `CONVERTER_FAILED`.
 - **Agent converter** (`agent_id`): ingestion sends the file as multimodal input with a fixed "extract all text / transcribe" instruction; the agent's text output becomes the content. The model must support the modality (**vision** for images and scanned PDFs, **audio-capable** for audio). The generation is awaited inline; no deferral/callback.
 
+### When the converter is deleted
+
+A rule outlives its converter. Deleting a tool or agent that one of its own project's rules converts with is `409 TOOL_HAS_DEPENDENTS` / `AGENT_HAS_DEPENDENTS` with `meta.ingestion_rule_count`, until `force=true`; another project's rule, converting through a [share](./shares.md), never blocks the delete. The rule keeps its `tool_id` or `agent_id`, and every document it matches fails with `CONVERTER_FAILED` until [`PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`](/docs/api/ingestion-rules/update-ingestion-rule) names another converter.
+
 :::caution[Audio agent converters need a Chat Completions-compatible AI provider]
 An [AI provider](./ai-providers.md) with the `openai` slug uses OpenAI's Responses API, which rejects audio input: the document fails with `CONVERTER_FAILED` (`AI_UnsupportedFunctionalityError: file part media type audio/...`). Register an audio-capable model (e.g. `gpt-audio-mini`) under the **`custom`** slug with `base_url` `https://api.openai.com/v1` (Chat Completions) instead. Vision converters are unaffected. Speech-to-text APIs that are not chat-completions-shaped (including xAI's) need a **tool converter**; see [Ingest Images and Audio with Converters](/docs/tutorials/ingest-images-and-audio).
 :::

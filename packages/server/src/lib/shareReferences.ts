@@ -98,25 +98,19 @@ export const findShareReferences = async (args: {
     args.projectId
   );
   const isTool = args.resourceType === 'tool';
-  const lookup = { where: { publicId: args.resourceId }, attributes: ['id'] };
-  const resource = await (isTool
-    ? db.Tool.findOne(lookup)
-    : db.Agent.findOne(lookup));
 
   const [users, rules, orchestrations, triggers, formations] =
     await Promise.all([
       isTool
         ? findToolUsers({ projectId: args.projectId, toolId: args.resourceId })
         : [],
-      resource
-        ? db.IngestionRule.findAll({
-            where: {
-              projectId: args.projectId,
-              [isTool ? 'toolId' : 'agentId']: resource.id,
-            },
-            attributes: ['publicId'],
-          })
-        : [],
+      db.IngestionRule.findAll({
+        where: {
+          projectId: args.projectId,
+          [isTool ? 'toolPublicId' : 'agentPublicId']: args.resourceId,
+        },
+        attributes: ['publicId'],
+      }),
       db.Orchestration.findAll({
         where: {
           projectId: args.projectId,

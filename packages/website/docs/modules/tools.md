@@ -409,7 +409,7 @@ A tool can be offered to another project with a [share](./shares.md). The grante
 
 ### Deleting a tool
 
-[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) refuses a tool that is a [decider's backend](./deciders.md#the-tool-backend) with `409 TOOL_HAS_DEPENDENTS`; `meta.decider_count` counts the deciders to delete or repoint first. A tool another project accepted a [share](./shares.md#accepted-shares-are-dependents) of is refused the same way, with `meta.accepted_share_count`, until `force=true` revokes the shares.
+[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) refuses a tool that is a [decider's backend](./deciders.md#the-tool-backend) with `409 TOOL_HAS_DEPENDENTS`; `meta.decider_count` counts the deciders to delete or repoint first. A tool another project accepted a [share](./shares.md#accepted-shares-are-dependents) of is refused the same way, with `meta.accepted_share_count`, until `force=true` revokes the shares. So is a tool one of its own project's [ingestion rules](./ingestion-rules.md#when-the-converter-is-deleted) converts with, with `meta.ingestion_rule_count`, until `force=true`.
 
 ### Who may act on a tool
 

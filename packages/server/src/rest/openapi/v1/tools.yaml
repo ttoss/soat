@@ -374,8 +374,10 @@ paths:
       description: >-
         Deletes a tool by ID. A tool that is a decider's backend is refused with
         `409 TOOL_HAS_DEPENDENTS`, and so is one another project has accepted a
-        share of, until `force=true`. Every share of the tool is revoked when
-        it is deleted.
+        share of, or one of its own project's ingestion rules converts with,
+        until `force=true`. Every share of the tool is revoked when it is
+        deleted; an ingestion rule keeps its `tool_id` and fails the documents
+        it matches with `CONVERTER_FAILED` until repointed.
       operationId: deleteTool
       x-soat-resource:
         kind: tool
@@ -391,7 +393,8 @@ paths:
           required: false
           description: >-
             Delete the tool even when another project has accepted a share of
-            it, revoking those shares. A decider backend still refuses.
+            it, revoking those shares, or an ingestion rule converts with it. A
+            decider backend still refuses.
           schema:
             type: boolean
             default: false

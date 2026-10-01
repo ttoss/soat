@@ -70,7 +70,6 @@ export const PROJECT_CASCADE_ORDER = [
   // FormationOperation/FormationResource cascade at the DB level.
   'Formation',
 
-  // Must precede Tool/Agent, which its RESTRICT FKs point at.
   'IngestionRule',
 
   // Declarations govern writes, so nothing points at them.
