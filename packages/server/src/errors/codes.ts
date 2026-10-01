@@ -167,6 +167,11 @@ export const ERROR_CODES = {
     description:
       "The tool is the backend of one or more deciders, or another project has accepted a share of it, and it cannot be deleted. `meta.decider_count` counts the deciders, which block even under `force=true`: delete them or point them at another backend first. `meta.accepted_share_count` counts the accepted shares and `meta.ingestion_rule_count` the ingestion rules of the tool's own project converting with it; both block only until `force=true`, which revokes the shares and leaves the rules naming a converter that is gone.",
   },
+  SHARE_CAP_EXCEEDED: {
+    httpStatus: 429,
+    description:
+      "The call reached another project's tool or agent through a share whose `cap` is spent for the current window, so nothing ran and nothing was metered. The response carries a `Retry-After` header, and `meta` names the share, its `calls` and `window`, `resets_at` and `retry_after`.",
+  },
   SHARE_IN_USE: {
     httpStatus: 409,
     description:

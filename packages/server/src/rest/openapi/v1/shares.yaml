@@ -75,6 +75,14 @@ paths:
                     The project the share is offered to, or `*` for every
                     project. Never the publishing project itself.
                   example: proj_Q1StGXR8Z5jdHi6B
+                cap:
+                  description: >-
+                    The calls each accepting project may make through the share
+                    per fixed window; a call past it is `429 SHARE_CAP_EXCEEDED`.
+                    Omit or `null` for no cap.
+                  nullable: true
+                  allOf:
+                    - $ref: '#/components/schemas/ShareCap'
       responses:
         '201':
           description: Share created
@@ -231,6 +239,64 @@ paths:
         '404':
           description: >-
             Share not found, or not addressed to the project the caller reads as
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Shares
+      summary: Update a share
+      description: >-
+        Changes a share's `cap`, as its publisher. The next call through the
+        share reads the new cap; a changed `window` starts a fresh count.
+      operationId: updateShare
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: '#/components/parameters/share_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                cap:
+                  description: >-
+                    The calls each accepting project may make through the share
+                    per fixed window; a call past it is `429 SHARE_CAP_EXCEEDED`.
+                    `null` removes the cap.
+                  nullable: true
+                  allOf:
+                    - $ref: '#/components/schemas/ShareCap'
+      responses:
+        '200':
+          description: The updated share
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          description: Invalid cap
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Share not found
           content:
             application/json:
               schema:
@@ -700,6 +766,25 @@ components:
         type: string
         example: shr_acc_V1StGXR8Z5jdHi6B
   schemas:
+    ShareCap:
+      type: object
+      description: >-
+        The calls each acceptance of a share may make per fixed window. Windows
+        are fixed and aligned like a quota's: `rolling_1h` resets on the hour.
+      required:
+        - calls
+        - window
+      additionalProperties: false
+      properties:
+        calls:
+          type: integer
+          minimum: 1
+          description: Calls admitted per window
+          example: 1000
+        window:
+          type: string
+          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
+          description: The fixed window the calls are counted in
     ShareReference:
       type: object
       description: One of the grantee project's resources naming the shared resource.
@@ -743,6 +828,11 @@ components:
         grantee:
           type: string
           description: The project the share is offered to, or `*`
+        cap:
+          description: The calls each accepting project may make per window, or `null` for none
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ShareCap'
         suspended_at:
           type: string
           format: date-time

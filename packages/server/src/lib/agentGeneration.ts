@@ -27,6 +27,7 @@ import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
+import { admitSharedCall } from './shareCaps';
 import { assertValidToolContextKeys } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -317,6 +318,13 @@ const prepareGeneration = async (
     sessionId: args.sessionId,
   });
   if (quotaBreach) throw quotaBreachError(quotaBreach);
+  if (args.runProjectId !== undefined) {
+    await admitSharedCall({
+      resourceType: 'agent',
+      resourceId: args.agentId,
+      projectId: args.runProjectId,
+    });
+  }
 
   const ctx = await resolveContextAndRecord({
     agentId: args.agentId,

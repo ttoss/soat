@@ -58,6 +58,7 @@ paths:
                 approval_resolved,
                 exception_created,
                 schedule_fired,
+                share_cap_exceeded,
                 share_resumed,
                 share_revoked,
                 share_suspended,
@@ -226,6 +227,7 @@ components:
               approval_resolved,
               exception_created,
               schedule_fired,
+              share_cap_exceeded,
               share_resumed,
               share_revoked,
               share_suspended,
@@ -242,6 +244,8 @@ components:
             consumer project when the publisher of a share it accepted
             suspends, resumes or revokes it; `ref_id` is the share and `detail`
             names the resource and the publisher project.
+            `share_cap_exceeded` lands in the consumer project when a call
+            through a share it accepted is refused by the share's `cap`.
         severity:
           type: string
           enum: [info, warning, critical]

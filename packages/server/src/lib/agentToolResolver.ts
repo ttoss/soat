@@ -26,6 +26,7 @@ import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { resolveSecretRefsInString } from './secrets';
+import { admitEachSharedCall } from './shareCaps';
 import {
   applyHttpToolAuth,
   type HttpToolAuthConfig,
@@ -1253,6 +1254,22 @@ type ResolveToolByTypeArgs = {
   attribution: ToolCallAttribution;
 };
 
+// A shared pipeline is admitted where it runs, by `callTool`.
+const admitSharedBinding = (args: {
+  tools: Record<string, Tool>;
+  typedTool: AgentToolRow;
+  ownTool: boolean;
+  callerProjectId: number;
+}): Record<string, Tool> => {
+  if (args.ownTool || args.typedTool.type === 'pipeline') return args.tools;
+  return admitEachSharedCall({
+    tools: args.tools,
+    resourceType: 'tool',
+    resourceId: args.typedTool.publicId,
+    projectId: args.callerProjectId,
+  });
+};
+
 // Resolves one persisted-tool binding into its (output-mapped, optionally
 // guardrail-gated) AI-SDK tools. Extracted so `resolveAgentTools` stays within
 // its complexity budget.
@@ -1311,12 +1328,17 @@ const resolveReferenceBinding = async (args: {
   });
   // Activity recording sits innermost, so it only fires for a call that actually
   // reached (and returned from) the tool — see `recordToolActivity`.
-  const tools = recordToolActivity({
-    tools: resolved,
-    toolId: typedTool.publicId,
-    toolType: typedTool.type,
-    toolName: typedTool.name,
-    activity: args.activity,
+  const tools = admitSharedBinding({
+    tools: recordToolActivity({
+      tools: resolved,
+      toolId: typedTool.publicId,
+      toolType: typedTool.type,
+      toolName: typedTool.name,
+      activity: args.activity,
+    }),
+    typedTool,
+    ownTool,
+    callerProjectId: args.callerProjectId,
   });
   // Pipeline tools delegate execution to `callTool` (tools.ts), which already
   // applies `outputMapping` to its return value — wrapping again here would

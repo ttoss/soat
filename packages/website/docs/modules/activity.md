@@ -25,7 +25,7 @@ No public create endpoint; entries are platform-written. The feed is read-only, 
 |---|---|---|
 | `id` | string | Public ID, `acte_` prefix |
 | `project_id` | string | Owning project |
-| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `share_resumed`, `share_revoked`, `share_suspended`, `tool_resolution_failed` |
+| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `share_cap_exceeded`, `share_resumed`, `share_revoked`, `share_suspended`, `tool_resolution_failed` |
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
 | `detail` | object \| null | Kind-specific structured context (tool id, node id, guardrail policy version) |
@@ -77,6 +77,7 @@ Severity defaults per kind, and a producer may override it:
 | `approval_resolved` | `info` | Routine autonomous operation |
 | `exception_created` | `warning` | An exception was already filed — an anomaly, by definition |
 | `schedule_fired` | `info` | Routine autonomous operation |
+| `share_cap_exceeded` | `warning` | A call through an accepted share was refused by its cap |
 | `share_resumed` | `info` | An accepted share is granted again |
 | `share_revoked` | `warning` | Something the project accepted stopped being granted, for good |
 | `share_suspended` | `warning` | Something the project accepted stopped being granted |
@@ -121,6 +122,7 @@ One producer per kind:
 - **`exception_created`** — subscribes to `exceptions.created` ([Exceptions](./exceptions.md#producers)).
 - **`schedule_fired`** — from the trigger scheduler's due-firing sweep, `source === 'schedule'` only; a manual or webhook [trigger](./triggers.md) fire does not produce it.
 - **`share_suspended`, `share_resumed`, `share_revoked`** — from the [shares](./shares.md#consumers-are-told) lifecycle, in each consumer project whose acceptance the publisher's suspend, resume, revoke or delete reached. `ref_id` is the share; `detail` carries `share_id`, `resource` and `publisher_project_id`.
+- **`share_cap_exceeded`** — from the [share cap](./shares.md#cap), in the consumer project whose call through the share was refused. `ref_id` is the share; `detail` carries `share_id`, `resource`, `publisher_project_id`, `calls` and `window`.
 - **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding contributed no tool to the turn. `detail` carries `tool_id`, `tool_type`, `tool_name` and `reason`, and the entry's `generation_id` names the turn. The `reason` separates the cases:
 
   | `reason` | What happened |

@@ -87,6 +87,7 @@ const NOT_NULL_FOREIGN_KEYS = [
   'sessions.project_id',
   'share_acceptances.project_id',
   'share_acceptances.share_id',
+  'share_cap_counters.acceptance_id',
   'shares.project_id',
   'task_transitions.task_id',
   'tasks.project_id',

@@ -497,6 +497,15 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          description: >-
+            `SHARE_CAP_EXCEEDED`: the agent is another project's, reached
+            through a share whose `cap` is spent for the window. Carries a
+            `Retry-After` header and `error.meta.retry_after`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR); model output that

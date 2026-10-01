@@ -22,6 +22,7 @@ export type ActivityKind =
   | 'approval_resolved'
   | 'exception_created'
   | 'schedule_fired'
+  | 'share_cap_exceeded'
   | 'share_resumed'
   | 'share_revoked'
   | 'share_suspended'
@@ -33,7 +34,7 @@ export type ActivityKind =
  * exception was already filed (an anomaly, by definition), and
  * `tool_resolution_failed` because the turn ran without tools it was configured
  * to have, and a suspended or revoked share because something the project
- * accepted stopped being granted; the other kinds are routine autonomous
+ * accepted stopped being granted or refused a call over its cap; the other kinds are routine autonomous
  * operation, an approval waiting on a human included.
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
@@ -42,6 +43,7 @@ const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
   approval_resolved: 'info',
   exception_created: 'warning',
   schedule_fired: 'info',
+  share_cap_exceeded: 'warning',
   share_resumed: 'info',
   share_revoked: 'warning',
   share_suspended: 'warning',

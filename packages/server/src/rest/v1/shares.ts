@@ -20,6 +20,7 @@ import {
   listPublishedShares,
   listReceivedShares,
   listShareAcceptances,
+  updateShare,
 } from 'src/lib/shares';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -55,6 +56,7 @@ sharesRouter.post('/shares', async (ctx: Context) => {
     resource: string;
     actions: string[];
     grantee: string;
+    cap?: unknown;
   };
   const projectPublicId = resolveWriteProjectPublicId({
     ctx,
@@ -74,6 +76,7 @@ sharesRouter.post('/shares', async (ctx: Context) => {
     resource: body.resource,
     actions: body.actions,
     grantee: body.grantee,
+    cap: body.cap,
   });
 });
 
@@ -170,6 +173,21 @@ sharesRouter.get('/shares/:share_id/references', async (ctx: Context) => {
     id: ctx.params.share_id,
     projectId: party.projectId,
   });
+});
+
+/**
+ * @openapi
+ * /api/v1/shares/{share_id}:
+ *   patch:
+ *     $ref: 'openapi/v1/shares.yaml#/paths/~1api~1v1~1shares~1{share_id}/patch'
+ */
+sharesRouter.patch('/shares/:share_id', async (ctx: Context) => {
+  await publisherShareAccess.authorizeWrite({
+    ctx,
+    action: 'shares:UpdateShare',
+  });
+  const { cap } = ctx.request.body as { cap?: unknown };
+  ctx.body = await updateShare({ id: ctx.params.share_id, cap });
 });
 
 /**

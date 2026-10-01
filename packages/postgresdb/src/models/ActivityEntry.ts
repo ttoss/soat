@@ -86,6 +86,7 @@ export class ActivityEntry extends Model {
       'approval_resolved',
       'exception_created',
       'schedule_fired',
+      'share_cap_exceeded',
       'share_resumed',
       'share_revoked',
       'share_suspended',
@@ -99,6 +100,7 @@ export class ActivityEntry extends Model {
     | 'approval_resolved'
     | 'exception_created'
     | 'schedule_fired'
+    | 'share_cap_exceeded'
     | 'share_resumed'
     | 'share_revoked'
     | 'share_suspended'
