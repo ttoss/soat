@@ -273,6 +273,48 @@ describe('Shared agents', () => {
         agent_id: sharedAgentId,
       });
     });
+
+    test("the usage events narrow on the shared agent's id", async () => {
+      const response = await generate(sharedAgentId);
+
+      const events = await grantee().get('/api/v1/usage/events').query({
+        meter_type: 'llm_tokens',
+        agent_id: sharedAgentId,
+      });
+
+      expect(events.status).toBe(200);
+      expect(
+        events.body.data.map((event: { generation_id: string }) => {
+          return event.generation_id;
+        })
+      ).toContain(response.body.id);
+    });
+
+    test("the usage aggregate narrows on the shared agent's id", async () => {
+      await generate(sharedAgentId);
+
+      const aggregate = await grantee()
+        .get('/api/v1/usage/aggregate')
+        .query({ project_id: granteeId, agent_id: sharedAgentId });
+
+      expect(aggregate.status).toBe(200);
+      expect(aggregate.body.totals.event_count).toBeGreaterThan(0);
+    });
+
+    test("the generation listing narrows on the shared agent's id", async () => {
+      const response = await generate(sharedAgentId);
+
+      const generations = await grantee()
+        .get('/api/v1/generations')
+        .query({ agent_id: sharedAgentId });
+
+      expect(generations.status).toBe(200);
+      expect(
+        generations.body.data.map((generation: { id: string }) => {
+          return generation.id;
+        })
+      ).toContain(response.body.id);
+    });
   });
 
   describe('agent references in the grantee', () => {

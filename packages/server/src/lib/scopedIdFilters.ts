@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { scopedWhere } from './resourceAccessor';
-import { toolReferences } from './resourceReferences';
+import { agentReferences, toolReferences } from './resourceReferences';
 
 /**
  * Resolving the public ids a listing or a rollup filters on into the internal
@@ -70,6 +70,12 @@ const SCOPED_ID_MODELS: Record<ScopedIdResource, Finder> = {
   },
 };
 
+// A tool or agent another project shares with one in scope is metered in that
+// project's events and generations, so it narrows them like one of its own.
+const SHARED_REFERENCES: Partial<
+  Record<ScopedIdResource, typeof toolReferences | typeof agentReferences>
+> = { tool: toolReferences, agent: agentReferences };
+
 /** One narrowing: which resource the id names, under which key to file it. */
 export type ScopedIdFilter<K extends string = string> = {
   key: K;
@@ -88,13 +94,12 @@ const resolveOne = async (args: {
       ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
     })
   );
-  if (row || args.resource !== 'tool' || args.projectIds === undefined) {
+  const references = SHARED_REFERENCES[args.resource];
+  if (row || !references || args.projectIds === undefined) {
     return row?.id ?? null;
   }
-  // A tool another project shares with one in scope is metered in that
-  // project's events, so it narrows them like one of its own.
   for (const projectId of args.projectIds) {
-    const shared = await toolReferences.find({
+    const shared = await references.find({
       id: args.publicId,
       projectId,
       reach: 'shares',
