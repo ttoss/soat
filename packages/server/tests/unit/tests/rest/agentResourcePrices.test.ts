@@ -137,17 +137,6 @@ describe('Agent resource prices', () => {
     return (res.body.data as UsageEvent[])[0];
   };
 
-  // The usage events' `agent_id` filter reaches the project's own agents only.
-  const agentEvent = async (agentId: string) => {
-    const res = await grantee()
-      .get('/api/v1/usage/events')
-      .query({ meter_type: 'llm_tokens' });
-    expect(res.status).toBe(200);
-    return (res.body.data as UsageEvent[]).find((event) => {
-      return event.agent_id === agentId;
-    });
-  };
-
   const componentOf = (event: UsageEvent | undefined, name: string) => {
     return event?.components.find((component) => {
       return component.component === name;
@@ -375,7 +364,7 @@ describe('Agent resource prices', () => {
 
       await convert({ agentId, contentType });
 
-      const event = await agentEvent(agentId);
+      const event = await eventOf({ agent_id: agentId });
       expect(componentOf(event, 'turn')?.quantity).toBe(1);
     });
 

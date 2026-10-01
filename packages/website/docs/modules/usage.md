@@ -355,7 +355,7 @@ Sixteen filters narrow the rollup before bucketing. They intersect and apply to 
 | Filter | Selects |
 | --- | --- |
 | `session_id`, `actor_id` | One conversation, or one end user across every session ([End-user attribution](#end-user-attribution)) |
-| `agent_id`, `ai_provider_id` | One agent's traffic; the spend billed against one provider record |
+| `agent_id`, `ai_provider_id` | One agent's traffic, a shared one included; the spend billed against one provider record |
 | `orchestration_run_id`, `orchestration_id` | One run; every run of one orchestration |
 | `generation_id`, `trace_id` | One generation's events; everything recorded under one trace |
 | `meter_type`, `model`, `source` | One meter, one as-billed SKU, one [workload source](#workload-source) |

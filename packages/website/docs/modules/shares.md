@@ -159,8 +159,8 @@ A turn through a share:
 
 - **Runs on the publisher's configuration**: its instructions, provider credential or model route, version and rollout, tools and knowledge resolve in the publisher's project. Its own tools are called through the share, carrying `calling_project_id`.
 - **Is governed by the grantee**: the grantee project's quotas, pause state and guardrails apply; the agent's own `guardrail_ids` name guardrails in the publisher's project and do not. The agent is offered no `write_memory` tool, so the grantee's conversation is never written into the publisher's memory store.
-- **Is recorded in the grantee**: its generation, trace and content are the grantee project's, under its zero-retention mode, retention and purge; the publisher holds no copy.
-- **Is metered in the grantee**: its `llm_tokens` events belong to the grantee, with `publisher_project_id` naming the publisher and `ai_provider_id` the publisher's provider, priced from the publisher's price book. See [Usage](./usage.md#calls-through-a-share).
+- **Is recorded in the grantee**: its generation, trace and content are the grantee project's, under its zero-retention mode, retention and purge; the publisher holds no copy. The generation listing's `agent_id` filter accepts the shared agent's id.
+- **Is metered in the grantee**: its `llm_tokens` events belong to the grantee, with `publisher_project_id` naming the publisher and `ai_provider_id` the publisher's provider, priced from the publisher's price book; `agent_id` on the event listing and the rollup accepts the shared agent's id. See [Usage](./usage.md#calls-through-a-share).
 
 A turn that pauses for client tool outputs or a tool-call approval is resumed on the agent's own routes, which a grantee-scoped credential does not reach.
 
