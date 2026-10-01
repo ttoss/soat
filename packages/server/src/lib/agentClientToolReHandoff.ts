@@ -74,6 +74,18 @@ const seedReHandoffPending = (args: {
   });
 };
 
+/** The approver's bag, plus the session the re-handed-off call belongs to. */
+const reHandoffToolContext = (args: {
+  toolContext?: Record<string, string>;
+  sessionId: string | null;
+}): Record<string, string> | undefined => {
+  if (!args.toolContext && !args.sessionId) return undefined;
+  return {
+    ...args.toolContext,
+    ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+  };
+};
+
 /**
  * Class-C (and escalated class-B) client-tool approvals cannot be executed
  * server-side on approval the way a persisted server tool is — a client tool
@@ -95,6 +107,7 @@ export const emitClientToolReHandoff = async (args: {
   // continuation branches — and records the same principal, so a further
   // approval re-mints from its own row.
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<boolean> => {
   const proposed = args.item.proposed_action;
   const agentId = args.item.agent_id;
@@ -131,9 +144,10 @@ export const emitClientToolReHandoff = async (args: {
     projectIds: [args.projectInternalId],
     messages: [{ role: 'user', content: note }],
     authHeader: args.authHeader,
-    toolContext: args.item.session_id
-      ? { sessionId: args.item.session_id }
-      : undefined,
+    toolContext: reHandoffToolContext({
+      toolContext: args.toolContext,
+      sessionId: args.item.session_id,
+    }),
   });
 
   const traceId = generatePublicId(PUBLIC_ID_PREFIXES.trace);

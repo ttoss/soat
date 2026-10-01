@@ -63,6 +63,7 @@ const executeApprovedAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
   if (!proposed?.tool_id) {
@@ -97,6 +98,7 @@ const executeApprovedAction = async (args: {
     // continuation that reports it — a proposed `soat` call is executed here,
     // and without the credential it reaches the loopback unauthenticated.
     authHeader: args.authHeader,
+    toolContext: args.toolContext,
     attribution: { generationId: args.item.generation_id },
   });
 
@@ -201,6 +203,7 @@ const fireContinuation = async (args: {
   decision: DecisionOutput;
   projectInternalId: number;
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<void> => {
   const { item } = args;
   if (!item.agent_id) return;
@@ -220,6 +223,7 @@ const fireContinuation = async (args: {
       sessionId: item.session_id,
       message,
       authHeader: args.authHeader,
+      toolContext: args.toolContext,
       initiatorGenerationId: item.generation_id,
     });
     return;
@@ -236,6 +240,7 @@ const fireContinuation = async (args: {
     // the continuation's generation row, so a further approval in the same
     // chain re-mints from there in turn.
     authHeader: args.authHeader,
+    toolContext: args.toolContext,
   });
 };
 
@@ -249,6 +254,7 @@ const fireContinuation = async (args: {
 export const runToolCallContinuation = async (args: {
   item: MappedApproval;
   decision: DecisionOutput;
+  toolContext?: Record<string, string>;
 }): Promise<void> => {
   const { item } = args;
   if (item.origin !== 'tool_call') return;
@@ -278,6 +284,7 @@ export const runToolCallContinuation = async (args: {
         item,
         projectInternalId,
         authHeader,
+        toolContext: args.toolContext,
       });
       if (reHandedOff) return;
 
@@ -285,6 +292,7 @@ export const runToolCallContinuation = async (args: {
         item,
         projectInternalId,
         authHeader,
+        toolContext: args.toolContext,
       }).catch((error: unknown) => {
         log('executeApprovedAction failed id=%s %o', item.id, error);
         return { error: errorMessage(error) };
@@ -311,6 +319,7 @@ export const runToolCallContinuation = async (args: {
       decision: { ...args.decision, result },
       projectInternalId,
       authHeader,
+      toolContext: args.toolContext,
     });
   } catch (error) {
     // The continuation is best-effort: the decision is already persisted and
@@ -332,9 +341,10 @@ export const runToolCallContinuation = async (args: {
 export const resumeToolCallApproval: ApprovalResumeHandler = async ({
   item,
   decision,
+  toolContext,
 }) => {
   if (item.origin !== 'tool_call') return;
-  void runToolCallContinuation({ item, decision });
+  void runToolCallContinuation({ item, decision, toolContext });
 };
 
 registerApprovalResumeHandler(resumeToolCallApproval);

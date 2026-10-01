@@ -231,6 +231,20 @@ paths:
                     Editing composes a new call, so it additionally requires
                     permission to make that call: `tools:CallTool` on the tool,
                     and for a `builtin` proposal the action's own IAM action.
+                tool_context:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >-
+                    Key-value pairs forwarded as context headers on the approved
+                    action and on every tool call of the continuation turn, as
+                    on a generation's `tool_context`. Never stored on the item:
+                    supply it on the approve call itself, for a tool that
+                    authorizes with a credential minted at decision time. The
+                    server-pinned identity keys (`session_id`, `actor_id`,
+                    `actor_external_id`) are dropped. An invalid or colliding
+                    key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` and
+                    nothing is resolved.
       responses:
         '200':
           description: Approval item approved
@@ -241,7 +255,8 @@ paths:
         '400':
           description: >-
             Edited arguments are not a JSON object, or do not satisfy the tool's
-            parameters schema
+            parameters schema; or a `tool_context` key is not a valid header
+            name
         '401':
           description: Unauthorized
         '403':

@@ -15,7 +15,12 @@ import { toolReferences } from 'src/lib/resourceReferences';
 import { soatTools } from 'src/lib/soatTools';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  parseToolContextBody,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 
 const approvalsRouter = new Router<Context>();
 
@@ -216,7 +221,10 @@ approvalsRouter.post(
       throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
-    const body = ctx.request.body as { arguments?: object };
+    const body = ctx.request.body as {
+      arguments?: object;
+      tool_context?: unknown;
+    };
 
     if (body.arguments != null) {
       await assertMayEditProposedAction({
@@ -229,6 +237,7 @@ approvalsRouter.post(
       id: ctx.params.approval_id,
       editedArguments: body.arguments ?? null,
       resolvedByUserId: ctx.authUser.id,
+      toolContext: parseToolContextBody(body.tool_context),
     });
 
     ctx.body = item;
