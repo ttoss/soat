@@ -151,7 +151,7 @@ Once a project accepts a share of an agent, the agent runs in that project from:
 - a conversation's generation, naming it as `agent_id`, and a message it authors;
 - a [session](./sessions.md), opened with a key or OAuth token scoped to the grantee project;
 - an orchestration `agent` node;
-- an ingestion rule's `agent_id`, as its converter.
+- an ingestion rule's `agent_id`, as its converter, including one declared in a [formation](./formations.md) template.
 
 Every other reference to an agent — a decider, an eval, a memory rule, a workflow dispatch — names one of the project's own agents only.
 

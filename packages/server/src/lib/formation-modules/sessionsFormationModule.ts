@@ -38,6 +38,7 @@ export const sessionsFormationModule = defineFormationModule({
     const agentId = await lookupAgentInternalId({
       publicId: properties.agent_id as string,
       projectId,
+      reach: 'project',
     });
 
     return createSession({

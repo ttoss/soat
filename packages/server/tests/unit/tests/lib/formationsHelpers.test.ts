@@ -789,7 +789,11 @@ describe('formationsHelpers', () => {
       });
 
       await expect(
-        lookupAgentInternalId({ publicId: agent.publicId, projectId })
+        lookupAgentInternalId({
+          publicId: agent.publicId,
+          projectId,
+          reach: 'project',
+        })
       ).resolves.toBe(agent.id);
     });
 
@@ -801,7 +805,11 @@ describe('formationsHelpers', () => {
       });
 
       await expect(
-        lookupToolInternalId({ publicId: tool.publicId, projectId })
+        lookupToolInternalId({
+          publicId: tool.publicId,
+          projectId,
+          reach: 'project',
+        })
       ).resolves.toBe(tool.id);
     });
 

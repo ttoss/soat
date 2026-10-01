@@ -352,6 +352,41 @@ describe('Shared agents', () => {
     });
   });
 
+  describe('formations in the grantee', () => {
+    const deploy = (agentId: string, name: string) => {
+      return admin()
+        .post('/api/v1/formations')
+        .send({
+          project_id: granteeId,
+          name,
+          template: {
+            resources: {
+              Rule: {
+                type: 'ingestion_rule',
+                properties: {
+                  content_type_glob: `image/x-${name}`,
+                  agent_id: agentId,
+                },
+              },
+            },
+          },
+        });
+    };
+
+    test('a template declares a rule converting with the shared agent, and fails naming it once the share is revoked', async () => {
+      const shared = await shareAgent('Formation Converter');
+
+      const deployed = await deploy(shared.agentId, 'agent-rule-ok');
+      await admin().post(`/api/v1/shares/${shared.shareId}/revoke`);
+      const refused = await deploy(shared.agentId, 'agent-rule-gone');
+
+      expect(deployed.status).toBe(201);
+      expect(deployed.body.status).toBe('active');
+      expect(refused.body.status).toBe('failed');
+      expect(refused.body.error.message).toContain(shared.agentId);
+    });
+  });
+
   describe('when the share goes away', () => {
     test('the grantee can no longer run the agent', async () => {
       const gone = await shareAgent('Revoked Agent');

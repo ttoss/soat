@@ -36,7 +36,11 @@ const resolveToolId = async (args: {
   if (args.value === null) return null;
   const publicId = toNullableString(args.value);
   if (!publicId) return undefined;
-  return lookupToolInternalId({ publicId, projectId: args.projectId });
+  return lookupToolInternalId({
+    publicId,
+    projectId: args.projectId,
+    reach: 'shares',
+  });
 };
 
 const resolveAgentId = async (args: {
@@ -46,7 +50,11 @@ const resolveAgentId = async (args: {
   if (args.value === null) return null;
   const publicId = toNullableString(args.value);
   if (!publicId) return undefined;
-  return lookupAgentInternalId({ publicId, projectId: args.projectId });
+  return lookupAgentInternalId({
+    publicId,
+    projectId: args.projectId,
+    reach: 'shares',
+  });
 };
 
 // ── Normalizers ──────────────────────────────────────────────────────────
