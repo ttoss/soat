@@ -77,7 +77,7 @@ export const executeSoatTool = async (args: {
     return await meterToolExecution({
       meter: args.meter,
       send: (markSent) => {
-        markSent();
+        markSent({ input: args.rawArgs, action: args.def.name });
         return withCallTimeout({
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,

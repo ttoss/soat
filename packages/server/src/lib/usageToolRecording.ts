@@ -4,12 +4,21 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { emitActivityEntry } from './activity';
+import { sumComponentCostUsd } from './priceCompute';
 import { insertUsageEvent } from './usageEventWrite';
+import {
+  type InvalidQuantity,
+  priceToolResource,
+  type SentToolCall,
+  type ToolCallRecord,
+} from './usageResourcePricing';
 
 const log = createDebug('soat:usage');
 
-// A platform meter, unpriced: one `tool_call` component per event. With no
-// price row the event's `cost_usd` stays null ("captured, not yet priced").
+// A platform meter: one unpriced `tool_call` component per event, plus one per
+// resource row the tool's owner prices it with. With none priced the event's
+// `cost_usd` stays null ("captured, not yet priced").
 const TOOL_PROVIDER = 'soat';
 const TOOL_MODEL = 'tool-call';
 const TOOL_COMPONENT = 'tool_call';
@@ -197,11 +206,35 @@ const resolveAttribution = async (
   };
 };
 
+const reportInvalidQuantities = async (args: {
+  projectId: number;
+  toolId: string;
+  invalid: InvalidQuantity[];
+}): Promise<void> => {
+  for (const entry of args.invalid) {
+    await emitActivityEntry({
+      projectId: args.projectId,
+      kind: 'usage_quantity_invalid',
+      summary: `Price ${entry.priceId} of ${entry.resource} read no valid quantity for '${entry.component}'`,
+      detail: { ...entry },
+      refId: args.toolId,
+    });
+  }
+};
+
 const persistToolExecution = async (args: {
   meter: ToolExecutionMeter;
-  outcome: ToolExecutionOutcome;
+  call: ToolCallRecord;
 }): Promise<void> => {
   const resolved = await resolveAttribution(args.meter);
+  const { toolId } = args.meter;
+  const priced = toolId
+    ? await priceToolResource({
+        toolId,
+        ownerProjectId: args.meter.projectId,
+        call: args.call,
+      })
+    : { components: [], invalid: [] };
   const guardrailIds = args.meter.attribution.guardrailIds ?? [];
   // A tool call has no replay identity: a retry is a second call on the wire
   // and meters as one, so the key is unique per execution.
@@ -216,62 +249,92 @@ const persistToolExecution = async (args: {
           projectId === args.meter.projectId ? null : args.meter.projectId,
         ...resolved,
         aiProviderId: null,
-        outcome: args.outcome,
+        outcome: args.call.outcome as ToolExecutionOutcome,
         guardrailIds: guardrailIds.length > 0 ? [...guardrailIds] : null,
         meterType: TOOL_EXECUTION_METER_TYPE,
         provider: TOOL_PROVIDER,
         model: TOOL_MODEL,
-        costUsd: null,
+        costUsd: sumComponentCostUsd(
+          priced.components.map((component) => {
+            return component.costUsd;
+          })
+        ),
         idempotencyKey,
       },
       transaction,
     });
     if (!created) return;
 
-    await db.UsageComponent.create(
-      {
-        publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
-        usageEventId: event.id,
-        component: TOOL_COMPONENT,
-        quantity: '1',
-        unit: TOOL_COMPONENT,
-        billable: true,
-        unitPrice: null,
-        costUsd: null,
-        priceId: null,
-      },
+    await db.UsageComponent.bulkCreate(
+      [
+        {
+          component: TOOL_COMPONENT,
+          quantity: '1',
+          unit: TOOL_COMPONENT,
+          unitPrice: null,
+          costUsd: null,
+          priceId: null,
+        },
+        ...priced.components,
+      ].map((component) => {
+        return {
+          ...component,
+          publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
+          usageEventId: event.id,
+          billable: true,
+        };
+      }),
       { transaction }
     );
   });
+  if (toolId && priced.invalid.length > 0) {
+    await reportInvalidQuantities({
+      projectId: eventProjectId(args.meter),
+      toolId,
+      invalid: priced.invalid,
+    });
+  }
 };
 
 /**
  * Runs one outbound tool call and writes its `tool_execution` event.
  *
- * `send` calls `markSent` the moment the request leaves: a call refused before
- * that (an egress block, an unresolvable template) is not an execution and
- * writes nothing, while one that went out is recorded whatever the target
- * answered. The write is awaited so a guardrail counting this tool's calls
- * sees it on the next call, and never throws: metering must not fail the call
- * it measures.
+ * `send` calls `markSent` the moment the request leaves, with what it sent: a
+ * call refused before that (an egress block, an unresolvable template) is not
+ * an execution and writes nothing, while one that went out is recorded
+ * whatever the target answered. The write is awaited so a guardrail counting
+ * this tool's calls sees it on the next call, and never throws: metering must
+ * not fail the call it measures.
  */
 export const meterToolExecution = async <T>(args: {
   meter: ToolExecutionMeter;
-  send: (markSent: () => void) => Promise<T>;
+  send: (markSent: (sent?: SentToolCall) => void) => Promise<T>;
 }): Promise<T> => {
-  let sent = false;
+  const startedAt = Date.now();
+  const sent: { call?: SentToolCall } = {};
   let outcome: ToolExecutionOutcome = 'ok';
+  let response: unknown = null;
   try {
-    return await args.send(() => {
-      sent = true;
+    const result = await args.send((call) => {
+      sent.call = call ?? {};
     });
+    response = result;
+    return result;
   } catch (error) {
     outcome = isTimeoutError(error) ? 'timeout' : 'error';
     throw error;
   } finally {
-    if (sent) {
+    if (sent.call) {
       try {
-        await persistToolExecution({ meter: args.meter, outcome });
+        await persistToolExecution({
+          meter: args.meter,
+          call: {
+            ...sent.call,
+            response,
+            outcome,
+            durationMs: Date.now() - startedAt,
+          },
+        });
       } catch (error) {
         log(
           'meterToolExecution: failed tool=%s error=%s',

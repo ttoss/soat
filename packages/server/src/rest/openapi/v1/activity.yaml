@@ -63,6 +63,7 @@ paths:
                 share_revoked,
                 share_suspended,
                 tool_resolution_failed,
+                usage_quantity_invalid,
               ]
         - name: severity
           in: query
@@ -232,6 +233,7 @@ components:
               share_revoked,
               share_suspended,
               tool_resolution_failed,
+              usage_quantity_invalid,
             ]
           description: >-
             How the entry was produced. `tool_resolution_failed` means a tool
@@ -246,6 +248,9 @@ components:
             names the resource and the publisher project.
             `share_cap_exceeded` lands in the consumer project when a call
             through a share it accepted is refused by the share's `cap`.
+            `usage_quantity_invalid` lands in the project a tool call is
+            metered in when a resource price row's `quantity` reads no finite
+            number >= 0; `ref_id` is the tool.
         severity:
           type: string
           enum: [info, warning, critical]

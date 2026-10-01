@@ -84,6 +84,7 @@ The flow they follow is
 | `2026-09-30-agent-records-outlive-agent` | `agent_id` on generations, traces and sessions becomes nullable and `SET NULL`, with a backfilled, not-null `agent_public_id`, so a shared agent's records survive its owner deleting it |
 | `2026-09-30-ingestion-rules-outlive-converter` | `ingestion_rules.tool_id` and `agent_id` become `SET NULL` on delete, with `tool_public_id` and `agent_public_id` kept beside them |
 | `2026-10-01-share-cap` | `shares.cap`, the calls each acceptance may make per window |
+| `2026-10-01-price-book-resource` | `price_books.resource` and `quantity`, a row pricing one tool by what a call consumed |
 
 Run them from the server package, which owns the entrypoint:
 

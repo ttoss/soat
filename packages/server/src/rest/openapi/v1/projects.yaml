@@ -685,7 +685,16 @@ components:
           description: Always null for a project + provider-slug price
         meter_type:
           type: string
-          description: Always `llm_tokens` for project prices
+          description: '`llm_tokens` for a token row, `tool_execution` for a resource row'
+        resource:
+          type: string
+          nullable: true
+          description: The tool SRN a resource row prices; null for a SKU row
+        quantity:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: A resource row's quantity expression; null prices one per call
         provider:
           type: string
           example: openai
@@ -726,29 +735,58 @@ components:
           items:
             type: object
             required:
-              - provider
-              - model
               - component
               - unit
               - unit_price
               - effective_from
             additionalProperties: false
             properties:
+              meter_type:
+                type: string
+                enum: [llm_tokens, tool_execution]
+                default: llm_tokens
+                description: >-
+                  `llm_tokens` for a token row naming `provider` and `model`;
+                  `tool_execution` for a resource row naming `resource`.
+              resource:
+                type: string
+                description: >-
+                  The SRN of one tool, `srn:<project_id>:tool:<tool_id>`, for a
+                  resource row. It prices that tool's `tool_execution` events,
+                  adding a component beside `tool_call`; omit `provider` and
+                  `model`. A pipeline or client tool has no execution of its
+                  own and cannot be priced.
+                example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
+              quantity:
+                type: object
+                additionalProperties: true
+                description: >-
+                  On a resource row only: JSON Logic over `{ input, action,
+                  response, outcome, duration_ms }` giving the quantity
+                  `unit_price` multiplies. Omit to price one per call. A result
+                  that is not a finite number >= 0 records quantity `0` and no
+                  cost.
+                example: { var: response.page_count }
               provider:
                 type: string
+                description: The provider slug of a token row
                 example: openai
               model:
                 type: string
+                description: The model of a token row
                 example: gpt-4o
               component:
                 type: string
-                description: The token component this row prices (`input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`)
+                description: >-
+                  The component this row prices: a token component
+                  (`input_tokens`, `output_tokens`, `cached_tokens`,
+                  `cache_write_tokens`), or a resource row's own (`page`)
               unit:
                 type: string
-                description: Always `token` for token pricing
+                description: '`token` for token pricing; the resource component''s unit otherwise'
               unit_price:
                 type: number
-                description: USD per token for this component
+                description: USD per `unit`
               effective_from:
                 type: string
                 format: date-time

@@ -25,6 +25,8 @@ type ProjectPriceBody = {
   meter_type?: string;
   provider?: string;
   model?: string;
+  resource?: string;
+  quantity?: unknown;
   component?: string;
   unit?: string;
   unit_price?: number;
@@ -267,8 +269,10 @@ projectsRouter.put('/projects/:project_id/prices', async (ctx: Context) => {
   const prices = (body.prices ?? []).map((price) => {
     return {
       meterType: price.meter_type,
-      provider: price.provider!,
-      model: price.model!,
+      provider: price.provider,
+      model: price.model,
+      resource: price.resource,
+      quantity: price.quantity,
       component: price.component!,
       unit: price.unit!,
       unitPrice: price.unit_price!,

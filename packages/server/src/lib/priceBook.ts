@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createEffectiveFromResolver } from './priceBookEffectiveFrom';
+import { type PriceRowKey, resolvePriceRowKey } from './priceBookResource';
 import { DEFAULT_METER_TYPE, validatePriceInput } from './priceCompute';
 
 export { DEFAULT_METER_TYPE } from './priceCompute';
@@ -20,6 +21,8 @@ export type PersistedPrice = {
   component: string;
   unit: string;
   unit_price: number;
+  resource: string | null;
+  quantity: unknown;
   effective_from: Date;
   created_at: Date;
 };
@@ -40,6 +43,8 @@ export const mapPrice = (
     component: price.component,
     unit: price.unit,
     unit_price: Number(price.unitPrice),
+    resource: price.resource ?? null,
+    quantity: price.quantity ?? null,
     effective_from: price.effectiveFrom,
     created_at: price.createdAt,
   };
@@ -112,8 +117,10 @@ export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
 type PriceInput = {
   aiProviderId?: string | null;
   meterType?: string;
-  provider: string;
-  model: string;
+  provider?: string;
+  model?: string;
+  resource?: string;
+  quantity?: unknown;
   component: string;
   unit: string;
   unitPrice: number;
@@ -159,6 +166,8 @@ export const persistPriceRow = async (args: {
   unit: string;
   unitPrice: number;
   effectiveFrom: Date;
+  resource?: string | null;
+  quantity?: unknown;
 }): Promise<number> => {
   assertPriceInput(args);
 
@@ -172,6 +181,8 @@ export const persistPriceRow = async (args: {
     unit: args.unit,
     unitPrice: String(args.unitPrice),
     effectiveFrom: args.effectiveFrom,
+    resource: args.resource ?? null,
+    quantity: args.quantity ?? null,
   };
 
   const [row, created] = await db.PriceBook.findOrCreate({
@@ -191,6 +202,7 @@ export const persistPriceRow = async (args: {
       meterType: values.meterType,
       unit: values.unit,
       unitPrice: values.unitPrice,
+      quantity: values.quantity,
     });
   }
 
@@ -219,18 +231,20 @@ export const upsertPrices = async (args: {
   const ids: number[] = [];
   for (const price of args.prices) {
     const provider = await resolveAiProvider(price.aiProviderId);
+    const key = await resolvePriceRowKey({
+      ...price,
+      ownerProjectPublicId: null,
+      skuMeterTypes: null,
+    });
     ids.push(
       await persistPriceRow({
+        ...price,
+        ...key,
         aiProviderId: provider.id,
         projectId: null,
-        meterType: price.meterType,
-        provider: price.provider,
-        model: price.model,
-        component: price.component,
-        unit: price.unit,
-        unitPrice: price.unitPrice,
         effectiveFrom: await resolveEffectiveFrom({
           ...price,
+          ...key,
           aiProviderId: provider.id,
           providerProjectId: provider.projectId,
         }),
@@ -350,8 +364,10 @@ const getProjectForPricing = async (projectId: string): Promise<number> => {
 
 export type ProjectPriceInput = {
   meterType?: string;
-  provider: string;
-  model: string;
+  provider?: string;
+  model?: string;
+  resource?: string;
+  quantity?: unknown;
   component: string;
   unit: string;
   unitPrice: number;
@@ -405,17 +421,18 @@ export const upsertProjectPrices = async (args: {
   });
   const ids: number[] = [];
   for (const price of args.prices) {
+    const key: PriceRowKey = await resolvePriceRowKey({
+      ...price,
+      ownerProjectPublicId: args.projectId,
+      skuMeterTypes: [DEFAULT_METER_TYPE],
+    });
     ids.push(
       await persistPriceRow({
+        ...price,
+        ...key,
         aiProviderId: null,
         projectId: id,
-        meterType: price.meterType,
-        provider: price.provider,
-        model: price.model,
-        component: price.component,
-        unit: price.unit,
-        unitPrice: price.unitPrice,
-        effectiveFrom: await resolveEffectiveFrom(price),
+        effectiveFrom: await resolveEffectiveFrom({ ...price, ...key }),
       })
     );
   }

@@ -26,7 +26,8 @@ export type ActivityKind =
   | 'share_resumed'
   | 'share_revoked'
   | 'share_suspended'
-  | 'tool_resolution_failed';
+  | 'tool_resolution_failed'
+  | 'usage_quantity_invalid';
 
 /**
  * Default severity per kind, applied when a producer emits without an
@@ -34,7 +35,8 @@ export type ActivityKind =
  * exception was already filed (an anomaly, by definition), and
  * `tool_resolution_failed` because the turn ran without tools it was configured
  * to have, and a suspended or revoked share because something the project
- * accepted stopped being granted or refused a call over its cap; the other kinds are routine autonomous
+ * accepted stopped being granted or refused a call over its cap, and an
+ * unreadable price quantity because the call went unpriced; the other kinds are routine autonomous
  * operation, an approval waiting on a human included.
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
@@ -48,6 +50,7 @@ const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
   share_revoked: 'warning',
   share_suspended: 'warning',
   tool_resolution_failed: 'warning',
+  usage_quantity_invalid: 'warning',
 };
 
 type ActivityInstance = InstanceType<(typeof db)['ActivityEntry']> & {

@@ -55,6 +55,7 @@ import {
   resolvePresetParametersForGate,
   resolveToolHeaderTemplates,
 } from './toolTemplates';
+import type { SentToolCall } from './usageResourcePricing';
 import {
   meterToolExecution,
   type ToolCallAttribution,
@@ -608,7 +609,7 @@ const sendHttpToolRequest = async (
   args: Omit<HttpToolExecuteArgs, 'meter'> & {
     toolArgs: unknown;
     toolContext?: Record<string, string>;
-    markSent: () => void;
+    markSent: (sent: SentToolCall) => void;
   }
 ): Promise<unknown> => {
   const { toolArgs, toolContext } = args;
@@ -668,7 +669,11 @@ const sendHttpToolRequest = async (
         url: resolved.fetchUrl,
         init,
       }),
-      { onRequest: args.markSent }
+      {
+        onRequest: () => {
+          args.markSent({ input: rawArgs });
+        },
+      }
     );
     return await readHttpToolResponse({ response, method, url });
   } catch (error) {

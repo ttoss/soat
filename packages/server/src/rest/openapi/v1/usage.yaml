@@ -1475,6 +1475,15 @@ components:
         unit_price:
           type: number
           description: USD per `unit` (for token components, USD per token)
+        resource:
+          type: string
+          nullable: true
+          description: The tool SRN a resource row prices; null for a SKU row
+        quantity:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: A resource row's quantity expression; null prices one per call
         effective_from:
           type: string
           format: date-time
@@ -1502,8 +1511,6 @@ components:
           items:
             type: object
             required:
-              - provider
-              - model
               - component
               - unit
               - unit_price
@@ -1529,10 +1536,31 @@ components:
                 description: >
                   Defaults to `llm_tokens`. Set to a platform meter type
                   (e.g. `compute_execution`) for a platform SKU.
+              resource:
+                type: string
+                description: >-
+                  The SRN of one tool, `srn:<project_id>:tool:<tool_id>`, for a
+                  resource row. It prices that tool's `tool_execution` events,
+                  adding a component beside `tool_call`; omit `provider` and
+                  `model`. A pipeline or client tool has no execution of its
+                  own and cannot be priced.
+                example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
+              quantity:
+                type: object
+                additionalProperties: true
+                description: >-
+                  On a resource row only: JSON Logic over `{ input, action,
+                  response, outcome, duration_ms }` giving the quantity
+                  `unit_price` multiplies. Omit to price one per call. A result
+                  that is not a finite number >= 0 records quantity `0` and no
+                  cost.
+                example: { var: response.page_count }
               provider:
                 type: string
+                description: The SKU vendor; omit on a resource row
               model:
                 type: string
+                description: The SKU; omit on a resource row
               component:
                 type: string
                 description: The component this row prices (`input_tokens`, `compute_second`, …)

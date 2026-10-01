@@ -28,6 +28,7 @@ import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
 import { agentRecordsOutliveAgent } from './2026-09-30-agentRecordsOutliveAgent';
 import { ingestionRulesOutliveConverter } from './2026-09-30-ingestionRulesOutliveConverter';
 import { usageEventPublisherProject } from './2026-09-30-usageEventPublisherProject';
+import { priceBookResource } from './2026-10-01-priceBookResource';
 import { shareCap } from './2026-10-01-shareCap';
 
 /**
@@ -79,4 +80,5 @@ export const MIGRATIONS: Migration[] = [
   agentRecordsOutliveAgent,
   ingestionRulesOutliveConverter,
   shareCap,
+  priceBookResource,
 ];
