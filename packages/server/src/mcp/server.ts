@@ -39,6 +39,8 @@ export const mcpOperationTools: Tool[] = soatMcpTools.map((tool) => {
   return {
     name: tool.name,
     description: tool.description,
+    summary: `${tool.method} ${tool.pathTemplate} — ${tool.description}`,
+    ...(tool.tags.length > 0 ? { tags: tool.tags } : {}),
     inputSchema: tool.inputSchema,
     validateArguments: true,
     handler: async (args: Record<string, unknown>) => {
@@ -88,9 +90,21 @@ const getDocPageTool: Tool = {
   },
 };
 
+/** Where an agent starts, so they stay on `tools/list` beside the proxies. */
+const STANDALONE_TOOLS = new Set([getDocsTool.name, getDocPageTool.name]);
+
+// Deferred behind `search` / `describe` / `call`: three definitions in a
+// client's context instead of every operation's schema. An `mcp` binding over
+// this server applies its lists to the tool a `call` targets
+// (`mcpDeferredProxy.ts`).
 registerTools({
   server: mcpServer,
   tools: [...mcpOperationTools, getDocsTool, getDocPageTool],
+  defer: {
+    except: ({ tool }) => {
+      return STANDALONE_TOOLS.has(tool.name);
+    },
+  },
 });
 
 const mcpRouter = createMcpRouter(mcpServer, {

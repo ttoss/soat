@@ -11,7 +11,9 @@ import {
 } from './agentToolResolver';
 import { executeSoatTool } from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
+import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
 import { McpToolError } from './mcpProtocol';
+import { fetchMcpToolListing } from './mcpToolListing';
 import { resolveSecretRefsInString } from './secrets';
 import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
@@ -128,6 +130,61 @@ export const callSoatTool = (
   });
 };
 
+/**
+ * Enforced before the outbound request: a scoped tool must reject a denied
+ * action at the capability boundary, not merely omit it from the model's tool
+ * surface. Absent `actions` means the whole surface; the denylist wins.
+ */
+const assertActionBound = (args: {
+  tool: CallableToolDefinition;
+  action: string;
+}): void => {
+  const { tool, action } = args;
+  if (
+    (tool.actions != null && !tool.actions.includes(action)) ||
+    (tool.deniedActions != null && tool.deniedActions.includes(action))
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `action "${action}" is not available on this tool.`
+    );
+  }
+};
+
+/**
+ * On a deferred server (`mcpDeferredProxy.ts`): the proxy to send `action`
+ * through when the server does not list it, after holding a direct call of
+ * the proxy to the binding's lists by the tool it targets. `undefined` on a
+ * server that lists its tools, or whose listing cannot be read.
+ */
+const deferredRoute = async (args: {
+  tool: CallableToolDefinition;
+  action: string;
+  input: Record<string, unknown>;
+  mcpUrl: string;
+  mcpHeaders: Record<string, string>;
+}): Promise<string | undefined> => {
+  const listing = await fetchMcpToolListing({
+    mcpUrl: args.mcpUrl,
+    mcpHeaders: args.mcpHeaders,
+    logToolCallingError: noopLogToolCallingError,
+  });
+  const proxy = listing ? findDeferredProxy(listing) : null;
+  if (!listing || !proxy) return undefined;
+
+  if (args.action === proxy.callName) {
+    assertActionBound({
+      tool: args.tool,
+      action: innerToolName(args.input) ?? '',
+    });
+    return undefined;
+  }
+  const listed = listing.some((mcpTool) => {
+    return mcpTool.name === args.action;
+  });
+  return listed ? undefined : proxy.callName;
+};
+
 export const callMcpTool = async (
   tool: CallableToolDefinition,
   action: string | undefined,
@@ -142,21 +199,7 @@ export const callMcpTool = async (
       'action is required for mcp tools.'
     );
   }
-  // Enforced before the outbound request: a scoped tool must reject a denied
-  // action at the capability boundary, not merely omit it from the model's tool
-  // surface. Absent `actions` means the whole surface; the denylist wins.
-  if (tool.actions != null && !tool.actions.includes(action)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not available on this tool.`
-    );
-  }
-  if (tool.deniedActions != null && tool.deniedActions.includes(action)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not available on this tool.`
-    );
-  }
+  assertActionBound({ tool, action });
   const mcpConfig = tool.mcp as {
     url: string;
     headers?: Record<string, string>;
@@ -180,15 +223,24 @@ export const callMcpTool = async (
     projectId,
     toolContext,
   });
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    ...(mcpHeaders ?? {}),
+    ...buildContextHeaders({ toolContext, contextKeys: tool.contextKeys }),
+  };
+  const viaCall = await deferredRoute({
+    tool,
+    action,
+    input: mergedInput,
+    mcpUrl,
+    mcpHeaders: headers,
+  });
   return buildMcpToolExecute({
     mcpUrl,
-    mcpHeaders: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      ...(mcpHeaders ?? {}),
-      ...buildContextHeaders({ toolContext, contextKeys: tool.contextKeys }),
-    },
+    mcpHeaders: headers,
     mcpToolName: action,
+    viaCall,
     meter,
     // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,

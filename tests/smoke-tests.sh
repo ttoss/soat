@@ -4140,7 +4140,7 @@ MCP_DIRECT_RESP=$(curl -s -X POST "$SERVER_URL/mcp" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"list-agents","arguments":{}}}')
+  -d '{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"call","arguments":{"name":"list-agents","arguments":{}}}}')
 
 if ! printf '%s\n' "$MCP_DIRECT_RESP" | jq -e '.result.content[0].text' >/dev/null 2>&1; then
   echo "ERROR: MCP direct tools/call did not return expected content" >&2

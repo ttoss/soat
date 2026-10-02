@@ -43,6 +43,8 @@ export interface ToolDefinition {
   acceptedBodyFields: string[];
   /** The operation's path, as the spec writes it (`/api/v1/agents/{agent_id}`). */
   pathTemplate: string;
+  /** The operation's `tags`, e.g. to filter the MCP `search` by module. */
+  tags: string[];
   /**
    * `x-soat-agent-exclude`: kept in the catalog rather than dropped like an
    * MCP exclusion, because the operation is still an MCP tool and the
@@ -101,6 +103,7 @@ const toSoatTool = (tool: OpenApiToolDefinition): ToolDefinition => {
     resource: readResourceRef(extensions['x-soat-resource']),
     acceptedBodyFields: tool.acceptedBodyFields,
     pathTemplate: tool.pathTemplate,
+    tags: tool.tags,
     ...(extensions['x-soat-agent-exclude'] ? { agentExcluded: true } : {}),
   };
 };
