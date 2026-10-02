@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.71.0](https://github.com/ttoss/soat/compare/v0.70.1...v0.71.0) (2026-10-02)
+
+### Features
+
+* **server:** defer mcp tools and scope bindings over deferred servers ([#1517](https://github.com/ttoss/soat/issues/1517)) ([acff05b](https://github.com/ttoss/soat/commit/acff05b2b77c0e71a3e7cfe2178853b8767fe9dc))
+
+### BREAKING CHANGES
+
+* **server:** an MCP client calling an operation by name must call
+  `call` with `{ name, arguments }`; `tools/list` no longer lists them.
+
 ## [0.70.1](https://github.com/ttoss/soat/compare/v0.70.0...v0.70.1) (2026-10-01)
 
 ### Bug Fixes
