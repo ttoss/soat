@@ -335,6 +335,12 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
  * exact. Offset/limit pagination; export-before-expiry is paginating this
  * endpoint into NDJSON.
  */
+/** Page size of the audit log when the caller names none. */
+export const AUDIT_LOG_DEFAULT_LIMIT = 25;
+
+/** The audit log's own page ceiling, wider than `MAX_LIST_LIMIT`. */
+export const AUDIT_LOG_MAX_LIMIT = 200;
+
 export const listAuditEntries = async (
   args: AuditListFilters & { limit?: number; offset?: number }
 ): Promise<{
@@ -348,7 +354,10 @@ export const listAuditEntries = async (
   // streamAuditEntriesNdjson's paging loop — safe against any other caller.
   const rawLimit = Number.isFinite(args.limit) ? args.limit : undefined;
   const rawOffset = Number.isFinite(args.offset) ? args.offset : undefined;
-  const limit = Math.min(Math.max(rawLimit ?? 25, 1), 200);
+  const limit = Math.min(
+    Math.max(rawLimit ?? AUDIT_LOG_DEFAULT_LIMIT, 1),
+    AUDIT_LOG_MAX_LIMIT
+  );
   const offset = Math.max(rawOffset ?? 0, 0);
 
   const where = buildListWhere(args);

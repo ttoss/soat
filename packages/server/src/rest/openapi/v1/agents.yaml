@@ -106,6 +106,8 @@ paths:
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
@@ -164,11 +166,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
       responses:
         '200':
           description: Agent details
@@ -204,11 +202,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
@@ -253,11 +247,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
@@ -307,11 +297,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
         - name: force
           in: query
           required: false
@@ -380,11 +366,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
         - name: wait
           in: query
           required: false
@@ -537,16 +519,8 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: generation_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/GenerationId'
       requestBody:
         required: true
         content:
@@ -612,17 +586,15 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
         - name: limit
           in: query
           required: false
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
@@ -686,17 +658,8 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: version
-          in: path
-          required: true
-          schema:
-            type: integer
-            minimum: 1
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/AgentVersionNumber'
       responses:
         '200':
           description: Archived agent version
@@ -750,17 +713,8 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: version
-          in: path
-          required: true
-          schema:
-            type: integer
-            minimum: 1
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/AgentVersionNumber'
       requestBody:
         required: false
         content:
@@ -825,11 +779,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
       requestBody:
         required: true
         content:
@@ -890,11 +840,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
       responses:
         '200':
           description: The agent, now serving the promoted config
@@ -945,11 +891,7 @@ paths:
         kind: agent
         from: agent_id
       parameters:
-        - name: agent_id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/AgentId'
       responses:
         '200':
           description: The agent, back on the stable config
@@ -982,6 +924,31 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
 components:
+  parameters:
+    AgentId:
+      name: agent_id
+      in: path
+      required: true
+      description: Agent public ID
+      schema:
+        type: string
+        example: agent_V1StGXR8Z5jdHi6B
+    GenerationId:
+      name: generation_id
+      in: path
+      required: true
+      description: Public ID of the generation paused at `requires_action`
+      schema:
+        type: string
+        example: gen_V1StGXR8Z5jdHi6B
+    AgentVersionNumber:
+      name: version
+      in: path
+      required: true
+      description: Archived config version number
+      schema:
+        type: integer
+        minimum: 1
   securitySchemes:
     bearerAuth:
       type: http
@@ -1420,10 +1387,18 @@ components:
             targets with failover. Mutually exclusive with `ai_provider_id` and
             `model`.
         name:
+          description: >-
+            Display name.
           type: string
         instructions:
+          description: >-
+            System instructions, sent as the system message of every
+            generation.
           type: string
         model:
+          description: >-
+            Model identifier on the pinned AI provider. Omitted, the provider's
+            default model is used. Cannot be combined with `model_route_id`.
           type: string
         tool_bindings:
           type: array
@@ -1435,6 +1410,8 @@ components:
             inline definition (`{ "tool": … }`). See
             [Tool Bindings](/docs/modules/agents#tool-bindings).
         max_steps:
+          description: >-
+            Maximum agent loop steps per turn (default `20`).
           type: integer
         tool_choice:
           description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
@@ -1465,6 +1442,10 @@ components:
             `max_chain_generations` whose `max_generations` is not a positive
             integer, or a non-object entry is rejected with 400.
         active_tool_ids:
+          description: >-
+            Persisted tools from `tool_bindings` the model sees on every step.
+            Omitted or `[]` leaves every bound tool active. See
+            [Active Tools](/docs/modules/agents#active-tools).
           x-soat-ref: tools
           type: array
           items:
@@ -1477,14 +1458,25 @@ components:
             type: string
           description: Guardrails attached at the agent scope.
         step_rules:
+          description: >-
+            Per-step overrides of `tool_choice` and `active_tool_ids`, numbered
+            from the first step of the turn. See
+            [Step Rules](/docs/modules/agents#step-rules).
           type: array
           items:
             $ref: '#/components/schemas/AgentStepRule'
         boundary_policy:
           $ref: '#/components/schemas/AgentBoundaryPolicy'
         temperature:
+          description: >-
+            Sampling temperature passed to the model. Omitted, the provider's
+            default applies.
           type: number
         knowledge_config:
+          description: >-
+            Knowledge search run before every generation; its matches are
+            prepended as reference context. See
+            [Knowledge Config](/docs/modules/agents#knowledge-config).
           type: object
           additionalProperties: false
           properties:
@@ -1612,6 +1604,9 @@ components:
       additionalProperties: false
       properties:
         ai_provider_id:
+          description: >-
+            Public ID of the AI provider to pin. Mutually exclusive with
+            `model_route_id`; set to `null` when switching to a route.
           x-soat-ref: ai-providers
           type: string
           nullable: true
@@ -1623,12 +1618,20 @@ components:
             Model route in the same project. Mutually exclusive with
             `ai_provider_id` and `model`; set to null to clear.
         name:
+          description: >-
+            Display name; `null` clears it.
           type: string
           nullable: true
         instructions:
+          description: >-
+            System instructions, sent as the system message of every
+            generation; `null` clears them.
           type: string
           nullable: true
         model:
+          description: >-
+            Model identifier on the pinned AI provider; `null` falls back to the
+            provider's default model. Cannot be combined with `model_route_id`.
           type: string
           nullable: true
         tool_bindings:
@@ -1641,6 +1644,9 @@ components:
             the whole binding list; set to `null` to clear. See
             [Tool Bindings](/docs/modules/agents#tool-bindings).
         max_steps:
+          description: >-
+            Maximum agent loop steps per turn; `null` restores the default of
+            `20`.
           type: integer
           nullable: true
         tool_choice:
@@ -1673,6 +1679,10 @@ components:
             `max_chain_generations` whose `max_generations` is not a positive
             integer, or a non-object entry is rejected with 400.
         active_tool_ids:
+          description: >-
+            Persisted tools from `tool_bindings` the model sees on every step.
+            `null` or `[]` leaves every bound tool active. See
+            [Active Tools](/docs/modules/agents#active-tools).
           x-soat-ref: tools
           type: array
           nullable: true
@@ -1686,6 +1696,10 @@ components:
             type: string
           description: Guardrails attached at the agent scope.
         step_rules:
+          description: >-
+            Per-step overrides of `tool_choice` and `active_tool_ids`, numbered
+            from the first step of the turn; `null` clears them. See
+            [Step Rules](/docs/modules/agents#step-rules).
           type: array
           nullable: true
           items:
@@ -1693,9 +1707,16 @@ components:
         boundary_policy:
           $ref: '#/components/schemas/AgentBoundaryPolicy'
         temperature:
+          description: >-
+            Sampling temperature passed to the model; `null` restores the
+            provider's default.
           type: number
           nullable: true
         knowledge_config:
+          description: >-
+            Knowledge search run before every generation; its matches are
+            prepended as reference context. `null` turns it off. See
+            [Knowledge Config](/docs/modules/agents#knowledge-config).
           type: object
           nullable: true
           additionalProperties: false
@@ -1829,6 +1850,10 @@ components:
       additionalProperties: false
       properties:
         messages:
+          description: >-
+            Conversation turns, oldest first. Roles are `user` and `assistant`:
+            the system prompt is the agent's `instructions`, so a `system` entry is
+            refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
           type: array
           minItems: 1
           items:
@@ -2051,6 +2076,9 @@ components:
       additionalProperties: false
       properties:
         tool_outputs:
+          description: >-
+            Results for the tool calls the paused generation is waiting on, one
+            entry per `tool_call_id`.
           type: array
           minItems: 1
           items:
