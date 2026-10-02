@@ -41,6 +41,8 @@ paths:
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
@@ -265,6 +267,8 @@ paths:
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
@@ -577,6 +581,8 @@ paths:
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
@@ -848,6 +854,8 @@ paths:
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
@@ -1105,6 +1113,8 @@ paths:
           description: Maximum number of results to return
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 50
         - name: offset
           in: query
