@@ -13,6 +13,12 @@ import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
 } from './externalToolCall';
+import {
+  type DeferredProxy,
+  describeDeferredTools,
+  findDeferredProxy,
+  innerToolName,
+} from './mcpDeferredProxy';
 import { parseJsonRpcBody, readMcpCallResult } from './mcpProtocol';
 import { fetchMcpToolListing, type McpToolListing } from './mcpToolListing';
 import { fetchWithEgressGuard } from './toolEgress';
@@ -38,6 +44,10 @@ export const buildMcpToolExecute = (args: {
   toolContext?: Record<string, string>;
   presetSchema?: unknown;
   logToolCallingError: LogToolCallingError;
+  /** Sends the call through a deferred server's proxy; see `mcpDeferredProxy.ts`. */
+  viaCall?: string;
+  /** On a deferred server's own `call`: whether the tool it targets is bound. */
+  allowInner?: (name: string) => boolean;
 }) => {
   return async (toolArgs: unknown) => {
     const presetParameters = resolvePresetParametersForCall({
@@ -49,6 +59,14 @@ export const buildMcpToolExecute = (args: {
     const callArgs = presetParameters
       ? mergePresetParameters({ presetParameters, input: toolArgs })
       : toolArgs;
+    if (args.allowInner) {
+      const inner = innerToolName(callArgs);
+      if (inner === undefined || !args.allowInner(inner)) {
+        throw new Error(
+          `action "${inner ?? ''}" is not available on this tool.`
+        );
+      }
+    }
     try {
       return await meterToolExecution({
         meter: args.meter,
@@ -63,7 +81,15 @@ export const buildMcpToolExecute = (args: {
                 jsonrpc: '2.0',
                 id: 2,
                 method: 'tools/call',
-                params: { name: args.mcpToolName, arguments: callArgs },
+                params: args.viaCall
+                  ? {
+                      name: args.viaCall,
+                      arguments: {
+                        name: args.mcpToolName,
+                        arguments: callArgs,
+                      },
+                    }
+                  : { name: args.mcpToolName, arguments: callArgs },
               }),
             },
             {
@@ -118,6 +144,8 @@ const buildMcpToolEntry = (args: {
   presetParameters?: object | null;
   toolContext?: Record<string, string>;
   logToolCallingError: LogToolCallingError;
+  viaCall?: string;
+  allowInner?: (name: string) => boolean;
 }): Tool => {
   const { mcpTool } = args;
   const entry = {
@@ -142,6 +170,8 @@ const buildMcpToolEntry = (args: {
       toolContext: args.toolContext,
       presetSchema: mcpTool.inputSchema,
       logToolCallingError: args.logToolCallingError,
+      viaCall: args.viaCall,
+      allowInner: args.allowInner,
     }),
   };
 
@@ -168,6 +198,49 @@ const buildActionFilter = (typedTool: {
     if (allowed && !allowed.has(name)) return false;
     return !denied?.has(name);
   };
+};
+
+/**
+ * The tools a binding attaches. On a deferred server an allowlist names tools
+ * behind the proxy, so those are described and attached by name, and the
+ * proxies themselves are not; without one, the listing is attached as listed
+ * and its `call` checks each target against the binding (`allowInner`).
+ */
+const boundTools = async (args: {
+  listing: McpToolListing[];
+  proxy: DeferredProxy | null;
+  actions?: string[] | null;
+  isBound: (name: string) => boolean;
+  mcpUrl: string;
+  mcpHeaders: Record<string, string>;
+}): Promise<McpToolListing[]> => {
+  const listed = args.listing.filter((mcpTool) => {
+    return args.isBound(mcpTool.name);
+  });
+  if (!args.proxy || args.actions == null) return listed;
+
+  const listedNames = new Set(
+    args.listing.map((mcpTool) => {
+      return mcpTool.name;
+    })
+  );
+  const behindProxy = await describeDeferredTools({
+    mcpUrl: args.mcpUrl,
+    mcpHeaders: args.mcpHeaders,
+    proxy: args.proxy,
+    names: args.actions.filter((name) => {
+      return !listedNames.has(name);
+    }),
+  });
+  const proxyNames = new Set([args.proxy.callName, args.proxy.describeName]);
+  return [
+    ...listed.filter((mcpTool) => {
+      return !proxyNames.has(mcpTool.name);
+    }),
+    ...behindProxy.filter((mcpTool) => {
+      return args.isBound(mcpTool.name);
+    }),
+  ];
 };
 
 export const resolveMcpTools = async (args: {
@@ -226,16 +299,32 @@ export const resolveMcpTools = async (args: {
   });
   if (!listing) return result;
 
-  for (const mcpTool of listing) {
-    if (!isBound(mcpTool.name)) continue;
+  const shared = {
+    mcpUrl,
+    mcpHeaders,
+    meter: args.meter,
+    presetParameters: args.typedTool.presetParameters,
+    toolContext: args.toolContext,
+    logToolCallingError: args.logToolCallingError,
+  };
+  const proxy = findDeferredProxy(listing);
+  for (const mcpTool of await boundTools({
+    listing,
+    proxy,
+    actions: args.typedTool.actions,
+    isBound,
+    mcpUrl,
+    mcpHeaders,
+  })) {
     result[mcpTool.name] = buildMcpToolEntry({
+      ...shared,
       mcpTool,
-      mcpUrl,
-      mcpHeaders,
-      meter: args.meter,
-      presetParameters: args.typedTool.presetParameters,
-      toolContext: args.toolContext,
-      logToolCallingError: args.logToolCallingError,
+      ...(proxy && !listing.includes(mcpTool)
+        ? { viaCall: proxy.callName }
+        : {}),
+      ...(proxy && mcpTool.name === proxy.callName
+        ? { allowInner: isBound }
+        : {}),
     });
   }
 

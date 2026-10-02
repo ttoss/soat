@@ -25,10 +25,10 @@ describe('generated tool surface covers the REST API only', () => {
   test('every tool targets a path under /api/v1', () => {
     const offenders = soatTools
       .filter((tool) => {
-        return !tool.path({}).startsWith('/api/v1/');
+        return !tool.pathTemplate.startsWith('/api/v1/');
       })
       .map((tool) => {
-        return `${tool.name} → ${tool.method} ${tool.path({})}`;
+        return `${tool.name} → ${tool.method} ${tool.pathTemplate}`;
       });
 
     expect(offenders).toEqual([]);

@@ -3,12 +3,13 @@ import type { App } from '@ttoss/http-server';
 import {
   createMcpRouter,
   McpServer,
-  registerToolFromSchema,
+  registerTools,
+  type Tool,
 } from '@ttoss/http-server-mcp';
 
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
-import { buildSoatActionTarget, soatTools } from '../lib/soatTools';
+import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
 import { verifyApiKeyToken } from '../middleware/auth';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
 import { dispatchMcpApiRequest } from './dispatchApi';
@@ -29,12 +30,19 @@ const mcpServer = new McpServer({
   ],
 });
 
-// Register all SOAT tools as MCP tools
-for (const tool of soatTools) {
-  registerToolFromSchema(mcpServer, {
+/**
+ * One tool per REST operation, each argument checked against its full schema
+ * before the request: a bad call is refused naming the argument, not answered
+ * with whatever the route makes of it.
+ */
+export const mcpOperationTools: Tool[] = soatMcpTools.map((tool) => {
+  return {
     name: tool.name,
     description: tool.description,
+    summary: `${tool.method} ${tool.pathTemplate} — ${tool.description}`,
+    ...(tool.tags.length > 0 ? { tags: tool.tags } : {}),
     inputSchema: tool.inputSchema,
+    validateArguments: true,
     handler: async (args: Record<string, unknown>) => {
       const url = buildSoatActionTarget({ def: tool, args });
       const data = await dispatchMcpApiRequest({
@@ -44,12 +52,12 @@ for (const tool of soatTools) {
       });
       return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
     },
-  });
-}
+  };
+});
 
 // ── Docs tools (MCP-only, not backed by REST) ─────────────────────────────
 
-registerToolFromSchema(mcpServer, {
+const getDocsTool: Tool = {
   name: 'get-docs',
   description:
     'Returns the SOAT documentation index in llms.txt format. The response lists all available documentation pages with their URLs. Use get-doc-page with a URL from this index to read a specific page.',
@@ -58,9 +66,9 @@ registerToolFromSchema(mcpServer, {
     const content = await getDocsIndex();
     return { content: [{ type: 'text' as const, text: content }] };
   },
-});
+};
 
-registerToolFromSchema(mcpServer, {
+const getDocPageTool: Tool = {
   name: 'get-doc-page',
   description:
     'Fetches the full content of a SOAT documentation page by URL. Use get-docs first to obtain the list of valid page URLs.',
@@ -75,9 +83,27 @@ registerToolFromSchema(mcpServer, {
     },
     required: ['url'],
   },
+  validateArguments: true,
   handler: async (args: Record<string, unknown>) => {
     const content = await getDocPage({ url: args.url as string });
     return { content: [{ type: 'text' as const, text: content }] };
+  },
+};
+
+/** Where an agent starts, so they stay on `tools/list` beside the proxies. */
+const STANDALONE_TOOLS = new Set([getDocsTool.name, getDocPageTool.name]);
+
+// Deferred behind `search` / `describe` / `call`: three definitions in a
+// client's context instead of every operation's schema. An `mcp` binding over
+// this server applies its lists to the tool a `call` targets
+// (`mcpDeferredProxy.ts`).
+registerTools({
+  server: mcpServer,
+  tools: [...mcpOperationTools, getDocsTool, getDocPageTool],
+  defer: {
+    except: ({ tool }) => {
+      return STANDALONE_TOOLS.has(tool.name);
+    },
   },
 });
 

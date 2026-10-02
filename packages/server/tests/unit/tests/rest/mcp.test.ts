@@ -12,6 +12,15 @@ import { saveTrace } from 'src/lib/traces';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+/** Tools a client calls by name; every operation goes through `call`. */
+const STANDALONE_TOOLS = new Set([
+  'search',
+  'describe',
+  'call',
+  'get-docs',
+  'get-doc-page',
+]);
+
 /**
  * **The absence of a listener is this file's primary assertion.** Every tool
  * exercised below reaches the platform through the app's own middleware chain
@@ -62,17 +71,16 @@ describe('MCP tools - happy path', () => {
     chatAiProviderId = aiRes.body.id;
   });
 
+  /** Runs an operation the way a client does: through the deferred `call`. */
   const mcpCall = (toolName: string, args: Record<string, unknown> = {}) => {
+    const params = STANDALONE_TOOLS.has(toolName)
+      ? { name: toolName, arguments: args }
+      : { name: 'call', arguments: { name: toolName, arguments: args } };
     return authenticatedTestClient(adminToken)
       .post('/mcp')
       .set('Content-Type', 'application/json')
       .set('Accept', 'application/json, text/event-stream')
-      .send({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: toolName, arguments: args },
-      });
+      .send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params });
   };
 
   const parseResult = (res: {
@@ -105,6 +113,14 @@ describe('MCP tools - happy path', () => {
   };
 
   test('create-presigned-url and upload-file-with-token are both exposed', async () => {
+    const res = await mcpCall('describe', {
+      names: ['create-presigned-url', 'upload-file-with-token'],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.result.structuredContent.unknown).toBeUndefined();
+  });
+
+  test('tools/list offers search, describe, call and the docs tools', async () => {
     const res = await listTools();
     expect(res.status).toBe(200);
     const names: string[] = (res.body.result?.tools ?? []).map(
@@ -112,8 +128,60 @@ describe('MCP tools - happy path', () => {
         return t.name;
       }
     );
-    expect(names).toContain('create-presigned-url');
-    expect(names).toContain('upload-file-with-token');
+    expect(names.sort()).toEqual([
+      'call',
+      'describe',
+      'get-doc-page',
+      'get-docs',
+      'search',
+    ]);
+  });
+
+  describe('deferred tools', () => {
+    test('search finds an operation by what it does', async () => {
+      const res = await mcpCall('search', { query: 'create agent' });
+      expect(res.status).toBe(200);
+      const names = res.body.result.structuredContent.tools.map(
+        (t: { name: string }) => {
+          return t.name;
+        }
+      );
+      expect(names[0]).toBe('create-agent');
+    });
+
+    test('describe returns the full input schema, bounds included', async () => {
+      const res = await mcpCall('describe', { names: ['list-tools'] });
+      const [described] = res.body.result.structuredContent.tools;
+      expect(described.inputSchema.properties.limit).toMatchObject({
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+      });
+    });
+
+    test('call refuses an argument its schema refuses, before the API', async () => {
+      const res = await mcpCall('list-tools', { limit: 101 });
+      expect(res.body.result.isError).toBe(true);
+      expect(res.body.result.structuredContent.error).toBe(
+        'Invalid arguments for "list-tools".'
+      );
+    });
+
+    test('call refuses a missing path argument, naming it', async () => {
+      const res = await mcpCall('get-agent', {});
+      expect(res.body.result.isError).toBe(true);
+      expect(res.body.result.structuredContent.issues.join(' ')).toContain(
+        'agent_id'
+      );
+    });
+
+    test('call answers an unknown name with suggestions', async () => {
+      const res = await mcpCall('call', { name: 'create-agnt' });
+      expect(res.body.result.isError).toBe(true);
+      expect(res.body.result.structuredContent.suggestions[0]).toBe(
+        'create-agent'
+      );
+    });
   });
 
   // ── Usage ────────────────────────────────────────────────────────────────
@@ -3297,7 +3365,9 @@ describe('MCP in-process dispatch', () => {
   const callTool = (token: string | null, name: string, args = {}) => {
     return rpc(token, {
       method: 'tools/call',
-      params: { name, arguments: args },
+      params: STANDALONE_TOOLS.has(name)
+        ? { name, arguments: args }
+        : { name: 'call', arguments: { name, arguments: args } },
     });
   };
 
@@ -3386,13 +3456,34 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
 
   beforeAll(async () => {
     adminToken = await loginAs('mcphappy', 'mcphappypass');
+    // `describe` answers the names it knows and lists the rest as `unknown`,
+    // so an excluded operation is simply absent from `tools`.
     const res = await authenticatedTestClient(adminToken)
       .post('/mcp')
       .set('Content-Type', 'application/json')
       .set('Accept', 'application/json, text/event-stream')
-      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'describe',
+          arguments: {
+            names: [
+              'download-file',
+              'download-file-base64',
+              'export-audit-entries',
+              'list-audit-entries',
+              'create-agent-generation',
+              'create-decision',
+              'generate-conversation-message',
+              'generate-session-response',
+            ],
+          },
+        },
+      });
     expect(res.status).toBe(200);
-    tools = res.body.result.tools;
+    tools = res.body.result.structuredContent.tools;
   });
 
   const toolNames = () => {

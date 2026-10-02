@@ -38,9 +38,23 @@ Session token: [`POST /api/v1/users/login`](/docs/api/users/login-user). Project
 
 Authentication admits the caller to `/mcp`; every tool call is still evaluated against the caller's policies at call time.
 
+## Finding and Calling Tools
+
+`tools/list` answers five tools, not one per operation, so a client holds a few small definitions instead of every operation's schema:
+
+| Tool | What it does |
+| --- | --- |
+| `search` | Finds operations by keyword, optionally by tag, and returns each one's name and summary. `limit` is 1–50. |
+| `describe` | Returns the full definition of operations by name, including the input schema. |
+| `call` | Runs one operation by name with its arguments. |
+| `get-docs` | Returns the documentation index. |
+| `get-doc-page` | Returns one documentation page. |
+
+An operation's name is its `operationId` in kebab-case: [`GET /api/v1/agents`](/docs/api/agents/list-agents) is `list-agents`, run as `call` with `{ "name": "list-agents", "arguments": {} }`. An unknown name answers suggestions, and a refused call carries the input schema, so a call made without `describe` corrects itself in one retry.
+
 ## How a Tool Call Is Served
 
-A tool call runs **inside the server process**, through the same middleware stack and route handler as the REST call: permission checks, field validation, audit logging, request metering, quotas, and the snake_case response contract apply identically; the server never reaches itself over the network. A failed tool call is returned as an **error**, never a result, carrying the API's own error message. An action that answers `204 No Content` (every `delete-*`) returns an empty result.
+A tool call runs **inside the server process**, through the same middleware stack and route handler as the REST call: permission checks, field validation, audit logging, request metering, quotas, and the snake_case response contract apply identically; the server never reaches itself over the network. Each tool's input schema is its operation's full request schema — types, bounds, enums, nested fields — and arguments are checked against it first: a missing, mistyped or out-of-range argument is refused by name without reaching the API. A failed tool call is returned as an **error**, never a result, carrying the API's own error message. An action that answers `204 No Content` (every `delete-*`) returns an empty result.
 
 ## What Is Not Exposed as a Tool
 

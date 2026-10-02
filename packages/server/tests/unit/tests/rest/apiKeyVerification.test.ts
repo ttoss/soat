@@ -27,7 +27,10 @@ const mcpListProjects = (key: string) => {
     key,
     body: {
       method: 'tools/call',
-      params: { name: 'list-projects', arguments: {} },
+      params: {
+        name: 'call',
+        arguments: { name: 'list-projects', arguments: {} },
+      },
     },
   });
 };

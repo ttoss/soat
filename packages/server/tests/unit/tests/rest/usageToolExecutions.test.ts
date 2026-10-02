@@ -197,12 +197,20 @@ describe('tool_execution usage', () => {
     test('an mcp call that times out is recorded with outcome timeout', async () => {
       const toolId = await createTool({ type: 'mcp', mcp: { url: mcpUrl } });
       // `AbortSignal.timeout` rejects the fetch with this exact error; waiting
-      // out the real five-minute limit is not something a test can do.
-      jest
-        .spyOn(globalThis, 'fetch')
-        .mockRejectedValueOnce(
-          new DOMException('The operation timed out.', 'TimeoutError')
-        );
+      // out the real five-minute limit is not something a test can do. Only
+      // the `tools/call` times out: the listing read before it is answered.
+      const realFetch = globalThis.fetch;
+      jest.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        if (
+          typeof init?.body === 'string' &&
+          init.body.includes('tools/call')
+        ) {
+          return Promise.reject(
+            new DOMException('The operation timed out.', 'TimeoutError')
+          );
+        }
+        return realFetch(input, init);
+      });
 
       await call(toolId, { action: 'remote-tool' });
 

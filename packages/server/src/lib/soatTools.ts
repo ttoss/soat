@@ -17,6 +17,7 @@ import {
 import createDebug from 'debug';
 import { load } from 'js-yaml';
 
+import { DomainError } from '../errors';
 import { getActionForOperation } from './permissionCatalog';
 import { deriveToolDefinitions } from './soatToolsDerivation';
 import { readResourceRef, type SoatResourceRef } from './soatToolsResource';
@@ -40,6 +41,10 @@ export interface ToolDefinition {
   resource?: SoatResourceRef;
   /** snake_case names of every top-level request body property this operation's schema declares, including server-managed ones. */
   acceptedBodyFields: string[];
+  /** The operation's path, as the spec writes it (`/api/v1/agents/{agent_id}`). */
+  pathTemplate: string;
+  /** The operation's `tags`, e.g. to filter the MCP `search` by module. */
+  tags: string[];
   /**
    * `x-soat-agent-exclude`: kept in the catalog rather than dropped like an
    * MCP exclusion, because the operation is still an MCP tool and the
@@ -63,9 +68,18 @@ export const buildSoatActionTarget = (args: {
   def: ToolDefinition;
   args: Record<string, unknown>;
 }): string => {
-  return (
-    args.def.path(args.args) + (args.def.query ? args.def.query(args.args) : '')
-  );
+  let target: string;
+  try {
+    // Building fails only on the caller's arguments — a missing path one —
+    // so it is their 400, not this process's 500.
+    target = args.def.path(args.args);
+  } catch (error) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+  return target + (args.def.query ? args.def.query(args.args) : '');
 };
 
 const toSoatTool = (tool: OpenApiToolDefinition): ToolDefinition => {
@@ -88,6 +102,8 @@ const toSoatTool = (tool: OpenApiToolDefinition): ToolDefinition => {
         : getActionForOperation(tool.operationId),
     resource: readResourceRef(extensions['x-soat-resource']),
     acceptedBodyFields: tool.acceptedBodyFields,
+    pathTemplate: tool.pathTemplate,
+    tags: tool.tags,
     ...(extensions['x-soat-agent-exclude'] ? { agentExcluded: true } : {}),
   };
 };
@@ -101,7 +117,7 @@ const readSpec = (filePath: string): OpenApiSpec | null => {
   }
 };
 
-const loadToolDefinitions = (): ToolDefinition[] => {
+const loadSpecs = (): Array<{ file: string; spec: OpenApiSpec }> => {
   const candidate1 = path.resolve(__dirname, '../rest/openapi/v1');
   const candidate2 = path.resolve(__dirname, 'rest/openapi/v1');
   const specDir = fs.existsSync(candidate1) ? candidate1 : candidate2;
@@ -115,12 +131,23 @@ const loadToolDefinitions = (): ToolDefinition[] => {
     })
     .sort();
 
-  const specs = files.flatMap((file) => {
+  return files.flatMap((file) => {
     const spec = readSpec(path.join(specDir, file));
     return spec ? [{ file, spec }] : [];
   });
-
-  return deriveToolDefinitions({ specs }).map(toSoatTool);
 };
 
-export const soatTools = loadToolDefinitions();
+const specs = loadSpecs();
+
+export const soatTools = deriveToolDefinitions({ specs }).map(toSoatTool);
+
+/**
+ * `soatTools` with each input schema in full — bounds, enums, nested fields —
+ * for MCP clients, which validate against it. Agents keep the compact form:
+ * their tools go to every configured provider, whose tool-schema dialects
+ * accept less than JSON Schema does.
+ */
+export const soatMcpTools = deriveToolDefinitions({
+  specs,
+  schemaDetail: 'full',
+}).map(toSoatTool);

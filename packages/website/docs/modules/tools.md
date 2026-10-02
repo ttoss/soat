@@ -282,6 +282,8 @@ Omitted or `null` exposes everything; `[]` nothing. MCP names are discovered at 
 
 `denied_actions` is a denylist (for a read+write server where enumerating every read tool would drift), enforced at the same points, applied after `actions` and winning: a name in both is denied. Omitted or `null` denies nothing.
 
+A server that defers its tools behind `search` / `describe` / `call` (SOAT's own [MCP server](/docs/mcp) among them) lists only those three, so both lists name the tools behind `call`, never the proxies. With `actions`, the named tools are described and registered under their own names and the proxies are not exposed; with only `denied_actions`, the proxies are exposed and `call` refuses a denied tool before contacting the server. [`POST /tools/{id}/call`](/docs/api/tools/call-tool) takes the tool's own name as `action` and sends it through `call`; an `action` of `call` is held to the lists by the tool it names.
+
 ### builtin
 
 A `builtin` tool exposes the SOAT platform actions listed in `actions`, named as the platform's MCP tools (`get-document`, `search-knowledge`, `create-file`), not REST operationIds (`search-knowledge`, not `searchKnowledge`). Worked example: [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
