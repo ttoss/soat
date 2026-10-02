@@ -186,6 +186,12 @@ describe('MCP bindings over a deferred server', () => {
       expect(reached).toEqual(['list-items']);
     });
 
+    test('an allowlist keeps a listed tool it names beside those behind the proxy', async () => {
+      const tools = await resolve({ actions: ['search', 'list-items'] });
+
+      expect(Object.keys(tools).sort()).toEqual(['list-items', 'search']);
+    });
+
     test('a denylist keeps the proxies but refuses a denied target', async () => {
       const tools = await resolve({ deniedActions: ['delete-item'] });
 
