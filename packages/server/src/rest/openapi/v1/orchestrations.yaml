@@ -1118,7 +1118,9 @@ components:
         activation_condition:
           type: string
           enum: [all, any]
-          description: Whether all or any edges in the activation group must fire.
+          description: >-
+            Whether all or any edges in the activation group must come from a
+            completed node before the target runs. Omitted, `all`.
 
     Orchestration:
       type: object

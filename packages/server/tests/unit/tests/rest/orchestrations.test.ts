@@ -1203,6 +1203,50 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.final).toBe('c');
     });
 
+    test('an activation group without activation_condition joins like all', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Default Activation Group',
+          nodes: [
+            { id: 'A', type: 'transform', expression: 'a' },
+            { id: 'B', type: 'transform', expression: 'b' },
+            {
+              id: 'B2',
+              type: 'transform',
+              expression: 'b2',
+              state_mapping: { 'state.b2': { var: 'output.result' } },
+            },
+            {
+              id: 'C',
+              type: 'transform',
+              expression: { var: 'b2' },
+              state_mapping: {
+                'state.seen': { var: 'output.result' },
+                'state.c_runs': {
+                  '+': [{ var: 'state.c_runs' }, 1],
+                },
+              },
+            },
+          ],
+          edges: [
+            { from: 'B', to: 'B2' },
+            { from: 'A', to: 'C', activation_group: 'join' },
+            { from: 'B2', to: 'C', activation_group: 'join' },
+          ],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.seen).toBe('b2');
+      expect(runRes.body.state.c_runs).toBe(1);
+    });
+
     test('empty nodes orchestration completes immediately', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
