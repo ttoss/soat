@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.71.1](https://github.com/ttoss/soat/compare/v0.71.0...v0.71.1) (2026-10-02)
+
+### Bug Fixes
+
+* **server:** an activation group without a condition joins like all ([#1520](https://github.com/ttoss/soat/issues/1520)) ([cd7f7ea](https://github.com/ttoss/soat/commit/cd7f7eacde936a5a8686db539f4f0cb359aeda55))
+
 # [0.71.0](https://github.com/ttoss/soat/compare/v0.70.1...v0.71.0) (2026-10-02)
 
 ### Features
