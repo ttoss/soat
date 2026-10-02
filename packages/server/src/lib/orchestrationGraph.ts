@@ -110,8 +110,9 @@ const edgeConditionMet = (args: {
 };
 
 /**
- * For an `all`-activation edge, whether every edge in its activation group has
- * a completed source (a join barrier). Non-grouped edges always pass.
+ * For a grouped edge, whether every edge in its activation group has a
+ * completed source (a join barrier). `all` is the default: only `any` lets a
+ * grouped edge pass on its own. Non-grouped edges always pass.
  */
 const activationGroupSatisfied = (args: {
   edge: OrchestrationEdge;
@@ -119,7 +120,7 @@ const activationGroupSatisfied = (args: {
   completedNodes: Set<string>;
 }): boolean => {
   const { edge, edges, completedNodes } = args;
-  if (!edge.activationGroup || edge.activationCondition !== 'all') return true;
+  if (!edge.activationGroup || edge.activationCondition === 'any') return true;
   return edges
     .filter((e) => {
       return e.to === edge.to && e.activationGroup === edge.activationGroup;
