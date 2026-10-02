@@ -40,7 +40,7 @@ Authentication admits the caller to `/mcp`; every tool call is still evaluated a
 
 ## How a Tool Call Is Served
 
-A tool call runs **inside the server process**, through the same middleware stack and route handler as the REST call: permission checks, field validation, audit logging, request metering, quotas, and the snake_case response contract apply identically; the server never reaches itself over the network. A failed tool call is returned as an **error**, never a result, carrying the API's own error message. An action that answers `204 No Content` (every `delete-*`) returns an empty result.
+A tool call runs **inside the server process**, through the same middleware stack and route handler as the REST call: permission checks, field validation, audit logging, request metering, quotas, and the snake_case response contract apply identically; the server never reaches itself over the network. Each tool's input schema is its operation's full request schema — types, bounds, enums, nested fields — and arguments are checked against it first: a missing, mistyped or out-of-range argument is refused by name without reaching the API. A failed tool call is returned as an **error**, never a result, carrying the API's own error message. An action that answers `204 No Content` (every `delete-*`) returns an empty result.
 
 ## What Is Not Exposed as a Tool
 

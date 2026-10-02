@@ -479,11 +479,11 @@ importers:
         specifier: ^0.6.4
         version: 0.6.4(@ttoss/http-server@0.8.1(supports-color@8.1.1))
       '@ttoss/http-server-mcp':
-        specifier: ^0.29.0
-        version: 0.29.0(hono@4.12.30)(supports-color@8.1.1)
+        specifier: ^0.34.2
+        version: 0.34.2(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/http-server-mcp-openapi':
-        specifier: ^0.5.0
-        version: 0.5.0(hono@4.12.30)(supports-color@8.1.1)
+        specifier: ^0.8.2
+        version: 0.8.2(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/postgresdb':
         specifier: ^0.12.0
         version: 0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
@@ -2586,6 +2586,9 @@ packages:
   '@fontsource/space-grotesk@5.3.0':
     resolution: {integrity: sha512-ksnGizDPXIDuvqcTYTSrmZ+evx9sDlS8rp7+42BQ7wU+spt3twEoXfbJz672C+5CLg6VeUQwRy5RXshWb67LcQ==}
 
+  '@formatjs/fast-memoize@3.1.7':
+    resolution: {integrity: sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA==}
+
   '@formatjs/icu-messageformat-parser@3.5.14':
     resolution: {integrity: sha512-jDvgtoLqe3U6yzoBlToMTkWBe38qSi7LN7kFlnXzd5ig8nn+4tSlED0xtEtdYakZVZGJJY2rW1D5xS3BFZh6kA==}
 
@@ -2594,6 +2597,9 @@ packages:
 
   '@formatjs/icu-skeleton-parser@2.1.11':
     resolution: {integrity: sha512-j8cUmOJzVgkHuS0QiQ6ga76UIoLOFSAMWhs7aZJztH3aAdCOAE6vpC8KVvFB4cU10ON0y2/5oOVmPJ43s2lTwA==}
+
+  '@formatjs/intl@4.2.1':
+    resolution: {integrity: sha512-GiL0cReencWQkhfJedNLMe0Aorb/wyTRJdi+hLgG9gsDPy4yw2N+EkMcijf5+oGKd5jde75tr5nujsPg78bUTw==}
 
   '@formatjs/ts-transformer@4.4.16':
     resolution: {integrity: sha512-HgZuZhZ+/sFq2aYOm42GA9vN90L+enU/YZGn4S2CkkGtT092CEa9jhziIb0nAJLoBohCSzRHDg5yY9bKOKyytQ==}
@@ -4462,6 +4468,9 @@ packages:
   '@ttoss/auth-core@0.14.1':
     resolution: {integrity: sha512-Dcf6TRNVYsOo+JOzdBSyvefKF/tiL9JphTXIqXxo4/OeyTcIzyrss4z0D8jQ6ugd2VD7lLJcmqnScTKN0lbeIw==}
 
+  '@ttoss/auth-core@0.16.1':
+    resolution: {integrity: sha512-uTv/1lc6lRgFs2bg6RTP+DLUtmmoOMy0RrOZS5MJbaxFYyGkK218scjlnY3I9PyQSzOab51T6+pdMDBKZhlwqA==}
+
   '@ttoss/cloudformation@0.14.0':
     resolution: {integrity: sha512-z4XDY8qiEkt4BWalJXQXmLnafbsJU0HwsnT0nQ91IhiyfehTq+IWDO+xiPjb+Aar1fxijeO7eYbKFHUYjOFysw==}
 
@@ -4479,14 +4488,25 @@ packages:
     peerDependencies:
       '@ttoss/http-server': ^0.8.1
 
-  '@ttoss/http-server-mcp-openapi@0.5.0':
-    resolution: {integrity: sha512-fCQ6gi/zle4mCQw4b+L54GCM5BQL4iFkeBjObB6xjLUdwMwU1Ar2vLjSZXm1yeqZJ4x7tvIgwotNimVq/QfyBA==}
+  '@ttoss/http-server-auth@0.8.1':
+    resolution: {integrity: sha512-oEAkarWFTKEP4zuaerD0jz6c4rLv/3YV87P1S8x9TTKIJaN7OVJSoXGt5sNJNC/cbqpjEoyvn//oN8JTJnXfSw==}
+    peerDependencies:
+      '@ttoss/http-server': ^0.11.1
 
-  '@ttoss/http-server-mcp@0.29.0':
-    resolution: {integrity: sha512-vYrbn3hr/b4jjK5Mjk7fDRWPMdCW1nY9D7vHU9VRYfWpunxbe22hDqAP9xWaGzS+FoWc5I2jpc3WEgQlZRjtWQ==}
+  '@ttoss/http-server-mcp-openapi@0.8.2':
+    resolution: {integrity: sha512-usAxQkmHhvatSeGUdPDtsYxMg59R0ijxTG1SXGWW1dHaR3SyKn6zVzan0rGbDano0oKpxTmfFSz2mr3oc5gLFA==}
+
+  '@ttoss/http-server-mcp@0.34.2':
+    resolution: {integrity: sha512-FV3LGFxrZnQK9qAR+1FpcTUyeajtp+M80PJH6DXTfgxgXOyIq1Td1KOZkjvcHLJ40DKnnDQLa1AQ3Kq5tG2ziw==}
+
+  '@ttoss/http-server@0.11.1':
+    resolution: {integrity: sha512-QY/ukryzYlscCt0Of28hOF6H0124oMbMXt/ZylIW+hS6VqcZj21AVXhNIALEzhxE/FnbXVYwry3JEh/d+72baQ==}
 
   '@ttoss/http-server@0.8.1':
     resolution: {integrity: sha512-S9292TxfvzdQ1hnzhYOMLa2emHBZoYGgDxB+5F5uwrqJ6QPQ7wHwcZYdbWfPQvRblpmjsFc/soP9i894L5ylcw==}
+
+  '@ttoss/i18n-core@0.7.0':
+    resolution: {integrity: sha512-TG5zt8f7QGe4Sj3rYMpUBSOPCSlku27NdsWJsfBVkhpTxdu5F9z4I9+0/w0Uah+bUTBbG5DrtetgV+3NyUFlXA==}
 
   '@ttoss/logger@0.8.20':
     resolution: {integrity: sha512-Z3cCw6gYGFONhyMwlEb/IlRBUivXIqnjlvosabA8iVWSUZJCDMX5NvRxGEKWne54olB/WyTh8HSFfaYsdcPtzg==}
@@ -8358,6 +8378,9 @@ packages:
   interpret@1.4.0:
     resolution: {integrity: sha512-agE4QfB2Lkp9uICn7BAqoscw4SZP9kTE2hxiFI3jBPmXJfdqiahTbUuKGsMoN2GtqL9AxhYioAcVvgsb1HvRbA==}
     engines: {node: '>= 0.10'}
+
+  intl-messageformat@11.2.15:
+    resolution: {integrity: sha512-W4VNytsXyWgW5lvVchmsb9xgA5rSKqoflu3/IQ9UCtB0z4R+Bx9MoEkwFT/+30RCl/KzUoH0QGGe9lppF5SuvQ==}
 
   invariant@2.2.4:
     resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
@@ -16271,6 +16294,8 @@ snapshots:
 
   '@fontsource/space-grotesk@5.3.0': {}
 
+  '@formatjs/fast-memoize@3.1.7': {}
+
   '@formatjs/icu-messageformat-parser@3.5.14':
     dependencies:
       '@formatjs/icu-skeleton-parser': 2.1.11
@@ -16280,6 +16305,12 @@ snapshots:
       '@formatjs/icu-skeleton-parser': 2.1.11
 
   '@formatjs/icu-skeleton-parser@2.1.11': {}
+
+  '@formatjs/intl@4.2.1':
+    dependencies:
+      '@formatjs/fast-memoize': 3.1.7
+      '@formatjs/icu-messageformat-parser': 3.5.18
+      intl-messageformat: 11.2.15
 
   '@formatjs/ts-transformer@4.4.16':
     dependencies:
@@ -18421,6 +18452,11 @@ snapshots:
       aws-jwt-verify: 4.0.1
       jose: 6.2.12
 
+  '@ttoss/auth-core@0.16.1':
+    dependencies:
+      aws-jwt-verify: 4.0.1
+      jose: 6.2.12
+
   '@ttoss/cloudformation@0.14.0':
     dependencies:
       '@ttoss/read-config-file': 2.3.0
@@ -18485,23 +18521,43 @@ snapshots:
       '@ttoss/auth-core': 0.14.1
       '@ttoss/http-server': 0.8.1(supports-color@8.1.1)
 
-  '@ttoss/http-server-mcp-openapi@0.5.0(hono@4.12.30)(supports-color@8.1.1)':
+  '@ttoss/http-server-auth@0.8.1(@ttoss/http-server@0.11.1(supports-color@8.1.1))':
     dependencies:
-      '@ttoss/http-server-mcp': 0.29.0(hono@4.12.30)(supports-color@8.1.1)
+      '@ttoss/auth-core': 0.16.1
+      '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
+
+  '@ttoss/http-server-mcp-openapi@0.8.2(hono@4.12.30)(supports-color@8.1.1)':
+    dependencies:
+      '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
+      '@ttoss/http-server-mcp': 0.34.2(hono@4.12.30)(supports-color@8.1.1)
     transitivePeerDependencies:
       - hono
       - supports-color
 
-  '@ttoss/http-server-mcp@0.29.0(hono@4.12.30)(supports-color@8.1.1)':
+  '@ttoss/http-server-mcp@0.34.2(hono@4.12.30)(supports-color@8.1.1)':
     dependencies:
       '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.30)
       '@modelcontextprotocol/server': 2.0.0
-      '@ttoss/auth-core': 0.14.1
-      '@ttoss/http-server': 0.8.1(supports-color@8.1.1)
-      '@ttoss/http-server-auth': 0.6.4(@ttoss/http-server@0.8.1(supports-color@8.1.1))
+      '@ttoss/auth-core': 0.16.1
+      '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
+      '@ttoss/http-server-auth': 0.8.1(@ttoss/http-server@0.11.1(supports-color@8.1.1))
+      '@ttoss/i18n-core': 0.7.0
       zod: 4.6.4
     transitivePeerDependencies:
       - hono
+      - supports-color
+
+  '@ttoss/http-server@0.11.1(supports-color@8.1.1)':
+    dependencies:
+      '@koa/bodyparser': 6.1.0(koa@3.2.1)
+      '@koa/cors': 5.0.0
+      '@koa/multer': 4.0.0(koa@3.2.1)(multer@2.1.1)
+      '@koa/router': 15.7.0(koa@3.2.1)(supports-color@8.1.1)
+      '@ttoss/i18n-core': 0.7.0
+      koa: 3.2.1
+      koa-static: 5.0.0(supports-color@8.1.1)
+      multer: 2.1.1
+    transitivePeerDependencies:
       - supports-color
 
   '@ttoss/http-server@0.8.1(supports-color@8.1.1)':
@@ -18515,6 +18571,10 @@ snapshots:
       multer: 2.1.1
     transitivePeerDependencies:
       - supports-color
+
+  '@ttoss/i18n-core@0.7.0':
+    dependencies:
+      '@formatjs/intl': 4.2.1
 
   '@ttoss/logger@0.8.20': {}
 
@@ -23083,6 +23143,11 @@ snapshots:
   internmap@2.0.3: {}
 
   interpret@1.4.0: {}
+
+  intl-messageformat@11.2.15:
+    dependencies:
+      '@formatjs/fast-memoize': 3.1.7
+      '@formatjs/icu-messageformat-parser': 3.5.18
 
   invariant@2.2.4:
     dependencies:

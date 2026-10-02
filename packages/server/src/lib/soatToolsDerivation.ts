@@ -62,6 +62,8 @@ const restPathsOnly = (spec: OpenApiSpec): OpenApiSpec => {
  */
 export const deriveToolDefinitions = (args: {
   specs: Array<{ file: string; spec: OpenApiSpec }>;
+  /** @default 'compact' — see `soatMcpTools` for why only MCP takes `full`. */
+  schemaDetail?: 'compact' | 'full';
 }): ToolDefinition[] => {
   const documents: OpenApiDocuments = {};
   for (const { file, spec } of args.specs) {
@@ -75,6 +77,7 @@ export const deriveToolDefinitions = (args: {
       excludeExtension: 'x-soat-mcp-exclude',
       serverManagedExtension: SERVER_MANAGED_EXTENSIONS,
       documents,
+      schemaDetail: args.schemaDetail,
     },
   });
 };

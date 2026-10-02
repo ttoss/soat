@@ -126,6 +126,26 @@ describe('SOAT self-call', () => {
       expect(response.body.error.code).toBe('TOOL_HTTP_ERROR');
       expect(response.body.error.meta.tool_status_code).toBe(404);
     });
+
+    test('a soat action missing a path argument is refused naming it', async () => {
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'soat-get-agent-no-id',
+          type: 'builtin',
+          actions: ['get-agent'],
+        });
+      expect(toolRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${toolRes.body.id}/call`)
+        .send({ action: 'get-agent', input: {} });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toContain('agent_id');
+    });
   });
 
   /**

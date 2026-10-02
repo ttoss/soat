@@ -116,6 +116,32 @@ describe('MCP tools - happy path', () => {
     expect(names).toContain('upload-file-with-token');
   });
 
+  describe('argument validation', () => {
+    test('tools/list advertises each argument with its full schema', async () => {
+      const res = await listTools();
+      const tool = res.body.result.tools.find((t: { name: string }) => {
+        return t.name === 'list-tools';
+      });
+      expect(tool.inputSchema.properties.limit).toMatchObject({
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+      });
+    });
+
+    test('a call its schema refuses is refused before the API', async () => {
+      const res = await mcpCall('list-tools', { limit: 101 });
+      expect(res.body.result.isError).toBe(true);
+      expect(res.body.result.content[0].text).toContain('limit');
+    });
+
+    test('a missing path argument is refused naming it', async () => {
+      const res = await mcpCall('get-agent', {});
+      expect(res.body.result.isError).toBe(true);
+      expect(res.body.result.content[0].text).toContain('agent_id');
+    });
+  });
+
   // ── Usage ────────────────────────────────────────────────────────────────
 
   test('get-usage-aggregate returns an aggregate rollup for a project', async () => {

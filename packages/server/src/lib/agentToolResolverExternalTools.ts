@@ -56,9 +56,9 @@ export const executeSoatTool = async (args: {
   }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }) => {
-  // Path *and* query string: `def.path(...)` alone substitutes path parameters
-  // only, discarding every `in: query` parameter the action advertises.
-  const path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
+  // The template until the target is built: building refuses a call missing a
+  // path argument, and that refusal is logged like any other failed call.
+  let path = args.def.pathTemplate;
   const body = buildSoatRequestBody({
     def: args.def,
     rawArgs: args.rawArgs,
@@ -70,6 +70,10 @@ export const executeSoatTool = async (args: {
   });
   const toolId = `${args.toolName}_${args.def.name}`;
   try {
+    // Path *and* query string: `def.path(...)` alone substitutes path
+    // parameters only, discarding every `in: query` parameter the action
+    // advertises.
+    path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
     log('soat tool execute: %s %s %s', toolId, args.def.method, path);
     // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
     // surface; only the error type is this caller's — `HttpToolError` carries
