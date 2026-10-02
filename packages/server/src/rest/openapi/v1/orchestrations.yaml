@@ -1215,10 +1215,18 @@ components:
           type: string
           nullable: true
         nodes:
+          description: >-
+            The graph's nodes. Each `id` is unique and is what edges and `nodes.<id>`
+            state references name; a node with no incoming edge starts the run.
           type: array
           items:
             $ref: '#/components/schemas/OrchestrationNode'
         edges:
+          description: >-
+            Directed edges between node `id`s. Every `from`/`to` must name a node in
+            `nodes`, and the graph must be acyclic unless it contains a `loop` node. A
+            node with several outgoing edges activates every target in parallel. `[]`
+            for a graph of independent nodes.
           type: array
           items:
             $ref: '#/components/schemas/OrchestrationEdge'
@@ -1246,10 +1254,21 @@ components:
           type: string
           nullable: true
         nodes:
+          description: >-
+            The graph's nodes. Each `id` is unique and is what edges and `nodes.<id>`
+            state references name; a node with no incoming edge starts the run. Replaces
+            the stored list; omitted, the stored nodes are kept and validated against
+            the new `edges`.
           type: array
           items:
             $ref: '#/components/schemas/OrchestrationNode'
         edges:
+          description: >-
+            Directed edges between node `id`s. Every `from`/`to` must name a node in
+            `nodes`, and the graph must be acyclic unless it contains a `loop` node. A
+            node with several outgoing edges activates every target in parallel.
+            Replaces the stored list; omitted, the stored edges are kept and validated
+            against the new `nodes`.
           type: array
           items:
             $ref: '#/components/schemas/OrchestrationEdge'
@@ -1805,10 +1824,19 @@ components:
       additionalProperties: false
       properties:
         nodes:
+          description: >-
+            The graph's nodes. Each `id` is unique and is what edges and `nodes.<id>`
+            state references name; a node with no incoming edge starts the run. Checked
+            exactly as create checks them, without persisting.
           type: array
           items:
             $ref: '#/components/schemas/OrchestrationNode'
         edges:
+          description: >-
+            Directed edges between node `id`s. Every `from`/`to` must name a node in
+            `nodes`, and the graph must be acyclic unless it contains a `loop` node. A
+            node with several outgoing edges activates every target in parallel. Checked
+            exactly as create checks them, without persisting.
           type: array
           items:
             $ref: '#/components/schemas/OrchestrationEdge'
