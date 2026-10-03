@@ -273,4 +273,70 @@ describe('validateRequestBody', () => {
       }).not.toThrow();
     });
   });
+
+  describe('scalar types (top level only)', () => {
+    test.each([
+      ['a number', 123],
+      ['an object', { a: 1 }],
+      ['an array', ['wfl_x']],
+    ])('rejects %s for a string field', (_label, value) => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/tasks',
+          body: { workflow_id: value, title: 'A card' },
+        });
+      });
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.meta).toEqual({ invalidFields: ['workflow_id'] });
+      expect(error.message).toBe('`workflow_id` must be a string');
+    });
+
+    test('accepts null for a nullable field', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'patch',
+          path: '/agents/:agent_id',
+          body: { ai_provider_id: null },
+        });
+      }).not.toThrow();
+    });
+
+    test('names null as allowed when the field is nullable', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'patch',
+          path: '/agents/:agent_id',
+          body: { ai_provider_id: 7 },
+        });
+      });
+      expect(error.message).toBe('`ai_provider_id` must be a string or null');
+    });
+
+    test('leaves collection fields to their routes', () => {
+      // `parameters` takes a JSON-encoded string, which the route parses.
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/tools',
+          body: {
+            name: 'echo',
+            type: 'client',
+            parameters: '{"type":"object"}',
+          },
+        });
+      }).not.toThrow();
+    });
+
+    test('reports a missing required field once, not also as mistyped', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/projects',
+          body: { name: null },
+        });
+      });
+      expect(error.meta).toEqual({ missingFields: ['name'] });
+    });
+  });
 });

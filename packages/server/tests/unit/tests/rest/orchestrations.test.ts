@@ -271,7 +271,7 @@ describe('Orchestrations', () => {
         .send({ ...simpleOrchestration, name: 123, project_id: projectId });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toBe('name is required');
+      expect(response.body.error.message).toBe('`name` must be a string');
     });
 
     test('non-array nodes returns 400', async () => {
@@ -711,13 +711,15 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(403);
     });
 
-    test('missing orchestration_id returns 400', async () => {
+    test('non-string orchestration_id returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: 123, input: {} });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toBe('orchestration_id is required');
+      expect(response.body.error.message).toBe(
+        '`orchestration_id` must be a string'
+      );
     });
 
     test('project-scoped API key without StartRun permission returns 403', async () => {

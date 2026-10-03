@@ -229,6 +229,27 @@ describe('Tasks', () => {
       expect(history.body[0].actor_id).toBeUndefined();
     });
 
+    // A non-string id reached the lookup as a query operator (an object) or
+    // an `IN` list (an array).
+    test.each([
+      ['a number', 123],
+      ['an object', { a: 1 }],
+      ['an array', ['wfl_x']],
+    ])('answers 400 when workflow_id is %s', async (_label, workflowValue) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowValue,
+          title: 'A card',
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain(
+        '`workflow_id` must be a string'
+      );
+    });
+
     // A task's only caller-settable bag was `payload`, which every guard reads
     // and `payload_writes` can write — so a label there is neither inert nor
     // safe from the engine.
