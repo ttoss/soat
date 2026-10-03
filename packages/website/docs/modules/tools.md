@@ -211,7 +211,7 @@ The caller's `input` is the request body verbatim (keys never case-transformed).
 
 ### client
 
-Client tools have no server-side `execute`. A call pauses the generation with `status: "requires_action"` and the pending tool calls; the caller executes locally and submits results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), which answers with a final result or another `requires_action`.
+Client tools have no server-side `execute`. A call pauses the generation with `status: "requires_action"` and the pending tool calls; the caller executes locally and submits results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), which answers with a final result or another `requires_action`. Each pause accepts outputs once: a second submission, or one racing the first, is `409 GENERATION_NOT_AWAITING_TOOL_OUTPUTS`.
 
 Resuming continues the paused turn: the agent's [`tool_choice`](./agents.md#tool-choice) applies, [`step_rules`](./agents.md#step-rules) keep counting from the turn's first step, and only what remains of [`max_steps`](./agents.md#stop-conditions) can be spent.
 

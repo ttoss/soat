@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
+import * as dbModule from 'src/db';
 import { db } from 'src/db';
 import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
 import { buildModel } from 'src/lib/agentModel';
@@ -66,6 +67,11 @@ describe('agentNonStreamGeneration', () => {
   // these pass only in file order.
   beforeEach(() => {
     jest.resetModules();
+    // The reloaded registry shares the initialized connection; its own
+    // `src/db` would never be initialized.
+    jest.doMock('src/db', () => {
+      return dbModule;
+    });
   });
 
   afterEach(() => {

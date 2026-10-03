@@ -246,10 +246,12 @@ const buildPersonaSystem = (agent: {
   name?: string | null;
 }) => {
   const lines = agent.instructions ? [agent.instructions] : [];
+  // Other turns arrive labelled `[<speaker>]: …` (`buildMessageEntry`), and a
+  // model left alone answers in the same shape.
   lines.push(
     `You are ${
       agent.name ?? 'Assistant'
-    }. Reply as this participant only — do not speak for any other actor.`
+    }. Reply as this participant only — do not speak for any other actor. Do not prefix your reply with a \`[name]:\` speaker label.`
   );
   return lines.join('\n\n');
 };

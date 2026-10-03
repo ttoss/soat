@@ -13,6 +13,7 @@ import type {
 } from '../openapiSchemaFields';
 import {
   deriveSchemaFields,
+  fieldTypeError,
   hasProperties,
   isObjectRecord,
 } from '../openapiSchemaFields';
@@ -39,66 +40,6 @@ type OpenApiSpec = {
 // ── Module spec ──────────────────────────────────────────────────────────
 
 export type ModuleOpenApiSpec = SchemaFields;
-
-// ── Type validators ──────────────────────────────────────────────────────
-
-type TypeValidationArgs = {
-  fieldName: string;
-  nullable: boolean;
-  value: unknown;
-};
-
-const typeValidators: Record<
-  string,
-  (args: TypeValidationArgs) => string | null
-> = {
-  string: ({ fieldName, nullable, value }) => {
-    const valid = typeof value === 'string' || (nullable && value === null);
-    if (valid) return null;
-    return nullable
-      ? `\`${fieldName}\` must be a string or null`
-      : `\`${fieldName}\` must be a string`;
-  },
-  boolean: ({ fieldName, nullable, value }) => {
-    const valid = typeof value === 'boolean' || (nullable && value === null);
-    if (valid) return null;
-    return nullable
-      ? `\`${fieldName}\` must be a boolean or null`
-      : `\`${fieldName}\` must be a boolean`;
-  },
-  integer: ({ fieldName, nullable, value }) => {
-    const valid =
-      (typeof value === 'number' && Number.isInteger(value)) ||
-      (nullable && value === null);
-    if (valid) return null;
-    return nullable
-      ? `\`${fieldName}\` must be an integer or null`
-      : `\`${fieldName}\` must be an integer`;
-  },
-  number: ({ fieldName, nullable, value }) => {
-    const valid = typeof value === 'number' || (nullable && value === null);
-    if (valid) return null;
-    return nullable
-      ? `\`${fieldName}\` must be a number or null`
-      : `\`${fieldName}\` must be a number`;
-  },
-  array: ({ fieldName, nullable, value }) => {
-    const valid = Array.isArray(value) || (nullable && value === null);
-    if (valid) return null;
-    return nullable
-      ? `\`${fieldName}\` must be an array or null`
-      : `\`${fieldName}\` must be an array`;
-  },
-  object: ({ fieldName, nullable, value }) => {
-    const valid =
-      (typeof value === 'object' && value !== null && !Array.isArray(value)) ||
-      (nullable && value === null);
-    if (valid) return null;
-    return nullable
-      ? `\`${fieldName}\` must be an object or null`
-      : `\`${fieldName}\` must be an object`;
-  },
-};
 
 // ── Spec path resolution ─────────────────────────────────────────────────
 
@@ -330,16 +271,7 @@ export const pushFieldTypeErrors = (args: {
     const value = args.properties[fieldName];
     if (value === undefined || isFormationExpression(value)) continue;
 
-    const validator = fieldSpec.type
-      ? typeValidators[fieldSpec.type]
-      : undefined;
-    if (!validator) continue;
-
-    const message = validator({
-      fieldName,
-      nullable: fieldSpec.nullable,
-      value,
-    });
+    const message = fieldTypeError({ fieldName, fieldSpec, value });
     if (message) {
       args.errors.push({ path: `${args.basePath}.${fieldName}`, message });
       flagged.add(fieldName);

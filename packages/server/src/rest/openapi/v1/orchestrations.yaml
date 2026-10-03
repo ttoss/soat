@@ -1526,8 +1526,10 @@ components:
           description: >-
             What the run cost: token counts and `cost_usd` summed across every
             metered generation it produced **and every run it started** through
-            `loop` / `sub_orchestration` nodes, at any depth. Present on the
-            single-run read; omitted from run list responses.
+            `loop` / `sub_orchestration` nodes, at any depth. Present only on
+            the single-run read (`GET /api/v1/orchestration-runs/{orchestration_run_id}`);
+            omitted from run lists and from every write's response, including
+            a start with `wait: true`.
 
 
             A nested child is a run record of its own, so this figure spans
@@ -1542,8 +1544,8 @@ components:
           description: >-
             The same roll-up restricted to **this run's own nodes**, excluding
             every nested run it started. Equal to `usage` for a run with no
-            children; below it for a run that delegates. Present on the
-            single-run read; omitted from run list responses.
+            children; below it for a run that delegates. Present only on the
+            single-run read, like `usage`.
 
 
             This is the field to read to see where cost sits in a run tree —

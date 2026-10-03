@@ -96,7 +96,7 @@ One agent execution; its steps are on its [trace](./traces.md).
 | `project_id`                | string      | Project the generation belongs to                                     |
 | `agent_id`                  | string      | Agent that was executed                                               |
 | `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                       |
-| `initiator_generation_id`   | string/null | Generation that spawned this one (for nested calls)                   |
+| `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations) |
 | `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status) |
 | `started_at`                | string      | ISO 8601 timestamp when execution began                               |
 | `completed_at`              | string/null | ISO 8601 timestamp when execution finished                            |

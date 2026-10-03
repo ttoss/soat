@@ -159,8 +159,8 @@ By default the call runs in the background and returns `202 Accepted` (`{ "statu
 Flow (with `?wait=true`):
 
 1. Load messages ordered by `position`.
-2. Compose the system prompt from the agent's `instructions`.
-3. Map `role: 'assistant'` messages to assistant turns; all others to user turns, prefixed with the speaker's name. A message's `metadata` is not part of the turn — the model sees `message` and nothing else the caller attached.
+2. Compose the system prompt from the agent's `instructions`, plus a line naming the agent and telling it to reply as itself, without a speaker label.
+3. Map `role: 'assistant'` messages to assistant turns; all others to user turns, prefixed `[<speaker name>]: `. A message's `metadata` is not part of the turn — the model sees `message` and nothing else the caller attached.
 4. Dispatch to the Agents module, including agent tools and the `requires_action` client-tool flow.
 5. On `completed`, a new Document is attached as the next message with `role: 'assistant'`. The response includes:
    - **`content`** — the generated text (always a `string`).

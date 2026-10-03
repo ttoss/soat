@@ -32,10 +32,6 @@ const modelRouteAccess = makeItemRouteAuthorizer({
   label: 'Model route',
 });
 
-const parseStringOrUndefined = (v: unknown): string | undefined => {
-  return typeof v === 'string' ? v : undefined;
-};
-
 /**
  * @openapi
  * /api/v1/model-routes:
@@ -48,7 +44,8 @@ modelRoutesRouter.post('/model-routes', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: parseStringOrUndefined(body.project_id),
+    // A non-string `project_id` is refused by `validateRequestBody`.
+    projectPublicId: body.project_id as string | undefined,
     action: 'model-routes:CreateModelRoute',
     resourceType: 'model_route',
   });

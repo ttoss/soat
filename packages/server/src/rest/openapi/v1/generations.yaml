@@ -78,9 +78,10 @@ paths:
           in: query
           required: false
           description: >
-            Filter by the public ID of the parent generation. Returns all
-            generations triggered by that generation — sub-agent invocations.
-            Null-initiated (top-level) generations are not returned.
+            Filter by the public ID of the parent generation. Returns every
+            generation started by that generation: sub-agent invocations,
+            approval continuations, client-tool re-handoffs and memory-rule
+            handler turns. Top-level generations are not returned.
           schema:
             type: string
         - name: chain_id
@@ -434,8 +435,9 @@ components:
           type: string
           nullable: true
           description: >
-            Public ID of the generation that triggered this one. Set for
-            sub-agent invocations. Null for top-level generations.
+            Public ID of the generation that started this one: a sub-agent
+            invocation, an approval continuation, a client-tool re-handoff or
+            a memory-rule handler turn. Null for top-level generations.
         chain_id:
           x-soat-ref: chains
           type: string

@@ -89,6 +89,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The operation exists in the contract but is not implemented on this deployment. Retrying will not change the outcome.',
   REQUEST_REJECTED:
     'The HTTP layer rejected the request before it reached a route — method, content type, or size. The message names the reason.',
+  GENERATION_NOT_AWAITING_TOOL_OUTPUTS:
+    'Read the generation for its current status. A generation that pauses again answers `requires_action` with new tool call ids; submit outputs for those.',
   GENERATION_ALREADY_IN_PROGRESS:
     'A generation is already running for this target. Poll it to completion, or cancel it, before starting another.',
   SINGLE_SESSION_CONFLICT:

@@ -678,6 +678,16 @@ describe('Agent Generation Routes', () => {
         },
         resolvedTools: {},
       };
+      await createGenerationRecord({
+        publicId: 'gen_stub_pending',
+        projectId: projectDbId,
+        agentId,
+        traceId: 'trc_stub_test',
+      });
+      await updateGenerationRecord({
+        publicId: 'gen_stub_pending',
+        status: 'requires_action',
+      });
       pendingGenerations.set('gen_stub_pending', pending);
 
       const response = await authenticatedTestClient(userToken)
@@ -710,21 +720,9 @@ describe('Agent Generation Routes', () => {
       expect(paused.status).toBe(200);
       expect(paused.body.status).toBe('requires_action');
 
-      // `requires_action` is persisted fire-and-forget, so the record can read
-      // `in_progress` briefly after the response. A single read passes on a
-      // fast machine and fails under CI load, so poll a bounded predicate.
-      let record = await authenticatedTestClient(userToken).get(
+      const record = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${paused.body.id}`
       );
-      for (let attempt = 0; attempt < 100; attempt += 1) {
-        if (record.body.status === 'requires_action') break;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 50);
-        });
-        record = await authenticatedTestClient(userToken).get(
-          `/api/v1/generations/${paused.body.id}`
-        );
-      }
 
       expect(record.status).toBe(200);
       expect(record.body.status).toBe('requires_action');
@@ -732,6 +730,63 @@ describe('Agent Generation Routes', () => {
       expect(record.body.metadata).toEqual({ ticket_id: 'OPS-9001' });
       // The persisted recovery state is not reachable through the API.
       expect(record.body.pending_state).toBeUndefined();
+    }, 60000);
+
+    const pauseOnShowDialog = async () => {
+      nextToolCall = { name: 'show_dialog', args: { message: 'confirm?' } };
+      const paused = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${pausingAgentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'ask me' }] });
+      expect(paused.body.status).toBe('requires_action');
+      return {
+        generationId: paused.body.id as string,
+        toolOutputs: [
+          {
+            tool_call_id: paused.body.required_action.tool_calls[0].id,
+            output: 'confirmed',
+          },
+        ],
+      };
+    };
+
+    test('tool-outputs refuses a generation that already resumed', async () => {
+      const { generationId, toolOutputs } = await pauseOnShowDialog();
+      const url = `/api/v1/agents/${pausingAgentId}/generate/${generationId}/tool-outputs`;
+
+      const first = await authenticatedTestClient(userToken)
+        .post(url)
+        .send({ tool_outputs: toolOutputs });
+      expect(first.status).toBe(200);
+      expect(first.body.status).toBe('completed');
+
+      const second = await authenticatedTestClient(userToken)
+        .post(url)
+        .send({ tool_outputs: toolOutputs });
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe(
+        'GENERATION_NOT_AWAITING_TOOL_OUTPUTS'
+      );
+    }, 60000);
+
+    test('tool-outputs submitted twice at once resumes the generation once', async () => {
+      const { generationId, toolOutputs } = await pauseOnShowDialog();
+      const url = `/api/v1/agents/${pausingAgentId}/generate/${generationId}/tool-outputs`;
+
+      const responses = await Promise.all(
+        [1, 2].map(() => {
+          return authenticatedTestClient(userToken)
+            .post(url)
+            .send({ tool_outputs: toolOutputs });
+        })
+      );
+
+      expect(
+        responses
+          .map((response) => {
+            return response.status;
+          })
+          .sort()
+      ).toEqual([200, 409]);
     }, 60000);
 
     /**
@@ -813,6 +868,7 @@ describe('Agent Generation Routes', () => {
       });
       await updateGenerationRecord({
         publicId: 'gen_recovered',
+        status: 'requires_action',
         pendingState: {
           pendingToolCalls: [
             { toolCallId: 'tc_1', toolName: 'noop', args: {} },
@@ -856,6 +912,7 @@ describe('Agent Generation Routes', () => {
       });
       await updateGenerationRecord({
         publicId: 'gen_unknown_id',
+        status: 'requires_action',
         pendingState: {
           pendingToolCalls: [
             { toolCallId: 'tc_open', toolName: 'noop', args: {} },
@@ -892,6 +949,7 @@ describe('Agent Generation Routes', () => {
       });
       await updateGenerationRecord({
         publicId: 'gen_mixed_ids',
+        status: 'requires_action',
         pendingState: {
           pendingToolCalls: [
             { toolCallId: 'tc_open', toolName: 'noop', args: {} },
@@ -938,6 +996,7 @@ describe('Agent Generation Routes', () => {
       });
       await updateGenerationRecord({
         publicId: 'gen_usage_metered',
+        status: 'requires_action',
         pendingState: {
           pendingToolCalls: [
             { toolCallId: 'tc_1', toolName: 'noop', args: {} },
@@ -1150,6 +1209,10 @@ describe('Agent Generation Routes', () => {
           projectId: projectDbId,
           agentId: pausingAgentId,
           traceId: 'trc_text_encoded_continuation',
+        });
+        await updateGenerationRecord({
+          publicId: 'gen_text_encoded_continuation',
+          status: 'requires_action',
         });
         pendingGenerations.set('gen_text_encoded_continuation', pending);
 

@@ -13,6 +13,10 @@ import {
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
 import {
+  claimPausedGeneration,
+  notAwaitingToolOutputs,
+} from './generationPendingState';
+import {
   collectSystemInstructions,
   withoutSystemMessages,
 } from './modelMessages';
@@ -122,6 +126,9 @@ export const submitToolOutputs = async (args: {
   await assertProjectAcceptsWork({ projectId: pending.projectId });
 
   pendingGenerations.delete(args.generationId);
+  if (!(await claimPausedGeneration({ publicId: args.generationId }))) {
+    throw notAwaitingToolOutputs(args.generationId);
+  }
 
   const toolResultMessages = buildToolResultMessages({
     toolOutputs: args.toolOutputs,

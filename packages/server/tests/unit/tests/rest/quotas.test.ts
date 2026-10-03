@@ -2,6 +2,8 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { isObjectRecord } from 'src/lib/openapiSchemaFields';
+import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
@@ -40,6 +42,20 @@ const QUOTA_ACTIONS = [
  * same reason.
  */
 const COUNTED_WINDOW = 'calendar_month';
+
+/** The breach a caller receives is one the operation's contract documents. */
+const expectStatusDeclared = (args: {
+  path: string;
+  method: 'post';
+  status: number;
+}) => {
+  const pathItem = getMergedOpenApiSpec().paths[args.path];
+  const operation = isObjectRecord(pathItem) ? pathItem[args.method] : null;
+  const responses = isObjectRecord(operation) ? operation.responses : null;
+  expect(Object.keys(isObjectRecord(responses) ? responses : {})).toContain(
+    String(args.status)
+  );
+};
 
 describe('Quotas', () => {
   let adminToken: string;
@@ -1570,6 +1586,27 @@ describe('Quotas', () => {
       // The 429 contract carries Retry-After even on the generation path.
       expect(blocked.headers['retry-after']).toBeDefined();
       expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+      expectStatusDeclared({
+        path: '/api/v1/agents/{agent_id}/generate',
+        method: 'post',
+        status: 429,
+      });
+
+      const conversationRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: enfProjectId });
+      const conversationBlocked = await authenticatedTestClient(adminToken)
+        .post(
+          `/api/v1/conversations/${conversationRes.body.id}/generate?wait=true`
+        )
+        .send({ agent_id: agentPublicId });
+      expect(conversationBlocked.status).toBe(429);
+      expect(conversationBlocked.body.error.code).toBe('QUOTA_EXCEEDED');
+      expectStatusDeclared({
+        path: '/api/v1/conversations/{conversation_id}/generate',
+        method: 'post',
+        status: 429,
+      });
 
       // No usage event was written for the blocked generation.
       const after = await db.UsageEvent.count({
@@ -1621,6 +1658,7 @@ describe('Quotas', () => {
         });
 
         return {
+          actorId: actorRes.body.id as string,
           sessionId: sessionRes.body.id as string,
           actorInternalId: (actor as unknown as { id: number }).id,
         };
@@ -1696,8 +1734,32 @@ describe('Quotas', () => {
       expect(blocked.body.error.meta.limit).toBe(30);
       expect(blocked.headers['retry-after']).toBeDefined();
       expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+      expectStatusDeclared({
+        path: '/api/v1/sessions/{session_id}/generate',
+        method: 'post',
+        status: 429,
+      });
 
-      // Nothing was metered for the blocked generation.
+      // A message that auto-generates starts the same generation.
+      const autoSessionRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentPublicId,
+          actor_id: bob.actorId,
+          auto_generate: true,
+        });
+      const autoBlocked = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/sessions/${autoSessionRes.body.id}/messages`)
+        .send({ message: 'hello' });
+      expect(autoBlocked.status).toBe(429);
+      expect(autoBlocked.body.error.code).toBe('QUOTA_EXCEEDED');
+      expectStatusDeclared({
+        path: '/api/v1/sessions/{session_id}/messages',
+        method: 'post',
+        status: 429,
+      });
+
+      // Nothing was metered for the blocked generations.
       expect(
         await db.UsageEvent.count({ where: { projectId: projectInternalId } })
       ).toBe(before);

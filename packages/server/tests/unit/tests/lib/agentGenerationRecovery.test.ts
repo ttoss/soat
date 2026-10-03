@@ -156,12 +156,11 @@ describe('recoverPendingFromDb (real DB)', () => {
       agentId: args.agentId,
       traceId: args.traceId,
     });
-    if (args.withPendingState) {
-      await updateGenerationRecord({
-        publicId: args.publicId,
-        pendingState: buildPendingState(),
-      });
-    }
+    await updateGenerationRecord({
+      publicId: args.publicId,
+      status: 'requires_action',
+      ...(args.withPendingState ? { pendingState: buildPendingState() } : {}),
+    });
   };
 
   test('rebuilds the full pending generation, resolving model and tools', async () => {

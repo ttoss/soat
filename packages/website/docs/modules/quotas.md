@@ -86,7 +86,7 @@ Each metric is scoped by what measures it: the request middleware sees API key a
 
 ### Token and cost enforcement
 
-`tokens` and `cost_usd` quotas are checked **before a generation starts**, aggregating the current window from the [usage meter](./usage.md): `cost_usd` sums the priced event cost, `tokens` sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). At or over the limit, the generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
+`tokens` and `cost_usd` quotas are checked **before a generation starts**, aggregating the current window from the [usage meter](./usage.md): `cost_usd` sums the priced event cost, `tokens` sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). At or over the limit, the generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it. Session and conversation `generate` answer that `429` only with `wait=true`; a background call is accepted before the check.
 
 ### Storage enforcement
 

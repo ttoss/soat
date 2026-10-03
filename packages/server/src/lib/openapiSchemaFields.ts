@@ -7,8 +7,8 @@
  * (`openapiSpec.ts` → `requestValidation.ts`) over request bodies, and
  * formation template validation (`formationSpecLoader.ts`) over
  * `*ResourceProperties`. Both compare against the spec's own snake_case names,
- * so there is no casing to reconcile; each keeps its own throw-vs-accumulate
- * policy.
+ * so there is no casing to reconcile, and both read a field's type through
+ * {@link fieldTypeError}; each keeps its own throw-vs-accumulate policy.
  */
 
 export type FieldSpec = {
@@ -89,4 +89,50 @@ export const deriveSchemaFields = (args: {
     ),
     fieldSpecs,
   };
+};
+
+const TYPE_CHECKS: Record<string, (value: unknown) => boolean> = {
+  string: (value) => {
+    return typeof value === 'string';
+  },
+  boolean: (value) => {
+    return typeof value === 'boolean';
+  },
+  integer: (value) => {
+    return typeof value === 'number' && Number.isInteger(value);
+  },
+  number: (value) => {
+    return typeof value === 'number';
+  },
+  array: (value) => {
+    return Array.isArray(value);
+  },
+  object: isObjectRecord,
+};
+
+const ARTICLES: Record<string, string> = {
+  array: 'an array',
+  integer: 'an integer',
+  object: 'an object',
+};
+
+/**
+ * Why `value` does not match the field's declared `type`, or null when it does
+ * — or when the field declares no single type (a `$ref`, a union) to read it
+ * against. `null` matches only a `nullable` field.
+ */
+export const fieldTypeError = (args: {
+  fieldName: string;
+  fieldSpec: FieldSpec;
+  value: unknown;
+}): string | null => {
+  const { type, nullable } = args.fieldSpec;
+  const check = type ? TYPE_CHECKS[type] : undefined;
+  if (!type || !check) return null;
+  if (check(args.value) || (nullable && args.value === null)) return null;
+
+  const expected = ARTICLES[type] ?? `a ${type}`;
+  return nullable
+    ? `\`${args.fieldName}\` must be ${expected} or null`
+    : `\`${args.fieldName}\` must be ${expected}`;
 };
