@@ -389,6 +389,15 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          description: >
+            The generation is not paused on client tool calls
+            (GENERATION_NOT_AWAITING_TOOL_OUTPUTS): it never paused, or its
+            outputs were already submitted. Each pause accepts outputs once.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/sessions/{session_id}/fork:
     post:

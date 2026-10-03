@@ -40,7 +40,12 @@ export const ERROR_CODES = {
   GENERATION_NOT_FOUND: {
     httpStatus: 404,
     description:
-      'The generation does not exist or is not in a pending state for tool output submission.',
+      'The generation does not exist or is not accessible to the caller.',
+  },
+  GENERATION_NOT_AWAITING_TOOL_OUTPUTS: {
+    httpStatus: 409,
+    description:
+      'The generation is not paused on client tool calls: it never paused, or its outputs were already submitted and it resumed. Tool outputs are accepted once per pause.',
   },
   GENERATION_NOT_COMPLETED: {
     httpStatus: 409,

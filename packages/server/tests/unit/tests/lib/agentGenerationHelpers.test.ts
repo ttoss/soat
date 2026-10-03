@@ -221,8 +221,8 @@ describe('savePendingGeneration', () => {
     pendingGenerations.clear();
   });
 
-  test('returns requires_action result and stores in pendingGenerations', () => {
-    const result = savePendingGeneration({
+  test('returns requires_action result and stores in pendingGenerations', async () => {
+    const result = await savePendingGeneration({
       generationId: 'gen_test001',
       traceId: 'trc_test001',
       pendingToolCalls: [
@@ -250,8 +250,8 @@ describe('savePendingGeneration', () => {
     expect(pendingGenerations.has('gen_test001')).toBe(true);
   });
 
-  test('returns requires_action with multiple pending tool calls', () => {
-    const result = savePendingGeneration({
+  test('returns requires_action with multiple pending tool calls', async () => {
+    const result = await savePendingGeneration({
       generationId: 'gen_test002',
       traceId: 'trc_test002',
       pendingToolCalls: [
@@ -271,12 +271,12 @@ describe('savePendingGeneration', () => {
     expect(result.requiredAction?.toolCalls).toHaveLength(2);
   });
 
-  test('does not call saveTrace — trace must not be written mid-generation', () => {
+  test('does not call saveTrace — trace must not be written mid-generation', async () => {
     const saveTraceSpy = jest
       .spyOn(tracesModule, 'saveTrace')
       .mockResolvedValue(undefined);
 
-    savePendingGeneration({
+    await savePendingGeneration({
       generationId: 'gen_notrace01',
       traceId: 'trc_notrace01',
       pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'myTool', input: {} }],
@@ -293,10 +293,10 @@ describe('savePendingGeneration', () => {
     jest.restoreAllMocks();
   });
 
-  test('stores first-call steps in pendingGenerations for later trace assembly', () => {
+  test('stores first-call steps in pendingGenerations for later trace assembly', async () => {
     const firstCallSteps = [{ type: 'tool-call', toolCallId: 'tc_1' }];
 
-    savePendingGeneration({
+    await savePendingGeneration({
       generationId: 'gen_steps01',
       traceId: 'trc_steps01',
       pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'myTool', input: {} }],
@@ -313,13 +313,13 @@ describe('savePendingGeneration', () => {
     expect(pending?.steps).toEqual(firstCallSteps);
   });
 
-  test('uses default maxSteps when typedAgent.maxSteps is null', () => {
+  test('uses default maxSteps when typedAgent.maxSteps is null', async () => {
     const agentWithoutMaxSteps: TypedAgent = {
       ...mockAgent,
       maxSteps: null,
     };
 
-    savePendingGeneration({
+    await savePendingGeneration({
       generationId: 'gen_test003',
       traceId: 'trc_test003',
       pendingToolCalls: [
@@ -339,13 +339,13 @@ describe('savePendingGeneration', () => {
     );
   });
 
-  test('does not throw when updateGenerationRecord rejects while saving pending state', async () => {
+  test('rejects when the pause cannot be persisted', async () => {
     jest
       .spyOn(generationsModule, 'updateGenerationRecord')
       .mockRejectedValue(new Error('db down'));
 
-    expect(() => {
-      return savePendingGeneration({
+    await expect(
+      savePendingGeneration({
         generationId: 'gen_reject001',
         traceId: 'trc_reject001',
         pendingToolCalls: [
@@ -358,13 +358,8 @@ describe('savePendingGeneration', () => {
         typedAgent: mockAgent,
         agentId: 'agt_test001',
         resolvedTools: {},
-      });
-    }).not.toThrow();
-
-    // Flush the microtask queue so the fire-and-forget `.catch` handlers run.
-    await new Promise((resolve) => {
-      setImmediate(resolve);
-    });
+      })
+    ).rejects.toThrow('db down');
 
     jest.restoreAllMocks();
   });

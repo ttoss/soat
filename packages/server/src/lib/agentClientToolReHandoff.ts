@@ -36,9 +36,9 @@ const seedReHandoffPending = (args: {
   traceId: string;
   parentTraceId: string | null;
   rootTraceId: string | null;
-}): void => {
+}): Promise<unknown> => {
   const toolCallId = `call_${args.ctx.generationId}`;
-  savePendingGeneration({
+  return savePendingGeneration({
     generationId: args.ctx.generationId,
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
@@ -175,7 +175,7 @@ export const emitClientToolReHandoff = async (args: {
     retrieval: ctx.retrieval,
   });
 
-  seedReHandoffPending({
+  await seedReHandoffPending({
     agentId,
     toolName: tool.name,
     frozenArgs,

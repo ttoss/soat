@@ -154,7 +154,7 @@ const storePendingGenerationState = (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   aiProviderId: string | null;
-}): void => {
+}): Promise<unknown> => {
   // Computed once rather than twice below, so a change to how a turn is frozen
   // cannot land on only one copy and leave a recovered generation resuming from
   // a different history than a live one.
@@ -200,11 +200,15 @@ const storePendingGenerationState = (args: {
   };
   // `pendingState`'s own column, not `metadata: { pendingState }` — that
   // replaced the whole bag, so every generation pausing for a client tool lost
-  // its attribution and metered unattributed.
-  updateGenerationRecord({
+  // its attribution and metered unattributed. Awaited with the status: a
+  // submission claims the pause by its status, so it must land before the
+  // caller can answer.
+  return updateGenerationRecord({
     publicId: args.generationId,
+    status: 'requires_action',
+    lastActivityAt: new Date(),
     pendingState,
-  }).catch(() => {});
+  });
 };
 
 /**
@@ -223,7 +227,7 @@ export const servedAiProviderId = (args: {
   );
 };
 
-export const savePendingGeneration = (args: {
+export const savePendingGeneration = async (args: {
   generationId: string;
   traceId: string;
   parentTraceId?: string | null;
@@ -239,19 +243,13 @@ export const savePendingGeneration = (args: {
   resolvedTools: Record<string, Tool>;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
-}): GenerationResult => {
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'requires_action',
-    lastActivityAt: new Date(),
-  }).catch(() => {});
-
+}): Promise<GenerationResult> => {
   const aiProviderId = servedAiProviderId({
     model: args.model,
     typedAgent: args.typedAgent,
   });
 
-  storePendingGenerationState({ ...args, aiProviderId });
+  await storePendingGenerationState({ ...args, aiProviderId });
 
   const requiresActionResult: GenerationResult = {
     id: args.generationId,

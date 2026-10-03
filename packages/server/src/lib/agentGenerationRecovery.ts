@@ -13,7 +13,10 @@ import {
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
-import { getGenerationPendingState } from './generationPendingState';
+import {
+  getGenerationPendingState,
+  notAwaitingToolOutputs,
+} from './generationPendingState';
 import { getGeneration, updateGenerationRecord } from './generations';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
@@ -272,15 +275,19 @@ export const recoverPendingFromDb = async (args: {
   ]);
   const pendingState = (storedState ?? undefined) as PendingStateDb | undefined;
 
-  if (!gen || !pendingState || gen.agent_id !== args.agentId) {
-    return undefined;
-  }
+  if (!gen || gen.agent_id !== args.agentId) return undefined;
 
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
   });
   if (!typedAgent) return undefined;
+  // After the scope check, so a refusal never confirms a generation the caller
+  // cannot reach. The stored state outlives the pause it was written for.
+  if (gen.status !== 'requires_action') {
+    throw notAwaitingToolOutputs(args.generationId);
+  }
+  if (!pendingState) return undefined;
 
   return buildPendingFromState({
     generationId: args.generationId,
