@@ -2,6 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { isObjectRecord } from 'src/lib/openapiSchemaFields';
 import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
@@ -48,9 +49,10 @@ const expectStatusDeclared = (args: {
   method: 'post';
   status: number;
 }) => {
-  const operation = getMergedOpenApiSpec().paths[args.path]?.[args.method] as
-    { responses?: Record<string, unknown> } | undefined;
-  expect(Object.keys(operation?.responses ?? {})).toContain(
+  const pathItem = getMergedOpenApiSpec().paths[args.path];
+  const operation = isObjectRecord(pathItem) ? pathItem[args.method] : null;
+  const responses = isObjectRecord(operation) ? operation.responses : null;
+  expect(Object.keys(isObjectRecord(responses) ? responses : {})).toContain(
     String(args.status)
   );
 };
