@@ -481,9 +481,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           description: >-
-            `SHARE_CAP_EXCEEDED`: the agent is another project's, reached
-            through a share whose `cap` is spent for the window. Carries a
-            `Retry-After` header and `error.meta.retry_after`.
+            `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted;
+            `error.meta` carries `quota_id`, `metric`, `limit`, `window` and
+            `resets_at`. `SHARE_CAP_EXCEEDED`: the agent is another project's,
+            reached through a share whose `cap` is spent for the window;
+            `error.meta.retry_after` says when. Both carry a `Retry-After`
+            header.
           content:
             application/json:
               schema:

@@ -275,6 +275,17 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          description: >-
+            `QUOTA_EXCEEDED`: the session auto-generates and an `enforce`-mode
+            generation quota is exhausted. `error.meta` carries `quota_id`,
+            `metric`, `limit`, `window` and `resets_at`, with a `Retry-After`
+            header. The message is saved. A session with
+            `message_delay_seconds` answers `201` before the quota is read.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/sessions/{session_id}/generate:
     post:
@@ -341,6 +352,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '410':
           description: Session has expired due to inactivity
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          description: >-
+            `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted.
+            `error.meta` carries `quota_id`, `metric`, `limit`, `window` and
+            `resets_at`, with a `Retry-After` header. Only with `?wait=true`:
+            a background call is answered `202` before the quota is read.
           content:
             application/json:
               schema:

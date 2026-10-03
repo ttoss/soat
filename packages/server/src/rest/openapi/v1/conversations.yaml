@@ -584,6 +584,16 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          description: >-
+            `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted.
+            `error.meta` carries `quota_id`, `metric`, `limit`, `window` and
+            `resets_at`, with a `Retry-After` header. Only with `?wait=true`:
+            a background call is answered `202` before the quota is read.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '501':
           description: Streaming not implemented
           content:
