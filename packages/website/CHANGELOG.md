@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.71.2](https://github.com/ttoss/soat/compare/v0.71.1...v0.71.2) (2026-10-03)
+
+### Bug Fixes
+
+* **server:** tool-output replay, body type checks, 429 and spec gaps ([#1526](https://github.com/ttoss/soat/issues/1526)) ([da70309](https://github.com/ttoss/soat/commit/da70309b19a521439d12ebb2387b0d7fb525b9a4)), closes [#1522](https://github.com/ttoss/soat/issues/1522) [#1523](https://github.com/ttoss/soat/issues/1523) [#1525](https://github.com/ttoss/soat/issues/1525) [#1524](https://github.com/ttoss/soat/issues/1524)
+
 ## [0.71.1](https://github.com/ttoss/soat/compare/v0.71.0...v0.71.1) (2026-10-02)
 
 **Note:** Version bump only for package @soat/website
