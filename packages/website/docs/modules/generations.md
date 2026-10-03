@@ -31,7 +31,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `project_id`                | string         | Project the generation belongs to                                                                    |
 | `agent_id`                  | string         | Agent that ran the generation                                                                        |
 | `trace_id`                  | string         | Trace this generation belongs to                                                                     |
-| `initiator_generation_id`   | string \| null | Generation that triggered this one. Set only for sub-agent invocations; `null` for top-level generations |
+| `initiator_generation_id`   | string \| null | Generation that started this one (see [Initiated generations](#initiated-generations)); `null` for top-level generations |
 | `chain_id`                  | string \| null | [Continuation chain](./chains.md) this generation belongs to — set on every member including the root; `null` when it is not part of one |
 | `session_id`                | string \| null | [Session](./sessions.md) this generation was dispatched through; `null` when it was started outside one |
 | `actor_id`                  | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none |
@@ -290,9 +290,14 @@ Two project settings turn the manual purge into a policy:
 - **[Retention](./traces.md#retention-policy)** — `trace_content_retention_days` on the project runs a daily sweep that purges content past the window, through this same purge path.
 - **[Zero-retention](./traces.md#zero-retention-mode)** — `trace_content_mode: "none"` on the project or the agent means the content columns are never written. The generation is still created and metered; it reads back as a skeleton stamped `content_redacted_by_principal_id: "zero_retention"` from the moment it exists.
 
-### Sub-agent invocations
+### Initiated generations
 
-`initiator_generation_id` is populated only when an agent calls another agent via a builtin tool: the child generation records the calling generation's ID; top-level generations leave it `null`.
+`initiator_generation_id` names the generation that started this one; top-level generations leave it `null`. It is set on:
+
+- a **sub-agent invocation** — an agent calling another agent via a builtin tool;
+- an **approval continuation** — the turn that resumes after an [approval](./approvals.md) settles, in a session or standalone;
+- a **client-tool re-handoff** — the generation an approved [client tool](./tools.md#client) call is handed back to the caller on;
+- a **memory-rule handler turn** — the agent a [memory rule](./memories.md#memory-rules) runs on a finished turn.
 
 Intermediate steps of multi-step reasoning composed by the calling application are ordinary generations of their own, not `metadata` on or children of the calling generation.
 
@@ -346,7 +351,7 @@ curl "https://api.example.com/api/v1/generations?orchestration_run_id=run_abc123
 
 `node_attempt` distinguishes the generations of a **retried** node: one node execution record and one generation per attempt, matched exactly on `node_attempt`.
 
-From a generation reached this way, the rest of the graph is reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, `chain_id` opens the [continuation chain](./chains.md) it belongs to (filtering generations by that id returns every member), and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
+From a generation reached this way, the rest of the graph is reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [generations it started](#initiated-generations), `chain_id` opens the [continuation chain](./chains.md) it belongs to (filtering generations by that id returns every member), and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
 
 `session_id` and `actor_id` also **filter** the listing, so the turns behind a conversation's or an end user's [cost](./usage.md#end-user-attribution) are one call away:
 

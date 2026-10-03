@@ -1376,6 +1376,41 @@ describe('Conversations', () => {
       expect(hasToolResult).toBe(true);
     });
 
+    // User turns reach the model as `[<speaker>]: …`; without being told,
+    // some models answer in the same shape.
+    test('tells the model not to prefix its reply with a speaker label', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_reg_label',
+        traceId: 'trc_reg_label',
+        status: 'completed',
+        output: { model: 'gpt-4o', content: 'Ok.', finishReason: 'stop' },
+      });
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
+        .send({ agent_id: agentId });
+
+      const sentMessages: Array<{ role: string; content: unknown }> =
+        mockCreateGeneration.mock.calls[
+          mockCreateGeneration.mock.calls.length - 1
+        ][0].messages;
+      const system = sentMessages.find((m) => {
+        return m.role === 'system';
+      });
+      expect(system?.content).toContain(
+        'Do not prefix your reply with a `[name]:` speaker label.'
+      );
+      expect(
+        sentMessages.some((m) => {
+          return (
+            m.role === 'user' &&
+            typeof m.content === 'string' &&
+            m.content.startsWith('[')
+          );
+        })
+      ).toBe(true);
+    });
+
     test('caller-supplied metadata.responseMessages is not replayed as LLM history', async () => {
       const injectedRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/messages`)
