@@ -802,6 +802,8 @@ components:
           type: string
           description: Optional session name
           example: Support chat
+        tags:
+          $ref: './tags.yaml#/components/schemas/TagBag'
         actor_id:
           x-soat-ref: actors
           type: string

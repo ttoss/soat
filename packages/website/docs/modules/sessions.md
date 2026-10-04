@@ -74,7 +74,7 @@ An optional `idempotency_key` string can accompany either variant — see [Idemp
 
 ### Tags
 
-Key-value string pairs managed via the tag sub-endpoints. [`GET /api/v1/sessions`](/docs/api/sessions/list-sessions) filters by pair with `?tags=key:value` (repeatable, all must match). Policy conditions read the same pairs through `soat:ResourceTag/<key>`; pass `?project_id=` for a conditioned policy to narrow the listing. See [IAM — Tags](iam.md#tags).
+Key-value string pairs, set on [`POST /api/v1/sessions`](/docs/api/sessions/create-session) and managed via the tag sub-endpoints. [`GET /api/v1/sessions`](/docs/api/sessions/list-sessions) filters by pair with `?tags=key:value` (repeatable, all must match). Policy conditions read the same pairs through `soat:ResourceTag/<key>`; pass `?project_id=` for a conditioned policy to narrow the listing. See [IAM — Tags](iam.md#tags).
 
 ### The Session's End User (Actor)
 

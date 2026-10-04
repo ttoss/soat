@@ -91,6 +91,7 @@ export const createSession = async (args: {
   projectId: number;
   agentId: number;
   name?: string | null;
+  tags?: Record<string, string>;
   actorId?: string | null;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
@@ -130,6 +131,7 @@ export const createSession = async (args: {
       projectId: args.projectId,
       agentId: agent.id,
       name: args.name,
+      tags: args.tags,
       existingActorId,
       autoGenerate: args.autoGenerate,
       toolContext,

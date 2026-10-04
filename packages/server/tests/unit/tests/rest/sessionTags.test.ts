@@ -45,6 +45,52 @@ describe('SessionTags', () => {
     agentId = agentRes.body.id;
   });
 
+  describe('POST /api/v1/sessions with tags', () => {
+    test('stores the bag and returns it on the record', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, tags: { channel: 'app' } });
+
+      expect(response.status).toBe(201);
+      expect(response.body.tags).toEqual({ channel: 'app' });
+
+      const listed = await authenticatedTestClient(userToken)
+        .get('/api/v1/sessions')
+        .query({ agent_id: agentId, tags: 'channel:app' });
+      const ids = listed.body.data.map((s: { id: string }) => {
+        return s.id;
+      });
+      expect(ids).toContain(response.body.id);
+    });
+
+    test('without tags the record carries none', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.tags).toEqual({});
+    });
+
+    test('rejects a non-string tag value', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, tags: { channel: ['app'] } });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a reserved system key', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, tags: { 'system.channel': 'app' } });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('RESERVED_TAG_KEY');
+    });
+  });
+
   describe('tag body validation', () => {
     let sessionId: string;
 
