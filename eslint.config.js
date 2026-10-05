@@ -45,7 +45,6 @@ export const TEST_MODULE_CEILING = 1000;
  * new violation, not a new entry.
  */
 export const TEST_MAX_LINES_EXEMPT = [
-  'packages/server/tests/unit/tests/lib/agentToolResolver.test.ts',
   'packages/server/tests/unit/tests/lib/formation-modules.test.ts',
   'packages/server/tests/unit/tests/lib/formationsValidation.test.ts',
   'packages/server/tests/unit/tests/lib/orchestrationNodeExecutors.test.ts',
