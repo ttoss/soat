@@ -327,8 +327,9 @@ jobs:
     name: Release Lockfile
     runs-on: ubuntu-latest
     # Every other job skips a release PR, but `lerna version` rewrites the
-    # lockfile and `main.yml` installs frozen before it tags anything.
-    if: "startsWith(github.event.pull_request.title, 'chore(release):')"
+    # lockfile and `main.yml` installs frozen before it tags anything. It runs
+    # on every PR: `scripts/releaseTestGate.mjs` reuses a PR run for the
+    # release commit only when none of its jobs was skipped.
 
     steps:
       - uses: actions/checkout@v6
