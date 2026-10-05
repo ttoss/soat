@@ -198,6 +198,11 @@ wiring, not argument quality. A provider pinning `base_url` bypasses the shim;
 nondeterminism, implement the missing capability at the provider boundary
 rather than weakening an assertion or retrying.
 
+Ollama keeps its default of one slot per model. On the CPU runners a chat
+request is bound by prompt processing, so `OLLAMA_NUM_PARALLEL` does not raise
+throughput, and with four slots a queued request outlasts undici's 300 s
+headers timeout and the generation fails with `fetch failed`.
+
 Local: `SOAT_BASE_URL=http://localhost:5047 ./tests/tutorials-tests.sh
 packages/website/docs/tutorials/permissions.md` (`VERBOSE=1` for detail);
 needs `soat`, `curl`, `jq`.
