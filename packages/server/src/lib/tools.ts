@@ -27,13 +27,12 @@ import type { ToolCallAttribution } from './usageToolRecording';
 
 const log = createDebug('soat:tools');
 
-// Re-exported so existing importers of `assertEphemeralTypeSupported`,
-// `callEphemeralTool`, and `InlineToolDefinition` (agents.ts, pipelineTools.ts,
-// agentToolResolver.ts) can keep importing them from this module.
+// Re-exported so importers of `assertEphemeralTypeSupported` and
+// `InlineToolDefinition` (agents.ts, pipelineTools.ts, agentToolResolver.ts)
+// can import them from this module.
 export {
   assertEphemeralTypeSupported,
   type CallableToolDefinition,
-  callEphemeralTool,
   type InlineToolDefinition,
 } from './toolsCall';
 
@@ -410,7 +409,7 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
 };
 
 // A thin DB-backed wrapper around `callResolvedTool` (toolsCall.ts), which
-// holds the actual per-type dispatch logic shared with `callEphemeralTool`.
+// holds the actual per-type dispatch logic.
 export const callTool = async (args: {
   /** The project that references the tool; also where the call is metered. */
   projectId: number;

@@ -104,12 +104,12 @@ export const buildAllMessages = (
  * the client at the `requires_action` boundary.
  */
 export const findPendingClientTools = (
-  steps: Array<{ toolCalls?: ClientToolCall[] }>,
+  steps: Array<{ toolCalls: ClientToolCall[] }>,
   resolvedTools: Record<string, Tool>
 ): ClientToolCall[] => {
   return steps
     .flatMap((step) => {
-      return step.toolCalls ?? [];
+      return step.toolCalls;
     })
     .filter((tc) => {
       const resolvedTool = resolvedTools[tc.toolName];
@@ -217,11 +217,11 @@ const storePendingGenerationState = (args: {
  * cases never compete.
  */
 export const servedAiProviderId = (args: {
-  model?: LanguageModel;
+  model: LanguageModel;
   typedAgent: TypedAgent;
 }): string | null => {
   return (
-    (args.model ? routedAiProviderId(args.model) : null) ??
+    routedAiProviderId(args.model) ??
     args.typedAgent.aiProvider?.publicId ??
     null
   );
@@ -306,7 +306,7 @@ const markGenerationCompleted = (args: {
 const meterCompletedTurn = (args: {
   generationId: string;
   modelId: string;
-  model?: LanguageModel;
+  model: LanguageModel;
   typedAgent: TypedAgent;
   result: {
     steps: unknown[];
@@ -318,7 +318,7 @@ const meterCompletedTurn = (args: {
     generationId: args.generationId,
     model: args.modelId,
     usage: args.result.usage,
-    aiProviderId: args.model ? routedAiProviderId(args.model) : null,
+    aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: 0,
     turn: {
       steps: args.result.steps,
@@ -336,7 +336,7 @@ export const buildCompletedGenerationResult = async (args: {
   rootTraceId?: string | null;
   result: {
     steps: unknown[];
-    response?: { modelId?: string; messages?: Array<unknown> };
+    response: { modelId: string; messages?: Array<unknown> };
     text: string;
     finishReason: string;
     object?: unknown;
@@ -345,9 +345,9 @@ export const buildCompletedGenerationResult = async (args: {
   typedAgent: TypedAgent;
   agentId: string;
   /** The model the turn ran on — routed models stamp the `routing` column. */
-  model?: LanguageModel;
+  model: LanguageModel;
   /** Names of the tools bound to this turn, for the text-encoded-call guard. */
-  toolNames?: string[];
+  toolNames: string[];
 }): Promise<GenerationResult> => {
   await saveRoutingMetadata({
     generationId: args.generationId,
@@ -371,7 +371,7 @@ export const buildCompletedGenerationResult = async (args: {
   // here must never have been.
   assertNoTextEncodedToolCall({
     text: args.result.text,
-    toolNames: args.toolNames ?? [],
+    toolNames: args.toolNames,
     outputSchema: args.typedAgent.outputSchema,
     generationId: args.generationId,
   });
@@ -382,7 +382,7 @@ export const buildCompletedGenerationResult = async (args: {
     maxSteps: args.typedAgent.maxSteps,
   });
 
-  const model = args.result.response?.modelId ?? args.typedAgent.model ?? '';
+  const model = args.result.response.modelId;
 
   const completedResult: GenerationResult = {
     id: args.generationId,
@@ -393,7 +393,7 @@ export const buildCompletedGenerationResult = async (args: {
       model,
       content: args.result.text,
       finishReason: args.result.finishReason,
-      responseMessages: args.result.response?.messages,
+      responseMessages: args.result.response.messages,
       ...(args.result.object !== undefined
         ? { object: args.result.object }
         : {}),

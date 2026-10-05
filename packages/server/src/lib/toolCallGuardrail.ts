@@ -98,13 +98,16 @@ const enactDirectDecision = (args: {
 const readProjectScope = async (
   projectId: number
 ): Promise<{ publicId: string; guardrailIds: string[] | null }> => {
+  // The id is the calling project's own row, resolved by the caller; a row that
+  // vanished mid-call fails the gate rather than evaluating it unscoped.
   const project = await db.Project.findOne({
     where: { id: projectId },
     attributes: ['publicId', 'guardrailIds'],
+    rejectOnEmpty: true,
   });
   return {
-    publicId: (project?.publicId as string) ?? '',
-    guardrailIds: project?.guardrailIds ?? null,
+    publicId: project.publicId,
+    guardrailIds: project.guardrailIds ?? null,
   };
 };
 

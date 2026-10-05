@@ -76,25 +76,17 @@ export const assertEphemeralTypeSupported = (
 // ── Resolved Tool Execution ───────────────────────────────────────────────
 
 /**
- * Executes an already-resolved tool definition — shared by `tools.ts#callTool`
- * (looks up a persisted Tool row first) and `callEphemeralTool` (executes an
- * inline definition directly, no DB row). `toolProjectId` scopes
+ * Executes an already-resolved tool definition — `tools.ts#callTool` looks up
+ * the persisted Tool row first, and a pipeline's inline step definition is
+ * dispatched here directly with no DB row. `toolProjectId` scopes
  * `{{secret:...}}` resolution for `http`/`mcp` tools.
- *
- * A pipeline step's `callStep` dispatches inline here (rather than through a
- * separate named helper calling back into `callEphemeralTool`) so this stays
- * a single self-recursive function instead of two consts referencing each
- * other out of declaration order.
  */
 /** Whether the call runs another project's tool, reached through a share. */
 const isCrossProject = (args: {
   toolProjectId: number;
-  callerProjectId?: number;
+  callerProjectId: number;
 }): boolean => {
-  return (
-    args.callerProjectId !== undefined &&
-    args.callerProjectId !== args.toolProjectId
-  );
+  return args.callerProjectId !== args.toolProjectId;
 };
 
 /**
@@ -105,7 +97,7 @@ const adjudicate = async (gateArgs: {
   args: {
     tool: CallableToolDefinition;
     toolProjectId: number;
-    callerProjectId?: number;
+    callerProjectId: number;
     guardrails: ToolCallGuardrailMode;
     toolPublicId?: string | null;
     toolGuardrailIds?: string[] | null;
@@ -127,7 +119,7 @@ const adjudicate = async (gateArgs: {
     action: args.action,
     input: args.input ?? {},
     presetParameters,
-    projectId: args.callerProjectId ?? args.toolProjectId,
+    projectId: args.callerProjectId,
     authHeader: args.authHeader,
   });
 };
@@ -136,11 +128,12 @@ type CallResolvedToolArgs = {
   tool: CallableToolDefinition;
   toolProjectId: number;
   /**
-   * The project the call is metered and gated in when the tool is another
-   * project's, reached through a share. The tool's own guardrails name
-   * guardrails in its project, so they do not apply to such a call.
+   * The project the call is metered and gated in — the tool's own project, or
+   * the caller's when the tool is another project's, reached through a share.
+   * The tool's own guardrails name guardrails in its project, so they do not
+   * apply to a shared call.
    */
-  callerProjectId?: number;
+  callerProjectId: number;
   /**
    * Whether a guardrail gate has already adjudicated this call. Required, so a
    * dispatch path cannot reach a tool without saying which it is — every path
@@ -288,7 +281,7 @@ export const callResolvedTool = async (
   args: CallResolvedToolArgs
 ): Promise<unknown> => {
   const crossProject = isCrossProject(args);
-  if (crossProject && args.toolPublicId && args.callerProjectId) {
+  if (crossProject && args.toolPublicId) {
     await admitSharedCall({
       resourceType: 'tool',
       resourceId: args.toolPublicId,
@@ -306,35 +299,5 @@ export const callResolvedTool = async (
       toolContext: args.toolContext,
       callingProjectPublicId: caller?.publicId ?? null,
     }),
-  });
-};
-
-/**
- * Executes an ephemeral tool definition directly — no persisted Tool row.
- * Used by pipeline steps that inline a `tool` definition instead of
- * referencing an existing tool by `tool_id`, and by agents' inline `tools`.
- */
-export const callEphemeralTool = async (args: {
-  definition: InlineToolDefinition;
-  projectId: number;
-  guardrails: ToolCallGuardrailMode;
-  action?: string;
-  input?: Record<string, unknown>;
-  authHeader?: string;
-  remainingDepth?: number;
-  toolContext?: Record<string, string>;
-  attribution: ToolCallAttribution;
-}): Promise<unknown> => {
-  assertEphemeralTypeSupported(args.definition);
-  return callResolvedTool({
-    tool: args.definition,
-    toolProjectId: args.projectId,
-    guardrails: args.guardrails,
-    action: args.action,
-    input: args.input,
-    authHeader: args.authHeader,
-    remainingDepth: args.remainingDepth,
-    toolContext: args.toolContext,
-    attribution: args.attribution,
   });
 };

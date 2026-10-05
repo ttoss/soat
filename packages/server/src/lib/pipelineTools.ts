@@ -28,7 +28,7 @@ export type PipelineConfig = {
 
 /**
  * Executes a single resolved tool call. Injected by the caller (tools.ts) so the
- * pipeline runner reuses `callTool`/`callEphemeralTool` without a circular import.
+ * pipeline runner reuses `callTool` and inline-step dispatch without a circular import.
  */
 export type PipelineStepCaller = (call: {
   toolId?: string;

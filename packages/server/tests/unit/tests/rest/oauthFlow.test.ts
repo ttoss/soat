@@ -473,6 +473,25 @@ describe('OAuth authorization server (SPA consent)', () => {
       );
       expect(res.status).toBe(403);
     });
+
+    test('a project-scoped token with no scope claim grants nothing', async () => {
+      const userPublicId = jwt.decode(readOnlyOauthToken, { json: true })?.sub;
+      const unscopedToken = jwt.sign(
+        {
+          sub: userPublicId,
+          publicId: userPublicId,
+          role: 'user',
+          prj: projectId,
+        },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const res = await authenticatedTestClient(unscopedToken).get(
+        `/api/v1/files/${fileId}`
+      );
+      expect(res.status).toBe(403);
+    });
   });
 });
 

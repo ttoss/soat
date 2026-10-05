@@ -226,7 +226,7 @@ export type GenerationResult = {
  */
 export type AgentRunResult = {
   steps: unknown[];
-  response?: { messages?: unknown[]; modelId?: string };
+  response: { messages: unknown[]; modelId: string };
   text: string;
   finishReason: string;
   output?: unknown;
