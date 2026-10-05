@@ -1212,7 +1212,8 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
   // The standalone worker's liveness signal: a drain that reached the queue
   // publishes a heartbeat its container healthcheck grades. Driven here, at the
   // worker loop, because that is where the timestamp is produced — the file
-  // format and grading rules are covered in lib/orchestrationWorkerHealth.test.ts.
+  // format is covered in rest/orchestrationWorkerHeartbeat.test.ts and the
+  // grading rules in lib/orchestrationWorkerHealth.test.ts.
   describe('worker heartbeat published by the drain', () => {
     let heartbeatDir: string;
 

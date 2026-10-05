@@ -36,13 +36,13 @@ type DispatchArgs = {
   projectIds: number[];
   // The run's own project id — used for project-scoped resolution (secrets) and
   // to scope an emit_event node's event to the run's project.
-  projectId?: number;
+  projectId: number;
   // The run's public id — used as the resourceId of an emit_event node's event
   // and stamped onto in-run generations' usage events for per-run roll-up.
-  runPublicId?: string;
+  runPublicId: string;
   // The run's own nesting depth, so a `loop`/`sub_orchestration` child is
   // started one deeper and the bound is checked before it exists.
-  runDepth?: number;
+  runDepth: number;
   // The trigger firing (if any) that started the run — propagated onto in-run
   // generations' usage events for in-run trigger attribution.
   triggerId?: string;
@@ -114,10 +114,7 @@ const dispatchNestedRunNode = (
     toolContext,
     // The parent run, so each child it starts records where it came from.
     runPublicId,
-    // A run reached without one is not nested, so it counts as the root: this
-    // is only absent where `runPublicId` is, and a child of an unidentified
-    // parent has nothing to descend from.
-    runDepth: args.runDepth ?? 0,
+    runDepth: args.runDepth,
   };
   return nodeDefn.type === 'loop'
     ? executeLoopNode(nested)
@@ -170,7 +167,6 @@ const dispatchNodeExecution = async (
       return executeToolNode({
         node: nodeDefn,
         state,
-        projectIds,
         projectId,
         authHeader,
         idempotencyKey,
@@ -192,9 +188,7 @@ const dispatchNodeExecution = async (
         node: nodeDefn,
         state,
         projectIds,
-        embeddingBilling: projectEmbeddingBilling({
-          projectId: projectId ?? null,
-        }),
+        embeddingBilling: projectEmbeddingBilling({ projectId }),
       });
     default:
       throw new DomainError(
@@ -209,9 +203,9 @@ export const executeNodeById = async (args: {
   nodes: OrchestrationNode[];
   state: Record<string, unknown>;
   projectIds: number[];
-  projectId?: number;
-  runPublicId?: string;
-  runDepth?: number;
+  projectId: number;
+  runPublicId: string;
+  runDepth: number;
   triggerId?: string;
   toolContext?: Record<string, string>;
   traceId: string | null;

@@ -11,7 +11,7 @@ import type { DeciderQuestion, DeciderQuestions } from './deciderQuestions';
  *
  * Built by concatenation with no template pass, so state text shaped like the
  * frame is never re-read as part of it. Its wording is not part of a decider's
- * version; `deciderFrame.test.ts` pins it so a change is a visible diff.
+ * version; `rest/decisions.test.ts` pins it so a change is a visible diff.
  */
 
 const PREAMBLE =
