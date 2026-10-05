@@ -137,7 +137,11 @@ changed tool gets a test.
 - `pnpm run -w smoke-tests`; POSIX `sh` (`[ ]`, not `[[ ]]`); `set -e`.
 - Every operation goes through `$SOAT_CLI`; the only `curl` is the `/mcp`
   JSON-RPC check. Missing CLI support → add it to the CLI first.
-- Covers every module end-to-end; new modules add steps.
+- Covers what the tutorials do not: a module no tutorial reaches, and what only
+  the full stack shows (MCP tools over HTTP, SSE streaming, model-route
+  failover, idempotent retries, prompt caching). A step whose commands a
+  tutorial already runs belongs to the tutorial, not here; a new module gets a
+  tutorial or, failing that, a smoke step.
 - `tests/docker-compose.smoke.yml` carries every env var the server needs
   (`SECRETS_ENCRYPTION_KEY` = 64 hex chars, fixed test value). Add new ones
   with the feature.

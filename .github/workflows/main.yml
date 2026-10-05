@@ -81,14 +81,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Free disk space
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf /usr/lib/jvm
-          sudo rm -rf /usr/share/swift
-          docker system prune -af
+        uses: ./.github/actions/free-disk-space
+        with:
+          phase: start
 
       - uses: pnpm/action-setup@v6
 
@@ -100,6 +95,11 @@ jobs:
 
       - name: Setup Ollama
         uses: ./.github/actions/setup-ollama
+
+      - name: Wait for disk space
+        uses: ./.github/actions/free-disk-space
+        with:
+          phase: wait
 
       - name: Run smoke tests
         run: pnpm run smoke-tests
@@ -270,17 +270,17 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Free disk space
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf /usr/lib/jvm
-          sudo rm -rf /usr/share/swift
-          docker system prune -af
+        uses: ./.github/actions/free-disk-space
+        with:
+          phase: start
 
       - name: Setup Ollama
         uses: ./.github/actions/setup-ollama
+
+      - name: Wait for disk space
+        uses: ./.github/actions/free-disk-space
+        with:
+          phase: wait
 
       - name: Run tutorials tests
         run: docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials

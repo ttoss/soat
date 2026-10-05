@@ -120,10 +120,6 @@ services:
     build:
       context: ..
       target: production
-      cache_from:
-        - type=gha
-      cache_to:
-        - type=gha,mode=max
     # The schema step runs to completion before the server process starts, as a
     # deploy does it — `exec` so the server still receives signals. It
     # cannot be a service of its own here: `--exit-code-from`, which both
@@ -194,10 +190,6 @@ services:
     build:
       context: ..
       target: smoke-test
-      cache_from:
-        - type=gha
-      cache_to:
-        - type=gha,mode=max
     depends_on:
       server:
         condition: service_healthy
