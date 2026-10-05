@@ -24,17 +24,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ttoss/postgresdb": "^0.12.0",
+    "@ttoss/postgresdb": "^0.14.1",
     "nanoid": "^6.0.1"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.1.0",
-    "@ttoss/config": "^1.38.0",
-    "@ttoss/postgresdb-cli": "^0.3.0",
-    "@ttoss/test-utils": "^4.2.19",
+    "@testcontainers/postgresql": "^12.2.0",
+    "@ttoss/config": "^1.41.0",
+    "@ttoss/postgresdb-cli": "^0.5.1",
+    "@ttoss/test-utils": "^4.4.0",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.5.1",
-    "jest": "^30.5.1",
+    "@types/node": "^26.6.4",
+    "jest": "^30.5.2",
     "tsdown": "^0.23.0",
     "typescript": "~6.0.3"
   }

@@ -10,15 +10,24 @@ const Probe = () => {
   const { loading, error, modules } = useSpec();
   if (loading) return <span>{'loading'}</span>;
   if (error) return <span data-testid="error">{error}</span>;
-  return <span data-testid="tags">{modules.map((m) => m.tag).join(',')}</span>;
+  return (
+    <span data-testid="tags">
+      {modules
+        .map((m) => {
+          return m.tag;
+        })
+        .join(',')}
+    </span>
+  );
 };
 
-const renderSpec = () =>
-  render(
+const renderSpec = () => {
+  return render(
     <SpecProvider token="test-token">
       <Probe />
     </SpecProvider>
   );
+};
 
 describe('SpecProvider', () => {
   test('loads the spec and derives modules', async () => {
@@ -31,9 +40,9 @@ describe('SpecProvider', () => {
 
   test('exposes an error when the spec request fails', async () => {
     server.use(
-      http.get('*/api/v1/openapi.json', () =>
-        HttpResponse.json({ error: 'nope' }, { status: 500 })
-      )
+      http.get('*/api/v1/openapi.json', () => {
+        return HttpResponse.json({ error: 'nope' }, { status: 500 });
+      })
     );
     renderSpec();
     expect(await screen.findByTestId('error')).toBeInTheDocument();

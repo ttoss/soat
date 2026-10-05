@@ -6,22 +6,26 @@ import {
   pathToView,
   viewToPath,
 } from '@/engine/routeUtils';
+import { parseModules } from '@/engine/specUtils';
 import type { ViewDescriptor } from '@/engine/types';
 
 import { testSpec } from '../fixtures/spec';
-import { parseModules } from '@/engine/specUtils';
 
 const modules = parseModules(testSpec);
 
 describe('matchTemplate', () => {
   test('matches a concrete path against a template with one param', () => {
-    expect(matchTemplate('/api/v1/agents/agt_1', '/api/v1/agents/{agent_id}')).toEqual({
+    expect(
+      matchTemplate('/api/v1/agents/agt_1', '/api/v1/agents/{agent_id}')
+    ).toEqual({
       agent_id: 'agt_1',
     });
   });
 
   test('returns null when segment counts differ', () => {
-    expect(matchTemplate('/api/v1/agents', '/api/v1/agents/{agent_id}')).toBeNull();
+    expect(
+      matchTemplate('/api/v1/agents', '/api/v1/agents/{agent_id}')
+    ).toBeNull();
   });
 
   test('returns null on a literal mismatch', () => {
@@ -150,18 +154,18 @@ describe('pathToView', () => {
   });
 
   test('PUT-only sub-resource URL → action view', () => {
-    const view = pathToView(
-      '/app/v1/users/usr_1/policies',
-      testSpec,
-      modules
-    );
+    const view = pathToView('/app/v1/users/usr_1/policies', testSpec, modules);
     expect(view?.mode).toBe('action');
     expect(view?.operationId).toBe('attachUserPolicies');
     expect(view?.pathParams).toEqual({ user_id: 'usr_1' });
   });
 
   test('project-scoped URL extracts project_id', () => {
-    const view = pathToView('/app/v1/projects/prj_1/webhooks', testSpec, modules);
+    const view = pathToView(
+      '/app/v1/projects/prj_1/webhooks',
+      testSpec,
+      modules
+    );
     expect(view?.mode).toBe('list');
     expect(view?.pathParams).toEqual({ project_id: 'prj_1' });
   });

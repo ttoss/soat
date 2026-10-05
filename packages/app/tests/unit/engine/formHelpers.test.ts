@@ -101,10 +101,7 @@ describe('buildRequestBody', () => {
   });
 
   test('parses JSON for object/array fields', () => {
-    const result = buildRequestBody(
-      { name: 'Bot', meta: '{"a":1}' },
-      schema
-    );
+    const result = buildRequestBody({ name: 'Bot', meta: '{"a":1}' }, schema);
     expect(result.ok && result.body.meta).toEqual({ a: 1 });
   });
 
@@ -139,7 +136,10 @@ describe('isMultipartOp', () => {
         requestBody: {
           content: {
             'multipart/form-data': {
-              schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+              schema: {
+                type: 'object',
+                properties: { file: { type: 'string', format: 'binary' } },
+              },
             },
           },
         },
@@ -221,7 +221,11 @@ describe('buildMultipartFormData', () => {
 
   test('omits empty optional string fields', () => {
     const file = new File(['data'], 'data.bin');
-    const fd = buildMultipartFormData({ prefix: '', project_id: '' }, { file }, schema);
+    const fd = buildMultipartFormData(
+      { prefix: '', project_id: '' },
+      { file },
+      schema
+    );
     expect(fd.get('prefix')).toBeNull();
     expect(fd.get('project_id')).toBeNull();
   });

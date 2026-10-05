@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import * as React from 'react';
+import type * as React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { AuthProvider } from '@/auth/authContext';
@@ -15,7 +15,9 @@ const TOKEN_KEY = 'soat_token';
 export const NavProbe = (): React.ReactElement => {
   const { view, activeProjectId } = useNavigation();
   return (
-    <div data-testid="nav-probe">{JSON.stringify({ view, activeProjectId })}</div>
+    <div data-testid="nav-probe">
+      {JSON.stringify({ view, activeProjectId })}
+    </div>
   );
 };
 
@@ -30,7 +32,10 @@ export const NavProbe = (): React.ReactElement => {
  */
 export const renderWithAuth = (
   ui: React.ReactElement,
-  { token = 'test-token', initialPath = '/app/' }: { token?: string; initialPath?: string } = {}
+  {
+    token = 'test-token',
+    initialPath = '/app/',
+  }: { token?: string; initialPath?: string } = {}
 ) => {
   localStorage.setItem(TOKEN_KEY, token);
   return render(

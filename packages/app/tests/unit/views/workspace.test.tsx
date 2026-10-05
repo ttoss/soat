@@ -42,7 +42,9 @@ const projectHandlers = [
 
 // Selects "Proj One" via the inline prompt shown when no project is active.
 const selectProjOne = async (): Promise<void> => {
-  await userEvent.click(await screen.findByRole('button', { name: /Proj One/ }));
+  await userEvent.click(
+    await screen.findByRole('button', { name: /Proj One/ })
+  );
 };
 
 describe('Workspace', () => {
@@ -101,9 +103,9 @@ describe('Workspace', () => {
 
   test('project picker opens and shows available projects', async () => {
     server.use(
-      http.get('*/api/v1/projects', () =>
-        HttpResponse.json([{ id: 'prj_1', name: 'Proj One' }])
-      )
+      http.get('*/api/v1/projects', () => {
+        return HttpResponse.json([{ id: 'prj_1', name: 'Proj One' }]);
+      })
     );
     renderWorkspace();
 
@@ -120,9 +122,9 @@ describe('Workspace', () => {
     // A project with no name falls back to its id — proving the picker uses
     // the engine's extractItems + itemLabel rather than a hardcoded `name`.
     server.use(
-      http.get('*/api/v1/projects', () =>
-        HttpResponse.json([{ id: 'prj_42' }])
-      )
+      http.get('*/api/v1/projects', () => {
+        return HttpResponse.json([{ id: 'prj_42' }]);
+      })
     );
     renderWorkspace();
 
@@ -137,9 +139,7 @@ describe('Workspace', () => {
     renderWorkspace();
 
     // The footer should show a semver version string (e.g. "v0.12.3")
-    expect(
-      await screen.findByText(/^v\d+\.\d+\.\d+$/)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/^v\d+\.\d+\.\d+$/)).toBeInTheDocument();
   });
 
   test('Projects and API Keys live in the Admin block, below the flat modules', async () => {
@@ -184,24 +184,28 @@ describe('Workspace', () => {
 
   test('prompts for a project on a project-scoped page when none is selected', async () => {
     server.use(
-      http.get('*/api/v1/projects', () =>
-        HttpResponse.json([{ id: 'prj_1', name: 'Proj One' }])
-      ),
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
-      )
+      http.get('*/api/v1/projects', () => {
+        return HttpResponse.json([{ id: 'prj_1', name: 'Proj One' }]);
+      }),
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }]);
+      })
     );
     renderWorkspace();
 
     // Open the Agents list (project-scoped) without selecting a project.
-    await userEvent.click(await screen.findByRole('button', { name: 'Agents' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Agents' })
+    );
 
     // The prompt replaces the (unscoped) list, and lists projects to pick.
     expect(
       await screen.findByText('Select a project first')
     ).toBeInTheDocument();
     expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Proj One/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Proj One/ })
+    ).toBeInTheDocument();
   });
 
   test('nested sub-resources (e.g. Sessions) are not top-level sidebar items', async () => {
@@ -220,9 +224,9 @@ describe('Workspace', () => {
 
   test('a global module renders without a selected project', async () => {
     server.use(
-      http.get('*/api/v1/users', () =>
-        HttpResponse.json([{ id: 'usr_9', username: 'zoe' }])
-      )
+      http.get('*/api/v1/users', () => {
+        return HttpResponse.json([{ id: 'usr_9', username: 'zoe' }]);
+      })
     );
     renderWorkspace();
 
@@ -230,16 +234,18 @@ describe('Workspace', () => {
     // even with no project active — no prompt.
     await userEvent.click(await screen.findByRole('button', { name: 'Users' }));
     expect(await screen.findByText('zoe')).toBeInTheDocument();
-    expect(screen.queryByText('Select a project first')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Select a project first')
+    ).not.toBeInTheDocument();
   });
 
   test('navigating to another page shows a loading state, not the old page', async () => {
     let releaseTools: () => void = () => {};
     server.use(
       ...projectHandlers,
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
-      ),
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }]);
+      }),
       http.get('*/api/v1/tools', async () => {
         await new Promise<void>((resolve) => {
           releaseTools = resolve;
@@ -251,7 +257,9 @@ describe('Workspace', () => {
     await selectProjOne();
 
     // Land on the Agents list.
-    await userEvent.click(await screen.findByRole('button', { name: 'Agents' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Agents' })
+    );
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
 
     // Navigate to Tools (whose fetch is held open). The Agents content must be
@@ -269,7 +277,9 @@ describe('Workspace', () => {
   test('keeps the selected project when navigating between modules', async () => {
     server.use(
       ...projectHandlers,
-      http.get('*/api/v1/agents', () => HttpResponse.json([]))
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([]);
+      })
     );
     renderWorkspace();
 
@@ -283,7 +293,9 @@ describe('Workspace', () => {
     ).toBeInTheDocument();
 
     // Navigate to a module whose route carries no project_id.
-    await userEvent.click(await screen.findByRole('button', { name: 'Agents' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Agents' })
+    );
 
     // The selection sticks — the picker still shows the project, not the
     // "Select project…" empty state.
@@ -307,7 +319,9 @@ describe('Workspace', () => {
     renderWorkspace();
 
     await selectProjOne();
-    await userEvent.click(await screen.findByRole('button', { name: 'Agents' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Agents' })
+    );
 
     // The Agents list (whose op accepts a project_id query param) is fetched
     // scoped to the active project.
@@ -318,9 +332,13 @@ describe('Workspace', () => {
 
   test('non-admin users see neither the Admin block nor its modules', async () => {
     server.use(
-      http.get('*/api/v1/users/me', () =>
-        HttpResponse.json({ id: 'usr_2', username: 'bob', role: 'user' })
-      )
+      http.get('*/api/v1/users/me', () => {
+        return HttpResponse.json({
+          id: 'usr_2',
+          username: 'bob',
+          role: 'user',
+        });
+      })
     );
     renderWorkspace();
 
@@ -341,9 +359,9 @@ describe('Workspace', () => {
   test('selecting a module renders its list in the main area', async () => {
     server.use(
       ...projectHandlers,
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }]);
+      })
     );
     renderWorkspace();
 

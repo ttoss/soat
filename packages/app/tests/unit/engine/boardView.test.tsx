@@ -71,11 +71,11 @@ describe('BoardView', () => {
     expect(await screen.findByText('Fix bug')).toBeInTheDocument();
     const board = screen.getByTestId('board-columns');
     const headings = within(board).getAllByRole('heading');
-    expect(headings.map((h) => h.textContent)).toEqual([
-      'todo',
-      'reviewing',
-      'done',
-    ]);
+    expect(
+      headings.map((h) => {
+        return h.textContent;
+      })
+    ).toEqual(['todo', 'reviewing', 'done']);
     // Cards land in the right column.
     expect(screen.getByText('Ship it')).toBeInTheDocument();
     expect(screen.getByText('Second todo')).toBeInTheDocument();
@@ -123,7 +123,12 @@ describe('BoardView', () => {
     server.use(
       http.get('*/api/v1/tasks', () => {
         return HttpResponse.json([
-          { id: 'task_1', title: 'Orphan', state: 'archived', status: 'closed' },
+          {
+            id: 'task_1',
+            title: 'Orphan',
+            state: 'archived',
+            status: 'closed',
+          },
         ]);
       })
     );
@@ -132,7 +137,11 @@ describe('BoardView', () => {
     expect(await screen.findByText('Orphan')).toBeInTheDocument();
     const board = screen.getByTestId('board-columns');
     const headings = within(board).getAllByRole('heading');
-    expect(headings.map((h) => h.textContent)).toContain('archived');
+    expect(
+      headings.map((h) => {
+        return h.textContent;
+      })
+    ).toContain('archived');
   });
 
   test('shows a message when no task collection is available', async () => {
@@ -144,7 +153,9 @@ describe('BoardView', () => {
 
     renderBoard(withoutTasks);
     expect(
-      await screen.findByText('No task collection is available for this workflow.')
+      await screen.findByText(
+        'No task collection is available for this workflow.'
+      )
     ).toBeInTheDocument();
   });
 
@@ -164,9 +175,9 @@ describe('BoardView', () => {
 
   test('shows a hint when the workflow has no states', async () => {
     server.use(
-      http.get('*/api/v1/workflows/:workflow_id', () =>
-        HttpResponse.json({ id: 'wfl_1', name: 'Empty', states: [] })
-      ),
+      http.get('*/api/v1/workflows/:workflow_id', () => {
+        return HttpResponse.json({ id: 'wfl_1', name: 'Empty', states: [] });
+      }),
       http.get('*/api/v1/tasks', () => {
         return HttpResponse.json([]);
       })
@@ -184,7 +195,12 @@ describe('BoardView', () => {
     server.use(
       http.get('*/api/v1/workflows/:workflow_id', () => {
         return HttpResponse.json(
-          { error: { code: 'WORKFLOW_NOT_FOUND', message: 'Workflow not found' } },
+          {
+            error: {
+              code: 'WORKFLOW_NOT_FOUND',
+              message: 'Workflow not found',
+            },
+          },
           { status: 404 }
         );
       })

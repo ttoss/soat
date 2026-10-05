@@ -23,7 +23,10 @@ export const defaultHandlers = [
       password: string;
     };
     if (body.password === 'wrong') {
-      return HttpResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      return HttpResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      );
     }
     return HttpResponse.json({ ...TEST_USER, token: 'test-token' });
   }),

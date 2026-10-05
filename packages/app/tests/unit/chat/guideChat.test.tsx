@@ -4,34 +4,46 @@ import { http, HttpResponse } from 'msw';
 
 import { GuideChat } from '@/chat/guideChat';
 
-import { NavProbe, renderWithAuth } from '../testUtils';
 import { server } from '../msw/server';
+import { NavProbe, renderWithAuth } from '../testUtils';
 
 const PROJECT_PATH = '/app/v1/projects/prj_1';
 
-const providerHandler = () =>
-  http.get('*/api/v1/ai-providers', () =>
-    HttpResponse.json([{ id: 'aip_1', name: 'OpenAI', provider: 'openai' }])
-  );
+const providerHandler = () => {
+  return http.get('*/api/v1/ai-providers', () => {
+    return HttpResponse.json([
+      { id: 'aip_1', name: 'OpenAI', provider: 'openai' },
+    ]);
+  });
+};
 
 // Handlers that let the guide provision successfully (no existing tool/agent).
-const provisioningHandlers = () => [
-  http.get('*/api/v1/tools', () => HttpResponse.json([])),
-  http.post('*/api/v1/tools', () => HttpResponse.json({ id: 'tool_1' })),
-  http.get('*/api/v1/agents', () => HttpResponse.json([])),
-  http.post('*/api/v1/agents', () =>
-    HttpResponse.json({ id: 'agt_guide', name: 'soat-app-guide' })
-  ),
-];
+const provisioningHandlers = () => {
+  return [
+    http.get('*/api/v1/tools', () => {
+      return HttpResponse.json([]);
+    }),
+    http.post('*/api/v1/tools', () => {
+      return HttpResponse.json({ id: 'tool_1' });
+    }),
+    http.get('*/api/v1/agents', () => {
+      return HttpResponse.json([]);
+    }),
+    http.post('*/api/v1/agents', () => {
+      return HttpResponse.json({ id: 'agt_guide', name: 'soat-app-guide' });
+    }),
+  ];
+};
 
-const renderGuide = () =>
-  renderWithAuth(
+const renderGuide = () => {
+  return renderWithAuth(
     <>
       <GuideChat />
       <NavProbe />
     </>,
     { initialPath: PROJECT_PATH }
   );
+};
 
 describe('GuideChat', () => {
   test('prompts to select a project when none is active', async () => {
@@ -53,7 +65,9 @@ describe('GuideChat', () => {
 
   test('shows an empty state when the project has no providers', async () => {
     server.use(
-      http.get('*/api/v1/ai-providers', () => HttpResponse.json([]))
+      http.get('*/api/v1/ai-providers', () => {
+        return HttpResponse.json([]);
+      })
     );
     renderGuide();
     expect(
@@ -64,8 +78,8 @@ describe('GuideChat', () => {
   test('drives a turn that mounts a view and answers in the chat', async () => {
     server.use(providerHandler(), ...provisioningHandlers());
     server.use(
-      http.post('*/api/v1/agents/agt_guide/generate', () =>
-        HttpResponse.json({
+      http.post('*/api/v1/agents/agt_guide/generate', () => {
+        return HttpResponse.json({
           id: 'gen_1',
           status: 'requires_action',
           tool_calls: [
@@ -75,17 +89,15 @@ describe('GuideChat', () => {
               args: { operationId: 'listAgents', mode: 'list' },
             },
           ],
-        })
-      ),
-      http.post(
-        '*/api/v1/agents/agt_guide/generate/gen_1/tool-outputs',
-        () =>
-          HttpResponse.json({
-            id: 'gen_1',
-            status: 'completed',
-            text: 'Here are your agents.',
-          })
-      )
+        });
+      }),
+      http.post('*/api/v1/agents/agt_guide/generate/gen_1/tool-outputs', () => {
+        return HttpResponse.json({
+          id: 'gen_1',
+          status: 'completed',
+          text: 'Here are your agents.',
+        });
+      })
     );
 
     renderGuide();
@@ -96,7 +108,9 @@ describe('GuideChat', () => {
     );
 
     const input = await screen.findByLabelText('Message the guide');
-    await waitFor(() => expect(input).toBeEnabled());
+    await waitFor(() => {
+      return expect(input).toBeEnabled();
+    });
 
     await userEvent.type(input, 'show agents');
     await userEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -105,9 +119,11 @@ describe('GuideChat', () => {
       await screen.findByText('Here are your agents.')
     ).toBeInTheDocument();
     // The view was actually mounted via real navigation.
-    await waitFor(() =>
-      expect(screen.getByTestId('nav-probe')).toHaveTextContent('listAgents')
-    );
+    await waitFor(() => {
+      return expect(screen.getByTestId('nav-probe')).toHaveTextContent(
+        'listAgents'
+      );
+    });
     // The transcript offers a re-mount affordance for the shown view.
     expect(
       screen.getByRole('button', { name: /Showing: Agents \(list\)/ })
@@ -117,10 +133,12 @@ describe('GuideChat', () => {
   test('surfaces a provisioning failure', async () => {
     server.use(providerHandler());
     server.use(
-      http.get('*/api/v1/tools', () => HttpResponse.json([])),
-      http.post('*/api/v1/tools', () =>
-        HttpResponse.json({ error: 'Forbidden' }, { status: 403 })
-      )
+      http.get('*/api/v1/tools', () => {
+        return HttpResponse.json([]);
+      }),
+      http.post('*/api/v1/tools', () => {
+        return HttpResponse.json({ error: 'Forbidden' }, { status: 403 });
+      })
     );
     renderGuide();
 
@@ -129,7 +147,9 @@ describe('GuideChat', () => {
       'aip_1'
     );
 
-    expect(await screen.findByText(/guide is unavailable/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/guide is unavailable/i)
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Message the guide')).toBeDisabled();
   });
 
@@ -138,7 +158,9 @@ describe('GuideChat', () => {
     renderGuide();
     await screen.findByLabelText('AI provider');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse guide' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Collapse guide' })
+    );
     expect(screen.queryByLabelText('AI provider')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Open guide' }));

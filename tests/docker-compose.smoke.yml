@@ -47,7 +47,7 @@ services:
   # everything else (embeddings included) to the real Ollama.
   # See tests/mocks/ollamaToolChoiceProxy.mjs.
   ollama-tool-choice:
-    image: node:22-alpine
+    image: node:24-alpine
     depends_on:
       ollama:
         condition: service_healthy
@@ -86,7 +86,7 @@ services:
   # smoke step proves the signing half too.
   # See tests/mocks/formationResourceHandler.mjs.
   formation-handler:
-    image: node:22-alpine
+    image: node:24-alpine
     volumes:
       - ./mocks/formationResourceHandler.mjs:/formationResourceHandler.mjs:ro
     command: ['node', '/formationResourceHandler.mjs']

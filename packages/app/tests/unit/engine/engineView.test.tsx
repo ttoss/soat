@@ -12,10 +12,11 @@ import { renderWithAuth } from '../testUtils';
 
 const modules = parseModules(testSpec);
 
-const renderEngine = (descriptor: ViewDescriptor) =>
-  renderWithAuth(
+const renderEngine = (descriptor: ViewDescriptor) => {
+  return renderWithAuth(
     <EngineView descriptor={descriptor} modules={modules} spec={testSpec} />
   );
+};
 
 describe('EngineView routing', () => {
   test('shows a message for an unknown module tag', () => {
@@ -32,9 +33,9 @@ describe('EngineView routing', () => {
 
   test('renders the list view for mode "list"', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }]);
+      })
     );
     renderEngine({
       tag: 'Agents',

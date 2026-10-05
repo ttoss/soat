@@ -12,13 +12,15 @@ import { server } from '../msw/server';
 import { NavProbe, renderWithAuth } from '../testUtils';
 
 const agentsModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Agents');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Agents';
+  });
   if (!m) throw new Error('Agents module missing');
   return m;
 };
 
-const renderDetail = (modules?: ModuleInfo[]) =>
-  renderWithAuth(
+const renderDetail = (modules?: ModuleInfo[]) => {
+  return renderWithAuth(
     <>
       <DetailView
         module={agentsModule()}
@@ -29,16 +31,18 @@ const renderDetail = (modules?: ModuleInfo[]) =>
       <NavProbe />
     </>
   );
+};
 
-const itemHandler = () =>
-  http.get('*/api/v1/agents/:agent_id', () =>
-    HttpResponse.json({
+const itemHandler = () => {
+  return http.get('*/api/v1/agents/:agent_id', () => {
+    return HttpResponse.json({
       id: 'agt_1',
       name: 'Alpha',
       api_key: 'sk_secret',
       created_at: '2024-01-01T00:00:00.000Z',
-    })
-  );
+    });
+  });
+};
 
 describe('DetailView', () => {
   test('renders fields and hides sensitive values', async () => {
@@ -52,9 +56,13 @@ describe('DetailView', () => {
 
   test('renders an x-soat-ref field as a link to the referenced resource', async () => {
     server.use(
-      http.get('*/api/v1/agents/:agent_id', () =>
-        HttpResponse.json({ id: 'agt_1', name: 'Alpha', project_id: 'proj_42' })
-      )
+      http.get('*/api/v1/agents/:agent_id', () => {
+        return HttpResponse.json({
+          id: 'agt_1',
+          name: 'Alpha',
+          project_id: 'proj_42',
+        });
+      })
     );
     renderDetail(parseModules(testSpec));
 
@@ -69,9 +77,12 @@ describe('DetailView', () => {
 
   test('surfaces an error when the fetch fails', async () => {
     server.use(
-      http.get('*/api/v1/agents/:agent_id', () =>
-        HttpResponse.json({ error: { message: 'not found' } }, { status: 404 })
-      )
+      http.get('*/api/v1/agents/:agent_id', () => {
+        return HttpResponse.json(
+          { error: { message: 'not found' } },
+          { status: 404 }
+        );
+      })
     );
     renderDetail();
     expect(await screen.findByText('not found')).toBeInTheDocument();
@@ -90,14 +101,14 @@ describe('DetailView', () => {
       return x.tag === 'Workflows';
     })!;
     server.use(
-      http.get('*/api/v1/workflows/:workflow_id', () =>
-        HttpResponse.json({
+      http.get('*/api/v1/workflows/:workflow_id', () => {
+        return HttpResponse.json({
           id: 'wfl_1',
           name: 'Review Flow',
           states: [{ name: 'todo', initial: true }],
           transitions: [],
-        })
-      )
+        });
+      })
     );
 
     renderWithAuth(
@@ -136,7 +147,9 @@ describe('DetailView', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: 'Generate' })
     );
-    expect(screen.getByTestId('nav-probe')).toHaveTextContent('"mode":"action"');
+    expect(screen.getByTestId('nav-probe')).toHaveTextContent(
+      '"mode":"action"'
+    );
     expect(screen.getByTestId('nav-probe')).toHaveTextContent('generateAgent');
   });
 
@@ -151,7 +164,9 @@ describe('DetailView', () => {
     );
     renderDetail();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete' })
+    );
     expect(
       screen.getByRole('dialog', { name: 'Confirm delete' })
     ).toBeInTheDocument();
@@ -178,7 +193,9 @@ describe('DetailView', () => {
     );
     renderDetail();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete' })
+    );
     expect(screen.getByLabelText('Force')).toBeInTheDocument();
     expect(
       screen.getByText(/deletes the agent's dependent generations/)
@@ -200,7 +217,9 @@ describe('DetailView', () => {
     );
     renderDetail();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete' })
+    );
     await userEvent.click(screen.getByLabelText('Force'));
     await userEvent.click(
       screen.getByRole('button', { name: 'Confirm delete' })
@@ -215,16 +234,18 @@ describe('DetailView', () => {
   test('Delete modal stays open and hints at force on a 409 conflict', async () => {
     server.use(
       itemHandler(),
-      http.delete('*/api/v1/agents/:agent_id', () =>
-        HttpResponse.json(
+      http.delete('*/api/v1/agents/:agent_id', () => {
+        return HttpResponse.json(
           { error: { message: 'Agent has dependents' } },
           { status: 409 }
-        )
-      )
+        );
+      })
     );
     renderDetail();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete' })
+    );
     await userEvent.click(
       screen.getByRole('button', { name: 'Confirm delete' })
     );
@@ -237,14 +258,20 @@ describe('DetailView', () => {
   test('shows the item name as the primary heading', async () => {
     server.use(itemHandler());
     renderDetail();
-    expect(await screen.findByRole('heading', { name: 'Alpha' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Alpha' })
+    ).toBeInTheDocument();
   });
 
   test('shows the status as a badge next to the title', async () => {
     server.use(
-      http.get('*/api/v1/agents/:agent_id', () =>
-        HttpResponse.json({ id: 'agt_1', name: 'Alpha', status: 'active' })
-      )
+      http.get('*/api/v1/agents/:agent_id', () => {
+        return HttpResponse.json({
+          id: 'agt_1',
+          name: 'Alpha',
+          status: 'active',
+        });
+      })
     );
     renderDetail();
 
@@ -254,14 +281,14 @@ describe('DetailView', () => {
 
   test('groups fields into labeled section cards', async () => {
     server.use(
-      http.get('*/api/v1/agents/:agent_id', () =>
-        HttpResponse.json({
+      http.get('*/api/v1/agents/:agent_id', () => {
+        return HttpResponse.json({
           id: 'agt_1',
           name: 'Alpha',
           status: 'active',
           model: 'gpt-4o',
-        })
-      )
+        });
+      })
     );
     renderDetail();
 
@@ -271,13 +298,13 @@ describe('DetailView', () => {
   test('renders long/multiline fields in their own mono block card', async () => {
     const instructions = 'You are a helpful assistant.\n'.repeat(8);
     server.use(
-      http.get('*/api/v1/agents/:agent_id', () =>
-        HttpResponse.json({
+      http.get('*/api/v1/agents/:agent_id', () => {
+        return HttpResponse.json({
           id: 'agt_1',
           name: 'Alpha',
           instructions,
-        })
-      )
+        });
+      })
     );
     renderDetail();
 
@@ -290,9 +317,9 @@ describe('DetailView', () => {
   test('shows sub-resource tabs and loads their items', async () => {
     server.use(
       itemHandler(),
-      http.get('*/api/v1/agents/:agent_id/sessions', () =>
-        HttpResponse.json([{ id: 'ses_1', name: 'Session One' }])
-      )
+      http.get('*/api/v1/agents/:agent_id/sessions', () => {
+        return HttpResponse.json([{ id: 'ses_1', name: 'Session One' }]);
+      })
     );
     renderWithAuth(
       <>
@@ -305,7 +332,9 @@ describe('DetailView', () => {
         <NavProbe />
       </>
     );
-    expect(await screen.findByRole('button', { name: /sessions/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /sessions/i })
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /sessions/i }));
     expect(await screen.findByText('Session One')).toBeInTheDocument();
   });

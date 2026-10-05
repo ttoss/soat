@@ -39,12 +39,13 @@ const Probe = () => {
   );
 };
 
-const renderAuth = () =>
-  render(
+const renderAuth = () => {
+  return render(
     <AuthProvider>
       <Probe />
     </AuthProvider>
   );
+};
 
 describe('AuthProvider', () => {
   test('is unauthenticated when no token is stored', async () => {
@@ -61,9 +62,9 @@ describe('AuthProvider', () => {
   test('clears an invalid stored token', async () => {
     localStorage.setItem('soat_token', 'bad');
     server.use(
-      http.get('*/api/v1/users/me', () =>
-        HttpResponse.json({ error: 'nope' }, { status: 401 })
-      )
+      http.get('*/api/v1/users/me', () => {
+        return HttpResponse.json({ error: 'nope' }, { status: 401 });
+      })
     );
     renderAuth();
     expect(await screen.findByText('unauthenticated')).toBeInTheDocument();

@@ -67,7 +67,10 @@ describe('boardResourceParam', () => {
 
 describe('findBoardCardsModule', () => {
   test('finds the companion collection filterable by this resource id', () => {
-    const found = findBoardCardsModule(byTag('Workflows'), parseModules(testSpec));
+    const found = findBoardCardsModule(
+      byTag('Workflows'),
+      parseModules(testSpec)
+    );
     expect(found?.tag).toBe('Tasks');
   });
 
@@ -91,9 +94,21 @@ describe('groupCardsByState', () => {
       { id: 't3', state: 'todo' },
     ];
     const { columns, extraColumns } = groupCardsByState({ cards, states });
-    expect(columns.map((c) => c.state.name)).toEqual(['todo', 'done']);
-    expect(columns[0].cards.map((c) => c.id)).toEqual(['t1', 't3']);
-    expect(columns[1].cards.map((c) => c.id)).toEqual(['t2']);
+    expect(
+      columns.map((c) => {
+        return c.state.name;
+      })
+    ).toEqual(['todo', 'done']);
+    expect(
+      columns[0].cards.map((c) => {
+        return c.id;
+      })
+    ).toEqual(['t1', 't3']);
+    expect(
+      columns[1].cards.map((c) => {
+        return c.id;
+      })
+    ).toEqual(['t2']);
     expect(extraColumns).toEqual([]);
   });
 
@@ -103,16 +118,28 @@ describe('groupCardsByState', () => {
       { id: 't2', state: 'archived' }, // not in the definition
     ];
     const { columns, extraColumns } = groupCardsByState({ cards, states });
-    expect(columns[0].cards.map((c) => c.id)).toEqual(['t1']);
+    expect(
+      columns[0].cards.map((c) => {
+        return c.id;
+      })
+    ).toEqual(['t1']);
     expect(extraColumns).toHaveLength(1);
     expect(extraColumns[0].state.name).toBe('archived');
-    expect(extraColumns[0].cards.map((c) => c.id)).toEqual(['t2']);
+    expect(
+      extraColumns[0].cards.map((c) => {
+        return c.id;
+      })
+    ).toEqual(['t2']);
   });
 
   test('ignores cards with no state value', () => {
     const cards: JsonObject[] = [{ id: 't1' }, { id: 't2', state: '' }];
     const { columns, extraColumns } = groupCardsByState({ cards, states });
-    expect(columns.every((c) => c.cards.length === 0)).toBe(true);
+    expect(
+      columns.every((c) => {
+        return c.cards.length === 0;
+      })
+    ).toBe(true);
     expect(extraColumns).toEqual([]);
   });
 });

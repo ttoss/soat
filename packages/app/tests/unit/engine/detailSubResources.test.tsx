@@ -12,7 +12,9 @@ import { server } from '../msw/server';
 import { renderWithAuth } from '../testUtils';
 
 const sessionsModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Sessions');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Sessions';
+  });
   if (!m) throw new Error('Sessions module missing');
   return m;
 };
@@ -20,11 +22,11 @@ const sessionsModule = (): ModuleInfo => {
 describe('SubResourceTabs', () => {
   test('renders status cells as badges', async () => {
     server.use(
-      http.get('*/api/v1/agents/:agent_id/sessions', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents/:agent_id/sessions', () => {
+        return HttpResponse.json([
           { id: 'ses_1', name: 'Session One', status: 'completed' },
-        ])
-      )
+        ]);
+      })
     );
 
     renderWithAuth(

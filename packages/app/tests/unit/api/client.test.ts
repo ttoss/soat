@@ -8,9 +8,9 @@ import { server } from '../msw/server';
 describe('apiFetch', () => {
   test('returns ok with parsed data on success', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1' }])
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1' }]);
+      })
     );
     const result = await apiFetch<{ id: string }[]>({
       url: '/api/v1/agents',
@@ -42,9 +42,9 @@ describe('apiFetch', () => {
 
   test('parses a string error field', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json({ error: 'boom' }, { status: 400 })
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json({ error: 'boom' }, { status: 400 });
+      })
     );
     const result = await apiFetch({ url: '/api/v1/agents', token: 't' });
     expect(result).toEqual({
@@ -56,12 +56,12 @@ describe('apiFetch', () => {
 
   test('parses an object error field with message and code', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json(
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json(
           { error: { message: 'denied', code: 'forbidden' } },
           { status: 403 }
-        )
-      )
+        );
+      })
     );
     const result = await apiFetch({ url: '/api/v1/agents', token: 't' });
     expect(result).toEqual({
@@ -73,9 +73,9 @@ describe('apiFetch', () => {
 
   test('falls back to an HTTP status message when no error field exists', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json({}, { status: 500 })
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json({}, { status: 500 });
+      })
     );
     const result = await apiFetch({ url: '/api/v1/agents', token: 't' });
     expect(result).toMatchObject({

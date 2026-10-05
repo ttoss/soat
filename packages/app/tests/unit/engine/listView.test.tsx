@@ -12,18 +12,22 @@ import { server } from '../msw/server';
 import { NavProbe, renderWithAuth } from '../testUtils';
 
 const agentsModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Agents');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Agents';
+  });
   if (!m) throw new Error('Agents module missing');
   return m;
 };
 
-const allModules = (): ModuleInfo[] => parseModules(testSpec);
+const allModules = (): ModuleInfo[] => {
+  return parseModules(testSpec);
+};
 
 const renderList = (
   modules?: ModuleInfo[],
   pathParams: Record<string, string> = {}
-) =>
-  renderWithAuth(
+) => {
+  return renderWithAuth(
     <>
       <ListView
         module={agentsModule()}
@@ -34,16 +38,17 @@ const renderList = (
       <NavProbe />
     </>
   );
+};
 
 describe('ListView', () => {
   test('renders a row per item with derived, humanized columns', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', model: 'gpt-4o' },
           { id: 'agt_2', name: 'Beta', model: 'gpt-4o-mini' },
-        ])
-      )
+        ]);
+      })
     );
     renderList();
 
@@ -61,9 +66,9 @@ describe('ListView', () => {
 
   test('clicking an item id navigates to its detail view', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }]);
+      })
     );
     renderList();
 
@@ -76,16 +81,20 @@ describe('ListView', () => {
   });
 
   test('shows an empty state when there are no items', async () => {
-    server.use(http.get('*/api/v1/agents', () => HttpResponse.json([])));
+    server.use(
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([]);
+      })
+    );
     renderList();
     expect(await screen.findByText('No items found.')).toBeInTheDocument();
   });
 
   test('surfaces an error message when the request fails', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json({ error: 'boom' }, { status: 500 })
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json({ error: 'boom' }, { status: 500 });
+      })
     );
     renderList();
     expect(await screen.findByText('boom')).toBeInTheDocument();
@@ -93,9 +102,9 @@ describe('ListView', () => {
 
   test('clicking "View →" navigates to the detail view with the id param', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }]);
+      })
     );
     renderList();
 
@@ -109,11 +118,11 @@ describe('ListView', () => {
 
   test('renders an x-soat-ref field as a link that opens the referenced resource', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', project_id: 'proj_42' },
-        ])
-      )
+        ]);
+      })
     );
     renderList(allModules());
 
@@ -128,11 +137,11 @@ describe('ListView', () => {
 
   test('renders an array ref field as one link per id', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', active_tool_ids: ['tool_a', 'tool_b'] },
-        ])
-      )
+        ]);
+      })
     );
     renderList(allModules());
 
@@ -148,11 +157,11 @@ describe('ListView', () => {
 
   test('does not link a nested ref when the parent id is unavailable', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', session_id: 'ses_1' },
-        ])
-      )
+        ]);
+      })
     );
     renderList(allModules());
 
@@ -164,11 +173,16 @@ describe('ListView', () => {
 
   test('links a nested ref when the row carries the parent id', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
-          { id: 'agt_1', name: 'Alpha', agent_id: 'agt_7', session_id: 'ses_9' },
-        ])
-      )
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
+          {
+            id: 'agt_1',
+            name: 'Alpha',
+            agent_id: 'agt_7',
+            session_id: 'ses_9',
+          },
+        ]);
+      })
     );
     renderList(allModules());
 
@@ -184,11 +198,11 @@ describe('ListView', () => {
 
   test('links a nested ref using a parent id from the current path params', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', session_id: 'ses_3' },
-        ])
-      )
+        ]);
+      })
     );
     renderList(allModules(), { agent_id: 'agt_5' });
 
@@ -203,11 +217,11 @@ describe('ListView', () => {
 
   test('renders a ref field as plain text when no modules are provided', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', project_id: 'proj_42' },
-        ])
-      )
+        ]);
+      })
     );
     renderList();
 
@@ -218,20 +232,32 @@ describe('ListView', () => {
   });
 
   test('clicking Create navigates to the create form', async () => {
-    server.use(http.get('*/api/v1/agents', () => HttpResponse.json([])));
+    server.use(
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([]);
+      })
+    );
     renderList();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Create' }));
-    expect(screen.getByTestId('nav-probe')).toHaveTextContent('"mode":"create"');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Create' })
+    );
+    expect(screen.getByTestId('nav-probe')).toHaveTextContent(
+      '"mode":"create"'
+    );
   });
 
   test('paginates: shows at most 15 rows, next/prev buttons cycle pages', async () => {
-    const items = Array.from({ length: 16 }, (_, i) => ({
-      id: `item_${i}`,
-      name: `Item ${i}`,
-    }));
+    const items = Array.from({ length: 16 }, (_, i) => {
+      return {
+        id: `item_${i}`,
+        name: `Item ${i}`,
+      };
+    });
     server.use(
-      http.get('*/api/v1/agents', () => HttpResponse.json(items))
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json(items);
+      })
     );
     renderList();
 
@@ -246,34 +272,34 @@ describe('ListView', () => {
 
   test('renders a status badge instead of plain text for status columns', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', status: 'active' },
           { id: 'agt_2', name: 'Beta', status: 'inactive' },
-        ])
-      )
+        ]);
+      })
     );
     renderList();
 
     // "Active" appears both as a filter chip and in the row cell; both are badges.
     const actives = await screen.findAllByText('Active');
     expect(actives.length).toBeGreaterThanOrEqual(1);
-    actives.forEach((el) => {
-      return expect(el).toHaveClass('rounded-full');
-    });
-    screen.getAllByText('Inactive').forEach((el) => {
-      return expect(el).toHaveClass('rounded-full');
-    });
+    for (const el of actives) {
+      expect(el).toHaveClass('rounded-full');
+    }
+    for (const el of screen.getAllByText('Inactive')) {
+      expect(el).toHaveClass('rounded-full');
+    }
   });
 
   test('search filters items client-side across string fields', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', model: 'gpt-4o' },
           { id: 'agt_2', name: 'Beta', model: 'claude' },
-        ])
-      )
+        ]);
+      })
     );
     renderList();
 
@@ -286,19 +312,17 @@ describe('ListView', () => {
 
   test('status filter chips narrow the list to the selected status', async () => {
     server.use(
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           { id: 'agt_1', name: 'Alpha', status: 'active' },
           { id: 'agt_2', name: 'Beta', status: 'inactive' },
-        ])
-      )
+        ]);
+      })
     );
     renderList();
 
     await screen.findByText('Alpha');
-    await userEvent.click(
-      screen.getByRole('button', { name: /^inactive$/i })
-    );
+    await userEvent.click(screen.getByRole('button', { name: /^inactive$/i }));
 
     expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
     expect(screen.getByText('Beta')).toBeInTheDocument();
@@ -308,13 +332,19 @@ describe('ListView', () => {
   });
 
   test('empty state offers a "Create your first" CTA that navigates to create', async () => {
-    server.use(http.get('*/api/v1/agents', () => HttpResponse.json([])));
+    server.use(
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([]);
+      })
+    );
     renderList();
 
     const cta = await screen.findByRole('button', {
       name: /create your first/i,
     });
     await userEvent.click(cta);
-    expect(screen.getByTestId('nav-probe')).toHaveTextContent('"mode":"create"');
+    expect(screen.getByTestId('nav-probe')).toHaveTextContent(
+      '"mode":"create"'
+    );
   });
 });
