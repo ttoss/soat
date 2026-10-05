@@ -19,7 +19,10 @@ type ChatMessage = {
 export type ChatRequest = {
   messages?: ChatMessage[];
   tools?: Array<{
-    function: { name: string; parameters?: { properties?: object } };
+    function: {
+      name: string;
+      parameters?: { properties?: object; required?: string[] };
+    };
   }>;
 };
 
@@ -130,18 +133,35 @@ export type ScriptedModel = {
   close: () => Promise<void>;
 };
 
-/** The parameter properties the model was last offered for one tool. */
-export const offeredProperties = (args: {
+type OfferedSchema = { properties?: object; required?: string[] };
+
+/** The parameters schema the model was last offered for one tool. */
+export const offeredSchema = (args: {
   model: ScriptedModel;
   toolName: string;
-}): object | undefined => {
+}): OfferedSchema | undefined => {
   return args.model.requests
     .flatMap((request) => {
       return request.tools ?? [];
     })
     .findLast((entry) => {
       return entry.function.name === args.toolName;
-    })?.function.parameters?.properties;
+    })?.function.parameters;
+};
+
+/** The parameter properties the model was last offered for one tool. */
+export const offeredProperties = (args: {
+  model: ScriptedModel;
+  toolName: string;
+}): object | undefined => {
+  return offeredSchema(args)?.properties;
+};
+
+/** The tool names the model was offered on its last request. */
+export const offeredToolNames = (model: ScriptedModel): string[] => {
+  return (model.requests.at(-1)?.tools ?? []).map((entry) => {
+    return entry.function.name;
+  });
 };
 
 export const startScriptedModel = async (): Promise<ScriptedModel> => {
@@ -162,9 +182,28 @@ export const startScriptedModel = async (): Promise<ScriptedModel> => {
   };
 };
 
-export type RecordedRequest = { path: string; body: Record<string, unknown> };
+export type RecordedRequest = {
+  /** The path without its query string; replies and `bodiesAt` key on it. */
+  path: string;
+  /** The request target as sent, query string included. */
+  url: string;
+  method: string;
+  headers: http.IncomingHttpHeaders;
+  /** The JSON body, or `{}` when the body is empty or not JSON. */
+  body: Record<string, unknown>;
+  raw: string;
+};
 
-type TargetReply = { status?: number; body?: unknown; delayMs?: number };
+type TargetReply = {
+  status?: number;
+  /** Sent as JSON; ignored when `raw` is set. */
+  body?: unknown;
+  raw?: string;
+  contentType?: string;
+  delayMs?: number;
+  /** Drops the connection without answering. */
+  destroy?: boolean;
+};
 
 type TargetResponder = (body: Record<string, unknown>) => TargetReply;
 
@@ -172,12 +211,28 @@ export type ToolTarget = {
   baseUrl: string;
   /** Every request received, in arrival order. */
   requests: RecordedRequest[];
-  /** The requests received on one path. */
+  /** The JSON bodies received on one path. */
   bodiesAt: (path: string) => Array<Record<string, unknown>>;
+  /** The requests received on one path. */
+  requestsAt: (path: string) => RecordedRequest[];
   /** Overrides the reply for one path; every other path answers `{ ok: true }`. */
   reply: (path: string, reply: TargetReply | TargetResponder) => void;
   reset: () => void;
   close: () => Promise<void>;
+};
+
+const parseObject = (raw: string): Record<string, unknown> => {
+  const parsed = parseJson(raw);
+  return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
+};
+
+const sendReply = (res: http.ServerResponse, reply: TargetReply) => {
+  res.writeHead(reply.status ?? 200, {
+    'Content-Type': reply.contentType ?? 'application/json',
+  });
+  res.end(reply.raw ?? JSON.stringify(reply.body ?? { ok: true }));
 };
 
 export const startToolTarget = async (): Promise<ToolTarget> => {
@@ -186,37 +241,48 @@ export const startToolTarget = async (): Promise<ToolTarget> => {
 
   const server = http.createServer(async (req, res) => {
     const raw = await readBody(req);
-    const path = req.url ?? '/';
-    const body = raw ? JSON.parse(raw) : {};
-    requests.push({ path, body });
+    const url = req.url ?? '/';
+    const path = url.split('?')[0];
+    const body = parseObject(raw);
+    requests.push({
+      path,
+      url,
+      method: req.method ?? '',
+      headers: req.headers,
+      body,
+      raw,
+    });
     const configured = replies.get(path) ?? {};
     const reply =
       typeof configured === 'function' ? configured(body) : configured;
-    const send = () => {
-      res.writeHead(reply.status ?? 200, {
-        'Content-Type': 'application/json',
-      });
-      res.end(JSON.stringify(reply.body ?? { ok: true }));
-    };
-    if (reply.delayMs) {
-      setTimeout(send, reply.delayMs);
+    if (reply.destroy) {
+      req.socket.destroy();
       return;
     }
-    send();
+    if (reply.delayMs) {
+      setTimeout(() => {
+        sendReply(res, reply);
+      }, reply.delayMs);
+      return;
+    }
+    sendReply(res, reply);
   });
   const baseUrl = await listen(server);
+
+  const requestsAt = (path: string) => {
+    return requests.filter((request) => {
+      return request.path === path;
+    });
+  };
 
   return {
     baseUrl,
     requests,
+    requestsAt,
     bodiesAt: (path) => {
-      return requests
-        .filter((request) => {
-          return request.path === path;
-        })
-        .map((request) => {
-          return request.body;
-        });
+      return requestsAt(path).map((request) => {
+        return request.body;
+      });
     },
     reply: (path, reply) => {
       replies.set(path, reply);
