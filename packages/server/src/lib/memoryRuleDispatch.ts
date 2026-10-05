@@ -45,23 +45,16 @@ const emptySummary = (candidates: number): RuleFiringSummary => {
 };
 
 /**
- * The payloads of the two events a rule binds to. Both are written by SOAT's
- * own producers — the completed `GenerationResult` for
- * `agents.generation.completed`, `firePostTurnSideEffects`
- * (`conversationGeneration.ts`) for `conversations.message.generated` — so
- * their shape is a contract the envelope's opaque `data` bag only hides.
- */
-type CompletedPayload = { output: { content: string } };
-type MessageGeneratedPayload = { generationId: string };
-
-/**
  * The generation a firing reads. `agents.generation.completed` names it
  * directly; `conversations.message.generated` names the message and carries the
  * generation's id in its payload.
  */
-const resolveGenerationPublicId = (event: SoatEvent): string => {
+const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
   if (event.type === 'agents.generation.completed') return event.resourceId;
-  return (event.data as MessageGeneratedPayload).generationId;
+  // `data` is the envelope's own `Record<string, unknown>`, so only the value
+  // needs narrowing, not the bag.
+  const { generationId } = event.data;
+  return typeof generationId === 'string' ? generationId : undefined;
 };
 
 /**
@@ -71,7 +64,9 @@ const resolveGenerationPublicId = (event: SoatEvent): string => {
  */
 const resolveAssistantContent = async (event: SoatEvent): Promise<string> => {
   if (event.type === 'agents.generation.completed') {
-    return (event.data as CompletedPayload).output.content;
+    const output = event.data.output;
+    const content = isPlainObject(output) ? output.content : undefined;
+    return typeof content === 'string' ? content : '';
   }
   const content = await readGeneratedMessageContent({
     documentPublicId: event.resourceId,
@@ -231,6 +226,7 @@ const loadGeneration = async (
  */
 const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
   const generationPublicId = resolveGenerationPublicId(event);
+  if (!generationPublicId) return;
 
   const generation = await loadGeneration(generationPublicId);
   if (!generation?.agent) {
