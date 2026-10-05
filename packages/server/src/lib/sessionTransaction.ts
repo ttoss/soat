@@ -4,6 +4,7 @@ export const createSessionTransaction = async (args: {
   projectId: number;
   agentId: number;
   name?: string | null;
+  tags?: Record<string, string>;
   existingActorId?: number | null;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
@@ -29,6 +30,7 @@ export const createSessionTransaction = async (args: {
       actorId: args.existingActorId ?? null,
       status: 'open',
       name: args.name ?? null,
+      tags: args.tags,
       autoGenerate: args.autoGenerate ?? false,
       toolContext: args.toolContext ?? null,
       inactivityTtlSeconds: args.inactivityTtlSeconds ?? 0,

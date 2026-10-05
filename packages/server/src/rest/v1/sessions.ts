@@ -12,7 +12,12 @@ import {
   listSessions,
   updateSession,
 } from 'src/lib/sessions';
-import { buildResourceTagContext, readTagQuery } from 'src/lib/tags';
+import {
+  assertNoSystemTagKeys,
+  buildResourceTagContext,
+  readTagBag,
+  readTagQuery,
+} from 'src/lib/tags';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { requireAuth, requireProjectAccess } from './helpers';
@@ -100,6 +105,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
   const body = ctx.request.body as {
     agent_id?: string;
     name?: string;
+    tags?: unknown;
     actor_id?: string;
     auto_generate?: boolean;
     tool_context?: Record<string, string> | null;
@@ -123,6 +129,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     projectId: target.projectId,
     agentId: target.agentId,
     name: body.name,
+    tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     actorId: body.actor_id,
     autoGenerate: body.auto_generate,
     toolContext: body.tool_context,
