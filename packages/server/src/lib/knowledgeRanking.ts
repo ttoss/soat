@@ -313,9 +313,8 @@ const toSearchSignals = (ranks: Array<number | undefined>): SearchSignals => {
  * The blend runs before the `slice`, so a fact its age demotes gives up its
  * result slot rather than merely its position inside one.
  *
- * One function rather than the same six lines at each call site — the two
- * single-store entry points and the cross-store one differ only in how many
- * shards they hand each signal.
+ * Each signal arrives as one shard per store searched; merging them before
+ * fusion is what makes each signal one ranking over the whole corpus.
  *
  * `slice` is a top-k of an in-memory ranking, not a page: there is no stable
  * order to offset into, which is why knowledge search has no `offset`.
@@ -329,8 +328,7 @@ export const fuseCandidates = <
   rrfK?: number;
   /**
    * Which results the recency blend applies to. A predicate rather than a
-   * property: `QueryDocumentResult` carries no discriminant, and the two
-   * single-store entry points answer it with a constant.
+   * property: `QueryDocumentResult` carries no discriminant.
    */
   isMemory: (item: T) => boolean;
   /** Days. See {@link resolveRecencyHalfLifeDays}; `0` disables the blend. */

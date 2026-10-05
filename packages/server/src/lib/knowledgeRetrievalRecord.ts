@@ -17,7 +17,7 @@ export type KnowledgeRetrievalEntry =
   | {
       source_type: 'document';
       document_id: string;
-      document_version: number | null;
+      document_version: number;
       chunk_id: string;
       page: number | null;
       similarity_score: number | null;
@@ -40,7 +40,7 @@ export const toKnowledgeRetrieval = (
       return {
         source_type: 'document',
         document_id: result.document_id,
-        document_version: result.document_version ?? null,
+        document_version: result.document_version,
         chunk_id: result.chunk_id,
         page: result.page ?? null,
         similarity_score: result.similarity_score ?? null,

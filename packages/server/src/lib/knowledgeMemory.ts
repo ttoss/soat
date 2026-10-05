@@ -1,8 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
-import type { EmbeddingBilling } from './embedding';
-import { distanceExpression, embedQueryOrDegrade } from './knowledgeEmbedding';
+import { distanceExpression } from './knowledgeEmbedding';
 import {
   lexicalMatchWhere,
   lexicalRankExpression,
@@ -13,7 +12,6 @@ import type {
   SearchSignals,
   SignalCandidate,
 } from './knowledgeRanking';
-import { fuseCandidates } from './knowledgeRanking';
 import { validMemoryWhere } from './memoryValidity';
 import { hasPolicyConstraints } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
@@ -489,41 +487,4 @@ export const resolveMemoryStoreSearchLists = async (args: {
       return mapEntry(entry as MemoryWithStore);
     }),
   };
-};
-
-/**
- * Ranks memories alone. `searchKnowledge` is the path that reads both
- * stores; this one fuses the two signals over a single store's shard of each.
- */
-export const resolveMemoryStoreSearch = async (args: {
-  projectIds?: number[];
-  embeddingBilling: EmbeddingBilling;
-  config: MemoryStoreQueryConfig;
-  policyWhere?: MemoryStorePolicyWhere;
-}): Promise<MemoryKnowledgeResult[]> => {
-  const candidates = await resolveMemoryStoreSearchLists({
-    ...args,
-    embedding: args.config.search
-      ? await embedQueryOrDegrade({
-          text: args.config.search,
-          billing: args.embeddingBilling,
-        })
-      : undefined,
-  });
-  if (!candidates.ranked) return candidates.results;
-
-  return fuseCandidates({
-    vector: [candidates.vector],
-    lexical: [candidates.lexical],
-    keyOf: (result) => {
-      return result.memory_id;
-    },
-    rrfK: args.config.rrfK,
-    // Every result of this entry point is a memory.
-    isMemory: () => {
-      return true;
-    },
-    recencyHalfLifeDays: args.config.recencyHalfLifeDays,
-    limit: clampKnowledgeSearchLimit(args.config.limit),
-  });
 };
