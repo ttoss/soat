@@ -43,10 +43,15 @@ holds the directories to these three.
 
 ## Test at the entry point
 
-Default to REST, the MCP endpoint or the event flow. A routine whose outcome
-the API shows (a sweep that settles what a `GET` reads back) is still a
-`rest/` test that runs the tick and reads through the API; `jobs/` is for what
-only the routine can observe. Write a `lib/` test only when:
+The class is decided by the stimulus, not by where the outcome is read: a
+file whose tests are triggered by a tick (`wakeDueRuns`, a retention sweep,
+the storage snapshot) is `jobs/`, even when it reads the outcome back through
+`GET`, which it should whenever the API shows it. A tick run as one setup step
+inside a test triggered by a request (wake a run, then assert its `GET`) keeps
+that test in `rest/`.
+
+Default to REST, the MCP endpoint or the event flow. Write a `lib/` test only
+when:
 
 1. a pure algorithm with a large input space is expensive or low-resolution
    through HTTP (`iam`, `policyCompiler`, `orchestrationValidation`,
