@@ -149,9 +149,13 @@ changed tool gets a test.
 - LLM steps: assert structure/status only, poll `in_progress` with a bounded
   loop, wrap stallable flows in a timeout; `requires_action` flow submits a
   synthetic result to `tool-outputs` then asserts `completed`.
-- The job is Ollama-bound (~73% of script time) and is not sharded (fixed cost
-  ~4 min). Levers, in order: bound or reduce generations, cut fixed overhead,
-  cut CLI invocations. `MAX_COMPLETION_TOKENS` on the proxy caps output at 256.
+- The job is not sharded (fixed cost ~4 min). Ollama requests are ~30% of
+  script time; the rest is the ~800 CLI calls. Levers, in order: cut CLI
+  invocations, cut fixed overhead, bound or reduce generations.
+  `MAX_COMPLETION_TOKENS` on the proxy caps output at 256.
+- Runner CPUs differ: Ollama logs its backend (`libggml-cpu-icelake`,
+  `libggml-cpu-haswell`), and LLM steps run ~2× slower on Haswell. Compare
+  smoke or tutorials timings only between runs on the same backend.
 
 ## Tutorials tests
 
