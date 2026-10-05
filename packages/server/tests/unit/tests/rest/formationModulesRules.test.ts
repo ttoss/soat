@@ -497,6 +497,17 @@ describe('POST /api/v1/formations — rules only the apply can check', () => {
       message: /binds neither ai_provider_id nor model_route_id/,
     },
     {
+      name: 'an orchestration node is an object',
+      template: () => {
+        return one('orchestration', {
+          name: `nodes-${seed()}`,
+          nodes: ['not-a-node'],
+          edges: [],
+        });
+      },
+      message: /node/i,
+    },
+    {
       name: 'a parameter substituted into a typed field still has that type',
       template: () => {
         return {

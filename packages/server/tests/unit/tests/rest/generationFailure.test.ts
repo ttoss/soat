@@ -92,6 +92,22 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
       expect(res.body.output.content).toBe('still answered');
     });
 
+    test('a status write that fails after the turn does not fail it', async () => {
+      const agentId = await createAgent('Status Write Swallowed Agent');
+      stub.reply(textCompletion('answered anyway'));
+      // Sanctioned force-failure: drives the `.catch` on the fire-and-forget
+      // completion write; the turn itself runs for real.
+      jest
+        .spyOn(generationsModule, 'updateGenerationRecord')
+        .mockRejectedValueOnce(new Error('status write failed'));
+
+      const res = await generate(agentId);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      expect(res.body.output.content).toBe('answered anyway');
+    });
+
     test('a failed Generation insert rolls its Trace back with it', async () => {
       const agentId = await createAgent('Record Atomicity Agent');
       stub.reply(providerFailure());
