@@ -38,7 +38,7 @@ const QUOTA_ACTIONS = [
  * The key derivation itself (`rolling_1m` included) is covered against a frozen
  * clock in `lib/quotas.test.ts`, where it is deterministic.
  *
- * `lib/quotaGenerationEnforcement.test.ts` defaults to the same window for the
+ * `rest/quotaGenerationEnforcement.test.ts` defaults to the same window for the
  * same reason.
  */
 const COUNTED_WINDOW = 'calendar_month';

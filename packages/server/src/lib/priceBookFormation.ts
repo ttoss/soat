@@ -144,8 +144,8 @@ export const updateFormationProjectPrice = async (args: {
   meterType?: string;
   provider?: string;
   model?: string;
-  component?: string;
-  unit?: string;
+  component: string;
+  unit: string;
   unitPrice?: number;
   effectiveFrom?: string;
 }): Promise<PersistedPrice> => {
@@ -159,8 +159,8 @@ export const updateFormationProjectPrice = async (args: {
   }
 
   assertPriceInput({
-    component: args.component ?? row.component,
-    unit: args.unit ?? row.unit,
+    component: args.component,
+    unit: args.unit,
     unitPrice: args.unitPrice ?? Number(row.unitPrice),
   });
 
