@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.71.3](https://github.com/ttoss/soat/compare/v0.71.2...v0.71.3) (2026-10-05)
+
+### Features
+
+* **server:** accept tags on session create ([#1528](https://github.com/ttoss/soat/issues/1528)) ([568caad](https://github.com/ttoss/soat/commit/568caad81bade73c4f4a197ac3c0f40b61e2d897))
+
 ## [0.71.2](https://github.com/ttoss/soat/compare/v0.71.1...v0.71.2) (2026-10-03)
 
 ### Bug Fixes
