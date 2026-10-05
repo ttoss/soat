@@ -286,10 +286,18 @@ jobs:
         run: docker compose -f tests/docker-compose.smoke.yml logs --no-color --tail=400 ollama-tool-choice
 
   tutorials-test:
-    name: Tutorials Tests
+    name: Tutorials Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     needs: changes
     if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+
+    # Each shard brings its own server and Ollama: the tutorials already run in
+    # parallel inside one container, where the shared Ollama is the bottleneck.
+    # `run-tutorials.sh` picks the slice from TUTORIAL_SHARD.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - uses: actions/checkout@v6
@@ -309,6 +317,8 @@ jobs:
 
       - name: Run tutorials tests
         run: docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+        env:
+          TUTORIAL_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
 
       # `up` only attaches the services it starts directly, so the tool_choice
       # shim's stdout never reaches the job log — which is exactly the evidence

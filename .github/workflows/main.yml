@@ -261,10 +261,18 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
 
   tutorials-test:
-    name: Tutorials Tests
+    name: Tutorials Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     needs: release-test-gate
     if: needs.release-test-gate.outputs.tested != 'true'
+
+    # Each shard brings its own server and Ollama: the tutorials already run in
+    # parallel inside one container, where the shared Ollama is the bottleneck.
+    # `run-tutorials.sh` picks the slice from TUTORIAL_SHARD.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - uses: actions/checkout@v6
@@ -284,6 +292,8 @@ jobs:
 
       - name: Run tutorials tests
         run: docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+        env:
+          TUTORIAL_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
 
       # See the note in pr.yml: the tool_choice shim's stdout is not attached by
       # `up`, so dump it when the stack fails.
