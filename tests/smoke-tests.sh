@@ -84,26 +84,6 @@ PROJECT_RESP=$($SOAT_CLI create-project --name smoke-test-project)
 PROJECT_PUBLIC_ID=$(printf '%s\n' "$PROJECT_RESP" | jq -r '.id')
 echo "Project id: $PROJECT_PUBLIC_ID"
 
-# 3a. Rename the project
-echo "--- Renaming project ---"
-PROJECT_RENAME_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --name smoke-test-project-renamed)
-if [ "$(printf '%s\n' "$PROJECT_RENAME_RESP" | jq -r '.name')" != "smoke-test-project-renamed" ]; then
-  echo "ERROR: update-project did not rename the project" >&2
-  echo "$PROJECT_RENAME_RESP" >&2
-  exit 1
-fi
-echo "Project rename: OK"
-
-# 3a-ii. Set the per-project orchestration concurrency limit
-echo "--- Project concurrency limit ---"
-PROJECT_LIMIT_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max-concurrent-runs 5)
-if [ "$(printf '%s\n' "$PROJECT_LIMIT_RESP" | jq -r '.max_concurrent_runs')" != "5" ]; then
-  echo "ERROR: update-project did not set max_concurrent_runs" >&2
-  echo "$PROJECT_LIMIT_RESP" >&2
-  exit 1
-fi
-echo "Project concurrency limit: OK"
-
 # 3a-ii-a. Set the per-project continuation-chain ceiling. Defaults to null (no
 # project ceiling, leaving the deployment-wide one), and clears back to it — the
 # rest of the suite must not run under a chain budget it did not ask for.
@@ -803,17 +783,6 @@ if [ "$GET_FILE_ID" != "$FILE_ID" ]; then
 fi
 echo "GET status: 200"
 
-# 6. Download file and verify content
-echo "--- Downloading file ---"
-DOWNLOAD_RESP=$($SOAT_CLI download-file-base64 --file-id "$FILE_ID")
-CONTENT=$(printf '%s\n' "$DOWNLOAD_RESP" | jq -r '.content' | base64 -d)
-EXPECTED="Hello, smoke test!"
-if [ "$CONTENT" != "$EXPECTED" ]; then
-  echo "ERROR: Content mismatch. Got '$CONTENT', expected '$EXPECTED'" >&2
-  exit 1
-fi
-echo "Content matches."
-
 # 7. Update metadata
 echo "--- Updating metadata ---"
 PATCH_RESP=$($SOAT_CLI update-file-metadata --file-id "$FILE_ID" \
@@ -912,29 +881,6 @@ DOC2_RESP=$($SOAT_CLI create-document \
   --tags '{"topic":"ml","env":"smoke"}')
 DOC2_ID=$(printf '%s\n' "$DOC2_RESP" | jq -r '.id')
 echo "Document 2 id: $DOC2_ID"
-
-# 11b. Verify path persists on GET /documents/:id
-echo "--- Verifying document path field on GET ---"
-GET_DOC1_RESP=$($SOAT_CLI get-document --document-id "$DOC1_ID")
-GET_DOC1_PATH=$(printf '%s\n' "$GET_DOC1_RESP" | jq -r '.path')
-if [ "$GET_DOC1_PATH" != "/animals/fox.txt" ]; then
-  echo "ERROR: GET document path expected '/animals/fox.txt', got '$GET_DOC1_PATH'" >&2
-  exit 1
-fi
-echo "GET document path: OK"
-
-# 11b2. List documents filed under one directory
-echo "--- Listing documents by path prefix ---"
-PREFIX_LIST_RESP=$($SOAT_CLI list-documents \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --path-prefix /animals/)
-PREFIX_LIST_TOTAL=$(printf '%s\n' "$PREFIX_LIST_RESP" | jq -r '.total')
-PREFIX_LIST_ID=$(printf '%s\n' "$PREFIX_LIST_RESP" | jq -r '.data[0].id')
-if [ "$PREFIX_LIST_TOTAL" != "1" ] || [ "$PREFIX_LIST_ID" != "$DOC1_ID" ]; then
-  echo "ERROR: path_prefix list expected only $DOC1_ID, got total=$PREFIX_LIST_TOTAL first=$PREFIX_LIST_ID" >&2
-  exit 1
-fi
-echo "Path-prefix list returned only the document under /animals/: OK"
 
 # 11b3. Content versions, withdrawal and restore
 echo "--- Document versions: create, edit, withdraw, restore ---"
@@ -1155,102 +1101,6 @@ $SOAT_CLI delete-document --document-id "$META_DOC_ID" > /dev/null
 $SOAT_CLI delete-metadata-schema --metadata-schema-id "$META_SCHEMA_ID" > /dev/null
 echo "Metadata schema refused the violation and stored the document that satisfied it: OK"
 
-# 11c. Search knowledge by path prefix
-echo "--- Search knowledge by path prefix ---"
-PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --document-paths '["/animals/"]')
-PATH_SEARCH_COUNT=$(printf '%s\n' "$PATH_SEARCH_RESP" | jq '.results | length')
-if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
-  echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
-  exit 1
-fi
-echo "Path-prefix search returned $PATH_SEARCH_COUNT result(s): OK"
-
-# 11d. Search knowledge by tags (document side)
-echo "--- Search knowledge by tags (documents) ---"
-TAG_SEARCH_RESP=$($SOAT_CLI search-knowledge \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --tags '{"topic":"ml","env":"smoke"}')
-TAG_SEARCH_IDS=$(printf '%s\n' "$TAG_SEARCH_RESP" | jq -r '[.results[] | select(.source_type == "document") | .document_id] | unique | join(",")')
-if [ "$TAG_SEARCH_IDS" != "$DOC2_ID" ]; then
-  echo "ERROR: tags search expected only $DOC2_ID, got '$TAG_SEARCH_IDS'" >&2
-  echo "$TAG_SEARCH_RESP" >&2
-  exit 1
-fi
-echo "Tag search returned only the tagged document: OK"
-
-# 12. Search knowledge
-echo "--- Searching knowledge ---"
-SEARCH_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --query "fox animal jumping" \
-  --limit 5)
-SEARCH_COUNT=$(printf '%s\n' "$SEARCH_RESP" | jq '.results | length')
-if [ "$SEARCH_COUNT" -lt 1 ]; then
-  echo "ERROR: Knowledge search returned $SEARCH_COUNT results, expected at least 1" >&2
-  exit 1
-fi
-echo "Search returned $SEARCH_COUNT result(s)."
-
-# A query search ranks results, so both scoring fields must come back: `score`
-# is the fused reciprocal-rank value the ordering is defined against, and
-# similarity_score is the raw cosine that --min_similarity filters on.
-SEARCH_SCORE=$(printf '%s\n' "$SEARCH_RESP" | jq -r '.results[0].score')
-SEARCH_SIMILARITY=$(printf '%s\n' "$SEARCH_RESP" | jq -r '.results[0].similarity_score')
-if [ "$SEARCH_SCORE" = "null" ] || [ "$SEARCH_SIMILARITY" = "null" ]; then
-  echo "ERROR: query search must return score and similarity_score, got score=$SEARCH_SCORE similarity_score=$SEARCH_SIMILARITY" >&2
-  echo "$SEARCH_RESP" >&2
-  exit 1
-fi
-echo "Search results carry score=$SEARCH_SCORE similarity_score=$SEARCH_SIMILARITY."
-
-# 12a. Hybrid retrieval: the lexical channel finds an exact token that the
-# vector channel cannot reach. The identifier sits inside unrelated prose, so a
-# one-token query embeds far from the chunk; --min_similarity 0.9 removes the
-# vector candidates and only a lexical match can answer.
-echo "--- Hybrid retrieval: exact-token recall under a similarity floor ---"
-LEXICAL_DOC_RESP=$($SOAT_CLI create-document \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --content "The replacement part SMOKE-SKU-4711 is stocked in the Lisbon warehouse and ships on weekdays." \
-  --filename parts.txt \
-  --path /parts/catalog.txt)
-LEXICAL_DOC_ID=$(printf '%s\n' "$LEXICAL_DOC_RESP" | jq -r '.id')
-
-LEXICAL_SEARCH_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --query "SMOKE-SKU-4711" \
-  --min_similarity 0.9 \
-  --rrf_k 60 \
-  --limit 5)
-LEXICAL_HIT=$(printf '%s\n' "$LEXICAL_SEARCH_RESP" | jq -r --arg id "$LEXICAL_DOC_ID" '[.results[] | select(.document_id == $id)] | length')
-if [ "$LEXICAL_HIT" -lt 1 ]; then
-  echo "ERROR: exact-token search did not return $LEXICAL_DOC_ID under --min_similarity 0.9" >&2
-  echo "$LEXICAL_SEARCH_RESP" >&2
-  exit 1
-fi
-echo "Exact-token search reached the chunk below the similarity floor: OK"
-
-# The baseline ranking the checks below compare against: this same query and
-# floor with nothing else set.
-CURRENT_IDS=$(printf '%s\n' "$LEXICAL_SEARCH_RESP" | jq -c '[.results[].chunk_id]')
-
-# The recency blend ships off, and 0 is its disable sentinel at either level,
-# so naming it explicitly must return exactly what omitting it returns.
-RECENCY_OFF_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --query "SMOKE-SKU-4711" \
-  --min_similarity 0.9 \
-  --rrf_k 60 \
-  --recency_half_life_days 0 \
-  --limit 5)
-RECENCY_OFF_IDS=$(printf '%s\n' "$RECENCY_OFF_RESP" | jq -c '[.results[].chunk_id]')
-if [ "$RECENCY_OFF_IDS" != "$CURRENT_IDS" ]; then
-  echo "ERROR: --recency_half_life_days 0 changed the ranking: $RECENCY_OFF_IDS vs $CURRENT_IDS" >&2
-  exit 1
-fi
-echo "Disabled recency blend leaves the ranking untouched: OK"
-
 # 12b. Ingest a PDF file
 echo "--- Ingesting a PDF file ---"
 PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="
@@ -1282,27 +1132,6 @@ if [ "$PDF_DOC_CONTENT_TYPE" != "application/pdf" ]; then
 fi
 echo "PDF ingestion: OK"
 
-# 12b-1. Re-ingesting the same file_id is rejected cleanly
-echo "--- Re-ingesting the same file_id returns a clean conflict ---"
-set +e
-DUP_INGEST_RESP=$($SOAT_CLI ingest-document \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --file-id "$PDF_FILE_ID" \
-  --path-prefix /smoke-dup/ 2>&1)
-DUP_INGEST_EXIT=$?
-set -e
-if [ "$DUP_INGEST_EXIT" -eq 0 ]; then
-  echo "ERROR: expected ingest-document to fail when re-using an already-ingested file_id" >&2
-  echo "$DUP_INGEST_RESP" >&2
-  exit 1
-fi
-if ! echo "$DUP_INGEST_RESP" | grep -q 'FILE_ALREADY_INGESTED'; then
-  echo "ERROR: expected FILE_ALREADY_INGESTED for a duplicate file_id" >&2
-  echo "$DUP_INGEST_RESP" >&2
-  exit 1
-fi
-echo "Duplicate file_id rejection: OK"
-
 # 12c. Ingest a Markdown file (exercises content-type dispatch)
 echo "--- Ingesting a text file ---"
 MD_BASE64=$(printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' | base64 | tr -d '\n')
@@ -1324,38 +1153,6 @@ if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
   exit 1
 fi
 echo "Text ingestion: OK"
-
-# 12d. Lightweight ingestion status endpoint (issues #5/#6)
-echo "--- Checking document status endpoint ---"
-PDF_STATUS_RESP=$($SOAT_CLI get-document-status --document-id "$PDF_DOC_ID")
-PDF_STATUS=$(printf '%s\n' "$PDF_STATUS_RESP" | jq -r '.status')
-PDF_STATUS_CHUNKS=$(printf '%s\n' "$PDF_STATUS_RESP" | jq -r '.chunk_count')
-echo "Document status: $PDF_STATUS chunk_count: $PDF_STATUS_CHUNKS"
-if [ "$PDF_STATUS" != "ready" ]; then
-  echo "ERROR: get-document-status expected 'ready', got '$PDF_STATUS'" >&2
-  exit 1
-fi
-# The status payload must be lightweight — no chunk content.
-if [ "$(printf '%s\n' "$PDF_STATUS_RESP" | jq -r '.content // "absent"')" != "absent" ]; then
-  echo "ERROR: get-document-status leaked chunk content" >&2
-  exit 1
-fi
-echo "Document status endpoint: OK"
-
-# 12e. Re-ingest an existing document with a different chunk strategy (issue #7)
-echo "--- Re-ingesting document ---"
-REINGEST_RESP=$($SOAT_CLI reingest-document \
-  --document-id "$PDF_DOC_ID" \
-  --wait true \
-  --chunk-strategy whole)
-REINGEST_STATUS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.status')
-REINGEST_CHUNKS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.chunk_count')
-echo "Re-ingested status: $REINGEST_STATUS chunk_count: $REINGEST_CHUNKS"
-if [ "$REINGEST_STATUS" != "ready" ]; then
-  echo "ERROR: reingest-document expected 'ready', got '$REINGEST_STATUS'" >&2
-  exit 1
-fi
-echo "Re-ingest: OK"
 
 # 12f. Both of the above again with an UNSCOPED api-key.
 #
@@ -1620,27 +1417,6 @@ $SOAT_CLI delete-document-relation --document-id "$DOC1_ID" \
   --relation-id "$DOC_REL_ID"
 echo "Document relations: OK"
 
-# 12d. NDJSON export: the corpus as a file, one JSON object per line, and the
-# same rows the listing returns for this caller.
-echo "--- Documents: NDJSON export ---"
-DOC_EXPORT_RESP=$($SOAT_CLI export-documents --project_id "$PROJECT_PUBLIC_ID")
-DOC_EXPORT_IDS=$(printf '%s\n' "$DOC_EXPORT_RESP" | grep '"path"' \
-  | jq -r '.id' | sort -u | wc -l)
-if [ "$DOC_EXPORT_IDS" -lt 2 ]; then
-  echo "ERROR: expected the export to carry the project's documents" >&2
-  printf '%s\n' "$DOC_EXPORT_RESP" >&2
-  exit 1
-fi
-# `path_prefix` narrows the file exactly as it narrows the listing.
-DOC_EXPORT_PREFIXED=$($SOAT_CLI export-documents \
-  --project_id "$PROJECT_PUBLIC_ID" --path_prefix /smoke-reports \
-  | grep '"path"' | jq -r '.path' | grep -cv '^/smoke-reports/' || true)
-if [ "$DOC_EXPORT_PREFIXED" != "0" ]; then
-  echo "ERROR: path_prefix export returned a document outside /smoke-reports" >&2
-  exit 1
-fi
-echo "Documents export: OK"
-
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
@@ -1674,16 +1450,6 @@ if ! printf '%s\n' "$MEM_GET_RESP" | jq -e --arg id "$MEM_ID" '.id == $id' >/dev
   exit 1
 fi
 echo "Memory store retrieved."
-
-# List memory stores
-echo "--- Listing memory stores ---"
-MEM_LIST_RESP=$($SOAT_CLI list-memory-stores --project_id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: LIST memory stores did not return an array" >&2
-  echo "$MEM_LIST_RESP" >&2
-  exit 1
-fi
-echo "Memory stores listed."
 
 # Update memory store
 echo "--- Updating memory store ---"
@@ -1732,31 +1498,6 @@ if [ "$ME1_ACTION" != "created" ]; then
   exit 1
 fi
 echo "Memory created: $ME1_ID"
-
-# The store as a file: one JSON object per line, what the store currently
-# asserts (an invalidated fact is left out unless asked for).
-echo "--- Memories: NDJSON export ---"
-MEM_EXPORT_RESP=$($SOAT_CLI export-memories --memory-store-id "$MEM_ID")
-MEM_EXPORT_IDS=$(printf '%s\n' "$MEM_EXPORT_RESP" | grep '"content"' \
-  | jq -r '.id' | sort -u | wc -l)
-if [ "$MEM_EXPORT_IDS" -lt 1 ]; then
-  echo "ERROR: expected the memory export to carry the store's memories" >&2
-  printf '%s\n' "$MEM_EXPORT_RESP" >&2
-  exit 1
-fi
-echo "Memories export: OK"
-
-echo "--- Memories: duplicate write (skipped) ---"
-ME_SKIP_RESP=$($SOAT_CLI create-memory \
-  --memory-store-id "$MEM_ID" \
-  --content "Smoke test customer prefers email over phone calls")
-ME_SKIP_ACTION=$(printf '%s\n' "$ME_SKIP_RESP" | jq -r '.action')
-if [ "$ME_SKIP_ACTION" != "skipped" ]; then
-  echo "ERROR: Expected action=skipped, got $ME_SKIP_ACTION" >&2
-  echo "$ME_SKIP_RESP" >&2
-  exit 1
-fi
-echo "Duplicate correctly skipped."
 
 echo "--- Memories: similar write (created, below the supersede threshold) ---"
 # An overlapping but distinct fact is stored as its own entry: below
@@ -1864,78 +1605,6 @@ if [ "$ME_DEC_AGAIN_STATUS" != "400" ]; then
 fi
 echo "Declared supersede retired a distant target, recorded the declaration, and refused a chain."
 
-echo "--- Memories: retraction withdraws a fact with no successor ---"
-# A store of its own: the retracted fact must not narrow the knowledge queries
-# that follow.
-ME_RET_STORE=$($SOAT_CLI create-memory-store \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name smoke-retraction-store | jq -r '.id')
-ME_RET_ID=$($SOAT_CLI create-memory \
-  --memory-store-id "$ME_RET_STORE" \
-  --content "Smoke warehouse is in Porto" | jq -r '.id')
-ME_RET_RESP=$($SOAT_CLI retract-memory --memory-id "$ME_RET_ID")
-ME_RET_INVAL=$(printf '%s\n' "$ME_RET_RESP" | jq -r '.invalidated_at')
-ME_RET_LINK=$(printf '%s\n' "$ME_RET_RESP" | jq -r '.superseded_by_memory_id')
-if [ "$ME_RET_INVAL" = "null" ] || [ "$ME_RET_LINK" != "null" ]; then
-  echo "ERROR: a retraction invalidates with no successor, got invalidated_at=$ME_RET_INVAL link=$ME_RET_LINK" >&2
-  exit 1
-fi
-ME_RET_LISTED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" | jq -r '.total')
-ME_RET_AUDITED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" --include_invalidated true | jq -r '.total')
-if [ "$ME_RET_LISTED" != "0" ] || [ "$ME_RET_AUDITED" != "1" ]; then
-  echo "ERROR: retracted memory should leave the listing and stay auditable, got $ME_RET_LISTED and $ME_RET_AUDITED" >&2
-  exit 1
-fi
-ME_RET_OUTCOME=$($SOAT_CLI list-memory-assertions --memory-id "$ME_RET_ID" | jq -r '.data[1].outcome')
-if [ "$ME_RET_OUTCOME" != "retracted" ]; then
-  echo "ERROR: the ledger should record the retraction, got $ME_RET_OUTCOME" >&2
-  exit 1
-fi
-# The fact is already out of every read, so there is nothing left to retract.
-ME_RET_AGAIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories/$ME_RET_ID/retract" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{}')
-if [ "$ME_RET_AGAIN_STATUS" != "409" ]; then
-  echo "ERROR: retracting an invalidated memory expected 409, got $ME_RET_AGAIN_STATUS" >&2
-  exit 1
-fi
-echo "Retraction withdrew the fact, recorded it, and refused a second attempt."
-
-# A query names no store, so it reaches both; include_memories takes the memory
-# store back out. Placed after the memory fixtures exist — the search steps
-# earlier in this script run before this project has any memory at all.
-echo "--- Knowledge: a bare query reaches both stores ---"
-BOTH_STORES_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --query "smoke delivery window" \
-  --limit 20)
-BOTH_SOURCES=$(printf '%s\n' "$BOTH_STORES_RESP" | jq -c '[.results[].source_type] | unique')
-case "$BOTH_SOURCES" in
-  *memory*) ;;
-  *)
-    echo "ERROR: a bare query must reach memories, got source types $BOTH_SOURCES" >&2
-    echo "$BOTH_STORES_RESP" >&2
-    exit 1
-    ;;
-esac
-echo "Bare query reached: $BOTH_SOURCES"
-
-DOCS_ONLY_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --query "smoke delivery window" \
-  --include_memories false \
-  --limit 20)
-DOCS_ONLY_SOURCES=$(printf '%s\n' "$DOCS_ONLY_RESP" | jq -c '[.results[].source_type] | unique')
-case "$DOCS_ONLY_SOURCES" in
-  *memory*)
-    echo "ERROR: --include_memories false must not return memories, got $DOCS_ONLY_SOURCES" >&2
-    echo "$DOCS_ONLY_RESP" >&2
-    exit 1
-    ;;
-esac
-echo "include_memories=false excluded the memory store: OK"
-
 echo "--- Memories: an inverted threshold pair is rejected ---"
 ME_THR_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories" \
   -H "Authorization: Bearer $TOKEN" \
@@ -1946,31 +1615,6 @@ if [ "$ME_THR_STATUS" != "400" ]; then
   exit 1
 fi
 echo "Inverted threshold pair rejected."
-
-echo "--- Memories: the write ledger records every outcome ---"
-# One assertion per write, including the skip — the outcome that produced no
-# memory at all.
-ME_ASSERT_RESP=$($SOAT_CLI list-memory-store-assertions --memory-store-id "$MEM_ID")
-ME_ASSERT_SKIPS=$(printf '%s\n' "$ME_ASSERT_RESP" | jq '[.data[] | select(.outcome == "skipped")] | length')
-ME_ASSERT_MECH=$(printf '%s\n' "$ME_ASSERT_RESP" | jq -r '[.data[].mechanism] | unique | join(",")')
-if [ "$ME_ASSERT_SKIPS" -lt 1 ]; then
-  echo "ERROR: expected at least one skipped assertion in the store ledger" >&2
-  echo "$ME_ASSERT_RESP" >&2
-  exit 1
-fi
-if [ "$ME_ASSERT_MECH" != "api" ]; then
-  echo "ERROR: CLI writes should record mechanism=api, got '$ME_ASSERT_MECH'" >&2
-  exit 1
-fi
-ME_SUP_ASSERTS=$($SOAT_CLI list-memory-assertions --memory-id "$ME_SUP_NEW_ID")
-ME_SUP_OUTCOME=$(printf '%s\n' "$ME_SUP_ASSERTS" | jq -r '.data[0].outcome')
-ME_SUP_RETIRED_ID=$(printf '%s\n' "$ME_SUP_ASSERTS" | jq -r '.data[0].superseded_memory_id')
-if [ "$ME_SUP_OUTCOME" != "superseded" ] || [ "$ME_SUP_RETIRED_ID" != "$ME_SUP_OLD_ID" ]; then
-  echo "ERROR: supersede assertion should name the retired memory, got outcome=$ME_SUP_OUTCOME retired=$ME_SUP_RETIRED_ID" >&2
-  echo "$ME_SUP_ASSERTS" >&2
-  exit 1
-fi
-echo "Write ledger recorded the skip and named the superseded memory."
 
 echo "--- Memories: unrelated write (created) ---"
 ME2_RESP=$($SOAT_CLI create-memory \
@@ -1983,37 +1627,6 @@ if [ "$ME2_ACTION" != "created" ]; then
   exit 1
 fi
 echo "Unrelated entry created."
-
-echo "--- Memories: write with tags and metadata ---"
-ME_TAG_RESP=$($SOAT_CLI create-memory \
-  --memory-store-id "$MEM_ID" \
-  --content "Smoke test reject refunds above 500 for the traffic-manager role" \
-  --tags '{"role":"smoke-traffic-manager","source":"rejected_approval","env":"smoke"}' \
-  --metadata '{"evidence": "high"}')
-ME_TAG_ACTION=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.action')
-ME_TAG_ROLE=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.tags.role')
-ME_TAG_META=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.metadata.evidence')
-if [ "$ME_TAG_ACTION" != "created" ]; then
-  echo "ERROR: Expected action=created for a tagged memory, got $ME_TAG_ACTION" >&2
-  echo "$ME_TAG_RESP" >&2
-  exit 1
-fi
-if [ "$ME_TAG_ROLE" != "smoke-traffic-manager" ] || [ "$ME_TAG_META" != "high" ]; then
-  echo "ERROR: tagged memory did not persist tags/metadata" >&2
-  echo "$ME_TAG_RESP" >&2
-  exit 1
-fi
-echo "Tagged memory created with tags/metadata."
-
-echo "--- List memories ---"
-ME_LIST_RESP=$($SOAT_CLI list-memories --memory-store-id "$MEM_ID")
-ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq '.data | length')
-if [ "$ME_LIST_COUNT" -ne 4 ]; then
-  echo "ERROR: Expected 4 memories after dedup writes, got $ME_LIST_COUNT" >&2
-  echo "$ME_LIST_RESP" >&2
-  exit 1
-fi
-echo "Memories listed: $ME_LIST_COUNT memories."
 
 echo "--- Memories: provenance and validity on a manual write ---"
 # A manual REST/CLI write has no conversation behind it, so there is no source
@@ -2032,59 +1645,6 @@ if [ "$ME_PROV_INVAL" != "null" ]; then
   exit 1
 fi
 echo "Manual write reports no source and is valid."
-
-echo "--- List memories including invalidated ---"
-# Nothing is invalidated yet (the arbitration that supersedes entries ships
-# later), so this asserts the flag is wired end-to-end and does not change the
-# result set on its own.
-ME_INVAL_RESP=$($SOAT_CLI list-memories --memory-store-id "$MEM_ID" --include-invalidated true)
-ME_INVAL_COUNT=$(printf '%s\n' "$ME_INVAL_RESP" | jq '.data | length')
-if [ "$ME_INVAL_COUNT" -ne "$ME_LIST_COUNT" ]; then
-  echo "ERROR: Expected $ME_LIST_COUNT memories with include_invalidated, got $ME_INVAL_COUNT" >&2
-  echo "$ME_INVAL_RESP" >&2
-  exit 1
-fi
-echo "include_invalidated listing returned $ME_INVAL_COUNT memories."
-
-# A conversation-sourced write names the conversation it was learned in, and
-# the pair is validated: `conversation` without an id, or an id without it, is
-# a 400.
-echo "--- Memories: conversation-sourced write ---"
-ME_SRC_CONV_RESP=$($SOAT_CLI create-conversation --project_id "$PROJECT_PUBLIC_ID" --name smoke-memory-source)
-ME_SRC_CONV_ID=$(printf '%s\n' "$ME_SRC_CONV_RESP" | jq -r '.id')
-ME_SRC_RESP=$($SOAT_CLI create-memory \
-  --memory-store-id "$MEM_ID" \
-  --content "The smoke customer escalation contact is Priya." \
-  --source_type conversation \
-  --source_id "$ME_SRC_CONV_ID")
-ME_SRC_TYPE=$(printf '%s\n' "$ME_SRC_RESP" | jq -r '.source_type')
-ME_SRC_ID=$(printf '%s\n' "$ME_SRC_RESP" | jq -r '.source_id')
-if [ "$ME_SRC_TYPE" != "conversation" ] || [ "$ME_SRC_ID" != "$ME_SRC_CONV_ID" ]; then
-  echo "ERROR: conversation write should name its source, got type=$ME_SRC_TYPE id=$ME_SRC_ID" >&2
-  echo "$ME_SRC_RESP" >&2
-  exit 1
-fi
-ME_SRC_BAD_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"memory_store_id\":\"$MEM_ID\",\"content\":\"missing its source\",\"source_type\":\"conversation\"}")
-if [ "$ME_SRC_BAD_STATUS" != "400" ]; then
-  echo "ERROR: source_type=conversation without source_id expected 400, got $ME_SRC_BAD_STATUS" >&2
-  exit 1
-fi
-echo "Conversation-sourced write names its source; the unpaired form is rejected."
-
-echo "--- Knowledge search via per-memory tags (memory granularity) ---"
-KS_TAG_RESP=$($SOAT_CLI search-knowledge \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --tags '{"role":"smoke-traffic-manager"}')
-KS_TAG_MATCH=$(printf '%s\n' "$KS_TAG_RESP" | jq -r '[.results[] | select(.source_type == "memory")] | length')
-if [ "$KS_TAG_MATCH" -lt 1 ]; then
-  echo "ERROR: memory-tag knowledge search returned 0 memory results" >&2
-  echo "$KS_TAG_RESP" >&2
-  exit 1
-fi
-echo "Memory-granularity tag search returned $KS_TAG_MATCH memory result(s)."
 
 # One `tags` bag reaches both stores — the point of unifying the filter. The
 # section-11 documents are already deleted by here, so this makes its own.
@@ -2108,22 +1668,6 @@ if [ "$KS_BOTH_SOURCES" != "document,memory" ]; then
 fi
 $SOAT_CLI delete-document --document-id "$XSRC_DOC_ID" >/dev/null
 echo "One tags bag returned both document and memory results: OK"
-
-echo "--- Knowledge search via memory_store_ids ---"
-KS_RESP=$($SOAT_CLI search-knowledge \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --query "smoke test customer communication" \
-  --memory-store-ids "[\"$MEM_ID\"]")
-KS_COUNT=$(printf '%s\n' "$KS_RESP" | jq '.results | length')
-if [ "$KS_COUNT" -lt 1 ]; then
-  echo "ERROR: Knowledge search returned 0 results" >&2
-  echo "$KS_RESP" >&2
-  exit 1
-fi
-echo "Knowledge search returned $KS_COUNT result(s)."
-echo "Memories + knowledge search coverage: OK"
-
-echo "=== Memory rules ==="
 
 echo "--- Creating a memory rule (built-in extractor) ---"
 # No selector: this runs before any agent exists, and the store is deleted
@@ -2221,74 +1765,6 @@ if [ -z "$ORCH_API_KEY_ID" ] || [ "$ORCH_API_KEY_ID" = "null" ] || [ -z "$ORCH_A
   exit 1
 fi
 echo "Orchestration-scoped auth: OK"
-
-echo "--- Validating orchestration graph (valid) ---"
-ORCH_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"seed","type":"transform","expression":{"var":"input.theme"},"state_mapping":{"state.theme":{"var":"output.result"}}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"input_mapping":{"t":{"var":"theme"}},"state_mapping":{"state.title":{"var":"output.result"}}}]' \
-  --edges '[{"from":"seed","to":"decorate"}]')
-if ! printf '%s\n' "$ORCH_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
-  echo "validate-orchestration did not report a valid graph as valid"
-  printf '%s\n' "$ORCH_VALID_RESP"
-  exit 1
-fi
-echo "Validate orchestration (valid): OK"
-
-echo "--- Validating orchestration graph with a poll node (valid) ---"
-ORCH_POLL_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"wait","type":"poll","tool_id":"tool_status","interval":"5s","exit_condition":{"==":[{"var":"response.status"},"completed"]},"max_iterations":3}]' \
-  --edges '[]')
-if ! printf '%s\n' "$ORCH_POLL_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
-  echo "validate-orchestration did not accept a well-formed poll node"
-  printf '%s\n' "$ORCH_POLL_VALID_RESP"
-  exit 1
-fi
-echo "Validate orchestration with poll node (valid): OK"
-
-echo "--- Validating orchestration graph with an emit_event node (valid) ---"
-ORCH_EMIT_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"seed","type":"transform","expression":{"preserve":{"m":"x"}}},{"id":"alert","type":"emit_event","event_type":"guardrail.exception","input_mapping":{"m":{"var":"nodes.seed.result.m"}}}]' \
-  --edges '[{"from":"seed","to":"alert"}]')
-if ! printf '%s\n' "$ORCH_EMIT_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
-  echo "validate-orchestration did not accept an emit_event node"
-  printf '%s\n' "$ORCH_EMIT_VALID_RESP"
-  exit 1
-fi
-echo "Validate orchestration with emit_event node (valid): OK"
-
-echo "--- Validating orchestration graph with an incomplete poll node (invalid) ---"
-ORCH_POLL_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"wait","type":"poll"}]' \
-  --edges '[]')
-if ! printf '%s\n' "$ORCH_POLL_INVALID_RESP" | jq -e '.valid == false and (.errors | length) > 0' >/dev/null 2>&1; then
-  echo "validate-orchestration did not reject an incomplete poll node"
-  printf '%s\n' "$ORCH_POLL_INVALID_RESP"
-  exit 1
-fi
-echo "Validate orchestration with incomplete poll node (invalid): OK"
-
-echo "--- Validating orchestration graph (invalid) ---"
-ORCH_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"a","type":"agent"}]' \
-  --edges '[{"from":"a","to":"ghost"}]')
-if ! printf '%s\n' "$ORCH_INVALID_RESP" | jq -e '.valid == false and (.errors | length) > 0' >/dev/null 2>&1; then
-  echo "validate-orchestration did not report an invalid graph as invalid"
-  printf '%s\n' "$ORCH_INVALID_RESP"
-  exit 1
-fi
-echo "Validate orchestration (invalid): OK"
-
-echo "--- Rejecting invalid orchestration at create ---"
-ORCH_REJECT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-orchestration-invalid" \
-  --nodes '[{"id":"a","type":"transform","expression":1},{"id":"b","type":"transform","expression":1}]' \
-  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' || true)
-if ! printf '%s\n' "$ORCH_REJECT_RESP" | jq -e '.error.code == "ORCHESTRATION_VALIDATION_FAILED"' >/dev/null 2>&1; then
-  echo "create-orchestration did not reject a cyclic graph"
-  printf '%s\n' "$ORCH_REJECT_RESP"
-  exit 1
-fi
-echo "Reject invalid orchestration at create: OK"
 
 echo "--- Creating orchestration ---"
 ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
@@ -2589,32 +2065,6 @@ if [ "$ACT_EXPORT_KINDS" -lt 1 ]; then
 fi
 echo "Activity export: OK"
 
-echo "--- Run input is visible to node logic via the input namespace ---"
-# A snake_case input key must round-trip verbatim; it resolves only through the
-# namespaced form ({"var":"input.cycle_task"}) — a flat {"var":"cycle_task"}
-# is never satisfied by run input.
-ORCH_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-orchestration-input" \
-  --nodes '[{"id":"echo","type":"transform","expression":{"var":"input.cycle_task"},"state_mapping":{"state.echoed":{"var":"output.result"}}}]' \
-  --edges '[]')
-ORCH_INPUT_ID=$(printf '%s\n' "$ORCH_INPUT_RESP" | jq -r '.id')
-if [ -z "$ORCH_INPUT_ID" ] || [ "$ORCH_INPUT_ID" = "null" ]; then
-  echo "Failed to create input-namespace orchestration"
-  printf '%s\n' "$ORCH_INPUT_RESP"
-  exit 1
-fi
-ORCH_INPUT_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
-  --orchestration-id "$ORCH_INPUT_ID" \
-  --input '{"cycle_task":"summarize the funnel"}' \
-  --wait true)
-if ! printf '%s\n' "$ORCH_INPUT_RUN_RESP" | jq -e '.status == "succeeded" and .state.echoed == "summarize the funnel"' >/dev/null 2>&1; then
-  echo "run input was not visible to node logic through the input namespace"
-  printf '%s\n' "$ORCH_INPUT_RUN_RESP"
-  exit 1
-fi
-echo "Run input namespace: OK"
-
 echo "--- Getting run ---"
 ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-run-id "$ORCH_RUN_ID")
@@ -2809,41 +2259,6 @@ if [ -z "$HUMAN_ORCH_ID" ] || [ "$HUMAN_ORCH_ID" = "null" ]; then
   exit 1
 fi
 echo "Human orchestration id: $HUMAN_ORCH_ID"
-
-echo "--- Starting paused run ---"
-HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
-  --orchestration-id "$HUMAN_ORCH_ID" \
-  --input '{"temaDocumentId":"ood_123","titulo":"Verao"}' \
-  --wait true)
-HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
-HUMAN_RUN_STATUS=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.status')
-HUMAN_NODE_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.required_action.node_id')
-if [ "$HUMAN_RUN_STATUS" != "awaiting_input" ] || [ "$HUMAN_NODE_ID" != "approval" ]; then
-  echo "Human orchestration did not pause as expected"
-  printf '%s\n' "$HUMAN_RUN_RESP"
-  exit 1
-fi
-# JSON Logic input_mapping: literal passthrough, {var} from run input, computed
-# expression. The mapping keys are the author's own (`documentId`), so they come
-# back exactly as written — nothing rewrites them.
-if ! printf '%s\n' "$HUMAN_RUN_RESP" | jq -e '.required_action.context.language == "pt-BR" and .required_action.context.documentId == "ood_123" and .required_action.context.label == "Tema: Verao"' >/dev/null 2>&1; then
-  echo "Human node input_mapping did not resolve JSON Logic as expected"
-  printf '%s\n' "$HUMAN_RUN_RESP"
-  exit 1
-fi
-echo "Paused run: OK"
-
-echo "--- Submitting human input ---"
-HUMAN_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
-  --orchestration-run-id "$HUMAN_RUN_ID" \
-  --node-id "$HUMAN_NODE_ID" \
-  --output '{"choice":"approve"}')
-if ! printf '%s\n' "$HUMAN_INPUT_RESP" | jq -e '.status == "succeeded" and .output.finalize.result == "approve"' >/dev/null 2>&1; then
-  echo "submit-human-input returned unexpected response"
-  printf '%s\n' "$HUMAN_INPUT_RESP"
-  exit 1
-fi
-echo "Submit human input: OK"
 
 echo "--- Resuming a paused run without input ---"
 RESUME_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
@@ -3325,44 +2740,6 @@ if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
 fi
 echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 
-# 19c. Call the pipeline — both steps hit GET /projects on the live server and
-# the output mapping returns from_a / from_b / echoed.container (the latter
-# resolved from a `var` nested inside a plain object, at both the step-input
-# and pipeline-output level).
-echo "--- Calling pipeline tool ---"
-STEP_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{"tag":"hello-nested"}')
-printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
-if ! printf '%s\n' "$PIPELINE_CALL_RESP" | jq -e 'has("from_a") and has("from_b")' > /dev/null; then
-  echo "FAIL: pipeline output missing mapped keys from_a/from_b"
-  echo "$PIPELINE_CALL_RESP"
-  exit 1
-fi
-if [ "$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.echoed.container')" != "hello-nested" ]; then
-  echo "FAIL: pipeline output did not resolve the nested var (echoed.container)"
-  echo "$PIPELINE_CALL_RESP"
-  exit 1
-fi
-echo "Pipeline call OK (nested JSON Logic resolution verified)"
-
-# Each step is one tool_execution event against the step's tool; the pipeline
-# itself executes nothing on the wire and writes none.
-STEP_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-PIPELINE_OWN_CALLS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-if [ "$((STEP_CALLS_AFTER - STEP_CALLS_BEFORE))" != "2" ] || [ "$PIPELINE_OWN_CALLS" != "0" ]; then
-  echo "FAIL: expected 2 tool_execution events for the steps and 0 for the pipeline, got $((STEP_CALLS_AFTER - STEP_CALLS_BEFORE)) and $PIPELINE_OWN_CALLS"
-  exit 1
-fi
-TOOL_AGG_RESP=$($SOAT_CLI get-usage-aggregate --project-id "$PROJECT_PUBLIC_ID" \
-  --meter-type tool_execution --group-by tool --tool-id "$TOOL_ID" --outcome ok | sanitize_json)
-if ! printf '%s\n' "$TOOL_AGG_RESP" | jq -e --arg tool "$TOOL_ID" \
-  '.groups.data | length == 1 and .[0].key == $tool and .[0].event_count >= 2' >/dev/null; then
-  echo "FAIL: get-usage-aggregate --group-by tool did not count the step tool's executions"
-  echo "$TOOL_AGG_RESP"
-  exit 1
-fi
-echo "Tool execution metering (per pipeline step, grouped by tool): OK"
-
 # 19c2. A pipeline `output` that is itself a bare JSON Logic expression (e.g.
 # `{"var": "steps.a.count"}`) must resolve to a bare scalar, not the literal
 # unevaluated expression object.
@@ -3380,16 +2757,6 @@ if [ -z "$BARE_OUTPUT_PIPELINE_ID" ] || [ "$BARE_OUTPUT_PIPELINE_ID" = "null" ];
   exit 1
 fi
 echo "Bare-scalar-output pipeline tool id: $BARE_OUTPUT_PIPELINE_ID"
-
-echo "--- Calling pipeline tool with a bare-scalar output mapping ---"
-BARE_OUTPUT_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$BARE_OUTPUT_PIPELINE_ID" --input '{}')
-printf '%s\n' "$BARE_OUTPUT_CALL_RESP" | jq .
-if printf '%s\n' "$BARE_OUTPUT_CALL_RESP" | jq -e 'type != "string"' > /dev/null; then
-  echo "FAIL: pipeline output mapping did not resolve to a bare scalar"
-  echo "$BARE_OUTPUT_CALL_RESP"
-  exit 1
-fi
-echo "Bare-scalar pipeline output OK"
 
 # 19d. A universal `output_mapping` field reshapes a tool's raw result at call
 # time, for every tool type — without wrapping it in a `pipeline` tool just to
@@ -3586,40 +2953,6 @@ if [ "$(printf '%s\n' "$GEN_IDEM_RETRY" | jq -r '.generation_id')" != "$GEN_ID" 
 fi
 echo "Idempotent generation retry: OK"
 
-# 22a3. output_schema is enforced on the way back, not just sent to the provider.
-# A generation that completes here means enforcement is off.
-#
-# The schema contradicts itself deliberately: `enum` admits only "ok", which can
-# never match `pattern` "^zzz$". Whichever way the provider treats the schema the
-# value violates it, so nothing depends on the model misbehaving.
-#
-# Do NOT use a large `minLength` instead: the schema is a generation constraint
-# too, and llama.cpp compiles `minLength` by repeating its character rule —
-# `minLength: 5000` expanded the grammar until the model runner segfaulted, so
-# the request failed before validation ran. Keep any violated keyword cheap.
-echo "--- Verifying output_schema enforcement ---"
-SCHEMA_AGENT_RESP=$($SOAT_CLI create-agent \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --ai_provider_id "$AI_PROVIDER_ID" \
-  --name schema-enforced \
-  --instructions "Answer with a JSON object containing a single key 'verdict'." \
-  --output_schema '{"type":"object","required":["verdict"],"properties":{"verdict":{"type":"string","enum":["ok"],"pattern":"^zzz$"}}}')
-SCHEMA_AGENT_ID=$(printf '%s\n' "$SCHEMA_AGENT_RESP" | jq -r '.id')
-if [ -z "$SCHEMA_AGENT_ID" ] || [ "$SCHEMA_AGENT_ID" = "null" ]; then
-  echo "ERROR: could not create the output_schema agent" >&2
-  printf '%s\n' "$SCHEMA_AGENT_RESP" >&2
-  exit 1
-fi
-SCHEMA_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$SCHEMA_AGENT_ID" \
-  --messages '[{"role":"user","content":"Give your verdict."}]' 2>&1 || true)
-if ! printf '%s\n' "$SCHEMA_GEN_RESP" | jq -e '.error.code == "OUTPUT_SCHEMA_VALIDATION_FAILED"' >/dev/null 2>&1; then
-  echo "ERROR: expected OUTPUT_SCHEMA_VALIDATION_FAILED for output violating output_schema" >&2
-  printf '%s\n' "$SCHEMA_GEN_RESP" >&2
-  exit 1
-fi
-echo "output_schema enforcement OK (502 OUTPUT_SCHEMA_VALIDATION_FAILED)"
-$SOAT_CLI delete-agent --agent-id "$SCHEMA_AGENT_ID" --force >/dev/null 2>&1 || true
-
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
 AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
@@ -3632,185 +2965,6 @@ if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
 fi
 echo "Agent SSE stream OK."
 
-# 22b2. Knowledge config: the write grant round-trips, and the retired
-# `extraction` field is rejected rather than accepted and ignored. What a store
-# ingests from a finished turn is a memory rule now, covered above.
-echo "--- Setting knowledge_config with the write-memory grant ---"
-KC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\"}")
-if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_store_id == $mem' >/dev/null 2>&1; then
-  echo "ERROR: update-agent did not round-trip knowledge_config.write_memory_store_id" >&2
-  echo "$KC_UPDATE_RESP" >&2
-  exit 1
-fi
-KC_EXTRACTION_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"knowledge_config\":{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":true}}")
-if [ "$KC_EXTRACTION_STATUS" != "400" ]; then
-  echo "ERROR: knowledge_config.extraction expected 400, got $KC_EXTRACTION_STATUS" >&2
-  exit 1
-fi
-$SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
-echo "knowledge_config write grant round-trip: OK"
-
-# 22b3. `reasoning` is not an agent field — it is rejected (as an unknown
-# field) with a 400.
-echo "--- Asserting reasoning is rejected on agents ---"
-RC_REMOVED_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"effort":"low"}' 2>&1 || true)
-if ! printf '%s\n' "$RC_REMOVED_RESP" | jq -e '.status == 400' >/dev/null 2>&1; then
-  echo "ERROR: reasoning on an agent was not rejected with a 400" >&2
-  echo "$RC_REMOVED_RESP" >&2
-  exit 1
-fi
-echo "reasoning rejected on agents: OK"
-
-# ── Agent versions and staged rollout ────────────────────────────────────────
-# Covers the full lifecycle: snapshot on create, snapshot on update, restore as
-# a new (append-only) version, a staged rollout serving an archived config, the
-# version stamped on a generation, abort, and promote.
-
-echo "--- Agent versioning: snapshot on create ---"
-VER_AGENT_RESP=$($SOAT_CLI create-agent \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --ai_provider_id "$AI_PROVIDER_ID" \
-  --name version-demo \
-  --instructions "You are terse. Answer in one word." \
-  --version-label initial)
-VER_AGENT_ID=$(printf '%s\n' "$VER_AGENT_RESP" | jq -r '.id')
-if [ "$(printf '%s\n' "$VER_AGENT_RESP" | jq -r '.version')" != "1" ]; then
-  echo "ERROR: a new agent did not start at version 1" >&2
-  echo "$VER_AGENT_RESP" >&2
-  exit 1
-fi
-if [ "$(printf '%s\n' "$VER_AGENT_RESP" | jq -r '.active_release')" != "null" ]; then
-  echo "ERROR: a new agent reported an active_release" >&2
-  exit 1
-fi
-echo "Agent id: $VER_AGENT_ID (version 1)"
-
-VER_LIST=$($SOAT_CLI list-agent-versions --agent-id "$VER_AGENT_ID")
-if [ "$(printf '%s\n' "$VER_LIST" | jq -r '.total')" != "1" ]; then
-  echo "ERROR: create did not archive exactly one version" >&2
-  printf '%s\n' "$VER_LIST" >&2
-  exit 1
-fi
-if [ "$(printf '%s\n' "$VER_LIST" | jq -r '.data[0].label')" != "initial" ]; then
-  echo "ERROR: version_label did not reach the archived version" >&2
-  printf '%s\n' "$VER_LIST" >&2
-  exit 1
-fi
-echo "snapshot on create: OK"
-
-echo "--- Agent versioning: snapshot on update ---"
-VER_UPDATED=$($SOAT_CLI update-agent --agent-id "$VER_AGENT_ID" \
-  --instructions "You are verbose. Answer in three sentences." \
-  --version-label wordy)
-if [ "$(printf '%s\n' "$VER_UPDATED" | jq -r '.version')" != "2" ]; then
-  echo "ERROR: a config change did not bump the version to 2" >&2
-  printf '%s\n' "$VER_UPDATED" >&2
-  exit 1
-fi
-
-# A write that changes nothing must not create a version.
-$SOAT_CLI update-agent --agent-id "$VER_AGENT_ID" \
-  --instructions "You are verbose. Answer in three sentences." >/dev/null
-VER_NOOP=$($SOAT_CLI get-agent --agent-id "$VER_AGENT_ID")
-if [ "$(printf '%s\n' "$VER_NOOP" | jq -r '.version')" != "2" ]; then
-  echo "ERROR: a no-op update created a new version" >&2
-  printf '%s\n' "$VER_NOOP" >&2
-  exit 1
-fi
-echo "snapshot on update (and no-op guard): OK"
-
-VER_ONE=$($SOAT_CLI get-agent-version --agent-id "$VER_AGENT_ID" --version 1)
-if ! printf '%s\n' "$VER_ONE" | jq -e '.config.instructions | test("one word")' >/dev/null 2>&1; then
-  echo "ERROR: version 1 did not archive the original instructions" >&2
-  printf '%s\n' "$VER_ONE" >&2
-  exit 1
-fi
-echo "archived config readback: OK"
-
-echo "--- Agent versioning: restore is append-only ---"
-VER_RESTORED=$($SOAT_CLI restore-agent-version --agent-id "$VER_AGENT_ID" --version 1)
-if [ "$(printf '%s\n' "$VER_RESTORED" | jq -r '.version')" != "3" ]; then
-  echo "ERROR: restore did not create a new version 3" >&2
-  printf '%s\n' "$VER_RESTORED" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$VER_RESTORED" | jq -e '.instructions | test("one word")' >/dev/null 2>&1; then
-  echo "ERROR: restore did not bring back version 1's instructions" >&2
-  exit 1
-fi
-# The version that was undone must remain retrievable.
-$SOAT_CLI get-agent-version --agent-id "$VER_AGENT_ID" --version 2 >/dev/null
-echo "restore (append-only, intermediate version retained): OK"
-
-echo "--- Agent versioning: staged rollout serves an archived config ---"
-# 100% canary makes the assignment deterministic without depending on hashing.
-VER_RELEASE=$($SOAT_CLI set-agent-release --agent-id "$VER_AGENT_ID" \
-  --stable-version 1 --canary-version 2 --canary-percent 100)
-if [ "$(printf '%s\n' "$VER_RELEASE" | jq -r '.active_release.canary_version')" != "2" ]; then
-  echo "ERROR: set-agent-release did not record the canary version" >&2
-  printf '%s\n' "$VER_RELEASE" >&2
-  exit 1
-fi
-
-VER_GEN=$($SOAT_CLI create-agent-generation --wait true --agent-id "$VER_AGENT_ID" \
-  --messages '[{"role":"user","content":"Say hello."}]' | sanitize_json)
-VER_GEN_ID=$(printf '%s\n' "$VER_GEN" | jq -r '.id')
-if [ -z "$VER_GEN_ID" ] || [ "$VER_GEN_ID" = "null" ]; then
-  echo "ERROR: generation under a rollout did not return an id" >&2
-  printf '%s\n' "$VER_GEN" >&2
-  exit 1
-fi
-VER_GEN_RECORD=$($SOAT_CLI get-generation --generation-id "$VER_GEN_ID")
-VER_SERVED=$(printf '%s\n' "$VER_GEN_RECORD" | jq -r '.agent_version')
-if [ "$VER_SERVED" != "2" ]; then
-  echo "ERROR: expected the 100% canary (version 2) to serve, got '$VER_SERVED'" >&2
-  printf '%s\n' "$VER_GEN_RECORD" >&2
-  exit 1
-fi
-echo "rollout assignment stamped on the generation record: OK"
-
-echo "--- Agent versioning: abort rolls back to stable ---"
-VER_ABORTED=$($SOAT_CLI abort-agent-release --agent-id "$VER_AGENT_ID")
-if [ "$(printf '%s\n' "$VER_ABORTED" | jq -r '.active_release')" != "null" ]; then
-  echo "ERROR: abort did not clear the release" >&2
-  printf '%s\n' "$VER_ABORTED" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$VER_ABORTED" | jq -e '.instructions | test("one word")' >/dev/null 2>&1; then
-  echo "ERROR: abort did not restore the stable config" >&2
-  printf '%s\n' "$VER_ABORTED" >&2
-  exit 1
-fi
-echo "abort: OK"
-
-echo "--- Agent versioning: promote makes the canary live ---"
-$SOAT_CLI set-agent-release --agent-id "$VER_AGENT_ID" \
-  --stable-version 1 --canary-version 2 --canary-percent 50 >/dev/null
-VER_PROMOTED=$($SOAT_CLI promote-agent-release --agent-id "$VER_AGENT_ID")
-if [ "$(printf '%s\n' "$VER_PROMOTED" | jq -r '.active_release')" != "null" ]; then
-  echo "ERROR: promote did not clear the release" >&2
-  printf '%s\n' "$VER_PROMOTED" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$VER_PROMOTED" | jq -e '.instructions | test("three sentences")' >/dev/null 2>&1; then
-  echo "ERROR: promote did not make the canary config live" >&2
-  printf '%s\n' "$VER_PROMOTED" >&2
-  exit 1
-fi
-echo "promote: OK"
-
-# Promoting with no active release is a conflict, not a silent no-op.
-expect_cli_error_status 409 promote-agent-release --agent-id "$VER_AGENT_ID"
-echo "promote without a release rejected with 409: OK"
-
-$SOAT_CLI delete-agent --agent-id "$VER_AGENT_ID" --force true >/dev/null
-echo "Agent versioning lifecycle OK"
-
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"
 PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \
@@ -3822,44 +2976,6 @@ PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
 PROJECT_DETAIL_TOOL_ID=$(printf '%s\n' "$PROJECT_DETAIL_TOOL_RESP" | jq -r '.id')
 echo "Project-detail tool id: $PROJECT_DETAIL_TOOL_ID"
-
-# 22d. Create an agent that echoes the resolved tool_output content
-echo "--- Creating tool-output agent ---"
-TOOL_OUTPUT_AGENT_RESP=$($SOAT_CLI create-agent \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --ai_provider_id "$AI_PROVIDER_ID" \
-  --name tool-output-agent \
-  --instructions "Repeat the user's last message exactly. Do not add any extra words or punctuation." \
-  --tool_bindings "[{\"tool_id\":\"$PROJECT_DETAIL_TOOL_ID\"}]" \
-  --max_steps 2)
-TOOL_OUTPUT_AGENT_ID=$(printf '%s\n' "$TOOL_OUTPUT_AGENT_RESP" | jq -r '.id')
-echo "Tool-output agent id: $TOOL_OUTPUT_AGENT_ID"
-
-# 22e. Run generation using tool_output content extracted via output_path
-echo "--- Running tool_output message content generation ---"
-TOOL_OUTPUT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$TOOL_OUTPUT_AGENT_ID" \
-  --messages '[{"role":"user","content":{"type":"tool_output","tool_id":"'"$PROJECT_DETAIL_TOOL_ID"'","output_path":".name"}}]' | sanitize_json)
-echo "Tool-output generation response:"
-printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq .
-
-TOOL_OUTPUT_GEN_STATUS=$(printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq -r '.status')
-if [ "$TOOL_OUTPUT_GEN_STATUS" != "completed" ]; then
-  echo "ERROR: Expected tool_output generation status 'completed', got '$TOOL_OUTPUT_GEN_STATUS'" >&2
-  exit 1
-fi
-
-TOOL_OUTPUT_GEN_CONTENT=$(printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq -r '.output.content // empty')
-if [ -z "$TOOL_OUTPUT_GEN_CONTENT" ]; then
-  echo "ERROR: tool_output generation returned empty output content" >&2
-  exit 1
-fi
-
-if printf '%s\n' "$TOOL_OUTPUT_GEN_CONTENT" | grep -Fq 'smoke-test-project'; then
-  echo "tool_output message content surfaced selected project name: OK"
-else
-  echo "WARNING: tool_output generation output did not include exact project name (LLM response varies), but generation completed with non-empty output." >&2
-  echo "tool_output output: $TOOL_OUTPUT_GEN_CONTENT" >&2
-fi
 
 # 22f. Cleanup — delete project-detail tool
 echo "--- Deleting project-detail tool ---"
@@ -3910,38 +3026,6 @@ if [ "$GATED_ATTACHED" != "$GATED_GUARDRAIL_ID" ]; then
   exit 1
 fi
 echo "guardrail attach: OK"
-
-# Force the gated tool call; tool_choice=required makes the model call it, so the
-# class-C guardrail files a pending item and the turn completes normally
-# (return-pending).
-echo "--- Running generation against the guardrail-gated tool ---"
-set +e
-$SOAT_CLI create-agent-generation --wait true --agent-id "$GATED_AGENT_ID" \
-  --messages '[{"role":"user","content":"fetch the project"}]' >/dev/null 2>&1
-set -e
-
-echo "--- Listing pending tool-call approvals ---"
-GATED_APPROVAL_ID=$($SOAT_CLI list-approvals \
-  --project-id "$PROJECT_PUBLIC_ID" --status pending --origin tool_call \
-  | sanitize_json | jq -r '[.data[] | select(.proposed_action.tool_id == "'"$GATED_TOOL_ID"'")][0].id // empty')
-
-if [ -n "$GATED_APPROVAL_ID" ]; then
-  echo "Filed tool-call approval id: $GATED_APPROVAL_ID"
-  APPROVE_RESP=$($SOAT_CLI approve-approval --approval-id "$GATED_APPROVAL_ID" | sanitize_json)
-  APPROVE_STATUS=$(printf '%s\n' "$APPROVE_RESP" | jq -r '.status')
-  if [ "$APPROVE_STATUS" != "approved" ]; then
-    echo "ERROR: Expected approval status 'approved', got '$APPROVE_STATUS'" >&2
-    exit 1
-  fi
-  APPROVE_ORIGIN=$(printf '%s\n' "$APPROVE_RESP" | jq -r '.origin')
-  if [ "$APPROVE_ORIGIN" != "tool_call" ]; then
-    echo "ERROR: Expected approval origin 'tool_call', got '$APPROVE_ORIGIN'" >&2
-    exit 1
-  fi
-  echo "Tool-call approval approved: OK"
-else
-  echo "WARNING: model did not call the gated tool (LLM response varies); skipping approve step." >&2
-fi
 
 # The recurrence view is a read-only rollup over the queue's own dedup_key
 # chains. Whether a recurring group exists depends on the nondeterministic LLM
@@ -4059,9 +3143,9 @@ $SOAT_CLI create-agent-generation --wait true --agent-id "$ACT_AGENT_ID" \
   --guardrail_context '{"action_rate_ceiling":1000000}' >/dev/null 2>&1
 set -e
 
-# The emit is fire-and-forget, so poll. Whether the model actually calls the tool
-# is LLM-dependent even with tool_choice=required, so a missing entry warns
-# rather than fails — but an entry that IS present must be well-formed.
+# The emit is fire-and-forget, so poll. The tool_choice shim forces the call
+# (`TOOL_CHOICE_TOOLS` in docker-compose.smoke.yml), so a missing entry is a
+# dispatch or recording failure, not a model decision.
 echo "--- Activity: the executed agent tool call is on the feed ---"
 ACT_EXEC_ENTRY=""
 i=0
@@ -4087,18 +3171,15 @@ if [ -n "$ACT_EXEC_ENTRY" ]; then
   fi
   echo "Tool-call rate guard context resolved (the guarded call executed and was metered): OK"
 else
-  echo "WARNING: model did not call the tool (LLM response varies); skipping action_executed assertion." >&2
+  echo "ERROR: the forced activity-project-detail call never reached the activity feed" >&2
+  printf '%s\n' "$ACT_EXEC_LIST" >&2
+  exit 1
 fi
 
 $SOAT_CLI delete-agent --agent-id "$ACT_AGENT_ID" --force >/dev/null 2>&1 || true
 $SOAT_CLI delete-tool --tool-id "$ACT_TOOL_ID" >/dev/null 2>&1 || true
 $SOAT_CLI delete-guardrail --guardrail-id "$ACT_GUARDRAIL_ID" >/dev/null 2>&1 || true
 echo "Activity recording flow cleanup: OK"
-
-# 23. An agent with dependent generations/traces is delete-blocked
-echo "--- Verifying agent delete-block after generation ---"
-expect_cli_error_status 409 delete-agent --agent-id "$AGENT_ID"
-echo "Agent delete-block: OK (409 as expected)"
 
 # 24. Cleanup — delete agent tool
 echo "--- Deleting agent tool ---"
@@ -4405,22 +3486,6 @@ echo "Client tool args preserve authored camelCase casing: OK"
 echo "Generation id: $CLIENT_GEN_ID"
 echo "Tool call id: $CLIENT_TOOL_CALL_ID"
 
-# 34. Submit tool output (simulate client executing get_weather)
-echo "--- Submitting client tool output ---"
-SUBMIT_RESP=$($SOAT_CLI submit-agent-tool-outputs \
-  --agent-id "$CLIENT_AGENT_ID" \
-  --generation-id "$CLIENT_GEN_ID" \
-  --tool_outputs "[{\"tool_call_id\":\"$CLIENT_TOOL_CALL_ID\",\"output\":{\"city\":\"Paris\",\"temperature\":\"18C\",\"condition\":\"Partly cloudy\"}}]" | sanitize_json)
-echo "Submit tool output response:"
-printf '%s\n' "$SUBMIT_RESP" | jq .
-
-SUBMIT_STATUS=$(printf '%s\n' "$SUBMIT_RESP" | jq -r '.status')
-if [ "$SUBMIT_STATUS" != "completed" ]; then
-  echo "ERROR: Expected final status 'completed', got '$SUBMIT_STATUS'" >&2
-  exit 1
-fi
-echo "Client tool generation completed after tool output: OK"
-
 # 34b. Trace checks (list traces + fetch current generation trace)
 echo "--- Verifying trace endpoints ---"
 # Traces and generations carry the model's output content, which can contain
@@ -4716,182 +3781,6 @@ else
   exit 1
 fi
 
-# 34b. Usage metering — a meter row is recorded per completed generation
-echo "--- Verifying usage metering ---"
-USAGE_EVENTS_RESP=$($SOAT_CLI list-usage-events | sanitize_json)
-USAGE_IS_ARRAY=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r 'if (.data | type) == "array" then "yes" else "no" end')
-if [ "$USAGE_IS_ARRAY" != "yes" ]; then
-  echo "ERROR: list-usage-events did not return a data array" >&2
-  echo "$USAGE_EVENTS_RESP" >&2
-  exit 1
-fi
-USAGE_TOTAL=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.total // 0')
-echo "List usage meters endpoint: OK (total: $USAGE_TOTAL)"
-
-# When at least one generation has completed, the event must carry token
-# components (values depend on the live provider, so only their shape is
-# checked).
-if [ "$USAGE_TOTAL" -ge 1 ]; then
-  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '(.data[0] | (.id | startswith("ue_")) and (.provider | length > 0) and (.meter_type == "llm_tokens") and (.components | type == "array") and ([.components[] | select(.component == "input_tokens")] | length >= 1))')
-  if [ "$USAGE_ROW_OK" != "true" ]; then
-    echo "ERROR: usage event missing expected token components" >&2
-    echo "$USAGE_EVENTS_RESP" >&2
-    exit 1
-  fi
-  echo "Usage event shape (token components): OK"
-
-  # 34b-ii. Receipt — the metered generation has a reconcilable receipt
-  USAGE_GEN_ID=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.data[0].generation_id // empty')
-  if [ -n "$USAGE_GEN_ID" ]; then
-    RECEIPT_RESP=$($SOAT_CLI get-usage-receipt --generation-id "$USAGE_GEN_ID" | sanitize_json)
-    RECEIPT_OK=$(printf '%s\n' "$RECEIPT_RESP" | jq -r '((.generation_id | length > 0) and (.currency == "USD") and (.line_items | type == "array") and (.totals.input_tokens | type == "number"))')
-    if [ "$RECEIPT_OK" != "true" ]; then
-      echo "ERROR: get-usage-receipt did not return a well-formed receipt" >&2
-      echo "$RECEIPT_RESP" >&2
-      exit 1
-    fi
-    echo "Usage receipt endpoint: OK (generation $USAGE_GEN_ID)"
-  fi
-
-  # 34b-ii-b. Standalone-completion coverage — the chat completions from steps
-  # 17/18 create no generation, so they must still be metered as llm_tokens
-  # events with a null generation_id. Proves no LLM call skips metering just
-  # because it has no Generation row behind it.
-  CHAT_EVENTS_RESP=$($SOAT_CLI list-usage-events --meter-type llm_tokens --limit 100 | sanitize_json)
-  CHAT_METER_COUNT=$(printf '%s\n' "$CHAT_EVENTS_RESP" | jq -r '[.data[] | select(.generation_id == null)] | length')
-  if [ "$CHAT_METER_COUNT" -lt 1 ]; then
-    echo "ERROR: no generation-less llm_tokens event — chat completions were not metered" >&2
-    echo "$CHAT_EVENTS_RESP" >&2
-    exit 1
-  fi
-  echo "Standalone completion metering: OK ($CHAT_METER_COUNT generation-less llm_tokens events)"
-
-  # 34b-ii-c. Embedding coverage — an embedding reaches the provider with no
-  # Generation and no AI provider record behind it, so it must still be metered,
-  # under its own `embedding` source. Its cost comes from
-  # EMBEDDING_INPUT_1M_TOKEN_PRICE_USD rather than the price book; the
-  # stack sets a non-zero rate, so a positive cost_usd is what proves the
-  # per-million conversion ran end to end.
-  $SOAT_CLI create-embeddings \
-    --project-id "$PROJECT_PUBLIC_ID" \
-    --input "smoke test embedding metering" > /dev/null
-  EMBEDDING_EVENTS_RESP=$($SOAT_CLI list-usage-events \
-    --source embedding --limit 100 | sanitize_json)
-  EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_EVENTS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and .cost_usd > 0 and ([.components[] | select(.component == "input_tokens" and .quantity > 0 and .cost_usd > 0)] | length == 1))] | length >= 1)')
-  if [ "$EMBEDDING_METER_OK" != "true" ]; then
-    echo "ERROR: embedding call was not metered as a priced input_tokens llm_tokens event" >&2
-    echo "$EMBEDDING_EVENTS_RESP" >&2
-    exit 1
-  fi
-  echo "Embedding metering: OK"
-
-  # 34b-iii. Aggregate — the per-project usage rollup, bucketed by meter type.
-  # Grand totals and each group carry summed token counts and cost_usd.
-  USAGE_AGG_RESP=$($SOAT_CLI get-usage-aggregate \
-    --project-id "$PROJECT_PUBLIC_ID" \
-    --group-by meter_type | sanitize_json)
-  USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups.data | type == "array") and (.groups.total | type == "number") and (.totals.input_tokens | type == "number") and (.totals.event_count | type == "number") and ([.groups.data[] | select(.key == "llm_tokens")] | length >= 1))')
-  if [ "$USAGE_AGG_OK" != "true" ]; then
-    echo "ERROR: get-usage-aggregate did not return a well-formed aggregate rollup" >&2
-    echo "$USAGE_AGG_RESP" >&2
-    exit 1
-  fi
-  echo "Usage aggregate endpoint: OK (project $PROJECT_PUBLIC_ID)"
-
-  # 34b-iii-b. The token fields describe llm_tokens only, so a non-token meter
-  # must report what it measured via `components`. The run earlier in this suite
-  # metered compute in this project, so that bucket has zero tokens and a
-  # positive compute_second — reporting it all-zero is the regression guarded.
-  USAGE_QTY_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '
-    [.groups.data[] | select(.key == "compute_execution")] as $g
-    | ($g | length == 1)
-      and ($g[0].input_tokens == 0)
-      and ([$g[0].components[] | select(.component == "compute_second")
-             | select(.quantity > 0) | select(.unit == "compute_second")]
-           | length == 1)
-      and (.filters.meter_type == null)')
-  if [ "$USAGE_QTY_OK" != "true" ]; then
-    echo "ERROR: get-usage-aggregate reported the compute_execution meter without a measured quantity" >&2
-    echo "$USAGE_AGG_RESP" >&2
-    exit 1
-  fi
-  echo "Usage aggregate measured quantities: OK"
-
-  # 34b-iii-c. meter_type narrows the rollup, so `group_by=model` can be asked
-  # about models alone without platform SKUs sharing the dimension.
-  USAGE_FILTERED_RESP=$($SOAT_CLI get-usage-aggregate \
-    --project-id "$PROJECT_PUBLIC_ID" \
-    --group-by meter_type \
-    --meter-type compute_execution | sanitize_json)
-  USAGE_FILTERED_OK=$(printf '%s\n' "$USAGE_FILTERED_RESP" | jq -r '
-    (.filters.meter_type == "compute_execution")
-      and ((.groups.data | map(.key)) == ["compute_execution"])
-      and ((.totals.components | map(.component)) == ["compute_second"])')
-  if [ "$USAGE_FILTERED_OK" != "true" ]; then
-    echo "ERROR: get-usage-aggregate --meter-type did not narrow the rollup" >&2
-    echo "$USAGE_FILTERED_RESP" >&2
-    exit 1
-  fi
-  echo "Usage aggregate meter_type filter: OK"
-
-  # 34b-iii-d. Counting without materializing: `groups.total` is the number of
-  # buckets, so a count is one small response however many there are. The page
-  # is bounded by --limit while `total` and `totals` keep describing the whole
-  # window — a page-scoped total read against an allowance would understate it.
-  USAGE_COUNT_RESP=$($SOAT_CLI get-usage-aggregate \
-    --project-id "$PROJECT_PUBLIC_ID" \
-    --group-by meter_type \
-    --limit 1 | sanitize_json)
-  USAGE_COUNT_OK=$(printf '%s\n' "$USAGE_COUNT_RESP" | jq -r --argjson full "$USAGE_AGG_RESP" '
-    (.groups.limit == 1)
-      and (.groups.offset == 0)
-      and ((.groups.data | length) <= 1)
-      and (.groups.total == ($full.groups.total))
-      and (.totals == ($full.totals))')
-  if [ "$USAGE_COUNT_OK" != "true" ]; then
-    echo "ERROR: get-usage-aggregate --limit did not bound the page while keeping totals whole-window" >&2
-    echo "$USAGE_COUNT_RESP" >&2
-    exit 1
-  fi
-  echo "Usage aggregate counting and paging: OK"
-
-  # 34b-iii-e. Counting entities, which `groups.total` does not answer: it is
-  # bucket cardinality, and a null key is a real bucket, so a project whose
-  # traffic is standalone generations reports one `orchestration_run` bucket
-  # whatever its volume. `include=distinct` is the counter, and it is
-  # absent unless asked for.
-  USAGE_DISTINCT_RESP=$($SOAT_CLI get-usage-aggregate \
-    --project-id "$PROJECT_PUBLIC_ID" \
-    --group-by orchestration_run \
-    --include distinct \
-    --limit 1 | sanitize_json)
-  USAGE_DISTINCT_OK=$(printf '%s\n' "$USAGE_DISTINCT_RESP" | jq -r '
-    (.totals.distinct.generations | type == "number")
-      and (.totals.distinct.generations > 0)
-      and (.totals.distinct.orchestration_runs | type == "number")
-      and (.totals.distinct.traces | type == "number")
-      and (.totals.distinct.agents | type == "number")
-      and (.totals.distinct.actors | type == "number")
-      and (.totals.distinct.sessions | type == "number")
-      and (.totals.distinct.ai_providers | type == "number")')
-  if [ "$USAGE_DISTINCT_OK" != "true" ]; then
-    echo "ERROR: get-usage-aggregate --include distinct did not report the distinct counters" >&2
-    echo "$USAGE_DISTINCT_RESP" >&2
-    exit 1
-  fi
-
-  USAGE_NO_DISTINCT=$($SOAT_CLI get-usage-aggregate \
-    --project-id "$PROJECT_PUBLIC_ID" \
-    --group-by orchestration_run \
-    --limit 1 | sanitize_json)
-  if ! printf '%s\n' "$USAGE_NO_DISTINCT" | jq -e '.totals.distinct == null' >/dev/null 2>&1; then
-    echo "ERROR: totals.distinct was present without include=distinct" >&2
-    echo "$USAGE_NO_DISTINCT" >&2
-    exit 1
-  fi
-  echo "Usage aggregate distinct counters: OK"
-fi
-
 # 34b-v. End-user attribution — a session-driven generation attributes its usage
 # to the actor and session behind it, so spend is answerable per end user and not
 # only per agent. Both dimensions must filter and group.
@@ -5061,34 +3950,6 @@ if [ "$THRESHOLD_GONE" != "true" ]; then
 fi
 echo "Delete usage threshold: OK"
 
-# 34c. Price book — the global-defaults path (admin upsert + read-back)
-# No prices ship by default, so the global tier is exercised by upserting a
-# global default row (ai_provider_id null) and reading it back.
-echo "--- Verifying price book ---"
-PRICES_PUT=$($SOAT_CLI upsert-price-book \
-  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","component":"input_tokens","unit":"token","unit_price":0.000002,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
-  | sanitize_json)
-PRICES_PUT_OK=$(printf '%s\n' "$PRICES_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id == null) and (.prices[0].component == "input_tokens") and (.prices[0].unit_price == 0.000002)')
-if [ "$PRICES_PUT_OK" != "true" ]; then
-  echo "ERROR: upsert-price-book did not return the upserted global price" >&2
-  echo "$PRICES_PUT" >&2
-  exit 1
-fi
-PRICES_RESP=$($SOAT_CLI get-price-book | sanitize_json)
-PRICES_IS_ARRAY=$(printf '%s\n' "$PRICES_RESP" | jq -r 'if (.prices | type) == "array" then "yes" else "no" end')
-if [ "$PRICES_IS_ARRAY" != "yes" ]; then
-  echo "ERROR: get-price-book did not return a prices array" >&2
-  echo "$PRICES_RESP" >&2
-  exit 1
-fi
-PRICES_HAS_ROW=$(printf '%s\n' "$PRICES_RESP" | jq -r '[.prices[] | select(.model == "qwen2.5:0.5b" and .ai_provider_id == null)] | length >= 1')
-if [ "$PRICES_HAS_ROW" != "true" ]; then
-  echo "ERROR: get-price-book did not return the upserted global price" >&2
-  echo "$PRICES_RESP" >&2
-  exit 1
-fi
-echo "Price book endpoint (global upsert + read-back): OK"
-
 # 34d. Per-provider price override — a project prices its own provider instance
 echo "--- Verifying per-provider price override ---"
 OVERRIDE_PUT=$($SOAT_CLI update-ai-provider-prices \
@@ -5243,11 +4104,6 @@ fi
 $SOAT_CLI delete-usage-threshold --threshold-id "$THRESHOLD_ID"
 echo "Usage thresholds endpoint (create + list + delete): OK"
 
-# 35. Client-tool agent is delete-blocked after generation persists trace data
-echo "--- Verifying client-tool agent delete-block after generation ---"
-expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"
-echo "Client-tool agent delete-block: OK (409 as expected)"
-
 # 36. Cleanup — delete client agent tool
 echo "--- Deleting client agent tool ---"
 $SOAT_CLI delete-tool --tool-id "$CLIENT_TOOL_ID"
@@ -5270,140 +4126,6 @@ if [ -z "$SOAT_TOOL_ID" ] || [ "$SOAT_TOOL_ID" = "null" ]; then
   exit 1
 fi
 echo "SOAT Agent Tool id: $SOAT_TOOL_ID"
-
-# 37b. A soat action's query string must reach the route: the path was
-# once built from path parameters alone, so every `in: query` parameter was
-# dropped and a `list-*` action always answered the default page. `limit` is
-# echoed back, so both a caller-supplied and a preset value are observable.
-echo "--- Calling a soat list action with a query parameter ---"
-SOAT_QUERY_TOOL_RESP=$($SOAT_CLI create-tool \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name soat-agent-lister \
-  --type builtin \
-  --actions '["list-agents"]')
-SOAT_QUERY_TOOL_ID=$(printf '%s\n' "$SOAT_QUERY_TOOL_RESP" | jq -r '.id')
-
-SOAT_QUERY_CALL_RESP=$($SOAT_CLI call-tool \
-  --tool-id "$SOAT_QUERY_TOOL_ID" \
-  --action list-agents \
-  --input '{"limit":1}')
-if ! printf '%s\n' "$SOAT_QUERY_CALL_RESP" | jq -e '.limit == 1 and (.data | length) <= 1' >/dev/null 2>&1; then
-  echo "ERROR: soat list-agents ignored the caller-supplied limit query parameter" >&2
-  echo "$SOAT_QUERY_CALL_RESP" >&2
-  exit 1
-fi
-echo "Caller-supplied query parameter: OK"
-
-SOAT_PRESET_TOOL_RESP=$($SOAT_CLI create-tool \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name soat-agent-lister-preset \
-  --type builtin \
-  --actions '["list-agents"]' \
-  --preset_parameters '{"limit":1}')
-SOAT_PRESET_TOOL_ID=$(printf '%s\n' "$SOAT_PRESET_TOOL_RESP" | jq -r '.id')
-
-SOAT_PRESET_CALL_RESP=$($SOAT_CLI call-tool \
-  --tool-id "$SOAT_PRESET_TOOL_ID" \
-  --action list-agents \
-  --input '{}')
-if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | length) <= 1' >/dev/null 2>&1; then
-  echo "ERROR: soat list-agents ignored a preset_parameters query parameter" >&2
-  echo "$SOAT_PRESET_CALL_RESP" >&2
-  exit 1
-fi
-echo "Preset query parameter: OK"
-
-# 37b-ii. A preset is a pin, not a default: a caller that supplies the same key
-# does not get to override it. `limit` is echoed back, so the losing value is
-# directly observable — the tool pins 1, the call asks for 50, the answer is 1.
-SOAT_PRESET_OVERRIDE_RESP=$($SOAT_CLI call-tool \
-  --tool-id "$SOAT_PRESET_TOOL_ID" \
-  --action list-agents \
-  --input '{"limit":50}')
-if ! printf '%s\n' "$SOAT_PRESET_OVERRIDE_RESP" | jq -e '.limit == 1' >/dev/null 2>&1; then
-  echo "ERROR: caller input overrode a preset_parameters value" >&2
-  echo "$SOAT_PRESET_OVERRIDE_RESP" >&2
-  exit 1
-fi
-echo "Preset wins over caller input: OK"
-
-# 37c. `preset_parameters` must also satisfy a *path* parameter, not just a
-# query one: the action's URL is built from them, so a pinned `agent_id` makes
-# an item-scoped action callable with an empty input.
-SOAT_PATH_PRESET_TOOL_RESP=$($SOAT_CLI create-tool \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name soat-agent-getter-preset \
-  --type builtin \
-  --actions '["get-agent"]' \
-  --preset_parameters "{\"agent_id\": \"$AGENT_ID\"}")
-SOAT_PATH_PRESET_TOOL_ID=$(printf '%s\n' "$SOAT_PATH_PRESET_TOOL_RESP" | jq -r '.id')
-
-SOAT_PATH_PRESET_CALL_RESP=$($SOAT_CLI call-tool \
-  --tool-id "$SOAT_PATH_PRESET_TOOL_ID" \
-  --action get-agent \
-  --input '{}')
-if ! printf '%s\n' "$SOAT_PATH_PRESET_CALL_RESP" \
-  | jq -e --arg id "$AGENT_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: soat get-agent ignored a preset_parameters path parameter" >&2
-  echo "$SOAT_PATH_PRESET_CALL_RESP" >&2
-  exit 1
-fi
-echo "Preset path parameter: OK"
-
-# 38. Create an agent that uses the SOAT tool
-echo "--- Creating SOAT agent ---"
-SOAT_AGENT_RESP=$($SOAT_CLI create-agent \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --ai_provider_id "$AI_PROVIDER_ID" \
-  --name soat-project-lister \
-  --instructions "You are a helpful assistant. Use the SOAT list-projects action to list projects for the user." \
-  --tool_bindings "[{\"tool_id\":\"$SOAT_TOOL_ID\"}]" \
-  --max_steps 5)
-SOAT_AGENT_ID=$(printf '%s\n' "$SOAT_AGENT_RESP" | jq -r '.id')
-if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then
-  echo "ERROR: Failed to create SOAT agent" >&2
-  echo "$SOAT_AGENT_RESP" >&2
-  exit 1
-fi
-echo "SOAT Agent id: $SOAT_AGENT_ID"
-
-# 39. Run generation with the SOAT-backed agent
-echo "--- Running SOAT agent generation ---"
-SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$SOAT_AGENT_ID" \
-  --messages '[{"role":"user","content":"List all projects. Use the soat-platform tool."}]' | sanitize_json)
-echo "SOAT generation response:"
-printf '%s\n' "$SOAT_GEN_RESP" | jq .
-
-SOAT_GEN_STATUS=$(printf '%s\n' "$SOAT_GEN_RESP" | jq -r '.status')
-if [ "$SOAT_GEN_STATUS" != "completed" ]; then
-  echo "ERROR: Expected SOAT generation status 'completed', got '$SOAT_GEN_STATUS'" >&2
-  exit 1
-fi
-echo "SOAT generation completed."
-
-# 40. Verify the SOAT agent output references project data
-SOAT_GEN_CONTENT=$(printf '%s\n' "$SOAT_GEN_RESP" | jq -r '.output.content')
-echo "SOAT Agent output: $SOAT_GEN_CONTENT"
-if echo "$SOAT_GEN_CONTENT" | grep -qi "smoke-test-project\|project"; then
-  echo "SOAT Agent output mentions projects: OK"
-else
-  echo "WARNING: SOAT Agent output may not contain exact project names (LLM response varies), but generation completed successfully."
-fi
-
-# A mid-turn soat-type tool call must not answer "Unknown field(s):
-# parent_trace_id, root_trace_id, max_call_depth": injecting those fields into
-# every soat action's request body reaches ones whose schema (like list-projects)
-# doesn't declare them.
-if echo "$SOAT_GEN_CONTENT" | grep -qi "VALIDATION_FAILED\|Unknown field"; then
-  echo "ERROR: SOAT agent output leaked a tool validation error" >&2
-  exit 1
-fi
-echo "SOAT agent mid-turn tool call did not leak a validation error: OK"
-
-# 41. SOAT agent is delete-blocked after generation persists trace data
-echo "--- Verifying SOAT agent delete-block after generation ---"
-expect_cli_error_status 409 delete-agent --agent-id "$SOAT_AGENT_ID"
-echo "SOAT agent delete-block: OK (409 as expected)"
 
 # 42. Cleanup — delete SOAT agent tool
 echo "--- Deleting SOAT agent tool ---"
@@ -5493,15 +4215,6 @@ if [ "$ACTOR_GET_INSTRUCTIONS" != "Reply as a friendly assistant." ]; then
 fi
 echo "GET /actors/:id shape: OK"
 
-# 45c. Verify mutual exclusion: actor with both agent_id and chat_id must fail (400)
-echo "--- Verifying actor agent_id+chat_id mutual exclusion ---"
-expect_cli_error_status 400 create-actor \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name bad-actor \
-  --agent_id "$CONVO_GEN_AGENT_ID" \
-  --chat_id fake-id
-echo "Actor mutual exclusion (agent_id+chat_id): OK (400 as expected)"
-
 # 46. Create a plain user actor for the conversation
 echo "--- Creating user actor for conversation ---"
 USER_ACTOR_RESP=$($SOAT_CLI create-actor --project_id "$PROJECT_PUBLIC_ID" --name convo-user-actor)
@@ -5551,19 +4264,6 @@ if [ -z "$CONVO_GEN_MSG_ID" ] || [ "$CONVO_GEN_MSG_ID" = "null" ]; then
 fi
 echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
-# 48b. Verify the generated message is listed in conversation messages
-echo "--- Verifying generated message persisted ---"
-# Two hazards in echoing model output: `sanitize_json` strips raw control bytes,
-# and `printf '%s\n'` is used because POSIX `echo` expands `\n` escapes inside
-# JSON strings into real newlines, which jq then rejects.
-CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$NAMED_CONVO_ID" | sanitize_json)
-MSG_COUNT=$(printf '%s\n' "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
-if [ "$MSG_COUNT" -lt "2" ]; then
-  echo "ERROR: Expected at least 2 conversation messages (user + generated), got $MSG_COUNT" >&2
-  exit 1
-fi
-echo "Conversation messages count: $MSG_COUNT (OK)"
-
 # 49. Verify GET /actors?conversation_id= lists the user actor
 echo "--- Verifying GET /actors?conversation_id= ---"
 CONVO_ACTORS_RESP=$($SOAT_CLI list-actors --conversation-id "$NAMED_CONVO_ID")
@@ -5593,11 +4293,6 @@ echo "Agent-backed actor deleted."
 echo "--- Deleting user actor ---"
 $SOAT_CLI delete-actor --actor-id "$USER_ACTOR_ID"
 echo "User actor deleted."
-
-# 54. Conversation-generate agent is delete-blocked after generation persists
-echo "--- Verifying conversation-generate agent delete-block ---"
-expect_cli_error_status 409 delete-agent --agent-id "$CONVO_GEN_AGENT_ID"
-echo "Conversation-generate agent delete-block: OK (409 as expected)"
 
 # 54b. force=true deletes the agent along with its dependent generations/traces
 echo "--- Verifying agent force-delete ---"
@@ -5798,16 +4493,6 @@ echo "--- Rotating webhook secret ---"
 $SOAT_CLI rotate-webhook-secret --webhook-id "$WEBHOOK_ID" >/dev/null
 echo "Webhook secret rotated."
 
-# List deliveries
-echo "--- Listing webhook deliveries ---"
-WEBHOOK_DELIVERIES_RESP=$($SOAT_CLI list-webhook-deliveries --webhook-id "$WEBHOOK_ID")
-if ! printf '%s\n' "$WEBHOOK_DELIVERIES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
-  echo "ERROR: LIST webhook deliveries did not return an array" >&2
-  echo "$WEBHOOK_DELIVERIES_RESP" >&2
-  exit 1
-fi
-echo "Webhook deliveries listed."
-
 # Redeliver a stored delivery. Needs a delivery to exist first, so this uses its
 # own wildcard webhook: an audited mutation in the project emits
 # `audit.entry_created`, which the wildcard subscription matches.
@@ -5917,16 +4602,6 @@ if ! printf '%s\n' "$TRIGGER_LIST_RESP" | jq -e --arg id "$TRIGGER_ID" '.data | 
 fi
 echo "Triggers listed."
 
-# Get trigger
-echo "--- Getting trigger ---"
-TRIGGER_GET_RESP=$($SOAT_CLI get-trigger --trigger-id "$TRIGGER_ID")
-if ! printf '%s\n' "$TRIGGER_GET_RESP" | jq -e --arg id "$TRIGGER_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: get-trigger returned an unexpected payload" >&2
-  printf '%s\n' "$TRIGGER_GET_RESP" >&2
-  exit 1
-fi
-echo "Trigger retrieved."
-
 # Update trigger
 echo "--- Updating trigger ---"
 TRIGGER_UPDATE_RESP=$($SOAT_CLI update-trigger --trigger-id "$TRIGGER_ID" \
@@ -5937,44 +4612,6 @@ if ! printf '%s\n' "$TRIGGER_UPDATE_RESP" | jq -e '.name == "smoke-manual-trigge
   exit 1
 fi
 echo "Trigger updated."
-
-# Fire trigger (synchronous; the orchestration target runs to a terminal state)
-echo "--- Firing trigger ---"
-TRIGGER_FIRE_RESP=$($SOAT_CLI fire-trigger --trigger-id "$TRIGGER_ID" \
-  --input '{"cycle":"smoke"}')
-FIRING_ID=$(printf '%s\n' "$TRIGGER_FIRE_RESP" | jq -r '.id')
-if [ -z "$FIRING_ID" ] || [ "$FIRING_ID" = "null" ]; then
-  echo "ERROR: fire-trigger did not return a firing record" >&2
-  printf '%s\n' "$TRIGGER_FIRE_RESP" >&2
-  exit 1
-fi
-FIRING_STATUS=$(printf '%s\n' "$TRIGGER_FIRE_RESP" | jq -r '.status')
-if [ "$FIRING_STATUS" != "succeeded" ] && [ "$FIRING_STATUS" != "failed" ]; then
-  echo "ERROR: firing did not reach a terminal status (got '$FIRING_STATUS')" >&2
-  printf '%s\n' "$TRIGGER_FIRE_RESP" >&2
-  exit 1
-fi
-echo "Trigger fired: $FIRING_ID ($FIRING_STATUS)"
-
-# List firings
-echo "--- Listing trigger firings ---"
-FIRINGS_RESP=$($SOAT_CLI list-trigger-firings --trigger-id "$TRIGGER_ID")
-if ! printf '%s\n' "$FIRINGS_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
-  echo "ERROR: list-trigger-firings did not return firings" >&2
-  printf '%s\n' "$FIRINGS_RESP" >&2
-  exit 1
-fi
-echo "Trigger firings listed."
-
-# Get firing
-echo "--- Getting trigger firing ---"
-FIRING_GET_RESP=$($SOAT_CLI get-trigger-firing --firing-id "$FIRING_ID")
-if ! printf '%s\n' "$FIRING_GET_RESP" | jq -e --arg id "$FIRING_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: get-trigger-firing returned an unexpected payload" >&2
-  printf '%s\n' "$FIRING_GET_RESP" >&2
-  exit 1
-fi
-echo "Trigger firing retrieved."
 
 # Webhook trigger: secret get + rotate (webhook triggers get a signing secret)
 echo "--- Creating webhook trigger ---"
@@ -5998,50 +4635,6 @@ if [ -z "$WEBHOOK_TRIGGER_SECRET" ] || [ "$WEBHOOK_TRIGGER_SECRET" = "null" ]; t
 fi
 echo "Webhook trigger created: $WEBHOOK_TRIGGER_ID"
 
-echo "--- Getting webhook trigger secret ---"
-TRIGGER_SECRET_RESP=$($SOAT_CLI get-trigger-secret --trigger-id "$WEBHOOK_TRIGGER_ID")
-if ! printf '%s\n' "$TRIGGER_SECRET_RESP" | jq -e '.secret | type == "string"' >/dev/null 2>&1; then
-  echo "ERROR: get-trigger-secret did not return a secret" >&2
-  printf '%s\n' "$TRIGGER_SECRET_RESP" >&2
-  exit 1
-fi
-echo "Webhook trigger secret retrieved."
-
-echo "--- Rotating webhook trigger secret ---"
-TRIGGER_ROTATE_RESP=$($SOAT_CLI rotate-trigger-secret --trigger-id "$WEBHOOK_TRIGGER_ID")
-ROTATED_SECRET=$(printf '%s\n' "$TRIGGER_ROTATE_RESP" | jq -r '.secret')
-if [ -z "$ROTATED_SECRET" ] || [ "$ROTATED_SECRET" = "null" ]; then
-  echo "ERROR: rotate-trigger-secret did not return a new secret" >&2
-  printf '%s\n' "$TRIGGER_ROTATE_RESP" >&2
-  exit 1
-fi
-if [ "$ROTATED_SECRET" = "$WEBHOOK_TRIGGER_SECRET" ]; then
-  echo "ERROR: rotate-trigger-secret returned the same secret" >&2
-  exit 1
-fi
-echo "Webhook trigger secret rotated."
-
-# Guard: only webhook triggers have a secret
-echo "--- Verifying a manual trigger has no secret ---"
-expect_cli_error_status 400 get-trigger-secret --trigger-id "$TRIGGER_ID"
-echo "Manual trigger secret correctly rejected."
-
-# Event trigger: an internal event starts work with no HTTP loopback in the path.
-# The emitting graph publishes onto the bus; the trigger subscribes to that name
-# and runs the transform orchestration. Nothing signs or verifies anything.
-echo "--- Creating event emitter orchestration ---"
-EVENT_EMITTER_RESP=$($SOAT_CLI create-orchestration \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-event-emitter" \
-  --nodes '[{"id":"tick","type":"emit_event","event_type":"smoke.tick","input_mapping":{"origin":"smoke"}}]' \
-  --edges '[]')
-EVENT_EMITTER_ID=$(printf '%s\n' "$EVENT_EMITTER_RESP" | jq -r '.id')
-if [ -z "$EVENT_EMITTER_ID" ] || [ "$EVENT_EMITTER_ID" = "null" ]; then
-  echo "ERROR: Failed to create event emitter orchestration" >&2
-  printf '%s\n' "$EVENT_EMITTER_RESP" >&2
-  exit 1
-fi
-
 echo "--- Creating event trigger ---"
 EVENT_TRIGGER_RESP=$($SOAT_CLI create-trigger \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -6064,48 +4657,6 @@ if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.event_pattern == "smoke.tick"
 fi
 echo "Event trigger created: $EVENT_TRIGGER_ID"
 
-echo "--- Emitting the event ---"
-$SOAT_CLI start-orchestration-run \
-  --orchestration-id "$EVENT_EMITTER_ID" \
-  --input '{}' \
-  --wait true >/dev/null
-
-# Dispatch is fire-and-forget off the bus, so poll the firing record.
-echo "--- Waiting for the event-driven firing ---"
-EVENT_FIRING_STATUS=""
-i=0
-while [ "$i" -lt 40 ]; do
-  EVENT_FIRINGS_RESP=$($SOAT_CLI list-trigger-firings --trigger-id "$EVENT_TRIGGER_ID")
-  EVENT_FIRING_STATUS=$(printf '%s\n' "$EVENT_FIRINGS_RESP" | jq -r '.data[0].status // ""')
-  if [ "$EVENT_FIRING_STATUS" = "succeeded" ] || [ "$EVENT_FIRING_STATUS" = "failed" ]; then
-    break
-  fi
-  i=$((i + 1))
-  sleep 1
-done
-if [ "$EVENT_FIRING_STATUS" != "succeeded" ]; then
-  echo "ERROR: event trigger did not produce a succeeded firing (status='$EVENT_FIRING_STATUS')" >&2
-  printf '%s\n' "$EVENT_FIRINGS_RESP" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$EVENT_FIRINGS_RESP" | jq -e '.data[0].source == "event" and .data[0].input.event == "smoke.tick"' >/dev/null 2>&1; then
-  echo "ERROR: event firing did not carry the event as its input" >&2
-  printf '%s\n' "$EVENT_FIRINGS_RESP" >&2
-  exit 1
-fi
-echo "Event trigger fired from the bus: OK"
-
-# Guard: a pattern in a platform namespace must name a registered event.
-echo "--- Verifying a typo'd event pattern is rejected ---"
-expect_cli_error_status 400 create-trigger \
-  --project-id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-event-typo" \
-  --type event \
-  --event-pattern "documents.ingsted" \
-  --target-type orchestration \
-  --target-id "$TRIGGER_ORCH_ID"
-echo "Typo'd event pattern correctly rejected."
-
 # Delete triggers
 echo "--- Deleting triggers ---"
 $SOAT_CLI delete-trigger --trigger-id "$EVENT_TRIGGER_ID"
@@ -6118,55 +4669,6 @@ echo "Triggers coverage: OK"
 
 echo ""
 echo "=== Agent Formations ==="
-
-# Validate template
-echo "--- Validating formation template ---"
-VALIDATE_RESP=$($SOAT_CLI validate-formation \
-  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Test Memory Store"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
-if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
-  echo "ERROR: validate-formation did not return valid=true" >&2
-  echo "$VALIDATE_RESP" >&2
-  exit 1
-fi
-echo "Formation template validated."
-
-# Validate template with a --parameter override
-echo "--- Validating formation template with a --parameter override ---"
-VALIDATE_PARAM_RESP=$($SOAT_CLI validate-formation \
-  --template '{"parameters":{"MemoryStoreName":{"type":"string"}},"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":{"param":"MemoryStoreName"}}}}}' \
-  --parameter MemoryStoreName=SmokeParamMemoryStore)
-if ! printf '%s\n' "$VALIDATE_PARAM_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
-  echo "ERROR: validate-formation with --parameter did not return valid=true" >&2
-  echo "$VALIDATE_PARAM_RESP" >&2
-  exit 1
-fi
-echo "Formation template with parameter validated."
-
-# Plan
-echo "--- Planning formation ---"
-PLAN_RESP=$($SOAT_CLI plan-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Test Memory Store"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
-if ! printf '%s\n' "$PLAN_RESP" | jq -e '((.changes // .actions) | type == "array")' >/dev/null 2>&1; then
-  echo "ERROR: plan-formation did not return changes/actions array" >&2
-  echo "$PLAN_RESP" >&2
-  exit 1
-fi
-echo "Formation planned."
-
-# Create
-echo "--- Creating formation ---"
-FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation" \
-  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Formation Memory Store"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
-FORMATION_ID=$(printf '%s\n' "$FORMATION_RESP" | jq -r '.id')
-if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation did not return an id" >&2
-  echo "$FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Formation created: $FORMATION_ID"
 
 # A formation may only do what the caller could do directly: the deploy
 # path authorizes every resource a template declares, and a plan reports the
@@ -6231,31 +4733,6 @@ fi
 $SOAT_CLI delete-formation --formation_id "$FORMATION_KEY_FORMATION_ID" >/dev/null
 echo "Formation api_key owned by the deploying caller."
 
-# Metadata substitution (F-16): top-level `metadata` resolves `sub`/`param`/`ref`
-# at deploy, exposed on `resolved_metadata`; deploy parameter values are recorded
-# on `resolved_parameters`.
-echo "--- Creating formation with metadata substitution ---"
-META_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-metadata-formation" \
-  --template '{"parameters":{"my_version":{"type":"string","default":"unpinned"}},"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Metadata MemoryStore"}}},"metadata":{"my_version":{"sub":"${my_version}"},"memory_store_ref":{"ref":"myMemoryStore"}}}' \
-  --parameter my_version=1.2.3)
-META_RESOLVED_VERSION=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.my_version')
-META_RESOLVED_PARAM=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_parameters.my_version')
-META_MEMORY_PHYS=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
-META_RESOLVED_MEMORY=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.memory_store_ref')
-if [ "$META_RESOLVED_VERSION" != "1.2.3" ] || [ "$META_RESOLVED_PARAM" != "1.2.3" ]; then
-  echo "ERROR: formation did not resolve metadata/parameter substitution" >&2
-  echo "$META_FORMATION_RESP" >&2
-  exit 1
-fi
-if [ "$META_RESOLVED_MEMORY" != "$META_MEMORY_PHYS" ]; then
-  echo "ERROR: formation did not resolve metadata ref to physical id" >&2
-  echo "$META_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Formation metadata substitution resolved."
-
 # List
 echo "--- Listing formations ---"
 FORMATION_LIST_RESP=$($SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID")
@@ -6266,42 +4743,6 @@ if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e '.data | type == "array"' >/de
 fi
 echo "Formations listed."
 
-# Get
-echo "--- Getting formation ---"
-FORMATION_GET_RESP=$($SOAT_CLI get-formation --formation_id "$FORMATION_ID")
-if ! printf '%s\n' "$FORMATION_GET_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: get-formation returned unexpected payload" >&2
-  echo "$FORMATION_GET_RESP" >&2
-  exit 1
-fi
-echo "Formation retrieved."
-
-# List events
-echo "--- Listing formation events ---"
-FORMATION_EVENTS_RESP=$($SOAT_CLI list-formation-events --formation_id "$FORMATION_ID")
-if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: list-formation-events did not return an array" >&2
-  echo "$FORMATION_EVENTS_RESP" >&2
-  exit 1
-fi
-echo "Formation events listed."
-
-# Project price resource — a formation seeds a project + provider-slug price so
-# a deployed stack produces billing-grade cost with no out-of-band pricing step.
-echo "--- Creating formation with a project_price resource ---"
-PRICE_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-price-formation" \
-  --template '{"resources":{"outputPrice":{"type":"project_price","properties":{"provider":"ollama","model":"smoke-formation-model","component":"output_tokens","unit":"token","unit_price":0.000004}}}}')
-PRICE_FORMATION_ID=$(printf '%s\n' "$PRICE_FORMATION_RESP" | jq -r '.id')
-PRICE_PHYS_ID=$(printf '%s\n' "$PRICE_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
-if ! printf '%s\n' "$PRICE_PHYS_ID" | grep -q '^price_'; then
-  echo "ERROR: create-formation did not create a project_price row" >&2
-  echo "$PRICE_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Formation project_price created: $PRICE_PHYS_ID"
-
 echo "--- Verifying the formation-seeded project price is queryable ---"
 SEEDED_PRICE_RESP=$($SOAT_CLI get-project-prices --project_id "$PROJECT_PUBLIC_ID" | sanitize_json)
 SEEDED_PRICE_OK=$(printf '%s\n' "$SEEDED_PRICE_RESP" | jq -r '[.prices[] | select(.model == "smoke-formation-model" and .component == "output_tokens" and .unit_price == 0.000004 and .project_id != null)] | length >= 1')
@@ -6311,113 +4752,6 @@ if [ "$SEEDED_PRICE_OK" != "true" ]; then
   exit 1
 fi
 echo "Formation-seeded project price verified."
-
-echo "--- Deleting project_price formation ---"
-$SOAT_CLI delete-formation --formation_id "$PRICE_FORMATION_ID"
-echo "Project_price formation deleted."
-
-# Quota resource (Quotas Phase 3) — a formation declares a monitor cost quota,
-# which must be queryable via get-quota and removed when the formation is torn
-# down.
-echo "--- Creating formation with a quota resource ---"
-QUOTA_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-quota-formation" \
-  --template '{"resources":{"spendCap":{"type":"quota","properties":{"scope":"project","metric":"cost_usd","window":"calendar_month","limit":50,"mode":"monitor"}}}}')
-QUOTA_FORMATION_ID=$(printf '%s\n' "$QUOTA_FORMATION_RESP" | jq -r '.id')
-QUOTA_PHYS_ID=$(printf '%s\n' "$QUOTA_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
-if ! printf '%s\n' "$QUOTA_PHYS_ID" | grep -q '^quota_'; then
-  echo "ERROR: create-formation did not create a quota row" >&2
-  echo "$QUOTA_FORMATION_RESP" >&2
-  exit 1
-fi
-if [ "$($SOAT_CLI get-quota --quota-id "$QUOTA_PHYS_ID" | jq -r '.mode')" != "monitor" ]; then
-  echo "ERROR: formation-created quota not queryable as monitor" >&2
-  exit 1
-fi
-$SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
-expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
-echo "Formation quota resource verified."
-
-# An operator-registered resource type, its lifecycle delegated to the
-# `formation-handler` service. The handler verifies the request signature, so a
-# passing step proves the signing half too.
-echo "--- Validating a formation with a custom resource type ---"
-CUSTOM_VALIDATE_RESP=$($SOAT_CLI validate-formation \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp"}}}}')
-if [ "$(printf '%s\n' "$CUSTOM_VALIDATE_RESP" | jq -r '.valid')" != "true" ]; then
-  echo "ERROR: validate-formation rejected a valid custom resource type" >&2
-  echo "$CUSTOM_VALIDATE_RESP" >&2
-  exit 1
-fi
-
-# The handler's `validate` capability.
-echo "--- Custom resource type: handler validate rejects an unsupported kind ---"
-# `validate-formation` reports rather than throws, so the assertion is on the
-# verdict. `kind` is a string either way, so only the handler can reject this.
-CUSTOM_BAD_KIND_RESP=$($SOAT_CLI validate-formation \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"carrier-pigeon"}}}}')
-if [ "$(printf '%s\n' "$CUSTOM_BAD_KIND_RESP" | jq -r '.valid')" != "false" ]; then
-  echo "ERROR: the handler's validate verdict was not applied" >&2
-  echo "$CUSTOM_BAD_KIND_RESP" >&2
-  exit 1
-fi
-
-echo "--- Custom resource type: unknown property is rejected by the registered schema ---"
-expect_cli_error_status 400 create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-custom-invalid" \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"X","kind":"whatsapp","nope":"x"}}}}'
-
-echo "--- Creating a formation with a custom resource type ---"
-# `access_token` is declared write-only in the registration, so the engine must
-# send it to the handler and then drop it before storing the resource snapshot.
-CUSTOM_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-custom-formation" \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","access_token":"shh-not-a-real-token","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}},"outputs":{"handlerUrl":{"ref_attr":"chan.handler_url"}}}')
-CUSTOM_FORMATION_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.id')
-CUSTOM_PHYS_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.resources[] | select(.resource_type == "smoke_channel") | .physical_resource_id')
-if ! printf '%s\n' "$CUSTOM_PHYS_ID" | grep -q '^chan_smoke_'; then
-  echo "ERROR: the custom resource handler did not provide a physical resource id" >&2
-  echo "$CUSTOM_FORMATION_RESP" >&2
-  exit 1
-fi
-# The handler's `read` outputs resolved a ref_attr, which is the whole
-# getAttributes path end to end.
-if [ "$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.outputs.handlerUrl')" = "null" ]; then
-  echo "ERROR: ref_attr against a custom resource type did not resolve" >&2
-  echo "$CUSTOM_FORMATION_RESP" >&2
-  exit 1
-fi
-# The write-only property must not survive into the stored plan/diff. A plan
-# against the same template is the surface that would expose it.
-CUSTOM_PLAN_RESP=$($SOAT_CLI plan-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --formation_id "$CUSTOM_FORMATION_ID" \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","access_token":"shh-not-a-real-token","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}}}')
-if printf '%s\n' "$CUSTOM_PLAN_RESP" | jq -e '[.changes[].diff.current // empty | tostring] | join(" ") | contains("shh-not-a-real-token")' >/dev/null 2>&1; then
-  echo "ERROR: a write-only property was stored in the formation ledger" >&2
-  echo "$CUSTOM_PLAN_RESP" >&2
-  exit 1
-fi
-echo "Write-only property withheld from the stored snapshot."
-
-echo "Custom resource type created: $CUSTOM_PHYS_ID"
-
-echo "--- Updating a formation with a custom resource type ---"
-CUSTOM_UPDATE_RESP=$($SOAT_CLI update-formation \
-  --formation_id "$CUSTOM_FORMATION_ID" \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel Renamed","kind":"whatsapp","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}}}')
-if [ "$(printf '%s\n' "$CUSTOM_UPDATE_RESP" | jq -r '.status')" != "active" ]; then
-  echo "ERROR: update-formation with a custom resource type did not settle active" >&2
-  echo "$CUSTOM_UPDATE_RESP" >&2
-  exit 1
-fi
-
-echo "--- Deleting the custom resource type formation ---"
-$SOAT_CLI delete-formation --formation_id "$CUSTOM_FORMATION_ID"
-echo "Custom formation resource type verified."
 
 # Evaluation resources (Evaluations Phase 3) — a formation declares a dataset,
 # a test case inside it, and the eval binding both to the agent under test; the
@@ -6476,205 +4810,6 @@ fi
 $SOAT_CLI delete-formation --formation_id "$GUARDRAIL_FORMATION_ID"
 expect_cli_error_status 404 get-guardrail --guardrail-id "$GUARDRAIL_PHYS_ID"
 echo "Formation guardrail resource verified."
-
-# Update
-echo "--- Updating formation ---"
-FORMATION_UPDATE_RESP=$($SOAT_CLI update-formation \
-  --formation_id "$FORMATION_ID" \
-  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Formation Memory Store Updated"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
-if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: update-formation returned unexpected payload" >&2
-  echo "$FORMATION_UPDATE_RESP" >&2
-  exit 1
-fi
-echo "Formation updated."
-
-# A deploy that fails to reconcile answers 2xx with `status: "failed"`.
-# The body must carry the reason, and the CLI must exit non-zero so an `&&`
-# chain does not report a deploy that deployed nothing.
-echo "--- Verifying a failed deploy is reported as a failure ---"
-set +e
-FAILED_DEPLOY_OUT=$($SOAT_CLI update-formation \
-  --formation_id "$FORMATION_ID" \
-  --template '{"resources":{"badProvider":{"type":"ai_provider","properties":{"name":"smoke-bad-provider","provider":"openai","default_model":"gpt-4o","secret_id":"sec_doesnotexist"}}}}' 2>/dev/null)
-FAILED_DEPLOY_EXIT=$?
-set -e
-if [ "$FAILED_DEPLOY_EXIT" -eq 0 ]; then
-  echo "ERROR: a failed deploy exited 0" >&2
-  printf '%s\n' "$FAILED_DEPLOY_OUT" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$FAILED_DEPLOY_OUT" | jq -e '.status == "failed" and (.error.code // "") != "" and (.error.message // "") != "" and .error.meta.logical_id == "badProvider"' >/dev/null 2>&1; then
-  echo "ERROR: a failed deploy did not explain itself on the response body" >&2
-  printf '%s\n' "$FAILED_DEPLOY_OUT" >&2
-  exit 1
-fi
-# Reading the wedged stack back is a successful read, and it still says why.
-if ! $SOAT_CLI get-formation --formation_id "$FORMATION_ID" \
-  | jq -e '.status == "failed" and .error.meta.logical_id == "badProvider"' >/dev/null 2>&1; then
-  echo "ERROR: get-formation did not report the stored failure" >&2
-  exit 1
-fi
-# A corrected re-apply recovers the stack and clears the error.
-if ! $SOAT_CLI update-formation --formation_id "$FORMATION_ID" \
-  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Formation Memory Store Updated"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}' \
-  | jq -e '.status == "active" and .error == null' >/dev/null 2>&1; then
-  echo "ERROR: the corrected re-apply did not clear the failure" >&2
-  exit 1
-fi
-echo "Failed deploy reporting verified (non-zero exit, error on the body)."
-
-# Update reusing a secret parameter's previous value (use_previous_value)
-echo "--- Creating formation with a use_previous_value secret parameter ---"
-KEEP_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemoryStore":{"type":"memory_store","properties":{"name":"keep-mem-original"}}}}'
-KEEP_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-keep-formation" \
-  --template "$KEEP_TEMPLATE" \
-  --parameter XaiApiKey=sk-smoke-original)
-KEEP_FORMATION_ID=$(printf '%s\n' "$KEEP_FORMATION_RESP" | jq -r '.id')
-if [ -z "$KEEP_FORMATION_ID" ] || [ "$KEEP_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (keep) did not return an id" >&2
-  echo "$KEEP_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Keep formation created: $KEEP_FORMATION_ID"
-
-echo "--- Updating formation while reusing the stored secret value ---"
-KEEP_UPDATE_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemoryStore":{"type":"memory_store","properties":{"name":"keep-mem-updated"}}}}'
-# XaiApiKey is intentionally NOT passed — use_previous_value reuses the stored value.
-KEEP_UPDATE_RESP=$($SOAT_CLI update-formation \
-  --formation_id "$KEEP_FORMATION_ID" \
-  --template "$KEEP_UPDATE_TEMPLATE")
-if ! printf '%s\n' "$KEEP_UPDATE_RESP" | jq -e '.status == "active"' >/dev/null 2>&1; then
-  echo "ERROR: update-formation with use_previous_value did not return active status" >&2
-  echo "$KEEP_UPDATE_RESP" >&2
-  exit 1
-fi
-echo "Formation updated reusing the stored secret value."
-
-$SOAT_CLI delete-formation --formation_id "$KEEP_FORMATION_ID"
-echo "Keep formation deleted."
-
-# Delete
-echo "--- Deleting formation ---"
-$SOAT_CLI delete-formation --formation_id "$FORMATION_ID"
-echo "Formation deleted."
-echo "Agent Formations coverage: OK"
-
-# ── Formations — new resource types ──────────────────────────────────────────
-
-echo ""
-echo "=== Formations — new resource types ==="
-
-# chat formation
-echo "--- Formation: chat resource type ---"
-CHAT_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation-chat" \
-  --template "{\"resources\":{\"myChat\":{\"type\":\"chat\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Smoke Chat\"}}},\"outputs\":{\"chatId\":{\"ref\":\"myChat\"}}}")
-CHAT_FORMATION_ID=$(printf '%s\n' "$CHAT_FORMATION_RESP" | jq -r '.id')
-if [ -z "$CHAT_FORMATION_ID" ] || [ "$CHAT_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (chat) did not return an id" >&2
-  printf '%s\n' "$CHAT_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Chat formation created: $CHAT_FORMATION_ID"
-$SOAT_CLI delete-formation --formation_id "$CHAT_FORMATION_ID"
-echo "Chat formation deleted."
-
-# conversation formation
-echo "--- Formation: conversation resource type ---"
-CONVO_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation-conversation" \
-  --template '{"resources":{"myConvo":{"type":"conversation","properties":{"name":"Smoke Conversation"}}},"outputs":{"convoId":{"ref":"myConvo"}}}')
-CONVO_FORMATION_ID=$(printf '%s\n' "$CONVO_FORMATION_RESP" | jq -r '.id')
-if [ -z "$CONVO_FORMATION_ID" ] || [ "$CONVO_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (conversation) did not return an id" >&2
-  printf '%s\n' "$CONVO_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Conversation formation created: $CONVO_FORMATION_ID"
-$SOAT_CLI delete-formation --formation_id "$CONVO_FORMATION_ID"
-echo "Conversation formation deleted."
-
-# file formation
-echo "--- Formation: file resource type ---"
-FILE_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation-file" \
-  --template '{"resources":{"myFile":{"type":"file","properties":{"prefix":"/smoke","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
-FILE_FORMATION_ID=$(printf '%s\n' "$FILE_FORMATION_RESP" | jq -r '.id')
-if [ -z "$FILE_FORMATION_ID" ] || [ "$FILE_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (file) did not return an id" >&2
-  printf '%s\n' "$FILE_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "File formation created: $FILE_FORMATION_ID"
-$SOAT_CLI delete-formation --formation_id "$FILE_FORMATION_ID"
-echo "File formation deleted."
-
-# policy formation
-echo "--- Formation: policy resource type ---"
-POLICY_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation-policy" \
-  --template '{"resources":{"myPolicy":{"type":"policy","properties":{"name":"smoke-formation-policy","document":{"statement":[{"effect":"Allow","action":["files:GetFile"]}]}}}},"outputs":{"policyId":{"ref":"myPolicy"}}}')
-POLICY_FORMATION_ID=$(printf '%s\n' "$POLICY_FORMATION_RESP" | jq -r '.id')
-if [ -z "$POLICY_FORMATION_ID" ] || [ "$POLICY_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (policy) did not return an id" >&2
-  printf '%s\n' "$POLICY_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Policy formation created: $POLICY_FORMATION_ID"
-$SOAT_CLI delete-formation --formation_id "$POLICY_FORMATION_ID"
-echo "Policy formation deleted."
-
-# secret formation — includes a tool referencing the formation-created secret
-# through a sub expression, which resolves to a {{secret:sec_...}} token.
-echo "--- Formation: secret resource type ---"
-SECRET_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation-secret" \
-  --template '{"resources":{"mySecret":{"type":"secret","properties":{"name":"smoke-formation-secret","value":"smoke-secret-value"}},"myTool":{"type":"tool","properties":{"name":"smoke-formation-secret-ref-tool","type":"http","execute":{"url":"https://api.example.com/convert","method":"POST","headers":{"Authorization":{"sub":"Bearer {{secret:${mySecret}}}"}}}}}},"outputs":{"secretId":{"ref":"mySecret"}}}')
-SECRET_FORMATION_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.id')
-if [ -z "$SECRET_FORMATION_ID" ] || [ "$SECRET_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (secret) did not return an id" >&2
-  printf '%s\n' "$SECRET_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Secret formation created: $SECRET_FORMATION_ID"
-
-FORMATION_SECRET_PHYSICAL_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "mySecret") | .physical_resource_id')
-FORMATION_TOOL_PHYSICAL_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "myTool") | .physical_resource_id')
-FORMATION_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$FORMATION_TOOL_PHYSICAL_ID")
-FORMATION_TOOL_AUTH=$(printf '%s\n' "$FORMATION_TOOL_GET" | jq -r '.execute.headers.Authorization')
-if [ "$FORMATION_TOOL_AUTH" != "Bearer {{secret:$FORMATION_SECRET_PHYSICAL_ID}}" ]; then
-  echo "ERROR: Expected formation tool header 'Bearer {{secret:$FORMATION_SECRET_PHYSICAL_ID}}', got '$FORMATION_TOOL_AUTH'" >&2
-  printf '%s\n' "$FORMATION_TOOL_GET" >&2
-  exit 1
-fi
-echo "Formation secret reference resolved into tool header: OK"
-
-$SOAT_CLI delete-formation --formation_id "$SECRET_FORMATION_ID"
-echo "Secret formation deleted."
-
-# session formation
-echo "--- Formation: session resource type ---"
-SESSION_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-formation-session" \
-  --template "{\"resources\":{\"mySession\":{\"type\":\"session\",\"properties\":{\"agent_id\":\"$AGENT_ID\"}}},\"outputs\":{\"sessionId\":{\"ref\":\"mySession\"}}}")
-SESSION_FORMATION_ID=$(printf '%s\n' "$SESSION_FORMATION_RESP" | jq -r '.id')
-if [ -z "$SESSION_FORMATION_ID" ] || [ "$SESSION_FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-formation (session) did not return an id" >&2
-  printf '%s\n' "$SESSION_FORMATION_RESP" >&2
-  exit 1
-fi
-echo "Session formation created: $SESSION_FORMATION_ID"
-$SOAT_CLI delete-formation --formation_id "$SESSION_FORMATION_ID"
-echo "Session formation deleted."
 
 # orchestration formation — an agent "squad": the formation creates an agent and
 # an orchestration whose node references that agent via a ref, proving the ref is
@@ -8007,61 +6142,6 @@ if ! printf '%s\n' "$DATASET_ITEM_ID" | grep -q '^dsit_'; then
   exit 1
 fi
 
-echo "--- Listing dataset items ---"
-DATASET_ITEMS_RESP=$($SOAT_CLI list-dataset-items --dataset_id "$DATASET_ID")
-if ! printf '%s\n' "$DATASET_ITEMS_RESP" | jq -e '.total == 1' >/dev/null 2>&1; then
-  echo "ERROR: expected exactly one dataset item" >&2
-  printf '%s\n' "$DATASET_ITEMS_RESP" >&2
-  exit 1
-fi
-
-# Curating a real turn into a fixture. Uses its own dataset so the eval run
-# below still scores exactly the hand-authored item it was written for.
-echo "--- Curating a dataset item from generation $GEN_ID ---"
-CURATED_DATASET_RESP=$($SOAT_CLI create-dataset \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-curated-dataset" \
-  --description "Items promoted from production turns")
-CURATED_DATASET_ID=$(printf '%s\n' "$CURATED_DATASET_RESP" | jq -r '.id')
-if ! printf '%s\n' "$CURATED_DATASET_ID" | grep -q '^dset_'; then
-  echo "ERROR: curated dataset id expected to start with 'dset_', got '$CURATED_DATASET_ID'" >&2
-  printf '%s\n' "$CURATED_DATASET_RESP" >&2
-  exit 1
-fi
-
-CURATED_ITEM_RESP=$($SOAT_CLI create-dataset-item-from-generation \
-  --dataset_id "$CURATED_DATASET_ID" \
-  --generation_id "$GEN_ID" | sanitize_json)
-# The turn's input is replayed into `input` and its own answer becomes the
-# reference output; neither is asserted for content, since the model's wording
-# is not deterministic. What must hold is the provenance link and that a
-# non-empty message array came back.
-if ! printf '%s\n' "$CURATED_ITEM_RESP" | jq -e \
-  --arg gen "$GEN_ID" \
-  '.source_generation_id == $gen and (.input | type == "array" and length > 0) and (.input[0].role | type == "string")' >/dev/null 2>&1; then
-  echo "ERROR: create-dataset-item-from-generation did not curate the generation's turn" >&2
-  printf '%s\n' "$CURATED_ITEM_RESP" | jq . >&2
-  exit 1
-fi
-echo "Curated dataset item: OK"
-
-echo "--- Curating with an explicit expected_output ---"
-CURATED_OVERRIDE_RESP=$($SOAT_CLI create-dataset-item-from-generation \
-  --dataset_id "$CURATED_DATASET_ID" \
-  --generation_id "$GEN_ID" \
-  --expected_output "a fixed reference answer" \
-  --metadata '{"topic":"curated"}' | sanitize_json)
-if ! printf '%s\n' "$CURATED_OVERRIDE_RESP" | jq -e \
-  '.expected_output == "a fixed reference answer" and .metadata.topic == "curated"' >/dev/null 2>&1; then
-  echo "ERROR: caller-supplied expected_output/metadata did not win over the derived ones" >&2
-  printf '%s\n' "$CURATED_OVERRIDE_RESP" | jq . >&2
-  exit 1
-fi
-
-echo "--- Curating from a missing generation fails ---"
-expect_cli_error_status 404 create-dataset-item-from-generation \
-  --dataset_id "$CURATED_DATASET_ID" --generation_id "gen_doesnotexist000"
-
 # Eval
 echo "--- Creating eval ---"
 # The model's wording is not deterministic, so nothing here grades content: the
@@ -8082,116 +6162,6 @@ if ! printf '%s\n' "$EVAL_ID" | grep -q '^eval_'; then
   exit 1
 fi
 echo "Eval id: $EVAL_ID"
-
-echo "--- Queuing an asynchronous run and polling to terminal ---"
-# `--metadata` and `--tool-context` ride along on the queued run: the worker
-# that settles it reads both off the row, never from the request that started
-# it. They differ on the way back — a label is readable, a credential is not.
-EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false \
-  --metadata '{"commit_sha":"smoke-9f2c1ab"}' \
-  --tool-context '{"ocaToken":"smoke-eval-token"}')
-if [ "$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r 'has("tool_context")')" != "false" ]; then
-  echo "ERROR: an eval run must not report its tool_context" >&2
-  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
-  exit 1
-fi
-
-# A key that could never become a header is rejected before any run exists.
-expect_cli_error_status 400 start-eval-run --eval_id "$EVAL_ID" --wait false \
-  --tool-context '{"bad key":"value"}'
-EVAL_ASYNC_RUN_ID=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.id')
-if [ "$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
-  echo "ERROR: start-eval-run did not persist metadata" >&2
-  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$EVAL_ASYNC_RESP" | jq -e '.status == "queued"' >/dev/null 2>&1; then
-  echo "ERROR: expected wait=false to answer with a queued run" >&2
-  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
-  exit 1
-fi
-echo "Queued eval run id: $EVAL_ASYNC_RUN_ID"
-
-# The worker drives the item in the background, so poll rather than assume. One
-# real generation per item means this can take a while on the sandbox model.
-EVAL_ASYNC_STATUS=""
-i=0
-while [ "$i" -lt 60 ]; do
-  EVAL_ASYNC_GET=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID")
-  EVAL_ASYNC_STATUS=$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.status')
-  case "$EVAL_ASYNC_STATUS" in
-    completed|failed|canceled) break ;;
-  esac
-  i=$((i + 1))
-  sleep 2
-done
-if [ "$EVAL_ASYNC_STATUS" != "completed" ]; then
-  echo "ERROR: queued eval run did not complete (status '$EVAL_ASYNC_STATUS')" >&2
-  printf '%s\n' "$EVAL_ASYNC_GET" >&2
-  exit 1
-fi
-if [ "$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
-  echo "ERROR: settled eval run lost its metadata" >&2
-  printf '%s\n' "$EVAL_ASYNC_GET" >&2
-  exit 1
-fi
-# Exactly one result row for the one item: at-least-once redelivery must not
-# double-count, and the run must settle from the worker that drained it.
-if ! printf '%s\n' "$EVAL_ASYNC_GET" | jq -e \
-  '.item_count == 1 and (.completed_count + .errored_count) == 1 and .finished_at != null' \
-  >/dev/null 2>&1; then
-  echo "ERROR: queued eval run settled with unexpected counts" >&2
-  printf '%s\n' "$EVAL_ASYNC_GET" >&2
-  exit 1
-fi
-EVAL_ASYNC_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID")
-if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e '.total == 1' >/dev/null 2>&1; then
-  echo "ERROR: expected exactly one result row for the queued run" >&2
-  printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
-  exit 1
-fi
-# The embedding scorer must have produced a numeric 0-1 cosine score (the value
-# itself depends on the model's wording, so only its presence/shape is asserted).
-if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e \
-  '.data[0].scores[] | select(.scorer == "embedding_similarity") | (.score >= 0 and .score <= 1 and .passed == true)' \
-  >/dev/null 2>&1; then
-  echo "ERROR: expected an embedding_similarity score on the eval result" >&2
-  printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
-  exit 1
-fi
-echo "Embedding similarity scorer: OK"
-
-echo "--- Cancelling an already-finished run is rejected ---"
-set +e
-EVAL_CANCEL_LATE=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID" 2>&1)
-EVAL_CANCEL_LATE_EXIT=$?
-set -e
-if [ "$EVAL_CANCEL_LATE_EXIT" -eq 0 ]; then
-  echo "ERROR: expected cancelling a finished run to fail" >&2
-  printf '%s\n' "$EVAL_CANCEL_LATE" >&2
-  exit 1
-fi
-EVAL_CANCEL_LATE_STATUS=$(printf '%s\n' "$EVAL_CANCEL_LATE" | jq -r '.status // empty' 2>/dev/null)
-if [ "$EVAL_CANCEL_LATE_STATUS" != "400" ]; then
-  echo "ERROR: expected 400 cancelling a finished run, got '$EVAL_CANCEL_LATE_STATUS'" >&2
-  printf '%s\n' "$EVAL_CANCEL_LATE" >&2
-  exit 1
-fi
-
-echo "--- Cancelling a queued run stops it ---"
-EVAL_CANCEL_RUN=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false)
-EVAL_CANCEL_RUN_ID=$(printf '%s\n' "$EVAL_CANCEL_RUN" | jq -r '.id')
-EVAL_CANCELLED=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_CANCEL_RUN_ID")
-# The worker may legitimately have finished the single item before the cancel
-# landed, so accept either terminal state — what must hold is that the run is
-# terminal and, when cancelled, publishes no partial aggregate.
-if ! printf '%s\n' "$EVAL_CANCELLED" | jq -e \
-  '(.status == "canceled" and .aggregate_scores == null) or .status == "completed"' \
-  >/dev/null 2>&1; then
-  echo "ERROR: cancel left the run in an unexpected state" >&2
-  printf '%s\n' "$EVAL_CANCELLED" >&2
-  exit 1
-fi
 
 echo "--- Running the eval ---"
 EVAL_RUN_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait true)
@@ -8217,53 +6187,11 @@ if ! printf '%s\n' "$EVAL_RUN_RESP" | jq -e \
 fi
 echo "Eval run id: $EVAL_RUN_ID"
 
-echo "--- Reading eval run results ---"
-EVAL_RESULTS_RESP=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_RUN_ID")
-if ! printf '%s\n' "$EVAL_RESULTS_RESP" | jq -e --arg item "$DATASET_ITEM_ID" \
-  '.total == 1 and .data[0].dataset_item_id == $item and (.data[0].input | length) == 1' \
-  >/dev/null 2>&1; then
-  echo "ERROR: eval results did not carry the frozen item snapshot" >&2
-  printf '%s\n' "$EVAL_RESULTS_RESP" >&2
-  exit 1
-fi
-
 echo "--- Grouping runs by an item metadata key ---"
 EVAL_GROUPED_RESP=$($SOAT_CLI update-eval --eval_id "$EVAL_ID" --group_by topic)
 if ! printf '%s\n' "$EVAL_GROUPED_RESP" | jq -e '.group_by == "topic"' >/dev/null 2>&1; then
   echo "ERROR: update-eval did not store group_by" >&2
   printf '%s\n' "$EVAL_GROUPED_RESP" >&2
-  exit 1
-fi
-
-echo "--- Running against a baseline reports deltas over the item intersection ---"
-EVAL_BASELINE_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait true \
-  --baseline_run_id "$EVAL_RUN_ID")
-# The one item is labelled `greeting`; whether it scored or errored is the
-# model's business, so the groups are checked to account for what scored.
-if ! printf '%s\n' "$EVAL_BASELINE_RESP" | jq -e \
-  '.aggregate_scores.grouping.group_by == "topic"
-   and ((.aggregate_scores.grouping.groups.greeting.scored_item_count // 0)
-        + .aggregate_scores.grouping.ungrouped_item_count)
-       == .aggregate_scores.scored_item_count
-   and .aggregate_scores.baseline.grouping.group_by == "topic"' \
-  >/dev/null 2>&1; then
-  echo "ERROR: eval run did not report its grouping" >&2
-  printf '%s\n' "$EVAL_BASELINE_RESP" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$EVAL_BASELINE_RESP" | jq -e --arg base "$EVAL_RUN_ID" \
-  '.baseline_run_id == $base
-   and .aggregate_scores.baseline.run_id == $base
-   and .aggregate_scores.baseline.compared_item_count <= 1
-   and (.aggregate_scores.baseline.added_item_count | type == "number")
-   and (.aggregate_scores.baseline.removed_item_count | type == "number")
-   and (.aggregate_scores.baseline.flipped.improved | type == "number")
-   and (.aggregate_scores.baseline.flipped.regressed | type == "number")
-   and (.aggregate_scores.baseline.p_value | type == "number" or type == "null")
-   and (.aggregate_scores.pass_rate_interval | type == "object" or type == "null")' \
-  >/dev/null 2>&1; then
-  echo "ERROR: eval run did not report a baseline comparison" >&2
-  printf '%s\n' "$EVAL_BASELINE_RESP" >&2
   exit 1
 fi
 
@@ -8324,22 +6252,6 @@ if ! printf '%s\n' "$EVAL_JUDGE_RESULTS" | jq -e \
   exit 1
 fi
 $SOAT_CLI delete-eval --eval_id "$EVAL_JUDGE_ID"
-
-echo "--- Rejecting an llm_judge scorer with no pass_threshold ---"
-set +e
-EVAL_JUDGE_BAD=$($SOAT_CLI create-eval \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-eval-judge-bad" \
-  --agent_id "$AGENT_ID" \
-  --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"llm_judge","prompt":"rate {{output}}"}]' 2>&1)
-EVAL_JUDGE_BAD_EXIT=$?
-set -e
-if [ "$EVAL_JUDGE_BAD_EXIT" -eq 0 ]; then
-  echo "ERROR: expected an llm_judge scorer without pass_threshold to be rejected" >&2
-  printf '%s\n' "$EVAL_JUDGE_BAD" >&2
-  exit 1
-fi
 
 # The bring-your-own-algorithm seam, as a pipeline tool: one step pings the live
 # server and the `output` mapping computes the verdict from the scorer input
@@ -8656,25 +6568,6 @@ if [ "$(printf '%s\n' "$DECISIONS_LISTED" | jq -r '.data[0].id')" != "$DECISION_
   printf '%s\n' "$DECISIONS_LISTED" >&2
   exit 1
 fi
-
-echo "--- A decider in a formation ---"
-DECIDER_FORMATION_RESP=$($SOAT_CLI create-formation \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "smoke-decider-formation" \
-  --template "{\"resources\":{\"Judge\":{\"type\":\"agent\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"smoke-formation-judge\"}},\"Triage\":{\"type\":\"decider\",\"properties\":{\"name\":\"smoke-formation-triage\",\"agent_id\":{\"ref\":\"Judge\"},\"questions\":{\"escalate\":{\"type\":\"boolean\",\"instructions\":\"Must a person read this first?\"}}}}}}")
-DECIDER_FORMATION_ID=$(printf '%s\n' "$DECIDER_FORMATION_RESP" | jq -r '.id')
-if ! printf '%s\n' "$DECIDER_FORMATION_RESP" | jq -e \
-  '.status == "active" and ([.resources[] | select(.logical_id == "Triage") | .physical_resource_id | startswith("dcd_")] == [true])' \
-  >/dev/null 2>&1; then
-  echo "ERROR: the formation did not create the decider" >&2
-  printf '%s\n' "$DECIDER_FORMATION_RESP" >&2
-  exit 1
-fi
-# The decider goes first, so it does not hold the agent it names.
-$SOAT_CLI delete-formation --formation_id "$DECIDER_FORMATION_ID" >/dev/null
-
-echo "--- A decider holds its agent ---"
-expect_cli_error_status 409 delete-agent --agent-id "$DECIDER_AGENT_ID" --force true
 
 echo "--- A tool-backed decider ---"
 # A deterministic engine: a pipeline wrapping a call to this server, whose

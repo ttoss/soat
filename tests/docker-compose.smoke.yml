@@ -58,9 +58,12 @@ services:
     environment:
       PORT: '11434'
       OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
-      # Only these tools have their forcing honored deterministically — the client-tool smoke step.
+      # Only these tools have their forcing honored deterministically: the
+      # client-tool step (get_weather) and the activity-feed step
+      # (activity-project-detail), whose assertions are about dispatch — the
+      # call reaching the feed and the meter — not about argument quality.
       # Every other forced tool still goes to the real model.
-      TOOL_CHOICE_TOOLS: 'get_weather'
+      TOOL_CHOICE_TOOLS: 'get_weather,activity-project-detail'
       # Nothing bounds how many tokens qwen2.5:0.5b emits (agents have no max_tokens
       # field) and the smoke assertions are structural, so cap the output here. 256
       # leaves room for a volunteered tool call's JSON while bounding the runaway

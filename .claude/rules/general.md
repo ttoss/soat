@@ -36,5 +36,6 @@ ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
 3. Module docs: `packages/website/docs/modules/<module>.md`.
 4. Tests in `packages/server/tests/unit/tests/rest/<module>.test.ts`: happy
    path, `401`, `403`, edge cases, for every new route and changed lib function.
-5. New user-facing flow: add steps to `tests/smoke-tests.sh`; run
+5. New user-facing flow: a tutorial that runs it, or steps in
+   `tests/smoke-tests.sh` when no tutorial can (`tests.md` §Smoke tests); run
    `pnpm run -w smoke-tests`.
