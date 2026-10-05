@@ -91,7 +91,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       dispatch({ type: 'SET_UNAUTHENTICATED' });
       return;
     }
+    // The check can settle after the provider unmounts; acting on it then
+    // would touch storage and state that no longer belong to a mounted tree.
+    let active = true;
     fetchCurrentUser(token).then((user) => {
+      if (!active) return;
       if (user) {
         dispatch({ type: 'SET_AUTHENTICATED', user, token });
       } else {
@@ -99,6 +103,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         dispatch({ type: 'SET_UNAUTHENTICATED' });
       }
     });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const login = async (args: { username: string; password: string }) => {
