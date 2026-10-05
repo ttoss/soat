@@ -5,7 +5,6 @@
 # Environment:
 #   SOAT_BASE_URL    Server base URL (required)
 #   TUTORIAL_ID      Run only this tutorial, by filename without .md
-#   TUTORIAL_SHARD   Run only shard i of n of the sorted list, as i/n
 #   TUTORIALS_DIR    Directory of *.md tutorials (default: /tutorials)
 #   IGNORE_FILE      Path to .tutorialsignore
 #   TUTORIALS_SH     Path to tutorials-tests.sh
@@ -55,29 +54,6 @@ else
     fi
     TO_RUN+=("$file")
   done < <(find "$TUTORIALS_DIR" -maxdepth 1 -name '*.md' -print0 | sort -z)
-fi
-
-# ---------------------------------------------------------------------------
-# TUTORIAL_SHARD=i/n keeps every n-th tutorial of the sorted list, starting at
-# the i-th: each CI shard gets its own server and Ollama, which is the
-# bottleneck the tutorials share inside one container.
-# ---------------------------------------------------------------------------
-if [[ -n "$TUTORIAL_SHARD" ]]; then
-  if [[ ! "$TUTORIAL_SHARD" =~ ^([0-9]+)/([0-9]+)$ ]] ||
-    ((BASH_REMATCH[2] < 1 || BASH_REMATCH[1] < 1 || BASH_REMATCH[1] > BASH_REMATCH[2])); then
-    echo "ERROR: TUTORIAL_SHARD must be i/n with 1 <= i <= n, got: $TUTORIAL_SHARD" >&2
-    exit 1
-  fi
-  shard_index=$((BASH_REMATCH[1] - 1))
-  shard_total=${BASH_REMATCH[2]}
-  declare -a SHARD
-  for i in "${!TO_RUN[@]}"; do
-    if ((i % shard_total == shard_index)); then
-      SHARD+=("${TO_RUN[$i]}")
-    fi
-  done
-  TO_RUN=("${SHARD[@]}")
-  echo "(shard $TUTORIAL_SHARD)"
 fi
 
 if [[ ${#TO_RUN[@]} -eq 0 ]]; then

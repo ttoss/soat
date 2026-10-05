@@ -158,7 +158,6 @@ changed tool gets a test.
 ```bash
 docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
 TUTORIAL_ID=permissions docker compose -f tests/docker-compose.tutorials.yml up ...   # one tutorial
-TUTORIAL_SHARD=1/2 docker compose -f tests/docker-compose.tutorials.yml up ...      # CI shard 1 of 2
 docker compose -f tests/docker-compose.tutorials.yml down --volumes
 ```
 
