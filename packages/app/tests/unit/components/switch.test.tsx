@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import * as React from 'react';
 
 import { Switch } from '@/components/ui/switch';
 
@@ -21,12 +21,10 @@ describe('Switch', () => {
   });
 
   test('calls onCheckedChange with the next value when clicked', async () => {
-    function Controlled() {
-      const [on, setOn] = useState(false);
-      return (
-        <Switch checked={on} onCheckedChange={setOn} label="Dark mode" />
-      );
-    }
+    const Controlled = () => {
+      const [on, setOn] = React.useState(false);
+      return <Switch checked={on} onCheckedChange={setOn} label="Dark mode" />;
+    };
     render(<Controlled />);
     const sw = screen.getByRole('switch');
     expect(sw).toHaveAttribute('aria-checked', 'false');

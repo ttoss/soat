@@ -11,17 +11,26 @@ const base = {
   messages: [{ role: 'user', content: 'hi' }],
 };
 
-const noopExecutor = () => ({ output: { ok: true } });
+const noopExecutor = () => {
+  return { output: { ok: true } };
+};
 
 describe('runGuideTurn', () => {
   test('returns the final text for a completed generation', async () => {
     server.use(
-      http.post('*/api/v1/agents/agt_guide/generate', () =>
-        HttpResponse.json({ id: 'gen_1', status: 'completed', text: 'Hello!' })
-      )
+      http.post('*/api/v1/agents/agt_guide/generate', () => {
+        return HttpResponse.json({
+          id: 'gen_1',
+          status: 'completed',
+          text: 'Hello!',
+        });
+      })
     );
 
-    const result = await runGuideTurn({ ...base, executeToolCall: noopExecutor });
+    const result = await runGuideTurn({
+      ...base,
+      executeToolCall: noopExecutor,
+    });
 
     expect(result).toEqual({ ok: true, text: 'Hello!', view: undefined });
   });
@@ -30,8 +39,8 @@ describe('runGuideTurn', () => {
     const seen: GuideToolCall[] = [];
     let toolOutputsBody: Record<string, unknown> | undefined;
     server.use(
-      http.post('*/api/v1/agents/agt_guide/generate', () =>
-        HttpResponse.json({
+      http.post('*/api/v1/agents/agt_guide/generate', () => {
+        return HttpResponse.json({
           id: 'gen_1',
           status: 'requires_action',
           tool_calls: [
@@ -41,8 +50,8 @@ describe('runGuideTurn', () => {
               args: { operationId: 'listAgents', mode: 'list' },
             },
           ],
-        })
-      ),
+        });
+      }),
       http.post(
         '*/api/v1/agents/agt_guide/generate/gen_1/tool-outputs',
         async ({ request }) => {
@@ -60,7 +69,15 @@ describe('runGuideTurn', () => {
       ...base,
       executeToolCall: (call) => {
         seen.push(call);
-        return { output: { ok: true }, view: { tag: 'Agents', operationId: 'listAgents', pathParams: {}, mode: 'list' } };
+        return {
+          output: { ok: true },
+          view: {
+            tag: 'Agents',
+            operationId: 'listAgents',
+            pathParams: {},
+            mode: 'list',
+          },
+        };
       },
     });
 
@@ -77,15 +94,18 @@ describe('runGuideTurn', () => {
 
   test('surfaces an API error', async () => {
     server.use(
-      http.post('*/api/v1/agents/agt_guide/generate', () =>
-        HttpResponse.json(
+      http.post('*/api/v1/agents/agt_guide/generate', () => {
+        return HttpResponse.json(
           { error: { code: 'AI_PROVIDER_ERROR', message: 'boom' } },
           { status: 502 }
-        )
-      )
+        );
+      })
     );
 
-    const result = await runGuideTurn({ ...base, executeToolCall: noopExecutor });
+    const result = await runGuideTurn({
+      ...base,
+      executeToolCall: noopExecutor,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe('boom');

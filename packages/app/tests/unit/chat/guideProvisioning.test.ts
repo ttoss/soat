@@ -28,9 +28,9 @@ describe('listAiProviders', () => {
 
   test('returns an empty list on error', async () => {
     server.use(
-      http.get('*/api/v1/ai-providers', () =>
-        HttpResponse.json({ error: 'Forbidden' }, { status: 403 })
-      )
+      http.get('*/api/v1/ai-providers', () => {
+        return HttpResponse.json({ error: 'Forbidden' }, { status: 403 });
+      })
     );
     expect(await listAiProviders(base)).toEqual([]);
   });
@@ -41,19 +41,27 @@ describe('provisionGuide', () => {
     let toolBody: Record<string, unknown> | undefined;
     let agentBody: Record<string, unknown> | undefined;
     server.use(
-      http.get('*/api/v1/tools', () => HttpResponse.json([])),
+      http.get('*/api/v1/tools', () => {
+        return HttpResponse.json([]);
+      }),
       http.post('*/api/v1/tools', async ({ request }) => {
         toolBody = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({ id: 'tool_1', name: 'render_page' });
       }),
-      http.get('*/api/v1/agents', () => HttpResponse.json([])),
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([]);
+      }),
       http.post('*/api/v1/agents', async ({ request }) => {
         agentBody = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({ id: 'agt_guide', name: 'soat-app-guide' });
       })
     );
 
-    const result = await provisionGuide({ ...base, providerId: 'aip_1', modules });
+    const result = await provisionGuide({
+      ...base,
+      providerId: 'aip_1',
+      modules,
+    });
 
     expect(result).toEqual({ ok: true, agentId: 'agt_guide' });
     expect(toolBody).toMatchObject({ name: 'render_page', type: 'client' });
@@ -68,30 +76,36 @@ describe('provisionGuide', () => {
     let createdTool = false;
     let createdAgent = false;
     server.use(
-      http.get('*/api/v1/tools', () =>
-        HttpResponse.json([{ id: 'tool_x', name: 'render_page', type: 'client' }])
-      ),
+      http.get('*/api/v1/tools', () => {
+        return HttpResponse.json([
+          { id: 'tool_x', name: 'render_page', type: 'client' },
+        ]);
+      }),
       http.post('*/api/v1/tools', () => {
         createdTool = true;
         return HttpResponse.json({ id: 'tool_x' });
       }),
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           {
             id: 'agt_x',
             name: 'soat-app-guide',
             ai_provider_id: 'aip_1',
             tool_bindings: [{ tool_id: 'tool_x' }],
           },
-        ])
-      ),
+        ]);
+      }),
       http.post('*/api/v1/agents', () => {
         createdAgent = true;
         return HttpResponse.json({ id: 'agt_x' });
       })
     );
 
-    const result = await provisionGuide({ ...base, providerId: 'aip_1', modules });
+    const result = await provisionGuide({
+      ...base,
+      providerId: 'aip_1',
+      modules,
+    });
 
     expect(result).toEqual({ ok: true, agentId: 'agt_x' });
     expect(createdTool).toBe(false);
@@ -101,26 +115,32 @@ describe('provisionGuide', () => {
   test('re-binds the provider when the existing agent points elsewhere', async () => {
     let updateBody: Record<string, unknown> | undefined;
     server.use(
-      http.get('*/api/v1/tools', () =>
-        HttpResponse.json([{ id: 'tool_x', name: 'render_page', type: 'client' }])
-      ),
-      http.get('*/api/v1/agents', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/tools', () => {
+        return HttpResponse.json([
+          { id: 'tool_x', name: 'render_page', type: 'client' },
+        ]);
+      }),
+      http.get('*/api/v1/agents', () => {
+        return HttpResponse.json([
           {
             id: 'agt_x',
             name: 'soat-app-guide',
             ai_provider_id: 'aip_OLD',
             tool_bindings: [{ tool_id: 'tool_x' }],
           },
-        ])
-      ),
+        ]);
+      }),
       http.put('*/api/v1/agents/agt_x', async ({ request }) => {
         updateBody = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({ id: 'agt_x' });
       })
     );
 
-    const result = await provisionGuide({ ...base, providerId: 'aip_NEW', modules });
+    const result = await provisionGuide({
+      ...base,
+      providerId: 'aip_NEW',
+      modules,
+    });
 
     expect(result).toEqual({ ok: true, agentId: 'agt_x' });
     expect(updateBody).toMatchObject({
@@ -132,13 +152,19 @@ describe('provisionGuide', () => {
 
   test('reports unavailable when the user cannot create a tool', async () => {
     server.use(
-      http.get('*/api/v1/tools', () => HttpResponse.json([])),
-      http.post('*/api/v1/tools', () =>
-        HttpResponse.json({ error: 'Forbidden' }, { status: 403 })
-      )
+      http.get('*/api/v1/tools', () => {
+        return HttpResponse.json([]);
+      }),
+      http.post('*/api/v1/tools', () => {
+        return HttpResponse.json({ error: 'Forbidden' }, { status: 403 });
+      })
     );
 
-    const result = await provisionGuide({ ...base, providerId: 'aip_1', modules });
+    const result = await provisionGuide({
+      ...base,
+      providerId: 'aip_1',
+      modules,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/unavailable/i);

@@ -79,7 +79,9 @@ describe('executeRenderPage', () => {
       spec: testSpec,
       modules,
       activeProjectId: null,
-      navigate: (d) => navigated.push(d),
+      navigate: (d) => {
+        return navigated.push(d);
+      },
     });
     expect(result.output).toEqual({
       ok: true,
@@ -97,7 +99,9 @@ describe('executeRenderPage', () => {
       spec: testSpec,
       modules,
       activeProjectId: null,
-      navigate: (d) => navigated.push(d),
+      navigate: (d) => {
+        return navigated.push(d);
+      },
     });
     expect(result.output).toMatchObject({ ok: false });
     expect(result.view).toBeUndefined();

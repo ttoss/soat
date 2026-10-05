@@ -70,29 +70,7 @@ export const viewToPath = (
 
   if (descriptor.mode === 'create') return `${appPath}/new`;
   if (descriptor.mode === 'edit') return `${appPath}/edit`;
-  if (descriptor.mode === 'board') return `${appPath}/board`;
   return appPath;
-};
-
-// A view over a resource's detail GET, rendered in board mode. Generic over any
-// module with a detail route — BoardView decides whether it is board-shaped.
-const findBoardViewForPath = (
-  apiPath: string,
-  modules: ModuleInfo[]
-): ViewDescriptor | null => {
-  for (const mod of modules) {
-    if (!mod.getOp) continue;
-    const params = matchTemplate(apiPath, mod.getOp.pathTemplate);
-    if (params !== null) {
-      return {
-        tag: mod.tag,
-        operationId: mod.getOp.operation.operationId,
-        pathParams: params,
-        mode: 'board',
-      };
-    }
-  }
-  return null;
 };
 
 const findCreateViewForPath = (
@@ -195,10 +173,6 @@ export const pathToView = (
 
   if (pathname.endsWith('/edit')) {
     return findEditViewForPath(appToApi(pathname.slice(0, -5)), modules);
-  }
-
-  if (pathname.endsWith('/board')) {
-    return findBoardViewForPath(appToApi(pathname.slice(0, -6)), modules);
   }
 
   const apiPath = appToApi(pathname);

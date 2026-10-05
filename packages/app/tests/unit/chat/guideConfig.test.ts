@@ -2,8 +2,8 @@ import {
   buildGuideInstructions,
   buildModuleIndex,
   GUIDE_AGENT_NAME,
-  renderPageParameters,
   RENDER_PAGE_TOOL_NAME,
+  renderPageParameters,
 } from '@/chat/guideConfig';
 import { parseModules } from '@/engine/specUtils';
 

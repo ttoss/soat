@@ -1,10 +1,20 @@
+import http from 'node:http';
+
 import { app } from 'src/app';
 import type { Test } from 'supertest';
 import request from 'supertest';
 
 import { assertResponseMatchesSpec } from './openapiContract';
 
-const agent = request(app.callback());
+// A listening server the tests own: supertest closes a server it starts itself
+// as soon as any request on it settles, which breaks a request built before an
+// `await` and sent after another one completes. Without a host, `listen`
+// binds synchronously, so `address()` is available to the first request.
+const server = http.createServer(app.callback());
+server.listen(0);
+server.unref();
+
+const agent = request(server);
 
 /**
  * Attaches an OpenAPI contract assertion to every request so that when the

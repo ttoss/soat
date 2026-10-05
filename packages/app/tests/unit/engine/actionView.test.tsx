@@ -12,13 +12,17 @@ import { server } from '../msw/server';
 import { renderWithAuth } from '../testUtils';
 
 const agentsModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Agents');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Agents';
+  });
   if (!m) throw new Error('Agents module missing');
   return m;
 };
 
 const usersModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Users');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Users';
+  });
   if (!m) throw new Error('Users module missing');
   return m;
 };
@@ -89,9 +93,9 @@ describe('ActionView', () => {
 
   test('shows an error when the action fails', async () => {
     server.use(
-      http.post('*/api/v1/agents/:agent_id/generate', () =>
-        HttpResponse.json({ error: 'model offline' }, { status: 503 })
-      )
+      http.post('*/api/v1/agents/:agent_id/generate', () => {
+        return HttpResponse.json({ error: 'model offline' }, { status: 503 });
+      })
     );
 
     renderWithAuth(
@@ -123,9 +127,9 @@ describe('ActionView', () => {
 
   test('shows a completion status line with status and id when the result returns', async () => {
     server.use(
-      http.post('*/api/v1/agents/:agent_id/generate', () =>
-        HttpResponse.json({ id: 'gen_9', status: 'completed' })
-      )
+      http.post('*/api/v1/agents/:agent_id/generate', () => {
+        return HttpResponse.json({ id: 'gen_9', status: 'completed' });
+      })
     );
 
     renderWithAuth(
@@ -169,7 +173,9 @@ describe('ActionView', () => {
       />
     );
     expect(screen.getByText('PUT')).toBeInTheDocument();
-    expect(screen.getByText('/api/v1/users/{user_id}/policies')).toBeInTheDocument();
+    expect(
+      screen.getByText('/api/v1/users/{user_id}/policies')
+    ).toBeInTheDocument();
   });
 
   test('attach-policies submits via PUT with the selected policy_ids', async () => {

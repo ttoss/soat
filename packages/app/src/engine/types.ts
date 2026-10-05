@@ -1,5 +1,4 @@
-export type ViewMode =
-  'list' | 'detail' | 'create' | 'edit' | 'action' | 'board';
+export type ViewMode = 'list' | 'detail' | 'create' | 'edit' | 'action';
 
 export type ViewDescriptor = {
   tag: string;
