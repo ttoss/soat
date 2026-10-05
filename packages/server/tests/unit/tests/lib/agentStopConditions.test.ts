@@ -321,7 +321,7 @@ describe('stop_conditions', () => {
 
   test('a chain-scoped condition does not bound the per-turn loop', async () => {
     // `max_chain_generations` bounds the *chain*, evaluated when a continuation is
-    // spawned (`generationChain.test.ts`). Treating it as a `stopWhen` predicate
+    // spawned (`rest/continuationChains.test.ts`). Treating it as a `stopWhen` predicate
     // would silently cap every turn's step count at the chain's number — a
     // different limit on a different axis, quietly enforced on the wrong one.
     const result = await run({
