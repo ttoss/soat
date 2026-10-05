@@ -45,16 +45,23 @@ const emptySummary = (candidates: number): RuleFiringSummary => {
 };
 
 /**
+ * The payloads of the two events a rule binds to. Both are written by SOAT's
+ * own producers — the completed `GenerationResult` for
+ * `agents.generation.completed`, `firePostTurnSideEffects`
+ * (`conversationGeneration.ts`) for `conversations.message.generated` — so
+ * their shape is a contract the envelope's opaque `data` bag only hides.
+ */
+type CompletedPayload = { output: { content: string } };
+type MessageGeneratedPayload = { generationId: string };
+
+/**
  * The generation a firing reads. `agents.generation.completed` names it
  * directly; `conversations.message.generated` names the message and carries the
  * generation's id in its payload.
  */
-const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
+const resolveGenerationPublicId = (event: SoatEvent): string => {
   if (event.type === 'agents.generation.completed') return event.resourceId;
-  // `data` is the envelope's own `Record<string, unknown>`, so only the value
-  // needs narrowing, not the bag.
-  const { generationId } = event.data;
-  return typeof generationId === 'string' ? generationId : undefined;
+  return (event.data as MessageGeneratedPayload).generationId;
 };
 
 /**
@@ -64,9 +71,7 @@ const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
  */
 const resolveAssistantContent = async (event: SoatEvent): Promise<string> => {
   if (event.type === 'agents.generation.completed') {
-    const output = event.data.output;
-    const content = isPlainObject(output) ? output.content : undefined;
-    return typeof content === 'string' ? content : '';
+    return (event.data as CompletedPayload).output.content;
   }
   const content = await readGeneratedMessageContent({
     documentPublicId: event.resourceId,
@@ -220,17 +225,12 @@ const loadGeneration = async (
 };
 
 /**
- * Runs every memory rule a completed turn matches.
- *
- * Exported separately from the subscription so a caller can drive one event
- * through the whole path with no live bus listener, and so a test can await the
- * firing rather than poll for it.
+ * Runs every memory rule a completed turn matches. Reached only through the
+ * subscription below, whose `types` filter admits nothing but
+ * `MEMORY_RULE_EVENTS`.
  */
-export const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
-  if (!MEMORY_RULE_EVENTS.includes(event.type as MemoryRuleEvent)) return;
-
+const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
   const generationPublicId = resolveGenerationPublicId(event);
-  if (!generationPublicId) return;
 
   const generation = await loadGeneration(generationPublicId);
   if (!generation?.agent) {
