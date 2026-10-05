@@ -119,10 +119,6 @@ services:
     build:
       context: ..
       target: production
-      cache_from:
-        - type=gha
-      cache_to:
-        - type=gha,mode=max
     # The API tier does not exit on SIGTERM within Compose's default 10s grace
     # period, so teardown waits the full timeout for it (and for both Ollama
     # services below). This is a throwaway stack — nothing here needs to drain.
@@ -271,10 +267,6 @@ services:
     build:
       context: ..
       target: smoke-test
-      cache_from:
-        - type=gha
-      cache_to:
-        - type=gha,mode=max
     depends_on:
       server:
         condition: service_healthy

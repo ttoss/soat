@@ -1,12 +1,14 @@
 name: Setup Ollama
 description: Cache Ollama models and ensure the Ollama Docker image is available.
 
+# No buildx builder here: the compose stacks build with the daemon's own
+# `docker` driver, which writes images straight into the image store. A
+# `docker-container` builder has to export each image and load it into the
+# daemon as a tarball, ~100s for the server image's 334MB node_modules layer.
+
 runs:
   using: composite
   steps:
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
-
     - name: Cache Ollama models
       uses: actions/cache@v5
       with:
