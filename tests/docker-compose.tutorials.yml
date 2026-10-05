@@ -215,6 +215,7 @@ services:
       SOAT_TOOL_ECHO_BASE_URL: 'http://tutorials:8788'
       SOAT_SCORER_BASE_URL: 'http://tutorials:8789'
       TUTORIAL_ID: '${TUTORIAL_ID:-}'
+      TUTORIAL_SHARD: '${TUTORIAL_SHARD:-}'
       VERBOSE: '0'
       # Point the converter tutorial's provider endpoints at the mock service.
       # The server (which makes the actual outbound calls) reaches these over the

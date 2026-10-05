@@ -1,0 +1,40 @@
+name: Free disk space
+description: >-
+  Frees the runner's preinstalled toolchains for the docker compose stacks.
+  `phase: start` begins the removal in the background and returns at once;
+  `phase: wait` blocks until it has finished. Run `start` first thing in the
+  job and `wait` just before the step that needs the space, so the removal
+  overlaps the steps in between instead of blocking them.
+
+inputs:
+  phase:
+    description: '`start` or `wait`.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Start freeing disk space
+      if: inputs.phase == 'start'
+      shell: bash
+      run: |
+        # Synchronous on purpose: run alongside a later `docker pull`, a
+        # `prune -a` would remove the image that pull just fetched.
+        docker system prune -af
+        # Nothing in the job reads these trees, so their removal races
+        # nothing; each one is many small files, so they go in parallel.
+        sudo nohup bash -c '
+          for dir in /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /usr/lib/jvm /usr/share/swift; do
+            rm -rf "$dir" &
+          done
+          wait
+          touch /tmp/free-disk-space.done
+        ' >/tmp/free-disk-space.log 2>&1 &
+
+    - name: Wait for disk space
+      if: inputs.phase == 'wait'
+      shell: bash
+      run: |
+        timeout 900 bash -c 'until [ -f /tmp/free-disk-space.done ]; do sleep 2; done'
+        df -h /
