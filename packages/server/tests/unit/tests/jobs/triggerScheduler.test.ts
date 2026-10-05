@@ -93,7 +93,7 @@ beforeAll(async () => {
  * claim that threw on one would end the sweep before the rest of the batch,
  * every tick, since the row is never advanced and stays first in due order.
  * The rest of the tick is pinned at the entry point in
- * `rest/triggerSchedule.test.ts`.
+ * `jobs/triggerSchedule.test.ts`.
  */
 describe('fireDueTriggers', () => {
   test('skips a trigger whose stored cron is invalid', async () => {

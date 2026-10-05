@@ -8,7 +8,7 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * What the storage snapshot quantifies, row by row. The event shape,
- * idempotency and pricing are covered in `rest/usageStorage.test.ts`; this
+ * idempotency and pricing are covered in `jobs/usageStorage.test.ts`; this
  * asserts the measured quantities themselves, on a project of its own so each
  * one is exactly what these fixtures seed.
  *
