@@ -9,14 +9,19 @@ import {
 import { JWT_SECRET } from 'src/middleware/auth';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Direct tests for the run-as token seam. The happy paths are covered end to
- * end through the REST entry point in `rest/soatSelfCall.test.ts`; what lives
- * here is the set of branches no entry point can reach — a principal that has
- * been deleted or revoked *after* the run started, and tokens minted by other
- * parts of the platform that must not be mistaken for run tokens.
+ * The run-as token seam's credential classification: which credentials a
+ * piece of work may inherit a principal from, read straight off the token's
+ * claims. A pure table over credential shapes, several of them (a trigger
+ * token, an OAuth token, a forged or malformed header) only reachable through
+ * an entry point by standing up a whole trigger dispatch or consent flow whose
+ * far-end signal — a continuation acting with too much access — would not name
+ * the branch that let it through.
+ *
+ * The header a run re-mints from its principal is driven end to end in
+ * `rest/soatSelfCall.test.ts` (principal present) and
+ * `rest/runAsRevokedPrincipal.test.ts` (key revoked, user deleted).
  */
 
 // A trigger run-as token, as an internal caller would forward it: it must not
@@ -26,9 +31,7 @@ const bearerTriggerToken = (publicId: string, prj: string): string => {
 };
 
 describe('orchestration run-as token', () => {
-  let adminToken: string;
   let projectId: string;
-  let projectPk: number;
   let userPublicId: string;
 
   beforeAll(async () => {
@@ -37,104 +40,24 @@ describe('orchestration run-as token', () => {
       policyActions: ['tools:ListTools'],
       createNoPermUser: false,
     });
-    adminToken = setup.adminToken;
     projectId = setup.projectId;
     userPublicId = setup.userId;
-    const project = await db.Project.findOne({
-      where: { publicId: projectId },
-    });
-    projectPk = project!.id as number;
   });
 
+  // A project deleted while its work is in flight takes the run or task row
+  // with it, but the drive already in memory still asks for a header; no entry
+  // point orders the delete before that ask.
   describe('buildRunAuthHeader', () => {
-    test('mints a token for a user principal', async () => {
-      const header = await buildRunAuthHeader({
-        principalKind: 'user',
-        principalId: userPublicId,
-        projectId: projectPk,
-        workPublicId: 'orun_test1',
-      });
-      expect(header).toMatch(/^Bearer /);
-      const payload = jwt.verify(header!.slice(7), JWT_SECRET) as {
-        publicId: string;
-        prj: string;
-        orn: string;
-        key?: string;
-      };
-      expect(payload.publicId).toBe(userPublicId);
-      expect(payload.prj).toBe(projectId);
-      expect(payload.orn).toBe('orun_test1');
-      expect(payload.key).toBeUndefined();
-    });
+    test('a project deleted mid-run yields no header', async () => {
+      const gone = await db.Project.create({ name: 'runtoken-deleted' });
+      const goneId = gone.id as number;
+      await gone.destroy();
 
-    test('carries the API key as a boundary claim for a key principal', async () => {
-      const keyRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/api-keys')
-        .send({ project_id: projectId, name: 'runtoken-key' });
-      expect(keyRes.status).toBe(201);
-
-      const header = await buildRunAuthHeader({
-        principalKind: 'api_key',
-        principalId: keyRes.body.id,
-        projectId: projectPk,
-        workPublicId: 'orun_test2',
-      });
-      const payload = jwt.verify(header!.slice(7), JWT_SECRET) as {
-        key?: string;
-      };
-      expect(payload.key).toBe(keyRes.body.id);
-    });
-
-    test('a run with no principal gets no header', async () => {
-      await expect(
-        buildRunAuthHeader({
-          principalKind: null,
-          principalId: null,
-          projectId: projectPk,
-          workPublicId: 'orun_test3',
-        })
-      ).resolves.toBeUndefined();
-    });
-
-    test('a revoked API key stops the run acting, rather than falling back to its owner', async () => {
-      const keyRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/api-keys')
-        .send({ project_id: projectId, name: 'runtoken-revoked' });
-      expect(keyRes.status).toBe(201);
-      const deleteRes = await authenticatedTestClient(adminToken).delete(
-        `/api/v1/api-keys/${keyRes.body.id}`
-      );
-      expect(deleteRes.status).toBe(204);
-
-      // Falling back to an owner-scoped token here would silently widen the
-      // run's reach to everything that user can do.
-      await expect(
-        buildRunAuthHeader({
-          principalKind: 'api_key',
-          principalId: keyRes.body.id,
-          projectId: projectPk,
-          workPublicId: 'orun_test4',
-        })
-      ).resolves.toBeUndefined();
-    });
-
-    test('a deleted user stops the run acting', async () => {
-      await expect(
-        buildRunAuthHeader({
-          principalKind: 'user',
-          principalId: 'user_goneforever',
-          projectId: projectPk,
-          workPublicId: 'orun_test5',
-        })
-      ).resolves.toBeUndefined();
-    });
-
-    test('an unknown project yields no header', async () => {
       await expect(
         buildRunAuthHeader({
           principalKind: 'user',
           principalId: userPublicId,
-          projectId: -1,
+          projectId: goneId,
           workPublicId: 'orun_test6',
         })
       ).resolves.toBeUndefined();

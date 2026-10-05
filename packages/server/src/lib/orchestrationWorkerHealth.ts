@@ -70,12 +70,12 @@ export const writeWorkerHeartbeat = async (args: {
  * (missing file, truncated JSON, unexpected shape) — every one of which means
  * "no trustworthy liveness signal", which the caller treats as unhealthy.
  */
-export const readWorkerHeartbeat = async (): Promise<Date | null> => {
-  const filePath = heartbeatFilePath();
-  if (!filePath) return null;
+export const readWorkerHeartbeat = async (args: {
+  filePath: string;
+}): Promise<Date | null> => {
   let raw: string;
   try {
-    raw = await fs.readFile(filePath, 'utf8');
+    raw = await fs.readFile(args.filePath, 'utf8');
   } catch {
     return null;
   }
@@ -106,10 +106,11 @@ export type WorkerHealth = {
 export const checkWorkerHealth = async (args?: {
   now?: Date;
 }): Promise<WorkerHealth> => {
-  if (!heartbeatFilePath()) {
+  const filePath = heartbeatFilePath();
+  if (!filePath) {
     return { healthy: false, reason: 'not_configured', ageMs: null };
   }
-  const heartbeat = await readWorkerHeartbeat();
+  const heartbeat = await readWorkerHeartbeat({ filePath });
   if (!heartbeat) {
     return { healthy: false, reason: 'no_heartbeat', ageMs: null };
   }

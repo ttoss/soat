@@ -213,4 +213,91 @@ describe('Approval node (orchestration producer)', () => {
     expect(secondRes.status).toBe(409);
     expect(secondRes.body.error.code).toBe('APPROVAL_ALREADY_RESOLVED');
   });
+
+  // The node resolves every mapping against run state and freezes the result
+  // onto the filed item, so what a reviewer reads is what the run computed.
+  describe('the proposal the node freezes', () => {
+    const DAY_SECONDS = 24 * 60 * 60;
+
+    const parkOn = async (gate: Record<string, unknown>) => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: `Approval Proposal ${Math.random()}`,
+          nodes: [
+            { id: 'gate', type: 'approval', tool_id: refundToolId, ...gate },
+          ],
+          edges: [],
+        });
+      expect(createRes.status).toBe(201);
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { amt: 500 },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('awaiting_input');
+      const itemRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/${runRes.body.required_action.approval_id}`
+      );
+      expect(itemRes.status).toBe(200);
+      return { run: runRes.body, item: itemRes.body };
+    };
+
+    const windowSeconds = (item: {
+      created_at: string;
+      expires_at: string;
+    }) => {
+      return Math.round(
+        (new Date(item.expires_at).getTime() -
+          new Date(item.created_at).getTime()) /
+          1000
+      );
+    };
+
+    test('every mapping resolves into the filed item', async () => {
+      const { run, item } = await parkOn({
+        arguments: { amount: { var: 'input.amt' } },
+        reasoning: 'needs review',
+        evidence: { order_id: 'ord_1' },
+        predicted_impact: 'issues a refund',
+        expires_in: 60,
+        instructions: 'Please review',
+      });
+
+      expect(run.required_action.prompt).toBe('Please review');
+      expect(item.proposed_action.arguments).toEqual({ amount: 500 });
+      expect(item.reasoning).toBe('needs review');
+      expect(item.evidence).toEqual({ order_id: 'ord_1' });
+      expect(item.predicted_impact).toBe('issues a refund');
+      expect(windowSeconds(item)).toBe(60);
+    });
+
+    test('a null reasoning and a non-object evidence file as null, an impact is stringified, and the window defaults to a day', async () => {
+      const { run, item } = await parkOn({
+        reasoning: { var: 'input.missing' },
+        evidence: 'not-an-object',
+        predicted_impact: 42,
+        expires_in: 0,
+      });
+
+      expect(run.required_action.prompt).toBe('Approval required.');
+      expect(item.proposed_action.arguments).toEqual({});
+      expect(item.reasoning).toBeNull();
+      expect(item.evidence).toBeNull();
+      expect(item.predicted_impact).toBe('42');
+      expect(windowSeconds(item)).toBe(DAY_SECONDS);
+    });
+
+    test('a node naming no reasoning, evidence or impact files all three as null', async () => {
+      const { item } = await parkOn({});
+
+      expect(item.reasoning).toBeNull();
+      expect(item.evidence).toBeNull();
+      expect(item.predicted_impact).toBeNull();
+    });
+  });
 });

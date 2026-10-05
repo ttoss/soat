@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -238,4 +240,64 @@ test('a payload schema tightened after the task was created does not block updat
     });
   expect(rejected.status).toBe(400);
   expect(rejected.body.error.code).toBe('TASK_PAYLOAD_INVALID');
+});
+
+/**
+ * The live-definition fallbacks. Neither state is producible through the API —
+ * `POST /tasks` always stamps a pin, and an archive row is deleted only together
+ * with its workflow and its tasks — so each test perturbs one row after setting
+ * the task up through the API: a null pin is a task that predates pinning, a
+ * missing archive is an out-of-band deletion. Both must degrade to the live
+ * definition rather than strand the task.
+ */
+describe('a task whose pinned definition cannot be resolved', () => {
+  const FALLBACK_STATES = [
+    { name: 'triage', initial: true },
+    { name: 'done', terminal: true },
+  ];
+
+  /** A task on v1 (`finish`), with the workflow then rewired to v2 (`close`). */
+  const createRewiredTask = async () => {
+    const workflow = await createWorkflow({
+      states: FALLBACK_STATES,
+      transitions: [{ name: 'finish', from: ['triage'], to: 'done' }],
+      payload_schema: { type: 'object' },
+    });
+    const task = await createTask(workflow.id);
+    expect(task.workflow_version).toBe(1);
+    await updateWorkflow(workflow.id, {
+      transitions: [{ name: 'close', from: ['triage'], to: 'done' }],
+    });
+    const workflowRow = await db.Workflow.findOne({
+      where: { publicId: workflow.id },
+    });
+    return { task, workflowPk: workflowRow!.id as number };
+  };
+
+  test('a task with no pinned version transitions on the live definition', async () => {
+    const { task } = await createRewiredTask();
+    await db.Task.update(
+      { workflowVersion: null },
+      { where: { publicId: task.id } }
+    );
+
+    const pinned = await transition(task.id, 'finish');
+    expect(pinned.status).toBe(400);
+    expect(pinned.body.error.code).toBe('TASK_TRANSITION_NOT_FOUND');
+
+    const live = await transition(task.id, 'close');
+    expect(live.status).toBe(200);
+    expect(live.body.state).toBe('done');
+  });
+
+  test('a task pinned to a missing archive row transitions on the live definition', async () => {
+    const { task, workflowPk } = await createRewiredTask();
+    await db.WorkflowVersion.destroy({
+      where: { workflowId: workflowPk, version: 1 },
+    });
+
+    const res = await transition(task.id, 'close');
+    expect(res.status).toBe(200);
+    expect(res.body.state).toBe('done');
+  });
 });

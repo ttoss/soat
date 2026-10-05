@@ -150,7 +150,7 @@ export const executeAgentNode = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   // The run's project, where the node's turn runs and is recorded.
-  projectId?: number;
+  projectId: number;
   traceId: string | null;
   authHeader?: string;
   // Stamped onto the generation's usage event so spend rolls up per run, per
@@ -189,7 +189,7 @@ export const executeAgentNode = async (args: {
 
   const result = await createGeneration({
     projectIds,
-    runProjectId: args.projectId ?? projectIds[0],
+    runProjectId: args.projectId,
     agentId,
     messages,
     parentTraceId: traceId,
@@ -215,10 +215,9 @@ export const executeAgentNode = async (args: {
 export const executeToolNode = async (args: {
   node: OrchestrationNode;
   state: Record<string, unknown>;
-  projectIds: number[];
-  // The run's own project id — used to scope guardrail collection to the run's
-  // project. Falls back to `projectIds[0]` when absent (direct-call callers).
-  projectId?: number;
+  // The run's own project id — scopes guardrail collection, the call itself and
+  // its activity entry to the run's project.
+  projectId: number;
   authHeader?: string;
   // Run-scoped idempotency key, forwarded to the HTTP tool executor as the
   // `Idempotency-Key` request header (D7).
@@ -235,8 +234,7 @@ export const executeToolNode = async (args: {
   // reach an `agent` node's generation already has.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, idempotencyKey, toolContext } =
-    args;
+  const { node, state, authHeader, idempotencyKey, toolContext } = args;
   const toolId = requireNodeField(node, 'toolId');
 
   const inputs =
@@ -244,14 +242,13 @@ export const executeToolNode = async (args: {
 
   // Classify at project + tool scope and enact the strictest decision before
   // dispatch. Skipped on an approved re-dispatch, already adjudicated.
-  const scopeProjectId = args.projectId ?? projectIds[0];
   const gated: ToolNodeGateResult =
-    args.approvedArguments != null || scopeProjectId === undefined
+    args.approvedArguments != null
       ? { kind: 'execute', input: inputs, guardrailIds: [] }
       : await runToolNodeGate({
           node,
           inputs,
-          projectId: scopeProjectId,
+          projectId: args.projectId,
           authHeader,
           orchestrationRunId: args.orchestrationRunId,
         });
@@ -260,7 +257,7 @@ export const executeToolNode = async (args: {
   const result = await callTool({
     // `runToolNodeGate` adjudicated this node's call before dispatch.
     guardrails: 'already-adjudicated',
-    projectId: args.projectId ?? projectIds[0],
+    projectId: args.projectId,
     reach: 'shares',
     id: toolId,
     action: node.operationId,
@@ -283,16 +280,14 @@ export const executeToolNode = async (args: {
   // The run-scoped call site: a tool node has no agent in scope. Threading no
   // `ActivityCallContext` is what keeps the resolver's own `recordToolActivity`
   // from recording the same call twice. Fire-and-forget.
-  if (scopeProjectId !== undefined) {
-    void emitActivityEntry({
-      projectId: scopeProjectId,
-      kind: 'action_executed',
-      summary: `Tool '${toolId}' executed by node '${node.id}'`,
-      detail: { nodeId: node.id, action: node.operationId },
-      orchestrationRunId: args.orchestrationRunId,
-      refId: toolId,
-    });
-  }
+  void emitActivityEntry({
+    projectId: args.projectId,
+    kind: 'action_executed',
+    summary: `Tool '${toolId}' executed by node '${node.id}'`,
+    detail: { nodeId: node.id, action: node.operationId },
+    orchestrationRunId: args.orchestrationRunId,
+    refId: toolId,
+  });
 
   return { kind: 'artifact', artifact };
 };
