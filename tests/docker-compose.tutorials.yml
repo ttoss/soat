@@ -19,6 +19,10 @@ services:
     image: ollama/ollama:0.20.6
     volumes:
       - ${HOME}/.ollama:/root/.ollama
+    environment:
+      # The tutorials run concurrently against this one server; with Ollama's
+      # default of one slot per model, every request queues behind the rest.
+      OLLAMA_NUM_PARALLEL: '4'
     entrypoint:
       - /bin/sh
       - -c
