@@ -31,8 +31,9 @@ const resolveRefAttrOutput = async (
     );
     return undefined;
   }
-  const resourceType = template.resources[logicalId]?.type;
-  if (!resourceType) return undefined;
+  // `resolvedIds` holds only the template's own logical ids, so a resolved id
+  // always has a declaration.
+  const resourceType = template.resources[logicalId].type;
   // The write refuses this shape, so only a template stored before the rule can
   // reach here — and it reaches here on every re-deploy of that formation.
   if (isSensitiveAttribute({ resourceType, attrName })) {

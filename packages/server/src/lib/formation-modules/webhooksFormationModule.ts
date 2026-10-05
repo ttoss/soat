@@ -1,5 +1,4 @@
 import {
-  toNullableArray,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -33,11 +32,11 @@ export const webhooksFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId }) => {
     await updateWebhook({
       id: physicalResourceId,
-      name: toOptionalString(properties.name) ?? undefined,
+      name: toOptionalString(properties.name),
       description: toNullableString(properties.description) ?? undefined,
-      url: toOptionalString(properties.url) ?? undefined,
-      events: (toNullableArray(properties.events) ?? undefined) as
-        string[] | undefined,
+      url: toOptionalString(properties.url),
+      // `events` is required by WebhookResourceProperties and validated above.
+      events: properties.events as string[],
     });
   },
 

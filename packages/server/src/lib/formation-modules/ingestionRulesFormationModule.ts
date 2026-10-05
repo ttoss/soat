@@ -14,6 +14,7 @@ import {
   toNullableNumber,
   toNullableObject,
   toNullableString,
+  toOptionalString,
 } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 import { isFormationExpression } from './formationSpecLoader';
@@ -88,7 +89,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
   },
   resourceLabel: 'ingestion rule',
 
-  extraChecks: ({ properties, basePath, forUpdate, errors }) => {
+  extraChecks: ({ properties, basePath, errors }) => {
     const rawGlob = properties.content_type_glob;
 
     const message = validateIngestionRule({
@@ -105,17 +106,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
       chunkStrategy: toNullableString(properties.chunk_strategy) ?? undefined,
     });
 
-    if (!message) return;
-    // A PATCH-style update payload may omit both tool_id and agent_id to mean
-    // "leave the converter unchanged" — only the "not both" half of the rule
-    // applies on update, not "exactly one is required".
-    if (
-      forUpdate &&
-      message === 'exactly one of tool_id or agent_id is required'
-    ) {
-      return;
-    }
-    errors.push({ path: basePath, message });
+    if (message) errors.push({ path: basePath, message });
   },
 
   create: async ({ properties, projectId }) => {
@@ -153,8 +144,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
 
     await updateIngestionRule({
       id: physicalResourceId,
-      contentTypeGlob:
-        toNullableString(properties.content_type_glob) ?? undefined,
+      contentTypeGlob: toOptionalString(properties.content_type_glob),
       toolId,
       agentId,
       action: toNullableString(properties.action),

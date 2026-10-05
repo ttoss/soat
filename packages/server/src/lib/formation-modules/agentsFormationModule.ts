@@ -41,22 +41,14 @@ const pushToolBindingErrors = (args: {
 /**
  * The pinned-provider vs model-route invariant, enforced with the same exported
  * rule the REST handlers use (`.claude/rules/modules.md`, Shared Business
- * Rules). A declaring template must name exactly one; an update that mentions
- * neither field leaves the stored binding untouched, so "neither" is only an
- * error when the template is declaring the agent's binding.
+ * Rules). A template declares the agent whole, so it names exactly one.
  */
 const pushModelBindingErrors = (args: {
   properties: Record<string, unknown>;
   basePath: string;
   errors: ValidationError[];
-  forUpdate: boolean;
 }): void => {
-  const { properties, basePath, errors, forUpdate } = args;
-  const declaresBinding =
-    properties.ai_provider_id !== undefined ||
-    properties.model_route_id !== undefined;
-  if (forUpdate && !declaresBinding) return;
-
+  const { properties, basePath, errors } = args;
   const message = validateModelRouteExclusivity({
     modelRouteId: properties.model_route_id,
     aiProviderId: properties.ai_provider_id,
@@ -146,7 +138,7 @@ export const agentsFormationModule = defineFormationModule({
     delete: 'agents:DeleteAgent',
   },
 
-  extraChecks: ({ properties, basePath, forUpdate, errors }) => {
+  extraChecks: ({ properties, basePath, errors }) => {
     // A mis-named `Deny` would silently no-op and fail the boundary open, so
     // the action names are checked here; the evaluator handles structure at
     // generation time.
@@ -158,7 +150,7 @@ export const agentsFormationModule = defineFormationModule({
     }
 
     pushToolBindingErrors({ properties, basePath, errors });
-    pushModelBindingErrors({ properties, basePath, errors, forUpdate });
+    pushModelBindingErrors({ properties, basePath, errors });
   },
 
   create: async ({ properties, projectId, actingUserId }) => {

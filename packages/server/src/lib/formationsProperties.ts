@@ -13,7 +13,6 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { isPlainObject } from './plainObject';
 import { normalizePropertyKeys } from './resource-inputs/normalizers';
 
 /**
@@ -31,9 +30,7 @@ import { normalizePropertyKeys } from './resource-inputs/normalizers';
 export const normalizeDeclaredProperties = (
   properties: Record<string, unknown>
 ): Record<string, unknown> => {
-  return isPlainObject(properties)
-    ? normalizePropertyKeys(properties)
-    : properties;
+  return normalizePropertyKeys(properties);
 };
 
 /**

@@ -34,10 +34,6 @@ const asSourceAgentIds = (value: unknown): string[] | null | undefined => {
   });
 };
 
-const asEvent = (value: unknown): MemoryRuleEvent | undefined => {
-  return typeof value === 'string' ? (value as MemoryRuleEvent) : undefined;
-};
-
 /**
  * The handler and provider refs, through the same resolver the REST route uses.
  * By apply time a `{ "ref": … }` has become a plain public id, so there is
@@ -58,7 +54,8 @@ const resolveHandlerRefs = (args: {
 
 const writeArgs = (properties: Record<string, unknown>) => {
   return {
-    on: asEvent(properties.on),
+    // `on` is required by MemoryRuleResourceProperties and validated above.
+    on: properties.on as MemoryRuleEvent,
     sourceAgentIds: asSourceAgentIds(properties.source_agent_ids),
     action: toNullableString(properties.action),
     presetParameters: toNullableObject(properties.preset_parameters) as Record<
@@ -84,7 +81,7 @@ export const memoryRulesFormationModule = defineFormationModule({
   },
   resourceLabel: 'memory rule',
 
-  extraChecks: ({ properties, basePath, forUpdate, errors }) => {
+  extraChecks: ({ properties, basePath, errors }) => {
     const message = validateMemoryRule({
       on: toNullableString(properties.on),
       agentId: asRefPresence(properties.agent_id),
@@ -97,11 +94,7 @@ export const memoryRulesFormationModule = defineFormationModule({
       sourceAgentIds: properties.source_agent_ids,
     });
 
-    if (!message) return;
-    // A PATCH-style update payload may omit `on` to mean "leave the event
-    // unchanged"; only the rules about what the payload *does* say apply then.
-    if (forUpdate && message === "'on' is required") return;
-    errors.push({ path: basePath, message });
+    if (message) errors.push({ path: basePath, message });
   },
 
   create: async ({ properties, projectId }) => {
