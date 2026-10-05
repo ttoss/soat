@@ -20,12 +20,6 @@ services:
     # Ollama ignores SIGTERM until its default timeout; nothing here is worth
     # draining.
     stop_grace_period: 2s
-    environment:
-      # NOTE: Ollama honours `OLLAMA_CONTEXT_LENGTH`, not `OLLAMA_NUM_CTX`, so this
-      # setting has never taken effect (the 2026-08-05 run logged `n_ctx = 4096`).
-      # Left in place deliberately: raising the real context to 16384 would slow
-      # every generation on a CPU-only runner, and no smoke assertion needs it.
-      OLLAMA_NUM_CTX: '16384'
     entrypoint:
       - /bin/sh
       - -c
