@@ -13,6 +13,7 @@ const MAIN_WORKFLOW = readFileSync(
   `${ROOT}.github/workflows/main.yml`,
   'utf-8'
 );
+const PR_WORKFLOW = readFileSync(`${ROOT}.github/workflows/pr.yml`, 'utf-8');
 
 /** A `git diff -U0` section for one file. */
 const fileDiff = (args) => {
@@ -268,5 +269,22 @@ describe('main.yml wiring', () => {
       assert.match(block, /!cancelled\(\)/, job);
       assert.match(block, /needs\.push-release-tag\.result == 'success'/, job);
     }
+  });
+});
+
+describe('pr.yml wiring', () => {
+  /**
+   * The gate reuses a PR run only when every one of its jobs succeeded, so a
+   * job that runs on release PRs alone is skipped on every run the gate reads
+   * and the release commit always re-runs the whole suite.
+   */
+  test('no job runs on release PRs alone', () => {
+    const releaseOnly = PR_WORKFLOW.split('\n').filter((line) => {
+      return /^\s+if: "startsWith\(github\.event\.pull_request\.title, 'chore\(release\):'\)/.test(
+        line
+      );
+    });
+
+    assert.deepEqual(releaseOnly, []);
   });
 });

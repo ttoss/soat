@@ -22,12 +22,9 @@ const jobBlock = (name) => {
 };
 
 describe('release PR lockfile guard', () => {
-  test('runs a frozen install on release PRs only', () => {
+  test('runs a frozen install on every PR', () => {
     const job = jobBlock('release-lockfile');
-    assert.match(
-      job,
-      /if: "startsWith\(github\.event\.pull_request\.title, 'chore\(release\):'\)"/
-    );
+    assert.doesNotMatch(job, /\n {4}if:/);
     assert.match(job, /run: pnpm install --frozen-lockfile/);
   });
 
