@@ -71,6 +71,73 @@ describe('OAuth consent API', () => {
       expect(res.body.scopes).toEqual(['*']);
     });
 
+    test('a module selection is granted sorted and without duplicates', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'modules', modules: ['files', 'agents', 'files'] },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.scopes).toEqual(['agents:*', 'files:*']);
+      expect(res.body.policy).toEqual({
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['agents:*', 'files:*'],
+            resource: [`srn:${projectId}:*:*`],
+          },
+        ],
+      });
+    });
+
+    test('an action selection grants exactly the chosen actions', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: {
+            kind: 'actions',
+            actions: ['agents:ListAgents', 'agents:CreateAgent'],
+          },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.scopes).toEqual([
+        'agents:CreateAgent',
+        'agents:ListAgents',
+      ]);
+      expect(res.body.policy.statement[0].action).toEqual([
+        'agents:CreateAgent',
+        'agents:ListAgents',
+      ]);
+    });
+
+    test('400 on an unknown module', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'modules', modules: ['agents', 'not-a-module'] },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toBe('Unknown module(s): not-a-module.');
+    });
+
+    test('400 on an empty module selection', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'modules', modules: [] },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toBe(
+        'Select at least one module to grant.'
+      );
+    });
+
     test('400 on an unknown action', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/oauth/consent')

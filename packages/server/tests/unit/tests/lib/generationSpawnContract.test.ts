@@ -148,8 +148,8 @@ describe('generation spawn contract', () => {
     // Coarser than the check above by design: the lineage may be spread from a
     // resolved object rather than named field by field, so what is checked is
     // that the file resolves it at all. The runtime half is covered by
-    // `generationChain.test.ts` and the chain assertions in
-    // `guardrailForcedToolLoop.test.ts`.
+    // `rest/continuationChains.test.ts` and the continuation assertions in
+    // `rest/approvalContinuation.test.ts`.
     const violations: string[] = [];
 
     for (const file of libFiles) {

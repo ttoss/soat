@@ -1,34 +1,21 @@
 import { getApiHeaders } from '@ttoss/http-server-mcp';
 
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
+import { isPlainObject } from '../lib/plainObject';
 
 /**
- * Extracts a human-readable message from a REST API error response body.
- *
- * The body shape varies by error type (see `.claude/rules/errors.md`):
- * - `DomainError` responses: `{ error: { code, message, meta? } }`
- * - Generic/manual error responses: `{ error: "some string" }`
- *
- * Returns `null` when no readable message can be extracted, so callers can
- * fall back to a generic message instead of stringifying an object.
+ * Whether a REST error response carries a readable message. Every non-2xx body
+ * is written by `middleware/errorLogger.ts`, whose only shape is
+ * `{ error: { code, message, ... } }` (`.claude/rules/errors.md`).
  */
-export const extractApiErrorMessage = (body: unknown): string | null => {
-  if (!body || typeof body !== 'object' || !('error' in body)) return null;
-
-  const error = (body as { error: unknown }).error;
-
-  if (typeof error === 'string') return error;
-
-  if (
-    error &&
-    typeof error === 'object' &&
-    'message' in error &&
-    typeof (error as { message: unknown }).message === 'string'
-  ) {
-    return (error as { message: string }).message;
-  }
-
-  return null;
+const hasErrorMessage = (
+  body: unknown
+): body is { error: { message: string } } => {
+  return (
+    isPlainObject(body) &&
+    isPlainObject(body.error) &&
+    typeof body.error.message === 'string'
+  );
 };
 
 /**
@@ -59,7 +46,9 @@ export const dispatchMcpApiRequest = async (args: {
     body: args.body,
     wrapError: (response) => {
       return new Error(
-        extractApiErrorMessage(response.body) ?? `HTTP ${response.status}`
+        hasErrorMessage(response.body)
+          ? response.body.error.message
+          : `HTTP ${response.status}`
       );
     },
   });

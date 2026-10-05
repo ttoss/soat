@@ -101,7 +101,7 @@ const partitionClientCalls = async (args: {
   resolvedTools: Record<string, Tool>;
 }): Promise<ClientCallPartition | null> => {
   const pending = findPendingClientTools(
-    args.steps as Array<{ toolCalls?: ClientToolCall[] }>,
+    args.steps as Array<{ toolCalls: ClientToolCall[] }>,
     args.resolvedTools
   );
   if (pending.length === 0) return null;
@@ -579,11 +579,10 @@ const completeContinuation = async (args: {
       args.pending.aiProviderId ??
       null,
     output: {
-      model: args.result.response?.modelId ?? '',
+      model: args.result.response.modelId,
       content: args.result.text,
       finishReason: args.result.finishReason,
-      responseMessages: args.result.response?.messages as
-        Array<unknown> | undefined,
+      responseMessages: args.result.response.messages,
       ...(args.pending.agentConfig.outputSchema
         ? { object: args.result.output }
         : {}),
@@ -637,7 +636,7 @@ export const resolveToolOutputsResult = async (args: {
       ...args.pending,
       messages: [
         ...(args.allMessages as Array<{ role: string; content: unknown }>),
-        ...(args.result.response?.messages ?? []),
+        ...args.result.response.messages,
       ],
       steps: [...priorSteps, ...serializeSteps(args.result.steps)],
     };

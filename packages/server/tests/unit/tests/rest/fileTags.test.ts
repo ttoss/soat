@@ -2,9 +2,10 @@ import fs from 'node:fs';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { storageDir } from '../../setupTests';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, loginAs } from '../../testClient';
 
 describe('FileTags', () => {
+  let adminToken: string;
   let userToken: string;
   let projectId: string;
 
@@ -29,6 +30,7 @@ describe('FileTags', () => {
       ],
       createNoPermUser: false,
     });
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
   });
@@ -112,6 +114,142 @@ describe('FileTags', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('GET /api/v1/files/{file_id} — file policy resources', () => {
+    let pathUserToken: string;
+    let tagUserToken: string;
+    let reportId: string;
+    let otherPathId: string;
+    let prodId: string;
+    let devId: string;
+
+    const principalWith = async (args: {
+      username: string;
+      statement: Record<string, unknown>;
+    }): Promise<string> => {
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: args.username, password: 'filepolicypass' });
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({ document: { statement: [args.statement] } });
+      expect(policyRes.status).toBe(201);
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${projectId}/members`)
+        .send({ user_id: userRes.body.id });
+      return loginAs(args.username, 'filepolicypass');
+    };
+
+    const uploadAt = async (args: { name: string; prefix: string }) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from(args.name), {
+          filename: `${args.name}.txt`,
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId)
+        .field('prefix', args.prefix);
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    beforeAll(async () => {
+      reportId = await uploadAt({ name: 'quarterly', prefix: '/reports/' });
+      otherPathId = await uploadAt({ name: 'scratch', prefix: '/drafts/' });
+      prodId = await upload('tagged-prod');
+      devId = await upload('tagged-dev');
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/files/${prodId}/tags`)
+        .send({ env: 'prod' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/files/${devId}/tags`)
+        .send({ env: 'dev' });
+
+      pathUserToken = await principalWith({
+        username: 'filetagspathuser',
+        statement: {
+          effect: 'Allow',
+          action: ['files:GetFile'],
+          resource: [`srn:${projectId}:file:/reports/*`],
+        },
+      });
+      tagUserToken = await principalWith({
+        username: 'filetagstaguser',
+        statement: {
+          effect: 'Allow',
+          action: ['files:GetFile'],
+          resource: ['*'],
+          condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+        },
+      });
+    });
+
+    test('a policy naming a path grants the file stored at it', async () => {
+      const response = await authenticatedTestClient(pathUserToken).get(
+        `/api/v1/files/${reportId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(reportId);
+      expect(response.body.path).toBe('/reports/quarterly.txt');
+    });
+
+    test('a policy naming a path does not grant a file outside it', async () => {
+      const response = await authenticatedTestClient(pathUserToken).get(
+        `/api/v1/files/${otherPathId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
+
+    test('a file with no path is granted by a policy naming its id', async () => {
+      const doc = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({ project_id: projectId, content: 'pathless' });
+      expect(doc.status).toBe(201);
+      const cleared = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/documents/${doc.body.id}`)
+        .send({ path: null });
+      expect(cleared.status).toBe(200);
+      const fileId = doc.body.file_id as string;
+      const idUserToken = await principalWith({
+        username: 'filetagsiduser',
+        statement: {
+          effect: 'Allow',
+          action: ['files:GetFile'],
+          resource: [`srn:${projectId}:file:${fileId}`],
+        },
+      });
+
+      const response = await authenticatedTestClient(idUserToken).get(
+        `/api/v1/files/${fileId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(fileId);
+      expect(response.body.path ?? null).toBeNull();
+    });
+
+    test('a tag condition grants a file carrying the tag', async () => {
+      const response = await authenticatedTestClient(tagUserToken).get(
+        `/api/v1/files/${prodId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(prodId);
+    });
+
+    test('a tag condition does not grant a file with another value', async () => {
+      const response = await authenticatedTestClient(tagUserToken).get(
+        `/api/v1/files/${devId}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 });
