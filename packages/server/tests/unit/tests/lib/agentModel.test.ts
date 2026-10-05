@@ -141,7 +141,7 @@ describe('buildModel', () => {
     );
   });
 
-  test('builds azure model with defaults when secretValue and resourceName are not provided', () => {
+  test('builds azure model without a resourceName and refuses to resolve a URL for it', () => {
     const model = asConfigured(
       buildModel({
         provider: 'azure',
@@ -150,9 +150,9 @@ describe('buildModel', () => {
       })
     );
     expect(model.modelId).toBe('gpt-4o');
-    expect(model.config.url({ path: '/responses', modelId: 'gpt-4o' })).toBe(
-      'https://.openai.azure.com/openai/v1/responses?api-version=v1'
-    );
+    expect(() => {
+      return model.config.url({ path: '/responses', modelId: 'gpt-4o' });
+    }).toThrow('Invalid Azure resource name');
   });
 
   test('builds ollama model wired to the default local base URL', () => {

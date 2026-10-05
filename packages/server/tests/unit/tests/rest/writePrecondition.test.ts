@@ -315,14 +315,9 @@ describe('Write preconditions', () => {
     test('a refused write never leaves its document behind', async () => {
       const id = await createGuardrail('precond-race-rollback');
 
-      // A supertest request is lazy until `.then`; dispatching it here makes
-      // the two writes overlap.
       const stale = authenticatedTestClient(userToken)
         .patch(`/api/v1/guardrails/${id}`)
-        .send({ document: documentAllowing(999), expected_version: 1 })
-        .then((response) => {
-          return response;
-        });
+        .send({ document: documentAllowing(999), expected_version: 1 });
 
       await authenticatedTestClient(userToken)
         .patch(`/api/v1/guardrails/${id}`)
