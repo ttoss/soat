@@ -345,6 +345,7 @@ const prepareGeneration = async (
     nodeId: args.nodeId,
     nodeAttempt: args.nodeAttempt,
     sessionId: args.sessionId,
+    conversationId: args.conversationId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
     pinnedAgentVersion: args.pinnedAgentVersion,
