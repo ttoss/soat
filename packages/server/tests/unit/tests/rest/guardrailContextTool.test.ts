@@ -8,7 +8,8 @@ import { authenticatedTestClient } from '../../testClient';
 // A guardrail's context tool receives the proposed call nested under `call` at
 // every gate site reachable without a model turn, and in the dry run, which
 // calls it exactly as a real call would. The agent-turn and client-tool gates
-// are pinned in `lib/guardrailContextToolInput.test.ts`.
+// are pinned in `agentToolGuardrailContext.test.ts` and
+// `agentClientToolGuardrails.test.ts`.
 
 describe('guardrail context tool', () => {
   let server: Server;

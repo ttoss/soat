@@ -82,7 +82,7 @@ const fileGuardrailTripwireException = async (
   // path must key on `agentId:toolName`, not `generationId` — a fresh id per
   // generation would make dedup impossible for the looping case this exists for.
   const scope = orchestrationRunId
-    ? `${orchestrationRunId}:${nodeId ?? ''}`
+    ? `${orchestrationRunId}:${nodeId}`
     : `${agentId ?? ''}:${toolName}`;
   await fileException({
     projectId: event.projectId,
