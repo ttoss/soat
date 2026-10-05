@@ -1,5 +1,4 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-
 import { db } from 'src/db';
 import { findOrCreateChain } from 'src/lib/generationChains';
 import { findOrCreateTrace } from 'src/lib/generationTrace';
