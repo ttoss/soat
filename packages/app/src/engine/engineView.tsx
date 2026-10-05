@@ -1,7 +1,6 @@
 import type * as React from 'react';
 
 import { ActionView } from './actionView';
-import { BoardView } from './boardView';
 import { DetailView } from './detailView';
 import { FormView } from './formView';
 import { ListView } from './listView';
@@ -77,17 +76,6 @@ export const EngineView = ({
         spec={spec}
         pathParams={descriptor.pathParams}
         mode="edit"
-      />
-    );
-  }
-
-  if (descriptor.mode === 'board') {
-    return (
-      <BoardView
-        module={module}
-        spec={spec}
-        pathParams={descriptor.pathParams}
-        modules={modules}
       />
     );
   }

@@ -90,16 +90,6 @@ describe('viewToPath', () => {
     expect(viewToPath(d, testSpec)).toBe('/app/v1/agents/agt_1/generate');
   });
 
-  test('board view → item URL + /board', () => {
-    const d: ViewDescriptor = {
-      tag: 'Workflows',
-      operationId: 'getWorkflow',
-      pathParams: { workflow_id: 'wfl_1' },
-      mode: 'board',
-    };
-    expect(viewToPath(d, testSpec)).toBe('/app/v1/workflows/wfl_1/board');
-  });
-
   test('returns null for an unknown operationId', () => {
     const d: ViewDescriptor = {
       tag: 'X',
@@ -139,11 +129,10 @@ describe('pathToView', () => {
     expect(view?.pathParams).toEqual({ agent_id: 'agt_1' });
   });
 
-  test('/board suffix → board view over the resource detail', () => {
-    const view = pathToView('/app/v1/workflows/wfl_1/board', testSpec, modules);
-    expect(view?.mode).toBe('board');
-    expect(view?.operationId).toBe('getWorkflow');
-    expect(view?.pathParams).toEqual({ workflow_id: 'wfl_1' });
+  test('/board suffix is not a route', () => {
+    expect(
+      pathToView('/app/v1/workflows/wfl_1/board', testSpec, modules)
+    ).toBeNull();
   });
 
   test('action URL → action view', () => {
