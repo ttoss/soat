@@ -7,12 +7,6 @@ import {
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 
-// Narrows a property to a number, or undefined when absent/other type. The
-// OpenAPI type validation in the factory has already rejected wrong-typed values.
-const toOptionalNumber = (value: unknown): number | undefined => {
-  return typeof value === 'number' ? value : undefined;
-};
-
 export const projectPricesFormationModule = defineFormationModule({
   resourceType: 'project_price',
   // Prices are the project's own resource, so the probe is the project
@@ -46,7 +40,7 @@ export const projectPricesFormationModule = defineFormationModule({
       model: toOptionalString(properties.model),
       component: toOptionalString(properties.component),
       unit: toOptionalString(properties.unit),
-      unitPrice: toOptionalNumber(properties.unit_price),
+      unitPrice: properties.unit_price as number,
       meterType: toOptionalString(properties.meter_type),
       effectiveFrom: toOptionalString(properties.effective_from),
     });

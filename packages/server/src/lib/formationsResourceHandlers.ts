@@ -10,6 +10,26 @@ import type {
 // upstream; normalizing again here is idempotent and makes the guarantee hold
 // for any caller, so no module has to remember.
 
+/**
+ * The module a write dispatches to. Template validation admits only registered
+ * types, so the type that reaches a create or update is always registered; a
+ * delete reads its type from the ledger, which can name one the registry no
+ * longer holds.
+ */
+const requireFormationModule = (args: {
+  resourceType: string;
+  operation: 'create' | 'update' | 'delete';
+}) => {
+  const formationModule = getFormationModule({
+    resourceType: args.resourceType,
+  });
+  if (!formationModule)
+    throw new Error(
+      `Unsupported resource type for ${args.operation}: ${args.resourceType}`
+    );
+  return formationModule;
+};
+
 // ── Public API ────────────────────────────────────────────────────────────
 
 export type ApplyArgs = {
@@ -19,11 +39,10 @@ export type ApplyArgs = {
   FormationActingPrincipal;
 
 export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
-  const formationModule = getFormationModule({
+  const formationModule = requireFormationModule({
     resourceType: args.resourceType,
+    operation: 'create',
   });
-  if (!formationModule)
-    throw new Error(`Unsupported resource type: ${args.resourceType}`);
   return formationModule.create({
     properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
@@ -41,13 +60,10 @@ export const applyUpdateResource = async (
   } & FormationResourceContext &
     FormationActingPrincipal
 ): Promise<UpdateOutcome | void> => {
-  const formationModule = getFormationModule({
+  const formationModule = requireFormationModule({
     resourceType: args.resourceType,
+    operation: 'update',
   });
-  if (!formationModule)
-    throw new Error(
-      `Unsupported resource type for update: ${args.resourceType}`
-    );
   return formationModule.update({
     physicalResourceId: args.physicalResourceId,
     properties: normalizeDeclaredProperties(args.resolvedProperties),
@@ -97,13 +113,10 @@ export const applyDeleteResource = async (
   } & FormationResourceContext &
     FormationActingPrincipal
 ): Promise<void> => {
-  const formationModule = getFormationModule({
+  const formationModule = requireFormationModule({
     resourceType: args.resourceType,
+    operation: 'delete',
   });
-  if (!formationModule)
-    throw new Error(
-      `Unsupported resource type for delete: ${args.resourceType}`
-    );
   return formationModule.delete({
     physicalResourceId: args.physicalResourceId,
     projectId: args.projectId,

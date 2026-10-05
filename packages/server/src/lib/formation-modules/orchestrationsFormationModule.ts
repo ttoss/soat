@@ -73,20 +73,16 @@ export const orchestrationsFormationModule = defineFormationModule({
       createdByUserId: actingUserId,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
-      nodes:
-        properties.nodes !== undefined
-          ? (convertCollectionKeys(
-              properties.nodes,
-              snakeToCamelKey
-            ) as OrchestrationNode[])
-          : undefined,
-      edges:
-        properties.edges !== undefined
-          ? (convertCollectionKeys(
-              properties.edges,
-              snakeToCamelKey
-            ) as OrchestrationEdge[])
-          : undefined,
+      // Both are required by OrchestrationResourceProperties, so a template
+      // update always restates the graph whole.
+      nodes: convertCollectionKeys(
+        properties.nodes,
+        snakeToCamelKey
+      ) as OrchestrationNode[],
+      edges: convertCollectionKeys(
+        properties.edges,
+        snakeToCamelKey
+      ) as OrchestrationEdge[],
       stateSchema: toNullableObject(properties.state_schema),
       inputSchema: toNullableObject(properties.input_schema),
       outputMapping: parseOutputMapping(properties.output_mapping),
