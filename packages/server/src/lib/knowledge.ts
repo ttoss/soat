@@ -39,7 +39,7 @@ export type KnowledgeResult =
        * The document version the chunk belongs to — what a caller cites to
        * say which text it read.
        */
-      document_version?: number;
+      document_version: number;
       chunk_id: string;
       file_id?: string;
       project_id?: string;

@@ -1,69 +1,25 @@
-import type { Server } from 'node:http';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-
-import { db } from 'src/db';
-import { DomainError } from 'src/errors';
 import { runExtractionCompletion } from 'src/lib/memoryExtractionCompletion';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-describe('memoryExtractionCompletion lib', () => {
+/**
+ * The two refusals `resolveCompletionModel` makes before any provider is
+ * called. No entry point reaches either: a rule fires only for an agent that
+ * exists in the store's project, and a rule's `ai_provider_id` is resolved in
+ * that same project when the rule is written. Both stay as guards — one keeps a
+ * completion config from borrowing another project's provider secret — and are
+ * driven here directly. Everything an entry point reaches is in
+ * `rest/memoryExtraction.test.ts`.
+ */
+describe('runExtractionCompletion', () => {
   let adminToken: string;
   let projectId: string;
   let aiProviderId: string;
-  let stubServer: Server;
-  let lastRequestBody: Record<string, unknown> | undefined;
-
-  // Local OpenAI-compatible chat completions stub. The ollama provider
-  // builder targets `${base_url}/v1/chat/completions`, so the real
-  // generateText call runs end-to-end with no mocks.
-  const startStubServer = async (): Promise<string> => {
-    stubServer = createServer((req, res) => {
-      let raw = '';
-      req.on('data', (chunk) => {
-        raw += chunk;
-      });
-      req.on('end', () => {
-        lastRequestBody = JSON.parse(raw);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            id: 'chatcmpl-stub',
-            object: 'chat.completion',
-            created: 0,
-            model: 'stub-model',
-            choices: [
-              {
-                index: 0,
-                message: { role: 'assistant', content: '["stub fact"]' },
-                finish_reason: 'stop',
-              },
-            ],
-            usage: {
-              prompt_tokens: 1,
-              completion_tokens: 1,
-              total_tokens: 2,
-            },
-          })
-        );
-      });
-    });
-
-    await new Promise<void>((resolve) => {
-      stubServer.listen(0, '127.0.0.1', resolve);
-    });
-    const { port } = stubServer.address() as AddressInfo;
-    return `http://127.0.0.1:${port}`;
-  };
 
   beforeAll(async () => {
-    const stubBaseUrl = await startStubServer();
-
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'extractioncompladmin', password: 'supersecret' });
-
     adminToken = await loginAs('extractioncompladmin', 'supersecret');
 
     const projectRes = await authenticatedTestClient(adminToken)
@@ -78,302 +34,45 @@ describe('memoryExtractionCompletion lib', () => {
         name: 'ExtractionCompletionProvider',
         provider: 'ollama',
         default_model: 'default-stub-model',
-        base_url: stubBaseUrl,
       });
     aiProviderId = aiProvRes.body.id;
   });
 
-  afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      stubServer.close((err) => {
-        return err ? reject(err) : resolve();
+  test('refuses a provider override from another project', async () => {
+    const otherProjectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Extraction Foreign Project' });
+    const foreignProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: otherProjectRes.body.id,
+        name: 'ForeignProvider',
+        provider: 'ollama',
+        default_model: 'foreign-model',
       });
-    });
-  });
-
-  const createAgent = async (args: {
-    name: string;
-    model?: string;
-  }): Promise<string> => {
-    const res = await authenticatedTestClient(adminToken)
+    const agentRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/agents')
       .send({
         project_id: projectId,
         ai_provider_id: aiProviderId,
-        name: args.name,
-        model: args.model,
+        name: 'ComplForeignProviderAgent',
       });
-    expect(res.status).toBe(201);
-    return res.body.id;
-  };
 
-  test('runs the prompt against the agent provider and returns the text', async () => {
-    const agentId = await createAgent({ name: 'ComplDefaultModelAgent' });
-
-    const text = await runExtractionCompletion({
-      agentId,
-      prompt: 'Extract facts from: user prefers email.',
-    });
-
-    expect(text).toBe('["stub fact"]');
-    // Falls back to the provider default_model when the agent has no model.
-    expect(lastRequestBody?.model).toBe('default-stub-model');
-    expect(JSON.stringify(lastRequestBody?.messages)).toContain(
-      'user prefers email.'
-    );
-  });
-
-  test('uses the agent model override when set', async () => {
-    const agentId = await createAgent({
-      name: 'ComplOverrideModelAgent',
-      model: 'override-stub-model',
-    });
-
-    const text = await runExtractionCompletion({
-      agentId,
-      prompt: 'Extract facts.',
-    });
-
-    expect(text).toBe('["stub fact"]');
-    expect(lastRequestBody?.model).toBe('override-stub-model');
-  });
-
-  describe('provider override', () => {
-    let overrideServer: Server;
-    let overrideRequestBody: Record<string, unknown> | undefined;
-    let overrideProviderId: string;
-
-    beforeAll(async () => {
-      overrideServer = createServer((req, res) => {
-        let raw = '';
-        req.on('data', (chunk) => {
-          raw += chunk;
-        });
-        req.on('end', () => {
-          overrideRequestBody = JSON.parse(raw);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              id: 'chatcmpl-override',
-              object: 'chat.completion',
-              created: 0,
-              model: 'override-stub',
-              choices: [
-                {
-                  index: 0,
-                  message: { role: 'assistant', content: '["override fact"]' },
-                  finish_reason: 'stop',
-                },
-              ],
-              usage: {
-                prompt_tokens: 1,
-                completion_tokens: 1,
-                total_tokens: 2,
-              },
-            })
-          );
-        });
-      });
-      await new Promise<void>((resolve) => {
-        overrideServer.listen(0, '127.0.0.1', resolve);
-      });
-      const { port } = overrideServer.address() as AddressInfo;
-
-      const provRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/ai-providers')
-        .send({
-          project_id: projectId,
-          name: 'ComplOverrideProvider',
-          provider: 'ollama',
-          default_model: 'override-default-model',
-          base_url: `http://127.0.0.1:${port}`,
-        });
-      overrideProviderId = provRes.body.id;
-    });
-
-    afterAll(async () => {
-      await new Promise<void>((resolve, reject) => {
-        overrideServer.close((err) => {
-          return err ? reject(err) : resolve();
-        });
-      });
-    });
-
-    test('routes the call to the override provider and uses its default model', async () => {
-      const agentId = await createAgent({ name: 'ComplProviderOverrideAgent' });
-
-      const text = await runExtractionCompletion({
-        agentId,
-        aiProviderId: overrideProviderId,
+    await expect(
+      runExtractionCompletion({
+        agentId: agentRes.body.id,
+        aiProviderId: foreignProvRes.body.id,
         prompt: 'Extract.',
-      });
-
-      expect(text).toBe('["override fact"]');
-      // Provider override switches the model fallback to ITS default_model,
-      // not the agent provider's.
-      expect(overrideRequestBody?.model).toBe('override-default-model');
-    });
-
-    test('model override wins over the override provider default', async () => {
-      const agentId = await createAgent({ name: 'ComplModelOverrideAgent' });
-
-      const text = await runExtractionCompletion({
-        agentId,
-        aiProviderId: overrideProviderId,
-        model: 'tiny-model',
-        prompt: 'Extract.',
-      });
-
-      expect(text).toBe('["override fact"]');
-      expect(overrideRequestBody?.model).toBe('tiny-model');
-    });
-
-    test('rejects a provider from another project', async () => {
-      const otherProjectRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'Extraction Foreign Project' });
-      const foreignProvRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/ai-providers')
-        .send({
-          project_id: otherProjectRes.body.id,
-          name: 'ForeignProvider',
-          provider: 'ollama',
-          default_model: 'foreign-model',
-        });
-
-      const agentId = await createAgent({ name: 'ComplForeignProviderAgent' });
-
-      await expect(
-        runExtractionCompletion({
-          agentId,
-          aiProviderId: foreignProvRes.body.id,
-          prompt: 'Extract.',
-        })
-      ).rejects.toMatchObject({ code: 'AI_PROVIDER_NOT_FOUND' });
-    });
+      })
+    ).rejects.toMatchObject({ code: 'AI_PROVIDER_NOT_FOUND' });
   });
 
-  test('meters the extraction as an llm_tokens event attributed to the agent', async () => {
-    const agentId = await createAgent({ name: 'ComplMeteredAgent' });
-    const agent = await db.Agent.findOne({ where: { publicId: agentId } });
-    const before = await db.UsageEvent.count({
-      where: { agentId: agent?.id as number },
-    });
-
-    await runExtractionCompletion({
-      agentId,
-      prompt: 'Extract facts from: user prefers metering.',
-    });
-
-    // The metering write is fire-and-forget, so poll for it rather than sleep.
-    let event: InstanceType<typeof db.UsageEvent> | undefined;
-    for (let attempt = 0; attempt < 100 && !event; attempt += 1) {
-      const rows = await db.UsageEvent.findAll({
-        where: { agentId: agent?.id as number, meterType: 'llm_tokens' },
-        order: [['createdAt', 'DESC']],
-      });
-      if (rows.length > before) event = rows[0];
-      await new Promise((resolve) => {
-        return setImmediate(resolve);
-      });
-    }
-    expect(event).toBeDefined();
-    expect(event?.provider).toBe('ollama');
-    expect(event?.model).toBe('default-stub-model');
-    // Extraction is anchored to an agent but produces no Generation row.
-    expect(event?.generationId).toBeNull();
-
-    const components = await db.UsageComponent.findAll({
-      where: { usageEventId: event?.id as number },
-    });
-    expect(
-      Number(
-        components.find((c) => {
-          return c.component === 'input_tokens';
-        })?.quantity
-      )
-    ).toBe(1);
-  });
-
-  test('an agent binding nothing inherits the project default route and meters the served target', async () => {
-    // The project default is the third arm of the resolution chain (model-routing
-    // PRD, Phase 3): consumer route → consumer pin → project default.
-    const routeRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/model-routes')
-      .send({
-        project_id: projectId,
-        name: 'extraction-default-route',
-        targets: [{ ai_provider_id: aiProviderId, model: 'routed-stub-model' }],
-      });
-    expect(routeRes.status).toBe(201);
-
-    const patched = await authenticatedTestClient(adminToken)
-      .patch(`/api/v1/projects/${projectId}`)
-      .send({ default_model_route_id: routeRes.body.id });
-    expect(patched.status).toBe(200);
-
-    const unbound = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents')
-      .send({ project_id: projectId, name: 'ComplInheritingAgent' });
-    expect(unbound.status).toBe(201);
-    expect(unbound.body.ai_provider_id).toBeNull();
-
-    const agent = await db.Agent.findOne({
-      where: { publicId: unbound.body.id },
-    });
-    const provider = await db.AiProvider.findOne({
-      where: { publicId: aiProviderId },
-    });
-
-    const text = await runExtractionCompletion({
-      agentId: unbound.body.id,
-      prompt: 'Extract facts from: user prefers email.',
-    });
-
-    expect(text).toBe('["stub fact"]');
-    // The target's own model, not the agent's (it has none) and not the route id.
-    expect(lastRequestBody?.model).toBe('routed-stub-model');
-
-    // Attribution is read back from the routing metadata after the call, so the
-    // usage event names the target that served rather than the route.
-    let event: InstanceType<typeof db.UsageEvent> | undefined;
-    for (let attempt = 0; attempt < 200 && !event; attempt += 1) {
-      event =
-        (await db.UsageEvent.findOne({
-          where: { agentId: agent?.id as number, meterType: 'llm_tokens' },
-        })) ?? undefined;
-      await new Promise((resolve) => {
-        return setImmediate(resolve);
-      });
-    }
-    expect(event).toBeDefined();
-    expect(event?.provider).toBe('ollama');
-    expect(event?.model).toBe('routed-stub-model');
-    expect(event?.aiProviderId).toBe(provider?.id as number);
-
-    // Leave the project with no default so file-order changes cannot leak it.
-    await authenticatedTestClient(adminToken).delete(
-      `/api/v1/agents/${unbound.body.id}`
-    );
-    const cleared = await authenticatedTestClient(adminToken)
-      .patch(`/api/v1/projects/${projectId}`)
-      .send({ default_model_route_id: null });
-    expect(cleared.status).toBe(200);
-  });
-
-  test('throws RESOURCE_NOT_FOUND for an unknown agent', async () => {
+  test('refuses an agent that does not exist', async () => {
     await expect(
       runExtractionCompletion({
         agentId: 'agt_doesnotexist000',
         prompt: 'irrelevant',
       })
     ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
-
-    await expect(
-      runExtractionCompletion({
-        agentId: 'agt_doesnotexist000',
-        prompt: 'irrelevant',
-      })
-    ).rejects.toBeInstanceOf(DomainError);
   });
 });

@@ -12,7 +12,9 @@ import {
  *
  * `embed` is the whole variation between suites: the unit suite returns one
  * constant vector (nothing there ranks), the retrieval eval returns a
- * feature-hashed vector (where ranking is the thing under test).
+ * feature-hashed vector (where ranking is the thing under test), and a suite
+ * that places its fixtures by hand returns a vector per text. An `embed` that
+ * throws answers the request with a provider error.
  */
 
 // One "token" per whitespace-separated word, so metering assertions have a
@@ -55,9 +57,24 @@ const handleEmbeddingRequest = (args: {
   args.req.on('end', () => {
     const body = raw ? JSON.parse(raw) : {};
     args.res.setHeader('content-type', 'application/json');
-    args.res.end(
-      JSON.stringify(embeddingResponse({ body, embed: args.embed }))
-    );
+    let response: ReturnType<typeof embeddingResponse>;
+    try {
+      response = embeddingResponse({ body, embed: args.embed });
+    } catch (error) {
+      // A `400`, which the SDK does not retry: the shape of a provider that
+      // refuses the request, answered at once rather than after a backoff.
+      args.res.statusCode = 400;
+      args.res.end(
+        JSON.stringify({
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            type: 'invalid_request_error',
+          },
+        })
+      );
+      return;
+    }
+    args.res.end(JSON.stringify(response));
   });
 };
 

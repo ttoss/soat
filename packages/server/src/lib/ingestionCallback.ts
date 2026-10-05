@@ -41,7 +41,7 @@ const getConversionStallTimeoutMs = (): number => {
 /**
  * True when a document is in a non-terminal ingestion state (`pending` or
  * `processing`) but has not been touched within the stall timeout — i.e. the
- * ingestion was abandoned (issue #4). A document awaiting an async converter
+ * ingestion was abandoned. A document awaiting an async converter
  * callback (`conversionAttemptId` set) uses the longer
  * `CONVERSION_STALL_TIMEOUT_MS` window instead of `INGESTION_STALL_TIMEOUT_MS`.
  */
@@ -52,8 +52,7 @@ export const isIngestionStale = (
   const timeoutMs = doc.conversionAttemptId
     ? getConversionStallTimeoutMs()
     : getStallTimeoutMs();
-  const updatedAt = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0;
-  return Date.now() - updatedAt > timeoutMs;
+  return Date.now() - new Date(doc.updatedAt).getTime() > timeoutMs;
 };
 
 /**

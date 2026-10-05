@@ -2,9 +2,8 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { mapDocument } from './documentMapper';
-import type { EmbeddingBilling } from './embedding';
 import { buildFileInclude } from './knowledgeDocumentScope';
-import { distanceExpression, embedQueryOrDegrade } from './knowledgeEmbedding';
+import { distanceExpression } from './knowledgeEmbedding';
 import {
   lexicalMatchWhere,
   lexicalRankExpression,
@@ -15,7 +14,6 @@ import type {
   SearchSignals,
   SignalCandidate,
 } from './knowledgeRanking';
-import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { applyFilterWhere } from './structuredFilter';
@@ -42,8 +40,11 @@ export type DocumentQueryConfig = {
   paths?: string[];
   documentIds?: string[];
   tags?: Record<string, string>;
-  /** Compiled by the caller, which is where the filter's project is known. */
-  metadataWhere?: unknown[];
+  /**
+   * Compiled by the caller, which is where the filter's project is known. `[]`
+   * when the request carries no metadata filter.
+   */
+  metadataWhere: unknown[];
 };
 
 /**
@@ -64,7 +65,7 @@ export type QueryDocumentResult = {
   metadata?: unknown;
   tags?: Record<string, string>;
   /** The document's version, read in the same query as the chunk. */
-  version?: number;
+  version: number;
   content: string | null;
   page?: number;
   score?: number;
@@ -92,8 +93,12 @@ type ChunkWhere = NonNullable<ChunkFindOptions['where']>;
  */
 type ChunkIncludes = NonNullable<ChunkFindOptions['include']>;
 
+/**
+ * `document` is always present: every chunk query joins it with
+ * `required: true` (see {@link buildDocumentInclude}).
+ */
 type ChunkWithDocument = InstanceType<(typeof db)['DocumentChunk']> & {
-  document?: InstanceType<(typeof db)['Document']> & {
+  document: InstanceType<(typeof db)['Document']> & {
     file?: InstanceType<(typeof db)['File']> & {
       project?: InstanceType<(typeof db)['Project']>;
     };
@@ -114,7 +119,7 @@ const readChunkSimilarity = (chunk: ChunkWithDocument): number | undefined => {
 type DocumentBase = ReturnType<typeof mapDocument>;
 
 const pickDocumentFields = (
-  base: DocumentBase | null
+  base: DocumentBase
 ): Pick<
   QueryDocumentResult,
   | 'file_id'
@@ -127,19 +132,6 @@ const pickDocumentFields = (
   | 'tags'
   | 'version'
 > => {
-  if (!base) {
-    return {
-      file_id: undefined,
-      project_id: undefined,
-      path: undefined,
-      filename: undefined,
-      size: undefined,
-      title: undefined,
-      metadata: undefined,
-      tags: undefined,
-      version: undefined,
-    };
-  }
   return {
     file_id: base.file_id,
     project_id: base.project_id,
@@ -155,13 +147,10 @@ const pickDocumentFields = (
 
 /** `score` is left to the fusion step, which is the only place that knows it. */
 const mapChunkResult = (chunk: ChunkWithDocument): QueryDocumentResult => {
-  const doc = chunk.document;
-  const base = doc ? mapDocument(doc) : null;
-
   return {
-    id: doc ? doc.publicId : '',
+    id: chunk.document.publicId,
     chunk_id: chunk.publicId,
-    ...pickDocumentFields(base),
+    ...pickDocumentFields(mapDocument(chunk.document)),
     content: chunk.content,
     page: chunk.pageNumber ?? undefined,
     similarity_score: readChunkSimilarity(chunk),
@@ -422,14 +411,14 @@ const findChunksWithoutSearch = async (args: {
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
   tags: Record<string, string> | undefined;
-  metadataWhere: unknown[] | undefined;
+  metadataWhere: unknown[];
 }): Record<string, unknown> => {
   const where: Record<string, unknown> = { ...liveDocumentWhere() };
   if (args.documentIds && args.documentIds.length > 0) {
     where.publicId = args.documentIds;
   }
   applyTagFilter({ where, tags: args.tags });
-  applyFilterWhere({ where, fragments: args.metadataWhere ?? [] });
+  applyFilterWhere({ where, fragments: args.metadataWhere });
   return where;
 };
 
@@ -509,43 +498,4 @@ export const resolveDocumentSearchLists = async (args: {
     // retrieval exists to prevent.
     lexical: lexical.map(toLexicalCandidate),
   };
-};
-
-/**
- * Ranks documents alone. `searchKnowledge` is the path that reads both stores;
- * this one exists for callers that only ever read documents, and fuses the two
- * signals over a single store's shard of each.
- */
-export const resolveDocumentSearch = async (args: {
-  projectIds?: number[];
-  embeddingBilling: EmbeddingBilling;
-  config: DocumentQueryConfig;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  policyWhere?: Record<string, any>;
-}): Promise<QueryDocumentResult[]> => {
-  const candidates = await resolveDocumentSearchLists({
-    ...args,
-    embedding: args.config.search
-      ? await embedQueryOrDegrade({
-          text: args.config.search,
-          billing: args.embeddingBilling,
-        })
-      : undefined,
-  });
-  if (!candidates.ranked) return candidates.results;
-
-  return fuseCandidates({
-    vector: [candidates.vector],
-    lexical: [candidates.lexical],
-    keyOf: (result) => {
-      return result.chunk_id;
-    },
-    rrfK: args.config.rrfK,
-    // No result of this entry point is a memory, so the recency blend
-    // never applies and the store needs no knob for it.
-    isMemory: () => {
-      return false;
-    },
-    limit: clampKnowledgeSearchLimit(args.config.limit),
-  });
 };

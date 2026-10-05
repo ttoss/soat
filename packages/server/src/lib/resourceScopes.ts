@@ -281,10 +281,10 @@ export const resolveResourceScope = async (args: {
   kind: string;
   publicId: string;
 }): Promise<ScopedResource | null> => {
-  const entry = RESOURCE_KINDS[args.kind];
-  if (!entry) return null;
-
   try {
+    // Every kind a spec declares has an entry (`soatToolsResourceScope.test.ts`
+    // pins it); one that did not would throw below and read as a miss.
+    const entry = RESOURCE_KINDS[args.kind];
     if ('via' in entry) {
       const parentId = await entry.parentId({ id: args.publicId });
       if (!parentId) return null;
