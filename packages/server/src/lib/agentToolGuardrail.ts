@@ -584,14 +584,12 @@ const buildClientToolGate = (args: {
 
 /**
  * Every guardrail governing one tool binding: the generation's project/agent
- * base plus the tool's own scope. Empty when the turn carries no guardrail
- * context.
+ * base plus the tool's own scope.
  */
 export const collectBindingGuardrails = async (args: {
-  context?: ResolverGuardrailContext;
+  context: ResolverGuardrailContext;
   toolGuardrailIds: string[] | null;
 }): Promise<CollectedGuardrail[]> => {
-  if (!args.context) return [];
   const toolScoped = args.toolGuardrailIds?.length
     ? await collectApplicableGuardrails({
         projectId: args.context.projectId,
@@ -620,14 +618,17 @@ export const gateResolvedToolsWithGuardrails = (args: {
   // its executions are metered under the guardrails that release them.
   guardrails: CollectedGuardrail[];
   presetParameters?: Record<string, unknown> | null;
-  rawParameters?: Record<string, unknown> | null;
+  rawParameters?: Record<string, unknown>;
   context: ResolverGuardrailContext;
 }): Record<string, Tool> => {
   const applicable = args.guardrails;
   if (applicable.length === 0) return args.tools;
 
-  const injectSchema =
-    canRouteToApproval(applicable) && args.rawParameters !== undefined;
+  // The schema the justification fields are injected into, when this gate can
+  // file an approval and the tool owns a local schema to carry them.
+  const injectable = canRouteToApproval(applicable)
+    ? args.rawParameters
+    : undefined;
   const gated: Record<string, Tool> = {};
 
   for (const [key, resolvedTool] of Object.entries(args.tools)) {
@@ -638,11 +639,11 @@ export const gateResolvedToolsWithGuardrails = (args: {
     });
     // The (optionally justification-injected) base tool, shared by both the
     // server-execute and client-handoff paths.
-    const base: Tool = injectSchema
+    const base: Tool = injectable
       ? {
           ...resolvedTool,
           inputSchema: jsonSchema(
-            injectApprovalJustificationSchema(args.rawParameters)
+            injectApprovalJustificationSchema(injectable)
           ),
         }
       : resolvedTool;

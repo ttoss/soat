@@ -1,21 +1,13 @@
-import {
-  parseFactCandidates,
-  runBuiltInExtractor,
-} from 'src/lib/memoryExtraction';
-import * as extractionCompletionModule from 'src/lib/memoryExtractionCompletion';
+import { parseFactCandidates } from 'src/lib/memoryExtraction';
 
-// Shared spy created once at module load (the `mockCreateGeneration` pattern):
-// `afterEach` uses `clearAllMocks`, never `restoreAllMocks`.
-const mockRunExtractionCompletion = jest.spyOn(
-  extractionCompletionModule,
-  'runExtractionCompletion'
-);
-
+/**
+ * The parser every built-in extraction reply is read through: a pure function
+ * over a large input space, where driving each shape through a firing rule
+ * would cost a turn and a completion apiece to assert the same thing at lower
+ * resolution. The extractor itself runs end to end in
+ * `rest/memoryExtraction.test.ts`.
+ */
 describe('memoryExtraction lib', () => {
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
   describe('parseFactCandidates', () => {
     test('parses a plain JSON array of strings', () => {
       expect(parseFactCandidates('["a", "b"]')).toEqual(['a', 'b']);
@@ -52,51 +44,6 @@ describe('memoryExtraction lib', () => {
         })
       );
       expect(parseFactCandidates(many)).toHaveLength(20);
-    });
-  });
-
-  describe('runBuiltInExtractor', () => {
-    test('sends the rule prompt, the provider and the model it was given', async () => {
-      mockRunExtractionCompletion.mockResolvedValueOnce('["a fact"]');
-
-      const candidates = await runBuiltInExtractor({
-        agentId: 'agent_source',
-        transcript: 'user: hi\nassistant: hello',
-        prompt: 'Only billing facts',
-        aiProviderId: 'aip_cheap',
-        model: 'cheap-model',
-      });
-
-      expect(candidates).toEqual(['a fact']);
-      const call = mockRunExtractionCompletion.mock.calls[0][0];
-      expect(call.agentId).toBe('agent_source');
-      expect(call.aiProviderId).toBe('aip_cheap');
-      expect(call.model).toBe('cheap-model');
-      // A custom prompt replaces the task instructions only: the response
-      // contract and the transcript are always appended.
-      expect(call.prompt).toContain('Only billing facts');
-      expect(call.prompt).toContain('Respond with a JSON array');
-      expect(call.prompt).toContain('assistant: hello');
-    });
-
-    test('proposes nothing for an empty transcript, without calling the model', async () => {
-      expect(
-        await runBuiltInExtractor({ agentId: 'agent_source', transcript: '  ' })
-      ).toEqual([]);
-      expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
-    });
-
-    test('proposes nothing when the completion fails, rather than throwing', async () => {
-      mockRunExtractionCompletion.mockRejectedValueOnce(
-        new Error('provider unavailable')
-      );
-
-      await expect(
-        runBuiltInExtractor({
-          agentId: 'agent_source',
-          transcript: 'user: hi',
-        })
-      ).resolves.toEqual([]);
     });
   });
 });

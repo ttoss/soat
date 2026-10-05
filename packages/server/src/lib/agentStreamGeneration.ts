@@ -28,7 +28,6 @@ import {
 } from './modelMessages';
 import { routedAiProviderId, routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
-import { isPlainObject } from './plainObject';
 import {
   buildGenerationErrorPayload,
   toProviderDomainError,
@@ -41,17 +40,6 @@ import { recordTraceError, saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
-
-/**
- * Text of the step the run ended on. `generateText` exposes this as
- * `result.text` already; a stream's `onEnd` only gets the step array, so the
- * same "final step, never an earlier one" rule is spelled out here.
- */
-const finalStepText = (steps: unknown[]): string => {
-  const finalStep = steps.at(-1);
-  if (!isPlainObject(finalStep)) return '';
-  return typeof finalStep.text === 'string' ? finalStep.text : '';
-};
 
 /**
  * Records a streamed generation that ended on a text-encoded tool call as
@@ -94,6 +82,8 @@ const fireStreamEndSideEffects = (args: {
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
   steps: unknown[];
+  /** The text of the step the run ended on, never an earlier one's. */
+  finalText: string;
   finishReason: string;
   usage?: LanguageModelUsage;
   /**
@@ -120,7 +110,7 @@ const fireStreamEndSideEffects = (args: {
   // tell the truth — `failed` is what makes this findable on the generation and
   // the trace instead of only in whatever consumed the stream.
   const streamedToolCall = findTextEncodedToolCall({
-    text: finalStepText(args.steps),
+    text: args.finalText,
     toolNames: Object.keys(args.resolvedTools),
   });
   if (streamedToolCall) {
@@ -182,18 +172,13 @@ const recordStreamFailure = async (args: {
   model: LanguageModel;
   error: unknown;
 }): Promise<unknown> => {
-  // `TypedAgent.project.id` is `unknown` — the row is built from several
-  // sources — so it is narrowed rather than asserted: when it is not a number
-  // the failure is still persisted, just not announced.
-  const projectId = args.typedAgent.project.id;
   return recordGenerationFailure({
     generationId: args.generationId,
     traceId: args.traceId,
     error: toProviderDomainError(args.error) ?? args.error,
     model: args.model,
-    ...(typeof projectId === 'number'
-      ? { projectId, projectPublicId: args.typedAgent.project.publicId }
-      : {}),
+    projectId: args.typedAgent.project.id,
+    projectPublicId: args.typedAgent.project.publicId,
     stepsAlreadySpent: 0,
   });
 };
@@ -279,7 +264,7 @@ export const runStreamGeneration = async (args: {
     onError: ({ error }) => {
       streamError = error;
     },
-    onEnd: ({ steps, finishReason, usage }) => {
+    onEnd: ({ steps, text, finishReason, usage }) => {
       fireStreamEndSideEffects({
         generationId: args.generationId,
         traceId: args.traceId,
@@ -290,6 +275,7 @@ export const runStreamGeneration = async (args: {
         model: args.model,
         resolvedTools: args.resolvedTools,
         steps: steps as unknown[],
+        finalText: text,
         finishReason,
         usage,
         failed: streamError !== undefined,

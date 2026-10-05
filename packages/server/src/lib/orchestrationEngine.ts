@@ -1026,7 +1026,6 @@ const applyResumeNodeOutcome = async (args: {
     const execResult = await executeToolNode({
       node: resumedNode,
       state: args.state,
-      projectIds: [run.projectId as number],
       projectId: run.projectId as number,
       orchestrationRunId: run.publicId as string,
       approvedArguments: args.approvedArguments ?? {},

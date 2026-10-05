@@ -94,7 +94,7 @@ describe('POST /api/v1/datasets/:dataset_id/items/from-generation', () => {
     stubServer = createServer((req, res) => {
       // Drained rather than parsed: what this stub answers is fixed per test by
       // `stubResponse`, and the outgoing request body is asserted elsewhere
-      // (`memoryExtractionCompletion.test.ts`).
+      // (`memoryExtraction.test.ts`).
       req.resume();
       req.on('end', () => {
         res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -1,47 +1,21 @@
-import { extractApiErrorMessage } from 'src/mcp/dispatchApi';
+import { dispatchMcpApiRequest } from 'src/mcp/dispatchApi';
 
 /**
- * `extractApiErrorMessage` is tested directly rather than through the MCP
- * endpoint: it is a pure function over the several body shapes an error can
- * arrive in (see `.claude/rules/errors.md`), and reaching each shape through a
- * route would mean provoking a different failure per case while the assertion
- * — which message text survives — stays the same.
- *
- * What the message is *used for* is pinned at the entry point instead, in
- * `rest/mcp.test.ts`: that a failed tool call surfaces as an error carrying this
- * text, rather than as a result.
+ * Outside an MCP request `getApiHeaders()` is `{}`, so the dispatch carries an
+ * empty credential rather than none. No entry point reaches this: every MCP
+ * tool handler runs inside a request whose bearer token the endpoint already
+ * verified. What it pins is that sharing a process never lends authority —
+ * the in-process call is refused by the same auth middleware as a wire call,
+ * and the refusal's own message, not a bare status, is what surfaces.
  */
-describe('extractApiErrorMessage', () => {
-  test('returns the string as-is for a plain string error body', () => {
-    expect(extractApiErrorMessage({ error: 'Orchestration not found' })).toBe(
-      'Orchestration not found'
-    );
-  });
+describe('dispatchMcpApiRequest outside an MCP request', () => {
+  test('is refused by auth with the API error message', async () => {
+    const call = dispatchMcpApiRequest({
+      method: 'GET',
+      url: '/api/v1/agents',
+    });
 
-  test('extracts message from a DomainError-shaped { code, message } body', () => {
-    expect(
-      extractApiErrorMessage({
-        error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Not found.' },
-      })
-    ).toBe('Not found.');
-  });
-
-  test('returns null when the error field is an object without a message', () => {
-    expect(extractApiErrorMessage({ error: { code: 'SOMETHING' } })).toBeNull();
-  });
-
-  test('returns null for a body with no error field', () => {
-    expect(extractApiErrorMessage({ ok: true })).toBeNull();
-  });
-
-  test('returns null for a non-object body', () => {
-    expect(extractApiErrorMessage(null)).toBeNull();
-    expect(extractApiErrorMessage('oops')).toBeNull();
-  });
-
-  test('returns null for a non-string message, so the caller falls back to the status', () => {
-    expect(extractApiErrorMessage({ error: { message: { nested: 1 } } })).toBe(
-      null
-    );
+    await expect(call).rejects.toThrow(Error);
+    await expect(call).rejects.not.toThrow(/^HTTP \d{3}$/);
   });
 });

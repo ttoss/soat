@@ -50,14 +50,25 @@ export const SpecProvider = ({
     error: null,
   });
 
+  // A fetch can settle after the provider unmounts; its result is dropped then.
+  const mounted = React.useRef(true);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const fetchData = React.useCallback(() => {
     if (!token) return;
     fetchSpec(token)
       .then((spec) => {
-        return setState({ spec, loading: false, error: null });
+        if (mounted.current) setState({ spec, loading: false, error: null });
       })
       .catch((error: unknown) => {
-        setState({ spec: null, loading: false, error: String(error) });
+        if (mounted.current) {
+          setState({ spec: null, loading: false, error: String(error) });
+        }
       });
   }, [token]);
 

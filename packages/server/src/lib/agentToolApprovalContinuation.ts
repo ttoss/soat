@@ -245,29 +245,25 @@ const fireContinuation = async (args: {
 };
 
 /**
- * Runs the full tool-call continuation for a resolved item: execute the approved
- * action (populating the decision `result`), then fire the continuation
- * generation. Self-contained — it never rejects, so the resume handler can fire
- * it and forget it without an unhandled rejection. Exported so tests can await
- * it deterministically.
+ * Runs the full tool-call continuation for a resolved `tool_call` item: execute
+ * the approved action (populating the decision `result`), then fire the
+ * continuation generation. Self-contained — it never rejects, so the resume
+ * handler can fire it and forget it without an unhandled rejection.
  */
-export const runToolCallContinuation = async (args: {
+const runToolCallContinuation = async (args: {
   item: MappedApproval;
   decision: DecisionOutput;
   toolContext?: Record<string, string>;
 }): Promise<void> => {
   const { item } = args;
-  if (item.origin !== 'tool_call') return;
   if (!item.project_id) return;
 
   try {
+    // The item's own project; a row deleted mid-resume lands in the catch below.
     const project = await db.Project.findOne({
       where: { publicId: item.project_id },
+      rejectOnEmpty: true,
     });
-    if (!project) {
-      log('runToolCallContinuation: project not found id=%s', item.id);
-      return;
-    }
     const projectInternalId = project.id as number;
 
     const authHeader = await resolveContinuationAuthHeader({

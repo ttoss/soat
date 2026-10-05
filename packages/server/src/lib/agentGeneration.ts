@@ -345,6 +345,7 @@ const prepareGeneration = async (
     nodeId: args.nodeId,
     nodeAttempt: args.nodeAttempt,
     sessionId: args.sessionId,
+    conversationId: args.conversationId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
     pinnedAgentVersion: args.pinnedAgentVersion,
@@ -365,16 +366,14 @@ const claimGeneration = (args: RequestedGenerationArgs) => {
 };
 
 /**
- * The project a failed turn belongs to, in the shape `recordGenerationFailure`
- * needs to announce it. `TypedAgent.project.id` is `unknown` — the row is built
- * from several sources — so it is narrowed rather than asserted: when it is not
- * a number the failure is still persisted, just not announced.
+ * The project a failed turn belongs to, where `recordGenerationFailure`
+ * announces the failure.
  */
 const failureProject = (ctx: GenerationContext) => {
-  const id = ctx.typedAgent.project.id;
-  return typeof id === 'number'
-    ? { projectId: id, projectPublicId: ctx.typedAgent.project.publicId }
-    : {};
+  return {
+    projectId: ctx.typedAgent.project.id,
+    projectPublicId: ctx.typedAgent.project.publicId,
+  };
 };
 
 const runPreparedGeneration = async (args: {

@@ -9,7 +9,7 @@ import { stableDigest } from './stableDigest';
 // producers behave identically.
 export const DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 
-const DEFAULT_REASONING_PROMPT =
+const REASONING_GUIDANCE =
   'This action requires human approval before it executes. Explain why it is warranted.';
 
 // ── Justification fields ────────────────────────────────────────────────────
@@ -46,26 +46,22 @@ export const stripApprovalJustification = (
 /**
  * Adds the three optional justification fields to a tool's model-visible
  * parameters schema, the additive mirror of the `preset_parameters` surgery
- * that strips fields (approvals module docs). `reasoning_prompt` customizes the
- * guidance the model sees; a default is used when omitted. The fields stay
- * optional — never added to `required` — so a guarded call without justification
- * still validates.
+ * that strips fields (approvals module docs). The fields stay optional — never
+ * added to `required` — so a guarded call without justification still
+ * validates.
  */
 export const injectApprovalJustificationSchema = (
-  schema: Record<string, unknown> | null | undefined,
-  reasoningPrompt?: string | null
+  schema: Record<string, unknown>
 ): Record<string, unknown> => {
-  const base = isPlainObject(schema) ? schema : {};
-  const properties = isPlainObject(base.properties) ? base.properties : {};
-  const guidance = reasoningPrompt ?? DEFAULT_REASONING_PROMPT;
+  const properties = isPlainObject(schema.properties) ? schema.properties : {};
   return {
-    ...base,
+    ...schema,
     type: 'object',
     properties: {
       ...properties,
       approval_reasoning: {
         type: 'string',
-        description: `${guidance} Provide the reasoning for this action.`,
+        description: `${REASONING_GUIDANCE} Provide the reasoning for this action.`,
       },
       approval_evidence: {
         type: 'object',

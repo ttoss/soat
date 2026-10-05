@@ -10,8 +10,7 @@
  * per case, with the failure signal buried in a `generateText` argument.
  *
  * `buildPrepareStep` lives in one module, so its cases live in one file rather
- * than split across `agentGenerationHelpers.test.ts` and
- * `agentNonStreamGeneration.test.ts`.
+ * than split across the stream and non-stream generation tests.
  */
 import {
   buildPrepareStep,

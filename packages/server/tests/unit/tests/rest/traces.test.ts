@@ -240,6 +240,24 @@ describe('Traces REST API', () => {
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
     });
+
+    test('an admin listing with no project_id spans every project', async () => {
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/traces');
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((t: { id: string }) => {
+        return t.id;
+      });
+      expect(ids).toContain(traceId);
+      expect(ids).toContain(childTraceId);
+    });
+
+    test('a caller who can read no project gets an empty page, not a 403', async () => {
+      const res =
+        await authenticatedTestClient(noPermToken).get('/api/v1/traces');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ data: [], total: 0, limit: 50, offset: 0 });
+    });
   });
 
   describe('GET /api/v1/traces/:trace_id', () => {

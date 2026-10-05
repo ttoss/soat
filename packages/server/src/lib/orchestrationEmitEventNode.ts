@@ -19,29 +19,25 @@ import type { OrchestrationNode } from './orchestrations';
 export const executeEmitEventNode = async (args: {
   node: OrchestrationNode;
   state: Record<string, unknown>;
-  projectId?: number;
-  runPublicId?: string;
+  projectId: number;
+  runPublicId: string;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectId, runPublicId } = args;
   const eventType = requireNodeField(node, 'eventType');
 
   const data = applyInputMapping(node.inputMapping, state);
 
-  // Outside a persisted run (e.g. unit tests) there is no project to scope the
-  // event to; nothing is emitted, but the node still completes.
-  if (projectId !== undefined) {
-    const projectPublicId = await resolveProjectPublicId({ projectId });
-    // The name is the template author's, not SOAT's, so this is the one emit
-    // site that cannot draw from the event registry (`soatEvents.ts`).
-    emitCustomEvent({
-      type: eventType,
-      projectId,
-      projectPublicId,
-      resourceType: 'orchestration_run',
-      resourceId: runPublicId ?? '',
-      data,
-    });
-  }
+  const projectPublicId = await resolveProjectPublicId({ projectId });
+  // The name is the template author's, not SOAT's, so this is the one emit
+  // site that cannot draw from the event registry (`soatEvents.ts`).
+  emitCustomEvent({
+    type: eventType,
+    projectId,
+    projectPublicId,
+    resourceType: 'orchestration_run',
+    resourceId: runPublicId,
+    data,
+  });
 
   return {
     kind: 'artifact',

@@ -103,7 +103,7 @@ describeCeiling({
   ceiling: TEST_MODULE_CEILING,
   // The size of the list when `pnpm lint` first started checking tests.
   // **Lower it as files shrink; never raise it.**
-  budget: 23,
+  budget: 20,
 });
 
 describe('module ceiling: no self-exemption', () => {

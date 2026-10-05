@@ -323,6 +323,61 @@ describe('Decisions', () => {
       expect(user?.content).toContain('"order_id": "ord_778"');
     });
 
+    // The frame's wording is not part of a decider's version, so a change to it
+    // can move answers on an unchanged decider; pinning the exact text makes
+    // every such change a reviewed diff.
+    test('the model is shown the exact frame for every question type', async () => {
+      const framed = await createDecider({
+        questions: {
+          route: {
+            type: 'choice',
+            instructions: 'Which team should own this ticket?',
+            criteria: { billing: 'Charges', technical: 'Errors' },
+          },
+          severity: {
+            type: 'score',
+            instructions: 'How urgent is it?',
+            criteria: ['Cosmetic', 'Blocking'],
+          },
+          escalate: {
+            type: 'boolean',
+            instructions: 'Escalate it?',
+            criteria: { false: 'Routine', true: 'Legal threat' },
+          },
+          reply: { type: 'boolean', instructions: 'Reply today?' },
+        },
+      });
+      nextContent = JSON.stringify({
+        route: 'billing',
+        severity: 1,
+        escalate: false,
+        reply: true,
+      });
+      const before = received.length;
+
+      const res = await decide({ decider: framed });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('completed');
+
+      const user = received[before].messages.find((message) => {
+        return message.role === 'user';
+      });
+      expect(user?.content).toBe(
+        [
+          'Answer every question below about the state that follows. Choose each answer only from the ones its question offers.',
+          '## Questions',
+          '### route (choice)\nWhich team should own this ticket?\nAnswer with one of these options:\n- billing: Charges\n- technical: Errors',
+          '### severity (score)\nHow urgent is it?\nAnswer with the number of the level that fits:\n- 0: Cosmetic\n- 1: Blocking',
+          '### escalate (boolean)\nEscalate it?\nAnswer true or false:\n- false: Routine\n- true: Legal threat',
+          '### reply (boolean)\nReply today?\nAnswer true or false.',
+          '## State',
+          '<state>',
+          'I was charged twice.',
+          '</state>',
+        ].join('\n\n')
+      );
+    });
+
     test('wait: false answers queued, and the decision settles', async () => {
       const res = await decide({ body: { wait: false } });
 

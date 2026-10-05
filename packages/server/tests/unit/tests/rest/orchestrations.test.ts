@@ -2475,7 +2475,7 @@ describe('Orchestrations', () => {
 
     // An `output_schema` silently reverted to `{ content }` when the model
     // fenced its JSON — the standard shape models return it in. The
-    // parsing edge cases are covered in `orchestrationNodeExecutors.test.ts`.
+    // parsing edge cases are covered in `orchestrationNodeExecution.test.ts`.
     test('an agent node with output_schema parses a markdown-fenced JSON response', async () => {
       const aiProviderRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')

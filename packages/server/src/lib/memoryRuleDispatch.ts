@@ -220,15 +220,11 @@ const loadGeneration = async (
 };
 
 /**
- * Runs every memory rule a completed turn matches.
- *
- * Exported separately from the subscription so a caller can drive one event
- * through the whole path with no live bus listener, and so a test can await the
- * firing rather than poll for it.
+ * Runs every memory rule a completed turn matches. Reached only through the
+ * subscription below, whose `types` filter admits nothing but
+ * `MEMORY_RULE_EVENTS`.
  */
-export const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
-  if (!MEMORY_RULE_EVENTS.includes(event.type as MemoryRuleEvent)) return;
-
+const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
   const generationPublicId = resolveGenerationPublicId(event);
   if (!generationPublicId) return;
 

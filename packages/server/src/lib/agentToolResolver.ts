@@ -810,7 +810,7 @@ const resolveClientTool = (
 const reportBindingUnavailable = (args: {
   typedTool: AgentToolRow;
   reason: string;
-  activity?: ActivityCallContext;
+  activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
 }): void => {
   recordToolResolutionFailure({
@@ -827,7 +827,7 @@ const resolveMcpToolEntry = async (args: {
   typedTool: AgentToolRow;
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
-  activity?: ActivityCallContext;
+  activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
 }): Promise<Record<string, Tool>> => {
   const { typedTool, toolContext, activity, unavailable } = args;
@@ -1190,8 +1190,8 @@ export const resolveEphemeralAgentTool = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  guardrail?: ResolverGuardrailContext;
-  activity?: ActivityCallContext;
+  guardrail: ResolverGuardrailContext;
+  activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
   attribution: ToolCallAttribution;
 }): Promise<Record<string, Tool>> => {
@@ -1220,7 +1220,6 @@ export const resolveEphemeralAgentTool = async (args: {
   const rawParameters =
     typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
-  if (!args.guardrail) return mapped;
   return gateResolvedToolsWithGuardrails({
     tools: mapped,
     // Inline tools have no persisted id to re-execute; the guardrail gate uses
@@ -1254,7 +1253,7 @@ type ResolveToolByTypeArgs = {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  activity?: ActivityCallContext;
+  activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
   attribution: ToolCallAttribution;
 };
@@ -1284,8 +1283,8 @@ const resolveReferenceBinding = async (args: {
   callerProjectId: number;
   projectPublicId?: string;
   resolveArgs: ResolveToolByTypeArgs;
-  guardrail?: ResolverGuardrailContext;
-  activity?: ActivityCallContext;
+  guardrail: ResolverGuardrailContext;
+  activity: ActivityCallContext;
 }): Promise<Record<string, Tool>> => {
   // The agent's project, never the caller's scope: a credential reaching
   // several projects must not widen what an agent's binding resolves to.
@@ -1354,7 +1353,6 @@ const resolveReferenceBinding = async (args: {
       : wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
 
   // Guardrails are the single tool-call gating mechanism.
-  if (!args.guardrail) return mapped;
   return gateResolvedToolsWithGuardrails({
     tools: mapped,
     toolId: typedTool.publicId,
@@ -1377,14 +1375,14 @@ const resolveReferenceBinding = async (args: {
 
 export const resolveAgentTools = async (args: {
   toolIds: string[];
-  tools?: InlineToolDefinition[] | null;
+  tools: InlineToolDefinition[];
   /** The agent's project: every binding resolves in it. */
   projectId: number;
   /**
-   * The project the turn runs in, where its calls are gated and metered, when
-   * it is not the agent's own: a shared agent run by a grantee.
+   * The project the turn runs in, where its calls are gated and metered: the
+   * agent's own, or a grantee's running a shared agent.
    */
-  callerProjectId?: number;
+  callerProjectId: number;
   /**
    * The generation's project on the wire. Pins `project_id` on every builtin
    * action that names one, so the model cannot move the call to another
@@ -1402,10 +1400,10 @@ export const resolveAgentTools = async (args: {
   // Per-generation guardrail-gate context (Milestone 2). Wraps every resolved
   // tool with the classify → route interceptor when a guardrail applies at the
   // project / agent / tool scope.
-  guardrail?: ResolverGuardrailContext;
+  guardrail: ResolverGuardrailContext;
   // Identity a successful tool call is attributed to on the activity feed
-  // (approvals PRD Phase 4). Omitted by callers with no agent in scope.
-  activity?: ActivityCallContext;
+  // (approvals PRD Phase 4).
+  activity: ActivityCallContext;
   // Reports each binding that contributed nothing, so the turn can be told the
   // tool exists and could not be reached.
   unavailable?: UnavailableToolSink;
@@ -1420,7 +1418,7 @@ export const resolveAgentTools = async (args: {
       await resolveReferenceBinding({
         toolPublicId,
         projectId: args.projectId,
-        callerProjectId: args.callerProjectId ?? args.projectId,
+        callerProjectId: args.callerProjectId,
         projectPublicId: args.projectPublicId,
         resolveArgs: args,
         guardrail: args.guardrail,
@@ -1429,7 +1427,7 @@ export const resolveAgentTools = async (args: {
     );
   }
 
-  for (const definition of args.tools ?? []) {
+  for (const definition of args.tools) {
     const ephemeralTools = await resolveEphemeralAgentTool({
       definition,
       projectId: args.projectId,

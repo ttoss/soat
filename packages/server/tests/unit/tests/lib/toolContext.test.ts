@@ -9,7 +9,7 @@ import {
 
 // The reserved identity keys must be unaddressable by a caller on every
 // generation path. This is the pure pinning algorithm; the chokepoint
-// wiring is covered by generationContextPinning.test.ts.
+// wiring is covered by rest/generationIdentityPinning.test.ts.
 describe('pinServerIdentityToolContext', () => {
   test('reserves exactly the server-owned keys', () => {
     expect([...RESERVED_TOOL_CONTEXT_KEYS]).toEqual([

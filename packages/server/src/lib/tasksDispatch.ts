@@ -201,7 +201,6 @@ const runToolDispatch = async (args: {
       inputMapping: args.inputMapping,
     },
     state: args.taskContext,
-    projectIds: [args.projectId],
     projectId: args.projectId,
     authHeader,
     toolContext: args.toolContext,

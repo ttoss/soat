@@ -144,11 +144,12 @@ export type FormationModuleDefinition<TResource> = {
    * rather than each surface remembering.
    */
   writeOnlyProperties?: readonly string[];
-  /** `getAttributes` names that may not be resolved into a formation output. */
+  /**
+   * Attribute names that may not be resolved into a formation output. A
+   * built-in module publishes no attributes, so a `ref_attr` naming one of these
+   * is refused by name rather than reported as not found.
+   */
   sensitiveAttributes?: readonly string[];
-  getAttributes?: (args: {
-    physicalResourceId: string;
-  }) => Promise<Record<string, string>>;
 };
 
 // ── Factory ───────────────────────────────────────────────────────────────
@@ -327,7 +328,7 @@ const dropProperties = (names: readonly string[]) => {
 /**
  * The members a module only has when it declares them — present as keys or
  * absent entirely, because the planner and the apply pipeline branch on
- * `module.writeOnly` / `module.getAttributes` being undefined.
+ * `module.writeOnly` being undefined.
  */
 const buildOptionalMembers = <TResource>(
   definition: FormationModuleDefinition<TResource>
@@ -336,7 +337,6 @@ const buildOptionalMembers = <TResource>(
     warnChecks,
     writeOnlyProperties,
     sensitiveAttributes,
-    getAttributes,
     deletionBlocker,
   } = definition;
   return {
@@ -364,7 +364,6 @@ const buildOptionalMembers = <TResource>(
         }
       : {}),
     ...(sensitiveAttributes ? { sensitiveAttributes } : {}),
-    ...(getAttributes ? { getAttributes } : {}),
   };
 };
 

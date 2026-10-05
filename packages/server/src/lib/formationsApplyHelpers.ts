@@ -141,7 +141,9 @@ export const rollbackCreatedResources = async (args: {
   const events: FormationEvent[] = [];
 
   for (const resource of [...args.created].reverse()) {
-    if (!resource.physicalResourceId) continue;
+    // A row joins `created` only once its create returned, so it carries the
+    // id that create recorded.
+    const physicalResourceId = resource.physicalResourceId!;
     if (resource.deletionPolicy === 'retain') {
       events.push({
         timestamp: new Date().toISOString(),
@@ -149,14 +151,14 @@ export const rollbackCreatedResources = async (args: {
         resourceType: resource.resourceType,
         action: 'rollback-skipped',
         status: 'succeeded',
-        physicalResourceId: resource.physicalResourceId,
+        physicalResourceId,
       });
       continue;
     }
     try {
       await applyDeleteResource({
         resourceType: resource.resourceType,
-        physicalResourceId: resource.physicalResourceId,
+        physicalResourceId,
         projectId: args.projectId,
         actingUserId: args.actingUserId,
         logicalId: resource.logicalId,
@@ -178,7 +180,7 @@ export const rollbackCreatedResources = async (args: {
           resourceType: resource.resourceType,
           action: 'rollback',
           status: 'failed',
-          physicalResourceId: resource.physicalResourceId,
+          physicalResourceId,
           error: errorMsg,
         });
         continue;
@@ -194,7 +196,7 @@ export const rollbackCreatedResources = async (args: {
       resourceType: resource.resourceType,
       action: 'rollback',
       status: 'succeeded',
-      physicalResourceId: resource.physicalResourceId,
+      physicalResourceId,
     });
   }
 
@@ -218,7 +220,7 @@ export const failFormationOperation = async (args: {
    * because of it. The error the operator has to act on stays the one that
    * broke the apply.
    */
-  rollbackEvents?: FormationEvent[];
+  rollbackEvents: FormationEvent[];
 }): Promise<void> => {
   args.events.push({
     timestamp: new Date().toISOString(),
@@ -228,7 +230,7 @@ export const failFormationOperation = async (args: {
     status: 'failed',
     error: args.errorMessage,
   });
-  if (args.rollbackEvents) args.events.push(...args.rollbackEvents);
+  args.events.push(...args.rollbackEvents);
   // The same bag on both records: the operation is the history, the formation
   // is what the deploy response returns, and a caller reading either gets the
   // failure in the platform's `{ code, message, meta }` shape.

@@ -11,8 +11,10 @@ import {
 } from 'src/lib/orchestrationWorkerHealth';
 
 // The standalone worker has no HTTP listener, so its healthcheck grades the
-// freshness of a heartbeat file. A `lib/` test by the keep-list rule: neither
-// the background-sweep producer nor the healthcheck consumer is an entry point.
+// freshness of a heartbeat file. The grading is reached only from
+// `src/workerHealthcheck.ts`, a separate process entry point no test drives;
+// publishing the file is driven at the worker loop in
+// `rest/orchestrationWorkerHeartbeat.test.ts`.
 describe('orchestration worker heartbeat', () => {
   let dir: string;
   let file: string;
@@ -53,49 +55,9 @@ describe('orchestration worker heartbeat', () => {
     });
   });
 
-  describe('writeWorkerHeartbeat', () => {
-    test('publishes the last successful drain, creating missing directories', async () => {
-      const at = Date.now();
-      await writeWorkerHeartbeat({ lastSuccessfulDrainAtMs: at });
-
-      expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual({
-        lastSuccessfulDrainAt: new Date(at).toISOString(),
-      });
-      expect((await readWorkerHeartbeat())?.getTime()).toBe(
-        new Date(at).getTime()
-      );
-    });
-
-    test('writes nothing before the first successful drain', async () => {
-      await writeWorkerHeartbeat({ lastSuccessfulDrainAtMs: null });
-      await expect(fs.readFile(file, 'utf8')).rejects.toThrow();
-    });
-
-    test('is a no-op when no heartbeat file is configured', async () => {
-      delete process.env.ORCHESTRATION_WORKER_HEARTBEAT_FILE;
-      await writeWorkerHeartbeat({ lastSuccessfulDrainAtMs: Date.now() });
-      expect(await readWorkerHeartbeat()).toBeNull();
-    });
-
-    test('an unwritable path is swallowed rather than crashing the worker', async () => {
-      // A path whose parent is an existing *file* can never be created.
-      const blocker = path.join(dir, 'blocker');
-      await fs.writeFile(blocker, 'x');
-      process.env.ORCHESTRATION_WORKER_HEARTBEAT_FILE = path.join(
-        blocker,
-        'worker.heartbeat'
-      );
-
-      await expect(
-        writeWorkerHeartbeat({ lastSuccessfulDrainAtMs: Date.now() })
-      ).resolves.toBeUndefined();
-      expect(await readWorkerHeartbeat()).toBeNull();
-    });
-  });
-
   describe('readWorkerHeartbeat', () => {
     test('is null when nothing has been published', async () => {
-      expect(await readWorkerHeartbeat()).toBeNull();
+      expect(await readWorkerHeartbeat({ filePath: file })).toBeNull();
     });
 
     test.each([
@@ -110,7 +72,7 @@ describe('orchestration worker heartbeat', () => {
     ])('is null for %s', async (_label, contents) => {
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, contents);
-      expect(await readWorkerHeartbeat()).toBeNull();
+      expect(await readWorkerHeartbeat({ filePath: file })).toBeNull();
     });
   });
 

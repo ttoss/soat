@@ -26,8 +26,8 @@ export const secretsFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId }) => {
     await updateSecret({
       id: physicalResourceId,
-      name: toOptionalString(properties.name) ?? undefined,
-      value: toOptionalString(properties.value) ?? undefined,
+      name: toOptionalString(properties.name),
+      value: toOptionalString(properties.value),
     });
   },
 

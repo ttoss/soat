@@ -20,25 +20,23 @@ export const RUN_EVENT_TYPES = {
 
 export type RunLifecycleEvent = keyof typeof RUN_EVENT_TYPES;
 
+const LIFECYCLE_EVENT_FOR_STATUS: Partial<
+  Record<MappedOrchestrationRun['status'], RunLifecycleEvent>
+> = {
+  awaiting_input: 'awaitingInput',
+  succeeded: 'succeeded',
+  failed: 'failed',
+};
+
 /**
- * Maps a run status to the lifecycle event that should fire when a run settles
- * into it. `sleeping` (parked on a timer) and `queued` are not terminal for
- * eventing, so they have no event here; `run.started` is emitted explicitly at
- * creation.
+ * The lifecycle event that fires when a run settles into `status`, if any.
+ * `sleeping` (parked on a timer) and `queued` are not terminal for eventing, so
+ * they have none; `run.started` is emitted explicitly at creation.
  */
 export const lifecycleEventForStatus = (
   status: MappedOrchestrationRun['status']
-): RunLifecycleEvent | null => {
-  switch (status) {
-    case 'awaiting_input':
-      return 'awaitingInput';
-    case 'succeeded':
-      return 'succeeded';
-    case 'failed':
-      return 'failed';
-    default:
-      return null;
-  }
+): RunLifecycleEvent | undefined => {
+  return LIFECYCLE_EVENT_FOR_STATUS[status];
 };
 
 /**

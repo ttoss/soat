@@ -9,7 +9,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
  * here are seeded directly for the same reason `rest/exceptions.test.ts` seeds
  * through `fileException` — the producer has no request behind it. The producer
  * *behavior* (when a row appears, and what its status becomes) is driven
- * end-to-end in `lib/generationChain.test.ts`.
+ * end-to-end in `rest/continuationChains.test.ts`.
  */
 describe('Chains', () => {
   let adminToken: string;

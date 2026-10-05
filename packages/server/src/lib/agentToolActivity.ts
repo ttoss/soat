@@ -61,8 +61,8 @@ const buildRecordedExecute = (args: {
 
 /**
  * Records every server-executed tool produced by one binding (one for most
- * types; many for `mcp` / `soat`) on the activity feed. A no-op when the caller
- * threaded no {@link ActivityCallContext}.
+ * types; many for `mcp` / `soat`) on the activity feed, attributed to the
+ * turn's {@link ActivityCallContext}.
  *
  * Client tools are skipped: they have no server-side `execute` — the call is
  * handed to the client, so the platform never executed the action and cannot
@@ -73,10 +73,9 @@ export const recordToolActivity = (args: {
   toolId: string | null;
   toolType: string;
   toolName: string;
-  activity?: ActivityCallContext;
+  activity: ActivityCallContext;
 }): Record<string, Tool> => {
   const { activity } = args;
-  if (!activity) return args.tools;
 
   log(
     'recordToolActivity: agentId=%s toolName=%s tools=%d',
@@ -129,10 +128,9 @@ export const recordToolResolutionFailure = (args: {
   toolType: string;
   toolName: string;
   reason: string;
-  activity?: ActivityCallContext;
+  activity: ActivityCallContext;
 }): void => {
   const { activity } = args;
-  if (!activity) return;
 
   log(
     'recordToolResolutionFailure: agentId=%s toolName=%s reason=%s',

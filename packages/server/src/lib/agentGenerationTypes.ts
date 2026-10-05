@@ -62,7 +62,7 @@ export type TypedAgent = {
    * project's, reached through a share.
    */
   project: {
-    id: unknown;
+    id: number;
     publicId: string;
     guardrailIds?: string[] | null;
     maxChainGenerations?: number | null;
@@ -226,7 +226,7 @@ export type GenerationResult = {
  */
 export type AgentRunResult = {
   steps: unknown[];
-  response?: { messages?: unknown[]; modelId?: string };
+  response: { messages: unknown[]; modelId: string };
   text: string;
   finishReason: string;
   output?: unknown;

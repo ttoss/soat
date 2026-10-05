@@ -1,7 +1,13 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  startStubChatProvider,
+  stubCompletion,
+} from '../../fixtures/stubChatProvider';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 // Every embedding the server makes reaches the provider through one function, so
@@ -331,6 +337,183 @@ describe('Usage — embedding metering', () => {
       expect(rows[0].trace_id).toBe(genRes.body.trace_id);
       // The deployment's embedding stack, not the agent's provider.
       expect(rows[0].ai_provider_id).toBeNull();
+    });
+  });
+
+  describe('the deployment rate', () => {
+    afterEach(() => {
+      process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD = RATE_PER_1M;
+    });
+
+    const embed = async (input: string) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/embeddings')
+        .send({ project_id: projectId, input });
+      expect(res.status).toBe(200);
+    };
+
+    test('a whole-number rate prices each token at it', async () => {
+      process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD = '3';
+      const before = await readEmbeddingMeters();
+
+      await embed('whole number');
+
+      const rows = await waitForMeters(before.length + 1);
+      expect(rows[0].cost_usd).toBeCloseTo(2 * 0.000003, 12);
+    });
+
+    test('an unset rate meters at zero rather than null', async () => {
+      delete process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD;
+      const before = await readEmbeddingMeters();
+
+      await embed('no rate set');
+
+      const rows = await waitForMeters(before.length + 1);
+      expect(rows[0].cost_usd).toBe(0);
+    });
+
+    // A rate meant to be set fails loudly rather than metering at zero — and a
+    // metering failure never fails the embedding it measures.
+    test('an unparseable rate is not metered, and the call still succeeds', async () => {
+      process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD = 'free';
+      const before = await readEmbeddingMeters();
+
+      await embed('unparseable rate');
+      // A second, metered call: had the first written a row, it would sit
+      // beside this one.
+      process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD = RATE_PER_1M;
+      await embed('parseable rate');
+
+      const rows = await waitForMeters(before.length + 1);
+      expect(rows).toHaveLength(before.length + 1);
+      expect(rows[0].cost_usd).toBeCloseTo(2 * UNIT_PRICE, 12);
+    });
+  });
+
+  describe('attribution to the turn', () => {
+    test('a memory the agent writes mid-turn bills its embedding to that turn', async () => {
+      // The model asks for one write, then answers once the tool has run.
+      const model = await startStubChatProvider({
+        reply: (request) => {
+          const toolRan = (request.messages ?? []).some((message) => {
+            return message.role === 'tool';
+          });
+          return toolRan
+            ? stubCompletion({ content: 'noted' })
+            : stubCompletion({
+                toolCalls: [
+                  {
+                    id: 'call_write',
+                    name: 'write_memory',
+                    arguments: JSON.stringify({
+                      content: 'the customer prefers phone calls',
+                    }),
+                  },
+                ],
+              });
+        },
+      });
+      try {
+        const storeRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-stores')
+          .send({ project_id: projectId, name: 'usage-embeddings-turn-store' });
+        expect(storeRes.status).toBe(201);
+        const providerRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/ai-providers')
+          .send({
+            project_id: projectId,
+            name: 'usage-embeddings-writer',
+            provider: 'ollama',
+            default_model: 'stub-model',
+            base_url: model.baseUrl,
+          });
+        expect(providerRes.status).toBe(201);
+        const agentRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/agents')
+          .send({
+            project_id: projectId,
+            ai_provider_id: providerRes.body.id,
+            name: 'usage-embeddings-writer-agent',
+            knowledge_config: { write_memory_store_id: storeRes.body.id },
+          });
+        expect(agentRes.status).toBe(201);
+
+        const genRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
+          .send({ messages: [{ role: 'user', content: 'call me, please' }] });
+        expect(genRes.status).toBe(200);
+        expect(genRes.body.status).toBe('completed');
+
+        const rows = await readEmbeddingMeters();
+        const write = rows.find((row) => {
+          return row.memory_store_id === storeRes.body.id;
+        });
+        // Written after the turn's record exists, so it carries the turn's
+        // attribution as it is written.
+        expect(write?.generation_id).toBe(genRes.body.id);
+        expect(write?.agent_id).toBe(agentRes.body.id);
+        expect(write?.trace_id).toBe(genRes.body.trace_id);
+
+        // An agent's write names no source to point at.
+        const memories = await authenticatedTestClient(adminToken).get(
+          `/api/v1/memories?memory_store_id=${storeRes.body.id}`
+        );
+        expect(memories.status).toBe(200);
+        expect(memories.body.data).toEqual([
+          expect.objectContaining({ source_type: 'manual' }),
+        ]);
+      } finally {
+        await model.close();
+      }
+    });
+
+    // Sanctioned force-failure: linking is bookkeeping around the record
+    // write, so its own failure must neither fail the turn nor unbill the
+    // embedding.
+    test('a failed link leaves the turn completed and the embedding billed to the project', async () => {
+      const model = await startStubChatProvider();
+      try {
+        const providerRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/ai-providers')
+          .send({
+            project_id: projectId,
+            name: 'usage-embeddings-unlinked',
+            provider: 'ollama',
+            default_model: 'stub-model',
+            base_url: model.baseUrl,
+          });
+        expect(providerRes.status).toBe(201);
+        const agentRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/agents')
+          .send({
+            project_id: projectId,
+            ai_provider_id: providerRes.body.id,
+            name: 'usage-embeddings-unlinked-agent',
+            knowledge_config: { document_paths: ['/'], min_score: 0 },
+          });
+        expect(agentRes.status).toBe(201);
+        const before = await readEmbeddingMeters();
+        const update = jest
+          .spyOn(db.UsageEvent, 'update')
+          .mockRejectedValueOnce(new Error('simulated link failure'));
+        try {
+          const genRes = await authenticatedTestClient(userToken)
+            .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
+            .send({ messages: [{ role: 'user', content: 'alpha gamma' }] });
+          expect(genRes.status).toBe(200);
+          expect(genRes.body.status).toBe('completed');
+          expect(update).toHaveBeenCalled();
+        } finally {
+          update.mockRestore();
+        }
+
+        const rows = await waitForMeters(before.length + 1);
+        expect(rows[0].source).toBe('embedding');
+        expect(rows[0].generation_id).toBeNull();
+        expect(rows[0].agent_id).toBeNull();
+      } finally {
+        await model.close();
+      }
     });
   });
 });
