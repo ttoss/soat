@@ -162,13 +162,16 @@ changed tool gets a test.
 ```bash
 docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
 TUTORIAL_ID=permissions docker compose -f tests/docker-compose.tutorials.yml up ...   # one tutorial
+TUTORIAL_SHARD=1/2 docker compose -f tests/docker-compose.tutorials.yml up ...      # CI shard 1 of 2
 docker compose -f tests/docker-compose.tutorials.yml down --volumes
 ```
 
 `tests/run-tutorials.sh` discovers `*.md`, skips `tests/.tutorialsignore`,
 bootstraps admin, and calls `tests/tutorials-tests.sh` per file, which runs
 `<TabItem value="cli">` bash blocks in one shell (`eval`; trusted files only).
-Harness tests: `tests/harness/` (`pnpm run test:harness`); annotation changes
+CI runs them as a two-shard matrix: the tutorials queue on their stack's one
+Ollama, so a shard with its own stack runs its half in about half the time on
+the same runner CPU. Harness tests: `tests/harness/` (`pnpm run test:harness`); annotation changes
 need a test there first.
 
 Annotations sit on their own line immediately **before** the command
