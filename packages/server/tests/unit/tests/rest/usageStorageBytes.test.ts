@@ -1,15 +1,20 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
-import { snapshotProjectStorage } from 'src/lib/usageStorage';
+import { runStorageSnapshot } from 'src/lib/usageStorage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { seedMemory } from '../../fixtures/memoryWrites';
+import { authenticatedTestClient } from '../../testClient';
 
 /**
  * What the storage snapshot quantifies, row by row. The event shape,
  * idempotency and pricing are covered in `rest/usageStorage.test.ts`; this
  * asserts the measured quantities themselves, on a project of its own so each
  * one is exactly what these fixtures seed.
+ *
+ * Driven through the scheduler's sweep and read back from
+ * `GET /api/v1/usage/events`. The corpus rows are seeded directly so every
+ * term is a known width: a write path would add rows of its own beside them.
  *
  * An embedding is the dominant term — a `vector(1024)` stores ~4 KB against the
  * ~1 KB of text it encodes — so a meter blind to it reports a fraction of the
@@ -52,6 +57,7 @@ const messages = (chars: number): Array<{ content: string; role: string }> => {
 };
 
 describe('Usage — what the storage snapshot counts', () => {
+  let userToken: string;
   let projectId: string;
   let projectInternalId: number;
   let datasetItemPublicId: string;
@@ -92,6 +98,7 @@ describe('Usage — what the storage snapshot counts', () => {
       policyActions: ['usage:ListEvents'],
       createNoPermUser: false,
     });
+    userToken = setup.userToken;
     projectId = setup.projectId;
 
     const project = await db.Project.findOne({
@@ -187,32 +194,38 @@ describe('Usage — what the storage snapshot counts', () => {
 
   type MeteredComponent = { quantity: number; unit: string; billable: boolean };
 
+  type StorageEvent = {
+    components: Array<{
+      component: string;
+      quantity: string;
+      unit: string;
+      billable: boolean;
+    }>;
+  };
+
+  const storageEvents = async (): Promise<StorageEvent[]> => {
+    const res = await authenticatedTestClient(userToken).get(
+      '/api/v1/usage/events?meter_type=storage&limit=100'
+    );
+    expect(res.status).toBe(200);
+    return res.body.data;
+  };
+
   /**
-   * Snapshots `now`'s day and reads back that event's components by name. The
-   * event is located by the same idempotency key the snapshot writes, so a
-   * suite that samples more than one day never reads another day's row.
+   * Runs the sweep for `now`'s day and reads back the event it wrote for this
+   * project by name. The caller reads only this project, and the listing is
+   * newest first, so the one new row is the head.
    */
   const meteredComponents = async (
     now: Date
   ): Promise<Record<string, MeteredComponent>> => {
-    const created = await snapshotProjectStorage({
-      projectId: projectInternalId,
-      projectPublicId: projectId,
-      now,
-    });
-    expect(created).toBe(true);
-
-    const event = await db.UsageEvent.findOne({
-      where: {
-        idempotencyKey: `storage:${projectId}:${now.toISOString().slice(0, 10)}`,
-      },
-    });
-    const components = await db.UsageComponent.findAll({
-      where: { usageEventId: event!.id },
-    });
+    const before = await storageEvents();
+    await runStorageSnapshot({ now });
+    const after = await storageEvents();
+    expect(after).toHaveLength(before.length + 1);
 
     return Object.fromEntries(
-      components.map((component) => {
+      after[0].components.map((component) => {
         return [
           component.component,
           {
@@ -307,7 +320,7 @@ describe('Usage — what the storage snapshot counts', () => {
     expect(vectorBytes).toBeGreaterThan(4 * DIMENSIONS);
     expect(vectorBytes).toBeLessThan(4 * DIMENSIONS + 64);
 
-    // The premise the issue rests on: the vector outweighs the text it encodes.
+    // The premise the meter rests on: the vector outweighs the text it encodes.
     expect(vectorBytes).toBeGreaterThan(4 * EMBEDDED_CHUNK_CHARS);
   });
 

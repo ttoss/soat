@@ -63,7 +63,7 @@ export const getEffectivePrice = async (args: {
   model: string;
   component: string;
   aiProviderId: number | null;
-  projectId: number | null;
+  projectId: number;
   at: Date;
 }): Promise<InstanceType<(typeof db)['PriceBook']> | null> => {
   const base = {
@@ -83,13 +83,11 @@ export const getEffectivePrice = async (args: {
   }
 
   // Tier 2 — the project's rate for this provider slug.
-  if (args.projectId !== null) {
-    const projectPrice = await db.PriceBook.findOne({
-      where: { ...base, aiProviderId: null, projectId: args.projectId },
-      order: [['effectiveFrom', 'DESC']],
-    });
-    if (projectPrice) return projectPrice;
-  }
+  const projectPrice = await db.PriceBook.findOne({
+    where: { ...base, aiProviderId: null, projectId: args.projectId },
+    order: [['effectiveFrom', 'DESC']],
+  });
+  if (projectPrice) return projectPrice;
 
   // Tier 3 — the global default.
   return db.PriceBook.findOne({

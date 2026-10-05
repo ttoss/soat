@@ -25,9 +25,13 @@ type TokenQuantities = {
 
 // A fresh project + agent per test so windowed aggregation is isolated by
 // project id — no cross-test usage bleed and no global cleanup.
+// `baseUrl` points the provider at a local stub, so a generation the quota
+// check admits completes rather than failing upstream.
 export const freshProjectAndAgent = async (args: {
   adminToken: string;
   name: string;
+  baseUrl?: string;
+  defaultModel?: string;
 }) => {
   const { adminToken, name } = args;
   const projRes = await authenticatedTestClient(adminToken)
@@ -41,7 +45,8 @@ export const freshProjectAndAgent = async (args: {
       project_id: projectPublicId,
       name: `${name} provider`,
       provider: 'ollama',
-      default_model: 'stub-model',
+      default_model: args.defaultModel ?? 'stub-model',
+      ...(args.baseUrl ? { base_url: args.baseUrl } : {}),
     });
 
   const agentRes = await authenticatedTestClient(adminToken)
@@ -63,6 +68,7 @@ export const freshProjectAndAgent = async (args: {
   return {
     projectPublicId,
     agentPublicId,
+    aiProviderPublicId: provRes.body.id as string,
     projectInternalId: (project as unknown as { id: number }).id,
     agentInternalId: (agent as unknown as { id: number }).id,
   };

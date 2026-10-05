@@ -2,15 +2,19 @@ import { randomBytes } from 'node:crypto';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
-import {
-  lastSnapshotStoredBytes,
-  snapshotProjectStorage,
-} from 'src/lib/usageStorage';
+import { runStorageSnapshot } from 'src/lib/usageStorage';
+
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient } from '../../testClient';
 
 /**
  * What the storage snapshot's `record_gb_day` quantifies: the records the
  * runtime writes about work it did, beside what a caller stored. The
  * stored-content terms are covered in `usageStorageBytes.test.ts`.
+ *
+ * Driven through the scheduler's sweep and read back from
+ * `GET /api/v1/usage/events`. The records are seeded directly so each term is
+ * a known width: any write path would add records of its own beside them.
  *
  * Measured as the difference between two days' snapshots of one project. That
  * difference also holds the first day's own storage event, so each term is
@@ -43,8 +47,8 @@ const text = (chars: number): string => {
 
 type Seeded = { projectId: number; projectPublicId: string; agentId: number };
 
-// Created directly rather than through the bootstrap fixture, which mints the
-// deployment's first admin and so can run once per file.
+// Created directly rather than through the API, which would write audit
+// entries of its own into the project being measured.
 const seedProject = async (name: string): Promise<Seeded> => {
   const project = await db.Project.create({ name });
   const agent = await db.Agent.create({
@@ -83,28 +87,40 @@ const seedGeneration = async (args: Seeded & { chars: number }) => {
 
 type MeteredComponents = Record<string, { quantity: number; unit: string }>;
 
-/** Snapshots `day` (`YYYY-MM-DD`) and reads back that event's components. */
+type StorageEvent = {
+  project_id: string;
+  components: Array<{ component: string; quantity: string; unit: string }>;
+};
+
+let adminToken: string;
+
+const projectStorageEvents = async (
+  project: Seeded
+): Promise<StorageEvent[]> => {
+  const res = await authenticatedTestClient(adminToken).get(
+    '/api/v1/usage/events?meter_type=storage&limit=100'
+  );
+  expect(res.status).toBe(200);
+  return (res.body.data as StorageEvent[]).filter((event) => {
+    return event.project_id === project.projectPublicId;
+  });
+};
+
+/**
+ * Runs the sweep for `day` (`YYYY-MM-DD`) and reads back the event it wrote for
+ * `project`. The listing is newest first, so the one new row is the head.
+ */
 const snapshot = async (args: {
   project: Seeded;
   day: string;
 }): Promise<MeteredComponents> => {
-  const created = await snapshotProjectStorage({
-    projectId: args.project.projectId,
-    projectPublicId: args.project.projectPublicId,
-    now: new Date(`${args.day}T00:00:00.000Z`),
-  });
-  expect(created).toBe(true);
+  const before = await projectStorageEvents(args.project);
+  await runStorageSnapshot({ now: new Date(`${args.day}T00:00:00.000Z`) });
+  const after = await projectStorageEvents(args.project);
+  expect(after).toHaveLength(before.length + 1);
 
-  const event = await db.UsageEvent.findOne({
-    where: {
-      idempotencyKey: `storage:${args.project.projectPublicId}:${args.day}`,
-    },
-  });
-  const components = await db.UsageComponent.findAll({
-    where: { usageEventId: event!.id },
-  });
   return Object.fromEntries(
-    components.map((component) => {
+    after[0].components.map((component) => {
       return [
         component.component,
         { quantity: Number(component.quantity), unit: component.unit },
@@ -126,6 +142,15 @@ const bytesBetween = (args: {
 };
 
 describe('Usage — what the storage snapshot counts as records of work', () => {
+  beforeAll(async () => {
+    const setup = await setupProjectWithUsers({
+      prefix: 'recordbytes',
+      policyActions: [],
+      createNoPermUser: false,
+    });
+    adminToken = setup.adminToken;
+  });
+
   test('writes record_gb_day beside gb_day and chunk_count', async () => {
     const project = await seedProject('records-shape');
 
@@ -314,20 +339,34 @@ describe('Usage — what the storage snapshot counts as records of work', () => 
     ).toBeLessThan(SLACK);
   });
 
+  // A cap on what a caller stored: the records of work the runtime keeps are
+  // metered, but are not the caller's to delete, so they never fill it.
   test('the storage_bytes quota reads gb_day alone, never records of work', async () => {
     const project = await seedProject('records-quota');
     await seedGeneration({ ...project, chars: GENERATION_CHARS });
-
     const components = await snapshot({ project, day: '2026-08-01' });
     expect(components.record_gb_day.quantity * BYTES_PER_GB).toBeGreaterThan(
       GENERATION_CHARS
     );
 
-    const measured = await lastSnapshotStoredBytes({
-      projectId: project.projectId,
-    });
-    expect(measured!.bytes).toBe(
-      Math.round(components.gb_day.quantity * BYTES_PER_GB)
-    );
+    const quotaRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/quotas')
+      .send({
+        project_id: project.projectPublicId,
+        scope: 'project',
+        metric: 'storage_bytes',
+        window: 'current',
+        limit: GENERATION_CHARS,
+      });
+    expect(quotaRes.status).toBe(201);
+
+    const upload = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files')
+      .send({
+        project_id: project.projectPublicId,
+        filename: 'under-the-cap.bin',
+        size: GENERATION_CHARS / 2,
+      });
+    expect(upload.status).toBe(201);
   });
 });

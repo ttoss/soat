@@ -44,8 +44,10 @@ export const projectPricesFormationModule = defineFormationModule({
       id: physicalResourceId,
       provider: toOptionalString(properties.provider),
       model: toOptionalString(properties.model),
-      component: toOptionalString(properties.component),
-      unit: toOptionalString(properties.unit),
+      // Both required by the schema and type-checked above, on update as on
+      // create.
+      component: properties.component as string,
+      unit: properties.unit as string,
       unitPrice: toOptionalNumber(properties.unit_price),
       meterType: toOptionalString(properties.meter_type),
       effectiveFrom: toOptionalString(properties.effective_from),
