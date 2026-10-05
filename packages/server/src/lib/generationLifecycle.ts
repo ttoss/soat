@@ -66,13 +66,11 @@ export const recordGenerationFailure = async (args: {
   /** The model the failed turn ran on — a routed one stamps its attempts. */
   model?: LanguageModel;
   /**
-   * The project the turn belongs to. Optional only because the failure must be
-   * *persisted* even from a path that cannot name it; when both are present the
-   * failure is also announced, which is the only channel a background caller
-   * has (it already got its `202` and went away).
+   * The project the turn belongs to, where the failure is announced — the only
+   * channel a background caller has (it already got its `202` and went away).
    */
-  projectId?: number;
-  projectPublicId?: string;
+  projectId: number;
+  projectPublicId: string;
   /**
    * Token usage the turn spent before it failed, from `usageFromFailure`. A
    * failure that never reached the model has none; one that failed *on* the
@@ -121,30 +119,28 @@ export const recordGenerationFailure = async (args: {
 
   // Without this, the only way to learn a background generation died is to poll
   // the record. Wrapped so emitting can never mask the original error.
-  if (args.projectId !== undefined && args.projectPublicId !== undefined) {
-    try {
-      emitResourceEvent({
-        type: 'agents.generation.failed',
-        projectId: args.projectId,
-        projectPublicId: args.projectPublicId,
-        resourceType: 'generation',
-        resourceId: args.generationId,
-        // snake_case: an event payload is a wire surface, reaching subscribers
-        // through the webhook dispatcher verbatim.
-        data: {
-          id: args.generationId,
-          trace_id: args.traceId,
-          status: 'failed',
-          error: errorPayload,
-        },
-      });
-    } catch (error) {
-      log(
-        'recordGenerationFailure: failed to emit failure event generationId=%s error=%s',
-        args.generationId,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
+  try {
+    emitResourceEvent({
+      type: 'agents.generation.failed',
+      projectId: args.projectId,
+      projectPublicId: args.projectPublicId,
+      resourceType: 'generation',
+      resourceId: args.generationId,
+      // snake_case: an event payload is a wire surface, reaching subscribers
+      // through the webhook dispatcher verbatim.
+      data: {
+        id: args.generationId,
+        trace_id: args.traceId,
+        status: 'failed',
+        error: errorPayload,
+      },
+    });
+  } catch (error) {
+    log(
+      'recordGenerationFailure: failed to emit failure event generationId=%s error=%s',
+      args.generationId,
+      error instanceof Error ? error.message : String(error)
+    );
   }
 
   // Meta keys are

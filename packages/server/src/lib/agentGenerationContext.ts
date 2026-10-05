@@ -117,11 +117,6 @@ const assembleContextMessages = async (args: {
   allMessages: Array<{ role: string; content: unknown }>;
   retrieval: KnowledgeRetrieval;
 }> => {
-  // `TypedAgent.project.id` is `unknown` — the row is built from several
-  // sources — so it is narrowed rather than asserted: a non-number leaves the
-  // retrieval embedding unmetered rather than failing the turn.
-  const projectId = args.typedAgent.project.id;
-
   const knowledge = await buildKnowledgeMessages({
     knowledgeConfig: mergeKnowledgeConfig({
       base: readKnowledgeConfig(args.typedAgent.knowledgeConfig),
@@ -131,10 +126,10 @@ const assembleContextMessages = async (args: {
     projectIds: args.typedAgent.ownerProject
       ? [args.typedAgent.ownerProject.id]
       : args.projectIds,
-    embeddingBilling:
-      typeof projectId === 'number'
-        ? { projectId, generationId: args.generationId }
-        : null,
+    embeddingBilling: {
+      projectId: args.typedAgent.project.id,
+      generationId: args.generationId,
+    },
     messages: args.resolvedMessages,
   });
 

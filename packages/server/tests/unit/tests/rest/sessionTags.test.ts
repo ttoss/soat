@@ -117,6 +117,41 @@ describe('SessionTags', () => {
     });
   });
 
+  // A fork is written with no bag at all, unlike a session created directly,
+  // so its tags column starts out null rather than `{}`.
+  describe('tags on a session forked without tags', () => {
+    const fork = async (name: string): Promise<string> => {
+      const parentId = await createSession(`${name} Parent`);
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${parentId}/fork`)
+        .send({ name });
+      expect(res.status).toBe(201);
+      return res.body.id;
+    };
+
+    test('GET /api/v1/sessions/:session_id/tags reads an empty bag', async () => {
+      const forkId = await fork('Untagged Fork Read');
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${forkId}/tags`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({});
+    });
+
+    test('PATCH /api/v1/sessions/:session_id/tags merges onto an empty bag', async () => {
+      const forkId = await fork('Untagged Fork Merge');
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${forkId}/tags`)
+        .send({ team: 'support' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ team: 'support' });
+    });
+  });
+
   describe('GET /api/v1/sessions with tag filter', () => {
     let taggedId: string;
     let otherId: string;
