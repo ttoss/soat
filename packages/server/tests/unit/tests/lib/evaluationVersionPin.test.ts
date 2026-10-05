@@ -3,15 +3,14 @@ import { buildGenerationContext } from 'src/lib/agentGenerationContext';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * The version pin an eval run relies on (the evaluations module doc — Version
- * pinning).
- *
- * Asserted here rather than through `POST /evals/{id}/runs`, because the REST
- * suite replaces `createGeneration` with `mockCreateGeneration` — so the pin
- * never reaches config resolution there and the served instructions cannot be
- * observed. `buildGenerationContext` is the chokepoint every fresh generation
- * passes through, so driving it directly is what proves the pinned run really
- * executes the archived config rather than the live row.
+ * A pin whose archive is gone degrades to the live row (the evaluations module
+ * doc — Version pinning). No entry point can name such a pin: a run validates
+ * its `agent_version` at start and archives are removed only with their agent,
+ * so the archive can go missing only when the non-transactional v1 archive
+ * write after an agent create fails. The served config and version are what
+ * the run is pinned on, so `buildGenerationContext` — the chokepoint every
+ * fresh generation passes through — is driven directly. The pins an entry
+ * point can produce are in `rest/evaluationVersionPin.test.ts`.
  */
 describe('buildGenerationContext — pinned agent version', () => {
   let agentId: string;
@@ -53,38 +52,6 @@ describe('buildGenerationContext — pinned agent version', () => {
       .patch(`/api/v1/agents/${agentId}`)
       .send({ instructions: V2_INSTRUCTIONS });
     expect(updated.body.version).toBe(2);
-  });
-
-  test('with no pin, the live draft config is served', async () => {
-    const ctx = await buildGenerationContext({
-      agentId,
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-
-    expect(ctx.agentVersion).toBe(2);
-    expect(ctx.typedAgent.instructions).toBe(V2_INSTRUCTIONS);
-  });
-
-  test('a pinned version serves that version’s archived config', async () => {
-    const ctx = await buildGenerationContext({
-      agentId,
-      messages: [{ role: 'user', content: 'hi' }],
-      pinnedAgentVersion: 1,
-    });
-
-    expect(ctx.agentVersion).toBe(1);
-    expect(ctx.typedAgent.instructions).toBe(V1_INSTRUCTIONS);
-  });
-
-  test('pinning the live version is a no-op that still stamps it', async () => {
-    const ctx = await buildGenerationContext({
-      agentId,
-      messages: [{ role: 'user', content: 'hi' }],
-      pinnedAgentVersion: 2,
-    });
-
-    expect(ctx.agentVersion).toBe(2);
-    expect(ctx.typedAgent.instructions).toBe(V2_INSTRUCTIONS);
   });
 
   test('a pin with no archived config degrades to the live row rather than failing', async () => {

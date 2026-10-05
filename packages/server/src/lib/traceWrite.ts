@@ -323,9 +323,7 @@ const readTraceBase = async (
   const storedSteps = await readTraceSteps(trace);
   const storedSegments = readStepSegments(trace?.stepSegments);
 
-  const indexed =
-    storedSteps !== null &&
-    (storedSegments.length > 0 || storedSteps.length === 0);
+  const indexed = storedSteps !== null && storedSegments.length > 0;
 
   return indexed
     ? { baseSteps: storedSteps, baseSegments: storedSegments }

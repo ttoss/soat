@@ -12,14 +12,11 @@
  * deriving the same thing independently let a defect survive in both at once.
  */
 import { hasToolCall, isStepCount, type StopCondition, type ToolSet } from 'ai';
-import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { forcesATool } from './agentStepRules';
 import { resolveMaxSteps } from './generationStopReason';
 import { isPlainObject } from './plainObject';
-
-const log = createDebug('soat:generation');
 
 /**
  * The condition vocabulary. Not every entry is a per-turn predicate: a condition
@@ -34,15 +31,6 @@ export const STOP_CONDITION_TYPES = [
   'has_tool_call',
   'max_chain_generations',
 ] as const;
-
-/**
- * Conditions the per-turn loop cannot evaluate, because they are about the chain
- * rather than the turn. Enforced at continuation-spawn time by
- * `generationChain.ts` (via {@link resolveChainGenerationCeiling}).
- */
-const CHAIN_SCOPED_TYPES: ReadonlySet<string> = new Set([
-  'max_chain_generations',
-]);
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(STOP_CONDITION_TYPES);
 
@@ -217,10 +205,12 @@ export const isTurnBudgetSpent = (config: {
  * Resolution), which is the key `resolvedTools` is already built under, so no
  * id→name translation belongs here.
  *
- * An entry the vocabulary does not cover is skipped with a log rather than
- * throwing: writes are validated, so anything reaching here is a stored row
- * from before that validation, and failing its generation would be worse than
- * ignoring a condition that never fired anyway.
+ * Only `has_tool_call` is a per-turn predicate. `max_chain_generations` bounds
+ * the chain rather than the turn, and is enforced where a continuation is
+ * spawned (`generationChain.ts`, via {@link resolveChainGenerationCeiling}).
+ * Every other entry is skipped rather than thrown on: writes refuse a type
+ * outside the vocabulary, so failing a generation over one would be worse than
+ * ignoring a condition no write path can produce.
  */
 export const resolveStopWhen = (config: {
   maxSteps: unknown;
@@ -241,17 +231,10 @@ export const resolveStopWhen = (config: {
 
   for (const entry of config.stopConditions) {
     if (!isPlainObject(entry)) continue;
-    const type = readType(entry);
     const toolName = readToolName(entry);
-    if (type === 'has_tool_call' && toolName) {
+    if (readType(entry) === 'has_tool_call' && toolName) {
       conditions.push(hasToolCall<ToolSet>(toolName));
-      continue;
     }
-    // Deliberately not a predicate: it bounds the chain, not this turn, and is
-    // evaluated where a continuation is spawned. Silent rather than logged —
-    // it is a supported condition doing its job elsewhere.
-    if (type && CHAIN_SCOPED_TYPES.has(type)) continue;
-    log('resolveStopWhen: ignoring unsupported condition %o', entry);
   }
 
   return conditions;

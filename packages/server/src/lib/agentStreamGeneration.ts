@@ -182,18 +182,13 @@ const recordStreamFailure = async (args: {
   model: LanguageModel;
   error: unknown;
 }): Promise<unknown> => {
-  // `TypedAgent.project.id` is `unknown` — the row is built from several
-  // sources — so it is narrowed rather than asserted: when it is not a number
-  // the failure is still persisted, just not announced.
-  const projectId = args.typedAgent.project.id;
   return recordGenerationFailure({
     generationId: args.generationId,
     traceId: args.traceId,
     error: toProviderDomainError(args.error) ?? args.error,
     model: args.model,
-    ...(typeof projectId === 'number'
-      ? { projectId, projectPublicId: args.typedAgent.project.publicId }
-      : {}),
+    projectId: args.typedAgent.project.id,
+    projectPublicId: args.typedAgent.project.publicId,
     stepsAlreadySpent: 0,
   });
 };

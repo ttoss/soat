@@ -62,7 +62,7 @@ export type TypedAgent = {
    * project's, reached through a share.
    */
   project: {
-    id: unknown;
+    id: number;
     publicId: string;
     guardrailIds?: string[] | null;
     maxChainGenerations?: number | null;
