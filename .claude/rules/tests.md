@@ -28,22 +28,33 @@ reuse a server whose account has `CREATEDB`.
 
 ## Location
 
-`packages/server/tests/unit/tests/`: `rest/<module>.test.ts` (default, via
-supertest) and `lib/<module>.test.ts` (direct, keep-list only). Every REST route
-has a test.
+`packages/server/tests/unit/tests/`, one directory per class:
+
+| Class | Drives | Example |
+|---|---|---|
+| `rest/<module>.test.ts` | an entry point via supertest (default) | `rest/agents.test.ts` |
+| `jobs/<routine>.test.ts` | a background routine no request reaches: a scheduler tick, the queue worker's drivers, the worker healthcheck | `jobs/triggerScheduler.test.ts` |
+| `lib/<module>.test.ts` | a function directly, keep-list only (below) | `lib/iam.test.ts` |
+
+Every REST route has a test. A routine is whatever `server.ts`, `worker.ts` or
+`workerHealthcheck.ts` starts, plus `lib/scheduler.ts` they all run on; a `lib/`
+test importing one fails `tests/harness/serverTestLayout.test.mjs`, which also
+holds the directories to these three.
 
 ## Test at the entry point
 
-Default to REST, the MCP endpoint, the scheduler or the event flow. Write a
-`lib/` test only when:
+Default to REST, the MCP endpoint or the event flow. A routine whose outcome
+the API shows (a sweep that settles what a `GET` reads back) is still a
+`rest/` test that runs the tick and reads through the API; `jobs/` is for what
+only the routine can observe. Write a `lib/` test only when:
 
 1. a pure algorithm with a large input space is expensive or low-resolution
    through HTTP (`iam`, `policyCompiler`, `orchestrationValidation`,
    `formationsHelpers`, `chunking`, `ingestionRuleMatching`), or
-2. no entry point reaches the function.
+2. no entry point and no routine reaches the function.
 
-Never duplicate `rest/` coverage in `lib/`, and never test a defensive branch no
-entry point reaches: delete the branch.
+Never duplicate `rest/` coverage in `lib/` or `jobs/`, and never test a
+defensive branch no entry point reaches: delete the branch.
 
 ## Never mock what you own
 
