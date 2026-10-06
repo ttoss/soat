@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.72.0](https://github.com/ttoss/soat/compare/v0.71.4...v0.72.0) (2026-10-06)
+
+### Features
+
+* **server:** accept formation templates up to 10 MB ([#1554](https://github.com/ttoss/soat/issues/1554)) ([e0f384b](https://github.com/ttoss/soat/commit/e0f384b490171be342aae55073ffc0b481382cae))
+
 ## [0.71.4](https://github.com/ttoss/soat/compare/v0.71.3...v0.71.4) (2026-10-05)
 
 **Note:** Version bump only for package @soat/website
