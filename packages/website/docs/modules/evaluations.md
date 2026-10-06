@@ -18,7 +18,7 @@ outputs. Where [traces](./traces.md) and [guardrails](./guardrails.md) deal with
 runs, an evaluation answers whether a change to the agent improved the distribution of
 runs. It is the ratchet layer of
 [The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet).
-How to choose the items, scorers and threshold so the verdict means something:
+How to write the claim and choose the items, scorers and threshold so the verdict means something:
 [Eval Design](../advanced/eval-design.md).
 
 The module follows the [engine & algorithms pattern](../advanced/engines-and-algorithms.md):

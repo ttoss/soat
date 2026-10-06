@@ -117,6 +117,27 @@ The loop asks *did this run succeed?*; the ratchet asks *did this change make th
 
 The ratchet's shape: **produce a verdict from evidence, gate the change on the verdict, keep the history append-only.** Current state of each piece: [Status](#status).
 
+### From a capability to a decision
+
+A verdict supports a claim, and the claim is written before the evidence. Each verb of the ratchet's shape owns a span of the nine steps that turn a capability into an engineering decision.
+
+**Produce a verdict from evidence** (steps 1–8):
+
+| Step | Artifact | Where it lives |
+| --- | --- | --- |
+| 1. Capability | The pain observed: a correction that recurs, an exception, a turn that went wrong | [Approvals recurrence view](/docs/modules/approvals#recurrence-view), [Exceptions](/docs/modules/exceptions), [Replay a Bad Turn](/docs/tutorials/replay-a-bad-turn) |
+| 2. Construct | The observable property that stands for the capability | One [scorer](/docs/modules/evaluations#scorers) per property; a [decider](/docs/modules/evaluations#decider-scorers-decider) when production already asks the question |
+| 3. Claim | The sentence a passing run authorizes about the agent, over which inputs | Written before the dataset: [Eval Design](/docs/advanced/eval-design#the-claim) |
+| 4. Evidence required | The kinds of input that must be present and the pass rate the claim needs | `group_by` over the items' `metadata`, `pass_threshold`: [Eval Design](/docs/advanced/eval-design#the-evidence-the-claim-needs) |
+| 5. Cases | The dataset, weighted toward failures, curated from production | [Datasets](/docs/modules/evaluations#curating-items-from-production), a dev and a held-out set |
+| 6. Measurements | One real generation per item, against one pinned agent version | [Eval runs](/docs/modules/evaluations#version-pinning) |
+| 7. Interpretation | The pass rate with its interval, per kind, against a baseline | [Uncertainty](/docs/modules/evaluations#uncertainty), [Grouped aggregates](/docs/modules/evaluations#grouped-aggregates), [Baseline deltas](/docs/modules/evaluations#baseline-deltas) |
+| 8. Supported claim | The run's verdict | [Pass semantics](/docs/modules/evaluations#pass-semantics) |
+
+**Gate the change on the verdict** (step 9): promoting the canary, encoding a guardrail `deny` or rewording an instruction waits for the verdict. [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) is the gate.
+
+**Keep the history append-only**: the decision creates an [agent version](/docs/modules/agents#versioning-and-staged-rollout), every generation records the version that served it, and production yields the next step 1. A run against the new version, with the old version's run as its `baseline_run_id`, reports what moved.
+
 ### It is not simply "after the graph"
 
 The ratchet acts on the other three layers and needs no graph. Order in practice: build the harness, close the loop, ratchet the loop as soon as it produces evidence you trust, add a graph only when a process pain demands one.
@@ -174,6 +195,9 @@ Pieces marked coming soon are designed but not built.
 | [Evaluations](/docs/modules/evaluations) — datasets, scorers, runs, baselines | Shipped                                                                                  |
 | [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) of a canary release | Shipped                                                                         |
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
+| An eval run's verdict read on the pass-rate interval and on the kinds the claim requires, with its reasons | Coming soon |
+| The claim written on the eval and frozen on each run | Coming soon |
+| Claims held per agent version; promotion refused while the canary loses one the stable version supports | Coming soon |
 
 ## Layers are concerns, not autonomy levels
 

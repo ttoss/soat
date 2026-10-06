@@ -1,7 +1,9 @@
 ---
-description: "Design an eval whose verdict means something: a failure-weighted dataset, the cheapest scorer per item, deltas read with p-values, calibrated judges."
+description: "Design an eval whose verdict means something: the claim first, the evidence it needs, a failure-weighted dataset, the cheapest scorer, calibrated judges."
 keywords:
   - eval design
+  - eval claim
+  - eval validity
   - evaluation dataset
   - llm judge calibration
   - noise floor
@@ -10,11 +12,33 @@ keywords:
 
 # Eval Design
 
-[Evaluations](../modules/evaluations.md) guarantees the mechanics: every item runs against the real agent, inputs are frozen, one version is pinned, errors are counted apart. What a verdict _means_ is decided by the items, the scorers and the threshold you choose. This page covers those choices and shows no calls: new to evals, complete [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) first, which builds a dataset, binds scorers, runs the eval and compares two runs.
+[Evaluations](../modules/evaluations.md) guarantees the mechanics: every item runs against the real agent, inputs are frozen, one version is pinned, errors are counted apart. What a verdict _means_ is decided by the claim you write and by the items, the scorers and the threshold you choose to support it. This page covers those choices, in the order they are made, and shows no calls: new to evals, complete [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) first, which builds a dataset, binds scorers, runs the eval and compares two runs.
+
+## The claim
+
+Write the sentence a passing run authorizes before the dataset: what the agent does, over which inputs. The items, the scorers and the threshold exist to support that sentence, and a run is evidence for it alone.
+
+| Capability | Claim |
+| --- | --- |
+| The agent is reliable | Answers a billing question from the account's own invoices, or says it cannot |
+| It knows how to use the tools | Calls `lookup_order` with the order id the customer gave, never with a guessed one |
+| It investigates well | Names the failing step of a run from its trace, for runs that errored in a tool call |
+
+A claim names an observable property and the inputs it holds over. One claim is one eval: when two kinds of input need different thresholds, give each its own dataset and eval. Write beside the claim what the eval does not establish, so a passing run is not read wider than its items.
+
+## The evidence the claim needs
+
+The claim fixes what counts as enough evidence before a run is read:
+
+- **Every kind of input the claim covers is a kind in the dataset.** Put the kind in each item's `metadata` and set `group_by` to it ([Label each item's kind](#label-each-items-kind)). A kind the claim names and the dataset lacks leaves that part of the claim unmeasured, whatever the pass rate.
+- **The threshold is the pass rate the claim needs, at a size the items can show.** A run's `pass_rate_interval` says what its items support ([Noise before signal](#noise-before-signal)); twenty items passing in full support a pass rate of `0.84`, not `0.95`.
+- **One scorer per property the claim names**, the cheapest that decides it ([Choosing a scorer](#choosing-a-scorer)). An item passes when every scorer passes.
+
+The verdict is the pass rate against the threshold ([Pass semantics](../modules/evaluations.md#pass-semantics)); the interval and the per-kind figures are read beside it.
 
 ## The dataset
 
-The dataset is the specification: an agent that passes it is correct only in the sense its items define.
+The dataset is the claim made concrete: an agent that passes it is correct only in the sense its items define.
 
 - **Weight it toward failures.** A set sampled uniformly from production is dominated by turns the agent already answers. Its pass rate sits near `1.0`, and a regression moves it by one item. Favour turns that went wrong, edge cases, and requests the agent must refuse.
 - **Fix the reference when curating.** `create-dataset-item-from-generation` copies the turn's answer into `expected_output`. For a turn promoted _because_ it was wrong, that stores the defect as the reference: pass `--expected-output` with the correct answer, or `null` when the scorers need none. See [Curating items from production](../modules/evaluations.md#curating-items-from-production) and [Replay a Bad Turn](/docs/tutorials/replay-a-bad-turn).
@@ -116,6 +140,8 @@ A run costs `items × (agent generation + one judge completion per llm_judge + o
 
 ## Checklist
 
+- [ ] The claim written before the dataset: what a passing run authorizes, over which inputs, and what it does not establish
+- [ ] Every kind of input the claim covers has items in the dataset
 - [ ] Dataset weighted toward failures, each item's kind in `metadata`, `group_by` set to it
 - [ ] Curated items carry a correct `expected_output`
 - [ ] The cheapest scorer per criterion; `llm_judge` only where no rule decides
