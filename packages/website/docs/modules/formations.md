@@ -118,6 +118,8 @@ A template has four top-level keys. Complete 14-resource template: [Deploy a Mul
 | `outputs`    | No       | Map of output names → values (may contain `ref` expressions) |
 | `metadata`   | No       | Arbitrary metadata; supports `sub`/`param`/`ref` substitution (see [Metadata Substitution](#metadata-substitution)) |
 
+A request carrying a template may be up to 10 MB, so documents can be declared with their content inline; every other route keeps a 1 MB body limit.
+
 #### Key Naming and Case
 
 The template is stored and returned **verbatim**; keys are never rewritten.

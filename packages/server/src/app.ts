@@ -2,7 +2,13 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
+import {
+  addHealthCheck,
+  App,
+  bodyParser,
+  cors,
+  type Next,
+} from '@ttoss/http-server';
 
 import type { Context } from './Context';
 import { initializeActivityListener } from './lib/activity';
@@ -40,7 +46,15 @@ app.use(requestIdMiddleware);
 // Capture the raw body for public inbound hook paths before the JSON body
 // parser runs, so signatures can be verified over the exact bytes.
 app.use(hookRawBodyMiddleware);
-app.use(bodyParser());
+// A formation template carries document bodies inline, so it outgrows the
+// parser's 1 MB default that every other route keeps.
+const formationBodyParser = bodyParser({ jsonLimit: '10mb' });
+const defaultBodyParser = bodyParser();
+app.use((ctx: Context, next: Next) => {
+  return ctx.path.startsWith('/api/v1/formations')
+    ? formationBodyParser(ctx, next)
+    : defaultBodyParser(ctx, next);
+});
 app.use(authMiddleware);
 // Audit-log write hook: after auth (wraps the attached isAllowed) and wrapping
 // the route handlers, it records one entry per mutating /api/v1 request
