@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { pageOf, type PaginatedResult } from './pagination';
 import { shares } from './shares';
 
 const log = createDebug('soat:shares');
@@ -65,6 +66,7 @@ const findToolUsers = async (args: {
         ],
       },
       attributes: ['publicId'],
+      order: [['id', 'ASC']],
     }),
     db.Tool.findAll({
       where: {
@@ -72,6 +74,7 @@ const findToolUsers = async (args: {
         [Op.and]: [jsonNames('pipeline', args.toolId)],
       },
       attributes: ['publicId'],
+      order: [['id', 'ASC']],
     }),
   ]);
   return [
@@ -110,6 +113,7 @@ export const findShareReferences = async (args: {
           [isTool ? 'toolPublicId' : 'agentPublicId']: args.resourceId,
         },
         attributes: ['publicId'],
+        order: [['id', 'ASC']],
       }),
       db.Orchestration.findAll({
         where: {
@@ -117,6 +121,7 @@ export const findShareReferences = async (args: {
           [Op.and]: [jsonNames('nodes', args.resourceId)],
         },
         attributes: ['publicId'],
+        order: [['id', 'ASC']],
       }),
       db.Trigger.findAll({
         where: {
@@ -125,6 +130,7 @@ export const findShareReferences = async (args: {
           targetId: args.resourceId,
         },
         attributes: ['publicId'],
+        order: [['id', 'ASC']],
       }),
       db.Formation.findAll({
         where: {
@@ -132,6 +138,7 @@ export const findShareReferences = async (args: {
           [Op.and]: [jsonNames('template', args.resourceId)],
         },
         attributes: ['publicId'],
+        order: [['id', 'ASC']],
       }),
     ]);
 
@@ -148,13 +155,17 @@ export const findShareReferences = async (args: {
 export const listShareReferences = async (args: {
   id: string;
   projectId: number;
-}): Promise<{ data: ShareReference[] }> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<ShareReference>> => {
   const share = await shares.getByPublicId({ id: args.id });
-  return {
-    data: await findShareReferences({
+  return pageOf({
+    items: await findShareReferences({
       resourceType: share.resourceType,
       resourceId: share.resourceId,
       projectId: args.projectId,
     }),
-  };
+    limit: args.limit,
+    offset: args.offset,
+  });
 };

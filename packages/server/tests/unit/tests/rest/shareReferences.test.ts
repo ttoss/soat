@@ -174,6 +174,60 @@ describe('Share references', () => {
       expect(response.body.data).toHaveLength(toolReferences.length);
     });
 
+    describe('pagination', () => {
+      const list = (query: Record<string, string | number> = {}) => {
+        return grantee()
+          .get(`/api/v1/shares/${toolShareId}/references`)
+          .query(query);
+      };
+
+      test('the default page carries the envelope', async () => {
+        const response = await list();
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+          total: toolReferences.length,
+          limit: 50,
+          offset: 0,
+        });
+      });
+
+      test('pages walk the same order without repeats', async () => {
+        const all = (await list()).body.data;
+
+        const first = await list({ limit: 2, offset: 0 });
+        const second = await list({ limit: 2, offset: 2 });
+
+        expect(first.status).toBe(200);
+        expect(first.body).toMatchObject({ total: 5, limit: 2, offset: 0 });
+        expect([...first.body.data, ...second.body.data]).toEqual(
+          all.slice(0, 4)
+        );
+      });
+
+      test('the last page holds the remainder', async () => {
+        const response = await list({ limit: 2, offset: 4 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.total).toBe(5);
+        expect(response.body.data).toHaveLength(1);
+      });
+
+      test('a limit above the ceiling is clamped to it', async () => {
+        const response = await list({ limit: 1000 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.limit).toBe(100);
+      });
+
+      test('a non-numeric limit falls back to the default', async () => {
+        const response = await list({ limit: 'abc' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.limit).toBe(50);
+      });
+    });
+
     test('lists a formation declaring a resource on the shared tool', async () => {
       const tool = await newTool('formationRefTool');
       const shareId = await shareAccepted({ type: 'tool', id: tool });

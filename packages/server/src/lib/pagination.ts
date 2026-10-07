@@ -118,3 +118,22 @@ export const paginatedList = async <M, T>(args: {
 
   return { data, total: count, limit, offset };
 };
+
+/**
+ * The paginated envelope over a set already held in memory — one assembled
+ * from several queries, or answered by a vendor API rather than the database.
+ * `items` must arrive in a stable order, or two pages can overlap.
+ */
+export const pageOf = <T>(args: {
+  items: T[];
+  limit?: number;
+  offset?: number;
+}): PaginatedResult<T> => {
+  const { limit, offset } = resolvePagination(args);
+  return {
+    data: args.items.slice(offset, offset + limit),
+    total: args.items.length,
+    limit,
+    offset,
+  };
+};
