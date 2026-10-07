@@ -47,9 +47,7 @@ const pollTask = async (args: {
     const res = await authenticatedTestClient(args.token).get(
       `/api/v1/tasks/${args.taskId}`
     );
-    if (res.status === 200 && args.predicate(res.body.data)) {
-      return res.body.data;
-    }
+    if (res.status === 200 && args.predicate(res.body)) return res.body;
     await new Promise((resolve) => {
       setTimeout(resolve, 20);
     });
@@ -4142,7 +4140,7 @@ describe('Tasks', () => {
         const history = await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         );
-        const automated = (history.body as HistoryRow[]).filter((row) => {
+        const automated = (history.body.data as HistoryRow[]).filter((row) => {
           return row.transition === 'respin';
         });
         expect(automated).toHaveLength(LIMIT);
