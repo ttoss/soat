@@ -65,11 +65,94 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The server suite runs in the `server-tests` shard matrix, as in
+      # `pr.yml`: the whole suite on this one runner outlasts the runner.
       - name: Build and test
-        run: pnpm turbo run build typecheck lint test
+        run: |
+          pnpm turbo run build typecheck lint
+          pnpm turbo run test --filter='!@soat/server'
 
       - name: Test test-harness scripts
         run: pnpm run test:harness
+
+  server-tests:
+    name: Server Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    needs: release-test-gate
+    if: needs.release-test-gate.outputs.tested != 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace dependencies
+        run: pnpm turbo run build --filter='@soat/server^...'
+
+      # Thresholds are enforced once over the merged coverage, in
+      # `server-coverage`; no shard sees more than its slice of the source.
+      - name: Run tests
+        run: >
+          pnpm --filter @soat/server exec jest --projects tests/unit
+          --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+          --coverageReporters=json
+          --coverageThreshold={}
+
+      - name: Upload shard coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: packages/server/tests/unit/coverage/coverage-final.json
+          retention-days: 1
+
+  server-coverage:
+    name: Server Coverage
+    runs-on: ubuntu-latest
+    needs: [release-test-gate, server-tests]
+    if: needs.release-test-gate.outputs.tested != 'true'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download shard coverage
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-shard-*
+          path: coverage-shards
+
+      - name: Resolve Jest config
+        working-directory: packages/server
+        run: pnpm exec jest --projects tests/unit --showConfig > "$RUNNER_TEMP/jest-config.json"
+
+      - name: Enforce coverage thresholds
+        run: >
+          node scripts/mergeCoverage.mjs
+          --config "$RUNNER_TEMP/jest-config.json"
+          --cwd packages/server
+          coverage-shards/*/coverage-final.json
 
   smoke-test:
     name: Smoke Tests
@@ -115,7 +198,7 @@ jobs:
   push-release-tag:
     name: Push Release Tag
     runs-on: ubuntu-latest
-    needs: [release-test-gate, build-and-test, smoke-test, tutorials-test]
+    needs: [release-test-gate, build-and-test, server-tests, server-coverage, smoke-test, tutorials-test]
     # The test jobs are skipped when the gate proved the tree tested, and a
     # skipped need would skip this job too — so require the gate itself to
     # pass and no test job to have failed or been cancelled instead.
