@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.73.0](https://github.com/ttoss/soat/compare/v0.72.0...v0.73.0) (2026-10-07)
+
+### Features
+
+* **server:** deciders follow the OpenAI Decisions API shape ([#1557](https://github.com/ttoss/soat/issues/1557)) ([5de0e6b](https://github.com/ttoss/soat/commit/5de0e6b4b41df5834db6d824b9ba4ad4d93a627c))
+
+### BREAKING CHANGES
+
+* **server:** decider `questions` is an array (`boolean` is `predicate`, `criteria` is `choices`/`levels`); decision `state` is `input`; `answers` is an array (plus `answers_by_name`); the eval `decider` scorer's `state` is `input`; tool backends answer the new contract.
+
 # [0.72.0](https://github.com/ttoss/soat/compare/v0.71.4...v0.72.0) (2026-10-06)
 
 **Note:** Version bump only for package @soat/postgresdb
