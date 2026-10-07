@@ -23,6 +23,7 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 
 - [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer's actor tags, and an orchestration branches on its answer
 - [Grade an Eval with a Decider](/docs/tutorials/grade-an-eval-with-a-decider) — a decider backed by TypeSafe Jev reviews a live reply, then grades every item of an eval
+- [Answer a Decider with OpenAI's Decisions API](/docs/tutorials/answer-a-decider-with-openai) — an `http` tool forwards a decider's questions to OpenAI
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -324,7 +325,7 @@ An answer outside that contract settles the decision `failed` with `DECISION_ANS
 
 ### Answering with OpenAI's Decisions API
 
-Since the tool receives the request body of OpenAI's Decisions API and answers in its response, an `http` tool that forwards to `https://api.openai.com/v1/decisions`, with `model` as a [preset parameter](./tools.md#preset-parameters), answers a decider unchanged:
+Since the tool receives the request body of OpenAI's Decisions API and answers in its response, an `http` tool that forwards to `https://api.openai.com/v1/decisions`, with `model` as a [preset parameter](./tools.md#preset-parameters), answers a decider unchanged ([tutorial](/docs/tutorials/answer-a-decider-with-openai)):
 
 ```json
 {

@@ -9,6 +9,7 @@
 //   POST /v1/responses  — Responses API (agent converter, image OCR).
 //   POST /v1/stt        — speech-to-text REST endpoint (tool converter).
 //   POST /v1/systemone  — TypeSafe Jev evaluation endpoint (decider tutorial).
+//   POST /v1/decisions  — OpenAI Decisions API (OpenAI decider tutorial).
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -144,6 +145,43 @@ const answerJevQuestions = (body) => {
   return answers;
 };
 
+// Fixed figures in OpenAI's Decisions API response shape: a predicate holds at
+// 0.92; a choice is its first value; a score leans on its second level.
+const round2 = (n) => Math.round(n * 100) / 100;
+
+const answerOpenAiDecision = (question) => {
+  const { type, name } = question;
+  if (type === 'predicate') return { type, name, probability: 0.92 };
+  if (type === 'choice' && Array.isArray(question.choices)) {
+    const rest = 0.1 / Math.max(question.choices.length - 1, 1);
+    const probabilities = question.choices.map((choice, index) => ({
+      value: choice.value,
+      probability: index === 0 ? 0.9 : round2(rest),
+    }));
+    return { type, name, choice: question.choices[0].value, probabilities, confidence: 0.88 };
+  }
+  if (type === 'score' && Array.isArray(question.levels)) {
+    const top = Math.min(1, question.levels.length - 1);
+    const rest = 0.3 / Math.max(question.levels.length - 1, 1);
+    const probabilities = question.levels.map((level, index) => ({
+      value: index,
+      label: level.label,
+      probability: index === top ? 0.7 : round2(rest),
+    }));
+    const score = round2(
+      probabilities.reduce((sum, entry) => sum + entry.value * entry.probability, 0)
+    );
+    return { type, name, score, probabilities, confidence: 0.55 };
+  }
+  return null;
+};
+
+const answerOpenAiDecisions = (body) => {
+  if (!Array.isArray(body.questions) || body.questions.length === 0) return null;
+  const answers = body.questions.map(answerOpenAiDecision);
+  return answers.includes(null) ? null : answers;
+};
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname } = url;
@@ -265,6 +303,22 @@ const server = http.createServer(async (req, res) => {
         usage: { input_tokens: 300, output_tokens: 20 },
       })
     );
+    return;
+  }
+
+  if (req.method === 'POST' && pathname.endsWith('/decisions')) {
+    if (!/^Bearer \S+/.test(req.headers.authorization ?? '')) {
+      jsonError(res, 401, 'missing bearer token');
+      return;
+    }
+    const body = parseJson((await readRawBuffer(req)).toString('utf8'));
+    const answers = answerOpenAiDecisions(body);
+    if (!body.model || body.input === undefined || answers === null) {
+      jsonError(res, 400, 'Invalid request.');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ answers }));
     return;
   }
 
