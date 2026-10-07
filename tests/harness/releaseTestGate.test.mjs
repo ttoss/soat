@@ -232,10 +232,16 @@ describe('main.yml wiring', () => {
   };
 
   test('every test job runs unless the gate proved the tree tested', () => {
-    for (const job of ['build-and-test', 'smoke-test', 'tutorials-test']) {
+    for (const job of [
+      'build-and-test',
+      'server-tests',
+      'server-coverage',
+      'smoke-test',
+      'tutorials-test',
+    ]) {
       const block = jobBlock(job);
 
-      assert.match(block, /needs: release-test-gate/, job);
+      assert.match(block, /needs: \[?release-test-gate/, job);
       assert.match(
         block,
         /if: needs\.release-test-gate\.outputs\.tested != 'true'/,
@@ -249,7 +255,7 @@ describe('main.yml wiring', () => {
 
     assert.match(
       block,
-      /needs: \[release-test-gate, build-and-test, smoke-test, tutorials-test\]/
+      /needs: \[release-test-gate, build-and-test, server-tests, server-coverage, smoke-test, tutorials-test\]/
     );
     assert.match(block, /needs\.release-test-gate\.result == 'success'/);
     assert.match(block, /!contains\(needs\.\*\.result, 'failure'\)/);
