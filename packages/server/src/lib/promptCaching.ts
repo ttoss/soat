@@ -9,16 +9,17 @@
  * and across the turns of a session. Everything after it is the conversation,
  * which grows every step and is what the prefix cache exists to stop re-buying.
  *
- * One mark, not one per block. Nested breakpoints each open their own cache
- * entry, and what a write of overlapping prefixes is billed as is a provider
- * detail we would be guessing at; one prefix has one write and one read, which
- * is arithmetic an operator can check against their invoice.
+ * A second mark rides on the last message of each step, applied per step by
+ * `buildStepCacheBreakpoint` and never stored: each step then reads the whole
+ * prefix the previous step wrote — history, knowledge and tool results — and
+ * writes only what it appended. Two marks stay under the provider's ceiling of
+ * four per request.
  *
  * Caching is off unless the agent asks for it: a cache write costs more than an
  * uncached token, so an agent whose prefix is never re-read would pay for the
  * privilege.
  */
-import type { SystemModelMessage } from 'ai';
+import type { ModelMessage, SystemModelMessage } from 'ai';
 
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
@@ -120,4 +121,50 @@ export const withPromptCacheBreakpoint = <
     if (index !== lastSystemIndex) return message;
     return { ...message, providerOptions: CACHE_BREAKPOINT };
   });
+};
+
+type ProviderOptions = NonNullable<ModelMessage['providerOptions']>;
+
+/** Adds the breakpoint beside whatever provider options a message already has. */
+const mergeBreakpoint = (
+  providerOptions: ProviderOptions | undefined
+): ProviderOptions => {
+  const merged: ProviderOptions = { ...providerOptions };
+  for (const [provider, options] of Object.entries(CACHE_BREAKPOINT ?? {})) {
+    merged[provider] = { ...providerOptions?.[provider], ...options };
+  }
+  return merged;
+};
+
+/**
+ * Marks the last message of a step, for the AI SDK's `prepareStep`. Undefined
+ * when caching is off.
+ *
+ * The SDK carries a `messages` override forward into the next step's input, so
+ * the message this step marked arrives marked again; it is swapped back for its
+ * unmarked original, found by identity, before the new last message is marked.
+ * The SDK's response messages never hold the override, so a paused turn
+ * persists no step mark and a resume marks its own.
+ */
+export const buildStepCacheBreakpoint = (
+  promptCaching: unknown
+): ((messages: ModelMessage[]) => ModelMessage[]) | undefined => {
+  if (!readPromptCachingConfig(promptCaching).enabled) return undefined;
+
+  const originals = new WeakMap<ModelMessage, ModelMessage>();
+
+  return (messages) => {
+    const unmarked = messages.map((message) => {
+      return originals.get(message) ?? message;
+    });
+    const last = unmarked.at(-1);
+    if (!last) return unmarked;
+
+    const marked = {
+      ...last,
+      providerOptions: mergeBreakpoint(last.providerOptions),
+    } as ModelMessage;
+    originals.set(marked, last);
+    return [...unmarked.slice(0, -1), marked];
+  };
 };
