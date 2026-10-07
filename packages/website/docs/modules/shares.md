@@ -119,7 +119,7 @@ Once a project accepts a share of a tool, it names that tool by id like one of i
 - a trigger's tool target;
 - an ingestion rule's `tool_id`, including one declared in a [formation](./formations.md) template.
 
-Every other reference to a tool — a decider or eval scorer backend, a memory rule, a workflow dispatch, a guardrail's `context_tool_id` — names one of the project's own tools only.
+Every other reference to a tool — a decider, inline decision or eval scorer backend, a memory rule, a workflow dispatch, a guardrail's `context_tool_id` — names one of the project's own tools only.
 
 A key or OAuth token scoped to the grantee project also reaches the shared tool on its own routes, when its policies allow the action in that project:
 
@@ -153,7 +153,7 @@ Once a project accepts a share of an agent, the agent runs in that project from:
 - an orchestration `agent` node;
 - an ingestion rule's `agent_id`, as its converter, including one declared in a [formation](./formations.md) template.
 
-Every other reference to an agent — a decider, an eval, a memory rule, a workflow dispatch — names one of the project's own agents only.
+Every other reference to an agent — a decider, an inline decision, an eval, a memory rule, a workflow dispatch — names one of the project's own agents only.
 
 A turn through a share:
 

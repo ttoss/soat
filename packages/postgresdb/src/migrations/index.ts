@@ -31,6 +31,7 @@ import { usageEventPublisherProject } from './2026-09-30-usageEventPublisherProj
 import { generationInputModalities } from './2026-10-01-generationInputModalities';
 import { priceBookResource } from './2026-10-01-priceBookResource';
 import { shareCap } from './2026-10-01-shareCap';
+import { decisionsOpenaiShape } from './2026-10-07-decisionsOpenaiShape';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -83,4 +84,5 @@ export const MIGRATIONS: Migration[] = [
   shareCap,
   priceBookResource,
   generationInputModalities,
+  decisionsOpenaiShape,
 ];

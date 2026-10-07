@@ -207,6 +207,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/multi-agent-orchestration',
         'tutorials/conditional-orchestration',
         'tutorials/route-work-with-a-decider',
+        'tutorials/answer-a-decider-with-openai',
         'tutorials/orchestration-control-flow',
         'tutorials/approval-gate',
         'tutorials/create-an-agent-squad',

@@ -13,7 +13,7 @@ import { Project } from './Project';
 import { Tool } from './Tool';
 
 /**
- * A named question set that, evaluated against a caller's state, produces a
+ * A named question set that, evaluated against a caller's input, produces a
  * `Decision` whose answers are confined to each question's declared space.
  *
  * `version` counts the question set only: every write that changes `questions`
@@ -108,10 +108,9 @@ export class Decider extends Model {
   declare version: number;
 
   /**
-   * Question id → `{ type, instructions, criteria? }`, in the wire shape.
-   * `JSON`, not `JSONB`: `JSONB` reorders object keys, and the order of the
-   * questions and of a `choice` question's options is the order the model is
-   * shown them in.
+   * `[{ type, name, instructions, choices? | levels? }]`, in the wire shape.
+   * `JSON`, not `JSONB`: `JSONB` reorders object keys, so a question would read
+   * back with its fields in another order than it was written.
    */
   @Column({ type: DataType.JSON, allowNull: false })
   declare questions: object;

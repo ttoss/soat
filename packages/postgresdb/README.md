@@ -86,6 +86,7 @@ The flow they follow is
 | `2026-10-01-share-cap` | `shares.cap`, the calls each acceptance may make per window |
 | `2026-10-01-price-book-resource` | `price_books.resource` and `quantity`, a row pricing one tool by what a call consumed |
 | `2026-10-01-generation-input-modalities` | `generations.input_modalities`, the part types a turn's input carried |
+| `2026-10-07-decisions-openai-shape` | decider questions and decision answers converted to the OpenAI Decisions API shape (arrays carrying `name`, `predicate` for `boolean`); `decisions.decider_id`/`decider_version` nullable and `decisions.questions` for a decision sent with its own questions |
 
 Run them from the server package, which owns the entrypoint:
 

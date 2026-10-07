@@ -7929,7 +7929,7 @@ DECIDER_RESP=$($SOAT_CLI create-decider \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-triage" \
   --agent_id "$DECIDER_AGENT_ID" \
-  --questions '{"escalate":{"type":"boolean","instructions":"Must a person read this first?"}}')
+  --questions '[{"type":"predicate","name":"escalate","instructions":"Must a person read this first?"}]')
 DECIDER_ID=$(printf '%s\n' "$DECIDER_RESP" | jq -r '.id')
 if ! printf '%s\n' "$DECIDER_RESP" | jq -e '(.id | startswith("dcd_")) and .version == 1' >/dev/null 2>&1; then
   echo "ERROR: create-decider did not return a decider at version 1" >&2
@@ -7941,7 +7941,7 @@ echo "Decider id: $DECIDER_ID"
 echo "--- Changing the questions archives a new version ---"
 DECIDER_UPDATED=$($SOAT_CLI update-decider \
   --decider_id "$DECIDER_ID" \
-  --questions '{"escalate":{"type":"boolean","instructions":"Does a person have to see this first?"}}')
+  --questions '[{"type":"predicate","name":"escalate","instructions":"Does a person have to see this first?"}]')
 if [ "$(printf '%s\n' "$DECIDER_UPDATED" | jq -r '.version')" != "2" ]; then
   echo "ERROR: a question change did not bump the decider to version 2" >&2
   printf '%s\n' "$DECIDER_UPDATED" >&2
@@ -7949,7 +7949,7 @@ if [ "$(printf '%s\n' "$DECIDER_UPDATED" | jq -r '.version')" != "2" ]; then
 fi
 DECIDER_V1=$($SOAT_CLI get-decider-version --decider_id "$DECIDER_ID" --version 1)
 if ! printf '%s\n' "$DECIDER_V1" | jq -e \
-  '.config.questions.escalate.instructions == "Must a person read this first?"' >/dev/null 2>&1; then
+  '.config.questions[0].instructions == "Must a person read this first?"' >/dev/null 2>&1; then
   echo "ERROR: version 1 did not keep the questions it held" >&2
   printf '%s\n' "$DECIDER_V1" >&2
   exit 1
@@ -7960,7 +7960,7 @@ echo "--- Requesting a decision ---"
 # the decision is asserted settled either way, under the version it was asked.
 DECISION_RESP=$($SOAT_CLI create-decision \
   --decider_id "$DECIDER_ID" \
-  --state "A customer threatens legal action." \
+  --input "A customer threatens legal action." \
   --metadata '{"ticket_id":"smoke-1"}' \
   --wait true)
 DECISION_ID=$(printf '%s\n' "$DECISION_RESP" | jq -r '.id')
@@ -7994,14 +7994,14 @@ DECIDER_ENGINE_RESP=$($SOAT_CLI create-tool \
   --name decider-engine-stub \
   --type pipeline \
   --description "Answers the decider's question set with a fixed answer." \
-  --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$DECIDER_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"answers\":{\"escalate\":{\"value\":true,\"probabilities\":{\"true\":0.9,\"false\":0.1}}}}}")
+  --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$DECIDER_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"answers\":[{\"name\":\"escalate\",\"probability\":0.9}]}}")
 DECIDER_ENGINE_ID=$(printf '%s\n' "$DECIDER_ENGINE_RESP" | jq -r '.id')
 
 TOOL_DECIDER_RESP=$($SOAT_CLI create-decider \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-tool-triage" \
   --tool_id "$DECIDER_ENGINE_ID" \
-  --questions '{"escalate":{"type":"boolean","instructions":"Must a person read this first?"}}')
+  --questions '[{"type":"predicate","name":"escalate","instructions":"Must a person read this first?"}]')
 TOOL_DECIDER_ID=$(printf '%s\n' "$TOOL_DECIDER_RESP" | jq -r '.id')
 if ! printf '%s\n' "$TOOL_DECIDER_RESP" | jq -e --arg tool "$DECIDER_ENGINE_ID" \
   '.tool_id == $tool and .agent_id == null' >/dev/null 2>&1; then
@@ -8012,13 +8012,28 @@ fi
 
 TOOL_DECISION_RESP=$($SOAT_CLI create-decision \
   --decider_id "$TOOL_DECIDER_ID" \
-  --state "A customer threatens legal action." \
+  --input "A customer threatens legal action." \
   --wait true)
 if ! printf '%s\n' "$TOOL_DECISION_RESP" | jq -e \
-  '.status == "completed" and .generation_id == null and .answers.escalate == {"type":"boolean","value":true,"probabilities":{"true":0.9,"false":0.1}}' \
+  '.status == "completed" and .generation_id == null and .answers == [{"type":"predicate","name":"escalate","probability":0.9}] and .answers_by_name.escalate.probability == 0.9' \
   >/dev/null 2>&1; then
   echo "ERROR: the tool-backed decision did not settle with the tool's answer" >&2
   printf '%s\n' "$TOOL_DECISION_RESP" >&2
+  exit 1
+fi
+
+echo "--- A decision with inline questions ---"
+INLINE_DECISION_RESP=$($SOAT_CLI create-inline-decision \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --tool_id "$DECIDER_ENGINE_ID" \
+  --questions '[{"type":"predicate","name":"escalate","instructions":"Must a person read this first?"}]' \
+  --input "A customer threatens legal action." \
+  --wait true)
+if ! printf '%s\n' "$INLINE_DECISION_RESP" | jq -e \
+  '.status == "completed" and .decider_id == null and .questions[0].name == "escalate" and .answers_by_name.escalate.probability == 0.9' \
+  >/dev/null 2>&1; then
+  echo "ERROR: the inline decision did not settle with its own questions" >&2
+  printf '%s\n' "$INLINE_DECISION_RESP" >&2
   exit 1
 fi
 

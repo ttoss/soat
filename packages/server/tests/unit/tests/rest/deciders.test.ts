@@ -13,33 +13,47 @@ const DECIDER_ACTIONS = [
   'agents:DeleteAgent',
 ];
 
-const QUESTIONS = {
-  route: {
+const ROUTE_CHOICES = [
+  { value: 'billing', description: 'Charges, refunds, invoices, plan changes' },
+  { value: 'technical', description: 'Errors, outages, integration failures' },
+];
+
+const QUESTIONS = [
+  {
     type: 'choice',
+    name: 'route',
     instructions: 'Which team should own this ticket?',
-    criteria: {
-      billing: 'Charges, refunds, invoices, plan changes',
-      technical: 'Errors, outages, integration failures',
-    },
+    choices: ROUTE_CHOICES,
   },
-  severity: {
+  {
     type: 'score',
+    name: 'severity',
     instructions: 'How urgent is this ticket?',
-    criteria: [
-      'Cosmetic or informational',
-      'Workaround exists',
-      'Blocks one workflow for one customer',
+    levels: [
+      { label: 'Cosmetic', description: 'Cosmetic or informational' },
+      { label: 'Minor', description: 'Workaround exists' },
+      {
+        label: 'Blocking',
+        description: 'Blocks one workflow for one customer',
+      },
     ],
   },
-  needs_human: {
-    type: 'boolean',
+  {
+    type: 'predicate',
+    name: 'needs_human',
     instructions: 'Must a person read this before any automated reply?',
-    criteria: {
-      false: 'Routine request an automated reply can answer',
-      true: 'Churn threat, legal action or a security report',
-    },
   },
-};
+];
+
+const TWO_CHOICES = [
+  { value: 'a', description: 'A' },
+  { value: 'b', description: 'B' },
+];
+
+const TWO_LEVELS = [
+  { label: 'Low', description: 'L' },
+  { label: 'High', description: 'H' },
+];
 
 describe('Deciders', () => {
   let adminToken: string;
@@ -193,59 +207,143 @@ describe('Deciders', () => {
       expect(res.body.updated_at).toBeDefined();
     });
 
-    test('a boolean question may omit its criteria', async () => {
-      const res = await createDecider(userToken, {
-        questions: {
-          escalate: { type: 'boolean', instructions: 'Escalate this?' },
-        },
-      });
+    test('keeps the order of questions, choices and levels', async () => {
+      const reordered = [QUESTIONS[2], QUESTIONS[1], QUESTIONS[0]];
+
+      const res = await createDecider(userToken, { questions: reordered });
 
       expect(res.status).toBe(201);
-      expect(res.body.questions.escalate).toEqual({
-        type: 'boolean',
-        instructions: 'Escalate this?',
-      });
+      expect(res.body.questions).toEqual(reordered);
     });
 
     test.each([
-      ['no questions', {}],
-      ['an unknown type', { q: { type: 'text', instructions: 'x' } }],
+      ['no questions', undefined],
+      ['an empty array', []],
       [
-        'a choice with one option',
-        { q: { type: 'choice', instructions: 'x', criteria: { a: 'A' } } },
+        'a map instead of an array',
+        { q: { type: 'predicate', instructions: 'x' } },
+      ],
+      [
+        'more than 20 questions',
+        Array.from({ length: 21 }, (_, index) => {
+          return { type: 'predicate', name: `q${index}`, instructions: 'x' };
+        }),
+      ],
+      ['an unknown type', [{ type: 'text', name: 'q', instructions: 'x' }]],
+      ['the boolean type', [{ type: 'boolean', name: 'q', instructions: 'x' }]],
+      [
+        'a choice with one choice',
+        [
+          {
+            type: 'choice',
+            name: 'q',
+            instructions: 'x',
+            choices: [{ value: 'a', description: 'A' }],
+          },
+        ],
+      ],
+      [
+        'a choice with a criteria map',
+        [
+          {
+            type: 'choice',
+            name: 'q',
+            instructions: 'x',
+            criteria: { a: 'A', b: 'B' },
+          },
+        ],
       ],
       [
         'a choice with an empty description',
-        {
-          q: {
+        [
+          {
             type: 'choice',
+            name: 'q',
             instructions: 'x',
-            criteria: { a: 'A', b: '' },
+            choices: [
+              { value: 'a', description: 'A' },
+              { value: 'b', description: '' },
+            ],
           },
-        },
+        ],
+      ],
+      [
+        'a choice entry with an unknown field',
+        [
+          {
+            type: 'choice',
+            name: 'q',
+            instructions: 'x',
+            choices: [
+              { value: 'a', description: 'A', weight: 2 },
+              { value: 'b', description: 'B' },
+            ],
+          },
+        ],
+      ],
+      [
+        'a choice value declared twice',
+        [
+          {
+            type: 'choice',
+            name: 'q',
+            instructions: 'x',
+            choices: [
+              { value: 'a', description: 'A' },
+              { value: 'a', description: 'Again' },
+            ],
+          },
+        ],
       ],
       [
         'a score with one level',
-        { q: { type: 'score', instructions: 'x', criteria: ['only'] } },
-      ],
-      [
-        'boolean criteria with the wrong keys',
-        {
-          q: {
-            type: 'boolean',
+        [
+          {
+            type: 'score',
+            name: 'q',
             instructions: 'x',
-            criteria: { yes: 'Y', no: 'N' },
+            levels: [{ label: 'Only', description: 'only' }],
           },
-        },
+        ],
       ],
-      ['a missing instruction', { q: { type: 'boolean' } }],
       [
-        'a question id that is not an identifier',
-        { 'needs.human': { type: 'boolean', instructions: 'x' } },
+        'a score level without a label',
+        [
+          {
+            type: 'score',
+            name: 'q',
+            instructions: 'x',
+            levels: [{ description: 'L' }, { label: 'High', description: 'H' }],
+          },
+        ],
+      ],
+      [
+        'a predicate carrying choices',
+        [
+          {
+            type: 'predicate',
+            name: 'q',
+            instructions: 'x',
+            choices: TWO_CHOICES,
+          },
+        ],
+      ],
+      ['a missing instruction', [{ type: 'predicate', name: 'q' }]],
+      ['a missing name', [{ type: 'predicate', instructions: 'x' }]],
+      [
+        'a name that is not an identifier',
+        [{ type: 'predicate', name: 'needs.human', instructions: 'x' }],
+      ],
+      [
+        'a name declared twice',
+        [
+          { type: 'predicate', name: 'q', instructions: 'x' },
+          { type: 'score', name: 'q', instructions: 'y', levels: TWO_LEVELS },
+        ],
       ],
       [
         'an unknown question field',
-        { q: { type: 'boolean', instructions: 'x', weight: 2 } },
+        [{ type: 'predicate', name: 'q', instructions: 'x', weight: 2 }],
       ],
     ])('rejects %s with 400', async (_label, questions) => {
       const res = await createDecider(userToken, { questions });
@@ -415,22 +513,26 @@ describe('Deciders', () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/deciders/${created.body.id}`)
         .send({
-          questions: {
-            ...QUESTIONS,
-            route: {
-              ...QUESTIONS.route,
-              criteria: { ...QUESTIONS.route.criteria, account: 'Login' },
+          questions: [
+            {
+              ...QUESTIONS[0],
+              choices: [
+                ...ROUTE_CHOICES,
+                { value: 'account', description: 'Login' },
+              ],
             },
-          },
+            QUESTIONS[1],
+            QUESTIONS[2],
+          ],
         });
 
       expect(res.status).toBe(200);
       expect(res.body.version).toBe(2);
-      expect(Object.keys(res.body.questions.route.criteria)).toEqual([
-        'billing',
-        'technical',
-        'account',
-      ]);
+      expect(
+        res.body.questions[0].choices.map((choice: { value: string }) => {
+          return choice.value;
+        })
+      ).toEqual(['billing', 'technical', 'account']);
     });
 
     test('rewriting identical questions leaves the version alone', async () => {
@@ -449,9 +551,9 @@ describe('Deciders', () => {
       await authenticatedTestClient(userToken)
         .patch(`/api/v1/deciders/${created.body.id}`)
         .send({
-          questions: {
-            escalate: { type: 'boolean', instructions: 'Escalate?' },
-          },
+          questions: [
+            { type: 'predicate', name: 'escalate', instructions: 'Escalate?' },
+          ],
         });
 
       const res = await authenticatedTestClient(userToken)
@@ -467,7 +569,9 @@ describe('Deciders', () => {
 
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/deciders/${created.body.id}`)
-        .send({ questions: { q: { type: 'score', instructions: 'x' } } });
+        .send({
+          questions: [{ type: 'score', name: 'q', instructions: 'x' }],
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -536,13 +640,15 @@ describe('Deciders', () => {
   });
 
   describe('versions', () => {
-    const rewordedQuestions = {
-      ...QUESTIONS,
-      needs_human: {
-        type: 'boolean',
+    const rewordedQuestions = [
+      QUESTIONS[0],
+      QUESTIONS[1],
+      {
+        type: 'predicate',
+        name: 'needs_human',
         instructions: 'Does a person have to see this first?',
       },
-    };
+    ];
 
     test('GET /api/v1/deciders/{decider_id}/versions lists every version newest first', async () => {
       const created = await createDecider(userToken);

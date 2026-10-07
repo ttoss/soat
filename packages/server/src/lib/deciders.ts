@@ -121,19 +121,19 @@ export const deciderBackendNamingError = (args: {
   forUpdate: boolean;
 }): string | null => {
   if (args.namesAgent && args.namesTool) {
-    return 'A decider names exactly one of agent_id and tool_id, not both.';
+    return 'Name exactly one of agent_id and tool_id, not both.';
   }
   if (!args.namesAgent && !args.namesTool && !args.forUpdate) {
-    return 'A decider names exactly one of agent_id and tool_id.';
+    return 'Name exactly one of agent_id and tool_id.';
   }
   return null;
 };
 
 /**
- * The one backend a write names: a tool-less agent or a callable tool, in the
- * decider's project.
+ * The one backend a decider write or an inline decision names: a tool-less
+ * agent or a callable tool, in the project.
  */
-const resolveBackend = async (args: {
+export const resolveDeciderBackend = async (args: {
   projectId: number;
   agentId?: unknown;
   toolId?: unknown;
@@ -176,7 +176,7 @@ export const createDecider = async (
   const name = validateName(args.name);
   const description = validateDescription(args.description);
   const questions = parseDeciderQuestions(args.questions);
-  const backend = await resolveBackend(args);
+  const backend = await resolveDeciderBackend(args);
   await assertNameAvailable({ projectId: args.projectId, name });
 
   const decider = await db.Decider.create({
@@ -264,7 +264,7 @@ const applyMetadata = async (args: {
   }
   if (args.agentId !== undefined || args.toolId !== undefined) {
     // Naming one backend replaces the other.
-    const backend = await resolveBackend({
+    const backend = await resolveDeciderBackend({
       projectId: decider.projectId,
       agentId: args.agentId,
       toolId: args.toolId,

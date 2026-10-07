@@ -25,20 +25,23 @@ const RESOURCE_ACTIONS = [
   'deciders:GetDecider',
 ];
 
-const QUESTIONS = {
-  route: {
-    type: 'choice',
-    instructions: 'Which team should own this ticket?',
-    criteria: {
-      billing: 'Charges, refunds, invoices',
-      technical: 'Errors, outages',
-    },
-  },
-  needs_human: {
-    type: 'boolean',
-    instructions: 'Must a person read this first?',
-  },
+const ROUTE = {
+  type: 'choice',
+  name: 'route',
+  instructions: 'Which team should own this ticket?',
+  choices: [
+    { value: 'billing', description: 'Charges, refunds, invoices' },
+    { value: 'technical', description: 'Errors, outages' },
+  ],
 };
+
+const NEEDS_HUMAN = {
+  type: 'predicate',
+  name: 'needs_human',
+  instructions: 'Must a person read this first?',
+};
+
+const QUESTIONS = [ROUTE, NEEDS_HUMAN];
 
 type FormationResource = {
   logical_id: string;
@@ -212,9 +215,7 @@ describe('Formations — decider resources', () => {
           properties: {
             name: 'triage',
             agent_id: { ref: 'Judge' },
-            questions: {
-              route: { ...QUESTIONS.route, weight: 2 },
-            },
+            questions: [{ ...ROUTE, weight: 2 }],
           },
         },
       });
@@ -223,7 +224,7 @@ describe('Formations — decider resources', () => {
       expect(JSON.stringify(res.body.errors)).toMatch(/weight/);
     });
 
-    test('a choice question with one option is invalid', async () => {
+    test('a choice question with one choice is invalid', async () => {
       const res = await validate({
         Judge: agentResource(),
         Triage: {
@@ -231,13 +232,14 @@ describe('Formations — decider resources', () => {
           properties: {
             name: 'triage',
             agent_id: { ref: 'Judge' },
-            questions: {
-              route: {
+            questions: [
+              {
                 type: 'choice',
+                name: 'route',
                 instructions: 'Which team?',
-                criteria: { billing: 'Charges' },
+                choices: [{ value: 'billing', description: 'Charges' }],
               },
-            },
+            ],
           },
         },
       });
@@ -248,6 +250,30 @@ describe('Formations — decider resources', () => {
           path: 'resources.Triage.properties.questions',
         }),
       ]);
+    });
+    test('questions keyed by name instead of listed are invalid', async () => {
+      const res = await validate({
+        Judge: agentResource(),
+        Triage: {
+          type: 'decider',
+          properties: {
+            name: 'triage',
+            agent_id: { ref: 'Judge' },
+            questions: { route: ROUTE },
+          },
+        },
+      });
+
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: expect.stringMatching(
+              /^resources\.Triage\.properties\.questions/
+            ),
+          }),
+        ])
+      );
     });
   });
 
@@ -369,9 +395,7 @@ describe('Formations — decider resources', () => {
                 ...triage,
                 properties: {
                   ...triage.properties,
-                  questions: {
-                    needs_human: QUESTIONS.needs_human,
-                  },
+                  questions: [NEEDS_HUMAN],
                 },
               },
             },
@@ -381,7 +405,7 @@ describe('Formations — decider resources', () => {
       expect(res.status).toBe(200);
       const decider = await getDecider(physicalId(formation, 'Triage'));
       expect(decider.body.version).toBe(2);
-      expect(Object.keys(decider.body.questions)).toEqual(['needs_human']);
+      expect(decider.body.questions).toEqual([NEEDS_HUMAN]);
     });
 
     test('pointing the decider at a tool replaces its agent', async () => {

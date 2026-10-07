@@ -9,7 +9,6 @@ import { deciderQuestionsOf, type DeciderRow } from './deciders';
 /** A question set a decision is answered under, stored and parsed. */
 export type DeciderQuestionSet = {
   version: number;
-  stored: object;
   questions: DeciderQuestions;
 };
 
@@ -25,7 +24,6 @@ export const deciderQuestionSetAt = async (args: {
   if (args.version === undefined || args.version === decider.version) {
     return {
       version: decider.version,
-      stored: decider.questions,
       questions: deciderQuestionsOf(decider),
     };
   }
@@ -40,10 +38,9 @@ export const deciderQuestionSetAt = async (args: {
       `Decider '${decider.publicId}' has no version ${args.version}.`
     );
   }
-  const { questions } = archived.config as { questions: object };
+  const { questions } = archived.config as { questions: unknown };
   return {
     version: args.version,
-    stored: questions,
     questions: parseDeciderQuestions(questions),
   };
 };

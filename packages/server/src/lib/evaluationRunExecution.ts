@@ -121,7 +121,7 @@ const buildScorerRunners = (args: {
         subject: null,
       });
     },
-    runDecider: (call: { scorer: Record<string, unknown>; state: unknown }) => {
+    runDecider: (call: { scorer: Record<string, unknown>; input: unknown }) => {
       return runDeciderScorerCall({
         projectId: args.projectId,
         ...call,

@@ -88,7 +88,7 @@ export const pinDeciderVersions = async (args: {
 export const runDeciderScorerCall = async (args: {
   projectId: number;
   scorer: Record<string, unknown>;
-  state: unknown;
+  input: unknown;
   scoring: DeciderScoring;
   datasetItemId: string;
 }): Promise<DeciderScorerDecision> => {
@@ -98,7 +98,7 @@ export const runDeciderScorerCall = async (args: {
   const decision = await createDecision({
     projectIds: [args.projectId],
     deciderId: String(args.scorer.decider_id),
-    state: args.state,
+    input: args.input,
     wait: true,
     // A scorer added to the eval after the run started has no pin.
     version: args.scoring.versions?.[name],
@@ -114,12 +114,16 @@ export const runDeciderScorerCall = async (args: {
     throw new DomainError(error.code, `scorer '${name}': ${error.message}`);
   });
 
-  if (decision.status !== 'completed' || !isPlainObject(decision.answers)) {
+  if (decision.status !== 'completed' || !Array.isArray(decision.answers)) {
     const error = isPlainObject(decision.error) ? decision.error : {};
     throw new DomainError(
       'VALIDATION_FAILED',
       `scorer '${name}': decision ${decision.id} failed: ${String(error.code)} ${String(error.message)}`
     );
   }
-  return { decisionId: decision.id, answers: decision.answers };
+  return {
+    decisionId: decision.id,
+    answers: decision.answers,
+    answersByName: decision.answers_by_name ?? {},
+  };
 };

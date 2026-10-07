@@ -3021,13 +3021,63 @@ describe('MCP tools - happy path', () => {
   // ── Deciders ───────────────────────────────────────────────────────────────
 
   describe('Deciders', () => {
-    const questions = {
-      escalate: {
-        type: 'boolean',
+    const questions = [
+      {
+        type: 'predicate',
+        name: 'escalate',
         instructions: 'Must a person read this first?',
       },
-    };
+    ];
     let deciderId: string;
+
+    // A pipeline answering from a builtin read: deterministic, no model. It
+    // reads the decider the input names and answers true once the read lands.
+    const createRuleEngine = async (args: {
+      name: string;
+    }): Promise<string> => {
+      const engineRes = await mcpCall('create-tool', {
+        project_id: projectId,
+        name: args.name,
+        type: 'pipeline',
+        description: 'Answers from the decider it reads',
+        pipeline: {
+          steps: [
+            {
+              id: 'read',
+              tool: {
+                name: 'read-decider',
+                type: 'builtin',
+                actions: ['get-decider'],
+              },
+              action: 'get-decider',
+              input: { decider_id: { var: 'input.input.decider_id' } },
+            },
+          ],
+          output: {
+            answers: [
+              {
+                type: 'predicate',
+                name: 'escalate',
+                probability: {
+                  if: [
+                    {
+                      '==': [
+                        { var: 'steps.read.id' },
+                        { var: 'input.input.decider_id' },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      });
+      expect(engineRes.status).toBe(200);
+      return parseResult(engineRes).id as string;
+    };
 
     beforeAll(async () => {
       const agentRes = await mcpCall('create-agent', {
@@ -3088,9 +3138,13 @@ describe('MCP tools - happy path', () => {
     test('update-decider archives a changed question set', async () => {
       const res = await mcpCall('update-decider', {
         decider_id: deciderId,
-        questions: {
-          escalate: { type: 'boolean', instructions: 'Escalate it now?' },
-        },
+        questions: [
+          {
+            type: 'predicate',
+            name: 'escalate',
+            instructions: 'Escalate it now?',
+          },
+        ],
       });
 
       expect(res.status).toBe(200);
@@ -3121,7 +3175,7 @@ describe('MCP tools - happy path', () => {
     test('create-decision, get-decision and list-decisions', async () => {
       const created = await mcpCall('create-decision', {
         decider_id: deciderId,
-        state: 'A customer threatens legal action.',
+        input: 'A customer threatens legal action.',
         metadata: { ticket_id: 'mcp-1' },
       });
       expect(created.status).toBe(200);
@@ -3140,53 +3194,66 @@ describe('MCP tools - happy path', () => {
     });
 
     test('create-decision always waits, returning the settled decision', async () => {
-      // A pipeline answering from a builtin read: deterministic, no model.
-      const engineRes = await mcpCall('create-tool', {
-        project_id: projectId,
-        name: 'mcp-decider-rules',
-        type: 'pipeline',
-        description: 'Answers from the decider it reads',
-        pipeline: {
-          steps: [
-            {
-              id: 'read',
-              tool: {
-                name: 'read-decider',
-                type: 'builtin',
-                actions: ['get-decider'],
-              },
-              action: 'get-decider',
-              input: { decider_id: { var: 'input.state.decider_id' } },
-            },
-          ],
-          output: {
-            answers: {
-              escalate: {
-                value: { '==': [{ var: 'steps.read.version' }, 1] },
-              },
-            },
-          },
-        },
-      });
-      expect(engineRes.status).toBe(200);
+      const engineId = await createRuleEngine({ name: 'mcp-decider-rules' });
       const ruleDeciderRes = await mcpCall('create-decider', {
         project_id: projectId,
         name: 'mcp-rule-triage',
-        tool_id: parseResult(engineRes).id,
+        tool_id: engineId,
         questions,
       });
       const ruleDeciderId = parseResult(ruleDeciderRes).id;
 
       const res = await mcpCall('create-decision', {
         decider_id: ruleDeciderId,
-        state: { decider_id: ruleDeciderId },
+        input: { decider_id: ruleDeciderId },
       });
 
       expect(res.status).toBe(200);
-      expect(parseResult(res).status).toBe('completed');
-      expect(parseResult(res).answers).toEqual({
-        escalate: { type: 'boolean', value: true },
+      const decision = parseResult(res);
+      expect(decision.status).toBe('completed');
+      expect(decision.answers).toEqual([
+        { type: 'predicate', name: 'escalate', probability: 1 },
+      ]);
+      expect(decision.answers_by_name).toEqual({
+        escalate: { type: 'predicate', name: 'escalate', probability: 1 },
       });
+    });
+
+    test('create-inline-decision answers questions sent with the call', async () => {
+      const engineId = await createRuleEngine({ name: 'mcp-inline-rules' });
+
+      const res = await mcpCall('create-inline-decision', {
+        project_id: projectId,
+        tool_id: engineId,
+        questions,
+        input: { decider_id: deciderId },
+        metadata: { ticket_id: 'mcp-inline-1' },
+      });
+
+      expect(res.status).toBe(200);
+      const decision = parseResult(res);
+      expect(decision.id).toMatch(/^dec_/);
+      expect(decision.status).toBe('completed');
+      expect(decision.decider_id).toBeNull();
+      expect(decision.decider_version).toBeNull();
+      expect(decision.questions).toEqual(questions);
+      expect(decision.answers).toEqual([
+        { type: 'predicate', name: 'escalate', probability: 1 },
+      ]);
+      expect(decision.metadata).toEqual({ ticket_id: 'mcp-inline-1' });
+    });
+
+    test('create-inline-decision refuses a call naming no backend', async () => {
+      const res = await mcpCall('create-inline-decision', {
+        project_id: projectId,
+        questions,
+        input: 'A customer threatens legal action.',
+      });
+
+      expect(res.body.result?.isError).toBe(true);
+      expect(JSON.stringify(res.body.result)).toMatch(
+        /exactly one of agent_id and tool_id/
+      );
     });
 
     test('delete-decider removes it', async () => {
@@ -3476,6 +3543,7 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
               'list-audit-entries',
               'create-agent-generation',
               'create-decision',
+              'create-inline-decision',
               'generate-conversation-message',
               'generate-session-response',
             ],
@@ -3548,6 +3616,16 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
     });
 
     expect(decide).toBeDefined();
+    expect(decide?.inputSchema?.properties?.wait).toBeUndefined();
+  });
+
+  test('create-inline-decision is offered without its wait field', () => {
+    const decide = tools.find((t) => {
+      return t.name === 'create-inline-decision';
+    });
+
+    expect(decide).toBeDefined();
+    expect(decide?.inputSchema?.properties?.questions).toBeDefined();
     expect(decide?.inputSchema?.properties?.wait).toBeUndefined();
   });
 

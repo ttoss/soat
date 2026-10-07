@@ -26,63 +26,129 @@ const ACTIONS = [
   'usage:ListEvents',
 ];
 
-const QUESTIONS = {
-  route: {
+const QUESTIONS = [
+  {
     type: 'choice',
+    name: 'route',
     instructions: 'Which team should own this ticket?',
-    criteria: {
-      billing: 'Charges, refunds, invoices, plan changes',
-      technical: 'Errors, outages, integration failures',
-    },
-  },
-  severity: {
-    type: 'score',
-    instructions: 'How urgent is this ticket?',
-    criteria: [
-      'Cosmetic or informational',
-      'Workaround exists',
-      'Blocks one workflow for one customer',
+    choices: [
+      {
+        value: 'billing',
+        description: 'Charges, refunds, invoices, plan changes',
+      },
+      {
+        value: 'technical',
+        description: 'Errors, outages, integration failures',
+      },
     ],
   },
-  needs_human: {
-    type: 'boolean',
+  {
+    type: 'score',
+    name: 'severity',
+    instructions: 'How urgent is this ticket?',
+    levels: [
+      { label: 'Cosmetic', description: 'Cosmetic or informational' },
+      { label: 'Workaround', description: 'A workaround exists' },
+      {
+        label: 'Blocking',
+        description: 'Blocks one workflow for one customer',
+      },
+    ],
+  },
+  {
+    type: 'predicate',
+    name: 'needs_human',
     instructions: 'Must a person read this before any automated reply?',
-    criteria: { false: 'Safe to automate', true: 'A person must read it' },
   },
+];
+
+type ToolAnswer = { name: string } & Record<string, unknown>;
+
+const TOOL_ANSWERS: ToolAnswer[] = [
+  {
+    type: 'choice',
+    name: 'route',
+    choice: 'billing',
+    probabilities: [
+      { value: 'billing', probability: 0.8 },
+      { value: 'technical', probability: 0.2 },
+    ],
+  },
+  { name: 'severity', score: 1 },
+  { type: 'predicate', name: 'needs_human', probability: 0.1 },
+];
+
+const TOOL_ANSWER = { answers: TOOL_ANSWERS };
+
+/** The tool's answers with the one named `answer.name` replaced. */
+const replacing = (answer: ToolAnswer) => {
+  return {
+    answers: TOOL_ANSWERS.map((each) => {
+      return each.name === answer.name ? answer : each;
+    }),
+  };
 };
 
-const TOOL_ANSWER = {
-  answers: {
-    route: {
-      choice: 'billing',
-      probabilities: { billing: 0.8, technical: 0.2 },
-    },
-    severity: { score: 1 },
-    needs_human: { value: false },
-  },
-};
-
-/** What Jev answers: fields the contract refuses, and `noul` for booleans. */
-const JEV_ANSWER = {
-  model: 'jev-1',
-  answers: {
-    route: {
-      type: 'choice',
-      choice: 'technical',
-      probabilities: { billing: 0.1, technical: 0.9 },
-      confidence: 0.9,
-    },
-    severity: {
+/**
+ * What OpenAI's Decisions API answers: keys beside `answers`, answers out of
+ * question order, a fractional score, level labels of its own, confidences.
+ */
+const OPENAI_ANSWER = {
+  id: 'decision_abc123',
+  object: 'decision',
+  model: 'gpt-5-decisions',
+  answers: [
+    { type: 'predicate', name: 'needs_human', probability: 0.75 },
+    {
       type: 'score',
-      score: 2,
-      legend: 'Blocks one workflow for one customer',
-      probabilities: { '0': 0.1, '1': 0.2, '2': 0.7 },
+      name: 'severity',
+      score: 1.6,
+      probabilities: [
+        { value: 0, label: 'low', probability: 0.1 },
+        { value: 1, label: 'mid', probability: 0.2 },
+        { value: 2, label: 'high', probability: 0.7 },
+      ],
       confidence: 0.7,
     },
-    needs_human: { type: 'noul', noul: 0.75, confidence: 0.75 },
-  },
+    {
+      type: 'choice',
+      name: 'route',
+      choice: 'technical',
+      probabilities: [
+        { value: 'billing', probability: 0.1 },
+        { value: 'technical', probability: 0.9 },
+      ],
+      confidence: 0.9,
+    },
+  ],
   usage: { input_tokens: 10 },
 };
+
+/** {@link OPENAI_ANSWER} as the decision stores it. */
+const OPENAI_ANSWERS_STORED = [
+  {
+    type: 'choice',
+    name: 'route',
+    choice: 'technical',
+    probabilities: [
+      { value: 'billing', probability: 0.1 },
+      { value: 'technical', probability: 0.9 },
+    ],
+    confidence: 0.9,
+  },
+  {
+    type: 'score',
+    name: 'severity',
+    score: 1.6,
+    probabilities: [
+      { value: 0, label: 'Cosmetic', probability: 0.1 },
+      { value: 1, label: 'Workaround', probability: 0.2 },
+      { value: 2, label: 'Blocking', probability: 0.7 },
+    ],
+    confidence: 0.7,
+  },
+  { type: 'predicate', name: 'needs_human', probability: 0.75 },
+];
 
 type StubReply = { status?: number; body: unknown };
 
@@ -97,7 +163,8 @@ describe('Decisions — tool backend', () => {
   let projectId: string;
   let agentId: string;
   let httpToolId: string;
-  let bridgeToolId: string;
+  let openaiToolId: string;
+  let forwardToolId: string;
   let deciderId: string;
   let seq = 0;
 
@@ -118,7 +185,7 @@ describe('Decisions — tool backend', () => {
           JSON.parse(Buffer.concat(chunks).toString('utf-8'))
         );
         const reply = replies[path]?.shift() ?? {
-          body: path === '/jev' ? JEV_ANSWER : TOOL_ANSWER,
+          body: path === '/openai' ? OPENAI_ANSWER : TOOL_ANSWER,
         };
         const text =
           typeof reply.body === 'string'
@@ -187,7 +254,7 @@ describe('Decisions — tool backend', () => {
   }) => {
     return authenticatedTestClient(args.token ?? userToken)
       .post(`/api/v1/deciders/${args.decider ?? deciderId}/decisions`)
-      .send({ state: 'I was charged twice.', wait: true, ...args.body });
+      .send({ input: 'I was charged twice.', wait: true, ...args.body });
   };
 
   /** Queues the stub's next answer on `path`, for a decider over its own tool. */
@@ -230,58 +297,24 @@ describe('Decisions — tool backend', () => {
     agentId = agentRes.body.id;
 
     httpToolId = await createHttpTool('/engine');
-    const jevToolId = await createHttpTool('/jev', {
-      preset_parameters: { model: 'jev-1' },
+    openaiToolId = await createHttpTool('/openai', {
+      preset_parameters: { model: 'gpt-5-decisions' },
     });
-    bridgeToolId = await createTool({
+    forwardToolId = await createTool({
       type: 'pipeline',
-      description: 'Bridges boolean questions to an engine that speaks noul',
+      description: 'Forwards the question set to an engine',
       pipeline: {
         steps: [
           {
             id: 'call',
-            tool_id: jevToolId,
+            tool_id: openaiToolId,
             input: {
-              state: { var: 'input.state' },
-              questions: {
-                route: { var: 'input.questions.route' },
-                severity: { var: 'input.questions.severity' },
-                needs_human: {
-                  type: 'noul',
-                  instructions: {
-                    var: 'input.questions.needs_human.instructions',
-                  },
-                  criteria: { var: 'input.questions.needs_human.criteria' },
-                },
-              },
+              input: { var: 'input.input' },
+              questions: { var: 'input.questions' },
             },
           },
         ],
-        output: {
-          answers: {
-            route: {
-              choice: { var: 'steps.call.answers.route.choice' },
-              probabilities: { var: 'steps.call.answers.route.probabilities' },
-            },
-            severity: {
-              score: { var: 'steps.call.answers.severity.score' },
-              probabilities: {
-                var: 'steps.call.answers.severity.probabilities',
-              },
-            },
-            needs_human: {
-              value: {
-                '>=': [{ var: 'steps.call.answers.needs_human.noul' }, 0.5],
-              },
-              probabilities: {
-                true: { var: 'steps.call.answers.needs_human.noul' },
-                false: {
-                  '-': [1, { var: 'steps.call.answers.needs_human.noul' }],
-                },
-              },
-            },
-          },
-        },
+        output: { answers: { var: 'steps.call.answers' } },
       },
     });
 
@@ -350,16 +383,16 @@ describe('Decisions — tool backend', () => {
       expect(res.body.error.code).toBe('DECIDER_TOOL_NOT_CALLABLE');
     });
 
-    test('a tool whose presets pin the state is refused with 400', async () => {
+    test('a tool whose presets pin the input is refused with 400', async () => {
       const toolId = await createHttpTool('/engine', {
-        preset_parameters: { state: 'always this' },
+        preset_parameters: { input: 'always this' },
       });
 
       const res = await postDecider({ tool_id: toolId });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('DECIDER_TOOL_NOT_CALLABLE');
-      expect(res.body.error.meta.pinned).toEqual(['state']);
+      expect(res.body.error.meta.pinned).toEqual(['input']);
     });
   });
 
@@ -433,33 +466,73 @@ describe('Decisions — tool backend', () => {
   });
 
   describe('POST /api/v1/deciders/{decider_id}/decisions', () => {
-    test('wait: true answers with the tool’s answers, legend derived', async () => {
+    test('wait: true answers with the tool’s answers, in question order', async () => {
       const res = await decide({});
 
+      const answers = [
+        {
+          type: 'choice',
+          name: 'route',
+          choice: 'billing',
+          probabilities: [
+            { value: 'billing', probability: 0.8 },
+            { value: 'technical', probability: 0.2 },
+          ],
+        },
+        { type: 'score', name: 'severity', score: 1 },
+        { type: 'predicate', name: 'needs_human', probability: 0.1 },
+      ];
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('completed');
       expect(res.body.generation_id).toBeNull();
-      expect(res.body.answers).toEqual({
-        route: {
-          type: 'choice',
-          choice: 'billing',
-          probabilities: { billing: 0.8, technical: 0.2 },
-        },
-        severity: { type: 'score', score: 1, legend: 'Workaround exists' },
-        needs_human: { type: 'boolean', value: false },
+      expect(res.body.answers).toEqual(answers);
+      expect(res.body.answers_by_name).toEqual({
+        route: answers[0],
+        severity: answers[1],
+        needs_human: answers[2],
       });
     });
 
-    test('the tool receives the state and the stored question set', async () => {
+    test('the tool receives the input and the stored question set', async () => {
       const decider = await createDecider({
         tool_id: await createHttpTool('/request-shape'),
       });
 
-      await decide({ decider, body: { state: { ticket: 'ZD-1' } } });
+      await decide({ decider, body: { input: { ticket: 'ZD-1' } } });
 
       expect(received['/request-shape']).toEqual([
-        { state: { ticket: 'ZD-1' }, questions: QUESTIONS },
+        { input: { ticket: 'ZD-1' }, questions: QUESTIONS },
       ]);
+    });
+
+    test('a tool forwarding to OpenAI’s Decisions API answers unchanged, with the decider’s labels', async () => {
+      const decider = await createDecider({ tool_id: openaiToolId });
+      const before = received['/openai']?.length ?? 0;
+
+      const res = await decide({ decider });
+
+      expect(res.body.status).toBe('completed');
+      expect(res.body.answers).toEqual(OPENAI_ANSWERS_STORED);
+      expect(received['/openai']?.[before]).toEqual({
+        model: 'gpt-5-decisions',
+        input: 'I was charged twice.',
+        questions: QUESTIONS,
+      });
+    });
+
+    test('a pipeline forwards to an engine and passes its answers through', async () => {
+      const decider = await createDecider({ tool_id: forwardToolId });
+      const before = received['/openai']?.length ?? 0;
+
+      const res = await decide({ decider });
+
+      expect(res.body.status).toBe('completed');
+      expect(res.body.answers).toEqual(OPENAI_ANSWERS_STORED);
+      expect(received['/openai']?.[before]).toEqual({
+        model: 'gpt-5-decisions',
+        input: 'I was charged twice.',
+        questions: QUESTIONS,
+      });
     });
 
     test('the call is metered as a tool execution with source decider', async () => {
@@ -487,7 +560,7 @@ describe('Decisions — tool backend', () => {
       const res = await decide({ decider });
 
       expect(res.body.status).toBe('completed');
-      expect(res.body.answers.route.choice).toBe('billing');
+      expect(res.body.answers_by_name.route.choice).toBe('billing');
     });
 
     test('keys beside answers are ignored', async () => {
@@ -498,6 +571,27 @@ describe('Decisions — tool backend', () => {
       const res = await decide({ decider });
 
       expect(res.body.status).toBe('completed');
+    });
+
+    test('a confidence on a choice and on a score is kept', async () => {
+      const decider = await deciderAnswering('/confidence', {
+        body: {
+          answers: [
+            { name: 'route', choice: 'technical', confidence: 0.6 },
+            { name: 'severity', score: 0, confidence: 0.4 },
+            { name: 'needs_human', probability: 1 },
+          ],
+        },
+      });
+
+      const res = await decide({ decider });
+
+      expect(res.body.status).toBe('completed');
+      expect(res.body.answers).toEqual([
+        { type: 'choice', name: 'route', choice: 'technical', confidence: 0.6 },
+        { type: 'score', name: 'severity', score: 0, confidence: 0.4 },
+        { type: 'predicate', name: 'needs_human', probability: 1 },
+      ]);
     });
 
     test('wait: false answers queued, and the decision settles', async () => {
@@ -517,122 +611,114 @@ describe('Decisions — tool backend', () => {
       throw new Error('The decision never settled.');
     });
 
-    test('a pipeline bridges boolean to noul and back', async () => {
-      const decider = await createDecider({ tool_id: bridgeToolId });
-
-      const res = await decide({ decider });
-
-      expect(res.body.status).toBe('completed');
-      expect(res.body.answers).toEqual({
-        route: {
-          type: 'choice',
-          choice: 'technical',
-          probabilities: { billing: 0.1, technical: 0.9 },
-        },
-        severity: {
-          type: 'score',
-          score: 2,
-          legend: 'Blocks one workflow for one customer',
-          probabilities: { '0': 0.1, '1': 0.2, '2': 0.7 },
-        },
-        needs_human: {
-          type: 'boolean',
-          value: true,
-          probabilities: { true: 0.75, false: 0.25 },
-        },
-      });
-      const sent = received['/jev']?.at(-1);
-      expect(sent?.model).toBe('jev-1');
-      expect(sent?.questions).toMatchObject({
-        needs_human: { type: 'noul' },
-      });
-    });
-
     test.each([
       ['a non-object answer', ['billing']],
       ['text that is not JSON', 'billing, probably'],
       ['no answers', { model: 'engine-1' }],
       [
-        'a missing answer',
-        { answers: { route: { choice: 'billing' }, severity: { score: 1 } } },
+        'answers that are not an array',
+        { answers: { route: { choice: 'billing' } } },
+      ],
+      ['an answer that is not an object', { answers: ['billing'] }],
+      ['a missing answer', { answers: TOOL_ANSWERS.slice(0, 2) }],
+      [
+        'a question answered twice',
+        { answers: [...TOOL_ANSWERS, { name: 'route', choice: 'technical' }] },
       ],
       [
         'an answer to no question',
-        {
-          answers: {
-            ...TOOL_ANSWER.answers,
-            tone: { choice: 'calm' },
-          },
-        },
+        { answers: [...TOOL_ANSWERS, { name: 'tone', choice: 'calm' }] },
       ],
       [
-        'a choice outside the options',
-        {
-          answers: { ...TOOL_ANSWER.answers, route: { choice: 'legal' } },
-        },
-      ],
-      [
-        'a score outside the levels',
-        { answers: { ...TOOL_ANSWER.answers, severity: { score: 3 } } },
-      ],
-      [
-        'a fractional score',
-        { answers: { ...TOOL_ANSWER.answers, severity: { score: 1.5 } } },
-      ],
-      [
-        'a boolean given as text',
-        {
-          answers: { ...TOOL_ANSWER.answers, needs_human: { value: 'false' } },
-        },
+        'an answer without a name',
+        { answers: [...TOOL_ANSWERS, { choice: 'calm' }] },
       ],
       [
         'a type that is not the question’s',
-        {
-          answers: {
-            ...TOOL_ANSWER.answers,
-            needs_human: { type: 'noul', value: false },
-          },
-        },
+        replacing({ type: 'choice', name: 'needs_human', probability: 0.5 }),
       ],
       [
-        'a confidence field',
-        {
-          answers: {
-            ...TOOL_ANSWER.answers,
-            route: { choice: 'billing', confidence: 0.8 },
-          },
-        },
+        'a field outside the contract',
+        replacing({ name: 'needs_human', probability: 0.5, confidence: 0.5 }),
       ],
       [
-        'a probability for an answer outside the space',
-        {
-          answers: {
-            ...TOOL_ANSWER.answers,
-            route: { choice: 'billing', probabilities: { legal: 0.1 } },
-          },
-        },
+        'a predicate answered with a boolean',
+        replacing({ name: 'needs_human', value: false }),
       ],
       [
         'a probability above 1',
-        {
-          answers: {
-            ...TOOL_ANSWER.answers,
-            needs_human: { value: true, probabilities: { true: 1.2 } },
-          },
-        },
+        replacing({ name: 'needs_human', probability: 1.2 }),
       ],
       [
-        'probabilities that are not an object',
-        {
-          answers: {
-            ...TOOL_ANSWER.answers,
-            severity: { score: 1, probabilities: [0.1, 0.8, 0.1] },
-          },
-        },
+        'a probability below 0',
+        replacing({ name: 'needs_human', probability: -0.1 }),
       ],
       [
-        'an answer that is not an object',
-        { answers: { ...TOOL_ANSWER.answers, route: 'billing' } },
+        'a choice outside the values',
+        replacing({ name: 'route', choice: 'legal' }),
+      ],
+      [
+        'a score above the top level',
+        replacing({ name: 'severity', score: 3 }),
+      ],
+      ['a negative score', replacing({ name: 'severity', score: -1 })],
+      ['a score given as text', replacing({ name: 'severity', score: '1' })],
+      [
+        'a confidence above 1',
+        replacing({ name: 'route', choice: 'billing', confidence: 1.5 }),
+      ],
+      [
+        'a probability for a value outside the choices',
+        replacing({
+          name: 'route',
+          choice: 'billing',
+          probabilities: [{ value: 'legal', probability: 0.1 }],
+        }),
+      ],
+      [
+        'a probability for a level that does not exist',
+        replacing({
+          name: 'severity',
+          score: 1,
+          probabilities: [{ value: 3, probability: 0.1 }],
+        }),
+      ],
+      [
+        'a probability for a fractional level',
+        replacing({
+          name: 'severity',
+          score: 1,
+          probabilities: [{ value: 1.5, probability: 0.1 }],
+        }),
+      ],
+      [
+        'a value given two probabilities',
+        replacing({
+          name: 'route',
+          choice: 'billing',
+          probabilities: [
+            { value: 'billing', probability: 0.5 },
+            { value: 'billing', probability: 0.5 },
+          ],
+        }),
+      ],
+      [
+        'a probability entry with a field outside the contract',
+        replacing({
+          name: 'route',
+          choice: 'billing',
+          probabilities: [
+            { value: 'billing', label: 'Billing', probability: 0.8 },
+          ],
+        }),
+      ],
+      [
+        'probabilities that are not an array',
+        replacing({
+          name: 'severity',
+          score: 1,
+          probabilities: { '0': 0.1, '1': 0.8, '2': 0.1 },
+        }),
       ],
     ])('%s fails the decision as invalid', async (_label, body) => {
       const decider = await deciderAnswering(`/invalid-${unique('x')}`, {
@@ -644,6 +730,7 @@ describe('Decisions — tool backend', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       expect(res.body.answers).toBeNull();
+      expect(res.body.answers_by_name).toBeNull();
       expect(res.body.error.code).toBe('DECISION_ANSWER_INVALID');
     });
 
@@ -749,7 +836,7 @@ describe('Decisions — tool backend', () => {
   });
   describe('a builtin step in the tool acts as the requester', () => {
     /**
-     * A pipeline whose inline builtin step reads a decider named in the state,
+     * A pipeline whose inline builtin step reads a decider named in the input,
      * and answers from what it read: the answer exists only if the step's
      * self-call carried a credential allowed to make it.
      */
@@ -767,12 +854,13 @@ describe('Decisions — tool backend', () => {
                 actions: ['get-decider'],
               },
               action: 'get-decider',
-              input: { decider_id: { var: 'input.state.decider_id' } },
+              input: { decider_id: { var: 'input.input.decider_id' } },
             },
           ],
           output: {
-            answers: {
-              route: {
+            answers: [
+              {
+                name: 'route',
                 choice: {
                   if: [
                     { '==': [{ var: 'steps.lookup.version' }, 1] },
@@ -781,28 +869,28 @@ describe('Decisions — tool backend', () => {
                   ],
                 },
               },
-              severity: { score: 0 },
-              needs_human: { value: false },
-            },
+              { name: 'severity', score: 0 },
+              { name: 'needs_human', probability: 0 },
+            ],
           },
         },
       });
       return createDecider({ tool_id: toolId });
     };
 
-    const stateFor = (decider: string) => {
+    const inputFor = (decider: string) => {
       return { decider_id: decider };
     };
 
     test('wait: true answers from the step’s read', async () => {
       const decider = await createLookupDecider();
 
-      const res = await decide({ decider, body: { state: stateFor(decider) } });
+      const res = await decide({ decider, body: { input: inputFor(decider) } });
 
       expect(res.status).toBe(201);
       expect(res.body.error).toBeNull();
       expect(res.body.status).toBe('completed');
-      expect(res.body.answers.route.choice).toBe('billing');
+      expect(res.body.answers_by_name.route.choice).toBe('billing');
     });
 
     test('wait: false settles from the step’s read', async () => {
@@ -810,7 +898,7 @@ describe('Decisions — tool backend', () => {
 
       const res = await decide({
         decider,
-        body: { state: stateFor(decider), wait: false },
+        body: { input: inputFor(decider), wait: false },
       });
 
       expect(res.status).toBe(201);
@@ -842,7 +930,7 @@ describe('Decisions — tool backend', () => {
       const res = await decide({
         decider,
         token: narrowToken,
-        body: { state: stateFor(decider) },
+        body: { input: inputFor(decider) },
       });
 
       expect(res.status).toBe(201);

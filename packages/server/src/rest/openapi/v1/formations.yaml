@@ -2106,7 +2106,7 @@ components:
     DeciderResourceProperties:
       description: >-
         Creates a decider — a versioned question set answered against a
-        caller's state. Names exactly one backend: `agent_id` (a tool-less
+        caller's input. Names exactly one backend: `agent_id` (a tool-less
         agent) or `tool_id` (an `http` or `pipeline` tool), either a `{ "ref":
         … }` to a resource in the same template. Only a change to `questions`
         archives a new version. Mirrors the deciders REST contract.
@@ -2132,11 +2132,14 @@ components:
           type: string
           description: The http or pipeline tool that answers
         questions:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: object
+            additionalProperties: true
           description: >-
-            Question id → question (`type`, `instructions`, `criteria`), 1 to
-            20 of them, validated as the deciders REST contract validates them.
+            The questions (`type`, `name`, `instructions`, `choices` or
+            `levels`), 1 to 20 of them, validated as the deciders REST contract
+            validates them.
 
     ResourceDeclaration:
       type: object

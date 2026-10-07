@@ -199,7 +199,7 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/actors/$GIL_ID/tags" \
 
 ## Step 4 — Write the refund rules as a pipeline
 
-A decider sends its tool `{ state, questions }` and reads back `{ answers }` ([The tool backend](/docs/modules/deciders#the-tool-backend)). This pipeline reads the tags of the customer named in the state with a builtin `get-actor-tags` step, then builds the answer in its `output`: `approve` when the amount is 50 or less or the `tier` tag is `gold`, `review` otherwise.
+A decider sends its tool `{ input, questions }` and reads back `{ answers: [...] }`, one answer per question ([The tool backend](/docs/modules/deciders#the-tool-backend)). The pipeline sees that body as its own `input`, so the decision's input is at `input.input`. It reads the tags of the customer named there with a builtin `get-actor-tags` step, then builds the answer to the `route` question in its `output`: `approve` when the amount is 50 or less or the `tier` tag is `gold`, `review` otherwise.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -216,16 +216,17 @@ RULES_ID=$(soat create-tool \
         "id": "customer",
         "tool": {"name": "read-customer", "type": "builtin", "actions": ["get-actor-tags"]},
         "action": "get-actor-tags",
-        "input": {"actor_id": {"var": "input.state.customer_id"}}
+        "input": {"actor_id": {"var": "input.input.customer_id"}}
       }
     ],
     "output": {
-      "answers": {
-        "route": {
+      "answers": [
+        {
+          "name": "route",
           "choice": {
             "if": [
               {"or": [
-                {"<=": [{"var": "input.state.amount"}, 50]},
+                {"<=": [{"var": "input.input.amount"}, 50]},
                 {"==": [{"var": "steps.customer.tier"}, "gold"]}
               ]},
               "approve",
@@ -233,7 +234,7 @@ RULES_ID=$(soat create-tool \
             ]
           }
         }
-      }
+      ]
     }
   }' | jq -r '.id')
 echo "Rules: $RULES_ID"
@@ -259,17 +260,18 @@ const { data: rules } = await adminSoat.tools.createTool({
             actions: ['get-actor-tags'],
           },
           action: 'get-actor-tags',
-          input: { actor_id: { var: 'input.state.customer_id' } },
+          input: { actor_id: { var: 'input.input.customer_id' } },
         },
       ],
       output: {
-        answers: {
-          route: {
+        answers: [
+          {
+            name: 'route',
             choice: {
               if: [
                 {
                   or: [
-                    { '<=': [{ var: 'input.state.amount' }, 50] },
+                    { '<=': [{ var: 'input.input.amount' }, 50] },
                     { '==': [{ var: 'steps.customer.tier' }, 'gold'] },
                   ],
                 },
@@ -278,7 +280,7 @@ const { data: rules } = await adminSoat.tools.createTool({
               ],
             },
           },
-        },
+        ],
       },
     },
   },
@@ -300,14 +302,15 @@ RULES_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
     "description": "Pays small refunds and any refund for a gold customer",
     "pipeline": {
       "steps": [
-        {"id":"customer","tool":{"name":"read-customer","type":"builtin","actions":["get-actor-tags"]},"action":"get-actor-tags","input":{"actor_id":{"var":"input.state.customer_id"}}}
+        {"id":"customer","tool":{"name":"read-customer","type":"builtin","actions":["get-actor-tags"]},"action":"get-actor-tags","input":{"actor_id":{"var":"input.input.customer_id"}}}
       ],
       "output": {
-        "answers": {
-          "route": {
-            "choice": {"if":[{"or":[{"<=":[{"var":"input.state.amount"},50]},{"==":[{"var":"steps.customer.tier"},"gold"]}]},"approve","review"]}
+        "answers": [
+          {
+            "name": "route",
+            "choice": {"if":[{"or":[{"<=":[{"var":"input.input.amount"},50]},{"==":[{"var":"steps.customer.tier"},"gold"]}]},"approve","review"]}
           }
-        }
+        ]
       }
     }
   }' | jq -r '.id')
@@ -332,16 +335,17 @@ DECIDER_ID=$(soat create-decider \
   --project-id "$PROJECT_ID" \
   --name refund-route \
   --tool-id "$RULES_ID" \
-  --questions '{
-    "route": {
+  --questions '[
+    {
       "type": "choice",
+      "name": "route",
       "instructions": "Pay this refund now, or send it to a person?",
-      "criteria": {
-        "approve": "Pay the refund now",
-        "review": "A person checks it first"
-      }
+      "choices": [
+        {"value": "approve", "description": "Pay the refund now."},
+        {"value": "review", "description": "A person checks it first."}
+      ]
     }
-  }' | jq -r '.id')
+  ]' | jq -r '.id')
 echo "Decider: $DECIDER_ID"
 ```
 
@@ -354,16 +358,17 @@ const { data: decider } = await adminSoat.deciders.createDecider({
     project_id: PROJECT_ID,
     name: 'refund-route',
     tool_id: RULES_ID,
-    questions: {
-      route: {
+    questions: [
+      {
         type: 'choice',
+        name: 'route',
         instructions: 'Pay this refund now, or send it to a person?',
-        criteria: {
-          approve: 'Pay the refund now',
-          review: 'A person checks it first',
-        },
+        choices: [
+          { value: 'approve', description: 'Pay the refund now.' },
+          { value: 'review', description: 'A person checks it first.' },
+        ],
       },
-    },
+    ],
   },
 });
 const DECIDER_ID = decider!.id;
@@ -380,13 +385,17 @@ DECIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders" \
     "project_id": "'"$PROJECT_ID"'",
     "name": "refund-route",
     "tool_id": "'"$RULES_ID"'",
-    "questions": {
-      "route": {
+    "questions": [
+      {
         "type": "choice",
+        "name": "route",
         "instructions": "Pay this refund now, or send it to a person?",
-        "criteria": {"approve": "Pay the refund now", "review": "A person checks it first"}
+        "choices": [
+          {"value": "approve", "description": "Pay the refund now."},
+          {"value": "review", "description": "A person checks it first."}
+        ]
       }
-    }
+    ]
   }' | jq -r '.id')
 ```
 
@@ -453,7 +462,7 @@ DECIDE_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 | `pay` | `transform` | Runs on the `approve` branch |
 | `escalate` | `transform` | Runs on the `review` branch |
 
-A [tool call waits for its decision](/docs/advanced/sync-and-async#two-combinations-that-are-resolved-for-you), so `decide`'s artifact is the settled [decision](/docs/modules/deciders#requesting-a-decision), and `route` reads the answer at `nodes.decide.answers.route.choice` ([The `nodes.<id>` namespace](/docs/modules/orchestrations#the-nodesid-namespace)).
+A [tool call waits for its decision](/docs/advanced/sync-and-async#two-combinations-that-are-resolved-for-you), so `decide`'s artifact is the settled [decision](/docs/modules/deciders#requesting-a-decision), and `route` reads the answer by question name at `nodes.decide.answers_by_name.route.choice` ([The `nodes.<id>` namespace](/docs/modules/orchestrations#the-nodesid-namespace)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -470,10 +479,10 @@ ORCH_ID=$(soat create-orchestration \
       "operation_id": "create-decision",
       "input_mapping": {
         "decider_id": "'"$DECIDER_ID"'",
-        "state": {"customer_id": {"var": "input.customer_id"}, "amount": {"var": "input.amount"}}
+        "input": {"customer_id": {"var": "input.customer_id"}, "amount": {"var": "input.amount"}}
       }
     },
-    {"id": "route", "type": "condition", "expression": {"var": "nodes.decide.answers.route.choice"}},
+    {"id": "route", "type": "condition", "expression": {"var": "nodes.decide.answers_by_name.route.choice"}},
     {
       "id": "pay",
       "type": "transform",
@@ -511,7 +520,7 @@ const { data: orch } = await adminSoat.orchestrations.createOrchestration({
         operation_id: 'create-decision',
         input_mapping: {
           decider_id: DECIDER_ID,
-          state: {
+          input: {
             customer_id: { var: 'input.customer_id' },
             amount: { var: 'input.amount' },
           },
@@ -520,7 +529,7 @@ const { data: orch } = await adminSoat.orchestrations.createOrchestration({
       {
         id: 'route',
         type: 'condition',
-        expression: { var: 'nodes.decide.answers.route.choice' },
+        expression: { var: 'nodes.decide.answers_by_name.route.choice' },
       },
       {
         id: 'pay',
@@ -556,8 +565,8 @@ ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
     "project_id": "'"$PROJECT_ID"'",
     "name": "refund-desk",
     "nodes": [
-      {"id":"decide","type":"tool","tool_id":"'"$DECIDE_TOOL_ID"'","operation_id":"create-decision","input_mapping":{"decider_id":"'"$DECIDER_ID"'","state":{"customer_id":{"var":"input.customer_id"},"amount":{"var":"input.amount"}}}},
-      {"id":"route","type":"condition","expression":{"var":"nodes.decide.answers.route.choice"}},
+      {"id":"decide","type":"tool","tool_id":"'"$DECIDE_TOOL_ID"'","operation_id":"create-decision","input_mapping":{"decider_id":"'"$DECIDER_ID"'","input":{"customer_id":{"var":"input.customer_id"},"amount":{"var":"input.amount"}}}},
+      {"id":"route","type":"condition","expression":{"var":"nodes.decide.answers_by_name.route.choice"}},
       {"id":"pay","type":"transform","expression":{"cat":["PAID ",{"var":"input.amount"}]},"state_mapping":{"state.result":{"var":"output.result"}}},
       {"id":"escalate","type":"transform","expression":{"cat":["REVIEW ",{"var":"input.amount"}]},"state_mapping":{"state.result":{"var":"output.result"}}}
     ],
@@ -589,7 +598,7 @@ LARGE_RUN=$(soat start-orchestration-run --orchestration-id "$ORCH_ID" \
 GOLD_RUN=$(soat start-orchestration-run --orchestration-id "$ORCH_ID" \
   --input '{"customer_id": "'"$GIL_ID"'", "amount": 400}' --wait true)
 
-SUMMARY='{status, route: .state.nodes.decide.answers.route.choice, result: .state.result}'
+SUMMARY='{status, route: .state.nodes.decide.answers_by_name.route.choice, result: .state.result}'
 echo "$SMALL_RUN" | jq -c "$SUMMARY"
 echo "$LARGE_RUN" | jq -c "$SUMMARY"
 echo "$GOLD_RUN" | jq -c "$SUMMARY"
@@ -633,7 +642,7 @@ for INPUT in \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"orchestration_id":"'"$ORCH_ID"'","input":'"$INPUT"',"wait":true}' \
-    | jq -c '{status, route: .state.nodes.decide.answers.route.choice, result: .state.result}'
+    | jq -c '{status, route: .state.nodes.decide.answers_by_name.route.choice, result: .state.result}'
 done
 ```
 
@@ -663,7 +672,7 @@ Expected output:
   "status": "completed",
   "decider_id": "dcd_…",
   "decider_version": 1,
-  "answers": { "route": { "type": "choice", "choice": "review" } }
+  "answers": [{ "type": "choice", "name": "route", "choice": "review" }]
 }
 ```
 

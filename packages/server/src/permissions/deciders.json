@@ -9,7 +9,7 @@
     {
       "operationId": "createDecider",
       "action": "deciders:CreateDecider",
-      "description": "Create a decider: a versioned question set answered by a tool-less agent"
+      "description": "Create a decider: a versioned question set answered by a tool-less agent or a tool"
     },
     {
       "operationId": "getDecider",
@@ -44,7 +44,12 @@
     {
       "operationId": "createDecision",
       "action": "deciders:CreateDecision",
-      "description": "Evaluate a decider against a state, recording the decision"
+      "description": "Evaluate a decider against an input, recording the decision"
+    },
+    {
+      "operationId": "createInlineDecision",
+      "action": "deciders:CreateInlineDecision",
+      "description": "Evaluate questions sent with the request against an input, answered by a named agent or tool"
     },
     {
       "operationId": "listDecisions",

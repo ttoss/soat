@@ -1485,19 +1485,20 @@ components:
           type: string
           description: The decider that judges each item; it must belong to the eval's project.
           example: dcd_V1StGXR8Z5jdHi6B
-        state:
+        input:
           description: >-
             JSON Logic mapping over `{ input, output, object, expected, item }`
-            building the state the decider judges. Omitted, the state is that
+            building the input the decider judges. Omitted, the input is that
             item context itself.
           example:
             customer: { var: 'input.0.content' }
             reply: { var: 'output' }
         score:
           description: >-
-            JSON Logic expression over `{ answers }`, the decision's answers
-            keyed by question id, that evaluates to the item's score in 0–1.
-          example: { var: 'answers.resolves_issue.probabilities.true' }
+            JSON Logic expression over `{ answers, answers_by_name }`, the
+            decision's answers in question order and keyed by question name,
+            that evaluates to the item's score in 0–1.
+          example: { var: 'answers_by_name.resolves_issue.probability' }
         pass_threshold:
           type: number
           minimum: 0

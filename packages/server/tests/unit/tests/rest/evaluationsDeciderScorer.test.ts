@@ -14,30 +14,42 @@ import { authenticatedTestClient, testClient } from '../../testClient';
  * the decider version the run was started under.
  */
 
-const QUESTIONS = {
-  resolves_issue: {
-    type: 'boolean',
-    instructions: 'Does the reply resolve what the customer asked?',
-  },
-  tone: {
-    type: 'score',
-    instructions: 'How warm is the reply?',
-    criteria: ['Cold', 'Neutral', 'Warm'],
-  },
+const levels = (labels: string[]) => {
+  return labels.map((label) => {
+    return { label, description: `The reply reads ${label.toLowerCase()}.` };
+  });
 };
 
-const ANSWER = {
-  answers: {
-    resolves_issue: {
-      value: true,
-      probabilities: { true: 0.8, false: 0.2 },
-    },
-    tone: { score: 2 },
+const QUESTIONS = [
+  {
+    type: 'predicate',
+    name: 'resolves_issue',
+    instructions: 'Does the reply resolve what the customer asked?',
   },
+  {
+    type: 'score',
+    name: 'tone',
+    instructions: 'How warm is the reply?',
+    levels: levels(['Cold', 'Neutral', 'Warm']),
+  },
+];
+
+const ANSWER = {
+  answers: [
+    { name: 'resolves_issue', probability: 0.8 },
+    {
+      name: 'tone',
+      score: 2,
+      probabilities: [
+        { value: 2, probability: 0.7 },
+        { value: 1, probability: 0.3 },
+      ],
+    },
+  ],
 };
 
 const RESOLVES_SCORE = {
-  var: 'answers.resolves_issue.probabilities.true',
+  var: 'answers_by_name.resolves_issue.probability',
 };
 
 type Reply = { status?: number; body: unknown };
@@ -352,11 +364,11 @@ describe('Evaluations — decider scorers', () => {
         pass_rate: 1,
       });
 
-      // With no `state`, the decision judges the item context a json_logic
+      // With no `input`, the decision judges the item context a json_logic
       // scorer reads.
       expect(received).toEqual([
         {
-          state: {
+          input: {
             input: [{ role: 'user', content: 'I was charged twice.' }],
             output: 'Refund issued for the duplicate.',
             expected: 'A refund of the duplicate charge.',
@@ -391,10 +403,10 @@ describe('Evaluations — decider scorers', () => {
       });
     });
 
-    test('judges the state the scorer maps from the item context', async () => {
+    test('judges the input the scorer maps from the item context', async () => {
       const evalId = await createEval([
         deciderScorer({
-          state: {
+          input: {
             customer: { var: 'input.0.content' },
             reply: { var: 'output' },
           },
@@ -407,7 +419,7 @@ describe('Evaluations — decider scorers', () => {
       const res = await runEval(evalId);
 
       expect(res.status).toBe(201);
-      expect(received[0]?.state).toEqual({
+      expect(received[0]?.input).toEqual({
         customer: 'I was charged twice.',
         reply: 'Refund issued.',
       });
@@ -433,7 +445,9 @@ describe('Evaluations — decider scorers', () => {
       mockCreateGeneration.mockResolvedValueOnce(
         completedGeneration('gen_dsc4', 'Refund issued.')
       );
-      replies.push({ body: { answers: { resolves_issue: { value: true } } } });
+      replies.push({
+        body: { answers: [{ name: 'resolves_issue', probability: 0.9 }] },
+      });
 
       const res = await runEval(evalId);
 
@@ -458,7 +472,7 @@ describe('Evaluations — decider scorers', () => {
       const evalId = await createEval([deciderScorer({ decider_id: refused })]);
       const pin = await asUser()
         .patch(`/api/v1/tools/${toolRes.body.id}`)
-        .send({ preset_parameters: { state: 'fixed' } });
+        .send({ preset_parameters: { input: 'fixed' } });
       expect(pin.status).toBe(200);
       mockCreateGeneration.mockResolvedValueOnce(
         completedGeneration('gen_dsc8', 'Refund issued.')
@@ -469,13 +483,13 @@ describe('Evaluations — decider scorers', () => {
       expect(res.body.errored_count).toBe(1);
       const [result] = await resultsOf(evalId, res.body.id);
       expect(result.error).toContain("scorer 'reply_review'");
-      expect(result.error).toContain('pins state');
+      expect(result.error).toContain('pins input');
       expect(received).toHaveLength(0);
     });
 
     test('a score expression outside 0–1 errors the item', async () => {
       const evalId = await createEval([
-        deciderScorer({ score: { var: 'answers.tone.score' } }),
+        deciderScorer({ score: { var: 'answers_by_name.tone.score' } }),
       ]);
       mockCreateGeneration.mockResolvedValueOnce(
         completedGeneration('gen_dsc5', 'Refund issued.')
@@ -508,10 +522,10 @@ describe('Evaluations — decider scorers', () => {
       expect(start.status).toBe(201);
       expect(start.body.decider_versions).toEqual({ reply_review: 1 });
 
-      const reworded = {
-        ...QUESTIONS,
-        tone: { ...QUESTIONS.tone, criteria: ['Hostile', 'Flat', 'Kind'] },
-      };
+      const reworded = [
+        QUESTIONS[0],
+        { ...QUESTIONS[1], levels: levels(['Hostile', 'Flat', 'Kind']) },
+      ];
       const update = await asUser()
         .patch(`/api/v1/deciders/${pinned}`)
         .send({ questions: reworded });
@@ -529,7 +543,10 @@ describe('Evaluations — decider scorers', () => {
         `/api/v1/decisions/${outcome.decision_id}`
       );
       expect(decision.body.decider_version).toBe(1);
-      expect(decision.body.answers.tone.legend).toBe('Warm');
+      expect(decision.body.answers_by_name.tone.probabilities).toEqual([
+        { value: 2, label: 'Warm', probability: 0.7 },
+        { value: 1, label: 'Neutral', probability: 0.3 },
+      ]);
     });
 
     test('a run with no decider scorer pins no decider version', async () => {

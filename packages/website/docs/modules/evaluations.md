@@ -147,7 +147,7 @@ eval; `tool` and `decider` scorers may appear several times, each under a distin
 | `embedding_similarity` | `pass_threshold` | The cosine similarity between the embeddings of the output text and `expected_output`, clamped to 0–1; see [Embedding similarity](#embedding-similarity) |
 | `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
 | `tool` | `name`, `tool_id`, `action` (builtin/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
-| `decider` | `name`, `decider_id`, `score`, `pass_threshold`, `state` (optional) | `score` evaluated over the answers of a [decision](./deciders.md); see [Decider scorers](#decider-scorers-decider) |
+| `decider` | `name`, `decider_id`, `score`, `pass_threshold`, `input` (optional) | `score` evaluated over the answers of a [decision](./deciders.md); see [Decider scorers](#decider-scorers-decider) |
 
 `exact_match`, `contains`, `embedding_similarity` and `llm_judge` read the final **text**;
 `output_schema` validates the **structured object** the platform parsed. `json_logic` sees
@@ -323,23 +323,26 @@ the eval grades exactly what production asks the same decider.
 | --- | --- | --- |
 | `name` | yes | Keys this scorer's outcomes and aggregate buckets, as for a `tool` scorer |
 | `decider_id` | yes | A decider in the eval's project; checked at eval create, update and run start |
-| `score` | yes | [JSON Logic](https://jsonlogic.com) over `{ answers }`, the decision's answers keyed by question id, yielding the item's 0–1 score |
+| `score` | yes | [JSON Logic](https://jsonlogic.com) over `{ answers, answers_by_name }`, the decision's answers in question order and keyed by question `name`, yielding the item's 0–1 score |
 | `pass_threshold` | yes | The item passes when `score >= pass_threshold`. No default, as on `llm_judge` |
-| `state` | no | JSON Logic over the item context (`input`, `output`, `object`, `expected`, `item`) building what the decider judges. Omitted, the state is that context itself |
+| `input` | no | JSON Logic over the item context (`input`, `output`, `object`, `expected`, `item`) building the decision's `input`. Omitted, the input is that context itself |
 
-A `probabilities` entry a tool backend returns is the natural score — a distribution over
-the answer space, so the score keeps the certainty a bare choice drops:
+A predicate's `probability` is the natural score: a tool backend returns the model's
+certainty, which a bare true/false drops (an agent backend records 1 or 0). A score
+answer's `score` is a level index; divide it by the top index (`tone` below has three
+levels) to read it as 0–1:
 
 ```json
 {
   "type": "decider",
   "name": "reply_review",
   "decider_id": "dcd_…",
-  "state": { "customer": { "var": "input.0.content" }, "reply": { "var": "output" } },
+  "input": { "customer": { "var": "input.0.content" }, "reply": { "var": "output" } },
   "score": {
     "*": [
-      { "var": "answers.resolves_issue.probabilities.true" },
-      { "-": [1, { "var": "answers.policy_violation.probabilities.true" }] }
+      { "var": "answers_by_name.resolves_issue.probability" },
+      { "-": [1, { "var": "answers_by_name.policy_violation.probability" }] },
+      { "/": [{ "var": "answers_by_name.tone.score" }, 2] }
     ]
   },
   "pass_threshold": 0.7
@@ -365,7 +368,7 @@ the answer space, so the score keeps the certainty a bare choice drops:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name reply-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
-  --scorers '[{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers.resolves_issue.probabilities.true"},"pass_threshold":0.7}]' \
+  --scorers '[{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers_by_name.resolves_issue.probability"},"pass_threshold":0.7}]' \
   --pass-threshold 0.8
 ```
 
@@ -384,7 +387,7 @@ const { data, error } = await soat.evaluations.createEval({
         type: 'decider',
         name: 'reply_review',
         decider_id: deciderId,
-        score: { var: 'answers.resolves_issue.probabilities.true' },
+        score: { var: 'answers_by_name.resolves_issue.probability' },
         pass_threshold: 0.7,
       },
     ],
@@ -406,7 +409,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "reply-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
-    "scorers": [{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers.resolves_issue.probabilities.true"},"pass_threshold":0.7}],
+    "scorers": [{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers_by_name.resolves_issue.probability"},"pass_threshold":0.7}],
     "pass_threshold": 0.8
   }'
 ```

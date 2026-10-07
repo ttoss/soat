@@ -315,13 +315,17 @@ describe('Shared tools', () => {
           project_id: granteeId,
           name: 'shared-backend',
           tool_id: sharedToolId,
-          questions: {
-            route: {
+          questions: [
+            {
               type: 'choice',
+              name: 'route',
               instructions: 'Which team?',
-              criteria: { billing: 'Money', technical: 'Errors' },
+              choices: [
+                { value: 'billing', description: 'Money' },
+                { value: 'technical', description: 'Errors' },
+              ],
             },
-          },
+          ],
         });
 
       expect(response.status).toBe(400);
