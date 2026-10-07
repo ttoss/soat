@@ -14,6 +14,7 @@ import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
+  parsePagination,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -57,12 +58,7 @@ type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
 ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
   requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const limit = ctx.query.limit
-    ? parseInt(ctx.query.limit as string, 10)
-    : undefined;
-  const offset = ctx.query.offset
-    ? parseInt(ctx.query.offset as string, 10)
-    : undefined;
+  const { limit, offset } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,

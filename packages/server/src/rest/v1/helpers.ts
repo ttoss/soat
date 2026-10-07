@@ -112,23 +112,27 @@ export const parseToolContextBody = (
 export type ProjectOwned = { project_id: string | undefined };
 
 /**
- * Parses `limit` / `offset` list pagination params from the query string.
- * Returns `undefined` for a param that is absent or not a valid integer, so the
- * lib layer applies its own defaults/bounds (see `lib/pagination.ts`).
+ * The only reader of `limit` / `offset` off a query string. Absent or empty is
+ * `undefined`, so the list's default applies; anything but an integer literal
+ * is `VALIDATION_FAILED`. Range and ceiling are `resolvePagination`'s.
  */
 export const parsePagination = (
   ctx: Context
 ): { limit?: number; offset?: number } => {
-  const toInt = (value: unknown): number | undefined => {
-    if (typeof value !== 'string' || value.trim() === '') return undefined;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
+  const toInt = (field: 'limit' | 'offset'): number | undefined => {
+    const value = ctx.query[field];
+    if (value === undefined || value === '') return undefined;
+    if (typeof value !== 'string' || !/^-?\d+$/.test(value.trim())) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `${field} must be an integer; got ${JSON.stringify(value)}.`,
+        { field }
+      );
+    }
+    return Number(value);
   };
 
-  return {
-    limit: toInt(ctx.query.limit),
-    offset: toInt(ctx.query.offset),
-  };
+  return { limit: toInt('limit'), offset: toInt('offset') };
 };
 
 /** A `Context` past {@link requireAuth}: `authUser` is guaranteed present. */

@@ -6,6 +6,7 @@ import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
+import { emptyPage } from 'src/lib/pagination';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
 import { readTagQuery } from 'src/lib/tags';
@@ -13,6 +14,7 @@ import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
 import {
+  parsePagination,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -71,7 +73,7 @@ const listFilesWithPolicy = async (args: {
   });
 
   if (!hasAccess) {
-    return { data: [], total: 0, limit: limit ?? 50, offset: offset ?? 0 };
+    return emptyPage({ limit, offset });
   }
 
   return listFiles({
@@ -90,12 +92,7 @@ filesRouter.get('/files', async (ctx: Context) => {
   const projectPublicId = (ctx.query as Record<string, string>).project_id;
   const pathPrefix = (ctx.query as Record<string, string>).path_prefix;
   const tags = readTagQuery(ctx.query.tags);
-  const limit = ctx.query.limit
-    ? parseInt(ctx.query.limit as string, 10)
-    : undefined;
-  const offset = ctx.query.offset
-    ? parseInt(ctx.query.offset as string, 10)
-    : undefined;
+  const { limit, offset } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,

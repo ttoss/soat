@@ -51,6 +51,7 @@ paths:
           description: Number of results to skip
           schema:
             type: integer
+            minimum: 0
             default: 0
       responses:
         '200':
@@ -230,6 +231,7 @@ paths:
           description: Number of results to skip
           schema:
             type: integer
+            minimum: 0
             default: 0
       responses:
         '200':

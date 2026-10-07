@@ -3,14 +3,8 @@ import * as path from 'node:path';
 
 import { load } from 'js-yaml';
 
-import {
-  AUDIT_LOG_DEFAULT_LIMIT,
-  AUDIT_LOG_MAX_LIMIT,
-} from '../../../../src/lib/auditLog';
-import {
-  DEFAULT_LIST_LIMIT,
-  MAX_LIST_LIMIT,
-} from '../../../../src/lib/pagination';
+import { AUDIT_LOG_BOUNDS } from '../../../../src/lib/auditLog';
+import { LIST_BOUNDS, type PageBounds } from '../../../../src/lib/pagination';
 
 /**
  * Drift guardrail — pure validation with no REST entry point.
@@ -23,12 +17,9 @@ import {
 
 const SPEC_DIR = path.resolve(__dirname, '../../../../src/rest/openapi/v1');
 
-/** Lists whose page bounds are not `resolvePagination`'s. */
-const OWN_BOUNDS: Record<string, { default: number; maximum: number }> = {
-  listAuditEntries: {
-    default: AUDIT_LOG_DEFAULT_LIMIT,
-    maximum: AUDIT_LOG_MAX_LIMIT,
-  },
+/** Lists whose page is not {@link LIST_BOUNDS}. */
+const OWN_BOUNDS: Record<string, PageBounds> = {
+  listAuditEntries: AUDIT_LOG_BOUNDS,
 };
 
 type Node = Record<string, unknown>;
@@ -65,8 +56,8 @@ const operationsOf = (spec: unknown) => {
     });
 };
 
-/** Every `limit` query parameter, by operation, with its declared schema. */
-const limitSchemas = (): Map<string, unknown> => {
+/** Every `name` query parameter, by operation, with its declared schema. */
+const pagingSchemas = (name: 'limit' | 'offset'): Map<string, unknown> => {
   const found = new Map<string, unknown>();
   const files = fs.readdirSync(SPEC_DIR).filter((file) => {
     return file.endsWith('.yaml');
@@ -78,7 +69,7 @@ const limitSchemas = (): Map<string, unknown> => {
         return (
           isNode(parameter) &&
           parameter.in === 'query' &&
-          parameter.name === 'limit'
+          parameter.name === name
         );
       });
       if (isNode(limit)) found.set(operationId, limit.schema);
@@ -88,7 +79,8 @@ const limitSchemas = (): Map<string, unknown> => {
 };
 
 describe('OpenAPI list limits', () => {
-  const schemas = limitSchemas();
+  const schemas = pagingSchemas('limit');
+  const offsets = pagingSchemas('offset');
 
   test('reads the limit of every list', () => {
     expect(schemas.size).toBeGreaterThan(50);
@@ -97,21 +89,35 @@ describe('OpenAPI list limits', () => {
   test('every limit declares the bounds and default the server applies', () => {
     const drifted = [...schemas]
       .filter(([operationId, schema]) => {
-        const bounds = OWN_BOUNDS[operationId] ?? {
-          default: DEFAULT_LIST_LIMIT,
-          maximum: MAX_LIST_LIMIT,
-        };
+        const bounds = OWN_BOUNDS[operationId] ?? LIST_BOUNDS;
         return (
           !isNode(schema) ||
           schema.type !== 'integer' ||
           schema.minimum !== 1 ||
-          schema.maximum !== bounds.maximum ||
-          schema.default !== bounds.default
+          schema.maximum !== bounds.maxLimit ||
+          schema.default !== bounds.defaultLimit
         );
       })
       .map(([operationId, schema]) => {
         return `${operationId}: ${JSON.stringify(schema)}`;
       });
+    expect(drifted).toEqual([]);
+  });
+
+  test('every offset declares the floor the server applies', () => {
+    const drifted = [...offsets]
+      .filter(([, schema]) => {
+        return (
+          !isNode(schema) ||
+          schema.type !== 'integer' ||
+          schema.minimum !== 0 ||
+          schema.default !== 0
+        );
+      })
+      .map(([operationId, schema]) => {
+        return `${operationId}: ${JSON.stringify(schema)}`;
+      });
+    expect(offsets.size).toBeGreaterThan(50);
     expect(drifted).toEqual([]);
   });
 

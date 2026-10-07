@@ -346,8 +346,7 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const limit = ctx.query.limit ? Number(ctx.query.limit) : undefined;
-  const offset = ctx.query.offset ? Number(ctx.query.offset) : undefined;
+  const { limit, offset } = parsePagination(ctx);
 
   ctx.body = await listTriggerFirings({
     triggerPublicId,

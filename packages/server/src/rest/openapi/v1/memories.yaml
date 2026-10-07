@@ -51,6 +51,7 @@ paths:
           description: Number of results to skip
           schema:
             type: integer
+            minimum: 0
             default: 0
         - name: include_invalidated
           in: query
@@ -454,6 +455,7 @@ paths:
           description: Number of results to skip
           schema:
             type: integer
+            minimum: 0
             default: 0
       responses:
         '200':

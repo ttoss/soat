@@ -168,9 +168,7 @@ describe('Actors', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
-    // `listActors` hand-rolled `args.limit ?? 50`, bypassing the only
-    // place `MAX_LIST_LIMIT` is enforced. `parsePagination` does not clamp
-    // either, so this asked for a full-table read with the `include` fan-out
+    // An unclamped limit here is a full-table read with the `include` fan-out
     // across four associations.
     test('an absurd limit is clamped to MAX_LIST_LIMIT', async () => {
       const response = await authenticatedTestClient(userToken).get(

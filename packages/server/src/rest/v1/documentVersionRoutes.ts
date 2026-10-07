@@ -10,7 +10,7 @@ import {
 import { withdrawDocument } from 'src/lib/documentWithdrawal';
 
 import type { ProjectOwned } from './helpers';
-import { requireAuth, writePreconditionOf } from './helpers';
+import { parsePagination, requireAuth, writePreconditionOf } from './helpers';
 
 /**
  * A document's history: its archived versions, the withdrawal that takes it
@@ -91,12 +91,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
 
       ctx.body = await listDocumentVersions({
         documentId: ctx.params.document_id,
-        limit: ctx.query.limit
-          ? parseInt(ctx.query.limit as string, 10)
-          : undefined,
-        offset: ctx.query.offset
-          ? parseInt(ctx.query.offset as string, 10)
-          : undefined,
+        ...parsePagination(ctx),
       });
     }
   );

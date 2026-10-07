@@ -19,7 +19,11 @@ import {
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
 
 import { checkConversationAccess } from './conversationHelpers';
-import { type AuthenticatedContext, requireAuth } from './helpers';
+import {
+  type AuthenticatedContext,
+  parsePagination,
+  requireAuth,
+} from './helpers';
 import { assertNotSystemRole } from './systemMessageGuard';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -48,12 +52,7 @@ conversationSubResourcesRouter.get(
       throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
-    const limit = ctx.query.limit
-      ? parseInt(ctx.query.limit as string, 10)
-      : undefined;
-    const offset = ctx.query.offset
-      ? parseInt(ctx.query.offset as string, 10)
-      : undefined;
+    const { limit, offset } = parsePagination(ctx);
 
     const messages = await listConversationMessages({
       conversationId: ctx.params.conversation_id,

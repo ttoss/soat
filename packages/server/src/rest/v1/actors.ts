@@ -12,10 +12,12 @@ import {
   updateActor,
   validateActorExclusivity,
 } from 'src/lib/actors';
+import { emptyPage } from 'src/lib/pagination';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { readTagQuery } from 'src/lib/tags';
 
 import {
+  parsePagination,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -60,12 +62,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const chatId = ctx.query.chat_id as string | undefined;
   const conversationId = ctx.query.conversation_id as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
-  const limit = ctx.query.limit
-    ? parseInt(ctx.query.limit as string, 10)
-    : undefined;
-  const offset = ctx.query.offset
-    ? parseInt(ctx.query.offset as string, 10)
-    : undefined;
+  const { limit, offset } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -84,12 +81,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
       projectPublicId,
     });
     if (!compiled.hasAccess) {
-      ctx.body = {
-        data: [],
-        total: 0,
-        limit: limit ?? 50,
-        offset: offset ?? 0,
-      };
+      ctx.body = emptyPage({ limit, offset });
       return;
     }
     policyWhere = compiled.where;
