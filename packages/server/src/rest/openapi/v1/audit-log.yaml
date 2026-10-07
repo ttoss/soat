@@ -79,19 +79,16 @@ paths:
             format: date-time
         - name: limit
           in: query
-          description: Number of results per page (1–200, default 25)
+          description: >-
+            Results per page. Above 200 it is clamped, and `limit` in the
+            response reports the page served; below 1 or not an integer it is
+            `400 VALIDATION_FAILED`.
           schema:
             type: integer
             minimum: 1
             maximum: 200
             default: 25
-        - name: offset
-          in: query
-          description: Number of results to skip
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
+        - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
         '200':
           description: A page of audit entries
@@ -111,7 +108,9 @@ paths:
                   offset:
                     type: integer
         '400':
-          description: '`from` or `to` is present but not a valid ISO 8601 date'
+          description: >-
+            `from` or `to` is not a valid ISO 8601 date, or `limit` / `offset`
+            is not a valid page
         '401':
           description: Unauthorized
         '403':

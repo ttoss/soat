@@ -1272,7 +1272,7 @@ attributed to the `approval` principal rather than to whoever typed the command.
 
 ```bash
 soat get-task-history --task-id "$TASK_ID" \
-  | jq '[.[] | {transition, from_state, to_state, principal_kind}]'
+  | jq '[.data[] | {transition, from_state, to_state, principal_kind}]'
 ```
 
 You should see `start_reconciliation`, `submit_for_review`, `request_rework`,
@@ -1284,11 +1284,11 @@ Project-wide activity: [Activity](/docs/modules/activity) and
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: history } = await adminSoat.tasks.getTaskHistory({
+const { data: page } = await adminSoat.tasks.getTaskHistory({
   path: { task_id: TASK_ID },
 });
 console.log(
-  history.map((h) => [
+  page?.data.map((h) => [
     h.transition,
     h.from_state,
     h.to_state,
@@ -1303,7 +1303,7 @@ console.log(
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.[] | {transition, from_state, to_state, principal_kind}]'
+  | jq '[.data[] | {transition, from_state, to_state, principal_kind}]'
 ```
 
 </TabItem>

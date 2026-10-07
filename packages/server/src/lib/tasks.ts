@@ -487,29 +487,42 @@ export const deleteTask = async (args: { id: string }) => {
 
 // ── History ──────────────────────────────────────────────────────────────────
 
-export const getTaskHistory = async (args: { id: string }) => {
+export const getTaskHistory = async (args: {
+  id: string;
+  limit?: number;
+  offset?: number;
+}) => {
   const task = await db.Task.findOne({ where: { publicId: args.id } });
   if (!task) {
     throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
   }
-  const rows = await db.TaskTransition.findAll({
-    where: { taskId: task.id as number },
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
     order: [['createdAt', 'ASC']],
-  });
-  return rows.map((row) => {
-    return {
-      id: row.publicId,
-      task_id: task.publicId,
-      from_state: row.fromState,
-      to_state: row.toState,
-      transition: row.transition,
-      principal_kind: row.principalKind,
-      principal_id: row.principalId,
-      generation_id: row.generationId,
-      orchestration_run_id: row.orchestrationRunId,
-      tool_id: row.toolId,
-      note: row.note,
-      created_at: row.createdAt,
-    };
+    query: ({ limit, offset, order }) => {
+      return db.TaskTransition.findAndCountAll({
+        where: { taskId: task.id as number },
+        limit,
+        offset,
+        order,
+      });
+    },
+    map: (row) => {
+      return {
+        id: row.publicId,
+        task_id: task.publicId,
+        from_state: row.fromState,
+        to_state: row.toState,
+        transition: row.transition,
+        principal_kind: row.principalKind,
+        principal_id: row.principalId,
+        generation_id: row.generationId,
+        orchestration_run_id: row.orchestrationRunId,
+        tool_id: row.toolId,
+        note: row.note,
+        created_at: row.createdAt,
+      };
+    },
   });
 };

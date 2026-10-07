@@ -121,11 +121,11 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
     expect(response.body.limit).toBe(100);
   });
 
-  test('a non-numeric limit falls back to the default', async () => {
+  test('a non-numeric limit is refused', async () => {
     const response = await list({ limit: 'abc' });
 
-    expect(response.status).toBe(200);
-    expect(response.body.limit).toBe(50);
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
   });
 
   test('q matches id or display name, ignoring case', async () => {

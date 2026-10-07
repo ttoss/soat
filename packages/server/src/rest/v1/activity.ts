@@ -4,7 +4,7 @@ import { DomainError } from 'src/errors';
 import { listActivity } from 'src/lib/activity';
 import { streamActivityNdjson } from 'src/lib/activityExport';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import { parsePageLimit, requireAuth, resolveReadProjectIds } from './helpers';
 import { sendNdjson } from './ndjsonResponse';
 
 const activityRouter = new Router<Context>();
@@ -21,7 +21,7 @@ activityRouter.get('/activity', async (ctx: Context) => {
     resourceType: 'activity',
   });
 
-  const { limit } = parsePagination(ctx);
+  const limit = parsePageLimit(ctx);
 
   ctx.body = await listActivity({
     projectIds: projectIds ?? [],

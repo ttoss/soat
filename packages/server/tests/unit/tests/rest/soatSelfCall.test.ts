@@ -353,7 +353,7 @@ describe('SOAT self-call', () => {
         `/api/v1/tasks/${taskPublicId}/history`
       );
       expect(res.status).toBe(200);
-      const rows = res.body as {
+      const rows = res.body.data as {
         transition: string | null;
         principal_kind: string | null;
         principal_id: string | null;
