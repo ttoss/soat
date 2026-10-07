@@ -5756,6 +5756,21 @@ fi
 $SOAT_CLI delete-formation --formation_id "$FORMATION_KEY_FORMATION_ID" >/dev/null
 echo "Formation api_key owned by the deploying caller."
 
+# `for_each` declares one resource per map entry, named `<LogicalId>[<key>]`.
+echo "--- Formation for_each ---"
+FOR_EACH_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-for-each" \
+  --template '{"resources":{"Docs":{"type":"document","for_each":{"a.md":"Alpha","b.md":"Beta"},"properties":{"path":{"sub":"/smoke-for-each/${each.key}"},"content":{"each":"value"}}}}}')
+FOR_EACH_IDS=$(printf '%s\n' "$FOR_EACH_RESP" | jq -r '[.resources[].logical_id] | sort | join(",")')
+if [ "$FOR_EACH_IDS" != "Docs[a.md],Docs[b.md]" ]; then
+  echo "ERROR: for_each did not declare one resource per entry" >&2
+  printf '%s\n' "$FOR_EACH_RESP" >&2
+  exit 1
+fi
+$SOAT_CLI delete-formation --formation_id "$(printf '%s\n' "$FOR_EACH_RESP" | jq -r '.id')" >/dev/null
+echo "Formation for_each expanded."
+
 # Metadata substitution (F-16): top-level `metadata` resolves `sub`/`param`/`ref`
 # at deploy, exposed on `resolved_metadata`; deploy parameter values are recorded
 # on `resolved_parameters`.

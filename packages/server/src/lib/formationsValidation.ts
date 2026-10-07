@@ -1,5 +1,6 @@
 import { load } from 'js-yaml';
 
+import { expandForEach, forEachValidationErrors } from './formationsForEach';
 import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
 import { normalizeDeclaredProperties } from './formationsProperties';
 import {
@@ -27,9 +28,9 @@ import { isPlainObject } from './plainObject';
  * appropriate error).
  */
 export const parseFormationTemplateInput = (input: unknown): unknown => {
-  if (typeof input !== 'string') return input;
+  if (typeof input !== 'string') return expandForEach(input);
   try {
-    return load(input);
+    return expandForEach(load(input));
   } catch {
     // Return the raw string so validateFormationTemplate reports a useful error
     return input;
@@ -323,9 +324,40 @@ const resolveTemplateParams = (
   return { errors, warnings, paramNames };
 };
 
-export const validateFormationTemplate = (
-  template: unknown
-): ValidationResult => {
+const validateDeclarations = (args: {
+  resources: Record<string, unknown>;
+  logicalIds: Set<string>;
+  paramNames: Set<string>;
+}): { errors: ValidationError[]; warnings: ValidationError[] } => {
+  const { resources, logicalIds, paramNames } = args;
+  const errors: ValidationError[] = [];
+  const warnings: ValidationError[] = [];
+  for (const [logicalId, declRaw] of Object.entries(resources)) {
+    if (isPlainObject(declRaw)) {
+      const forEachErrors = forEachValidationErrors({
+        logicalId,
+        decl: declRaw,
+        logicalIds,
+      });
+      errors.push(...forEachErrors);
+      // A `for_each` still here could not expand, so its properties hold
+      // `each` expressions no property check can read.
+      if (declRaw.for_each !== undefined) continue;
+    }
+    const declResult = validateResourceDeclaration({
+      logicalId,
+      declRaw,
+      logicalIds,
+      paramNames,
+    });
+    errors.push(...declResult.errors);
+    warnings.push(...declResult.warnings);
+  }
+  return { errors, warnings };
+};
+
+export const validateFormationTemplate = (input: unknown): ValidationResult => {
+  const template = expandForEach(input);
   const tmpl = parseTemplateObject(template);
   if (!tmpl) {
     return {
@@ -352,16 +384,9 @@ export const validateFormationTemplate = (
   const errors: ValidationError[] = [...paramErrors];
   const logicalIds = new Set(Object.keys(resources));
 
-  for (const [logicalId, declRaw] of Object.entries(resources)) {
-    const declResult = validateResourceDeclaration({
-      logicalId,
-      declRaw,
-      logicalIds,
-      paramNames,
-    });
-    errors.push(...declResult.errors);
-    warnings.push(...declResult.warnings);
-  }
+  const declared = validateDeclarations({ resources, logicalIds, paramNames });
+  errors.push(...declared.errors);
+  warnings.push(...declared.warnings);
 
   const outputs = getPlainObjectField(tmpl, 'outputs');
   if (outputs) {

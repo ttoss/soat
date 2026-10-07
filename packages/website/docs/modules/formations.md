@@ -273,7 +273,8 @@ Rules:
   "properties": { ... },
   "depends_on": ["OtherLogicalId"],
   "deletion_policy": "retain",
-  "metadata": { }
+  "metadata": { },
+  "for_each": { }
 }
 ```
 
@@ -282,6 +283,7 @@ Rules:
 - **`depends_on`** — explicit dependencies in addition to implicit `ref` dependencies
 - **`deletion_policy`** — what happens to the physical resource when it is removed from the stack: `delete` (default) deletes it; `retain` keeps it alive and only removes the formation record
 - **`metadata`** — arbitrary key/value stored on the resource record
+- **`for_each`** — declare one resource per map entry instead of one resource; see [For Each](#for-each)
 
 ### Ref Expressions
 
@@ -331,6 +333,32 @@ Main use: a [secret reference](./secrets.md#secret-references-secret) to a secre
 ```
 
 The stored header is `Bearer {{secret:sec_01HXYZ}}`; the decrypted value is substituted server-side at call time and never echoed by any API response.
+
+### For Each
+
+`for_each` maps keys to values and declares one resource per entry. Inside the declaration, `{ "each": "key" }` and `{ "each": "value" }` read the entry, as do `${each.key}` and `${each.value}` inside a `sub` (`${each.value}` needs text values):
+
+```json
+{
+  "resources": {
+    "Docs": {
+      "type": "document",
+      "for_each": {
+        "guide/start.md": "Start here.",
+        "faq.md": "Questions and answers."
+      },
+      "properties": {
+        "path": { "sub": "/kb/${each.key}" },
+        "content": { "each": "value" }
+      }
+    }
+  }
+}
+```
+
+Each instance is named `<LogicalId>[<key>]` (`Docs[faq.md]`) and keyed by its entry, so an update that adds, edits or removes one entry creates, updates or deletes only that instance; the others report `no-op`. `ref` and `ref_attr` name one instance (`{ "ref": "Docs[faq.md]" }`, `{ "ref_attr": "Docs[faq.md].path" }`), and `depends_on: ["Docs"]` waits on every instance.
+
+Keys must be non-empty and must not contain `[`, `]`, `{` or `}`, and an instance name may not collide with another resource. The template is stored expanded, so a read returns the instances rather than the `for_each`.
 
 ### Secrets in Templates
 

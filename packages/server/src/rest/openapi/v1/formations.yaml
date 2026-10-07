@@ -2179,9 +2179,23 @@ components:
             free-form here because property values may be substitution
             expressions rather than final values: `{ "ref": "logicalId" }`
             references another resource's physical ID,
-            `{ "param": "ParamName" }` substitutes a parameter value, and
+            `{ "param": "ParamName" }` substitutes a parameter value,
             `{ "sub": "text ${ParamName}" }` interpolates parameters into a
-            string.
+            string, and inside a `for_each` resource `{ "each": "key" }` /
+            `{ "each": "value" }` (or `${each.key}` / `${each.value}` in a
+            `sub`) read the current entry.
+        for_each:
+          type: object
+          additionalProperties: true
+          description: >
+            Declares one resource per entry of this map instead of one
+            resource. Each instance is named `<LogicalId>[<key>]` and is keyed
+            by its entry, so adding or removing an entry creates or deletes
+            only that instance. Keys must be non-empty and must not contain
+            `[`, `]`, `{` or `}`. `depends_on: ["<LogicalId>"]` elsewhere waits
+            on every instance; `ref` and `ref_attr` name one instance
+            (`Docs[guide.md]`, `Docs[guide.md].attribute`). The template is
+            stored expanded: a read returns the instances, not the `for_each`.
         depends_on:
           type: array
           items:

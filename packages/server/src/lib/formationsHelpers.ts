@@ -112,7 +112,10 @@ export const collectRefAttrs = (value: unknown): string[] => {
 export const parseRefAttr = (
   refAttr: string
 ): { logicalId: string; attrName: string } | null => {
-  const dotIndex = refAttr.indexOf('.');
+  // An instance id (`Docs[guide.md]`) may hold dots, so the attribute starts
+  // at the first dot after its closing bracket.
+  const close = refAttr.indexOf(']');
+  const dotIndex = refAttr.indexOf('.', close < 0 ? 0 : close);
   if (dotIndex <= 0) return null;
   const logicalId = refAttr.slice(0, dotIndex);
   const attrName = refAttr.slice(dotIndex + 1);
