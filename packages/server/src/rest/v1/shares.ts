@@ -172,6 +172,7 @@ sharesRouter.get('/shares/:share_id/references', async (ctx: Context) => {
   ctx.body = await listShareReferences({
     id: ctx.params.share_id,
     projectId: party.projectId,
+    ...parsePagination(ctx),
   });
 });
 

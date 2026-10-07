@@ -91,7 +91,7 @@ Revoke applies to one acceptance or to the whole share:
 
 Accepting a suspended share records the acceptance, which grants nothing until the share is resumed.
 
-[`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources: every agent, pipeline, ingestion rule, orchestration, trigger and formation of that project naming the shared resource, as `{ type, id }`. The publisher's revoke is never refused.
+[`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources: every agent, pipeline, ingestion rule, orchestration, trigger and formation of that project naming the shared resource, as `{ type, id }`, paged with `limit` (default 50, max 100) / `offset` in a `{ data, total, limit, offset }` envelope. `409 SHARE_IN_USE` lists every one, unpaged. The publisher's revoke is never refused.
 
 ### Cap
 

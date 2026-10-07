@@ -1235,6 +1235,44 @@ describe('MCP tools - happy path', () => {
       expect(deleted.status).toBe(200);
     });
 
+    test('list-document-relations pages with limit and offset', async () => {
+      const createDoc = async (filename: string) => {
+        const res = await mcpCall('create-document', {
+          project_id: projectId,
+          content: filename,
+          filename,
+        });
+        return parseResult(res).id as string;
+      };
+      const from = await createDoc('mcp-page-from.txt');
+      const targets = [
+        await createDoc('mcp-page-a.txt'),
+        await createDoc('mcp-page-b.txt'),
+      ];
+      for (const to of targets) {
+        await mcpCall('create-document-relation', {
+          document_id: from,
+          type: 'cites',
+          to_document_id: to,
+        });
+      }
+
+      const listed = await mcpCall('list-document-relations', {
+        document_id: from,
+        limit: 1,
+        offset: 1,
+      });
+
+      expect(listed.status).toBe(200);
+      const page = parseResult(listed);
+      expect(page).toMatchObject({ total: 2, limit: 1, offset: 1 });
+      expect(
+        (page.data as Array<{ to_document_id: string }>).map((row) => {
+          return row.to_document_id;
+        })
+      ).toEqual([targets[1]]);
+    });
+
     test('get-document-status returns a lightweight status payload', async () => {
       const res = await mcpCall('get-document-status', {
         document_id: documentId,

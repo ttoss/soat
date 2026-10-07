@@ -24,6 +24,7 @@ import type {
   BedrockModelSummary,
 } from './bedrockModelCatalog';
 import { defaultListFoundationModels } from './bedrockModelCatalog';
+import { pageOf } from './pagination';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 const log = createDebug('soat:provider-models');
@@ -457,6 +458,20 @@ export const enumerateProviderModels = async (
   return models;
 };
 
+/** `q` as a case-insensitive substring of a model's id or display name. */
+const filterModels = (args: {
+  models: ProviderModel[];
+  q?: string;
+}): ProviderModel[] => {
+  const needle = args.q?.trim().toLowerCase();
+  if (!needle) return args.models;
+  return args.models.filter((model) => {
+    return [model.id, model.display_name].some((value) => {
+      return value?.toLowerCase().includes(needle);
+    });
+  });
+};
+
 /**
  * Asks an existing AI provider record which models it can run, using that
  * provider's own stored credentials and configuration.
@@ -467,7 +482,16 @@ export const enumerateProviderModels = async (
  */
 export const listAiProviderModels = async (args: {
   aiProviderId: string;
-}): Promise<{ provider: AiProviderSlug; models: ProviderModel[] }> => {
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  provider: AiProviderSlug;
+  models: ProviderModel[];
+  total: number;
+  limit: number;
+  offset: number;
+}> => {
   // The provider is this route's subject rather than something another
   // project's record points at, and the caller was authorized against the
   // provider's own project — so that project is the scope.
@@ -489,13 +513,18 @@ export const listAiProviderModels = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
-  return {
+  const catalogue = await enumerateProviderModels({
     provider: resolved.provider,
-    models: await enumerateProviderModels({
-      provider: resolved.provider,
-      baseUrl: resolved.baseUrl,
-      config: resolved.config,
-      secretValue: resolved.secretValue,
-    }),
-  };
+    baseUrl: resolved.baseUrl,
+    config: resolved.config,
+    secretValue: resolved.secretValue,
+  });
+  // The vendor answers its whole catalogue in one call, so the filter and the
+  // page apply to what it returned rather than to the upstream request.
+  const { data, ...page } = pageOf({
+    items: filterModels({ models: catalogue, q: args.q }),
+    limit: args.limit,
+    offset: args.offset,
+  });
+  return { provider: resolved.provider, models: data, ...page };
 };

@@ -205,6 +205,71 @@ describe('Document relations', () => {
       expect(response.body.data[0].to_document_id).toBe(to);
     });
 
+    describe('pagination', () => {
+      let from: string;
+      let targets: string[];
+
+      beforeAll(async () => {
+        from = await createDocument({ filename: 'page-from.txt' });
+        targets = [];
+        for (const name of ['page-a.txt', 'page-b.txt', 'page-c.txt']) {
+          const to = await createDocument({ filename: name });
+          await relate({ from, type: 'cites', to });
+          targets.push(to);
+        }
+      });
+
+      const list = (query: Record<string, string | number> = {}) => {
+        return authenticatedTestClient(userToken)
+          .get(`/api/v1/documents/${from}/relations`)
+          .query(query);
+      };
+
+      test('the default page carries every edge and the envelope', async () => {
+        const response = await list();
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ total: 3, limit: 50, offset: 0 });
+        expect(
+          response.body.data.map((r: { to_document_id: string }) => {
+            return r.to_document_id;
+          })
+        ).toEqual(targets);
+      });
+
+      test('an explicit page answers that slice, oldest first', async () => {
+        const response = await list({ limit: 1, offset: 1 });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ total: 3, limit: 1, offset: 1 });
+        expect(response.body.data).toHaveLength(1);
+        expect(response.body.data[0].to_document_id).toBe(targets[1]);
+      });
+
+      test('the last page holds the remainder', async () => {
+        const response = await list({ limit: 2, offset: 2 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.total).toBe(3);
+        expect(response.body.data).toHaveLength(1);
+        expect(response.body.data[0].to_document_id).toBe(targets[2]);
+      });
+
+      test('a limit above the ceiling is clamped to it', async () => {
+        const response = await list({ limit: 1000 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.limit).toBe(100);
+      });
+
+      test('a non-numeric limit falls back to the default', async () => {
+        const response = await list({ limit: 'abc' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.limit).toBe(50);
+      });
+    });
+
     test('unauthenticated request returns 401', async () => {
       const document = await createDocument({ filename: 'list-unauth.txt' });
 

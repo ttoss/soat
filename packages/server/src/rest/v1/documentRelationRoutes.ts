@@ -13,7 +13,7 @@ import {
   checkDocumentPermission,
   documentsRouter as _router,
 } from './documents';
-import { requireAuth, resolveReadProjectIds } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 
 /**
  * A document's typed edges, as a sub-resource of the document that asserts
@@ -84,6 +84,7 @@ export const registerDocumentRelationRoutes = (args: {
       ctx.body = await listDocumentRelations({
         documentId: ctx.params.document_id,
         projectIds: await documentScope(ctx),
+        ...parsePagination(ctx),
       });
     }
   );
