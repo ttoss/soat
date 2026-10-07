@@ -105,6 +105,30 @@ describe('POST /api/v1/formations with for_each', () => {
     expect(doc.body.content).toBe('Start here.');
   });
 
+  test('reads the entry at any depth, beside literal values', async () => {
+    const formation = await createFormation({
+      resources: {
+        Docs: {
+          type: 'document',
+          for_each: { 'deep.md': 'Deep.' },
+          properties: {
+            path: '/depth/deep.md',
+            title: 'Guide',
+            content: { each: 'value' },
+            metadata: { sources: [{ each: 'key' }, 'manual'] },
+          },
+        },
+      },
+    });
+
+    const doc = await client().get(
+      `/api/v1/documents/${physicalIds(formation.resources)['Docs[deep.md]']}`
+    );
+    expect(doc.status).toBe(200);
+    expect(doc.body.title).toBe('Guide');
+    expect(doc.body.metadata).toEqual({ sources: ['deep.md', 'manual'] });
+  });
+
   test('stores the expanded template', async () => {
     const formation = await createFormation(docs({ 'a.md': 'A' }, 'stored'));
 
