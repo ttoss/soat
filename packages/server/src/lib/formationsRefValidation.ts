@@ -35,8 +35,6 @@ export const validateRefAndParamTokens = (
     }
   }
   for (const ref of collectParamRefs(value)) {
-    // body.xxx refs are runtime tool-argument interpolations, not formation params
-    if (ref.startsWith('body.')) continue;
     // A sub token may also name a resource logical id (resolved to the
     // physical id at apply time).
     if (logicalIds.has(ref)) continue;
