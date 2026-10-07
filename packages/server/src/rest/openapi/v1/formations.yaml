@@ -823,8 +823,8 @@ components:
           nullable: true
           description: >-
             Prompt caching for this agent's turns. `{"enabled": true}` marks a
-            cache breakpoint at the end of the turn's static prefix — the tool
-            definitions and the instructions together. Null or omitted is off.
+            cache breakpoint at the end of the system block and on the last
+            message of each step. Null or omitted is off.
           additionalProperties: false
           properties:
             enabled:

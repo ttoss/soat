@@ -395,9 +395,9 @@ A [session](./sessions.md) auto-populates `session_id`, `actor_id` and `actor_ex
 
 ### Prompt Caching
 
-Every step of a turn re-sends the same prefix: the tool definitions, then the instructions, then the conversation so far. On an agent with a large tool surface that prefix dominates the bill — a 45k-token MCP tool block bought again on every step of every turn — and none of it changes between those steps.
+Every step of a turn re-sends everything the step before it sent: the tool definitions, the instructions, then the conversation so far — history, knowledge excerpts and every tool result — plus whatever that step appended. Over a multi-step turn that re-sent prefix is most of the bill.
 
-`prompt_caching` marks a cache breakpoint at the end of that static prefix, so a provider that caches by explicit breakpoint serves it from cache instead of charging for it again:
+`prompt_caching` marks cache breakpoints on that prefix, so a provider that caches by explicit breakpoint serves it from cache instead of charging for it again:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -430,14 +430,23 @@ curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
 </TabItem>
 </Tabs>
 
-The breakpoint sits on the **last system block**, which is what puts both the tool definitions and the instructions inside the cached prefix — the request is ordered tools → system → messages, and the cache covers everything up to the mark. The conversation after it is never marked: it grows every step, so caching it would write a prefix that never repeats.
+Two breakpoints are marked on every request — the request is ordered tools → system → messages, and each mark caches everything up to it:
+
+| Mark | Covers | Read back by |
+| --- | --- | --- |
+| The last system block | tool definitions and instructions | every step and turn, while they are unchanged |
+| The last message of the step | all of the above, plus the conversation so far | the next step, and the next turn of the session within the cache TTL |
+
+Each step reads the previous step's whole prefix at the cache-read rate and writes only what it appended. The message mark moves every step and is never stored: a turn that pauses for a client tool or an approval (see [Generation Loop](#generation-loop)) persists its messages unmarked, and the resumed step marks its own last message.
 
 Consequences worth knowing before turning it on:
 
 - **It is off by default, per agent.** A cache write costs more than an uncached token, so an agent whose prefix is never re-read pays for the privilege. It pays off where the prefix is large and repeatedly re-sent — a multi-step tool-using agent, a long-running session — and not on one-shot calls with short instructions.
-- **An agent with no `instructions` caches nothing.** There is no system block to mark, and marking the first user message instead would cache a prefix containing that turn's own question.
+- **Below the model's minimum, nothing is cached.** A provider caches a prefix only from a minimum length per breakpoint (for Anthropic, 1,024–4,096 tokens depending on the model; Claude Haiku 4.5 needs 4,096) and reports nothing when a prefix falls short. Short instructions and a few tools often miss it alone; the message mark reaches it once the conversation and tool results grow.
+- **An agent with no `instructions` has no system mark.** Its message mark still caches the tool definitions with the conversation.
 - **Who honors it.** Anthropic, and Anthropic models served through Bedrock, cache by explicit breakpoint and act on the mark. Providers that cache automatically (OpenAI) and providers that do not cache at all are unaffected — the mark travels as provider-specific metadata each one either reads or ignores, so a `model_route` that fails over between them needs no per-provider configuration.
 - **What you get back.** Cache reads are metered as `cached_tokens` and cache writes as `cache_write_tokens` — separate components, because they are separately priced. See [Usage — Token Components](./usage.md#token-components).
+- **Price the write.** Every step writes what it appended, so writes are routine. A `cache_write_tokens` component with no price row of its own bills at the `input_tokens` rate, which understates a provider that charges a premium for writes; add the row before enabling caching on a priced deployment. See [Usage — Pricing](./usage.md#pricing).
 - **`active_tool_ids` on a step rule breaks the prefix.** The tool block is inside the cached prefix, so a [step rule](#step-rules) that changes the active set makes that step write a new cache entry, and the step after it — back to the full set — write another: the prefix is bought twice to save it once. Narrowing by `active_tool_ids` is a capability restriction and is honored anyway; a rule that only forces a tool by name does not narrow on a caching agent, because `tool_choice` already obliges the call.
 
 Nothing else about the turn changes: the same messages, tools and instructions are sent, and the model sees an identical prompt.
