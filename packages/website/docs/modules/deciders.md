@@ -1,5 +1,5 @@
 ---
-description: "Deciders: versioned question sets in the shape of OpenAI's Decisions API, answered by an agent or a tool against an input, producing append-only decisions confined to each answer space."
+description: "Deciders: versioned question sets in the OpenAI Decisions API shape, answered by an agent or a tool, producing append-only decisions."
 ---
 
 import Tabs from '@theme/Tabs';
