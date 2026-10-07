@@ -490,7 +490,7 @@ describe('MCP tools - happy path', () => {
 
     const history = parseResult(
       await mcpCall('get-task-history', { task_id: task.id })
-    );
+    ).data as Array<{ to_state: string }>;
     // initial placement + two transitions, oldest first.
     expect(history).toHaveLength(3);
     expect(
