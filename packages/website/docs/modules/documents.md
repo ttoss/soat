@@ -283,6 +283,7 @@ The kinds are a declared set, not free text: a corpus many agents write into is 
 - **Both documents live in one project.** An edge that left the project would be visible from one end and invisible from the other, since every surface that reads it is project-scoped.
 - **Asserting the same edge twice is `409`.** An edge is a fact; the second assertion is the same fact.
 - **`?related_to=doc_…` finds neighbours on either side** — what a document points at, and what points at it. A document with no relations narrows the listing to nothing.
+- [`GET /api/v1/documents/{document_id}/relations`](/docs/api/documents/list-document-relations) lists the edges a document asserts, oldest first, in a `{ data, total, limit, offset }` envelope (`limit` default 50, max 100). A single-document read carries every edge, unpaged.
 - [`DELETE /api/v1/documents/{document_id}/relations/{relation_id}`](/docs/api/documents/delete-document-relation) retracts an edge; both documents stay as they are.
 
 ### NDJSON export

@@ -7,6 +7,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { paginatedList } from './pagination';
 
 const log = createDebug('soat:documents');
 
@@ -163,19 +164,32 @@ export const createDocumentRelation = async (args: {
 export const listDocumentRelations = async (args: {
   documentId: string;
   projectIds?: number[];
+  limit?: number;
+  offset?: number;
 }) => {
+  log('listDocumentRelations: document=%s', args.documentId);
+
   const document = await requireDocumentRow({
     publicId: args.documentId,
     projectIds: args.projectIds,
   });
 
-  const relations = await db.DocumentRelation.findAll({
-    where: { fromDocumentId: document.id as number },
-    include: relationIncludes(),
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
     order: [['createdAt', 'ASC']],
+    query: ({ limit, offset, order }) => {
+      return db.DocumentRelation.findAndCountAll({
+        where: { fromDocumentId: document.id as number },
+        include: relationIncludes(),
+        distinct: true,
+        limit,
+        offset,
+        order,
+      });
+    },
+    map: mapRelation,
   });
-
-  return { data: relations.map(mapRelation) };
 };
 
 /**

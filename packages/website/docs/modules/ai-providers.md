@@ -166,6 +166,8 @@ An `apiKey` in `config` is accepted as an express-mode fallback when no secret i
 
 Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
+The response is `{ provider, models, total, limit, offset }`. `?q=` keeps models whose `id` or `display_name` contains the text, ignoring case (`?q=sonnet`), and `limit` (default 50, max 100) / `offset` page the matches; `total` counts them. Both apply to the catalogue the provider returned in one call. A request without `limit` gets the first 50 models.
+
 | Provider | Listing | Credential the listing uses |
 |---|---|---|
 | `openai`, `groq`, `xai`, `gateway`, `custom` | `GET {base_url}/models`, so a self-hosted or proxied endpoint works too | the linked secret — **required** |

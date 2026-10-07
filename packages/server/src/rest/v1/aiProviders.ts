@@ -294,6 +294,8 @@ aiProvidersRouter.get(
 
     ctx.body = await listAiProviderModels({
       aiProviderId: ctx.params.ai_provider_id,
+      q: typeof ctx.query.q === 'string' ? ctx.query.q : undefined,
+      ...parsePagination(ctx),
     });
   }
 );
