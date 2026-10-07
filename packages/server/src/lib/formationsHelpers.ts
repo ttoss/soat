@@ -134,20 +134,26 @@ export const isParam = (value: unknown): value is ParamExpression => {
 };
 
 /**
- * Collects every `${Name}` token found inside sub expressions, excluding
- * `body.*` tokens (which are resolved at tool-call time). A token may name a
- * template parameter or a resource logical id — callers disambiguate.
+ * The `${Name}` tokens of one sub that name something in the template — a
+ * parameter or a resource logical id. `body.*` tokens are tool arguments,
+ * filled at call time, so no deploy-time check may count them.
+ */
+const templateTokensOf = (sub: string): string[] => {
+  return [...sub.matchAll(SUB_PARAM_RE)]
+    .map((m) => {
+      return m[1];
+    })
+    .filter((name) => {
+      return !name.startsWith('body.');
+    });
+};
+
+/**
+ * Collects every template token found inside sub expressions. A token may
+ * name a template parameter or a resource logical id — callers disambiguate.
  */
 const collectSubTokens = (value: unknown): string[] => {
-  if (isSub(value)) {
-    return [...value.sub.matchAll(SUB_PARAM_RE)]
-      .map((m) => {
-        return m[1];
-      })
-      .filter((name) => {
-        return !name.startsWith('body.');
-      });
-  }
+  if (isSub(value)) return templateTokensOf(value.sub);
   if (Array.isArray(value)) return value.flatMap(collectSubTokens);
   if (typeof value === 'object' && value !== null) {
     return Object.values(value as Record<string, unknown>).flatMap(
@@ -159,12 +165,7 @@ const collectSubTokens = (value: unknown): string[] => {
 
 export const collectParamRefs = (value: unknown): string[] => {
   if (isParam(value)) return [value.param];
-  if (isSub(value)) {
-    const matches = [...value.sub.matchAll(SUB_PARAM_RE)];
-    return matches.map((m) => {
-      return m[1];
-    });
-  }
+  if (isSub(value)) return templateTokensOf(value.sub);
   if (Array.isArray(value)) return value.flatMap(collectParamRefs);
   if (typeof value === 'object' && value !== null) {
     return Object.values(value as Record<string, unknown>).flatMap(

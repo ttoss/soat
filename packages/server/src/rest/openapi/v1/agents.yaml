@@ -1106,16 +1106,18 @@ components:
           type: object
           nullable: true
           description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks a
-            cache breakpoint at the end of the turn's static prefix — the tool
-            definitions and the instructions together — so a provider that
-            caches by explicit breakpoint reads that prefix back on every later
-            step of the turn and every later turn of the session instead of
-            being charged for it again. Null or omitted is off: a cache write
+            Prompt caching for this agent's turns. `{"enabled": true}` marks two
+            cache breakpoints: the end of the system block, which covers the tool
+            definitions and the instructions, and the last message of each step,
+            which covers the conversation so far. A provider that caches by
+            explicit breakpoint then reads, on every later step and every later
+            turn of the session, the whole prefix the previous one sent, and
+            writes only what was appended. Null or omitted is off: a cache write
             costs more than an uncached token, so an agent whose prefix is never
-            re-read would pay for the privilege. An agent with no `instructions`
-            has no block to mark and caches nothing. Cache reads are reported as
-            `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+            re-read would pay for the privilege. A prefix below the model's
+            minimum cacheable length is not cached. Cache reads are reported as
+            `cached_tokens` and cache writes as `cache_write_tokens` on usage;
+            a write with no `cache_write_tokens` price bills at the input rate.
           properties:
             enabled:
               type: boolean
@@ -1523,16 +1525,18 @@ components:
           type: object
           nullable: true
           description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks a
-            cache breakpoint at the end of the turn's static prefix — the tool
-            definitions and the instructions together — so a provider that
-            caches by explicit breakpoint reads that prefix back on every later
-            step of the turn and every later turn of the session instead of
-            being charged for it again. Null or omitted is off: a cache write
+            Prompt caching for this agent's turns. `{"enabled": true}` marks two
+            cache breakpoints: the end of the system block, which covers the tool
+            definitions and the instructions, and the last message of each step,
+            which covers the conversation so far. A provider that caches by
+            explicit breakpoint then reads, on every later step and every later
+            turn of the session, the whole prefix the previous one sent, and
+            writes only what was appended. Null or omitted is off: a cache write
             costs more than an uncached token, so an agent whose prefix is never
-            re-read would pay for the privilege. An agent with no `instructions`
-            has no block to mark and caches nothing. Cache reads are reported as
-            `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+            re-read would pay for the privilege. A prefix below the model's
+            minimum cacheable length is not cached. Cache reads are reported as
+            `cached_tokens` and cache writes as `cache_write_tokens` on usage;
+            a write with no `cache_write_tokens` price bills at the input rate.
           additionalProperties: false
           properties:
             enabled:
@@ -1764,16 +1768,18 @@ components:
           type: object
           nullable: true
           description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks a
-            cache breakpoint at the end of the turn's static prefix — the tool
-            definitions and the instructions together — so a provider that
-            caches by explicit breakpoint reads that prefix back on every later
-            step of the turn and every later turn of the session instead of
-            being charged for it again. Null or omitted is off: a cache write
+            Prompt caching for this agent's turns. `{"enabled": true}` marks two
+            cache breakpoints: the end of the system block, which covers the tool
+            definitions and the instructions, and the last message of each step,
+            which covers the conversation so far. A provider that caches by
+            explicit breakpoint then reads, on every later step and every later
+            turn of the session, the whole prefix the previous one sent, and
+            writes only what was appended. Null or omitted is off: a cache write
             costs more than an uncached token, so an agent whose prefix is never
-            re-read would pay for the privilege. An agent with no `instructions`
-            has no block to mark and caches nothing. Cache reads are reported as
-            `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+            re-read would pay for the privilege. A prefix below the model's
+            minimum cacheable length is not cached. Cache reads are reported as
+            `cached_tokens` and cache writes as `cache_write_tokens` on usage;
+            a write with no `cache_write_tokens` price bills at the input rate.
           additionalProperties: false
           properties:
             enabled:

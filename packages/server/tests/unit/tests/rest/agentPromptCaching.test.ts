@@ -280,10 +280,9 @@ describe('Agent prompt caching', () => {
       expect(lastSystemBlocks()).toEqual([{ type: 'text', text: 'Be terse.' }]);
     });
 
-    // The mark has to be the *last* thing before the conversation, or the tool
-    // definitions and instructions it is meant to cover fall outside the cached
-    // prefix. Nothing after it may carry one.
-    test('marks nothing in the conversation itself', async () => {
+    // A one-step turn has one message to mark: the step's last, which is the
+    // turn's own question. Steps that follow it read up to there.
+    test('marks the last message of the step and nothing before it', async () => {
       const created = await createAgent({
         name: 'Wire Message Agent',
         instructions: 'Be terse.',
@@ -292,9 +291,14 @@ describe('Agent prompt caching', () => {
 
       await generate(created.body.id);
 
-      expect(JSON.stringify(requestBodies.at(-1)?.messages)).not.toContain(
-        'cache_control'
-      );
+      expect(requestBodies.at(-1)?.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'hi', cache_control: { type: 'ephemeral' } },
+          ],
+        },
+      ]);
     });
   });
 

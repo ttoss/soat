@@ -1,19 +1,23 @@
 /**
  * `step_rules` — the per-step `tool_choice` / `active_tool_ids` overrides an
  * agent can declare (`modules/agents.md` — Step Rules) — compiled into the AI
- * SDK's `prepareStep` callback.
+ * SDK's `prepareStep` callback, together with the per-step prompt-cache
+ * breakpoint (`promptCaching.ts`), the one other thing decided per step.
  *
  * A leaf module, so both the streaming and non-streaming paths can call one
  * `buildPrepareStep`: `agentGenerationHelpers` cannot import
  * `agentNonStreamGeneration`, which imports it, so a copy in either would be
  * duplicated in the other along with the `StepRule` type.
  */
-import type { Tool, ToolChoice } from 'ai';
+import type { ModelMessage, Tool, ToolChoice } from 'ai';
 import createDebug from 'debug';
 
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { resolveToolIdsToNames } from './agentToolSelection';
-import { readPromptCachingConfig } from './promptCaching';
+import {
+  buildStepCacheBreakpoint,
+  readPromptCachingConfig,
+} from './promptCaching';
 
 const log = createDebug('soat:generation');
 
@@ -191,9 +195,9 @@ export const buildPrepareStep = (args: {
   logContext: 'stream' | 'non_stream';
   toolIdToName?: Record<string, string>;
   /**
-   * The agent's `prompt_caching`, as stored. Read for one decision only —
-   * whether a forced tool may trim the tool block — never to place a
-   * breakpoint, which `withPromptCacheBreakpoint` did once for the whole turn.
+   * The agent's `prompt_caching`, as stored. Decides whether a forced tool may
+   * trim the tool block, and whether each step's last message is marked; the
+   * system mark is `withPromptCacheBreakpoint`'s, placed once for the turn.
    */
   promptCaching?: unknown;
   /**
@@ -203,16 +207,18 @@ export const buildPrepareStep = (args: {
    */
   stepsAlreadySpent?: number;
 }):
-  | ((opts: { stepNumber: number }) => {
+  | ((opts: { stepNumber: number; messages: ModelMessage[] }) => {
       toolChoice?: ToolChoice<Record<string, Tool>>;
       activeTools?: string[];
+      messages?: ModelMessage[];
     })
   | undefined => {
-  if (!Array.isArray(args.stepRules) || args.stepRules.length === 0) {
-    return undefined;
-  }
+  const rules = Array.isArray(args.stepRules)
+    ? (args.stepRules as StepRule[])
+    : [];
+  const markStep = buildStepCacheBreakpoint(args.promptCaching);
+  if (rules.length === 0 && !markStep) return undefined;
 
-  const rules = args.stepRules as StepRule[];
   const toolIdToName = args.toolIdToName ?? {};
   const promptCachingEnabled = readPromptCachingConfig(
     args.promptCaching
@@ -221,7 +227,7 @@ export const buildPrepareStep = (args: {
 
   const stepsAlreadySpent = args.stepsAlreadySpent ?? 0;
 
-  return ({ stepNumber }) => {
+  return ({ stepNumber, messages }) => {
     // stepNumber is 0-based (AI SDK) and segment-local; step_rules are
     // 1-indexed and turn-wide.
     const oneIndexedStep = stepNumber + stepsAlreadySpent + 1;
@@ -246,6 +252,6 @@ export const buildPrepareStep = (args: {
       promptCachingEnabled,
     });
     log('prepareStep (%s): result=%o', args.logContext, result);
-    return result;
+    return markStep ? { ...result, messages: markStep(messages) } : result;
   };
 };

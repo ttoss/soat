@@ -129,11 +129,11 @@ describe('buildPrepareStep', () => {
     });
 
     expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({
+    expect(prepareStep!({ stepNumber: 1, messages: [] })).toEqual({
       toolChoice: { type: 'tool', toolName: 'lookup' },
       activeTools: ['lookup'],
     });
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({});
   });
 
   test('buildPrepareStep ignores the retired camelCase rule keys', () => {
@@ -150,7 +150,7 @@ describe('buildPrepareStep', () => {
     });
 
     expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({});
   });
 
   test('buildPrepareStep honors a string tool_choice, not just a named tool', () => {
@@ -165,9 +165,11 @@ describe('buildPrepareStep', () => {
     expect(prepareStep).toBeDefined();
     // Step 1 forces a tool call, and leaves the active tool set alone: no
     // specific tool is named, so every bound tool stays available.
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({ toolChoice: 'required' });
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
+      toolChoice: 'required',
+    });
     // Later steps fall back to the agent's own tool_choice.
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
+    expect(prepareStep!({ stepNumber: 1, messages: [] })).toEqual({});
   });
 
   test('buildPrepareStep numbers steps from the start of the turn, not the segment', () => {
@@ -186,8 +188,10 @@ describe('buildPrepareStep', () => {
 
     expect(prepareStep).toBeDefined();
     // The turn's step 3, which is this segment's first.
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({ toolChoice: 'required' });
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
+      toolChoice: 'required',
+    });
+    expect(prepareStep!({ stepNumber: 1, messages: [] })).toEqual({});
   });
 
   test('buildPrepareStep honors the wire-shaped (snake_case) step rule keys', () => {
@@ -202,7 +206,7 @@ describe('buildPrepareStep', () => {
     });
 
     expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({
+    expect(prepareStep!({ stepNumber: 1, messages: [] })).toEqual({
       toolChoice: { type: 'tool', toolName: 'lookup' },
       activeTools: ['lookup'],
     });
@@ -219,8 +223,9 @@ describe('buildPrepareStep', () => {
       promptCaching: { enabled: true },
     });
 
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
       toolChoice: { type: 'tool', toolName: 'lookup' },
+      messages: [],
     });
   });
 
@@ -240,9 +245,10 @@ describe('buildPrepareStep', () => {
       promptCaching: { enabled: true },
     });
 
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
       toolChoice: { type: 'tool', toolName: 'search' },
       activeTools: ['search'],
+      messages: [],
     });
   });
 
@@ -258,11 +264,11 @@ describe('buildPrepareStep', () => {
     });
 
     expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
       activeTools: ['search'],
     });
     // A later step with no matching rule is untouched.
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
+    expect(prepareStep!({ stepNumber: 1, messages: [] })).toEqual({});
   });
 
   test('buildPrepareStep combines a forced tool_choice with a step rule active_tool_ids', () => {
@@ -279,7 +285,7 @@ describe('buildPrepareStep', () => {
     });
 
     expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
       toolChoice: { type: 'tool', toolName: 'search' },
       activeTools: ['search', 'analyze'],
     });
@@ -295,7 +301,7 @@ describe('buildPrepareStep', () => {
     });
 
     expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({
       toolChoice: 'required',
       activeTools: ['search'],
     });
@@ -310,6 +316,6 @@ describe('buildPrepareStep', () => {
 
     expect(prepareStep).toBeDefined();
     // No id resolved to a name — treated as no restriction, not "no tools".
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
+    expect(prepareStep!({ stepNumber: 0, messages: [] })).toEqual({});
   });
 });
