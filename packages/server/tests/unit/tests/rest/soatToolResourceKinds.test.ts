@@ -147,7 +147,9 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       project_id: projectId,
       name: 'kinds-decider',
       agent_id: agentId,
-      questions: { escalate: { type: 'boolean', instructions: 'Escalate?' } },
+      questions: [
+        { type: 'predicate', name: 'escalate', instructions: 'Escalate?' },
+      ],
     });
 
     // Rows no single request creates on its own: a run, a recorded turn and

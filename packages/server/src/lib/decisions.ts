@@ -2,32 +2,29 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError, type ErrorCode } from '../errors';
-import { createGeneration } from './agentGeneration';
-import type { GenerationResult } from './agentGenerationTypes';
-import { assertDeciderAgentToolLess } from './deciderAgent';
-import { renderDeciderFrame } from './deciderFrame';
+import { DomainError } from '../errors';
 import {
-  compileAnswerSchema,
-  DECIDER_USAGE_SOURCE,
+  answersByName,
   type DeciderQuestions,
-  toDecisionAnswers,
+  parseDeciderQuestions,
 } from './deciderQuestions';
 import { deciderQuestionSetAt } from './deciderQuestionSet';
-import { type DeciderRow, deciders } from './deciders';
-import { answerWithTool, assertDeciderToolCallable } from './deciderTool';
+import { deciders, resolveDeciderBackend } from './deciders';
+import {
+  admitDecisionBackend,
+  type DecisionEvaluation,
+  type DecisionOutcome,
+  failedOutcome,
+} from './decisionBackends';
 import { emitResourceEvent } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
-import { isPlainObject } from './plainObject';
-import { assertProjectAcceptsWork } from './projectPause';
-import { quotaBreachError } from './quotaBreach';
-import { checkGenerationQuota } from './quotaEnforcement';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:decisions');
 
 /**
- * Evaluating a decision and recording it.
+ * Evaluating a decision and recording it, for a decider or for questions sent
+ * with the request.
  *
  * Everything that can refuse a request runs before the row is written, so a
  * refusal is a `4xx` and never a polled failure. The row then settles exactly
@@ -72,8 +69,10 @@ export const mapDecision = (row: DecisionRow) => {
     project_id: row.project.publicId,
     decider_id: row.deciderId,
     decider_version: row.deciderVersion,
+    questions: row.questions,
     status: row.status,
     answers: row.answers,
+    answers_by_name: answersByName(row.answers),
     error: row.error,
     generation_id: row.generationId,
     metadata: row.metadata,
@@ -83,14 +82,6 @@ export const mapDecision = (row: DecisionRow) => {
 };
 
 export type MappedDecision = ReturnType<typeof mapDecision>;
-
-type Outcome =
-  | {
-      status: 'completed';
-      answers: Record<string, unknown>;
-      generationId: string | null;
-    }
-  | { status: 'failed'; error: { code: ErrorCode; message: string } };
 
 /** Fires the settled decision's event, carrying the decision as read now. */
 export const announceDecision = async (args: {
@@ -115,7 +106,7 @@ export const announceDecision = async (args: {
  */
 const settleDecision = async (args: {
   decisionDbId: number;
-  outcome: Outcome;
+  outcome: DecisionOutcome;
 }): Promise<void> => {
   const { outcome } = args;
   const [updated] = await db.Decision.update(
@@ -140,7 +131,7 @@ const settleDecision = async (args: {
 
 /**
  * Settles, as interrupted, a decision whose lease ran out before it settled.
- * Its state is not stored, so there is nothing to re-run. Returns whether this
+ * Its input is not stored, so there is nothing to re-run. Returns whether this
  * call won the write.
  */
 export const interruptDecision = async (args: {
@@ -169,178 +160,83 @@ export const interruptDecision = async (args: {
   return updated > 0;
 };
 
-type FailureCause = { code: ErrorCode; message: string };
-
-const GENERATION_FAILURE: FailureCause = {
-  code: 'GENERATION_FAILED',
-  message: 'The generation failed.',
-};
-
-const TOOL_FAILURE: FailureCause = {
-  code: 'INTERNAL_ERROR',
-  message: 'The tool call failed.',
-};
-
-/** The backend's own code when it raised one; anything else is opaque. */
-const failedOutcome = (args: {
-  error: unknown;
-  opaque: FailureCause;
-}): Outcome => {
-  const { code, message } =
-    args.error instanceof DomainError ? args.error : args.opaque;
-  return { status: 'failed', error: { code, message } };
-};
-
-/* istanbul ignore next -- a non-streamed generation of a tool-less agent with
-   an output schema always completes with an object or throws. */
-const answerOf = (
-  result: GenerationResult | ReadableStream
-): Record<string, unknown> | null => {
-  if (result instanceof ReadableStream) return null;
-  const object = result.output?.object;
-  return isPlainObject(object) ? object : null;
-};
-
-const outcomeOf = (args: {
-  result: GenerationResult | ReadableStream;
-  questions: DeciderQuestions;
-}): Outcome => {
-  const { result } = args;
-  const answer = answerOf(result);
-  /* istanbul ignore next -- see `answerOf`. */
-  if (answer === null || result instanceof ReadableStream) {
-    return failedOutcome({ error: null, opaque: GENERATION_FAILURE });
-  }
-  return {
-    status: 'completed',
-    answers: toDecisionAnswers({ questions: args.questions, answer }),
-    generationId: result.id,
-  };
-};
-
-/** Runs the agent over the frame; the generation carries the answer. */
-const answerWithAgent = async (args: {
-  projectIds?: number[];
-  agentPublicId: string;
-  agentVersion: number;
-  questions: DeciderQuestions;
-  state: unknown;
-}): Promise<Outcome> => {
-  const result = await createGeneration({
-    projectIds: args.projectIds,
-    agentId: args.agentPublicId,
-    messages: [
-      {
-        role: 'user',
-        content: renderDeciderFrame({
-          questions: args.questions,
-          state: args.state,
-        }),
-      },
-    ],
-    stream: false,
-    // The version whose tool surface was checked at admission, so an edit
-    // landing mid-evaluation cannot hand the generation a tool.
-    pinnedAgentVersion: args.agentVersion,
-    source: DECIDER_USAGE_SOURCE,
-    outputSchemaOverride: compileAnswerSchema(args.questions),
-  });
-  return outcomeOf({ result, questions: args.questions });
-};
-
 /**
- * Runs the decider's backend and settles the decision. Never throws: a
- * failure after admission is recorded on the decision, since a background
- * caller has no request left to receive it.
+ * Runs the backend and settles the decision. Never throws: a failure after
+ * admission is recorded on the decision, since a background caller has no
+ * request left to receive it.
  */
 const evaluateDecision = async (args: {
   decisionDbId: number;
-  answer: () => Promise<Outcome>;
-  opaqueFailure: FailureCause;
+  evaluation: DecisionEvaluation;
 }): Promise<void> => {
   await db.Decision.update(
     { status: 'running' },
     { where: { id: args.decisionDbId, status: 'queued' } }
   );
 
-  let outcome: Outcome;
+  let outcome: DecisionOutcome;
   try {
-    outcome = await args.answer();
+    outcome = await args.evaluation.answer();
   } catch (error) {
-    outcome = failedOutcome({ error, opaque: args.opaqueFailure });
+    outcome = failedOutcome({
+      error,
+      opaque: args.evaluation.opaqueFailure,
+    });
   }
 
   await settleDecision({ decisionDbId: args.decisionDbId, outcome });
 };
 
-type Evaluation = {
-  answer: () => Promise<Outcome>;
-  opaqueFailure: FailureCause;
-};
-
-/**
- * Checks the decider's backend can answer, then returns how it will. Every
- * check here runs before the decision is written, so a refusal is a `4xx`.
- */
-const admitBackend = async (args: {
-  projectIds?: number[];
-  decider: DeciderRow;
-  questions: DeciderQuestions;
-  storedQuestions: object;
-  state: unknown;
-  authHeader?: string;
-}): Promise<Evaluation> => {
-  const { decider, questions } = args;
-  const { agent, tool } = decider;
-  if (tool) {
-    assertDeciderToolCallable(tool);
-    await assertProjectAcceptsWork({ projectId: decider.projectId });
-    return {
-      answer: async () => {
-        return {
-          status: 'completed',
-          answers: await answerWithTool({
-            projectId: decider.projectId,
-            toolPublicId: tool.publicId,
-            questions,
-            storedQuestions: args.storedQuestions,
-            state: args.state,
-            authHeader: args.authHeader,
-          }),
-          generationId: null,
-        };
-      },
-      opaqueFailure: TOOL_FAILURE,
-    };
-  }
-  /* istanbul ignore next -- a decider names exactly one backend. */
-  if (!agent)
-    throw new DomainError('INTERNAL_ERROR', 'Decider has no backend.');
-  assertDeciderAgentToolLess(agent);
-  await assertProjectAcceptsWork({ projectId: decider.projectId });
-  const breach = await checkGenerationQuota({
-    agentId: agent.publicId,
-    projectIds: args.projectIds,
+/** Writes the admitted decision, then evaluates it now or in the background. */
+const recordAndEvaluate = async (args: {
+  projectId: number;
+  deciderId: string | null;
+  deciderVersion: number | null;
+  questions: DeciderQuestions | null;
+  metadata?: Record<string, unknown>;
+  wait: boolean;
+  evaluation: DecisionEvaluation;
+}): Promise<MappedDecision> => {
+  const decision = await db.Decision.create({
+    projectId: args.projectId,
+    deciderId: args.deciderId,
+    deciderVersion: args.deciderVersion,
+    questions: args.questions,
+    status: 'queued',
+    metadata: args.metadata ?? null,
+    leaseExpiresAt: new Date(Date.now() + DECISION_LEASE_MS),
   });
-  if (breach) throw quotaBreachError(breach);
-  return {
-    answer: () => {
-      return answerWithAgent({
-        projectIds: args.projectIds,
-        agentPublicId: agent.publicId,
-        agentVersion: agent.version,
-        questions,
-        state: args.state,
-      });
-    },
-    opaqueFailure: GENERATION_FAILURE,
+  log('recordAndEvaluate: created id=%s', decision.publicId);
+
+  const evaluate = () => {
+    return evaluateDecision({
+      decisionDbId: decision.id as number,
+      evaluation: args.evaluation,
+    });
   };
+
+  if (args.wait) {
+    await evaluate();
+    return mapDecision(await decisions.reload(decision));
+  }
+
+  // Read before the evaluation starts, whose first write moves the row to
+  // `running`: the background answer is the decision as it was admitted.
+  const queued = mapDecision(await decisions.reload(decision));
+  void evaluate().catch((error: unknown) => {
+    log(
+      'recordAndEvaluate: evaluation failed id=%s %o',
+      decision.publicId,
+      error
+    );
+  });
+  return queued;
 };
 
 export const createDecision = async (args: {
   projectIds?: number[];
   deciderId: string;
-  state: unknown;
+  input: unknown;
   metadata?: Record<string, unknown>;
   wait: boolean;
   /**
@@ -361,44 +257,68 @@ export const createDecision = async (args: {
     decider,
     version: args.version,
   });
-  const evaluation = await admitBackend({
+  const evaluation = await admitDecisionBackend({
     projectIds: args.projectIds,
-    decider,
+    projectId: decider.projectId,
+    agent: decider.agent,
+    tool: decider.tool,
     questions: questionSet.questions,
-    storedQuestions: questionSet.stored,
-    state: args.state,
+    input: args.input,
     authHeader: args.authHeader,
   });
 
-  const decision = await db.Decision.create({
+  return recordAndEvaluate({
     projectId: decider.projectId,
     deciderId: decider.publicId,
     deciderVersion: questionSet.version,
-    status: 'queued',
-    metadata: args.metadata ?? null,
-    leaseExpiresAt: new Date(Date.now() + DECISION_LEASE_MS),
+    questions: null,
+    metadata: args.metadata,
+    wait: args.wait,
+    evaluation,
   });
-  log('createDecision: created id=%s', decision.publicId);
+};
 
-  const evaluate = () => {
-    return evaluateDecision({
-      decisionDbId: decision.id as number,
-      ...evaluation,
-    });
-  };
+/**
+ * A decision whose questions come with the request rather than from a
+ * decider, answered by the agent or tool the request names. The questions are
+ * stored on the decision, since no version names them.
+ */
+export const createInlineDecision = async (args: {
+  projectId: number;
+  agentId?: unknown;
+  toolId?: unknown;
+  questions: unknown;
+  input: unknown;
+  metadata?: Record<string, unknown>;
+  wait: boolean;
+  authHeader?: string;
+}): Promise<MappedDecision> => {
+  log('createInlineDecision: projectId=%d wait=%s', args.projectId, args.wait);
 
-  if (args.wait) {
-    await evaluate();
-    return mapDecision(await decisions.reload(decision));
-  }
-
-  // Read before the evaluation starts, whose first write moves the row to
-  // `running`: the background answer is the decision as it was admitted.
-  const queued = mapDecision(await decisions.reload(decision));
-  void evaluate().catch((error: unknown) => {
-    log('createDecision: evaluation failed id=%s %o', decision.publicId, error);
+  const questions = parseDeciderQuestions(args.questions);
+  const backend = await resolveDeciderBackend({
+    projectId: args.projectId,
+    agentId: args.agentId,
+    toolId: args.toolId,
   });
-  return queued;
+  const evaluation = await admitDecisionBackend({
+    projectIds: [args.projectId],
+    projectId: args.projectId,
+    ...backend,
+    questions,
+    input: args.input,
+    authHeader: args.authHeader,
+  });
+
+  return recordAndEvaluate({
+    projectId: args.projectId,
+    deciderId: null,
+    deciderVersion: null,
+    questions,
+    metadata: args.metadata,
+    wait: args.wait,
+    evaluation,
+  });
 };
 
 const readStatusFilter = (status: unknown): string | undefined => {

@@ -52,7 +52,7 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   output_schema: ['schema'],
   llm_judge: ['ai_provider_id', 'model', 'prompt', 'pass_threshold'],
   tool: ['name', 'tool_id', 'action', 'preset_parameters', 'pass_threshold'],
-  decider: ['name', 'decider_id', 'state', 'score', 'pass_threshold'],
+  decider: ['name', 'decider_id', 'input', 'score', 'pass_threshold'],
 };
 
 /** The scorer types keyed by their `name` rather than their type. */

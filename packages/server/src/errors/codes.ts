@@ -155,17 +155,17 @@ export const ERROR_CODES = {
   DECISION_INTERRUPTED: {
     httpStatus: 500,
     description:
-      'Recorded on a decision, never returned by a request: the process evaluating it stopped before it settled. The evaluated state is not stored, so the decision cannot be re-run; request a new one.',
+      'Recorded on a decision, never returned by a request: the process evaluating it stopped before it settled. The evaluated input is not stored, so the decision cannot be re-run; request a new one.',
   },
   DECIDER_TOOL_NOT_CALLABLE: {
     httpStatus: 400,
     description:
-      "The tool a decider evaluates with cannot answer a decision. Only `http` and `pipeline` tools can: a `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry. A tool whose `preset_parameters` pin `state` or `questions` is refused too, since presets are merged over the call input and would replace the caller's state or the stored questions. `meta.tool_id` names the tool, with `meta.type` or `meta.pinned`.",
+      "The tool a decider evaluates with cannot answer a decision. Only `http` and `pipeline` tools can: a `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry. A tool whose `preset_parameters` pin `input` or `questions` is refused too, since presets are merged over the call input and would replace the caller's input or the questions. `meta.tool_id` names the tool, with `meta.type` or `meta.pinned`.",
   },
   DECISION_ANSWER_INVALID: {
     httpStatus: 502,
     description:
-      "Recorded on a decision, never returned by a request: the decider's tool answered outside the contract — not a JSON object with `answers`, an answer missing or naming no question, a value outside the question's answer space, a probability for an answer outside it or outside 0–1, or a field the contract does not define (`confidence`, `noul`). The message names the question and the field.",
+      "Recorded on a decision, never returned by a request: the tool answered outside the contract — not a JSON object with an `answers` array, an answer missing, repeated or naming no question, a value outside the question's answer space, a probability or confidence outside 0–1, or a field the contract does not define. The message names the answer and the field.",
   },
   TOOL_HAS_DEPENDENTS: {
     httpStatus: 409,

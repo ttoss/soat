@@ -20,7 +20,7 @@ export type DeciderToolRow = InstanceType<(typeof db)['Tool']>;
 const CALLABLE_TOOL_TYPES: ReadonlySet<string> = new Set(['http', 'pipeline']);
 
 /** The call input keys a decider owns; presets are merged over the input. */
-const DECIDER_INPUT_KEYS = ['state', 'questions'];
+const DECIDER_INPUT_KEYS = ['input', 'questions'];
 
 /**
  * Refuses a tool that cannot answer a decision. Run at the decider write and
@@ -72,27 +72,28 @@ export const findDeciderTool = async (args: {
 
 /**
  * Asks the tool and reads its answer against the contract. Through `callTool`,
- * so the call is metered, egress-checked and guarded like any other.
+ * so the call is metered, egress-checked and guarded like any other. The tool
+ * receives `{ input, questions }`, the request body of OpenAI's Decisions API
+ * less `model`, which a preset can supply.
  */
 export const answerWithTool = async (args: {
   projectId: number;
   toolPublicId: string;
   questions: DeciderQuestions;
-  storedQuestions: object;
-  state: unknown;
+  input: unknown;
   /**
    * The requester's credential: a `builtin` step calls this server's API as
    * whoever asked for the decision, never as nobody or as anyone else.
    */
   authHeader?: string;
-}): Promise<Record<string, DecisionAnswer>> => {
+}): Promise<DecisionAnswer[]> => {
   log('answerWithTool: toolId=%s', args.toolPublicId);
   const raw = await callTool({
     projectId: args.projectId,
     reach: 'project',
     id: args.toolPublicId,
     guardrails: 'apply',
-    input: { state: args.state, questions: args.storedQuestions },
+    input: { input: args.input, questions: args.questions },
     authHeader: args.authHeader,
     attribution: { source: DECIDER_USAGE_SOURCE },
   });

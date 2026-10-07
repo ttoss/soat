@@ -3,53 +3,80 @@ import { isPlainObject } from './plainObject';
 
 /**
  * A decider's question set: the validation every write runs, the JSON Schema
- * an answer must satisfy, and the mapping from a validated answer to the
+ * an agent's answer must satisfy, and the mapping from that answer to the
  * decision's `answers`.
  *
- * Every question declares a finite answer space, and the compiled schema is
- * what confines an answer to it, whichever backend produced it.
+ * The question and answer shapes are those of OpenAI's Decisions API, so a
+ * tool that forwards to it, or to any engine speaking the same shape, answers
+ * a decider with no mapping.
  */
+
+export type PredicateQuestion = {
+  type: 'predicate';
+  name: string;
+  instructions: string;
+};
+
+export type DeciderChoice = { value: string; description: string };
 
 export type ChoiceQuestion = {
   type: 'choice';
+  name: string;
   instructions: string;
-  criteria: Record<string, string>;
+  choices: DeciderChoice[];
 };
+
+export type DeciderLevel = { label: string; description: string };
 
 export type ScoreQuestion = {
   type: 'score';
+  name: string;
   instructions: string;
-  criteria: string[];
+  levels: DeciderLevel[];
 };
 
-export type BooleanQuestion = {
-  type: 'boolean';
-  instructions: string;
-  criteria?: { false: string; true: string };
-};
+export type DeciderQuestion =
+  PredicateQuestion | ChoiceQuestion | ScoreQuestion;
 
-export type DeciderQuestion = ChoiceQuestion | ScoreQuestion | BooleanQuestion;
+export type DeciderQuestions = DeciderQuestion[];
 
 /** The usage `source` a decider's generation carries. */
 export const DECIDER_USAGE_SOURCE = 'decider';
 
-export type DeciderQuestions = Record<string, DeciderQuestion>;
+export type ChoiceProbability = { value: string; probability: number };
+
+export type LevelProbability = {
+  value: number;
+  label: string;
+  probability: number;
+};
 
 /**
- * `probabilities` is a distribution over the answer space, set only when a
- * tool backend supplies one. SOAT carries it and does not vouch for it.
+ * `probabilities` and `confidence` are set only when a tool backend supplies
+ * them. SOAT carries them and does not vouch for them.
  */
-export type DecisionAnswer = (
-  | { type: 'choice'; choice: string }
-  | { type: 'score'; score: number; legend: string }
-  | { type: 'boolean'; value: boolean }
-) & { probabilities?: Record<string, number> };
+export type DecisionAnswer =
+  | { type: 'predicate'; name: string; probability: number }
+  | {
+      type: 'choice';
+      name: string;
+      choice: string;
+      probabilities?: ChoiceProbability[];
+      confidence?: number;
+    }
+  | {
+      type: 'score';
+      name: string;
+      score: number;
+      probabilities?: LevelProbability[];
+      confidence?: number;
+    };
 
 /**
- * A question id is a JSON Schema property name and a JSON Logic `var` path
+ * A question name is a JSON Schema property name and a JSON Logic `var` path
  * segment, so it may not hold a dot.
  */
-const QUESTION_ID = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const QUESTION_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 
 const MAX_QUESTIONS = 20;
 
@@ -58,7 +85,11 @@ const MIN_ANSWERS = 2;
 
 const MAX_ANSWERS = 20;
 
-const QUESTION_FIELDS = new Set(['type', 'instructions', 'criteria']);
+const QUESTION_FIELDS: Record<DeciderQuestion['type'], ReadonlySet<string>> = {
+  predicate: new Set(['type', 'name', 'instructions']),
+  choice: new Set(['type', 'name', 'instructions', 'choices']),
+  score: new Set(['type', 'name', 'instructions', 'levels']),
+};
 
 const invalid = (message: string): DomainError => {
   return new DomainError('VALIDATION_FAILED', message);
@@ -68,217 +99,233 @@ const isNonEmptyString = (value: unknown): value is string => {
   return typeof value === 'string' && value.trim() !== '';
 };
 
-const assertAnswerCount = (args: { id: string; count: number }): void => {
-  if (args.count < MIN_ANSWERS || args.count > MAX_ANSWERS) {
+/** Reads `items` as 2–20 objects holding exactly `keys`, each a string. */
+const parseMembers = <K extends string>(args: {
+  path: string;
+  items: unknown;
+  keys: readonly [K, K];
+}): Record<K, string>[] => {
+  const { path, items, keys } = args;
+  if (!Array.isArray(items)) {
+    throw invalid(`${path} must be an array.`);
+  }
+  if (items.length < MIN_ANSWERS || items.length > MAX_ANSWERS) {
     throw invalid(
-      `questions.${args.id}.criteria must declare between ${MIN_ANSWERS} and ${MAX_ANSWERS} answers.`
+      `${path} must declare between ${MIN_ANSWERS} and ${MAX_ANSWERS} entries.`
     );
   }
-};
-
-const parseChoiceCriteria = (args: {
-  id: string;
-  criteria: unknown;
-}): Record<string, string> => {
-  if (!isPlainObject(args.criteria)) {
-    throw invalid(
-      `questions.${args.id}.criteria must map each option to its description.`
-    );
-  }
-  const entries = Object.entries(args.criteria);
-  assertAnswerCount({ id: args.id, count: entries.length });
-
-  const criteria: Record<string, string> = {};
-  for (const [option, description] of entries) {
-    if (!isNonEmptyString(option) || !isNonEmptyString(description)) {
-      throw invalid(
-        `questions.${args.id}.criteria options and descriptions must be non-empty strings.`
-      );
+  return items.map((item, index) => {
+    const at = `${path}[${index}]`;
+    if (!isPlainObject(item)) throw invalid(`${at} must be an object.`);
+    for (const field of Object.keys(item)) {
+      if (
+        !keys.some((key) => {
+          return key === field;
+        })
+      ) {
+        throw invalid(`${at}.${field} is not a field of this entry.`);
+      }
     }
-    criteria[option] = description;
-  }
-  return criteria;
-};
-
-const parseScoreCriteria = (args: {
-  id: string;
-  criteria: unknown;
-}): string[] => {
-  if (!Array.isArray(args.criteria)) {
-    throw invalid(
-      `questions.${args.id}.criteria must list the levels in order.`
-    );
-  }
-  assertAnswerCount({ id: args.id, count: args.criteria.length });
-
-  return args.criteria.map((level) => {
-    if (!isNonEmptyString(level)) {
-      throw invalid(
-        `questions.${args.id}.criteria levels must be non-empty strings.`
-      );
+    const member = {} as Record<K, string>;
+    for (const key of keys) {
+      const value = item[key];
+      if (!isNonEmptyString(value)) {
+        throw invalid(`${at}.${key} must be a non-empty string.`);
+      }
+      member[key] = value;
     }
-    return level;
+    return member;
   });
 };
 
-const parseBooleanCriteria = (args: {
-  id: string;
-  criteria: unknown;
-}): { false: string; true: string } | undefined => {
-  if (args.criteria === undefined) return undefined;
+const parseChoices = (args: {
+  path: string;
+  choices: unknown;
+}): DeciderChoice[] => {
+  const choices = parseMembers({
+    path: `${args.path}.choices`,
+    items: args.choices,
+    keys: ['value', 'description'],
+  });
+  const seen = new Set<string>();
+  for (const { value } of choices) {
+    if (seen.has(value)) {
+      throw invalid(`${args.path}.choices holds '${value}' twice.`);
+    }
+    seen.add(value);
+  }
+  return choices;
+};
 
-  const keys = isPlainObject(args.criteria)
-    ? Object.keys(args.criteria).sort()
-    : [];
-  if (
-    !isPlainObject(args.criteria) ||
-    keys.length !== 2 ||
-    keys[0] !== 'false' ||
-    keys[1] !== 'true' ||
-    !isNonEmptyString(args.criteria.false) ||
-    !isNonEmptyString(args.criteria.true)
-  ) {
+/** The fields every question type shares, validated. */
+const readQuestionHeader = (args: {
+  path: string;
+  question: unknown;
+}): Pick<DeciderQuestion, 'type' | 'name' | 'instructions'> & {
+  question: Record<string, unknown>;
+} => {
+  const { path, question } = args;
+  if (!isPlainObject(question)) {
+    throw invalid(`${path} must be an object.`);
+  }
+  const { type, name, instructions } = question;
+  if (type !== 'predicate' && type !== 'choice' && type !== 'score') {
+    throw invalid(`${path}.type must be one of predicate, choice or score.`);
+  }
+  for (const field of Object.keys(question)) {
+    if (!QUESTION_FIELDS[type].has(field)) {
+      throw invalid(`${path}.${field} is not a field of a ${type} question.`);
+    }
+  }
+  if (typeof name !== 'string' || !QUESTION_NAME.test(name)) {
     throw invalid(
-      `questions.${args.id}.criteria must describe exactly false and true.`
+      `${path}.name must start with a letter or underscore and hold only letters, digits and underscores (at most 64).`
     );
   }
-  return { false: args.criteria.false, true: args.criteria.true };
+  if (!isNonEmptyString(instructions)) {
+    throw invalid(`${path}.instructions must be a non-empty string.`);
+  }
+  return { type, name, instructions, question };
 };
 
 const parseQuestion = (args: {
-  id: string;
+  path: string;
   question: unknown;
 }): DeciderQuestion => {
-  const { id, question } = args;
-
-  if (!QUESTION_ID.test(id)) {
-    throw invalid(
-      `Question id '${id}' must start with a letter or underscore and hold only letters, digits and underscores (at most 64).`
-    );
-  }
-  if (!isPlainObject(question)) {
-    throw invalid(`questions.${id} must be an object.`);
-  }
-  for (const field of Object.keys(question)) {
-    if (!QUESTION_FIELDS.has(field)) {
-      throw invalid(`questions.${id}.${field} is not a question field.`);
-    }
-  }
-  if (!isNonEmptyString(question.instructions)) {
-    throw invalid(`questions.${id}.instructions must be a non-empty string.`);
-  }
-
-  const { instructions, criteria } = question;
-  switch (question.type) {
+  const { path } = args;
+  const { type, name, instructions, question } = readQuestionHeader(args);
+  switch (type) {
+    case 'predicate':
+      return { type, name, instructions };
     case 'choice':
       return {
-        type: 'choice',
+        type,
+        name,
         instructions,
-        criteria: parseChoiceCriteria({ id, criteria }),
+        choices: parseChoices({ path, choices: question.choices }),
       };
     case 'score':
       return {
-        type: 'score',
+        type,
+        name,
         instructions,
-        criteria: parseScoreCriteria({ id, criteria }),
+        levels: parseMembers({
+          path: `${path}.levels`,
+          items: question.levels,
+          keys: ['label', 'description'],
+        }),
       };
-    case 'boolean': {
-      const parsed = parseBooleanCriteria({ id, criteria });
-      return parsed === undefined
-        ? { type: 'boolean', instructions }
-        : { type: 'boolean', instructions, criteria: parsed };
-    }
-    default:
-      throw invalid(
-        `questions.${id}.type must be one of choice, score or boolean.`
-      );
   }
 };
 
 /**
  * Validates a question set and returns it in canonical form, keeping the
- * caller's order of questions and of each question's options.
+ * caller's order of questions, choices and levels.
  */
 export const parseDeciderQuestions = (value: unknown): DeciderQuestions => {
-  if (!isPlainObject(value)) {
-    throw invalid('questions must be an object keyed by question id.');
+  if (!Array.isArray(value)) {
+    throw invalid('questions must be an array.');
   }
-  const entries = Object.entries(value);
-  if (entries.length === 0 || entries.length > MAX_QUESTIONS) {
+  if (value.length === 0 || value.length > MAX_QUESTIONS) {
     throw invalid(
       `questions must declare between 1 and ${MAX_QUESTIONS} questions.`
     );
   }
 
-  const questions: DeciderQuestions = {};
-  for (const [id, question] of entries) {
-    questions[id] = parseQuestion({ id, question });
-  }
-  return questions;
+  const names = new Set<string>();
+  return value.map((question, index) => {
+    const parsed = parseQuestion({ path: `questions[${index}]`, question });
+    if (names.has(parsed.name)) {
+      throw invalid(`questions holds the name '${parsed.name}' twice.`);
+    }
+    names.add(parsed.name);
+    return parsed;
+  });
 };
 
-const answerSchema = (question: DeciderQuestion): Record<string, unknown> => {
+/**
+ * What an agent answers each question with. A model emits no calibrated
+ * probability, so a predicate is answered true or false and recorded as 1 or 0.
+ */
+const agentAnswerSchema = (
+  question: DeciderQuestion
+): Record<string, unknown> => {
   switch (question.type) {
+    case 'predicate':
+      return { type: 'boolean' };
     case 'choice':
-      return { type: 'string', enum: Object.keys(question.criteria) };
+      return {
+        type: 'string',
+        enum: question.choices.map((choice) => {
+          return choice.value;
+        }),
+      };
     case 'score':
       return {
         type: 'integer',
         minimum: 0,
-        maximum: question.criteria.length - 1,
+        maximum: question.levels.length - 1,
       };
-    case 'boolean':
-      return { type: 'boolean' };
   }
 };
 
 /**
- * The JSON Schema an answer object must satisfy: one property per question,
- * each confined to that question's answer space, all required, nothing else.
+ * The JSON Schema an agent's answer object must satisfy: one property per
+ * question name, each confined to that question's answer space, all required,
+ * nothing else.
  */
 export const compileAnswerSchema = (
   questions: DeciderQuestions
 ): Record<string, unknown> => {
   const properties: Record<string, unknown> = {};
-  for (const [id, question] of Object.entries(questions)) {
-    properties[id] = answerSchema(question);
+  for (const question of questions) {
+    properties[question.name] = agentAnswerSchema(question);
   }
   return {
     type: 'object',
     additionalProperties: false,
-    required: Object.keys(questions),
+    required: questions.map((question) => {
+      return question.name;
+    }),
     properties,
   };
 };
 
 /**
- * Maps an answer object that already satisfies {@link compileAnswerSchema} to
- * the decision's `answers`, deriving each score's `legend` from the criteria.
+ * Maps an agent answer object that already satisfies
+ * {@link compileAnswerSchema} to the decision's `answers`, in question order.
  */
 export const toDecisionAnswers = (args: {
   questions: DeciderQuestions;
   answer: Record<string, unknown>;
-}): Record<string, DecisionAnswer> => {
-  const answers: Record<string, DecisionAnswer> = {};
-  for (const [id, question] of Object.entries(args.questions)) {
-    const value = args.answer[id];
+}): DecisionAnswer[] => {
+  return args.questions.map((question): DecisionAnswer => {
+    const value = args.answer[question.name];
+    const { name } = question;
     switch (question.type) {
+      case 'predicate':
+        return { type: 'predicate', name, probability: value === true ? 1 : 0 };
       case 'choice':
-        answers[id] = { type: 'choice', choice: String(value) };
-        break;
-      case 'score': {
-        const score = Number(value);
-        answers[id] = {
-          type: 'score',
-          score,
-          legend: question.criteria[score],
-        };
-        break;
-      }
-      case 'boolean':
-        answers[id] = { type: 'boolean', value: value === true };
-        break;
+        return { type: 'choice', name, choice: String(value) };
+      case 'score':
+        return { type: 'score', name, score: Number(value) };
+    }
+  });
+};
+
+/**
+ * The answers keyed by question name, so a JSON Logic path reads an answer by
+ * name rather than by its position in the question set.
+ */
+export const answersByName = (
+  answers: unknown
+): Record<string, unknown> | null => {
+  if (!Array.isArray(answers)) return null;
+  const byName: Record<string, unknown> = {};
+  for (const answer of answers) {
+    if (isPlainObject(answer) && typeof answer.name === 'string') {
+      byName[answer.name] = answer;
     }
   }
-  return answers;
+  return byName;
 };

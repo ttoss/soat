@@ -16,6 +16,7 @@ import {
 } from 'src/lib/deciderVersions';
 import {
   createDecision,
+  createInlineDecision,
   decisions,
   getDecision,
   listDecisions,
@@ -266,9 +267,39 @@ decidersRouter.post('/deciders/:decider_id/decisions', async (ctx: Context) => {
   ctx.body = await createDecision({
     projectIds,
     deciderId: ctx.params.decider_id,
-    state: body.state,
+    input: body.input,
     // Rejected here, before the decision exists: a queued decision answers
     // 201 long before it settles.
+    metadata: parseMetadataBag(body.metadata),
+    wait: body.wait === true,
+    authHeader: ctx.request.headers.authorization,
+  });
+});
+
+/**
+ * @openapi
+ * /api/v1/decisions:
+ *   post:
+ *     $ref: 'openapi/v1/deciders.yaml#/paths/~1api~1v1~1decisions/post'
+ */
+decidersRouter.post('/decisions', async (ctx: Context) => {
+  requireAuth(ctx);
+  const body = ctx.request.body as Record<string, unknown>;
+
+  const projectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: parseString(body.project_id),
+    action: 'deciders:CreateInlineDecision',
+    resourceType: 'decision',
+  });
+
+  ctx.status = 201;
+  ctx.body = await createInlineDecision({
+    projectId: Number(projectId),
+    agentId: body.agent_id,
+    toolId: body.tool_id,
+    questions: body.questions,
+    input: body.input,
     metadata: parseMetadataBag(body.metadata),
     wait: body.wait === true,
     authHeader: ctx.request.headers.authorization,

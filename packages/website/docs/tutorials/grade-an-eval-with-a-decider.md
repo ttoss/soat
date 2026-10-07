@@ -212,13 +212,16 @@ JEV_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 
 ## Step 4 — Bridge Jev's answers to the decider contract
 
-Jev speaks almost the decider contract, with three differences the pipeline absorbs ([Bridging an engine with a pipeline](/docs/modules/deciders#bridging-an-engine-with-a-pipeline)):
+A decider calls its tool with `{ input, questions }` and reads back `{ answers: [...] }`. Jev speaks a neighbouring shape, and a [pipeline tool](/docs/modules/tools#pipeline) translates both ways ([Bridging an engine with a pipeline](/docs/modules/deciders#bridging-an-engine-with-a-pipeline)):
 
 | Jev | Decider contract | Bridge |
 | --- | --- | --- |
-| `noul` question, answered as a probability | `boolean`, answered as `value` | `type: "noul"` in; `value` = `noul >= 0.5`, `probabilities.true` = `noul` out |
-| `score` is the probability-weighted level (`1.99`) | `score` is a level index (`2`) | rounded: `(s + 0.5) - ((s + 0.5) % 1)` |
-| `confidence` beside every choice and score | not part of the contract | the output names each field, which leaves it behind |
+| `{ state, questions }`, questions keyed by id | `{ input, questions }`, questions an array | `state` = `input`; each question read by position |
+| `noul` question, answered as `noul`, a probability | `predicate`, answered as `probability` | `type: "noul"` in; `probability` = `noul` out |
+| `criteria`, a list of level labels | `levels`, a list of `{ label, description }` | `criteria` = each level's `label` |
+| `score` is the probability-weighted level (`1.9`) | `score` is a level index (`2`) | rounded: `(s + 0.5) - ((s + 0.5) % 1)` |
+| `probabilities` keyed by level index | `probabilities`, a list of `{ value, probability }` | one entry per level |
+| `legend` and `confidence` beside every answer | not read | the output names each field, which leaves them behind |
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -234,32 +237,35 @@ BRIDGE_ID=$(soat create-tool \
       "id": "jev",
       "tool_id": "'"$JEV_TOOL_ID"'",
       "input": {
-        "state": {"var": "input.state"},
+        "state": {"var": "input.input"},
         "questions": {
-          "resolves_issue": {"type": "noul", "instructions": {"var": "input.questions.resolves_issue.instructions"}},
-          "respects_policy": {"type": "noul", "instructions": {"var": "input.questions.respects_policy.instructions"}},
-          "tone": {"var": "input.questions.tone"}
+          "resolves_issue": {"type": "noul", "instructions": {"var": "input.questions.0.instructions"}},
+          "respects_policy": {"type": "noul", "instructions": {"var": "input.questions.1.instructions"}},
+          "tone": {
+            "type": "score",
+            "instructions": {"var": "input.questions.2.instructions"},
+            "criteria": {"map": [{"var": "input.questions.2.levels"}, {"var": "label"}]}
+          }
         }
       }
     }],
     "output": {
-      "answers": {
-        "resolves_issue": {
-          "value": {">=": [{"var": "steps.jev.answers.resolves_issue.noul"}, 0.5]},
-          "probabilities": {"true": {"var": "steps.jev.answers.resolves_issue.noul"}}
-        },
-        "respects_policy": {
-          "value": {">=": [{"var": "steps.jev.answers.respects_policy.noul"}, 0.5]},
-          "probabilities": {"true": {"var": "steps.jev.answers.respects_policy.noul"}}
-        },
-        "tone": {
+      "answers": [
+        {"name": "resolves_issue", "probability": {"var": "steps.jev.answers.resolves_issue.noul"}},
+        {"name": "respects_policy", "probability": {"var": "steps.jev.answers.respects_policy.noul"}},
+        {
+          "name": "tone",
           "score": {"-": [
             {"+": [{"var": "steps.jev.answers.tone.score"}, 0.5]},
             {"%": [{"+": [{"var": "steps.jev.answers.tone.score"}, 0.5]}, 1]}
           ]},
-          "probabilities": {"var": "steps.jev.answers.tone.probabilities"}
+          "probabilities": [
+            {"value": 0, "probability": {"var": "steps.jev.answers.tone.probabilities.0"}},
+            {"value": 1, "probability": {"var": "steps.jev.answers.tone.probabilities.1"}},
+            {"value": 2, "probability": {"var": "steps.jev.answers.tone.probabilities.2"}}
+          ]
         }
-      }
+      ]
     }
   }' | jq -r '.id')
 echo "Bridge: $BRIDGE_ID"
@@ -269,12 +275,14 @@ echo "Bridge: $BRIDGE_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const noul = (id: string) => {
-  return { type: 'noul', instructions: { var: `input.questions.${id}.instructions` } };
+const noul = (position: number) => {
+  return {
+    type: 'noul',
+    instructions: { var: `input.questions.${position}.instructions` },
+  };
 };
-const asBoolean = (id: string) => {
-  const p = { var: `steps.jev.answers.${id}.noul` };
-  return { value: { '>=': [p, 0.5] }, probabilities: { true: p } };
+const predicate = (name: string) => {
+  return { name, probability: { var: `steps.jev.answers.${name}.noul` } };
 };
 const toneScore = { var: 'steps.jev.answers.tone.score' };
 
@@ -290,29 +298,41 @@ const { data: bridge } = await adminSoat.tools.createTool({
           id: 'jev',
           tool_id: JEV_TOOL_ID,
           input: {
-            state: { var: 'input.state' },
+            state: { var: 'input.input' },
             questions: {
-              resolves_issue: noul('resolves_issue'),
-              respects_policy: noul('respects_policy'),
-              tone: { var: 'input.questions.tone' },
+              resolves_issue: noul(0),
+              respects_policy: noul(1),
+              tone: {
+                type: 'score',
+                instructions: { var: 'input.questions.2.instructions' },
+                criteria: {
+                  map: [{ var: 'input.questions.2.levels' }, { var: 'label' }],
+                },
+              },
             },
           },
         },
       ],
       output: {
-        answers: {
-          resolves_issue: asBoolean('resolves_issue'),
-          respects_policy: asBoolean('respects_policy'),
-          tone: {
+        answers: [
+          predicate('resolves_issue'),
+          predicate('respects_policy'),
+          {
+            name: 'tone',
             score: {
               '-': [
                 { '+': [toneScore, 0.5] },
                 { '%': [{ '+': [toneScore, 0.5] }, 1] },
               ],
             },
-            probabilities: { var: 'steps.jev.answers.tone.probabilities' },
+            probabilities: [0, 1, 2].map((value) => {
+              return {
+                value,
+                probability: { var: `steps.jev.answers.tone.probabilities.${value}` },
+              };
+            }),
           },
-        },
+        ],
       },
     },
   },
@@ -337,32 +357,35 @@ BRIDGE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
         "id": "jev",
         "tool_id": "'"$JEV_TOOL_ID"'",
         "input": {
-          "state": {"var": "input.state"},
+          "state": {"var": "input.input"},
           "questions": {
-            "resolves_issue": {"type": "noul", "instructions": {"var": "input.questions.resolves_issue.instructions"}},
-            "respects_policy": {"type": "noul", "instructions": {"var": "input.questions.respects_policy.instructions"}},
-            "tone": {"var": "input.questions.tone"}
+            "resolves_issue": {"type": "noul", "instructions": {"var": "input.questions.0.instructions"}},
+            "respects_policy": {"type": "noul", "instructions": {"var": "input.questions.1.instructions"}},
+            "tone": {
+              "type": "score",
+              "instructions": {"var": "input.questions.2.instructions"},
+              "criteria": {"map": [{"var": "input.questions.2.levels"}, {"var": "label"}]}
+            }
           }
         }
       }],
       "output": {
-        "answers": {
-          "resolves_issue": {
-            "value": {">=": [{"var": "steps.jev.answers.resolves_issue.noul"}, 0.5]},
-            "probabilities": {"true": {"var": "steps.jev.answers.resolves_issue.noul"}}
-          },
-          "respects_policy": {
-            "value": {">=": [{"var": "steps.jev.answers.respects_policy.noul"}, 0.5]},
-            "probabilities": {"true": {"var": "steps.jev.answers.respects_policy.noul"}}
-          },
-          "tone": {
+        "answers": [
+          {"name": "resolves_issue", "probability": {"var": "steps.jev.answers.resolves_issue.noul"}},
+          {"name": "respects_policy", "probability": {"var": "steps.jev.answers.respects_policy.noul"}},
+          {
+            "name": "tone",
             "score": {"-": [
               {"+": [{"var": "steps.jev.answers.tone.score"}, 0.5]},
               {"%": [{"+": [{"var": "steps.jev.answers.tone.score"}, 0.5]}, 1]}
             ]},
-            "probabilities": {"var": "steps.jev.answers.tone.probabilities"}
+            "probabilities": [
+              {"value": 0, "probability": {"var": "steps.jev.answers.tone.probabilities.0"}},
+              {"value": 1, "probability": {"var": "steps.jev.answers.tone.probabilities.1"}},
+              {"value": 2, "probability": {"var": "steps.jev.answers.tone.probabilities.2"}}
+            ]
           }
-        }
+        ]
       }
     }
   }' | jq -r '.id')
@@ -371,13 +394,13 @@ BRIDGE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 </TabItem>
 </Tabs>
 
-The output names each question id: a question added to the decider later fails its decisions until the bridge names it too.
+The bridge is written for one question set: it reads each question by its position and answers each by name, and `tone` has three levels. A question added, moved or given another level count fails its decisions until the bridge follows.
 
 ---
 
 ## Step 5 — Create the decider
 
-Jev accepts at most 10 levels on a `score`, fewer than a decider allows, so keep scores to 10 levels or less.
+The questions are an array, in the order the bridge reads them. Jev accepts at most 10 levels on a `score`, fewer than a decider allows, so keep scores to 10 levels or less.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -387,21 +410,28 @@ DECIDER_ID=$(soat create-decider \
   --project-id "$PROJECT_ID" \
   --name reply-review \
   --tool-id "$BRIDGE_ID" \
-  --questions '{
-    "resolves_issue": {
-      "type": "boolean",
+  --questions '[
+    {
+      "type": "predicate",
+      "name": "resolves_issue",
       "instructions": "Does the `reply` resolve what the `customer` asked?"
     },
-    "respects_policy": {
-      "type": "boolean",
+    {
+      "type": "predicate",
+      "name": "respects_policy",
       "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"
     },
-    "tone": {
+    {
       "type": "score",
+      "name": "tone",
       "instructions": "How warm is the `reply`?",
-      "criteria": ["Cold", "Neutral", "Warm"]
+      "levels": [
+        {"label": "Cold", "description": "Curt or dismissive."},
+        {"label": "Neutral", "description": "Polite but impersonal."},
+        {"label": "Warm", "description": "Friendly and empathetic."}
+      ]
     }
-  }' | jq -r '.id')
+  ]' | jq -r '.id')
 echo "Decider: $DECIDER_ID"
 ```
 
@@ -409,22 +439,29 @@ echo "Decider: $DECIDER_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const QUESTIONS = {
-  resolves_issue: {
-    type: 'boolean',
+const QUESTIONS = [
+  {
+    type: 'predicate',
+    name: 'resolves_issue',
     instructions: 'Does the `reply` resolve what the `customer` asked?',
   },
-  respects_policy: {
-    type: 'boolean',
+  {
+    type: 'predicate',
+    name: 'respects_policy',
     instructions:
       'Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?',
   },
-  tone: {
+  {
     type: 'score',
+    name: 'tone',
     instructions: 'How warm is the `reply`?',
-    criteria: ['Cold', 'Neutral', 'Warm'],
+    levels: [
+      { label: 'Cold', description: 'Curt or dismissive.' },
+      { label: 'Neutral', description: 'Polite but impersonal.' },
+      { label: 'Warm', description: 'Friendly and empathetic.' },
+    ],
   },
-};
+];
 
 const { data: decider } = await adminSoat.deciders.createDecider({
   body: {
@@ -448,11 +485,15 @@ DECIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders" \
     "project_id": "'"$PROJECT_ID"'",
     "name": "reply-review",
     "tool_id": "'"$BRIDGE_ID"'",
-    "questions": {
-      "resolves_issue": {"type": "boolean", "instructions": "Does the `reply` resolve what the `customer` asked?"},
-      "respects_policy": {"type": "boolean", "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"},
-      "tone": {"type": "score", "instructions": "How warm is the `reply`?", "criteria": ["Cold", "Neutral", "Warm"]}
-    }
+    "questions": [
+      {"type": "predicate", "name": "resolves_issue", "instructions": "Does the `reply` resolve what the `customer` asked?"},
+      {"type": "predicate", "name": "respects_policy", "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"},
+      {"type": "score", "name": "tone", "instructions": "How warm is the `reply`?", "levels": [
+        {"label": "Cold", "description": "Curt or dismissive."},
+        {"label": "Neutral", "description": "Polite but impersonal."},
+        {"label": "Warm", "description": "Friendly and empathetic."}
+      ]}
+    ]
   }' | jq -r '.id')
 ```
 
@@ -463,7 +504,7 @@ DECIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders" \
 
 ## Step 6 — Review a live reply
 
-In production the decider sits in the loop: before a reply is sent, ask it. The state names `customer` and `reply`, the fields the instructions point at in backticks.
+In production the decider sits in the loop: before a reply is sent, ask it with [`POST /api/v1/deciders/{decider_id}/decisions`](/docs/api/deciders/create-decision). The input names `customer` and `reply`, the fields the instructions point at in backticks.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -471,7 +512,7 @@ In production the decider sits in the loop: before a reply is sent, ask it. The 
 ```bash
 soat create-decision \
   --decider-id "$DECIDER_ID" \
-  --state '{
+  --input '{
     "customer": "I was charged twice for order 1042.",
     "reply": "Sorry about that! I have flagged the duplicate charge for our billing team, who will reverse it."
   }' \
@@ -485,11 +526,20 @@ Expected output against the mock (Jev's own figures vary):
 {
   "status": "completed",
   "decider_version": 1,
-  "answers": {
-    "resolves_issue": { "type": "boolean", "value": true, "probabilities": { "true": 0.85 } },
-    "respects_policy": { "type": "boolean", "value": true, "probabilities": { "true": 0.85 } },
-    "tone": { "type": "score", "score": 2, "legend": "Warm", "probabilities": { "0": 0, "1": 0.1, "2": 0.9 } }
-  }
+  "answers": [
+    { "type": "predicate", "name": "resolves_issue", "probability": 0.85 },
+    { "type": "predicate", "name": "respects_policy", "probability": 0.85 },
+    {
+      "type": "score",
+      "name": "tone",
+      "score": 2,
+      "probabilities": [
+        { "value": 0, "label": "Cold", "probability": 0 },
+        { "value": 1, "label": "Neutral", "probability": 0.1 },
+        { "value": 2, "label": "Warm", "probability": 0.9 }
+      ]
+    }
+  ]
 }
 ```
 
@@ -500,7 +550,7 @@ Expected output against the mock (Jev's own figures vary):
 const { data: live } = await adminSoat.deciders.createDecision({
   path: { decider_id: DECIDER_ID },
   body: {
-    state: {
+    input: {
       customer: 'I was charged twice for order 1042.',
       reply:
         'Sorry about that! I have flagged the duplicate charge for our billing team, who will reverse it.',
@@ -520,7 +570,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders/$DECIDER_ID/decisions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "state": {
+    "input": {
       "customer": "I was charged twice for order 1042.",
       "reply": "Sorry about that! I have flagged the duplicate charge for our billing team, who will reverse it."
     },
@@ -532,7 +582,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders/$DECIDER_ID/decisions" \
 </TabItem>
 </Tabs>
 
-`tone.probabilities` is Jev's distribution over the levels, carried as the bridge returned it: the certainty a bare `score: 2` drops.
+`tone.probabilities` is Jev's distribution over the levels, labelled from the decider's own levels: the certainty a bare `score: 2` drops. The same answers are keyed by name in `answers_by_name`.
 
 ---
 
@@ -640,7 +690,7 @@ done
 
 ## Step 8 — Bind the decider as a scorer and run
 
-`state` maps each item into the shape the questions read; `score` reads the decision's answers. Averaging the two `probabilities.true` keeps Jev's certainty in the score: a reply Jev is unsure about scores lower than one it is sure about, even when both answer `true`.
+`input` maps each item into the shape the questions read; `score` reads the decision's answers by name. Averaging the two `probability` values keeps Jev's certainty in the score: a reply Jev is unsure about scores lower than one it is sure about, even when both predicates hold.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -655,10 +705,10 @@ EVAL_ID=$(soat create-eval \
     "type": "decider",
     "name": "reply_review",
     "decider_id": "'"$DECIDER_ID"'",
-    "state": {"customer": {"var": "input.0.content"}, "reply": {"var": "output"}},
+    "input": {"customer": {"var": "input.0.content"}, "reply": {"var": "output"}},
     "score": {"/": [{"+": [
-      {"var": "answers.resolves_issue.probabilities.true"},
-      {"var": "answers.respects_policy.probabilities.true"}
+      {"var": "answers_by_name.resolves_issue.probability"},
+      {"var": "answers_by_name.respects_policy.probability"}
     ]}, 2]},
     "pass_threshold": 0.7
   }]' \
@@ -695,13 +745,13 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
         type: 'decider',
         name: 'reply_review',
         decider_id: DECIDER_ID,
-        state: { customer: { var: 'input.0.content' }, reply: { var: 'output' } },
+        input: { customer: { var: 'input.0.content' }, reply: { var: 'output' } },
         score: {
           '/': [
             {
               '+': [
-                { var: 'answers.resolves_issue.probabilities.true' },
-                { var: 'answers.respects_policy.probabilities.true' },
+                { var: 'answers_by_name.resolves_issue.probability' },
+                { var: 'answers_by_name.respects_policy.probability' },
               ],
             },
             2,
@@ -738,10 +788,10 @@ EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
       "type": "decider",
       "name": "reply_review",
       "decider_id": "'"$DECIDER_ID"'",
-      "state": {"customer": {"var": "input.0.content"}, "reply": {"var": "output"}},
+      "input": {"customer": {"var": "input.0.content"}, "reply": {"var": "output"}},
       "score": {"/": [{"+": [
-        {"var": "answers.resolves_issue.probabilities.true"},
-        {"var": "answers.respects_policy.probabilities.true"}
+        {"var": "answers_by_name.resolves_issue.probability"},
+        {"var": "answers_by_name.respects_policy.probability"}
       ]}, 2]},
       "pass_threshold": 0.7
     }],
@@ -773,7 +823,7 @@ ITEM_DECISION_ID=$(soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$B
   | jq -r '.data[0].scores[0].decision_id')
 
 soat get-decision --decision-id "$ITEM_DECISION_ID" \
-  | jq '{decider_version, tone: .answers.tone.legend, run: .metadata.eval_run_id}'
+  | jq '{decider_version, tone: .answers_by_name.tone.score, run: .metadata.eval_run_id}'
 ```
 
 </TabItem>
@@ -788,7 +838,11 @@ const decisionId = results!.data![0].scores![0].decision_id!;
 const { data: itemDecision } = await adminSoat.deciders.getDecision({
   path: { decision_id: decisionId },
 });
-console.log(itemDecision!.decider_version, itemDecision!.metadata);
+console.log(
+  itemDecision!.decider_version,
+  itemDecision!.answers_by_name!.tone,
+  itemDecision!.metadata
+);
 ```
 
 </TabItem>
@@ -799,7 +853,8 @@ ITEM_DECISION_ID=$(curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.data[0].scores[0].decision_id')
 
 curl -s "$SOAT_BASE_URL/api/v1/decisions/$ITEM_DECISION_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{decider_version, metadata}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{decider_version, tone: .answers_by_name.tone.score, run: .metadata.eval_run_id}'
 ```
 
 </TabItem>
@@ -815,11 +870,15 @@ Rewording a question archives a new decider version. A run grades every item und
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat update-decider --decider-id "$DECIDER_ID" --questions '{
-  "resolves_issue": {"type": "boolean", "instructions": "Does the `reply` resolve what the `customer` asked, or name who will?"},
-  "respects_policy": {"type": "boolean", "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"},
-  "tone": {"type": "score", "instructions": "How warm is the `reply`?", "criteria": ["Cold", "Neutral", "Warm"]}
-}' | jq '{version}'
+soat update-decider --decider-id "$DECIDER_ID" --questions '[
+  {"type": "predicate", "name": "resolves_issue", "instructions": "Does the `reply` resolve what the `customer` asked, or name who will?"},
+  {"type": "predicate", "name": "respects_policy", "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"},
+  {"type": "score", "name": "tone", "instructions": "How warm is the `reply`?", "levels": [
+    {"label": "Cold", "description": "Curt or dismissive."},
+    {"label": "Neutral", "description": "Polite but impersonal."},
+    {"label": "Warm", "description": "Friendly and empathetic."}
+  ]}
+]' | jq '{version}'
 
 soat start-eval-run --eval-id "$EVAL_ID" --baseline-run-id "$BASELINE_RUN_ID" --wait true \
   | jq '{decider_versions, reply_review: .aggregate_scores.scorers.reply_review}'
@@ -842,14 +901,15 @@ Expected output against the mock:
 await adminSoat.deciders.updateDecider({
   path: { decider_id: DECIDER_ID },
   body: {
-    questions: {
-      ...QUESTIONS,
-      resolves_issue: {
-        type: 'boolean',
+    questions: [
+      {
+        ...QUESTIONS[0],
         instructions:
           'Does the `reply` resolve what the `customer` asked, or name who will?',
       },
-    },
+      QUESTIONS[1],
+      QUESTIONS[2],
+    ],
   },
 });
 
@@ -867,11 +927,15 @@ console.log(candidate!.decider_versions); // { reply_review: 2 }
 curl -s -X PATCH "$SOAT_BASE_URL/api/v1/deciders/$DECIDER_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"questions": {
-    "resolves_issue": {"type": "boolean", "instructions": "Does the `reply` resolve what the `customer` asked, or name who will?"},
-    "respects_policy": {"type": "boolean", "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"},
-    "tone": {"type": "score", "instructions": "How warm is the `reply`?", "criteria": ["Cold", "Neutral", "Warm"]}
-  }}' | jq '{version}'
+  -d '{"questions": [
+    {"type": "predicate", "name": "resolves_issue", "instructions": "Does the `reply` resolve what the `customer` asked, or name who will?"},
+    {"type": "predicate", "name": "respects_policy", "instructions": "Does the `reply` avoid promising refunds, credits or dates the agent cannot grant?"},
+    {"type": "score", "name": "tone", "instructions": "How warm is the `reply`?", "levels": [
+      {"label": "Cold", "description": "Curt or dismissive."},
+      {"label": "Neutral", "description": "Polite but impersonal."},
+      {"label": "Warm", "description": "Friendly and empathetic."}
+    ]}
+  ]}' | jq '{version}'
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \

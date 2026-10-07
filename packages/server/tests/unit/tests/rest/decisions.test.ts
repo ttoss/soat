@@ -10,6 +10,7 @@ import {
   freshProjectAndAgent,
   seedUsageEvent,
 } from '../../fixtures/quotaSeed';
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const DECISION_ACTIONS = [
@@ -21,31 +22,46 @@ const DECISION_ACTIONS = [
   'usage:ListEvents',
 ];
 
-const QUESTIONS = {
-  route: {
+const QUESTIONS = [
+  {
     type: 'choice',
+    name: 'route',
     instructions: 'Which team should own this ticket?',
-    criteria: {
-      billing: 'Charges, refunds, invoices, plan changes',
-      technical: 'Errors, outages, integration failures',
-    },
-  },
-  severity: {
-    type: 'score',
-    instructions: 'How urgent is this ticket?',
-    criteria: [
-      'Cosmetic or informational',
-      'Workaround exists',
-      'Blocks one workflow for one customer',
+    choices: [
+      {
+        value: 'billing',
+        description: 'Charges, refunds, invoices, plan changes',
+      },
+      {
+        value: 'technical',
+        description: 'Errors, outages, integration failures',
+      },
     ],
   },
-  needs_human: {
-    type: 'boolean',
+  {
+    type: 'score',
+    name: 'severity',
+    instructions: 'How urgent is this ticket?',
+    levels: [
+      { label: 'Cosmetic', description: 'Cosmetic or informational' },
+      { label: 'Workaround', description: 'A workaround exists' },
+      {
+        label: 'Blocking',
+        description: 'Blocks one workflow for one customer',
+      },
+    ],
+  },
+  {
+    type: 'predicate',
+    name: 'needs_human',
     instructions: 'Must a person read this before any automated reply?',
   },
-};
+];
 
 const MODEL_ANSWER = { route: 'technical', severity: 2, needs_human: false };
+
+const PNG_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 type ChatRequest = {
   messages: Array<{ role: string; content: string }>;
@@ -149,7 +165,7 @@ describe('Decisions', () => {
   }) => {
     return authenticatedTestClient(args.token ?? userToken)
       .post(`/api/v1/deciders/${args.decider ?? deciderId}/decisions`)
-      .send({ state: 'I was charged twice.', wait: true, ...args.body });
+      .send({ input: 'I was charged twice.', wait: true, ...args.body });
   };
 
   const countDecisions = async (decider: string): Promise<number> => {
@@ -252,31 +268,47 @@ describe('Decisions', () => {
         body: { metadata: { ticket_id: 'ZD-48213' } },
       });
 
+      const answers = [
+        { type: 'choice', name: 'route', choice: 'technical' },
+        { type: 'score', name: 'severity', score: 2 },
+        { type: 'predicate', name: 'needs_human', probability: 0 },
+      ];
       expect(res.status).toBe(201);
       expect(res.body.id).toMatch(/^dec_/);
       expect(res.body.project_id).toBe(projectId);
       expect(res.body.decider_id).toBe(deciderId);
       expect(res.body.decider_version).toBe(1);
+      expect(res.body.questions).toBeNull();
       expect(res.body.status).toBe('completed');
-      expect(res.body.answers).toEqual({
-        route: { type: 'choice', choice: 'technical' },
-        severity: {
-          type: 'score',
-          score: 2,
-          legend: 'Blocks one workflow for one customer',
-        },
-        needs_human: { type: 'boolean', value: false },
+      expect(res.body.answers).toEqual(answers);
+      expect(res.body.answers_by_name).toEqual({
+        route: answers[0],
+        severity: answers[1],
+        needs_human: answers[2],
       });
       expect(res.body.error).toBeNull();
       expect(res.body.generation_id).toMatch(/^gen_/);
       expect(res.body.metadata).toEqual({ ticket_id: 'ZD-48213' });
-      expect(res.body.state).toBeUndefined();
+      expect(res.body.input).toBeUndefined();
     });
 
-    test('the model is shown the questions and the state, under the agent’s instructions', async () => {
+    test('a predicate the agent holds true is recorded with probability 1', async () => {
+      nextContent = JSON.stringify({ ...MODEL_ANSWER, needs_human: true });
+
+      const res = await decide({});
+
+      expect(res.body.status).toBe('completed');
+      expect(res.body.answers_by_name.needs_human).toEqual({
+        type: 'predicate',
+        name: 'needs_human',
+        probability: 1,
+      });
+    });
+
+    test('the model is shown the questions and the input, under the agent’s instructions', async () => {
       const before = received.length;
 
-      await decide({ body: { state: 'The dashboard throws a 500.' } });
+      await decide({ body: { input: 'The dashboard throws a 500.' } });
 
       const request = received[before];
       const system = request.messages.find((message) => {
@@ -288,13 +320,13 @@ describe('Decisions', () => {
       expect(system?.content).toContain('You triage support tickets for ACME.');
       expect(user?.content).toContain('Which team should own this ticket?');
       expect(user?.content).toContain(
-        'technical: Errors, outages, integration failures'
+        '- technical: Errors, outages, integration failures'
       );
       expect(user?.content).toContain(
-        '2: Blocks one workflow for one customer'
+        '- 2: Blocking. Blocks one workflow for one customer'
       );
       expect(user?.content).toContain('The dashboard throws a 500.');
-      // The billing option precedes the technical one, as the decider lists them.
+      // The billing choice precedes the technical one, as the decider lists them.
       expect(user!.content.indexOf('billing:')).toBeLessThan(
         user!.content.indexOf('technical:')
       );
@@ -310,11 +342,11 @@ describe('Decisions', () => {
       expect(format).toContain('"required":["route","severity","needs_human"]');
     });
 
-    test('a structured state reaches the model as JSON', async () => {
+    test('a structured input reaches the model as JSON', async () => {
       const before = received.length;
 
       await decide({
-        body: { state: { subject: 'Refund', order_id: 'ord_778' } },
+        body: { input: { subject: 'Refund', order_id: 'ord_778' } },
       });
 
       const user = received[before].messages.find((message) => {
@@ -323,35 +355,142 @@ describe('Decisions', () => {
       expect(user?.content).toContain('"order_id": "ord_778"');
     });
 
+    test('a messages input reaches the model as its text parts', async () => {
+      const before = received.length;
+
+      const res = await decide({
+        body: {
+          input: [
+            { role: 'user', content: 'I was charged twice.' },
+            {
+              role: 'user',
+              content: [{ type: 'input_text', text: 'Order ord_778.' }],
+            },
+          ],
+        },
+      });
+
+      expect(res.body.status).toBe('completed');
+      const user = received[before].messages.find((message) => {
+        return message.role === 'user';
+      });
+      expect(user?.content).toContain(
+        '<input>\n\nI was charged twice.\n\nOrder ord_778.\n\n</input>'
+      );
+    });
+
+    test('a messages input with an image reaches the agent as the frame and the image', async () => {
+      const before = mockCreateGeneration.mock.calls.length;
+
+      const res = await decide({
+        body: {
+          input: [
+            {
+              role: 'user',
+              content: [
+                { type: 'input_text', text: 'Is this box damaged?' },
+                { type: 'input_image', image_url: PNG_DATA_URL },
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(res.status).toBe(201);
+      const [call] = mockCreateGeneration.mock.calls[before];
+      expect(call.agentId).toBe(agentId);
+      expect(call.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: expect.stringContaining(
+                '<input>\n\nIs this box damaged?\n\n</input>'
+              ),
+            },
+            { type: 'image', image: PNG_DATA_URL },
+          ],
+        },
+      ]);
+    });
+
+    test.each([
+      ['a role other than user', [{ role: 'assistant', content: 'Hi.' }]],
+      [
+        'content that is neither text nor parts',
+        [{ role: 'user', content: 42 }],
+      ],
+      [
+        'a text part without text',
+        [{ role: 'user', content: [{ type: 'input_text' }] }],
+      ],
+      [
+        'an image that is not a base64 data URL',
+        [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_image',
+                image_url: 'https://example.com/box.png',
+              },
+            ],
+          },
+        ],
+      ],
+      [
+        'a part of an unknown type',
+        [{ role: 'user', content: [{ type: 'input_audio', data: 'AAAA' }] }],
+      ],
+    ])(
+      'a messages input with %s is refused before any decision is written',
+      async (_label, input) => {
+        const decider = await createDecider();
+
+        const res = await decide({ decider, body: { input } });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(await countDecisions(decider)).toBe(0);
+      }
+    );
+
     // The frame's wording is not part of a decider's version, so a change to it
     // can move answers on an unchanged decider; pinning the exact text makes
     // every such change a reviewed diff.
     test('the model is shown the exact frame for every question type', async () => {
       const framed = await createDecider({
-        questions: {
-          route: {
+        questions: [
+          {
             type: 'choice',
+            name: 'route',
             instructions: 'Which team should own this ticket?',
-            criteria: { billing: 'Charges', technical: 'Errors' },
+            choices: [
+              { value: 'billing', description: 'Charges' },
+              { value: 'technical', description: 'Errors' },
+            ],
           },
-          severity: {
+          {
             type: 'score',
+            name: 'severity',
             instructions: 'How urgent is it?',
-            criteria: ['Cosmetic', 'Blocking'],
+            levels: [
+              { label: 'Cosmetic', description: 'Appearance only.' },
+              { label: 'Blocking', description: 'No workaround.' },
+            ],
           },
-          escalate: {
-            type: 'boolean',
-            instructions: 'Escalate it?',
-            criteria: { false: 'Routine', true: 'Legal threat' },
+          {
+            type: 'predicate',
+            name: 'escalate',
+            instructions: 'Does it threaten legal action?',
           },
-          reply: { type: 'boolean', instructions: 'Reply today?' },
-        },
+        ],
       });
       nextContent = JSON.stringify({
         route: 'billing',
         severity: 1,
         escalate: false,
-        reply: true,
       });
       const before = received.length;
 
@@ -364,16 +503,15 @@ describe('Decisions', () => {
       });
       expect(user?.content).toBe(
         [
-          'Answer every question below about the state that follows. Choose each answer only from the ones its question offers.',
+          'Answer every question below about the input that follows. Choose each answer only from the ones its question offers.',
           '## Questions',
-          '### route (choice)\nWhich team should own this ticket?\nAnswer with one of these options:\n- billing: Charges\n- technical: Errors',
-          '### severity (score)\nHow urgent is it?\nAnswer with the number of the level that fits:\n- 0: Cosmetic\n- 1: Blocking',
-          '### escalate (boolean)\nEscalate it?\nAnswer true or false:\n- false: Routine\n- true: Legal threat',
-          '### reply (boolean)\nReply today?\nAnswer true or false.',
-          '## State',
-          '<state>',
+          '### route (choice)\nWhich team should own this ticket?\nAnswer with one of these values:\n- billing: Charges\n- technical: Errors',
+          '### severity (score)\nHow urgent is it?\nAnswer with the number of the level that fits:\n- 0: Cosmetic. Appearance only.\n- 1: Blocking. No workaround.',
+          '### escalate (predicate)\nDoes it threaten legal action?\nAnswer true if the condition holds, false otherwise.',
+          '## Input',
+          '<input>',
           'I was charged twice.',
-          '</state>',
+          '</input>',
         ].join('\n\n')
       );
     });
@@ -384,10 +522,11 @@ describe('Decisions', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('queued');
       expect(res.body.answers).toBeNull();
+      expect(res.body.answers_by_name).toBeNull();
 
       const settled = await waitForSettled(res.body.id);
       expect(settled.body.status).toBe('completed');
-      expect(settled.body.answers.route.choice).toBe('technical');
+      expect(settled.body.answers_by_name.route.choice).toBe('technical');
     });
 
     test('an answer outside the answer space fails the decision', async () => {
@@ -403,17 +542,20 @@ describe('Decisions', () => {
 
     test('names the question-set version it was answered under', async () => {
       const decider = await createDecider();
-      await authenticatedTestClient(userToken)
+      const patched = await authenticatedTestClient(userToken)
         .patch(`/api/v1/deciders/${decider}`)
         .send({
-          questions: {
-            ...QUESTIONS,
-            needs_human: {
-              type: 'boolean',
+          questions: [
+            QUESTIONS[0],
+            QUESTIONS[1],
+            {
+              type: 'predicate',
+              name: 'needs_human',
               instructions: 'Does a person have to see this first?',
             },
-          },
+          ],
         });
+      expect(patched.status).toBe(200);
 
       const res = await decide({ decider });
 
@@ -536,10 +678,19 @@ describe('Decisions', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('a missing state is refused with 400', async () => {
+    test('a missing input is refused with 400', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/deciders/${deciderId}/decisions`)
         .send({ wait: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a state field is refused with 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/deciders/${deciderId}/decisions`)
+        .send({ state: 'I was charged twice.', wait: true });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -568,7 +719,7 @@ describe('Decisions', () => {
     test('unauthenticated request returns 401', async () => {
       const res = await testClient
         .post(`/api/v1/deciders/${deciderId}/decisions`)
-        .send({ state: 'x' });
+        .send({ input: 'x' });
       expect(res.status).toBe(401);
     });
   });
@@ -588,35 +739,35 @@ describe('Decisions', () => {
   });
 
   describe('a background evaluation that cannot record its progress', () => {
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
     test('leaves the decision queued for the sweep', async () => {
-      // Drives only the `.catch` on the detached evaluation: the write that
-      // moves the decision to `running` is the first thing it does.
+      // Drives only the `.catch` on the detached evaluation, whose first write
+      // moves the decision to `running`. Restored alone: restoring every mock
+      // detaches the shared `mockCreateGeneration` spy.
       const update = jest
         .spyOn(db.Decision, 'update')
         .mockRejectedValueOnce(new Error('connection reset'));
+      try {
+        const res = await decide({ body: { wait: false } });
+        expect(res.body.status).toBe('queued');
+        for (
+          let tick = 0;
+          tick < 40 && update.mock.calls.length === 0;
+          tick += 1
+        ) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 25);
+          });
+        }
 
-      const res = await decide({ body: { wait: false } });
-      expect(res.body.status).toBe('queued');
-      for (
-        let tick = 0;
-        tick < 40 && update.mock.calls.length === 0;
-        tick += 1
-      ) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 25);
-        });
+        expect(update).toHaveBeenCalled();
+        const after = await authenticatedTestClient(userToken).get(
+          `/api/v1/decisions/${res.body.id}`
+        );
+        expect(after.body.status).toBe('queued');
+        expect(after.body.answers).toBeNull();
+      } finally {
+        update.mockRestore();
       }
-
-      expect(update).toHaveBeenCalled();
-      const after = await authenticatedTestClient(userToken).get(
-        `/api/v1/decisions/${res.body.id}`
-      );
-      expect(after.body.status).toBe('queued');
-      expect(after.body.answers).toBeNull();
     });
   });
 

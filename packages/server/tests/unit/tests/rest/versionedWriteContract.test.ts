@@ -96,9 +96,9 @@ describe('versioned write contract', () => {
           project_id: projectId,
           name: unique('contract-decider'),
           agent_id: agentId,
-          questions: {
-            escalate: { type: 'boolean', instructions: 'Escalate?' },
-          },
+          questions: [
+            { type: 'predicate', name: 'escalate', instructions: 'Escalate?' },
+          ],
         });
       },
       writes: [
@@ -108,9 +108,13 @@ describe('versioned write contract', () => {
             return client()
               .patch(`/api/v1/deciders/${id}`)
               .send({
-                questions: {
-                  escalate: { type: 'boolean', instructions: 'Escalate now?' },
-                },
+                questions: [
+                  {
+                    type: 'predicate',
+                    name: 'escalate',
+                    instructions: 'Escalate now?',
+                  },
+                ],
                 ...extra,
               });
           },

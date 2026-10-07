@@ -44,9 +44,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   DECIDER_AGENT_NOT_TOOL_LESS:
     "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `PATCH /api/v1/agents/{agent_id}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
   DECIDER_TOOL_NOT_CALLABLE:
-    'Point the decider at an `http` or `pipeline` tool with no `state` or `questions` in its `preset_parameters`. Reach an `mcp` or `builtin` tool through a `pipeline` step, which names its own `action`.',
+    'Point the decider at an `http` or `pipeline` tool with no `input` or `questions` in its `preset_parameters`. Reach an `mcp` or `builtin` tool through a `pipeline` step, which names its own `action`.',
   DECISION_ANSWER_INVALID:
-    "Make the tool answer `{ answers: { <question id>: { choice | score | value, probabilities? } } }` for every question; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
+    "Make the tool answer `{ answers: [{ name, probability | choice | score, probabilities?, confidence? }] }`, one per question, as OpenAI's Decisions API does; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
   TOOL_HAS_DEPENDENTS:
     'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
   SHARE_CAP_EXCEEDED:
@@ -58,7 +58,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PUBLIC_SHARES_DISABLED:
     'Create the share with a project id as `grantee`, or ask the operator to set `SHARES_ALLOW_PUBLIC=true`.',
   DECISION_INTERRUPTED:
-    'Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions`; nothing about the interrupted one can be resumed.',
+    'Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions` or `POST /api/v1/decisions`; nothing about the interrupted one can be resumed.',
   PROJECT_PAUSED:
     'Resume the project with `POST /api/v1/projects/{project_id}/resume` once whatever paused it is resolved; `meta.pause_reason` says why it was paused. Nothing is queued while paused — retry the request after resuming.',
   PROJECT_NOT_PAUSED:

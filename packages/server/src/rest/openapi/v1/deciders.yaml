@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: >-
     API for deciders — versioned question sets answered against a caller's
-    state — and the append-only decisions they produce.
+    input — and the append-only decisions they produce. Questions, input and
+    answers follow the shapes of OpenAI's Decisions API.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -90,7 +91,7 @@ paths:
         binding left active by `active_tool_ids` and no
         `knowledge_config.write_memory_store_id` — or the create is refused with
         `400 DECIDER_AGENT_NOT_TOOL_LESS`. A tool must be `http` or `pipeline`
-        and must not pin `state` or `questions` in its `preset_parameters`, or
+        and must not pin `input` or `questions` in its `preset_parameters`, or
         the create is refused with `400 DECIDER_TOOL_NOT_CALLABLE`. A duplicate
         `name` in the project is `409 NAME_CONFLICT`.
       operationId: createDecider
@@ -337,9 +338,10 @@ paths:
         - Deciders
       summary: Request a decision
       description: >-
-        Evaluates the decider against `state` and records the decision. The
+        Evaluates the decider against `input` and records the decision. The
         questions come from the decider, never from the request, so a call site
-        can only supply what is judged.
+        can only supply what is judged. To send the questions with the request,
+        use `POST /api/v1/decisions`.
 
 
         Everything that can refuse the request is checked before the decision
@@ -350,10 +352,10 @@ paths:
         (`429 QUOTA_EXCEEDED`).
 
 
-        A tool backend is called with `{ state, questions }` and must answer
-        `{ answers: { <question id>: { choice | score | value, probabilities? } } }`;
-        an answer outside that contract fails the decision with
-        `DECISION_ANSWER_INVALID`.
+        A tool backend is called with `{ input, questions }` and must answer
+        `{ answers: [{ name, probability | choice | score, probabilities?, confidence? }] }`,
+        the request and response of OpenAI's Decisions API; an answer outside
+        that contract fails the decision with `DECISION_ANSWER_INVALID`.
 
 
         With `wait: false`, the default, the answer is `201` with the decision
@@ -380,7 +382,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Decision'
         '400':
-          description: Bad request — a missing state, a non-object metadata bag, or a tool-bearing agent
+          description: Bad request — a missing or malformed input, a non-object metadata bag, or a tool-bearing agent
         '401':
           description: Unauthorized
         '403':
@@ -393,6 +395,46 @@ paths:
           description: A generation quota is exhausted
 
   /api/v1/decisions:
+    post:
+      tags:
+        - Deciders
+      summary: Request a decision with inline questions
+      description: >-
+        Evaluates `questions` sent with the request against `input`, answered
+        by the agent or tool the request names (exactly one of `agent_id` and
+        `tool_id`, held to the same rules as a decider's backend), and records
+        the decision with its questions. The request and answers are those of
+        OpenAI's Decisions API, with the backend in place of `model`.
+
+
+        No decider names the questions, so the decision carries them in
+        `questions` and has no `decider_id` or `decider_version`. Admission,
+        `wait` and the tool contract are those of
+        `POST /api/v1/deciders/{decider_id}/decisions`.
+      operationId: createInlineDecision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInlineDecisionRequest'
+      responses:
+        '201':
+          description: The decision — `queued`, or settled when `wait` is true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '400':
+          description: Bad request — invalid questions or input, no backend or both, or a backend that cannot answer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: The project is paused
+        '429':
+          description: A generation quota is exhausted
     get:
       tags:
         - Deciders
@@ -517,58 +559,99 @@ components:
         type: integer
         minimum: 1
   schemas:
+    DeciderChoice:
+      type: object
+      additionalProperties: false
+      required:
+        - value
+        - description
+      properties:
+        value:
+          type: string
+          description: What a `choice` answer carries; unique within the question
+          example: billing
+        description:
+          type: string
+          example: Payments, invoices and refunds.
+    DeciderLevel:
+      type: object
+      additionalProperties: false
+      required:
+        - label
+        - description
+      properties:
+        label:
+          type: string
+          example: Workaround available
+        description:
+          type: string
+          example: A task fails, but another way works.
     DeciderQuestion:
       type: object
       additionalProperties: false
       required:
         - type
+        - name
         - instructions
       description: >-
-        One question and its finite answer space. `criteria` is an object
-        mapping each option to its description for `choice` (2 to 20 options,
-        in the order the model is shown them), an ordered array of level
-        descriptions for `score` (2 to 20 levels; the answer is a level's
-        zero-based index), and for `boolean` an optional object describing what
-        `false` and `true` mean.
+        One question and its answer space. A `predicate` checks a condition and
+        is answered with the probability it holds. A `choice` selects one of
+        `choices` (2 to 20, in the order the model is shown them). A `score`
+        rates against ordered `levels` (2 to 20); its answer is a level index,
+        or a value between two when a tool weighs them.
       properties:
         type:
           type: string
-          enum: [choice, score, boolean]
+          enum: [predicate, choice, score]
           example: choice
+        name:
+          type: string
+          description: >-
+            Names the question's answer. Unique within the set; starts with a
+            letter or underscore and holds only letters, digits and
+            underscores (at most 64).
+          example: department
         instructions:
           type: string
           description: What to judge
-          example: Which team should own this ticket?
-        criteria:
-          description: The answer space's descriptions; the shape follows `type`
-          oneOf:
-            - type: object
-              additionalProperties:
-                type: string
-            - type: array
-              items:
-                type: string
-          example:
-            billing: Charges, refunds, invoices, plan changes
-            technical: Errors, outages, integration failures
+          example: Which department should handle this complaint?
+        choices:
+          type: array
+          description: A `choice` question's options; required for `choice` only
+          items:
+            $ref: '#/components/schemas/DeciderChoice'
+        levels:
+          type: array
+          description: A `score` question's ordered levels; required for `score` only
+          items:
+            $ref: '#/components/schemas/DeciderLevel'
     DeciderQuestions:
-      type: object
-      description: >-
-        Question id → question, 1 to 20 of them. A question id starts with a
-        letter or underscore and holds only letters, digits and underscores (at
-        most 64), since it keys the answer object.
-      additionalProperties:
+      type: array
+      minItems: 1
+      maxItems: 20
+      description: The questions, in the order the model is shown them.
+      items:
         $ref: '#/components/schemas/DeciderQuestion'
       example:
-        route:
-          type: choice
-          instructions: Which team should own this ticket?
-          criteria:
-            billing: Charges, refunds, invoices, plan changes
-            technical: Errors, outages, integration failures
-        needs_human:
-          type: boolean
+        - type: choice
+          name: department
+          instructions: Which department should handle this complaint?
+          choices:
+            - value: billing
+              description: Payments, invoices and refunds.
+            - value: technical
+              description: Problems using the product.
+        - type: predicate
+          name: needs_human
           instructions: Must a person read this before any automated reply?
+    DecisionInput:
+      description: >-
+        What is judged, not stored: a string; a list of `user` messages whose
+        `content` is a string or `input_text` and `input_image` parts (an image
+        as a base64 data URL); or any other JSON value, which an agent is shown
+        as indented JSON. An array of objects carrying `role` is read as
+        messages.
+      example: I was charged twice for the same order.
     Decider:
       type: object
       properties:
@@ -720,19 +803,14 @@ components:
       type: object
       additionalProperties: false
       required:
-        - state
+        - input
       properties:
-        state:
-          description: >-
-            What is judged: any JSON value. A string reaches the agent verbatim;
-            anything else is serialized as JSON. Not stored.
-          example:
-            subject: Charged twice
-            body: I was charged twice for the same order.
+        input:
+          $ref: '#/components/schemas/DecisionInput'
         metadata:
           description: >-
             Caller-owned annotations stored on the decision and returned on
-            every read — typically the id of what was judged, since the state
+            every read — typically the id of what was judged, since the input
             itself is not stored. Written once, with the decision. A non-object
             is rejected with `400 VALIDATION_FAILED` and no decision is written.
           example:
@@ -750,40 +828,106 @@ components:
             False — the default — returns the `queued` decision at once. A tool
             call, `builtin` or MCP, always waits.
           example: true
+    CreateInlineDecisionRequest:
+      type: object
+      additionalProperties: false
+      description: Names exactly one of `agent_id` and `tool_id`.
+      required:
+        - questions
+        - input
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Project ID (required if not using project key auth)
+          example: proj_V1StGXR8Z5jdHi6B
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: A tool-less agent that answers
+          example: agent_V1StGXR8Z5jdHi6B
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: An http or pipeline tool that answers
+          example: tool_V1StGXR8Z5jdHi6B
+        questions:
+          $ref: '#/components/schemas/DeciderQuestions'
+        input:
+          $ref: '#/components/schemas/DecisionInput'
+        metadata:
+          description: >-
+            Caller-owned annotations stored on the decision. A non-object is
+            rejected with `400 VALIDATION_FAILED`.
+          example:
+            ticket_id: ZD-48213
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
+        wait:
+          type: boolean
+          default: false
+          # Pinned to `true` for tool calls, as on a decider's decision.
+          x-soat-tool-forced: true
+          description: >-
+            True evaluates before answering and returns the settled decision.
+            False — the default — returns the `queued` decision at once. A tool
+            call, `builtin` or MCP, always waits.
+          example: true
+    AnswerProbability:
+      type: object
+      additionalProperties: false
+      properties:
+        value:
+          description: The choice's `value`, or the level's index
+          oneOf:
+            - type: string
+            - type: integer
+          example: billing
+        label:
+          type: string
+          description: The level's `label`; on a `score` answer only
+        probability:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.95
     DecisionAnswer:
       type: object
       description: >-
-        One question's answer, confined to its answer space. `choice` carries
-        the chosen option, `score` the level's zero-based index and its
-        `legend`, `boolean` the `value`. `probabilities` is present only when a
-        tool backend supplied it.
+        One question's answer, named after it. A `predicate` carries the
+        `probability` its condition holds — 1 or 0 from an agent, which states
+        no calibrated probability. A `choice` carries the chosen `choice`. A
+        `score` carries the level index, or from a tool a probability-weighted
+        value between levels. `probabilities` and `confidence` are present only
+        when a tool backend supplied them, carried as supplied; SOAT does not
+        vouch for their meaning.
       properties:
         type:
           type: string
-          enum: [choice, score, boolean]
+          enum: [predicate, choice, score]
+        name:
+          type: string
+          example: department
+        probability:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.92
         choice:
           type: string
-          example: technical
+          example: billing
         score:
-          type: integer
-          example: 2
-        legend:
-          type: string
-          example: Blocks one workflow for one customer
-        value:
-          type: boolean
-          example: false
+          type: number
+          example: 1.1
         probabilities:
-          type: object
-          description: >-
-            A distribution over the answer space, keyed by option, by level
-            index as a string, or by `true` / `false`. Carried as the tool
-            supplied it; SOAT does not vouch for its meaning.
-          additionalProperties:
-            type: number
-          example:
-            billing: 0.8
-            technical: 0.2
+          type: array
+          items:
+            $ref: '#/components/schemas/AnswerProbability'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.93
     Decision:
       type: object
       properties:
@@ -797,19 +941,43 @@ components:
         decider_id:
           x-soat-ref: deciders
           type: string
-          description: The decider asked; kept after the decider is deleted
+          nullable: true
+          description: >-
+            The decider asked; kept after the decider is deleted. Null for a
+            decision sent with its own questions.
           example: dcd_V1StGXR8Z5jdHi6B
         decider_version:
           type: integer
+          nullable: true
           description: The question-set version the decision was answered under
           example: 1
+        questions:
+          type: array
+          nullable: true
+          description: >-
+            The questions a decision sent with its own was answered under. Null
+            for a decider's decision, whose questions are its
+            `decider_version`.
+          items:
+            $ref: '#/components/schemas/DeciderQuestion'
         status:
           type: string
           enum: [queued, running, completed, failed]
         answers:
+          type: array
+          nullable: true
+          description: >-
+            One answer per question, in question order. Null until the decision
+            completes, then never rewritten.
+          items:
+            $ref: '#/components/schemas/DecisionAnswer'
+        answers_by_name:
           type: object
           nullable: true
-          description: Question id → answer. Null until the decision completes, then never rewritten.
+          description: >-
+            The same answers keyed by question name, so a JSON Logic path reads
+            one by name (`answers_by_name.department.choice`) rather than by
+            position.
           additionalProperties:
             $ref: '#/components/schemas/DecisionAnswer'
         error:

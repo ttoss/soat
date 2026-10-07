@@ -33,7 +33,7 @@ const toolSurfaceOf = (agent: DeciderAgentRow): string[] => {
 /**
  * Refuses an agent that could call a tool. A tool call is the only thing that
  * parks a generation, and a decision has no route to resume one; nor may
- * evaluating a state take a side effect the decision cannot record.
+ * evaluating an input take a side effect the decision cannot record.
  */
 export const assertDeciderAgentToolLess = (agent: DeciderAgentRow): void => {
   const surface = toolSurfaceOf(agent);

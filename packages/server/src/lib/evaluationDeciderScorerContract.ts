@@ -14,7 +14,8 @@ export const DECIDER_SCORER_TYPE = 'decider';
 /** A completed decision, as the scorer reads it. */
 export type DeciderScorerDecision = {
   decisionId: string;
-  answers: Record<string, unknown>;
+  answers: unknown[];
+  answersByName: Record<string, unknown>;
 };
 
 /**
@@ -23,7 +24,7 @@ export type DeciderScorerDecision = {
  */
 export type DeciderScorerRunner = (args: {
   scorer: Record<string, unknown>;
-  state: unknown;
+  input: unknown;
 }) => Promise<DeciderScorerDecision>;
 
 /**
@@ -46,7 +47,7 @@ export const checkDeciderScorerConfig = (args: {
     return `${path}.decider_id is required and must be a decider id.`;
   }
   if (scorer.score === undefined) {
-    return `${path}.score is required: a JSON Logic expression over { answers } yielding 0–1.`;
+    return `${path}.score is required: a JSON Logic expression over { answers, answers_by_name } yielding 0–1.`;
   }
   if (!isUnitInterval(scorer.pass_threshold)) {
     return `${path}.pass_threshold is required and must be a number between 0 and 1.`;
@@ -55,7 +56,7 @@ export const checkDeciderScorerConfig = (args: {
 };
 
 /**
- * Builds the state from the item context, requests the decision, and reads the
+ * Builds the input from the item context, requests the decision, and reads the
  * score off its answers. A score outside 0–1 throws, which errors the item.
  */
 export const scoreDeciderScorer = async (args: {
@@ -65,13 +66,16 @@ export const scoreDeciderScorer = async (args: {
 }): Promise<ScorerOutcome> => {
   const { scorer } = args;
   const name = String(scorer.name);
-  const state =
-    scorer.state === undefined
+  const input =
+    scorer.input === undefined
       ? args.context
-      : evaluateLogic(scorer.state, args.context);
+      : evaluateLogic(scorer.input, args.context);
 
-  const decision = await args.runDecider({ scorer, state });
-  const score = evaluateLogic(scorer.score, { answers: decision.answers });
+  const decision = await args.runDecider({ scorer, input });
+  const score = evaluateLogic(scorer.score, {
+    answers: decision.answers,
+    answers_by_name: decision.answersByName,
+  });
 
   if (typeof score !== 'number' || !isUnitInterval(score)) {
     throw new DomainError(
