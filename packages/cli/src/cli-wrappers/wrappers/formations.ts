@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 import { load } from 'js-yaml';
 
+import { resolveTemplateFiles } from '../templateFiles.js';
 import type { Wrapper } from '../types.js';
 
 const FORMATION_COMMANDS = [
@@ -228,7 +230,7 @@ export const formationsWrapper: Wrapper = {
     {
       name: 'template-path',
       description:
-        'Path to template file (JSON or YAML). Alias: --template-file',
+        "Path to template file (JSON or YAML). `{ file: path }` in it becomes that file's text and `{ files: glob }` a map of each match's path to its text, both relative to the template. Alias: --template-file",
       required: false,
       type: 'string',
     },
@@ -292,8 +294,9 @@ export const formationsWrapper: Wrapper = {
     };
 
     if (effectiveTemplatePath) {
-      forcedBody[TEMPLATE_FIELD] = readTemplateFromPath({
-        templatePath: effectiveTemplatePath,
+      forcedBody[TEMPLATE_FIELD] = resolveTemplateFiles({
+        node: readTemplateFromPath({ templatePath: effectiveTemplatePath }),
+        baseDir: path.dirname(path.resolve(effectiveTemplatePath)),
       });
     }
 

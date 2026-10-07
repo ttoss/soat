@@ -360,6 +360,22 @@ Each instance is named `<LogicalId>[<key>]` (`Docs[faq.md]`) and keyed by its en
 
 Keys must be non-empty and must not contain `[`, `]`, `{` or `}`, and an instance name may not collide with another resource. The template is stored expanded, so a read returns the instances rather than the `for_each`.
 
+#### One resource per file
+
+The CLI builds the map from files on disk. In a template passed with `--template-path`, `{ "files": "<glob>" }` becomes a map from each match's path below the glob's fixed prefix to its text, and `{ "file": "<path>" }` becomes one file's text; both resolve against the template's own directory:
+
+```yaml
+resources:
+  Docs:
+    type: document
+    for_each: { files: ../docs/docs/**/*.md }
+    properties:
+      path: { sub: '/assistant/docs/${each.key}' }
+      content: { each: value }
+```
+
+`soat create-formation --template-path formation.yaml` sends one entry per page — `docs/docs/guide/start.md` arrives as `guide/start.md` — so a new page becomes a new document on the next deploy and a deleted page is deleted. A glob that matches nothing, or a file that cannot be read, stops the command before any request. The server never sees the reference: an inline `--template` or a direct API call sends the map itself.
+
 ### Secrets in Templates
 
 `formations:GetFormation` is a wider audience than `secrets:GetSecret` or `triggers:GetTriggerSecret`, so credential material never reaches a formation read.

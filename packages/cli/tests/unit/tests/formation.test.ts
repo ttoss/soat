@@ -294,4 +294,135 @@ describe('formation wrapper endpoint integration', () => {
       ])
     ).rejects.toThrow('Missing environment variable: MISSING_SECRET');
   });
+
+  describe('file references in --template-path', () => {
+    let refDir = '';
+
+    beforeAll(() => {
+      refDir = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-cli-files-'));
+      fs.mkdirSync(path.join(refDir, 'docs', 'guide'), { recursive: true });
+      fs.writeFileSync(path.join(refDir, 'docs', 'faq.md'), 'Questions.');
+      fs.writeFileSync(
+        path.join(refDir, 'docs', 'guide', 'start.md'),
+        'Start here.'
+      );
+      fs.writeFileSync(path.join(refDir, 'docs', 'skip.txt'), 'Not markdown.');
+      fs.writeFileSync(path.join(refDir, 'intro.md'), 'Intro.');
+    });
+
+    afterAll(() => {
+      fs.rmSync(refDir, { recursive: true, force: true });
+    });
+
+    const writeTemplate = (lines: string[]) => {
+      const file = path.join(refDir, 'stack', 'formation.yaml');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, lines.join('\n'));
+      return file;
+    };
+
+    const sentTemplate = async (file: string) => {
+      const requests = await cliTestClient.call([
+        'validate-formation',
+        '--template-path',
+        file,
+      ]);
+      return (requests[0]?.body as { template: Record<string, unknown> })
+        .template;
+    };
+
+    test('{ files: glob } becomes a map of each match, keyed below the fixed prefix', async () => {
+      const template = await sentTemplate(
+        writeTemplate([
+          'resources:',
+          '  Docs:',
+          '    type: document',
+          "    for_each: { files: '../docs/**/*.md' }",
+          '    properties:',
+          "      path: { sub: '/kb/${each.key}' }",
+          '      content: { each: value }',
+        ])
+      );
+
+      expect(template).toEqual({
+        resources: {
+          Docs: {
+            type: 'document',
+            for_each: {
+              'faq.md': 'Questions.',
+              'guide/start.md': 'Start here.',
+            },
+            properties: {
+              path: { sub: '/kb/${each.key}' },
+              content: { each: 'value' },
+            },
+          },
+        },
+      });
+    });
+
+    test("{ file: path } becomes that file's text, relative to the template", async () => {
+      const template = await sentTemplate(
+        writeTemplate([
+          'resources:',
+          '  Intro:',
+          '    type: document',
+          '    properties:',
+          "      content: { file: '../intro.md' }",
+        ])
+      );
+
+      expect(template).toEqual({
+        resources: {
+          Intro: { type: 'document', properties: { content: 'Intro.' } },
+        },
+      });
+    });
+
+    test('an object with other keys beside `file` is left alone', async () => {
+      const template = await sentTemplate(
+        writeTemplate([
+          'resources:',
+          '  Tool:',
+          '    type: tool',
+          '    properties:',
+          "      schema: { file: 'x', type: string }",
+        ])
+      );
+
+      expect(
+        (template.resources as Record<string, { properties: unknown }>).Tool
+          .properties
+      ).toEqual({ schema: { file: 'x', type: 'string' } });
+    });
+
+    test('a glob that matches nothing is refused before any request', async () => {
+      await expect(
+        sentTemplate(
+          writeTemplate([
+            'resources:',
+            '  Docs:',
+            '    type: document',
+            "    for_each: { files: '../nowhere/*.md' }",
+            '    properties: { content: { each: value } }',
+          ])
+        )
+      ).rejects.toThrow('matched no files');
+      expect(cliTestClient.fetchMock).not.toHaveBeenCalled();
+    });
+
+    test('a missing file is refused before any request', async () => {
+      await expect(
+        sentTemplate(
+          writeTemplate([
+            'resources:',
+            '  Intro:',
+            '    type: document',
+            "    properties: { content: { file: '../missing.md' } }",
+          ])
+        )
+      ).rejects.toThrow('Unable to read file');
+      expect(cliTestClient.fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });
