@@ -46,7 +46,7 @@ paths:
           required: false
           schema:
             type: string
-            example: trc_V1StGXR8Z5jdHi6B
+            example: trace_V1StGXR8Z5jdHi6B
           description: >-
             Only the direct children of this trace. A trace naming nothing the
             caller can read matches nothing rather than widening the listing.
