@@ -13,7 +13,7 @@ import TabItem from '@theme/TabItem';
 
 # Conditional Branching in Orchestrations
 
-A branching orchestration with [condition nodes](/docs/modules/orchestrations#node-types); unreached nodes are recorded with `status: "skipped"`. You route a `condition` node to one of two `transform` branches, run both, and inspect `node_executions`. No AI provider is required.
+A branching orchestration with [condition nodes](/docs/modules/orchestrations#node-types); unreached nodes are recorded with `status: "skipped"`. You route a `condition` node to one of two `transform` branches, run both, and list each run's node executions. No AI provider is required.
 
 ## Prerequisites
 
@@ -243,9 +243,15 @@ ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
 ```bash
 ALERT_RUN=$(soat start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
-  --input '{"urgent": true, "topic": "Server is down"}')
+  --input '{"urgent": true, "topic": "Server is down"}' \
+  --wait true)
 
-echo "$ALERT_RUN" | jq '{status, result: .output, executions: .node_executions | map({node_id, status})}'
+ALERT_RUN_ID=$(echo "$ALERT_RUN" | jq -r '.id')
+
+echo "$ALERT_RUN" | jq '{status, result: .output}'
+
+soat list-orchestration-run-node-executions \
+  --orchestration-run-id "$ALERT_RUN_ID" | jq '.data | map({node_id, status})'
 ```
 
 Expected output:
@@ -253,13 +259,13 @@ Expected output:
 ```json
 {
   "status": "succeeded",
-  "result": null,
-  "executions": [
-    { "node_id": "route",      "status": "completed" },
-    { "node_id": "send_alert", "status": "completed" },
-    { "node_id": "queue_task", "status": "skipped"   }
-  ]
+  "result": null
 }
+[
+  { "node_id": "route",      "status": "completed" },
+  { "node_id": "send_alert", "status": "completed" },
+  { "node_id": "queue_task", "status": "skipped"   }
+]
 ```
 
 </TabItem>
@@ -270,22 +276,32 @@ const { data: alertRun } = await adminSoat.orchestrations.startOrchestrationRun(
   body: {
     orchestration_id: ORCH_ID,
     input: { urgent: true, topic: 'Server is down' },
+    wait: true,
   },
 });
 
+const { data: alertExecutions } =
+  await adminSoat.orchestrations.listOrchestrationRunNodeExecutions({
+    path: { orchestration_run_id: alertRun!.id },
+  });
+
 // send_alert ran; queue_task was skipped
-console.log(alertRun!.node_executions?.map(e => ({ id: e.node_id, status: e.status })));
+console.log(alertExecutions!.data.map(e => ({ id: e.node_id, status: e.status })));
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
+ALERT_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"orchestration_id":"'"$ORCH_ID"'","input":{"urgent":true,"topic":"Server is down"}}' \
-  | jq '.node_executions | map({node_id, status})'
+  -d '{"orchestration_id":"'"$ORCH_ID"'","input":{"urgent":true,"topic":"Server is down"},"wait":true}' \
+  | jq -r '.id')
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$ALERT_RUN_ID/node-executions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '.data | map({node_id, status})'
 ```
 
 </TabItem>
@@ -305,9 +321,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 ```bash
 QUEUE_RUN=$(soat start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
-  --input '{"urgent": false, "topic": "Update documentation"}')
+  --input '{"urgent": false, "topic": "Update documentation"}' \
+  --wait true)
 
-echo "$QUEUE_RUN" | jq '.node_executions | map({node_id, status})'
+QUEUE_RUN_ID=$(echo "$QUEUE_RUN" | jq -r '.id')
+
+soat list-orchestration-run-node-executions \
+  --orchestration-run-id "$QUEUE_RUN_ID" | jq '.data | map({node_id, status})'
 ```
 
 Expected output:
@@ -328,21 +348,31 @@ const { data: queueRun } = await adminSoat.orchestrations.startOrchestrationRun(
   body: {
     orchestration_id: ORCH_ID,
     input: { urgent: false, topic: 'Update documentation' },
+    wait: true,
   },
 });
 
-console.log(queueRun!.node_executions?.map(e => ({ id: e.node_id, status: e.status })));
+const { data: queueExecutions } =
+  await adminSoat.orchestrations.listOrchestrationRunNodeExecutions({
+    path: { orchestration_run_id: queueRun!.id },
+  });
+
+console.log(queueExecutions!.data.map(e => ({ id: e.node_id, status: e.status })));
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
+QUEUE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"orchestration_id":"'"$ORCH_ID"'","input":{"urgent":false,"topic":"Update documentation"}}' \
-  | jq '.node_executions | map({node_id, status})'
+  -d '{"orchestration_id":"'"$ORCH_ID"'","input":{"urgent":false,"topic":"Update documentation"},"wait":true}' \
+  | jq -r '.id')
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$QUEUE_RUN_ID/node-executions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '.data | map({node_id, status})'
 ```
 
 </TabItem>

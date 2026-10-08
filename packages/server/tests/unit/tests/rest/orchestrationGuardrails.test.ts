@@ -2,6 +2,7 @@ import { DomainError } from 'src/errors';
 import * as toolsModule from 'src/lib/tools';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
 import { authenticatedTestClient } from '../../testClient';
 
 // The interceptor was once wired only into agent tool-dispatch, so a tool node
@@ -116,15 +117,14 @@ describe('Orchestration tool-node guardrails', () => {
     expect(callToolSpy).not.toHaveBeenCalled();
     expect(runRes.body.status).toBe('succeeded');
 
-    const getRes = await authenticatedTestClient(userToken).get(
-      `/api/v1/orchestration-runs/${runRes.body.id}`
-    );
+    const executions = await nodeExecutionsOf({
+      token: userToken,
+      runId: runRes.body.id,
+    });
     const byId = new Map<string, { status: string }>(
-      getRes.body.node_executions.map(
-        (n: { node_id: string; status: string }) => {
-          return [n.node_id, n];
-        }
-      )
+      executions.map((n) => {
+        return [n.node_id, n];
+      })
     );
     // The blocked branch routed to the fallback node, which ran.
     expect(byId.get('fallback')?.status).toBe('completed');
@@ -162,10 +162,11 @@ describe('Orchestration tool-node guardrails', () => {
     expect(runRes.status).toBe(201);
     expect(callToolSpy).not.toHaveBeenCalled();
 
-    const getRes = await authenticatedTestClient(userToken).get(
-      `/api/v1/orchestration-runs/${runRes.body.id}`
-    );
-    const after = getRes.body.node_executions.find((n: { node_id: string }) => {
+    const executions = await nodeExecutionsOf({
+      token: userToken,
+      runId: runRes.body.id,
+    });
+    const after = executions.find((n) => {
       return n.node_id === 'after';
     });
     // The happy-path successor is skipped, never executed, after a block.
@@ -455,14 +456,13 @@ describe('Orchestration tool-node guardrails', () => {
 
       // A rejected call never executes, and the happy-path successor does not run.
       expect(callToolSpy).not.toHaveBeenCalled();
-      const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runRes.body.id}`
-      );
-      const done = getRes.body.node_executions.find(
-        (n: { node_id: string }) => {
-          return n.node_id === 'done';
-        }
-      );
+      const executions = await nodeExecutionsOf({
+        token: userToken,
+        runId: runRes.body.id,
+      });
+      const done = executions.find((n) => {
+        return n.node_id === 'done';
+      });
       expect(done?.status).not.toBe('completed');
     });
   });

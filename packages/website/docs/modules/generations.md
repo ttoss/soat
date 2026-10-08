@@ -138,7 +138,7 @@ Every [memory rule](./memories.md#memory-rules) bound to `agents.generation.comp
 { "mrule_V1StGXR8Z5jdHi6B": { "candidates": 3, "created": 2, "superseded": 1, "skipped": 0 } }
 ```
 
-A store can have several rules, so one flat pair of counts could not say which produced them. Absent when no rule fired. Rules bound to `conversations.message.generated` are visible in `memory_assertions` only; the rows behind every count are there either way.
+A store can have several rules, so one flat pair of counts could not say which produced them. Absent when no rule fired. Rules bound to `conversations.message.generated` are visible only in [`GET /api/v1/generations/{generation_id}/memory-assertions`](/docs/api/generations/list-generation-memory-assertions), which lists the rows behind every count either way.
 
 ### Recorded input
 
@@ -303,7 +303,7 @@ Intermediate steps of multi-step reasoning composed by the calling application a
 
 ### Finding an orchestration run's generations
 
-An [orchestration](./orchestrations.md) run's `node_executions` record what each node received and produced but carry **no generation id**. The pointer runs the other way: a generation dispatched by an agent node stores `orchestration_run_id`, `node_id` and `node_attempt` as attribution columns, next to `action_id` and `trigger_id`. Filter the list endpoint:
+An [orchestration](./orchestrations.md) run's [node executions](./orchestrations.md#node-executions) record what each node received and produced but carry **no generation id**. The pointer runs the other way: a generation dispatched by an agent node stores `orchestration_run_id`, `node_id` and `node_attempt` as attribution columns, next to `action_id` and `trigger_id`. Filter the list endpoint:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -484,6 +484,37 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl https://api.example.com/api/v1/generations/gen_abc123 \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### List a generation's memory writes
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-generation-memory-assertions --generation-id gen_abc123
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.generations.listGenerationMemoryAssertions({
+  path: { generation_id: 'gen_abc123' },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.data is oldest first; data.total counts every write
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/generations/gen_abc123/memory-assertions \
   -H "Authorization: Bearer <token>"
 ```
 

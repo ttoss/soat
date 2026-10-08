@@ -320,7 +320,9 @@ trace_A   (root)
 GET /api/v1/traces/{any_trace_id}/tree
 ```
 
-Or build it client-side: the root has `root_trace_id: null`; group the rest by `parent_trace_id` and attach recursively. A parent's `create-agent-generation` tool result also contains the child's `trace_id`.
+Tree nodes carry no generations; list a node's generations with [`GET /api/v1/generations?trace_id=`](/docs/api/generations/list-generations).
+
+Or walk it a level at a time: [`GET /api/v1/traces?parent_trace_id=`](/docs/api/traces/list-traces) pages the direct children of one trace; an id naming no trace the caller can read matches nothing. Or build it client-side: the root has `root_trace_id: null`; group the rest by `parent_trace_id` and attach recursively. A parent's `create-agent-generation` tool result also contains the child's `trace_id`.
 
 ## Examples
 
@@ -351,6 +353,36 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl "https://api.example.com/api/v1/traces?project_id=proj_abc123" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### List a trace's direct children
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-traces --parent-trace-id trace_abc123
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.traces.listTraces({
+  query: { parent_trace_id: 'trace_abc123' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/traces?parent_trace_id=trace_abc123" \
   -H "Authorization: Bearer <token>"
 ```
 

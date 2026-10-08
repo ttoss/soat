@@ -258,6 +258,32 @@ describe('Traces REST API', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ data: [], total: 0, limit: 50, offset: 0 });
     });
+
+    test('parent_trace_id lists the direct children of a trace', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .get('/api/v1/traces')
+        .query({ project_id: projectId, parent_trace_id: traceId });
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.data[0].id).toBe(childTraceId);
+      expect(res.body.data[0].parent_trace_id).toBe(traceId);
+    });
+
+    test('a leaf trace has no children', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .get('/api/v1/traces')
+        .query({ project_id: projectId, parent_trace_id: childTraceId });
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(0);
+    });
+
+    test('a parent naming nothing matches nothing, rather than widening', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .get('/api/v1/traces')
+        .query({ project_id: projectId, parent_trace_id: 'trc_nonexistent' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ data: [], total: 0, limit: 50, offset: 0 });
+    });
   });
 
   describe('GET /api/v1/traces/:trace_id', () => {
@@ -456,37 +482,22 @@ describe('Traces REST API', () => {
     });
   });
 
-  describe('GET /api/v1/traces/:trace_id/tree?include=generations', () => {
-    test('embeds generations on each trace node when include=generations', async () => {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/traces/${traceId}/tree?include=generations`
-      );
-      expect(res.status).toBe(200);
-      expect(res.body.id).toBe(traceId);
-      expect(Array.isArray(res.body.generations)).toBe(true);
-      // root trace has 2 top-level + 1 child generation seeded in beforeAll
-      expect(res.body.generations.length).toBeGreaterThanOrEqual(3);
-      for (const gen of res.body.generations) {
-        expect(gen.trace_id).toBe(traceId);
-      }
-    });
-
-    test('generations field is absent without include=generations', async () => {
+  describe('GET /api/v1/traces/:trace_id/tree generations', () => {
+    test('nodes carry no generations; they are listed by trace', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/traces/${traceId}/tree`
       );
       expect(res.status).toBe(200);
       expect(res.body.generations).toBeUndefined();
+      expect(res.body.children[0].generations).toBeUndefined();
     });
 
-    test('child trace node also gets its generations', async () => {
+    test('include is not a parameter of the tree', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/traces/${traceId}/tree?include=generations`
       );
-      expect(res.status).toBe(200);
-      const childNode = res.body.children[0];
-      expect(childNode.id).toBe(childTraceId);
-      expect(Array.isArray(childNode.generations)).toBe(true);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 

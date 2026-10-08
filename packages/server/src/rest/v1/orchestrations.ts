@@ -45,6 +45,7 @@ import {
   hintAuditResourceForOrchestration,
   resolveStartRunScope,
 } from './orchestrationAuth';
+import { orchestrationNodeExecutionsRouter } from './orchestrationNodeExecutions';
 import {
   parseRunInput,
   parseUpdateBody,
@@ -513,3 +514,5 @@ orchestrationsRouter.post(
 // mirroring `agentVersions.ts` under the agents router.
 orchestrationsRouter.use(orchestrationVersionsRouter.routes());
 orchestrationsRouter.use(orchestrationVersionsRouter.allowedMethods());
+orchestrationsRouter.use(orchestrationNodeExecutionsRouter.routes());
+orchestrationsRouter.use(orchestrationNodeExecutionsRouter.allowedMethods());

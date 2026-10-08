@@ -579,8 +579,8 @@ soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.stat
 soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" \
   | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
 
-soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" \
-  | jq '[.node_executions[] | {node_id, status}]'
+soat list-orchestration-run-node-executions --orchestration-run-id "$CLEAN_RUN_ID" \
+  | jq '[.data[] | {node_id, status}]'
 ```
 
 Expected output once the run settles:
@@ -637,7 +637,11 @@ const cleanRun = await waitForRun(queued.id);
 console.log('Status:', cleanRun.status);
 console.log('Total variance:', cleanRun.state.total_variance);
 console.log('Note:', cleanRun.state.close_note);
-console.log(cleanRun.node_executions.map((n) => [n.node_id, n.status]));
+const { data: cleanExecutions } =
+  await adminSoat.orchestrations.listOrchestrationRunNodeExecutions({
+    path: { orchestration_run_id: cleanRun.id },
+  });
+console.log(cleanExecutions.data.map((n) => [n.node_id, n.status]));
 ```
 
 </TabItem>
@@ -657,6 +661,10 @@ until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID/node-executions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {node_id, status}]'
 ```
 
 </TabItem>

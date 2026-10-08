@@ -108,7 +108,7 @@ Each firing:
 2. Builds a transcript from the turn's recorded input messages and the assistant's reply.
 3. Runs the rule's handler — the built-in extractor (a tool-less, temperature-0 completion whose response is parsed leniently between the first `[` and last `]`, capped at **20 candidates**), a handler agent, or a handler tool. Since the write algorithm has no model call in it, an agent handler and a tool handler behave identically once they return.
 4. Writes each candidate through the standard write algorithm, on the store's effective thresholds and against the project's storage quota, recording a `rule` assertion that names both the rule and the turn's generation.
-5. Records per-rule counts on the originating generation's `extraction` field ([Generations](../modules/generations.md) API), which also carries the `memory_assertions` rows behind them.
+5. Records per-rule counts on the originating generation's `extraction` field ([Generations](../modules/generations.md) API); the rows behind them are listed by [`GET /api/v1/generations/{generation_id}/memory-assertions`](/docs/api/generations/list-generation-memory-assertions).
 
 Because a rule subscribes to `agents.generation.completed`, it covers every transport: a background generation, a streamed one, and a turn that resumed from `requires_action` all emit that event when the record completes.
 

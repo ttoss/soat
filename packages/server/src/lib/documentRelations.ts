@@ -192,21 +192,6 @@ export const listDocumentRelations = async (args: {
   });
 };
 
-/**
- * The edges a document asserts, for a read of that document. Scoping is the
- * read's own: the caller has already been authorized for the document whose
- * edges these are.
- */
-export const relationsForDocument = async (args: { documentId: string }) => {
-  const relations = await db.DocumentRelation.findAll({
-    where: { '$fromDocument.public_id$': args.documentId },
-    include: relationIncludes(),
-    order: [['createdAt', 'ASC']],
-  });
-
-  return relations.map(mapRelation);
-};
-
 /** Retracts an edge. The documents at both ends are left alone. */
 export const deleteDocumentRelation = async (args: {
   documentId: string;

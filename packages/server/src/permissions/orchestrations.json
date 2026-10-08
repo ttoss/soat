@@ -62,6 +62,11 @@
       "description": "Get an orchestration run by ID"
     },
     {
+      "operationId": "listOrchestrationRunNodeExecutions",
+      "action": "orchestrations:GetRun",
+      "description": "List a run's node executions, oldest first"
+    },
+    {
       "operationId": "cancelOrchestrationRun",
       "action": "orchestrations:CancelRun",
       "description": "Cancel a running or paused orchestration run"
@@ -85,6 +90,11 @@
       "operationId": "getQueueStats",
       "action": "orchestrations:GetQueueStats",
       "description": "Read orchestration queue depth and claim-latency metrics"
+    },
+    {
+      "operationId": "listQueueStatsProjects",
+      "action": "orchestrations:GetQueueStats",
+      "description": "List the projects with queued or claimed orchestration work"
     }
   ]
 }

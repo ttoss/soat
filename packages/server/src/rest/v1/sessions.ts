@@ -20,7 +20,7 @@ import {
 } from 'src/lib/tags';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { requireAuth, requireProjectAccess } from './helpers';
+import { parsePagination, requireAuth, requireProjectAccess } from './helpers';
 import { sessionSubResourcesRouter } from './sessionSubResources';
 import { authorizeSharedUse } from './sharedAccess';
 
@@ -151,8 +151,6 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     agent_id: agentId,
     actor_id: actorId,
     status,
-    limit,
-    offset,
   } = ctx.query as Record<string, string | undefined>;
   const tags = readTagQuery(ctx.query.tags);
 
@@ -188,8 +186,7 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     status,
     tags,
     policyWhere,
-    limit: limit ? Number(limit) : undefined,
-    offset: offset ? Number(offset) : undefined,
+    ...parsePagination(ctx),
   });
 });
 

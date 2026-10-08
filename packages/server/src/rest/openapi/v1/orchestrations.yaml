@@ -135,12 +135,13 @@ paths:
         many tasks are waiting to be claimed (`queue_depth`), how many are
         currently claimed with a valid lease (`claimed_tasks`), the age of the
         oldest waiting task, recent claim-latency percentiles over a rolling
-        in-process window, and a per-project breakdown. Intended for
+        in-process window. The per-project breakdown is listed by
+        `GET /api/v1/orchestrations/queue/stats/projects`. Intended for
         admin/operator policies; guarded by `orchestrations:GetQueueStats`.
 
         Every figure is scoped to what the caller may see. A project-scoped
-        caller gets `per_project` for their own projects only, `queue_depth`
-        and `claimed_tasks` summed over those same projects, and `null` for
+        caller gets `queue_depth` and `claimed_tasks` summed over their own
+        projects, and `null` for
         `oldest_queued_age_seconds` and the `claim_latency_ms` percentiles —
         both describe the whole deployment and cannot be narrowed, so they are
         withheld rather than approximated. An unrestricted caller (the action
@@ -155,6 +156,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueueStats'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/orchestrations/queue/stats/projects:
+    get:
+      tags:
+        - Orchestrations
+      summary: List the projects with queued orchestration work
+      description: >
+        One row per project with any queued or claimed task, ordered by project
+        ID: the per-project breakdown of `GET /api/v1/orchestrations/queue/stats`.
+        A project-scoped caller sees its own projects only. Guarded by
+        `orchestrations:GetQueueStats`.
+      operationId: listQueueStatsProjects
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: A page of projects with queued or claimed work
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QueueProjectStats'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
         '403':
@@ -739,6 +784,53 @@ paths:
         '404':
           description: Not found
 
+  /api/v1/orchestration-runs/{orchestration_run_id}/node-executions:
+    get:
+      tags:
+        - Orchestrations
+      summary: List a run's node executions
+      description: >-
+        The run's per-node execution records, oldest first: one per node
+        attempt, retries and skipped nodes included. Each captures the resolved
+        input, output, status and error of that attempt — the orchestration
+        analogue of an LLM trace. Reading them is reading the run
+        (`orchestrations:GetRun`).
+      operationId: listOrchestrationRunNodeExecutions
+      x-soat-resource:
+        kind: orchestration_run
+        from: orchestration_run_id
+      parameters:
+        - $ref: '#/components/parameters/orchestration_run_id'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: A page of the run's node executions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NodeExecution'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
 components:
   securitySchemes:
     bearerAuth:
@@ -774,8 +866,8 @@ components:
             - sqs
           description: >-
             The active queue driver (`ORCHESTRATION_QUEUE_DRIVER`). Under
-            `sqs`, `oldest_queued_age_seconds` is always `null` and
-            `per_project` is always empty — SQS exposes neither.
+            `sqs`, `oldest_queued_age_seconds` is always `null` and the
+            per-project listing is always empty — SQS exposes neither.
           example: postgres
         queue_depth:
           type: integer
@@ -817,22 +909,22 @@ components:
             window_seconds:
               type: integer
               example: 300
-        per_project:
-          type: array
-          description: One row per project with any queued or claimed task.
-          items:
-            type: object
-            properties:
-              project_id:
-                type: string
-                description: Public project ID (proj_ prefix).
-                example: proj_V1StGXR8Z5jdHi6B
-              queued:
-                type: integer
-                example: 5
-              claimed:
-                type: integer
-                example: 1
+    QueueProjectStats:
+      type: object
+      description: One project's share of the orchestration run queue.
+      properties:
+        project_id:
+          type: string
+          description: Public project ID (proj_ prefix).
+          example: proj_V1StGXR8Z5jdHi6B
+        queued:
+          type: integer
+          description: Tasks of this project waiting to be claimed now.
+          example: 5
+        claimed:
+          type: integer
+          description: Tasks of this project claimed with a valid lease.
+          example: 1
     OrchestrationNode:
       type: object
       description: A single execution unit in the orchestration graph.
@@ -1470,14 +1562,6 @@ components:
             evaluated over the final state, or, when it declares none, the
             terminal node artifacts keyed by node id. Null unless the run
             succeeded.
-        node_executions:
-          type: array
-          description: >-
-            Per-node execution records in chronological order. Each entry
-            captures the resolved input, output, status, and error for a single
-            node execution — the orchestration analogue of an LLM trace.
-          items:
-            $ref: '#/components/schemas/NodeExecution'
         usage:
           allOf:
             - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'

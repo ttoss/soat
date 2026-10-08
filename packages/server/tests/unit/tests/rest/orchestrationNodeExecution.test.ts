@@ -10,6 +10,7 @@ import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { drainQueueOnce } from 'src/lib/orchestrationWorker';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -23,19 +24,11 @@ import { authenticatedTestClient } from '../../testClient';
  * the explicit `drainQueueOnce` / `wakeDueRuns` calls a test makes.
  */
 
-type NodeExecution = {
-  node_id: string;
-  attempt: number;
-  status: string;
-  output: unknown;
-};
-
 type RunBody = {
   id: string;
   status: string;
   error: { code: string; message: string } | null;
   state: Record<string, unknown>;
-  node_executions: NodeExecution[];
   required_action: { prompt: string } | null;
 };
 
@@ -128,10 +121,12 @@ const wakeAndDrain = async (runId: string) => {
   expect(await drainQueueOnce()).toBe(1);
 };
 
-const executionsOf = (run: RunBody, nodeId: string) => {
-  return run.node_executions.filter((execution) => {
-    return execution.node_id === nodeId;
-  });
+const executionsOf = async (run: RunBody, nodeId: string) => {
+  return (await nodeExecutionsOf({ token: userToken, runId: run.id })).filter(
+    (execution) => {
+      return execution.node_id === nodeId;
+    }
+  );
 };
 
 beforeAll(async () => {
@@ -366,7 +361,7 @@ describe('a poll node', () => {
     const run = await runToRest(await pollOrchestration({}));
 
     expect(run.status).toBe('succeeded');
-    expect(executionsOf(run, 'watch')[0].output).toEqual({
+    expect((await executionsOf(run, 'watch'))[0].output).toEqual({
       result: { ok: true },
       attempts: 1,
       conditionMet: true,
@@ -383,7 +378,7 @@ describe('a poll node', () => {
     );
 
     expect(run.status).toBe('succeeded');
-    expect(executionsOf(run, 'watch')[0].output).toEqual({
+    expect((await executionsOf(run, 'watch'))[0].output).toEqual({
       result: { ok: true },
       attempts: 1,
       conditionMet: false,
@@ -505,7 +500,7 @@ describe('an agent node', () => {
     const run = await runToRest(orchestrationId);
 
     expect(run.status).toBe('succeeded');
-    expect(executionsOf(run, 'ask')[0].output).toEqual(artifact);
+    expect((await executionsOf(run, 'ask'))[0].output).toEqual(artifact);
   });
 });
 
@@ -518,7 +513,9 @@ describe('a tool node', () => {
     const run = await runToRest(orchestrationId);
 
     expect(run.status).toBe('succeeded');
-    expect(executionsOf(run, 'call')[0].output).toEqual({ result: 'done' });
+    expect((await executionsOf(run, 'call'))[0].output).toEqual({
+      result: 'done',
+    });
   });
 
   test('records an action_executed activity entry naming the run', async () => {
@@ -610,7 +607,7 @@ describe('a node retry policy', () => {
     const run = await runToRest(orchestrationId);
 
     expect(run.status).toBe('failed');
-    expect(executionsOf(run, 'call')).toHaveLength(20);
+    expect(await executionsOf(run, 'call')).toHaveLength(20);
   });
 
   test('an exponential backoff doubles per attempt up to its cap', async () => {
@@ -688,7 +685,7 @@ describe('a node retry policy', () => {
 
     expect(run.status).toBe('failed');
     expect(run.error?.code).toBe('OUTPUT_SCHEMA_VALIDATION_FAILED');
-    expect(executionsOf(run, 'ask')).toHaveLength(1);
+    expect(await executionsOf(run, 'ask')).toHaveLength(1);
   });
 
   test('a run woken onto a live graph that dropped the node fails naming it', async () => {

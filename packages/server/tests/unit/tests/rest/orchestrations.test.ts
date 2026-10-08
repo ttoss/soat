@@ -9,6 +9,7 @@ import { reapOrphanedRuns, wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import * as toolsModule from 'src/lib/tools';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Orchestrations', () => {
@@ -1371,16 +1372,18 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
 
-      const execs = runRes.body.node_executions;
-      expect(Array.isArray(execs)).toBe(true);
+      const execs = await nodeExecutionsOf({
+        token: userToken,
+        runId: runRes.body.id,
+      });
       expect(execs).toHaveLength(2);
 
-      const nodeA = execs.find((e: { node_id: string }) => {
+      const nodeA = execs.find((e) => {
         return e.node_id === 'nodeA';
-      });
-      const nodeB = execs.find((e: { node_id: string }) => {
+      })!;
+      const nodeB = execs.find((e) => {
         return e.node_id === 'nodeB';
-      });
+      })!;
       expect(nodeA.status).toBe('completed');
       expect(nodeA.node_type).toBe('transform');
       expect(nodeA.output).toEqual({ result: 42 });
@@ -2541,11 +2544,11 @@ describe('Orchestrations', () => {
           });
         expect(runRes.status).toBe(201);
         expect(runRes.body.status).toBe('succeeded');
-        const nodeExec = runRes.body.node_executions.find(
-          (e: { node_id: string }) => {
-            return e.node_id === 'ask';
-          }
-        );
+        const nodeExec = (
+          await nodeExecutionsOf({ token: userToken, runId: runRes.body.id })
+        ).find((e) => {
+          return e.node_id === 'ask';
+        })!;
         expect(nodeExec.output).toEqual({
           content: '```json\n{"city": "Paris"}\n```',
           object: { city: 'Paris' },
@@ -2591,19 +2594,18 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
 
-      // get-orchestration-run exposes the per-node trace
-      const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runRes.body.id}`
-      );
-      expect(getRes.status).toBe(200);
-      const execs = getRes.body.node_executions;
+      // The run's node-executions sub-resource exposes the per-node trace.
+      const execs = await nodeExecutionsOf({
+        token: userToken,
+        runId: runRes.body.id,
+      });
       expect(execs).toHaveLength(1);
       expect(execs[0].node_id).toBe('boom');
       expect(execs[0].status).toBe('failed');
       expect(execs[0].input).toEqual({ name: 'widget' });
       expect(execs[0].output).toBeNull();
       expect(execs[0].error).toBeDefined();
-      expect(execs[0].error.message).toBeDefined();
+      expect(execs[0].error?.message).toBeDefined();
     });
 
     test('a run that throws a non-Error value records a readable error message', async () => {
@@ -2638,10 +2640,11 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
 
-      const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runRes.body.id}`
-      );
-      const nodeError = getRes.body.node_executions[0].error;
+      const [failed] = await nodeExecutionsOf({
+        token: userToken,
+        runId: runRes.body.id,
+      });
+      const nodeError = failed.error!;
       expect(nodeError.message).not.toBe('[object Object]');
       expect(nodeError.message).toContain('Unknown Operator');
     });
@@ -3650,11 +3653,11 @@ describe('Orchestrations', () => {
         expect(runRes.status).toBe(201);
         expect(runRes.body.status).toBe('succeeded');
 
-        const exec = runRes.body.node_executions.find(
-          (n: { node_id: string }) => {
-            return n.node_id === 'alert';
-          }
-        );
+        const exec = (
+          await nodeExecutionsOf({ token: userToken, runId: runRes.body.id })
+        ).find((n) => {
+          return n.node_id === 'alert';
+        })!;
         // `output` is a verbatim pass-through on orchestration-run routes, so
         // the artifact keeps its camelCase `eventType`.
         expect(exec.output).toEqual({
@@ -4465,12 +4468,10 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
 
-      const execs: Array<{
-        node_id: string;
-        status: string;
-        output: unknown;
-        started_at: unknown;
-      }> = runRes.body.node_executions;
+      const execs = await nodeExecutionsOf({
+        token: userToken,
+        runId: runRes.body.id,
+      });
 
       const highExec = execs.find((e) => {
         return e.node_id === 'high_path';
@@ -4525,8 +4526,10 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('awaiting_input');
       const orchestrationRunId = runRes.body.id;
 
-      const pausedExecs: Array<{ node_id: string; status: string }> =
-        runRes.body.node_executions;
+      const pausedExecs = await nodeExecutionsOf({
+        token: userToken,
+        runId: orchestrationRunId,
+      });
       const pausedReviewExec = pausedExecs.find((e) => {
         return e.node_id === 'review';
       });
@@ -4544,12 +4547,10 @@ describe('Orchestrations', () => {
       expect(finalRes.status).toBe(200);
       expect(finalRes.body.status).toBe('succeeded');
 
-      const finalExecs: Array<{
-        node_id: string;
-        status: string;
-        output: unknown;
-        completed_at: unknown;
-      }> = finalRes.body.node_executions;
+      const finalExecs = await nodeExecutionsOf({
+        token: userToken,
+        runId: orchestrationRunId,
+      });
       const reviewExecs = finalExecs.filter((e) => {
         return e.node_id === 'review';
       });
@@ -4576,15 +4577,18 @@ describe('Orchestrations', () => {
       const orchestrationRunId = runRes.body.id;
       const humanNodeId = runRes.body.required_action.node_id;
 
-      const execsFor = (body: {
-        node_executions: Array<{ node_id: string; status: string }>;
-      }) => {
-        return body.node_executions.filter((e) => {
+      const execsFor = async () => {
+        return (
+          await nodeExecutionsOf({
+            token: userToken,
+            runId: orchestrationRunId,
+          })
+        ).filter((e) => {
           return e.node_id === humanNodeId;
         });
       };
 
-      expect(execsFor(runRes.body)).toHaveLength(1);
+      expect(await execsFor()).toHaveLength(1);
 
       // Each resume re-drives the frontier, which re-executes the still-parked
       // human node. The re-park must reuse the node's existing
@@ -4596,7 +4600,7 @@ describe('Orchestrations', () => {
         );
         expect(resumeRes.status).toBe(200);
         expect(resumeRes.body.status).toBe('awaiting_input');
-        expect(execsFor(resumeRes.body)).toHaveLength(1);
+        expect(await execsFor()).toHaveLength(1);
       }
 
       const submitRes = await authenticatedTestClient(userToken)
@@ -4608,7 +4612,7 @@ describe('Orchestrations', () => {
         `/api/v1/orchestration-runs/${orchestrationRunId}`
       );
       expect(finalRes.status).toBe(200);
-      const finalExecs = execsFor(finalRes.body);
+      const finalExecs = await execsFor();
       expect(finalExecs).toHaveLength(1);
       expect(finalExecs[0].status).toBe('completed');
     });
@@ -5307,12 +5311,15 @@ describe('Orchestrations', () => {
 
     // ── Per-node retry policy ────────────────────────────────────────────────
 
-    const callExecsOf = (run: Record<string, unknown>, nodeId: string) => {
-      return (run.node_executions as Array<Record<string, unknown>>).filter(
-        (e) => {
-          return e.node_id === nodeId;
-        }
-      );
+    const callExecsOf = async (
+      run: Record<string, unknown>,
+      nodeId: string
+    ) => {
+      return (
+        await nodeExecutionsOf({ token: userToken, runId: String(run.id) })
+      ).filter((e) => {
+        return e.node_id === nodeId;
+      });
     };
 
     const startAsyncRun = async (orchId: string) => {
@@ -5351,7 +5358,7 @@ describe('Orchestrations', () => {
         await wakeDueRuns({ now: new Date(Date.now() + 5000) });
         const settled = await waitForStatus(orchestrationRunId, ['succeeded']);
 
-        const execs = callExecsOf(settled, 'call');
+        const execs = await callExecsOf(settled, 'call');
         expect(execs).toHaveLength(2);
         expect(execs[0]).toMatchObject({ attempt: 1, status: 'failed' });
         expect(execs[1]).toMatchObject({ attempt: 2, status: 'completed' });
@@ -5384,7 +5391,7 @@ describe('Orchestrations', () => {
         await wakeDueRuns({ now: new Date(Date.now() + 5000) });
         const settled = await waitForStatus(orchestrationRunId, ['failed']);
 
-        const execs = callExecsOf(settled, 'call');
+        const execs = await callExecsOf(settled, 'call');
         expect(execs).toHaveLength(2);
         expect(
           execs.every((e) => {
@@ -5421,7 +5428,7 @@ describe('Orchestrations', () => {
         expect(res.status).toBe(201);
         expect(res.body.status).toBe('failed');
 
-        const execs = callExecsOf(res.body, 'call');
+        const execs = await callExecsOf(res.body, 'call');
         expect(execs).toHaveLength(1);
         expect(execs[0]).toMatchObject({ attempt: 1, status: 'failed' });
         expect(spy).toHaveBeenCalledTimes(1);

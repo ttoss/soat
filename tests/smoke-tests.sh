@@ -1491,11 +1491,11 @@ if ! printf '%s\n' "$DOC_REL_ID" | grep -q '^doc_rel_'; then
   printf '%s\n' "$DOC_REL_RESP" >&2
   exit 1
 fi
-# The read carries what the document asserts.
-DOC_REL_READ=$($SOAT_CLI get-document --document-id "$DOC1_ID" \
-  | jq -r '[.relations[].to_document_id] | join(",")')
+# The relations sub-resource pages what the document asserts.
+DOC_REL_READ=$($SOAT_CLI list-document-relations --document-id "$DOC1_ID" \
+  | jq -r '[.data[].to_document_id] | join(",")')
 if [ "$DOC_REL_READ" != "$DOC2_ID" ]; then
-  echo "ERROR: document read expected relation to $DOC2_ID, got '$DOC_REL_READ'" >&2
+  echo "ERROR: relation listing expected an edge to $DOC2_ID, got '$DOC_REL_READ'" >&2
   exit 1
 fi
 # `related_to` finds the neighbour from the other end of the edge.
@@ -2315,9 +2315,11 @@ if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == 
 fi
 # Per-node execution records: every node that ran is traceable with a status,
 # and each carries the dispatch count that makes a redelivered execution visible.
-if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.node_executions | type) == "array" and (.node_executions | length) >= 1 and (.node_executions | all(.status == "completed")) and (.node_executions | all(.dispatches == 1))' >/dev/null 2>&1; then
-  echo "get-orchestration-run did not include completed node_executions"
-  printf '%s\n' "$ORCH_RUN_GET_RESP"
+ORCH_RUN_EXECS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-run-node-executions \
+  --orchestration-run-id "$ORCH_RUN_ID")
+if ! printf '%s\n' "$ORCH_RUN_EXECS" | jq -e '.total >= 1 and (.data | all(.status == "completed")) and (.data | all(.dispatches == 1))' >/dev/null 2>&1; then
+  echo "list-orchestration-run-node-executions did not list completed executions"
+  printf '%s\n' "$ORCH_RUN_EXECS"
   exit 1
 fi
 echo "Get run: OK"
@@ -2355,9 +2357,9 @@ echo "Compute metering (P4): OK"
 
 # Per-node attribution: every line of a run receipt names the node that produced
 # it, so grouping the lines by node_id is the per-node cost breakdown. Asserted
-# against the run's own node_executions rather than a hardcoded id, so the check
-# still holds if the smoke orchestration's graph changes.
-ORCH_RUN_NODE_IDS=$(printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -c '[.node_executions[].node_id] | unique')
+# against the run's own node executions rather than a hardcoded id, so the
+# check still holds if the smoke orchestration's graph changes.
+ORCH_RUN_NODE_IDS=$(printf '%s\n' "$ORCH_RUN_EXECS" | jq -c '[.data[].node_id] | unique')
 if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --argjson nodes "$ORCH_RUN_NODE_IDS" '(.line_items | length) >= 1 and (.line_items | all(.node_id != null and (.node_id | IN($nodes[]))))' >/dev/null 2>&1; then
   echo "run receipt line items did not carry the node_id that produced them"
   printf '%s\n' "$ORCH_RUN_NODE_IDS"
@@ -2649,13 +2651,15 @@ if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "succeeded"' >/dev/null 
   printf '%s\n' "$COND_RUN_RESP"
   exit 1
 fi
-if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '
-  (.node_executions | map(select(.node_id == "high_path")) | .[0].status) == "completed" and
-  (.node_executions | map(select(.node_id == "low_path")) | .[0].status) == "skipped" and
-  (.node_executions | map(select(.node_id == "low_path")) | .[0].started_at) == null
+COND_RUN_EXECS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-run-node-executions \
+  --orchestration-run-id "$(printf '%s\n' "$COND_RUN_RESP" | jq -r '.id')")
+if ! printf '%s\n' "$COND_RUN_EXECS" | jq -e '
+  (.data | map(select(.node_id == "high_path")) | .[0].status) == "completed" and
+  (.data | map(select(.node_id == "low_path")) | .[0].status) == "skipped" and
+  (.data | map(select(.node_id == "low_path")) | .[0].started_at) == null
 ' >/dev/null 2>&1; then
   echo "Condition-skip run did not record expected skipped node"
-  printf '%s\n' "$COND_RUN_RESP" | jq '.node_executions'
+  printf '%s\n' "$COND_RUN_EXECS"
   exit 1
 fi
 SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$COND_ORCH_ID"

@@ -3,7 +3,6 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import {
-  nodeExecutionsInclude,
   type OrchestrationRunRow,
   orchestrationRuns,
 } from './orchestrationAccessor';
@@ -48,7 +47,6 @@ export const cancelOrchestrationRun = async (args: {
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
-      nodeExecutionsInclude(),
     ],
   })) as OrchestrationRunRow | null;
   if (!run) throw orchestrationRuns.notFound(args.runPublicId);

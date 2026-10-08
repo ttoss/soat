@@ -50,7 +50,7 @@ flowchart LR
 
 Three of these are one call rather than a walk:
 
-- **The whole tree from any node.** [`GET /traces/{trace_id}/tree`](/docs/api/traces/get-trace-tree) resolves the root itself; no climb up `parent_trace_id`. Add `include=generations` to get each node's generations with it.
+- **The whole tree from any node.** [`GET /traces/{trace_id}/tree`](/docs/api/traces/get-trace-tree) resolves the root itself; no climb up `parent_trace_id`. Nodes carry no generations; read each node's with `soat list-generations --trace-id <trace_id>` (next bullet).
 - **Every turn of one run.** [`GET /generations?trace_id=`](/docs/api/generations/list-generations) returns all generations on a trace; `chain_id`, `orchestration_run_id` and `node_id` slice the same list other ways.
 - **A run's work from its orchestration.** A node execution record carries no generation id; the pointer runs from the generation's attribution columns. See [Finding an orchestration run's generations](../modules/generations.md#finding-an-orchestration-runs-generations).
 

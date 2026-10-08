@@ -147,6 +147,25 @@ export const parsePageLimit = (ctx: Context): number | undefined => {
   return readPagingParam({ ctx, field: 'limit' });
 };
 
+/**
+ * A resource a route already authorized, past the `null` its lib lookup
+ * declares for callers with a wider scope. A miss here is a delete racing the
+ * request, answered as the resource being gone.
+ */
+export const requireFound = <T>(args: {
+  value: T | null;
+  label: string;
+  id: string;
+}): T => {
+  if (!args.value) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `${args.label} '${args.id}' not found.`
+    );
+  }
+  return args.value;
+};
+
 /** A `Context` past {@link requireAuth}: `authUser` is guaranteed present. */
 export type AuthenticatedContext = Context & { authUser: AuthUser };
 

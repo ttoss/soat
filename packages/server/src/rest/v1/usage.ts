@@ -106,13 +106,10 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
     resourceType: 'usage',
   });
 
-  const { limit, offset } = ctx.query as Record<string, string | undefined>;
-
   const result = await listUsageEvents({
     projectIds: projectIds ?? undefined,
     ...usageNarrowings(ctx),
-    limit: limit ? Number(limit) : undefined,
-    offset: offset ? Number(offset) : undefined,
+    ...parsePagination(ctx),
   });
 
   ctx.body = result;

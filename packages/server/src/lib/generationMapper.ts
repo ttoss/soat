@@ -1,6 +1,5 @@
 import type { db } from '../db';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
-import type { MappedMemoryAssertion } from './memoryAssertions';
 import type { UsageTotals } from './usageTotals';
 
 export type PersistedGeneration = {
@@ -36,7 +35,6 @@ export type PersistedGeneration = {
    * queries. It is what the `extraction` counts summarize, so the two can be
    * reconciled instead of taken on trust.
    */
-  memory_assertions?: MappedMemoryAssertion[];
   /**
    * What the turn cost. Present on the single read, absent from the listing:
    * it is a second query per generation, and a page of them would be a page of
@@ -144,14 +142,7 @@ export const mapGeneration = (
  */
 export const mapGenerationWithUsage = (
   gen: Parameters<typeof mapGeneration>[0],
-  usage: UsageTotals | null,
-  memoryAssertions?: MappedMemoryAssertion[]
+  usage: UsageTotals | null
 ): PersistedGeneration => {
-  return {
-    ...mapGeneration(gen),
-    usage,
-    ...(memoryAssertions === undefined
-      ? {}
-      : { memory_assertions: memoryAssertions }),
-  };
+  return { ...mapGeneration(gen), usage };
 };

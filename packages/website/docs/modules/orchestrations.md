@@ -60,7 +60,6 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `active_nodes`     | array          | Node IDs awaiting input or a scheduled wake (populated when `awaiting_input`, or `sleeping` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
 | `error`            | object \| null | Error details if failed                                           |
-| `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
 | `usage`            | object         | What the run cost: token/cost roll-up (`input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, `cost_usd`) summed across this run's generations **and every run it started** through `loop` / `sub_orchestration` nodes, at any depth (see [Run usage](#run-usage)). Present only on the single-run read; omitted from run lists and every write's response, a start with `wait: true` included |
 | `usage_own`        | object         | The same roll-up restricted to **this run's own nodes**, excluding nested runs. Equal to `usage` for a run with no children. Present only on the single-run read, like `usage` |
 | `required_action`  | object \| null | Present when status is `awaiting_input` — why the run is parked (see [Human Nodes](#human-nodes) and [Pausing a run](#pausing-a-run)) |
@@ -81,7 +80,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 
 ### NodeExecution
 
-One entry per node execution, in chronological order.
+One record per node attempt, listed oldest first by [`GET /api/v1/orchestration-runs/{orchestration_run_id}/node-executions`](/docs/api/orchestrations/list-orchestration-run-node-executions); a run carries none inline.
 
 | Field          | Type           | Description                                              |
 | -------------- | -------------- | -------------------------------------------------------- |
@@ -240,7 +239,7 @@ The event carries `resource_type: "orchestration_run"` and the run's id as `reso
 
 Any node can declare `retry`. On a **transient** error with attempts left, the run parks as `sleeping` and re-executes the node after a backoff on the scheduler (survives a restart, holds no worker). Absent, or `max_attempts <= 1`, is fail-fast.
 
-Retriable: infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx`. Terminal: `4xx` business errors (validation, not found, conflict), which fail the run at once without consuming attempts — and `OUTPUT_SCHEMA_VALIDATION_FAILED`, whose `502` says the model answered, not that the provider is down: the same answer fails the same schema on a retry. Each attempt writes its own `node_executions` record with an incrementing `attempt`.
+Retriable: infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx`. Terminal: `4xx` business errors (validation, not found, conflict), which fail the run at once without consuming attempts — and `OUTPUT_SCHEMA_VALIDATION_FAILED`, whose `502` says the model answered, not that the provider is down: the same answer fails the same schema on a retry. Each attempt writes its own [node execution](#node-executions) record with an incrementing `attempt`.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -287,7 +286,7 @@ Nested `loop` / `sub_orchestration` children inherit the parent's identity; a [w
 | --- | --- | --- |
 | Backing store | `orchestration_run_tasks` table (`SELECT … FOR UPDATE SKIP LOCKED` + lease) | an SQS queue (visibility timeout **is** the lease) |
 | Per-project `max_concurrent_runs` | **enforced** at claim time | **not enforced** |
-| `oldest_queued_age_seconds`, `per_project` stats | reported | `null` / empty |
+| `oldest_queued_age_seconds`, per-project stats | reported | `null` / empty |
 
 Postgres needs no extra infrastructure. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes; the persisted `wake_at` still decides whether there is work. An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails with `QUEUE_DRIVER_MISCONFIGURED` (no fallback to Postgres).
 
@@ -395,9 +394,9 @@ The listing is newest-first; without the filter, finding live work means paging 
 
 ### Queue metrics
 
-[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) snapshots waiting vs. claimed task counts, the oldest waiting task's age, claim-latency percentiles (in-process, rolling 5-minute window) and a per-project breakdown. `driver` names the backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by `orchestrations:GetQueueStats`.
+[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) snapshots waiting vs. claimed task counts, the oldest waiting task's age, and claim-latency percentiles (in-process, rolling 5-minute window). [`GET /api/v1/orchestrations/queue/stats/projects`](/docs/api/orchestrations/list-queue-stats-projects) pages the per-project breakdown, one `{ project_id, queued, claimed }` row per project with queued or claimed work, ordered by project ID. `driver` names the backend; under `sqs`, `oldest_queued_age_seconds` is `null` and the project listing is empty. Both are guarded by `orchestrations:GetQueueStats`.
 
-A project-scoped caller gets `per_project` for its projects, `queue_depth` and `claimed_tasks` summed over them, and `null` for `oldest_queued_age_seconds` and both `claim_latency_ms` percentiles (deployment-wide, not narrowable). A caller granted the action on every project gets deployment-wide figures.
+A project-scoped caller gets project rows for its own projects only, `queue_depth` and `claimed_tasks` summed over them, and `null` for `oldest_queued_age_seconds` and both `claim_latency_ms` percentiles (deployment-wide, not narrowable). A caller granted the action on every project gets deployment-wide figures.
 
 ### State and Mappings
 
@@ -637,9 +636,9 @@ Pinning is per run: a `loop` / `sub_orchestration` node starts a **new** child r
 
 ### Node Executions
 
-Every node run persists a `node_executions` entry: resolved `input_mapping`, `output` artifact, `status`, and on failure the structured `error`, written even when the node throws, so `get-orchestration-run` shows which node failed, with what input, and why.
+Every node attempt persists a [NodeExecution](#nodeexecution) record: resolved `input_mapping`, `output` artifact, `status`, and on failure the structured `error`, written even when the node throws, so the record shows which node failed, with what input, and why.
 
-`get-orchestration-run` and `list-orchestration-runs` return them oldest-first. A node paused for human input is `status: "requires_action"`; when `submit-human-input` satisfies it, the same record becomes `completed` with the payload as `output` (a re-entered pause reuses the record). On completion, nodes never reached (an un-traversed condition branch, an activation group that never fired) are `status: "skipped"` with `null` `input`/`output`/timestamps ([Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration)). Reading a finished run: [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
+[`GET /api/v1/orchestration-runs/{orchestration_run_id}/node-executions`](/docs/api/orchestrations/list-orchestration-run-node-executions) pages them oldest first (`{ data, total, limit, offset }`; default `limit` 50, max 100), retries and skipped nodes included. Guarded by `orchestrations:GetRun`; a run read, run list, run write response or `orchestration_runs.*` webhook payload carries none. A node paused for human input is `status: "requires_action"`; when `submit-human-input` satisfies it, the same record becomes `completed` with the payload as `output` (a re-entered pause reuses the record). On completion, nodes never reached (an un-traversed condition branch, an activation group that never fired) are `status: "skipped"` with `null` `input`/`output`/timestamps ([Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration)). Reading a finished run: [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
 
 ### Run usage
 
@@ -670,7 +669,7 @@ Usage is metered as each generation settles: read the roll-up from `get-orchestr
 
 ### Reaching an agent node's generation
 
-An `agent` node's `node_executions` artifact is the final answer (`{ content, object }`); reasoning, tool calls and token usage live on the [generation](./generations.md), which is stamped with `orchestration_run_id`, `node_id` and `node_attempt`. Filter the generations list:
+An `agent` node's [node execution](#node-executions) artifact is the final answer (`{ content, object }`); reasoning, tool calls and token usage live on the [generation](./generations.md), which is stamped with `orchestration_run_id`, `node_id` and `node_attempt`. Filter the generations list:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -716,7 +715,7 @@ curl "https://api.example.com/api/v1/generations?orchestration_run_id=run_abc123
 </TabItem>
 </Tabs>
 
-`node_attempt` equals the `attempt` on the matching `node_executions` entry, pairing a [retried](#retry-policy) node exactly.
+`node_attempt` equals the `attempt` on the matching [node execution](#node-executions) record, pairing a [retried](#retry-policy) node exactly.
 
 Each generation carries its own `trace_id` for the full [trace](./traces.md) of that turn. The run's `trace_id` is the trace of its first agent node, later nodes as children, not a per-node handle.
 
@@ -864,8 +863,8 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 | ---------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.errors`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
 | `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
-| `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's entry in `node_executions` for the exact `error` — see [Node Executions](#node-executions) |
-| _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from `node_executions` |
+| `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's [node execution](#node-executions) record for the exact `error` — see [Node Executions](#node-executions) |
+| _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from its [node execution](#node-executions) record |
 | `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
 | `ORCHESTRATION_RUN_DEPTH_LIMIT`    | `409`  | Starting the next `loop` / `sub_orchestration` child would nest past the effective bound — usually a graph naming itself, directly or through a cycle of two graphs | Walk `parent_orchestration_run_id` up from the failed run to find the node that re-enters a graph already in the chain; raise the project's `max_orchestration_run_depth` only if the composition is legitimately that deep — see [Nesting depth](#nesting-depth) |
 | `ORCHESTRATION_NESTED_RUN_FAILED`  | `422`  | A `loop` / `sub_orchestration` child settled `failed`/`cancelled`/`expired` carrying no code of its own | Read the child run (`parent_orchestration_run_id` points back at this one) — a child that *does* carry a code fails its parent under that code instead — see [A child run's failure fails its parent](#a-child-runs-failure-fails-its-parent) |
@@ -1046,6 +1045,37 @@ curl -X POST https://api.example.com/api/v1/orchestration-runs \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"orchestration_id": "orch_01", "input": {"query": "summarize Q1 revenue"}, "wait": true}'
+```
+
+</TabItem>
+</Tabs>
+
+### List a run's node executions
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-orchestration-run-node-executions --orchestration-run-id run_abc123
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.orchestrations.listOrchestrationRunNodeExecutions({
+  path: { orchestration_run_id: 'run_abc123' },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.data is oldest first, one record per node attempt
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/orchestration-runs/run_abc123/node-executions \
+  -H "Authorization: Bearer <token>"
 ```
 
 </TabItem>

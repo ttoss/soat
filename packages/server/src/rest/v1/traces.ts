@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import { purgeTraceContent } from 'src/lib/contentPurge';
 import { getTrace, getTraceTree, listTraces, traceRows } from 'src/lib/traces';
 
@@ -8,6 +7,7 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
+  requireFound,
   resolveReadProjectIds,
 } from './helpers';
 import { makeItemRouteAuthorizer } from './resourceAccess';
@@ -37,9 +37,11 @@ tracesRouter.get('/traces', async (ctx: Context) => {
     resourceType: 'trace',
   });
 
-  const { limit, offset } = parsePagination(ctx);
-
-  ctx.body = await listTraces({ projectIds, limit, offset });
+  ctx.body = await listTraces({
+    projectIds,
+    parentTraceId: ctx.query.parent_trace_id as string | undefined,
+    ...parsePagination(ctx),
+  });
 });
 
 tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
@@ -62,17 +64,9 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
     action: 'traces:GetTraceTree',
   });
 
-  const includeParam = ctx.query.include as string | undefined;
-  const include = includeParam
-    ? includeParam.split(',').map((s) => {
-        return s.trim();
-      })
-    : undefined;
-
   const result = await getTraceTree({
     projectIds,
     traceId: ctx.params.trace_id,
-    include,
   });
 
   ctx.body = result;
@@ -93,18 +87,13 @@ tracesRouter.delete('/traces/:trace_id/content', async (ctx: Context) => {
     action: 'traces:PurgeTraceContent',
   });
 
-  const purged = await purgeTraceContent({
-    traceId: ctx.params.trace_id,
-    projectIds,
-    principal: requestPrincipalFromCtx(ctx),
+  ctx.body = requireFound({
+    value: await purgeTraceContent({
+      traceId: ctx.params.trace_id,
+      projectIds,
+      principal: requestPrincipalFromCtx(ctx),
+    }),
+    label: 'Trace',
+    id: ctx.params.trace_id,
   });
-
-  if (!purged) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trace '${ctx.params.trace_id}' not found.`
-    );
-  }
-
-  ctx.body = purged;
 });

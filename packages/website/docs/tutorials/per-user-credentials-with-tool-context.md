@@ -573,8 +573,8 @@ soat submit-human-input \
 # → retry 120
 soat get-orchestration-run --orchestration-run-id "$RUN_ID" | jq -e '.status == "succeeded"'
 
-soat get-orchestration-run --orchestration-run-id "$RUN_ID" \
-  | jq '[.node_executions[] | {node_id, node_type, status}]'
+soat list-orchestration-run-node-executions --orchestration-run-id "$RUN_ID" \
+  | jq '[.data[] | {node_id, node_type, status}]'
 ```
 
 </TabItem>
@@ -595,6 +595,12 @@ do {
   }));
 } while (!['succeeded', 'failed'].includes(finished.status));
 console.log(finished.status); // "succeeded"
+
+const { data: executions } =
+  await adminSoat.orchestrations.listOrchestrationRunNodeExecutions({
+    path: { orchestration_run_id: RUN_ID },
+  });
+console.log(executions.data.map((n) => ({ node_id: n.node_id, node_type: n.node_type, status: n.status })));
 ```
 
 </TabItem>
@@ -608,6 +614,10 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID/human-input" \
 
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status}'
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID/node-executions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {node_id, node_type, status}]'
 ```
 
 </TabItem>
