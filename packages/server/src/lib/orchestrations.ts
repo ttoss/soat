@@ -3,7 +3,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import {
-  nodeExecutionsInclude,
   type OrchestrationRunRow,
   orchestrationRuns,
   orchestrations,
@@ -166,20 +165,6 @@ export type MappedOrchestration = {
   updated_at: Date;
 };
 
-export type MappedNodeExecution = {
-  node_id: string;
-  node_type: string | null;
-  attempt: number;
-  dispatches: number;
-  status: 'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
-  input: Record<string, unknown> | null;
-  output: Record<string, unknown> | null;
-  error: object | null;
-  started_at: Date | null;
-  completed_at: Date | null;
-  created_at: Date;
-};
-
 /**
  * Every status a run can hold, in one list so the listing's `status` filter and
  * the wire type cannot describe different sets.
@@ -236,7 +221,6 @@ export type MappedOrchestrationRun = {
   // `loop` / `sub_orchestration` edges between this run and the one a caller
   // started; 0 for a caller-started run. What the depth bound counts.
   orchestration_run_depth: number;
-  node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced, in the shape a receipt and an aggregate bucket also report.
   // Populated on the single-run read; omitted from list responses.
@@ -272,24 +256,6 @@ const mapOrchestration = (
     output_mapping: orch.outputMapping,
     created_at: orch.createdAt,
     updated_at: orch.updatedAt,
-  };
-};
-
-const mapNodeExecution = (
-  exec: InstanceType<typeof db.OrchestrationNodeExecution>
-): MappedNodeExecution => {
-  return {
-    node_id: exec.nodeId,
-    node_type: exec.nodeType,
-    attempt: exec.attempt,
-    dispatches: exec.dispatches,
-    status: exec.status,
-    input: exec.input as Record<string, unknown> | null,
-    output: exec.output as Record<string, unknown> | null,
-    error: exec.error,
-    started_at: exec.startedAt,
-    completed_at: exec.completedAt,
-    created_at: exec.createdAt,
   };
 };
 
@@ -337,7 +303,6 @@ export const mapOrchestrationRun = (
   run: InstanceType<typeof db.OrchestrationRun> & {
     orchestration: InstanceType<typeof db.Orchestration>;
     project: InstanceType<typeof db.Project>;
-    nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   },
   // The subtree total (what the run cost) and this run's own nodes.
   usage?: UsageTotals,
@@ -364,7 +329,6 @@ export const mapOrchestrationRun = (
     parent_orchestration_run_id: run.parentRunId,
     parent_node_id: run.parentNodeId,
     orchestration_run_depth: run.orchestrationRunDepth,
-    node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     ...(usage ? { usage } : {}),
     ...(ownUsage ? { usage_own: ownUsage } : {}),
     started_at: run.startedAt,
@@ -373,8 +337,6 @@ export const mapOrchestrationRun = (
     updated_at: run.updatedAt,
   };
 };
-
-export { nodeExecutionsInclude } from './orchestrationAccessor';
 
 // ── CRUD: Orchestrations ──────────────────────────────────────────────────
 
@@ -642,7 +604,6 @@ export const findOrchestrationRun = async (args: {
           where: { publicId: args.orchestrationId },
         }
       : { model: db.Orchestration, as: 'orchestration' },
-    nodeExecutionsInclude(),
   ];
 
   const run = (await db.OrchestrationRun.findOne({
@@ -718,7 +679,6 @@ export const listOrchestrationRuns = async (args: {
         include: [
           { model: db.Project, as: 'project' },
           { model: db.Orchestration, as: 'orchestration' },
-          nodeExecutionsInclude(),
         ],
         distinct: true,
         order,

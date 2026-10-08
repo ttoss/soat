@@ -2,10 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
-import {
-  relatedDocumentRowIds,
-  relationsForDocument,
-} from 'src/lib/documentRelations';
+import { relatedDocumentRowIds } from 'src/lib/documentRelations';
 import {
   createDocument,
   deleteDocument,
@@ -228,10 +225,7 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = {
-    ...doc,
-    relations: await relationsForDocument({ documentId: doc.id }),
-  };
+  ctx.body = doc;
 });
 
 registerDocumentRelationRoutes({ documentsRouter });

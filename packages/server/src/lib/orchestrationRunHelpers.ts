@@ -14,7 +14,7 @@ import type {
   OrchestrationEdge,
   OrchestrationNode,
 } from './orchestrations';
-import { mapOrchestrationRun, nodeExecutionsInclude } from './orchestrations';
+import { mapOrchestrationRun } from './orchestrations';
 
 export const mapRunWithIncludes = async (
   orchestrationRunId: number
@@ -24,14 +24,12 @@ export const mapRunWithIncludes = async (
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
-      nodeExecutionsInclude(),
     ],
   });
 
   const run = finalRun as InstanceType<typeof db.OrchestrationRun> & {
     orchestration: InstanceType<typeof db.Orchestration>;
     project: InstanceType<typeof db.Project>;
-    node_executions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   };
 
   return mapOrchestrationRun(run);

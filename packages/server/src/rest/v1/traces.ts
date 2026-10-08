@@ -37,9 +37,11 @@ tracesRouter.get('/traces', async (ctx: Context) => {
     resourceType: 'trace',
   });
 
-  const { limit, offset } = parsePagination(ctx);
-
-  ctx.body = await listTraces({ projectIds, limit, offset });
+  ctx.body = await listTraces({
+    projectIds,
+    parentTraceId: ctx.query.parent_trace_id as string | undefined,
+    ...parsePagination(ctx),
+  });
 });
 
 tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
@@ -62,17 +64,9 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
     action: 'traces:GetTraceTree',
   });
 
-  const includeParam = ctx.query.include as string | undefined;
-  const include = includeParam
-    ? includeParam.split(',').map((s) => {
-        return s.trim();
-      })
-    : undefined;
-
   const result = await getTraceTree({
     projectIds,
     traceId: ctx.params.trace_id,
-    include,
   });
 
   ctx.body = result;

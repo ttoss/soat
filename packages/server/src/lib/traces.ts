@@ -3,8 +3,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { PersistedGeneration } from './generations';
-import { listGenerationsByTraceIds } from './generations';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
@@ -31,7 +29,6 @@ export type Trace = {
 
 export type TraceTreeNode = Trace & {
   children: TraceTreeNode[];
-  generations?: PersistedGeneration[];
 };
 
 type TraceRow = InstanceType<(typeof db)['Trace']> & {
@@ -81,6 +78,7 @@ export const mapTrace = (row: TraceRow): Trace => {
 
 export const listTraces = async (args: {
   projectIds?: number[];
+  parentTraceId?: string;
   limit?: number;
   offset?: number;
 }): Promise<{
@@ -94,6 +92,16 @@ export const listTraces = async (args: {
   if (args.projectIds !== undefined) {
     if (args.projectIds.length === 0) return emptyPage(args);
     where.projectId = args.projectIds;
+  }
+  if (args.parentTraceId !== undefined) {
+    // A parent naming nothing in scope empties the page rather than dropping
+    // the filter, so a mistyped id never reads back as every trace.
+    const parent = await db.Trace.findOne({
+      where: { publicId: args.parentTraceId, ...where },
+      attributes: ['id'],
+    });
+    if (!parent) return emptyPage(args);
+    where.parentTraceId = parent.id;
   }
 
   return paginatedList({
@@ -152,38 +160,6 @@ const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
   return root;
 };
 
-const attachNodeGenerations = (
-  node: TraceTreeNode,
-  byTraceId: Map<string, PersistedGeneration[]>
-): void => {
-  node.generations = byTraceId.get(node.id) ?? [];
-  for (const child of node.children) {
-    attachNodeGenerations(child, byTraceId);
-  }
-};
-
-const attachGenerationsToTree = async (
-  tree: TraceTreeNode,
-  allTraces: Trace[],
-  projectIds: number[] | undefined
-): Promise<void> => {
-  const allGens = await listGenerationsByTraceIds({
-    tracePublicIds: allTraces.map((t) => {
-      return t.id;
-    }),
-    projectIds,
-  });
-
-  const byTraceId = new Map<string, PersistedGeneration[]>();
-  for (const gen of allGens) {
-    const list = byTraceId.get(gen.trace_id) ?? [];
-    list.push(gen);
-    byTraceId.set(gen.trace_id, list);
-  }
-
-  attachNodeGenerations(tree, byTraceId);
-};
-
 /**
  * Returns the full trace tree rooted at the given trace.
  *
@@ -198,7 +174,6 @@ const attachGenerationsToTree = async (
 export const getTraceTree = async (args: {
   projectIds?: number[];
   traceId: string;
-  include?: string[];
 }): Promise<TraceTreeNode> => {
   log('getTraceTree: traceId=%s projectIds=%o', args.traceId, args.projectIds);
 
@@ -239,10 +214,6 @@ export const getTraceTree = async (args: {
       'RESOURCE_NOT_FOUND',
       `Trace tree for '${args.traceId}' not found.`
     );
-
-  if (args.include?.includes('generations')) {
-    await attachGenerationsToTree(tree, allTraces, args.projectIds);
-  }
 
   return tree;
 };

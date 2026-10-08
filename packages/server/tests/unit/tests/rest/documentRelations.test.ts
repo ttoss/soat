@@ -11,8 +11,8 @@ import { authenticatedTestClient, testClient } from '../../testClient';
  * `"derived-from"` and `"derivedFrom"` as the same edge is a reader that will
  * eventually get it wrong.
  *
- * An edge is directed and asserted by the document it leaves: `relations` on a
- * read carries what this document claims, and `?related_to=` finds a
+ * An edge is directed and asserted by the document it leaves: its relations
+ * sub-resource pages what this document claims, and `?related_to=` finds a
  * document's neighbours on either side.
  */
 describe('Document relations', () => {
@@ -282,7 +282,7 @@ describe('Document relations', () => {
   });
 
   describe('GET /api/v1/documents/:document_id', () => {
-    test('a read carries the edges the document asserts', async () => {
+    test('a read carries no edges; they are read from the sub-resource', async () => {
       const from = await createDocument({ filename: 'read-from.txt' });
       const to = await createDocument({ filename: 'read-to.txt' });
       await relate({ from, type: 'derived_from', to });
@@ -292,21 +292,8 @@ describe('Document relations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.relations).toHaveLength(1);
-      expect(response.body.relations[0]).toEqual(
-        expect.objectContaining({ type: 'derived_from', to_document_id: to })
-      );
-    });
-
-    test('a document with no edges carries an empty list', async () => {
-      const document = await createDocument({ filename: 'no-edges.txt' });
-
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents/${document}`
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.body.relations).toEqual([]);
+      expect(response.body.id).toBe(from);
+      expect(response.body.relations).toBeUndefined();
     });
   });
 
@@ -361,9 +348,9 @@ describe('Document relations', () => {
       expect(response.status).toBe(204);
 
       const read = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents/${from}`
+        `/api/v1/documents/${from}/relations`
       );
-      expect(read.body.relations).toEqual([]);
+      expect(read.body.data).toEqual([]);
 
       const target = await authenticatedTestClient(userToken).get(
         `/api/v1/documents/${to}`

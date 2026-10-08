@@ -2462,6 +2462,18 @@ describe('MCP tools - happy path', () => {
       expect(result.project_id).toBe(projectId);
     });
 
+    test('list-traces pages the direct children of a trace', async () => {
+      const res = await mcpCall('list-traces', {
+        project_id: projectId,
+        parent_trace_id: mcpTraceId,
+      });
+
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.total).toBe(1);
+      expect(result.data[0].id).toBe(mcpChildTraceId);
+    });
+
     test('get-trace-tree returns tree with child', async () => {
       const res = await mcpCall('get-trace-tree', { trace_id: mcpTraceId });
 
@@ -2604,6 +2616,35 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.valid).toBe(true);
+    });
+
+    test('list-orchestration-run-node-executions pages a run', async () => {
+      const orchestration = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'mcp node executions',
+          nodes: [
+            { id: 'one', type: 'transform', expression: 1 },
+            { id: 'two', type: 'transform', expression: 2 },
+          ],
+          edges: [{ from: 'one', to: 'two' }],
+        });
+      const run = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchestration.body.id });
+      expect(run.body.status).toBe('succeeded');
+
+      const res = await mcpCall('list-orchestration-run-node-executions', {
+        orchestration_run_id: run.body.id,
+        limit: 1,
+        offset: 1,
+      });
+
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result).toMatchObject({ total: 2, limit: 1, offset: 1 });
+      expect(result.data[0].node_id).toBe('two');
     });
 
     test('validate-orchestration reports errors for an invalid graph', async () => {

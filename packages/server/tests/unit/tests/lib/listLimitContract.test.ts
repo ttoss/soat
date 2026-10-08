@@ -67,6 +67,20 @@ describe('list pagination', () => {
     ).toEqual([]);
   });
 
+  test('no route destructures limit or offset off the query', () => {
+    const destructure = /\{([^}]*)\}\s*=\s*ctx\.query\b/g;
+    const offenders = sourceLinesExcept(join('rest', 'v1', 'helpers.ts'))
+      .filter(([, lines]) => {
+        return [...lines.join('\n').matchAll(destructure)].some((match) => {
+          return /\b(limit|offset)\b/.test(match[1]);
+        });
+      })
+      .map(([file]) => {
+        return file;
+      });
+    expect(offenders).toEqual([]);
+  });
+
   test('no module applies a page default or ceiling of its own', () => {
     expect(
       offendersOf({

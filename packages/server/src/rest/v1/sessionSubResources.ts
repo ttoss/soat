@@ -11,7 +11,7 @@ import {
 } from 'src/lib/sessions';
 import { assertNoSystemTagKeys } from 'src/lib/tags';
 
-import { type AuthenticatedContext } from './helpers';
+import { type AuthenticatedContext, parsePagination } from './helpers';
 import { checkSessionAccess } from './sessions';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -220,13 +220,10 @@ sessionSubResourcesRouter.get(
   async (ctx: Context) => {
     const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
 
-    const { limit, offset } = ctx.query as Record<string, string | undefined>;
-
     ctx.body = await listSessionForks({
       agentId,
       sessionId: ctx.params.session_id,
-      limit: limit ? Number(limit) : undefined,
-      offset: offset ? Number(offset) : undefined,
+      ...parsePagination(ctx),
     });
   }
 );

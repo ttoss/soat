@@ -1447,14 +1447,6 @@ components:
           type: integer
           description: Overlap in characters between consecutive windows used when `chunk_strategy=size`. Absent otherwise.
           example: 120
-        relations:
-          type: array
-          description: >-
-            The typed edges this document asserts about others, on a single
-            document read. Absent from a listing, which is a page of documents
-            rather than of edges.
-          items:
-            $ref: '#/components/schemas/DocumentRelation'
         created_at:
           type: string
           format: date-time

@@ -2,8 +2,9 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { getOrchestrationQueueDriver } from 'src/lib/orchestration-queue-drivers';
 import type { QueueStats } from 'src/lib/orchestration-queue-drivers/types';
+import { pageOf } from 'src/lib/pagination';
 
-import { requireAuth, requireProjectAccess } from './helpers';
+import { parsePagination, requireAuth, requireProjectAccess } from './helpers';
 
 /**
  * The wire projection of a `QueueStats` snapshot. The driver type stays
@@ -35,13 +36,26 @@ const mapQueueStats = (args: { stats: QueueStats; restricted: boolean }) => {
       p95: restricted ? null : stats.claimLatencyMs.p95,
       window_seconds: stats.claimLatencyMs.windowSeconds,
     },
-    per_project: stats.perProject.map((entry) => {
-      return {
-        project_id: entry.projectId,
-        queued: entry.queued,
-        claimed: entry.claimed,
-      };
+  };
+};
+
+/**
+ * The caller's queue scope. An empty scope — the action granted on no project —
+ * is forbidden for these operator endpoints, not an empty result, so this takes
+ * the stricter of the two preambles.
+ */
+const queueStatsFor = async (ctx: Context) => {
+  requireAuth(ctx);
+  const projectIds = await requireProjectAccess({
+    ctx,
+    action: 'orchestrations:GetQueueStats',
+    resourceType: 'orchestration',
+  });
+  return {
+    stats: await getOrchestrationQueueDriver().stats({
+      projectIds: projectIds ?? undefined,
     }),
+    restricted: projectIds !== null && projectIds !== undefined,
   };
 };
 
@@ -59,20 +73,29 @@ export const orchestrationQueueRouter = new Router<Context>();
 orchestrationQueueRouter.get(
   '/orchestrations/queue/stats',
   async (ctx: Context) => {
-    requireAuth(ctx);
-    // An empty scope — the action granted on no project — is forbidden for this
-    // operator endpoint, not an empty result, so this takes the stricter of the
-    // two preambles.
-    const projectIds = await requireProjectAccess({
-      ctx,
-      action: 'orchestrations:GetQueueStats',
-      resourceType: 'orchestration',
-    });
-    ctx.body = mapQueueStats({
-      stats: await getOrchestrationQueueDriver().stats({
-        projectIds: projectIds ?? undefined,
+    ctx.body = mapQueueStats(await queueStatsFor(ctx));
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/orchestrations/queue/stats/projects:
+ *   get:
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1queue~1stats~1projects/get'
+ */
+orchestrationQueueRouter.get(
+  '/orchestrations/queue/stats/projects',
+  async (ctx: Context) => {
+    const { stats } = await queueStatsFor(ctx);
+    ctx.body = pageOf({
+      items: stats.perProject.map((entry) => {
+        return {
+          project_id: entry.projectId,
+          queued: entry.queued,
+          claimed: entry.claimed,
+        };
       }),
-      restricted: projectIds !== null && projectIds !== undefined,
+      ...parsePagination(ctx),
     });
   }
 );

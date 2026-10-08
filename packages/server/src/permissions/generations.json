@@ -12,6 +12,11 @@
       "description": "Get a generation record by ID"
     },
     {
+      "operationId": "listGenerationMemoryAssertions",
+      "action": "generations:GetGeneration",
+      "description": "List the memory writes a generation made, oldest first"
+    },
+    {
       "operationId": "getGenerationTranscript",
       "action": "generations:GetGeneration",
       "description": "Read a generation's turn as an ordered transcript of steps, tool calls and results (also requires traces:GetTrace)"

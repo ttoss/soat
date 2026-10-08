@@ -14,19 +14,6 @@
 import { db } from '../db';
 import { makeResourceAccessor } from './resourceAccessor';
 
-/**
- * Sequelize include for the per-node execution records of a run, ordered
- * oldest-first. Returned as a function because `db` is populated at runtime.
- */
-export const nodeExecutionsInclude = (): object => {
-  return {
-    model: db.OrchestrationNodeExecution,
-    as: 'nodeExecutions',
-    separate: true,
-    order: [['createdAt', 'ASC']],
-  };
-};
-
 export type OrchestrationRow = InstanceType<typeof db.Orchestration> & {
   project: InstanceType<typeof db.Project>;
 };

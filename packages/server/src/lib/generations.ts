@@ -431,35 +431,6 @@ export const listGenerations = async (args: {
   });
 };
 
-export const listGenerationsByTraceIds = async (args: {
-  tracePublicIds: string[];
-  projectIds?: number[];
-}): Promise<PersistedGeneration[]> => {
-  if (args.tracePublicIds.length === 0) return [];
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const traceWhere: Record<string, any> = { publicId: args.tracePublicIds };
-  if (args.projectIds !== undefined) traceWhere.projectId = args.projectIds;
-
-  const traces = await db.Trace.findAll({ where: traceWhere });
-  const traceInternalIds = traces.map((t) => {
-    return t.id as number;
-  });
-  if (traceInternalIds.length === 0) return [];
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const genWhere: Record<string, any> = { traceId: traceInternalIds };
-  if (args.projectIds !== undefined) genWhere.projectId = args.projectIds;
-
-  const rows = await db.Generation.findAll({
-    where: genWhere,
-    include: generationIncludes(),
-    order: [['startedAt', 'ASC']],
-  });
-
-  return rows.map(mapGeneration);
-};
-
 export const getGeneration = async (args: {
   publicId: string;
   projectIds?: number[];
@@ -476,20 +447,37 @@ export const getGeneration = async (args: {
   // The turn's own events: one per segment, so a turn that paused for client
   // tools has several. Sub-agent turns meter against their own generation, so
   // summing is also what keeps a delegating turn honest.
-  const [usage, memoryAssertions] = await Promise.all([
-    rollUpUsageTotals({
-      projectId: gen.projectId,
-      from: null,
-      to: null,
-      generationId: gen.id,
-    }),
-    // Alongside the per-rule `extraction` counts, so the summary and the rows
-    // it summarizes can be reconciled. It also covers the writes the summary
-    // never saw: a `write_memory` call mid-turn is not a rule firing.
-    listGenerationMemoryAssertions({ generationDbId: gen.id as number }),
-  ]);
+  const usage = await rollUpUsageTotals({
+    projectId: gen.projectId,
+    from: null,
+    to: null,
+    generationId: gen.id,
+  });
 
-  return mapGenerationWithUsage(gen, usage, memoryAssertions);
+  return mapGenerationWithUsage(gen, usage);
+};
+
+/**
+ * Every memory write a turn made, oldest first: each memory rule's firings and
+ * the agent's own `write_memory` calls alike. The rows behind the generation's
+ * per-rule `extraction` counts.
+ */
+export const getGenerationMemoryAssertions = async (args: {
+  publicId: string;
+  projectIds?: number[];
+  limit?: number;
+  offset?: number;
+}) => {
+  const gen = await generations.findByPublicId({
+    id: args.publicId,
+    projectIds: args.projectIds,
+  });
+  if (!gen) return null;
+  return listGenerationMemoryAssertions({
+    generationDbId: gen.id as number,
+    limit: args.limit,
+    offset: args.offset,
+  });
 };
 
 // Shallow-merged so repeated patches accumulate. The bag holds only caller

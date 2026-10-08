@@ -41,6 +41,15 @@ paths:
           schema:
             type: string
           description: Project public ID to filter by
+        - name: parent_trace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            example: trc_V1StGXR8Z5jdHi6B
+          description: >-
+            Only the direct children of this trace. A trace naming nothing the
+            caller can read matches nothing rather than widening the listing.
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -126,7 +135,9 @@ paths:
         Returns the full execution tree rooted at the given trace (or its root
         if the given trace is a child). Each node represents one agent's
         execution session. The `children` array contains traces triggered by
-        sub-agent tool calls from that trace.
+        sub-agent tool calls from that trace. A node's generations are listed
+        by `GET /api/v1/generations?trace_id=`, and a node's direct children
+        page by `GET /api/v1/traces?parent_trace_id=`.
       operationId: getTraceTree
       x-soat-resource:
         kind: trace
@@ -138,17 +149,6 @@ paths:
           schema:
             type: string
           description: Public ID of any trace in the tree (root or child)
-        - name: include
-          in: query
-          required: false
-          description: >
-            Comma-separated list of related resources to embed on each node.
-            Supported value: `generations` — attaches all generations that belong
-            to each trace node (including sub-agent generations
-            linked via `initiator_generation_id`).
-          schema:
-            type: string
-            example: generations
       responses:
         '200':
           description: Trace tree rooted at the resolved root trace
@@ -384,11 +384,3 @@ components:
           description: Child traces triggered by sub-agent calls from this trace
           items:
             $ref: '#/components/schemas/TraceTreeNode'
-        generations:
-          type: array
-          description: >
-            Generations that belong to this trace node. Only present when
-            `include=generations` is requested. Includes top-level generations
-            and sub-agent child generations linked via `initiator_generation_id`.
-          items:
-            $ref: './generations.yaml#/components/schemas/Generation'

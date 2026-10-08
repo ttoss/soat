@@ -5,6 +5,7 @@ import { purgeGenerationContent } from 'src/lib/contentPurge';
 import {
   generations,
   getGeneration,
+  getGenerationMemoryAssertions,
   getGenerationTraceId,
   listGenerations,
   updateGenerationMetadata,
@@ -14,6 +15,7 @@ import { validateMetadataBag } from 'src/lib/metadataBag';
 import { traceRows } from 'src/lib/traces';
 
 import {
+  parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
@@ -82,8 +84,6 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     orchestration_run_id: orchestrationRunId,
     node_id: nodeId,
     status,
-    limit,
-    offset,
   } = ctx.query as Record<string, string | undefined>;
 
   const result = await listGenerations({
@@ -97,8 +97,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     orchestrationRunId,
     nodeId,
     status,
-    limit: limit ? Number(limit) : undefined,
-    offset: offset ? Number(offset) : undefined,
+    ...parsePagination(ctx),
   });
 
   ctx.body = result;
@@ -127,6 +126,30 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
     }),
   });
 });
+
+/**
+ * @openapi
+ * GET /api/v1/generations/{generation_id}/memory-assertions
+ * operationId: listGenerationMemoryAssertions
+ */
+generationsRouter.get(
+  '/generations/:generation_id/memory-assertions',
+  async (ctx: Context) => {
+    const { projectIds } = await generationAccess.authorizeRead({
+      ctx,
+      action: 'generations:GetGeneration',
+    });
+
+    ctx.body = requireResolved({
+      ctx,
+      value: await getGenerationMemoryAssertions({
+        publicId: ctx.params.generation_id,
+        projectIds,
+        ...parsePagination(ctx),
+      }),
+    });
+  }
+);
 
 /**
  * @openapi

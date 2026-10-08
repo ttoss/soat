@@ -1137,12 +1137,66 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(res.body.claim_latency_ms).toHaveProperty('p50');
       expect(res.body.claim_latency_ms).toHaveProperty('p95');
       expect(res.body.claim_latency_ms.window_seconds).toBe(300);
-      expect(Array.isArray(res.body.per_project)).toBe(true);
-      const row = res.body.per_project.find((r: { project_id: string }) => {
+      expect(res.body.per_project).toBeUndefined();
+    });
+  });
+
+  describe('GET /api/v1/orchestrations/queue/stats/projects', () => {
+    const seedQueuedTask = async (name: string) => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name,
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
+    };
+
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get(
+        '/api/v1/orchestrations/queue/stats/projects'
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('a user without orchestrations:GetQueueStats gets 403', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestrations/queue/stats/projects'
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('pages the projects with queued or claimed work', async () => {
+      await seedQueuedTask('Stats Projects');
+
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/orchestrations/queue/stats/projects'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ limit: 50, offset: 0 });
+      expect(res.body.total).toBe(res.body.data.length);
+      const row = res.body.data.find((r: { project_id: string }) => {
         return r.project_id === projectId;
       });
-      expect(row).toBeDefined();
       expect(row.queued).toBeGreaterThanOrEqual(1);
+      expect(typeof row.claimed).toBe('number');
+    });
+
+    test('an explicit page answers that slice', async () => {
+      await seedQueuedTask('Stats Projects Page');
+
+      const res = await authenticatedTestClient(adminToken)
+        .get('/api/v1/orchestrations/queue/stats/projects')
+        .query({ limit: 1, offset: 0 });
+      expect(res.status).toBe(200);
+      expect(res.body.limit).toBe(1);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.total).toBeGreaterThanOrEqual(1);
     });
 
     test('getQueueStats reports queued and claimed counts for a project', async () => {

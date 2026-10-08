@@ -553,6 +553,33 @@ describe('Agent knowledge', () => {
       ]);
     });
 
+    test("the turn's writes are paged off the generation", async () => {
+      const writeStoreId = await freshStore();
+      const agentId = await createAgent({
+        scope,
+        knowledgeConfig: { write_memory_store_id: writeStoreId },
+      });
+
+      const { generationId } = await remember({
+        agentId,
+        content: 'The release train leaves Thursday.',
+      });
+
+      const page = await asAdmin().get(
+        `/api/v1/generations/${generationId}/memory-assertions`
+      );
+      expect(page.status).toBe(200);
+      expect(page.body).toMatchObject({ total: 1, limit: 50, offset: 0 });
+      expect(page.body.data).toEqual([
+        expect.objectContaining({
+          mechanism: 'tool',
+          generation_id: generationId,
+          outcome: 'created',
+          content: 'The release train leaves Thursday.',
+        }),
+      ]);
+    });
+
     test('an agent a formation deployed is offered the tool', async () => {
       const formation = await asAdmin()
         .post('/api/v1/formations')

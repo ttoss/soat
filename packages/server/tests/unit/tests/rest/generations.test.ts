@@ -367,6 +367,54 @@ describe('Generations', () => {
   // Server-owned state lives in typed columns, so `metadata` is entirely
   // caller-owned: no reserved-key blocklist to maintain, and no way to forge
   // attribution through the bag.
+  describe('GET /api/v1/generations/:generation_id/memory-assertions', () => {
+    test('returns 401 when unauthenticated', async () => {
+      const response = await testClient.get(
+        '/api/v1/generations/gen_x/memory-assertions'
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 when user lacks permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/generations/${failedGenerationId}/memory-assertions`
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('returns 404 when generation does not exist', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations/gen_does_not_exist/memory-assertions'
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('a turn that wrote no memory answers an empty page', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get(`/api/v1/generations/${failedGenerationId}/memory-assertions`)
+        .query({ limit: 10 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        data: [],
+        total: 0,
+        limit: 10,
+        offset: 0,
+      });
+    });
+
+    test('the single read carries no memory assertions', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.memory_assertions).toBeUndefined();
+    });
+  });
+
   describe('server-owned state is stored in columns, not metadata', () => {
     let attributedGenerationId: string;
 

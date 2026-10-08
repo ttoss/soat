@@ -281,11 +281,14 @@ export const listMemoryStoreAssertions = async (args: {
  */
 export const listGenerationMemoryAssertions = async (args: {
   generationDbId: number;
-}): Promise<MappedMemoryAssertion[]> => {
-  const rows = (await db.MemoryAssertion.findAll({
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedMemoryAssertion>> => {
+  log('listGenerationMemoryAssertions: generation=%d', args.generationDbId);
+  return assertionPage({
     where: { generationId: args.generationDbId },
-    include: assertionIncludes(),
-    order: [['createdAt', 'ASC']],
-  })) as AssertionRow[];
-  return mapAssertions(rows);
+    order: 'ASC',
+    limit: args.limit,
+    offset: args.offset,
+  });
 };
