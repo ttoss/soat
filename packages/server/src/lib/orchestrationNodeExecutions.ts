@@ -43,7 +43,7 @@ const mapNodeExecution = (
  */
 export const listOrchestrationRunNodeExecutions = async (args: {
   runId: string;
-  projectIds?: number[];
+  projectIds: number[];
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedNodeExecution>> => {
@@ -62,7 +62,7 @@ export const listOrchestrationRunNodeExecutions = async (args: {
             required: true,
             where: {
               publicId: args.runId,
-              ...(args.projectIds ? { projectId: args.projectIds } : {}),
+              projectId: args.projectIds,
             },
           },
         ],

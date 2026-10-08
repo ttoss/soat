@@ -18,6 +18,7 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
+  requireFound,
   requireProjectAccess,
 } from './helpers';
 import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
@@ -35,27 +36,6 @@ const generationAccess = makeItemRouteAuthorizer({
   param: 'generation_id',
   label: 'Generation',
 });
-
-/**
- * The generation a route resolved, past the `null` its lib lookup still
- * declares.
- *
- * Each route below runs after `generationAccess`, which resolved the generation
- * and its project, and then re-reads it narrowed to exactly that project — so
- * the second lookup cannot miss. The lib signatures stay nullable because other
- * callers pass a wider scope; this is the one place that difference is
- * reconciled, rather than three unreachable guards that read as though a miss
- * were expected.
- */
-const requireResolved = <T>(args: { value: T | null; ctx: Context }): T => {
-  if (!args.value) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${args.ctx.params.generation_id}' not found.`
-    );
-  }
-  return args.value;
-};
 
 /**
  * @openapi
@@ -117,8 +97,9 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
     action: 'generations:GetGeneration',
   });
 
-  ctx.body = requireResolved({
-    ctx,
+  ctx.body = requireFound({
+    label: 'Generation',
+    id: ctx.params.generation_id,
     value: await getGeneration({
       publicId: ctx.params.generation_id,
       projectIds,
@@ -140,8 +121,9 @@ generationsRouter.get(
       action: 'generations:GetGeneration',
     });
 
-    ctx.body = requireResolved({
-      ctx,
+    ctx.body = requireFound({
+      label: 'Generation',
+      id: ctx.params.generation_id,
       value: await getGenerationMemoryAssertions({
         publicId: ctx.params.generation_id,
         projectIds,
@@ -222,8 +204,9 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', metadataError);
   }
 
-  ctx.body = requireResolved({
-    ctx,
+  ctx.body = requireFound({
+    label: 'Generation',
+    id: ctx.params.generation_id,
     value: await updateGenerationMetadata({
       publicId: ctx.params.generation_id,
       projectIds,
@@ -248,8 +231,9 @@ generationsRouter.delete(
       action: 'generations:PurgeGenerationContent',
     });
 
-    ctx.body = requireResolved({
-      ctx,
+    ctx.body = requireFound({
+      label: 'Generation',
+      id: ctx.params.generation_id,
       value: await purgeGenerationContent({
         publicId: ctx.params.generation_id,
         projectIds,

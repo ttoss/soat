@@ -27,7 +27,7 @@ orchestrationNodeExecutionsRouter.get(
 
     ctx.body = await listOrchestrationRunNodeExecutions({
       runId: ctx.params.orchestration_run_id,
-      projectIds: projectIds ?? undefined,
+      projectIds,
       ...parsePagination(ctx),
     });
   }

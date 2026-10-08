@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import { purgeTraceContent } from 'src/lib/contentPurge';
 import { getTrace, getTraceTree, listTraces, traceRows } from 'src/lib/traces';
 
@@ -8,6 +7,7 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
+  requireFound,
   resolveReadProjectIds,
 } from './helpers';
 import { makeItemRouteAuthorizer } from './resourceAccess';
@@ -87,18 +87,13 @@ tracesRouter.delete('/traces/:trace_id/content', async (ctx: Context) => {
     action: 'traces:PurgeTraceContent',
   });
 
-  const purged = await purgeTraceContent({
-    traceId: ctx.params.trace_id,
-    projectIds,
-    principal: requestPrincipalFromCtx(ctx),
+  ctx.body = requireFound({
+    value: await purgeTraceContent({
+      traceId: ctx.params.trace_id,
+      projectIds,
+      principal: requestPrincipalFromCtx(ctx),
+    }),
+    label: 'Trace',
+    id: ctx.params.trace_id,
   });
-
-  if (!purged) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trace '${ctx.params.trace_id}' not found.`
-    );
-  }
-
-  ctx.body = purged;
 });
