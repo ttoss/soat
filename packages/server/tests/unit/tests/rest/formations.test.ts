@@ -1657,6 +1657,71 @@ resources:
       expect(toolRes.body.execute.body_mode).toBe('multipart');
     });
 
+    test('carries execute.response_mode through an apply', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `execute-response-mode-${Date.now()}`,
+          template: {
+            resources: {
+              DownloadTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-download-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://api.example.com/media/{id}',
+                    method: 'GET',
+                    response_mode: 'base64',
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+
+      // Read back as admin: this file's policy grants formation actions only,
+      // so `tools:GetTool` would 404 for `userToken` and mask the assertion.
+      const toolRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${res.body.resources[0].physical_resource_id}`
+      );
+      expect(toolRes.status).toBe(200);
+      expect(toolRes.body.execute.response_mode).toBe('base64');
+    });
+
+    test('rejects an unknown execute.response_mode at validate time', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadModeTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-bad-mode-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://example.com',
+                    response_mode: 'binary',
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((error: { message: string }) => {
+          return error.message.includes('execute.response_mode');
+        })
+      ).toBe(true);
+    });
+
     test('carries execute.auth through an apply', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
