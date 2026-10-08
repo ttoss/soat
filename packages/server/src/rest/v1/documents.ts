@@ -20,6 +20,7 @@ import {
 } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
+import { emptyPage } from 'src/lib/pagination';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { readMetadataQuery } from 'src/lib/structuredFilter';
@@ -34,6 +35,7 @@ import { registerDocumentRelationRoutes } from './documentRelationRoutes';
 import { registerDocumentVersionRoutes } from './documentVersionRoutes';
 import type { AuthenticatedContext, ProjectOwned } from './helpers';
 import {
+  parsePagination,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -113,12 +115,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const limit = ctx.query.limit
-    ? parseInt(ctx.query.limit as string, 10)
-    : undefined;
-  const offset = ctx.query.offset
-    ? parseInt(ctx.query.offset as string, 10)
-    : undefined;
+  const { limit, offset } = parsePagination(ctx);
   const pathPrefix = ctx.query.path_prefix as string | undefined;
   const relatedTo = ctx.query.related_to as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
@@ -149,12 +146,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       projectPublicId,
     });
     if (!hasAccess) {
-      ctx.body = {
-        data: [],
-        total: 0,
-        limit: limit ?? 50,
-        offset: offset ?? 0,
-      };
+      ctx.body = emptyPage({ limit, offset });
       return;
     }
     ctx.body = await listDocuments({

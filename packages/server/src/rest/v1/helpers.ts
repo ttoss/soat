@@ -112,23 +112,39 @@ export const parseToolContextBody = (
 export type ProjectOwned = { project_id: string | undefined };
 
 /**
- * Parses `limit` / `offset` list pagination params from the query string.
- * Returns `undefined` for a param that is absent or not a valid integer, so the
- * lib layer applies its own defaults/bounds (see `lib/pagination.ts`).
+ * The only reader of a paging parameter off a query string. Absent or empty is
+ * `undefined`, so the list's default applies; anything but an integer literal
+ * is `VALIDATION_FAILED`. Range and ceiling are `resolvePagination`'s.
  */
+const readPagingParam = (args: {
+  ctx: Context;
+  field: 'limit' | 'offset';
+}): number | undefined => {
+  const value = args.ctx.query[args.field];
+  if (value === undefined || value === '') return undefined;
+  if (typeof value !== 'string' || !/^-?\d+$/.test(value.trim())) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `${args.field} must be an integer; got ${JSON.stringify(value)}.`,
+      { field: args.field }
+    );
+  }
+  return Number(value);
+};
+
+/** `limit` / `offset` of an offset-paged list. */
 export const parsePagination = (
   ctx: Context
 ): { limit?: number; offset?: number } => {
-  const toInt = (value: unknown): number | undefined => {
-    if (typeof value !== 'string' || value.trim() === '') return undefined;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-
   return {
-    limit: toInt(ctx.query.limit),
-    offset: toInt(ctx.query.offset),
+    limit: readPagingParam({ ctx, field: 'limit' }),
+    offset: readPagingParam({ ctx, field: 'offset' }),
   };
+};
+
+/** `limit` of a cursor-paged list, which takes no `offset`. */
+export const parsePageLimit = (ctx: Context): number | undefined => {
+  return readPagingParam({ ctx, field: 'limit' });
 };
 
 /** A `Context` past {@link requireAuth}: `authUser` is guaranteed present. */

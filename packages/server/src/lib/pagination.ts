@@ -1,12 +1,20 @@
 import createDebug from 'debug';
 
+import { DomainError } from '../errors';
+
 const log = createDebug('soat:pagination');
 
+/** A list's page: its size when the caller names none, and its ceiling. */
+export type PageBounds = { defaultLimit: number; maxLimit: number };
+
+/** The page every list uses unless it declares its own. */
+export const LIST_BOUNDS: PageBounds = { defaultLimit: 50, maxLimit: 100 };
+
 /** Default number of rows returned by a list endpoint when no limit is given. */
-export const DEFAULT_LIST_LIMIT = 50;
+export const DEFAULT_LIST_LIMIT = LIST_BOUNDS.defaultLimit;
 
 /** Hard upper bound on a single page, regardless of the requested limit. */
-export const MAX_LIST_LIMIT = 100;
+export const MAX_LIST_LIMIT = LIST_BOUNDS.maxLimit;
 
 /** The single, canonical envelope every list endpoint returns. */
 export type PaginatedResult<T> = {
@@ -16,31 +24,45 @@ export type PaginatedResult<T> = {
   offset: number;
 };
 
+const refuse = (args: { field: string; value: number; rule: string }) => {
+  return new DomainError(
+    'VALIDATION_FAILED',
+    `${args.field} must be ${args.rule}; got ${args.value}.`,
+    { field: args.field }
+  );
+};
+
 /**
- * Normalizes raw `limit`/`offset` inputs to safe, bounded integers. A missing
- * limit falls back to {@link DEFAULT_LIST_LIMIT}; any limit is clamped to
- * `[1, MAX_LIST_LIMIT]`. A missing or negative offset becomes `0`.
+ * The one pagination rule. An absent `limit` is the list's default and an
+ * absent `offset` is `0`; a `limit` that is not an integer of at least 1, or an
+ * `offset` that is not a non-negative integer, is `VALIDATION_FAILED`. A limit
+ * above the ceiling is clamped to it, and the envelope reports the page served.
  */
 export const resolvePagination = (args: {
   limit?: number;
   offset?: number;
+  bounds?: PageBounds;
 }): { limit: number; offset: number } => {
-  const rawLimit = args.limit ?? DEFAULT_LIST_LIMIT;
-  const rawOffset = args.offset ?? 0;
+  const bounds = args.bounds ?? LIST_BOUNDS;
+  const limit = args.limit ?? bounds.defaultLimit;
+  const offset = args.offset ?? 0;
 
-  const limit = Math.min(
-    Math.max(
-      1,
-      Number.isFinite(rawLimit) ? Math.floor(rawLimit) : DEFAULT_LIST_LIMIT
-    ),
-    MAX_LIST_LIMIT
-  );
-  const offset = Math.max(
-    0,
-    Number.isFinite(rawOffset) ? Math.floor(rawOffset) : 0
-  );
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw refuse({
+      field: 'limit',
+      value: limit,
+      rule: 'an integer of at least 1',
+    });
+  }
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw refuse({
+      field: 'offset',
+      value: offset,
+      rule: 'a non-negative integer',
+    });
+  }
 
-  return { limit, offset };
+  return { limit: Math.min(limit, bounds.maxLimit), offset };
 };
 
 /**

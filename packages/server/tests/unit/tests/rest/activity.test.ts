@@ -123,10 +123,10 @@ describe('Activity', () => {
       expect(found.created_at).toBeDefined();
     });
 
-    test('a non-numeric limit falls back to the default rather than erroring', async () => {
+    test('a non-numeric limit is refused', async () => {
       const res = await listActivity('&limit=not-a-number');
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('filters by kind', async () => {

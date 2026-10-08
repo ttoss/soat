@@ -5,6 +5,7 @@ import { purgeTraceContent } from 'src/lib/contentPurge';
 import { getTrace, getTraceTree, listTraces, traceRows } from 'src/lib/traces';
 
 import {
+  parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
@@ -36,8 +37,7 @@ tracesRouter.get('/traces', async (ctx: Context) => {
     resourceType: 'trace',
   });
 
-  const limit = ctx.query.limit ? Number(ctx.query.limit) : undefined;
-  const offset = ctx.query.offset ? Number(ctx.query.offset) : undefined;
+  const { limit, offset } = parsePagination(ctx);
 
   ctx.body = await listTraces({ projectIds, limit, offset });
 });

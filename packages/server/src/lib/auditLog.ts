@@ -9,7 +9,11 @@ import {
 
 import { emitResourceEvent } from './eventBus';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
-import { totalListOrder } from './pagination';
+import {
+  type PageBounds,
+  resolvePagination,
+  totalListOrder,
+} from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:audit');
@@ -335,11 +339,8 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
  * exact. Offset/limit pagination; export-before-expiry is paginating this
  * endpoint into NDJSON.
  */
-/** Page size of the audit log when the caller names none. */
-export const AUDIT_LOG_DEFAULT_LIMIT = 25;
-
-/** The audit log's own page ceiling, wider than `MAX_LIST_LIMIT`. */
-export const AUDIT_LOG_MAX_LIMIT = 200;
+/** The audit log's page: smaller by default than a list, wider at most. */
+export const AUDIT_LOG_BOUNDS: PageBounds = { defaultLimit: 25, maxLimit: 200 };
 
 export const listAuditEntries = async (
   args: AuditListFilters & { limit?: number; offset?: number }
@@ -349,16 +350,11 @@ export const listAuditEntries = async (
   limit: number;
   offset: number;
 }> => {
-  // A non-finite value should never reach here (the REST layer validates it),
-  // but guarding here too keeps this shared clamp — also used by
-  // streamAuditEntriesNdjson's paging loop — safe against any other caller.
-  const rawLimit = Number.isFinite(args.limit) ? args.limit : undefined;
-  const rawOffset = Number.isFinite(args.offset) ? args.offset : undefined;
-  const limit = Math.min(
-    Math.max(rawLimit ?? AUDIT_LOG_DEFAULT_LIMIT, 1),
-    AUDIT_LOG_MAX_LIMIT
-  );
-  const offset = Math.max(rawOffset ?? 0, 0);
+  const { limit, offset } = resolvePagination({
+    limit: args.limit,
+    offset: args.offset,
+    bounds: AUDIT_LOG_BOUNDS,
+  });
 
   const where = buildListWhere(args);
 

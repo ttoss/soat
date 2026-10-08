@@ -71,7 +71,9 @@ const pollHistory = async (args: {
     const res = await authenticatedTestClient(args.token).get(
       `/api/v1/tasks/${args.taskId}/history`
     );
-    if (res.status === 200 && args.predicate(res.body)) return res.body;
+    if (res.status === 200 && args.predicate(res.body.data)) {
+      return res.body.data;
+    }
     await new Promise((resolve) => {
       setTimeout(resolve, 20);
     });
@@ -219,14 +221,14 @@ describe('Tasks', () => {
         `/api/v1/tasks/${res.body.id}/history`
       );
       expect(history.status).toBe(200);
-      expect(history.body).toHaveLength(1);
-      expect(history.body[0].from_state).toBeNull();
-      expect(history.body[0].to_state).toBe('triage');
-      expect(history.body[0].principal_kind).toBe('user');
-      expect(history.body[0].principal_id).toBe(userId);
+      expect(history.body.data).toHaveLength(1);
+      expect(history.body.data[0].from_state).toBeNull();
+      expect(history.body.data[0].to_state).toBe('triage');
+      expect(history.body.data[0].principal_kind).toBe('user');
+      expect(history.body.data[0].principal_id).toBe(userId);
       // The wire names the principal, never an `actor_*` alias.
-      expect(history.body[0].actor_kind).toBeUndefined();
-      expect(history.body[0].actor_id).toBeUndefined();
+      expect(history.body.data[0].actor_kind).toBeUndefined();
+      expect(history.body.data[0].actor_id).toBeUndefined();
     });
 
     // A non-string id reached the lookup as a query operator (an object) or
@@ -375,7 +377,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${created.body.id}/history`
         )
-      ).body;
+      ).body.data;
       expect(history[0].principal_kind).toBe('api_key');
       // The forensic value: the specific key, distinguishable from the owner.
       expect(history[0].principal_id).toBe(keyPublicId);
@@ -401,7 +403,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${res.body.id}/history`
         )
-      ).body;
+      ).body.data;
       // Mid-flow entry is a different first state, not a second lifecycle: a
       // single synthetic placement entry, same shape as the initial-state one.
       expect(history).toHaveLength(1);
@@ -528,7 +530,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${task.id}/history`
         )
-      ).body;
+      ).body.data;
       // initial + 3 transitions.
       expect(history).toHaveLength(4);
       expect(
@@ -536,6 +538,25 @@ describe('Tasks', () => {
           return h.to_state;
         })
       ).toEqual(['triage', 'review', 'draft', 'review']);
+    });
+
+    test('history pages oldest first with the list envelope', async () => {
+      const task = (await createTask()).body;
+      await transition(task.id, 'to_review');
+      await transition(task.id, 'to_draft');
+      await transition(task.id, 'to_review');
+
+      const page = await authenticatedTestClient(userToken)
+        .get(`/api/v1/tasks/${task.id}/history`)
+        .query({ limit: 2, offset: 1 });
+
+      expect(page.status).toBe(200);
+      expect(page.body).toMatchObject({ total: 4, limit: 2, offset: 1 });
+      expect(
+        page.body.data.map((h: { to_state: string }) => {
+          return h.to_state;
+        })
+      ).toEqual(['review', 'draft']);
     });
 
     test('a false guard rejects the move before any state change', async () => {
@@ -1545,7 +1566,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${created.body.id}/history`
         )
-      ).body;
+      ).body.data;
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
@@ -1817,7 +1838,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       expect(
         history.some((h: { transition: string }) => {
           return h.transition === 'advance';
@@ -1940,7 +1961,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       expect(
         history.some((h: { transition: string | null }) => {
           return h.transition === 'to_failed';
@@ -1987,7 +2008,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       // on_failure routed exactly once — after the last attempt, not per attempt.
       expect(
         history.filter((h: { transition: string | null }) => {
@@ -2116,7 +2137,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       expect(
         history.some((h: { transition: string | null }) => {
           return h.transition === 'to_failed';
@@ -2158,7 +2179,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       expect(
         history.some((h: { transition: string | null }) => {
           return h.transition === 'to_failed';
@@ -2200,7 +2221,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
@@ -2256,7 +2277,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
@@ -2304,7 +2325,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       expect(
         history.some((h: { transition: string }) => {
           return h.transition === 'to_done';
@@ -2644,7 +2665,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });
@@ -3343,7 +3364,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });
@@ -3725,7 +3746,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const move = history.find((h: { transition: string }) => {
         return h.transition === 'publish';
       });
@@ -3755,7 +3776,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const note = history[history.length - 1];
       expect(note.principal_kind).toBe('approval');
       expect(note.transition).toBeNull();
@@ -4119,7 +4140,7 @@ describe('Tasks', () => {
         const history = await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         );
-        const automated = (history.body as HistoryRow[]).filter((row) => {
+        const automated = (history.body.data as HistoryRow[]).filter((row) => {
           return row.transition === 'respin';
         });
         expect(automated).toHaveLength(LIMIT);
@@ -4673,7 +4694,7 @@ describe('Tasks', () => {
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${taskId}/history`
         )
-      ).body;
+      ).body.data;
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });

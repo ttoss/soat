@@ -630,13 +630,20 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(res.body.offset).toBe(0);
   });
 
-  test('out-of-range numeric limit/offset still clamp instead of erroring', async () => {
+  test('a limit below 1 or a negative offset is refused', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log')
       .query({ project_id: projectId, limit: '0', offset: '-10' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('a limit above the ceiling is clamped to it', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: '1000' });
     expect(res.status).toBe(200);
-    expect(res.body.limit).toBe(1);
-    expect(res.body.offset).toBe(0);
+    expect(res.body.limit).toBe(200);
   });
 });
 

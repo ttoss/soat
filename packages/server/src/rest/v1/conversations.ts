@@ -10,12 +10,14 @@ import {
   listConversations,
   updateConversation,
 } from 'src/lib/conversations';
+import { emptyPage } from 'src/lib/pagination';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { readTagQuery } from 'src/lib/tags';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
 import {
+  parsePagination,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -29,12 +31,7 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
   const projectPublicId = ctx.query.project_id as string | undefined;
   const actorId = ctx.query.actor_id as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
-  const limit = ctx.query.limit
-    ? parseInt(ctx.query.limit as string, 10)
-    : undefined;
-  const offset = ctx.query.offset
-    ? parseInt(ctx.query.offset as string, 10)
-    : undefined;
+  const { limit, offset } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -53,12 +50,7 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
       projectPublicId,
     });
     if (!compiled.hasAccess) {
-      ctx.body = {
-        data: [],
-        total: 0,
-        limit: limit ?? 50,
-        offset: offset ?? 0,
-      };
+      ctx.body = emptyPage({ limit, offset });
       return;
     }
     policyWhere = compiled.where;

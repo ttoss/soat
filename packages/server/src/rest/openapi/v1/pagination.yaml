@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: SOAT Pagination
+  version: 1.0.0
+  description: >-
+    Shared components for list pagination. This file declares no paths: it
+    exists so `limit` and `offset` are defined once rather than once per list.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: >-
+        Results per page. Above the maximum it is clamped, and `limit` in the
+        response reports the page served; below 1 or not an integer it is
+        `400 VALIDATION_FAILED`.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: >-
+        Results to skip. Negative or not an integer it is
+        `400 VALIDATION_FAILED`.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0

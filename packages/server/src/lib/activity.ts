@@ -7,7 +7,7 @@ import { APPROVAL_EVENT_TYPES } from './approvals';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { EXCEPTION_EVENT_TYPES } from './exceptions';
-import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from './pagination';
+import { resolvePagination } from './pagination';
 import { isPlainObject } from './plainObject';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { isSoatEventType, type SoatEventType } from './soatEvents';
@@ -191,14 +191,6 @@ const decodeCursor = (cursor: string): ActivityCursor => {
   return { createdAt, publicId };
 };
 
-const resolveActivityLimit = (limit?: number): number => {
-  const raw = limit ?? DEFAULT_LIST_LIMIT;
-  return Math.min(
-    Math.max(1, Number.isFinite(raw) ? Math.floor(raw) : DEFAULT_LIST_LIMIT),
-    MAX_LIST_LIMIT
-  );
-};
-
 export type ListActivityResult = {
   data: MappedActivityEntry[];
   next_cursor: string | null;
@@ -246,7 +238,7 @@ export const buildActivityWhere = (
 export const listActivity = async (
   args: ActivityFilters & { cursor?: string; limit?: number }
 ): Promise<ListActivityResult> => {
-  const limit = resolveActivityLimit(args.limit);
+  const { limit } = resolvePagination({ limit: args.limit });
   const where = buildActivityWhere(args);
 
   let finalWhere: Record<string, unknown> = where;

@@ -694,17 +694,17 @@ Every move (`start`, the automated `to_stanza_1`…`to_review` chain, `revise`,
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-task-history --task-id "$TASK_ID" | jq -r '.[] | "\(.from_state // "∅") → \(.to_state)  [\(.principal_kind)]  \(.transition // "(initial)")"'
+soat get-task-history --task-id "$TASK_ID" | jq -r '.data[] | "\(.from_state // "∅") → \(.to_state)  [\(.principal_kind)]  \(.transition // "(initial)")"'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: history } = await adminSoat.tasks.getTaskHistory({
+const { data: page } = await adminSoat.tasks.getTaskHistory({
   path: { task_id: TASK_ID },
 });
-for (const entry of history) {
+for (const entry of page?.data ?? []) {
   console.log(
     `${entry.from_state ?? '∅'} → ${entry.to_state} [${entry.principal_kind}] ${entry.transition ?? '(initial)'}`
   );
@@ -716,7 +716,7 @@ for (const entry of history) {
 
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq -r '.[] | "\(.from_state // "∅") → \(.to_state)  [\(.principal_kind)]  \(.transition // "(initial)")"'
+  | jq -r '.data[] | "\(.from_state // "∅") → \(.to_state)  [\(.principal_kind)]  \(.transition // "(initial)")"'
 ```
 
 </TabItem>

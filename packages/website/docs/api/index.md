@@ -127,8 +127,9 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
   -H "Authorization: Bearer <token>"
 ```
 
-- `limit` — results per page. Default `50`, clamped to `100` (a larger value is capped, not rejected).
+- `limit` — results per page. Default `50`, clamped to `100`: a larger value is capped, and `limit` in the response reports the page served. The [audit log](../modules/audit-log.md) defaults to `25` and caps at `200`.
 - `offset` — results to skip (default `0`).
+- A `limit` that is not an integer of at least `1`, or an `offset` that is not a non-negative integer (`abc`, `1.5`, `0`, `-1`), is `400 VALIDATION_FAILED`.
 - Items are in `response.data`, never the top-level body.
 - No `cursor`, `page`, or `sort`/`order` parameter. Sort order is fixed per endpoint (see the module doc), and rows that tie on it are broken by creation order, so a tie never reorders between pages.
 

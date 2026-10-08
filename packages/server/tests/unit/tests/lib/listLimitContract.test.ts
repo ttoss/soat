@@ -2,23 +2,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * `MAX_LIST_LIMIT` is enforced in exactly one function — `resolvePagination`,
- * reached through `paginatedList` and `emptyPage`. A list function that
- * hand-rolls `const limit = args.limit ?? 50` therefore has no upper bound at
- * all: nothing upstream compensates, because `parsePagination`
- * (`rest/v1/helpers.ts`) only parses the query value and passes it through.
- *
- * That is how `GET /actors?limit=1000000` came to attempt a full-table read with
- * an `include` fan-out across four associations while `GET /tools?limit=1000000`
- * correctly returned 100. Same contract, same envelope, different bound,
- * decided by which lib function the route happened to call.
- *
- * Static on purpose, and the reason this is the durable half of the fix: a
- * per-route integration test only catches the routes someone remembered to
- * write one for, and `webhooks.ts` — which used `paginatedList` in one function
- * and hand-rolled in another — is the evidence that "remembering" does not
- * scale. Reading the source catches the class, including the 14th list function
- * nobody has written yet.
+ * Pagination has one parser and one resolver. `parsePagination`
+ * (`rest/v1/helpers.ts`) is the only reader of `limit`/`offset` off a query
+ * string, and `resolvePagination` (`lib/pagination.ts`) the only place a
+ * default, the ceiling or the `400` is applied. A route or lib function that
+ * does either itself answers the same request differently from every other
+ * list. Static, so it also holds the list nobody has written yet.
  */
 
 const SRC_DIR = join(__dirname, '../../../../src');
@@ -43,7 +32,51 @@ const collectSourceFiles = (dir: string): string[] => {
  */
 const UNCLAMPED_LIMIT = /\b(?:const|let)\s+limit\s*=\s*args\.limit\s*\?\?/;
 
-describe('list limit clamp', () => {
+/** Every `src/` file but `owner`, comments blanked, as `[path, lines]`. */
+const sourceLinesExcept = (owner: string): [string, string[]][] => {
+  return collectSourceFiles(SRC_DIR)
+    .filter((file) => {
+      return !file.endsWith(owner);
+    })
+    .map((file) => {
+      const source = readFileSync(file, 'utf-8').replace(
+        /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+        (match) => {
+          return match.replace(/[^\n]/g, ' ');
+        }
+      );
+      return [file.slice(SRC_DIR.length + 1), source.split('\n')];
+    });
+};
+
+const offendersOf = (args: { pattern: RegExp; owner: string }): string[] => {
+  return sourceLinesExcept(args.owner).flatMap(([file, lines]) => {
+    return lines.flatMap((line, index) => {
+      return args.pattern.test(line) ? [`${file}:${index + 1}`] : [];
+    });
+  });
+};
+
+describe('list pagination', () => {
+  test('no route reads limit or offset off the query itself', () => {
+    expect(
+      offendersOf({
+        pattern: /query\s*(\.\s*|\[\s*['"])(limit|offset)\b/,
+        owner: join('rest', 'v1', 'helpers.ts'),
+      })
+    ).toEqual([]);
+  });
+
+  test('no module applies a page default or ceiling of its own', () => {
+    expect(
+      offendersOf({
+        pattern:
+          /\b(DEFAULT_LIST_LIMIT|MAX_LIST_LIMIT)\b|\b(limit|offset)\s*\?\?\s*\d/,
+        owner: join('lib', 'pagination.ts'),
+      })
+    ).toEqual([]);
+  });
+
   test('no lib function applies its own limit default', () => {
     const offenders: string[] = [];
 

@@ -54,6 +54,7 @@ const readQueryNames = (source: string): Set<string> => {
     names.add('limit');
     names.add('offset');
   }
+  if (source.includes('parsePageLimit(ctx)')) names.add('limit');
   return names;
 };
 

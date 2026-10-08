@@ -6478,7 +6478,7 @@ expect_cli_error_status 409 transition-task --task-id "$TASK_ID" --transition re
 echo "Closed-task guard: OK (409 as expected)"
 
 # History is append-only: initial + start + to_review + revise + to_review + publish = 6.
-TASK_HISTORY=$($SOAT_CLI get-task-history --task-id "$TASK_ID")
+TASK_HISTORY=$($SOAT_CLI get-task-history --task-id "$TASK_ID" | jq '.data')
 HIST_COUNT=$(printf '%s\n' "$TASK_HISTORY" | jq 'length')
 if [ "$HIST_COUNT" -lt 6 ]; then
   echo "ERROR: expected >= 6 history rows, got $HIST_COUNT" >&2
@@ -6579,7 +6579,7 @@ fi
 # no run, so `tool_id` is the provenance an automation transition carries.
 TOOL_HIST_OK=$($SOAT_CLI get-task-history --task-id "$TOOL_TASK_ID" | jq -r \
   --arg tool "$WF_TOOL_ID" \
-  'any(.[]; .transition == "to_done" and .principal_kind == "automation" and .tool_id == $tool)')
+  'any(.data[]; .transition == "to_done" and .principal_kind == "automation" and .tool_id == $tool)')
 if [ "$TOOL_HIST_OK" != "true" ]; then
   echo "ERROR: tool dispatch transition missing tool_id provenance" >&2
   $SOAT_CLI get-task-history --task-id "$TOOL_TASK_ID" >&2
@@ -6833,7 +6833,7 @@ echo "Automation chain depth counted the hop: OK"
 # Attribution is asserted on the *finish* row, not the task's first — the
 # creation row names whoever called create-task directly, which is an ordinary
 # request-bound credential and says nothing about the chain.
-SELF_HISTORY=$($SOAT_CLI get-task-history --task-id "$SELF_TASK_ID")
+SELF_HISTORY=$($SOAT_CLI get-task-history --task-id "$SELF_TASK_ID" | jq '.data')
 if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
   'map(select(.transition == "finish")) | length == 1 and (.[0].principal_kind == "user") and (.[0].principal_id == $uid)' >/dev/null 2>&1; then
   echo "ERROR: the automated transition was not attributed to the principal that started the chain" >&2

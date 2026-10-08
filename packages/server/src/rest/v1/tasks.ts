@@ -119,7 +119,10 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  ctx.body = await getTaskHistory({ id: ctx.params.task_id });
+  ctx.body = await getTaskHistory({
+    id: ctx.params.task_id,
+    ...parsePagination(ctx),
+  });
 });
 
 tasksRouter.post('/tasks', async (ctx: Context) => {
