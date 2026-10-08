@@ -498,6 +498,13 @@ describe('Traces REST API', () => {
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toBe(
+        'Unknown query parameter(s): include. This route takes no query parameters.'
+      );
+      expect(res.body.error.meta).toEqual({
+        unknown_query_parameters: ['include'],
+        accepted_query_parameters: [],
+      });
     });
   });
 

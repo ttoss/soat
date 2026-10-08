@@ -221,6 +221,12 @@ describe('strictFieldsMiddleware', () => {
         (thrown as { meta?: { unknown_query_parameters?: string[] } }).meta
           ?.unknown_query_parameters
       ).toEqual(['conversation_id']);
+      const accepted = (
+        thrown as { meta?: { accepted_query_parameters?: string[] } }
+      ).meta?.accepted_query_parameters;
+      expect(accepted).toContain('group_by');
+      expect(accepted).toEqual([...(accepted ?? [])].sort());
+      expect((thrown as { message?: string }).message).toContain('Accepted: ');
     });
 
     test('passes the parameters the spec declares', async () => {

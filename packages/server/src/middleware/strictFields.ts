@@ -77,14 +77,18 @@ const validateQueryParams = (ctx: Context): void => {
   if (unknown.length === 0) return;
 
   log('unknown query params: %s %s %o', ctx.method, ctx.path, unknown);
+  const accepted = [...declared].sort();
   throw new DomainError(
     'VALIDATION_FAILED',
-    `Unknown query parameter(s): ${unknown.sort().join(', ')}. Accepted: ${[
-      ...declared,
-    ]
-      .sort()
-      .join(', ')}.`,
-    { unknown_query_parameters: unknown.sort() }
+    `Unknown query parameter(s): ${unknown.sort().join(', ')}. ${
+      accepted.length > 0
+        ? `Accepted: ${accepted.join(', ')}.`
+        : 'This route takes no query parameters.'
+    }`,
+    {
+      unknown_query_parameters: unknown,
+      accepted_query_parameters: accepted,
+    }
   );
 };
 

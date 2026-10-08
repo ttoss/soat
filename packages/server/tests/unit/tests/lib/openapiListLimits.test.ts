@@ -19,6 +19,7 @@ import { LIST_BOUNDS, type PageBounds } from '../../../../src/lib/pagination';
 const SPEC_DIR = path.resolve(__dirname, '../../../../src/rest/openapi/v1');
 
 const SHARED = './pagination.yaml#/components/parameters/';
+const PAGE_KEYS = 'data,limit,offset,total';
 
 /** Lists whose page is not {@link LIST_BOUNDS}. */
 const OWN_BOUNDS: Record<string, PageBounds> = {
@@ -125,8 +126,8 @@ const resolveLocal = (spec: unknown, node: unknown): unknown => {
 };
 
 /**
- * Operations answering a collection — a JSON array, or an object whose `data`
- * is one — with whether they take `limit`.
+ * Operations answering a collection — a JSON array, an object whose `data` is
+ * one, or any operation taking `offset` — with how they page.
  */
 const collectionOperations = () => {
   return fs
@@ -163,17 +164,35 @@ const collectionOperations = () => {
                 : undefined;
               const bareArray = schema.type === 'array';
               const enveloped = isNode(data) && data.type === 'array';
-              if (!bareArray && !enveloped) return [];
-              const paged = [
+              const parameters = [
                 ...listOf(item.parameters),
                 ...listOf(operation.parameters),
-              ].some((parameter) => {
+              ];
+              const paged = parameters.some((parameter) => {
                 return (
                   pagingName(parameter) === 'limit' ||
                   (isNode(parameter) && parameter.name === 'cursor')
                 );
               });
-              return [{ operationId, bareArray, paged }];
+              const offsetPaged = parameters.some((parameter) => {
+                return pagingName(parameter) === 'offset';
+              });
+              if (!bareArray && !enveloped && !offsetPaged) return [];
+              const keysOf = (node: unknown) => {
+                const resolved = resolveLocal(spec, node);
+                return isNode(resolved) && isNode(resolved.properties)
+                  ? Object.keys(resolved.properties).sort().join()
+                  : '';
+              };
+              // A report may carry its page under one property (`groups`).
+              const pages = [
+                keysOf(schema),
+                ...Object.values(
+                  isNode(schema.properties) ? schema.properties : {}
+                ).map(keysOf),
+              ];
+              const keys = pages.includes(PAGE_KEYS) ? PAGE_KEYS : pages[0];
+              return [{ operationId, bareArray, paged, offsetPaged, keys }];
             });
         });
     });
@@ -194,6 +213,22 @@ describe('OpenAPI collection responses', () => {
         })
         .map(({ operationId }) => {
           return operationId;
+        })
+    ).toEqual([]);
+  });
+
+  test('an offset page is exactly data, total, limit and offset', () => {
+    const offsetPages = operations.filter(({ offsetPaged }) => {
+      return offsetPaged;
+    });
+    expect(offsetPages.length).toBeGreaterThan(50);
+    expect(
+      offsetPages
+        .filter(({ keys }) => {
+          return keys !== PAGE_KEYS;
+        })
+        .map(({ operationId, keys }) => {
+          return `${operationId}: ${keys}`;
         })
     ).toEqual([]);
   });
