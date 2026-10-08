@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.74.0](https://github.com/ttoss/soat/compare/v0.73.1...v0.74.0) (2026-10-08)
+
+* feat(server)!: read embedded collections through their own paged routes (#1569) ([80604b8](https://github.com/ttoss/soat/commit/80604b81aac0fd76afa2fcaa128ee6544e90eaf3)), closes [#1569](https://github.com/ttoss/soat/issues/1569)
+* feat(server)!: one pagination rule and definition for every list (#1568) ([e02cd9f](https://github.com/ttoss/soat/commit/e02cd9f751d23cddc6b8f433a51cc1d80b9cfe61)), closes [#1568](https://github.com/ttoss/soat/issues/1568)
+
+### Bug Fixes
+
+* **formations:** a ${body.*} tool argument is not a missing parameter ([#1566](https://github.com/ttoss/soat/issues/1566)) ([6842ab5](https://github.com/ttoss/soat/commit/6842ab5cfd2d17284f87e08722333d25365b94ae))
+
+### Features
+
+* **agents:** mark each step's last message for prompt caching ([#1564](https://github.com/ttoss/soat/issues/1564)) ([35c467e](https://github.com/ttoss/soat/commit/35c467edf5ece63ecdfb8aba08b7e09df739648a)), closes [#1562](https://github.com/ttoss/soat/issues/1562)
+* **server:** paginate provider models, document relations and share references ([#1565](https://github.com/ttoss/soat/issues/1565)) ([4f9d37d](https://github.com/ttoss/soat/commit/4f9d37dee83f732aefc63f13c6ddd954aba2c4c4)), closes [#1563](https://github.com/ttoss/soat/issues/1563)
+
+### BREAKING CHANGES
+
+* a malformed or out-of-domain `limit`/`offset` is `400`
+  instead of being defaulted or clamped, and
+  `GET /api/v1/tasks/{task_id}/history` answers `{ data, total, limit, offset }`
+  instead of an array.
+* the fields above are removed from their responses and
+  `include` is refused on the trace tree; read them from the routes listed.
+
 ## [0.73.1](https://github.com/ttoss/soat/compare/v0.72.0...v0.73.1) (2026-10-07)
 
 ### Features
