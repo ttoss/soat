@@ -270,6 +270,7 @@ describe('Tools', () => {
             method: 'POST',
             headers: { Authorization: 'Bearer static' },
             body_mode: 'json',
+            response_mode: 'base64',
             auth: {
               type: 'gcp_service_account',
               credentials: '{"type":"service_account"}',
@@ -280,6 +281,7 @@ describe('Tools', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.execute.body_mode).toBe('json');
+      expect(response.body.execute.response_mode).toBe('base64');
     });
   });
 
@@ -1370,6 +1372,21 @@ describe('Tools', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
       expect(res.body.error.message).toContain('multipart');
+    });
+
+    test('an unknown response_mode returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'unknown-response-mode-tool',
+          type: 'http',
+          execute: { url: 'https://example.com', response_mode: 'binary' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('execute.response_mode');
     });
 
     test('updating a tool to an invalid auth config returns 400', async () => {

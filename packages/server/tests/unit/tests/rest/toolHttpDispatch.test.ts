@@ -289,6 +289,163 @@ describe('POST /api/v1/tools/{tool_id}/call — http request shape', () => {
     });
   });
 
+  describe('execute.response_mode base64', () => {
+    // Every byte value, so a lossy text decode cannot pass.
+    const BYTES = Buffer.from(
+      Array.from({ length: 256 }, (_, index) => {
+        return index;
+      })
+    );
+
+    afterEach(() => {
+      delete process.env.TOOL_RESPONSE_MAX_BYTES;
+    });
+
+    const binaryTool = () => {
+      return httpTool({
+        method: 'GET',
+        execute: { response_mode: 'base64' },
+      });
+    };
+
+    test('returns the body as a file object, byte for byte', async () => {
+      const tool = await binaryTool();
+      turn.target.reply(tool.path, {
+        raw: BYTES,
+        contentType: 'audio/ogg; codecs=opus',
+        headers: {
+          'Content-Disposition': 'attachment; filename="voice note.ogg"',
+        },
+      });
+
+      const res = await call(tool.id);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        content_type: 'audio/ogg',
+        filename: 'voice note.ogg',
+        data_base64: BYTES.toString('base64'),
+      });
+    });
+
+    test('reads an RFC 5987 filename over the plain one', async () => {
+      const tool = await binaryTool();
+      turn.target.reply(tool.path, {
+        raw: BYTES,
+        contentType: 'application/pdf',
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="fallback.pdf"; filename*=UTF-8\'\'recibo%20n%C2%BA1.pdf',
+        },
+      });
+
+      const res = await call(tool.id);
+
+      expect(res.body.filename).toBe('recibo nº1.pdf');
+    });
+
+    test('omits filename when the target names none', async () => {
+      const tool = await binaryTool();
+      turn.target.reply(tool.path, { raw: BYTES, contentType: 'image/jpeg' });
+
+      const res = await call(tool.id);
+
+      expect(res.status).toBe(200);
+      expect(res.body.content_type).toBe('image/jpeg');
+      expect(res.body).not.toHaveProperty('filename');
+    });
+
+    test('a body over TOOL_RESPONSE_MAX_BYTES is 502 TOOL_RESPONSE_TOO_LARGE', async () => {
+      process.env.TOOL_RESPONSE_MAX_BYTES = '255';
+      const tool = await binaryTool();
+      turn.target.reply(tool.path, { raw: BYTES, contentType: 'image/png' });
+
+      const res = await call(tool.id);
+
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe('TOOL_RESPONSE_TOO_LARGE');
+      expect(res.body.error.meta.max_bytes).toBe(255);
+    });
+
+    test('a non-2xx answer is still TOOL_HTTP_ERROR with its text', async () => {
+      const tool = await binaryTool();
+      turn.target.reply(tool.path, { status: 404, raw: 'gone' });
+
+      const res = await call(tool.id);
+
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe('TOOL_HTTP_ERROR');
+      expect(res.body.error.meta.tool_response_body).toBe('gone');
+    });
+
+    test('a pipeline step hands the file to a multipart upload', async () => {
+      const download = await binaryTool();
+      turn.target.reply(download.path, {
+        raw: Buffer.from('PNG-BYTES'),
+        contentType: 'image/png',
+        headers: { 'Content-Disposition': 'inline; filename="a.png"' },
+      });
+      const upload = await httpTool({ execute: { body_mode: 'multipart' } });
+      const pipeline = await turn.createTool({
+        name: turn.unique('pipeline'),
+        type: 'pipeline',
+        parameters: { type: 'object', properties: {} },
+        execute: undefined,
+        pipeline: {
+          steps: [
+            { id: 'download', tool_id: download.id, input: {} },
+            {
+              id: 'upload',
+              tool_id: upload.id,
+              input: { file: { var: 'steps.download' } },
+            },
+          ],
+        },
+      });
+
+      expect((await call(pipeline.id)).status).toBe(200);
+
+      const [request] = turn.target.requestsAt(upload.path);
+      expect(request.raw).toContain('name="file"; filename="a.png"');
+      expect(request.raw).toContain('Content-Type: image/png');
+      expect(request.raw).toContain('PNG-BYTES');
+    });
+
+    test('a generation transcript keeps the file object without its bytes', async () => {
+      const name = turn.unique('media');
+      const tool = await turn.createTool({
+        name,
+        parameters: { type: 'object', properties: {} },
+        execute: {
+          url: `${turn.target.baseUrl}/${name}`,
+          method: 'GET',
+          response_mode: 'base64',
+        },
+      });
+      turn.target.reply(`/${tool.name}`, {
+        raw: BYTES,
+        contentType: 'image/png',
+      });
+      const agentId = await turn.createAgent({
+        tool_bindings: [{ tool_id: tool.id }],
+      });
+
+      const generation = await turn.startTurn({
+        agentId,
+        calls: [{ name: tool.name, args: {} }],
+      });
+
+      const transcript = await turn
+        .api()
+        .get(`/api/v1/generations/${generation.id}/transcript`);
+      expect(transcript.status).toBe(200);
+      expect(transcript.body.steps[0].tool_results[0].result).toEqual({
+        content_type: 'image/png',
+        data_base64: '[omitted: 256 bytes]',
+      });
+    });
+  });
+
   describe('SOAT_ERROR_LOGS_ENABLED', () => {
     let previousNamespaces: string;
     let sink: jest.SpyInstance;

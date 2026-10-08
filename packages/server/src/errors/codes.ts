@@ -518,6 +518,11 @@ export const ERROR_CODES = {
     description:
       'An http-type tool call returned a non-2xx response. The error `meta` carries the real upstream status code, response body, URL, and method.',
   },
+  TOOL_RESPONSE_TOO_LARGE: {
+    httpStatus: 502,
+    description:
+      "An http-type tool with `execute.response_mode: base64` answered with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default). The body is refused while it streams, so nothing was buffered. The error `meta` carries `tool_url` and `max_bytes`.",
+  },
   MCP_TOOL_ERROR: {
     httpStatus: 502,
     description:

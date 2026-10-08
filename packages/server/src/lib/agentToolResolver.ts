@@ -22,6 +22,11 @@ import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
 import { HttpToolError } from './httpToolError';
+import {
+  parseResponseMode,
+  readBase64ToolResponse,
+  type ResponseMode,
+} from './httpToolResponse';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
@@ -194,6 +199,7 @@ export type HttpExecuteConfig = {
   method?: string;
   headers?: Record<string, string>;
   bodyMode?: 'json' | 'multipart';
+  responseMode?: ResponseMode;
   auth?: HttpToolAuthConfig;
 };
 
@@ -250,8 +256,8 @@ export const parseHttpExecuteConfig = (
   execute: TypedHttpTool['execute']
 ): HttpExecuteConfig | null => {
   // Widened before narrowing: the declared union's object member lists only
-  // `url`/`method`/`headers`, so narrowing it directly would hide `body_mode`
-  // and `auth`.
+  // `url`/`method`/`headers`, so narrowing it directly would hide `body_mode`,
+  // `response_mode` and `auth`.
   const candidate: unknown = execute;
   if (!isPlainObject(candidate)) {
     return null;
@@ -272,6 +278,7 @@ export const parseHttpExecuteConfig = (
     method: typeof method === 'string' ? method : undefined,
     headers: parseHeaders({ value: parsedExecute.headers }),
     bodyMode: rawBodyMode === 'multipart' ? 'multipart' : 'json',
+    responseMode: parseResponseMode(parsedExecute.response_mode),
     auth: parseHttpToolAuthConfig(parsedExecute.auth),
   };
 };
@@ -556,6 +563,7 @@ const readHttpToolResponse = async (args: {
   response: Response;
   method: string;
   url: string;
+  responseMode?: ResponseMode;
 }): Promise<unknown> => {
   const { response, method, url } = args;
 
@@ -568,6 +576,10 @@ const readHttpToolResponse = async (args: {
       url,
       method
     );
+  }
+
+  if (args.responseMode === 'base64') {
+    return readBase64ToolResponse({ response, url });
   }
 
   // A 2xx with a non-JSON body must not surface as an opaque 500 from
@@ -613,6 +625,7 @@ const sendHttpToolRequest = async (
   }
 ): Promise<unknown> => {
   const { toolArgs, toolContext } = args;
+  const { responseMode } = args.execute;
   const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
   const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
   const hasBody = !['GET', 'HEAD'].includes(method);
@@ -675,7 +688,7 @@ const sendHttpToolRequest = async (
         },
       }
     );
-    return await readHttpToolResponse({ response, method, url });
+    return await readHttpToolResponse({ response, method, url, responseMode });
   } catch (error) {
     logToolCallingError({
       toolName: args.toolName,
