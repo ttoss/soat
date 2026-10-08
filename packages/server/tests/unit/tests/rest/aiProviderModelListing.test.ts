@@ -26,8 +26,8 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
       .query(query);
   };
 
-  const ids = (body: { models: Array<{ id: string }> }) => {
-    return body.models.map((model) => {
+  const ids = (body: { data: Array<{ id: string }> }) => {
+    return body.data.map((model) => {
       return model.id;
     });
   };
@@ -85,12 +85,13 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
     const response = await list();
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({
-      provider: 'anthropic',
-      total: 4,
-      limit: 50,
-      offset: 0,
-    });
+    expect(Object.keys(response.body).sort()).toEqual([
+      'data',
+      'limit',
+      'offset',
+      'total',
+    ]);
+    expect(response.body).toMatchObject({ total: 4, limit: 50, offset: 0 });
     expect(ids(response.body)).toEqual(
       catalogue.map((model) => {
         return model.id;
@@ -158,6 +159,6 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
     const response = await list({ q: 'gpt' });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ models: [], total: 0 });
+    expect(response.body).toMatchObject({ data: [], total: 0 });
   });
 });

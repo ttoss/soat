@@ -24,7 +24,7 @@ import type {
   BedrockModelSummary,
 } from './bedrockModelCatalog';
 import { defaultListFoundationModels } from './bedrockModelCatalog';
-import { pageOf } from './pagination';
+import { pageOf, type PaginatedResult } from './pagination';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 const log = createDebug('soat:provider-models');
@@ -485,13 +485,7 @@ export const listAiProviderModels = async (args: {
   q?: string;
   limit?: number;
   offset?: number;
-}): Promise<{
-  provider: AiProviderSlug;
-  models: ProviderModel[];
-  total: number;
-  limit: number;
-  offset: number;
-}> => {
+}): Promise<PaginatedResult<ProviderModel>> => {
   // The provider is this route's subject rather than something another
   // project's record points at, and the caller was authorized against the
   // provider's own project — so that project is the scope.
@@ -521,10 +515,9 @@ export const listAiProviderModels = async (args: {
   });
   // The vendor answers its whole catalogue in one call, so the filter and the
   // page apply to what it returned rather than to the upstream request.
-  const { data, ...page } = pageOf({
+  return pageOf({
     items: filterModels({ models: catalogue, q: args.q }),
     limit: args.limit,
     offset: args.offset,
   });
-  return { provider: resolved.provider, models: data, ...page };
 };

@@ -251,7 +251,7 @@ export const ERROR_CODES = {
   },
   VALIDATION_FAILED: {
     httpStatus: 400,
-    description: 'The request body failed validation.',
+    description: 'The request body or query string failed validation.',
   },
   FORCED_TOOL_CHOICE_CANNOT_STOP: {
     httpStatus: 400,

@@ -626,16 +626,11 @@ components:
     ProviderModelsResponse:
       type: object
       required:
-        - provider
-        - models
+        - data
         - total
         - limit
         - offset
       properties:
-        provider:
-          type: string
-          description: The provider slug the listing came from
-          example: vertex
         total:
           type: integer
           description: Models matching `q` across every page
@@ -643,7 +638,7 @@ components:
           type: integer
         offset:
           type: integer
-        models:
+        data:
           type: array
           items:
             type: object
