@@ -109,27 +109,6 @@ const findings = (args: {
   ];
 };
 
-const collectFindings = (args: {
-  schema: Record<string, unknown>;
-  body: unknown;
-}): Finding[] => {
-  // A bare-array response (e.g. a list route that returns items directly) is
-  // checked element-wise against the schema's `items`.
-  if (Array.isArray(args.body)) {
-    const itemSchema = resolveSchemaRef(args.schema.items);
-    if (!isObjectRecord(itemSchema)) return [];
-    return args.body.flatMap((element, index) => {
-      return findings({
-        schema: itemSchema,
-        value: element,
-        path: String(index),
-      });
-    });
-  }
-
-  return findings({ schema: args.schema, value: args.body, path: '' });
-};
-
 /**
  * Enabled outside production only. In tests a camelCase key throws, so the REST
  * suite is the enforcement mechanism; in development everything logs, so no
@@ -149,7 +128,8 @@ const checkableBody = (
   if (isErrorStatus(status)) return null;
 
   const body = ctx.body;
-  if (!isObjectRecord(body) && !Array.isArray(body)) return null;
+  // A collection is always an envelope object (`openapiListLimits.test.ts`).
+  if (!isObjectRecord(body)) return null;
 
   return { body, status };
 };
@@ -198,7 +178,7 @@ export const responseContractMiddleware = async (ctx: Context, next: Next) => {
   });
   if (!schema) return;
 
-  const found = collectFindings({ schema, body: checkable.body });
+  const found = findings({ schema, value: checkable.body, path: '' });
   if (found.length === 0) return;
 
   const where = `${ctx.method} ${template} (${checkable.status})`;

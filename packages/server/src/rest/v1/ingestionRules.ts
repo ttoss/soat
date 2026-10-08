@@ -168,17 +168,15 @@ ingestionRulesRouter.delete(
       id: ctx.params.ingestion_rule_id,
       projectIds,
     });
-    if (rule.project_id) {
-      setAuditResourceHint(ctx, {
+    setAuditResourceHint(ctx, {
+      projectPublicId: rule.project_id,
+      resourceSrn: buildSrn({
         projectPublicId: rule.project_id,
-        resourceSrn: buildSrn({
-          projectPublicId: rule.project_id,
-          resourceType: 'ingestionRule',
-          resourceId: rule.id,
-        }),
-        resourcePublicId: rule.id,
-      });
-    }
+        resourceType: 'ingestionRule',
+        resourceId: rule.id,
+      }),
+      resourcePublicId: rule.id,
+    });
 
     await deleteIngestionRule({ id: ctx.params.ingestion_rule_id, projectIds });
     ctx.status = 204;
