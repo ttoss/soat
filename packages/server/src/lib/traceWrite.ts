@@ -21,14 +21,27 @@ import {
 
 const log = createDebug('soat:traces');
 
+const OMITTED_PREFIX = '[omitted:';
+
 /**
  * Serializes trace steps so that Error objects (which serialize to `{}` by
  * default) are converted to plain objects with `message`, `name`, and any
  * enumerable properties (e.g. `status`, `body` from HttpToolError).
+ *
+ * A file's `data_base64` (a tool's file argument or `response_mode: base64`
+ * answer) is replaced by its size: a trace records the call, not the file.
  */
 export const serializeSteps = (steps: unknown[]): unknown[] => {
   return JSON.parse(
-    JSON.stringify(steps, (_key, value: unknown) => {
+    JSON.stringify(steps, (key, value: unknown) => {
+      // Steps already serialized pass through again on resume; keep the size.
+      if (
+        key === 'data_base64' &&
+        typeof value === 'string' &&
+        !value.startsWith(OMITTED_PREFIX)
+      ) {
+        return `${OMITTED_PREFIX} ${Buffer.byteLength(value, 'base64')} bytes]`;
+      }
       if (value instanceof Error) {
         return {
           message: value.message,

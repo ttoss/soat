@@ -198,8 +198,9 @@ type TargetReply = {
   status?: number;
   /** Sent as JSON; ignored when `raw` is set. */
   body?: unknown;
-  raw?: string;
+  raw?: string | Buffer;
   contentType?: string;
+  headers?: Record<string, string>;
   delayMs?: number;
   /** Drops the connection without answering. */
   destroy?: boolean;
@@ -231,6 +232,7 @@ const parseObject = (raw: string): Record<string, unknown> => {
 const sendReply = (res: http.ServerResponse, reply: TargetReply) => {
   res.writeHead(reply.status ?? 200, {
     'Content-Type': reply.contentType ?? 'application/json',
+    ...reply.headers,
   });
   res.end(reply.raw ?? JSON.stringify(reply.body ?? { ok: true }));
 };

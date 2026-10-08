@@ -1,6 +1,7 @@
 import { DomainError } from '../../errors';
 import { isRef } from '../formationsHelpers';
 import type { ValidationError } from '../formationsTypes';
+import { validateHttpExecute } from '../httpToolResponse';
 import {
   findUnreferencedPipelineParams,
   validatePipelineConfig,
@@ -11,7 +12,6 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import { validateExecuteAuth } from '../toolAuth';
 import { assertValidToolContextAllowlist } from '../toolContext';
 import { deleteTool, findToolDeletionBlocker } from '../toolDelete';
 import { createTool, getTool, updateTool } from '../tools';
@@ -54,20 +54,20 @@ const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
 };
 
 /**
- * Applies the same `execute.auth` rule the REST create/update paths enforce, so
- * a malformed credential config fails at `validate-formation` rather than
- * part-way through an apply.
+ * Applies the same `execute` rules the REST create/update paths enforce, so a
+ * malformed config fails at `validate-formation` rather than part-way through
+ * an apply.
  */
-const pushExecuteAuthErrors = (args: {
+const pushExecuteErrors = (args: {
   properties: Record<string, unknown>;
   basePath: string;
   errors: ValidationError[];
 }): void => {
   try {
-    validateExecuteAuth({ execute: args.properties.execute });
+    validateHttpExecute({ execute: args.properties.execute });
   } catch (error) {
     args.errors.push({
-      path: `${args.basePath}.execute.auth`,
+      path: `${args.basePath}.execute`,
       message: error instanceof DomainError ? error.message : String(error),
     });
   }
@@ -95,7 +95,7 @@ export const toolsFormationModule = defineFormationModule({
       }
     }
 
-    pushExecuteAuthErrors({ properties, basePath, errors });
+    pushExecuteErrors({ properties, basePath, errors });
 
     // The same rule the REST write path enforces, from the same function, so a
     // template cannot author a tool the API would reject — and so the error

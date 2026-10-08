@@ -601,7 +601,7 @@ components:
           nullable: true
           description: >
             Execution config for http tools. Supported fields: `url` (required),
-            `method` (default `POST`), `headers`, and `body_mode`. The `url`
+            `method` (default `POST`), `headers`, `body_mode` and `response_mode`. The `url`
             may contain `{paramName}` placeholders (e.g. `/users/{userId}`)
             that are replaced at call time with the corresponding tool argument
             value (URL-encoded). Arguments consumed as path parameters are
@@ -612,7 +612,13 @@ components:
             `{ content_type, filename, data_base64 }` is decoded from base64
             and attached as a file part (the hardcoded
             `Content-Type: application/json` is dropped so `fetch` sets the
-            multipart boundary itself).
+            multipart boundary itself). `response_mode` is `json` (default: the
+            body parsed as JSON, else returned as text) or `base64`, which returns
+            a 2xx body as `{ content_type, filename, data_base64 }` — the same
+            file shape `multipart` accepts, so a pipeline step can relay a
+            downloaded file. `filename` comes from `Content-Disposition` and is
+            omitted when the target names none; a body over
+            `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`.
 
 
             `auth` adds a computed request credential, for targets whose
@@ -1010,7 +1016,7 @@ components:
       additionalProperties: false
       description: >
         Execution config for http tools. Supported fields: `url` (required),
-        `method` (default `POST`), `headers`, and `body_mode`. The `url`
+        `method` (default `POST`), `headers`, `body_mode` and `response_mode`. The `url`
         may contain `{paramName}` placeholders (e.g. `/users/{userId}`)
         that are replaced at call time with the corresponding tool argument
         value (URL-encoded). Arguments consumed as path parameters are
@@ -1021,7 +1027,13 @@ components:
         `{ content_type, filename, data_base64 }` is decoded from base64
         and attached as a file part (the hardcoded
         `Content-Type: application/json` is dropped so `fetch` sets the
-        multipart boundary itself).
+        multipart boundary itself). `response_mode` is `json` (default: the
+        body parsed as JSON, else returned as text) or `base64`, which returns
+        a 2xx body as `{ content_type, filename, data_base64 }` — the same
+        file shape `multipart` accepts, so a pipeline step can relay a
+        downloaded file. `filename` comes from `Content-Disposition` and is
+        omitted when the target names none; a body over
+        `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`.
 
 
         `auth` adds a computed request credential, for targets whose
@@ -1096,6 +1108,16 @@ components:
           description: >-
             Request body encoding. Incompatible with
             `auth.type: aws_sigv4`.
+        response_mode:
+          type: string
+          nullable: true
+          enum:
+            - json
+            - base64
+            - null
+          description: >-
+            How a 2xx response body is returned. `base64` returns
+            `{ content_type, filename, data_base64 }` for binary targets.
         auth:
           $ref: '#/components/schemas/ToolExecuteAuthConfig'
     ToolExecuteAuthConfig:

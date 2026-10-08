@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { assertGuardrailsExist } from './guardrails';
+import { validateHttpExecute } from './httpToolResponse';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
 import {
@@ -14,7 +15,6 @@ import { makeResourceAccessor } from './resourceAccessor';
 import { type ReferenceReach, toolReferences } from './resourceReferences';
 import { assertSecretRefsExist } from './secrets';
 import { validateSoatActions } from './soatActionValidation';
-import { validateExecuteAuth } from './toolAuth';
 import type { ToolCallGuardrailMode } from './toolCallGuardrail';
 import { assertValidToolContextAllowlist } from './toolContext';
 import {
@@ -187,7 +187,7 @@ export const validateToolDefinition = async (args: {
     validateSoatActions(definition.actions);
   }
 
-  validateExecuteAuth({ execute: definition.execute });
+  validateHttpExecute({ execute: definition.execute });
 
   // A `context_keys` entry is a `tool_context` key, held to the same
   // header-name grammar (`toolContext.ts`) so an entry cannot be one that no
@@ -332,7 +332,7 @@ const validateToolUpdateTemplates = async (params: {
   if (!touchesConfig && args.presetParameters === undefined) return;
 
   if (touchesConfig) {
-    validateExecuteAuth({ execute: args.execute });
+    validateHttpExecute({ execute: args.execute });
   }
   assertValidToolTemplateTokens({
     execute: args.execute,

@@ -36,11 +36,12 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"builtin"` \| `"pipeline"` | Tool type — determines execution behaviour                                        |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
-| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `auth`). Required for `http` type.                |
+| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `response_mode`, `auth`). Required for `http` type. |
 | `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.   |
 | `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
 | `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
 | `execute.body_mode` | `"json" \| "multipart"`                         | How the request body is encoded for `POST`/`PUT`/`PATCH` (default: `json`). Use `multipart` for APIs that require `multipart/form-data`. |
+| `execute.response_mode` | `"json" \| "base64"`                       | How a 2xx response body is returned (default: `json`). `base64` returns `{ content_type, filename, data_base64 }` for binary targets. See [Binary responses](#binary-responses-response_mode). |
 | `execute.auth`      | `object \| null`                                | Computed request credential, for targets whose `Authorization` value cannot be a static header. `type` is `aws_sigv4` or `gcp_service_account`. See [Computed credentials](#computed-credentials-executeauth). |
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
@@ -208,6 +209,31 @@ The caller's `input` is the request body verbatim (keys never case-transformed).
 - Scalars (string, number, boolean) become form fields.
 - A `{ content_type, filename, data_base64 }` field (the shape an [ingestion rule](./ingestion-rules.md) passes for the uploaded file) is base64-decoded and attached as a file part with that filename and content type.
 - `Content-Type` is left unset so `fetch` generates the boundary (any `Content-Type` in `execute.headers` is dropped).
+
+#### Binary responses (`response_mode`)
+
+By default a 2xx body is parsed as JSON, else returned as text, which corrupts binary content. `execute.response_mode: "base64"` returns the body as the same file shape `multipart` accepts:
+
+```json
+{ "content_type": "audio/ogg", "filename": "voice.ogg", "data_base64": "T2dnUwACAAAA…" }
+```
+
+- `content_type` is the response's media type without parameters (`application/octet-stream` when absent).
+- `filename` comes from `Content-Disposition` (`filename*` over `filename`) and is omitted when the target names none.
+- A body over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is `502 TOOL_RESPONSE_TOO_LARGE`, refused while it streams.
+- A non-2xx answer is `502 TOOL_HTTP_ERROR` with its text, as in `json` mode.
+- Traces and transcripts record the object with `data_base64` replaced by its size.
+
+A [pipeline](#pipeline) step can hand the object to a `multipart` tool as one field:
+
+```json
+{
+  "steps": [
+    { "id": "download", "tool_id": "tool_download", "input": { "media_id": { "var": "input.media_id" } } },
+    { "id": "upload", "tool_id": "tool_upload", "input": { "file": { "var": "steps.download" } } }
+  ]
+}
+```
 
 ### client
 
@@ -443,6 +469,12 @@ arrives directly or through an approval.
 Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a tool it may not see does not announce itself), a write or a call is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project none of the caller's policies name is `404` too — the same answer their read would get, so a refusal never confirms existence across a tenant boundary.
 
 Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-tools) asks whether the caller may list tools in a project at all, so a policy that names individual tools grants no listing.
+
+## Configuration
+
+| Environment Variable      | Required | Description |
+| ------------------------- | -------- | ----------- |
+| `TOOL_RESPONSE_MAX_BYTES` | No       | Ceiling on an http tool's `response_mode: base64` body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger body is `502 TOOL_RESPONSE_TOO_LARGE`. |
 
 ## Examples
 

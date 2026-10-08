@@ -22,6 +22,17 @@ export const getUploadMaxBytes = (): number => {
     : UPLOAD_DEFAULT_MAX_BYTES;
 };
 
+/**
+ * An http tool's binary answer (`response_mode: base64`) is buffered whole.
+ * Defaults to the upload ceiling, so whatever a tool downloads can be uploaded.
+ */
+export const getToolResponseMaxBytes = (): number => {
+  const raw = process.env.TOOL_RESPONSE_MAX_BYTES;
+  if (!raw) return getUploadMaxBytes();
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : getUploadMaxBytes();
+};
+
 /** Embedding inputs per request: one call per input reaches the provider. */
 export const MAX_EMBEDDINGS_INPUTS = 256;
 
