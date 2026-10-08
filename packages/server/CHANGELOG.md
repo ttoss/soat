@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.76.0](https://github.com/ttoss/soat/compare/v0.75.0...v0.76.0) (2026-10-08)
+
+### Bug Fixes
+
+* **formations:** accept execute.response_mode on tool resources ([#1574](https://github.com/ttoss/soat/issues/1574)) ([e55bb4c](https://github.com/ttoss/soat/commit/e55bb4cf0908bdda1df1d2c8c8922c7df05fcb28))
+
+### Features
+
+* **tools:** return binary http responses as base64 file objects ([#1573](https://github.com/ttoss/soat/issues/1573)) ([f70b45f](https://github.com/ttoss/soat/commit/f70b45f8dcaa35f31e5b8f44247791f5b1b418b4))
+
 # [0.75.0](https://github.com/ttoss/soat/compare/v0.74.0...v0.75.0) (2026-10-08)
 
 * feat(server)!: one page envelope for every offset list; name the accepted query parameters (#1571) ([b60d8dc](https://github.com/ttoss/soat/commit/b60d8dc80933c67b210833e6137e9af1ac38d0c5)), closes [#1571](https://github.com/ttoss/soat/issues/1571)
