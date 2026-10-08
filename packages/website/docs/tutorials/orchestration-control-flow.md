@@ -422,21 +422,24 @@ echo "RUN_ID: $RUN_ID"
 
 ## Step 7 — Inspect the per-node executions
 
-`get-orchestration-run` returns the run [state](/docs/modules/orchestrations#state-and-mappings) and one record per executed node.
+`get-orchestration-run` returns the run [state](/docs/modules/orchestrations#state-and-mappings); `list-orchestration-run-node-executions` returns one [record](/docs/modules/orchestrations#node-executions) per node attempt.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 soat get-orchestration-run \
-  --orchestration-run-id "$RUN_ID" | jq '{status, state: {results: .state.results, summary: .state.summary}, nodes: [.node_executions[] | {node_id, node_type, status}]}'
+  --orchestration-run-id "$RUN_ID" | jq '{status, state: {results: .state.results, summary: .state.summary}}'
+
+soat list-orchestration-run-node-executions \
+  --orchestration-run-id "$RUN_ID" | jq '[.data[] | {node_id, node_type, status}]'
 ```
 
 Look for:
 
 - `state.results` — one entry per item, the sub-orchestration's output.
 - `state.summary` — `"Items were processed."`, written by the selected branch.
-- `node_executions` — `wait-ready` completed after one attempt; `summary-none` is `skipped` (the `condition` routed away from it).
+- the node executions — `wait-ready` completed after one attempt; `summary-none` is `skipped` (the `condition` routed away from it).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -447,9 +450,14 @@ const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
 });
 console.log('results:', runState.state.results);
 console.log('summary:', runState.state.summary);
+
+const { data: executions } =
+  await adminSoat.orchestrations.listOrchestrationRunNodeExecutions({
+    path: { orchestration_run_id: RUN_ID },
+  });
 console.log(
   'nodes:',
-  runState.node_executions?.map((n) => ({
+  executions.data.map((n) => ({
     node_id: n.node_id,
     node_type: n.node_type,
     status: n.status,
@@ -463,7 +471,11 @@ console.log(
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '{status, results: .state.results, summary: .state.summary, nodes: [.node_executions[] | {node_id, node_type, status}]}'
+  | jq '{status, results: .state.results, summary: .state.summary}'
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID/node-executions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {node_id, node_type, status}]'
 ```
 
 </TabItem>

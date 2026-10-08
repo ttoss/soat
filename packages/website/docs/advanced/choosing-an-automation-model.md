@@ -43,7 +43,7 @@ Escalate to a graph only when the work needs something an agent loop cannot expr
 | Signal | What only a graph gives you |
 | --- | --- |
 | **Steps run in parallel and rejoin** | [Parallel execution rounds](/docs/modules/orchestrations#parallel-execution) and [`activation_group` fan-in](/docs/modules/orchestrations#activation-groups-fan-in). An agent loop is sequential |
-| **The branch must be auditable, not inferred** | A [`condition` node](/docs/modules/orchestrations#node-types) emits a label an edge selects on, and every attempt lands in [`node_executions`](/docs/modules/orchestrations#node-executions). A model choosing its own next step leaves no such record |
+| **The branch must be auditable, not inferred** | A [`condition` node](/docs/modules/orchestrations#node-types) emits a label an edge selects on, and every attempt lands in a [node execution](/docs/modules/orchestrations#node-executions) record. A model choosing its own next step leaves no such record |
 | **A human signs off mid-run** | [`human`](/docs/modules/orchestrations#human-nodes) and [`approval`](/docs/modules/orchestrations#approval-nodes) nodes park the run and resume it later |
 | **The wait outlives the request** | [Durable background execution](/docs/modules/orchestrations#durable-background-execution) — `delay`, `poll`, and the `sleeping` status let a run span hours or days holding no connection open |
 | **The entity revisits states over days** | A [workflow](/docs/modules/workflows) — see the rest of this page |
@@ -73,7 +73,7 @@ Both are started by a client, or by a [trigger](/docs/modules/triggers):
 | **A long-lived entity** — a task never terminates on its own (`status: open` / `closed`)        | A run always drives toward a terminal node                                 |
 | **Named transitions as the only mutation path**, with guards over `{task, transition, principal}` | A run advances by the edges the engine picks; there is nothing to fire     |
 | **A board query** — [`GET /tasks?workflow_id=…&state=…`](/docs/api/tasks/list-tasks) is one column, with zero app-side state | —                                                                         |
-| **Append-only transition history** with `principal_kind` (`user`/`api_key`/`automation`/`approval`) | `node_executions` records execution, not who moved what                   |
+| **Append-only transition history** with `principal_kind` (`user`/`api_key`/`automation`/`approval`) | Node executions record execution, not who moved what                     |
 | **Caller-owned mutable `payload`** (shallow-merged on `PATCH`, validated by `payload_schema`)   | A run's `state` is engine-owned                                           |
 | **Approval-gated _transitions_** (`requires_approval` parks the move itself)                    | An `approval` node gates a tool call, not a state change                   |
 | **Stall detection** — `stalled_after` emits `tasks.stalled`, re-armed on the next transition    | A run has no "sat here too long" concept                                  |
@@ -95,7 +95,7 @@ reaches it by dispatching a run:
 - **Per-node retry** with `fixed` or `exponential` backoff and a delay ceiling. (A
   workflow's `retry` is a simpler per-dispatch policy for one state.)
 - **The `state` / `artifacts` / `nodes.<id>` namespaces**, `input_schema` and
-  `state_schema`, and a `node_executions` record per attempt.
+  `state_schema`, and a node execution record per attempt.
 - **Usage roll-up** — tokens and cost summed across every metered generation in the run,
   plus a linked trace.
 - **Guardrail interception** on tool nodes.

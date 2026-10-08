@@ -195,9 +195,9 @@ The *who* is `principal_type` / `principal_id`. On both agent doors the principa
 
 - [`GET /api/v1/memories/{memory_id}/assertions`](/docs/api/memories/list-memory-assertions) — one memory's full history, oldest first, skips included. A `superseded` assertion also names the memory it retired, so the chain reads in both directions. A retired memory keeps its own assertions.
 - [`GET /api/v1/memory-stores/{memory_store_id}/assertions`](/docs/api/memory-stores/list-memory-store-assertions) — the store's ledger, newest first, filterable by `mechanism`, `outcome`, `generation_id` and `since`. This is the volume question as a query.
-- [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) carries `memory_assertions` alongside the per-rule [`extraction` counts](#what-a-firing-records), so the summary and the rows it summarizes reconcile — and it covers the `write_memory` calls the summary never saw.
+- [`GET /api/v1/generations/{generation_id}/memory-assertions`](/docs/api/generations/list-generation-memory-assertions) — every write one turn made, oldest first: the rows behind the generation's per-rule [`extraction` counts](#what-a-firing-records), plus the `write_memory` calls the summary never saw.
 
-Both listings are gated on `memories:ListMemoryAssertions`, against the store's SRN like every other item read.
+The memory and store listings are gated on `memories:ListMemoryAssertions`, against the store's SRN like every other item read. The generation listing is gated on `generations:GetGeneration`.
 
 Validity — `invalidated_at` and `superseded_by_memory_id` — is on the memory, not on the assertion: it is the filter on every read, and one memory has one answer however many writes reached it. `superseded_memory_id` is read back from the memory, and is unique because a write supersedes exactly its top match; a `retracted` assertion leaves it null, because the memory it retired is the one `memory_id` already names.
 

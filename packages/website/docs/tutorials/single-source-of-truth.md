@@ -485,7 +485,7 @@ soat create-document-relation \
 
 soat list-documents --project-id "$PROJECT_ID" --related-to "$Q1_ID" | jq '[.data[] | .path]'
 
-soat get-document --document-id "$SUMMARY_ID" | jq '.relations'
+soat list-document-relations --document-id "$SUMMARY_ID" | jq '.data'
 ```
 
 </TabItem>

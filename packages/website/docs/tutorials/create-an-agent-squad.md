@@ -712,17 +712,18 @@ Inspect the [per-node executions](/docs/modules/orchestrations#node-executions) 
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-orchestration-run --orchestration-run-id "$RUN_ID" | jq '.node_executions[] | {node_id, node_type, status}'
+soat list-orchestration-run-node-executions --orchestration-run-id "$RUN_ID" | jq '.data[] | {node_id, node_type, status}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: finished } = await authClient.orchestrations.getOrchestrationRun({
-  path: { orchestration_run_id: RUN_ID },
-});
-for (const exec of finished.node_executions) {
+const { data: executions } =
+  await authClient.orchestrations.listOrchestrationRunNodeExecutions({
+    path: { orchestration_run_id: RUN_ID },
+  });
+for (const exec of executions.data) {
   console.log(exec.node_id, exec.node_type, exec.status);
 }
 ```
@@ -731,8 +732,8 @@ for (const exec of finished.node_executions) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/orchestration-runs/$RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.node_executions[] | {node_id, node_type, status}'
+curl -s "$SOAT_URL/api/v1/orchestration-runs/$RUN_ID/node-executions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {node_id, node_type, status}'
 ```
 
 </TabItem>
