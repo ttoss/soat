@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.75.0](https://github.com/ttoss/soat/compare/v0.74.0...v0.75.0) (2026-10-08)
+
+* feat(server)!: one page envelope for every offset list; name the accepted query parameters (#1571) ([b60d8dc](https://github.com/ttoss/soat/commit/b60d8dc80933c67b210833e6137e9af1ac38d0c5)), closes [#1571](https://github.com/ttoss/soat/issues/1571)
+
+### BREAKING CHANGES
+
+* `GET /api/v1/ai-providers/{ai_provider_id}/models` answers
+  `data` instead of `models` and no longer carries `provider`.
+
 # [0.74.0](https://github.com/ttoss/soat/compare/v0.73.1...v0.74.0) (2026-10-08)
 
 * feat(server)!: read embedded collections through their own paged routes (#1569) ([80604b8](https://github.com/ttoss/soat/commit/80604b81aac0fd76afa2fcaa128ee6544e90eaf3)), closes [#1569](https://github.com/ttoss/soat/issues/1569)
