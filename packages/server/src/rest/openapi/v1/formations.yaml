@@ -928,6 +928,13 @@ components:
                 Request body encoding for `POST`/`PUT`/`PATCH`: `json`
                 (default) or `multipart`. Incompatible with
                 `auth.type: aws_sigv4`.
+            response_mode:
+              type: string
+              nullable: true
+              description: >-
+                How a 2xx response body is returned: `json` (default) or
+                `base64`, which returns `{ content_type, filename,
+                data_base64 }` for binary targets.
             auth:
               type: object
               nullable: true
