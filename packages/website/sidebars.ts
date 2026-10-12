@@ -148,6 +148,7 @@ const sidebars: SidebarsConfig = {
         'advanced/expressions-and-templating',
         'advanced/sync-and-async',
         'advanced/concurrent-writes',
+        'advanced/idempotency',
         'advanced/single-source-of-truth',
         'advanced/memory-and-knowledge-engine',
         'advanced/retrieval-quality',
