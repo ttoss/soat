@@ -450,6 +450,8 @@ paths:
         scheduler, surviving restarts. Pass wait=true to block until the run
         reaches a terminal or awaiting_input state.
       operationId: startOrchestrationRun
+      parameters:
+        - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:

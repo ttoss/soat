@@ -353,6 +353,7 @@ paths:
         from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
+        - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
         - name: wait
           in: query
           required: false

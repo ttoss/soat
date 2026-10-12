@@ -238,6 +238,7 @@ paths:
         from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
+        - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:

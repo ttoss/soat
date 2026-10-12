@@ -139,17 +139,18 @@ describe('POST /api/v1/agents/:agent_id/generate with an idempotency_key', () =>
     query?: string;
     agent?: string;
     token?: string;
+    header?: string;
     extra?: Record<string, unknown>;
   }) => {
-    return authenticatedTestClient(args.token ?? userToken)
-      .post(
-        `/api/v1/agents/${args.agent ?? agentId}/generate${args.query ?? ''}`
-      )
-      .send({
-        messages: [{ role: 'user', content: args.content ?? 'File the row.' }],
-        ...(args.key === undefined ? {} : { idempotency_key: args.key }),
-        ...args.extra,
-      });
+    const request = authenticatedTestClient(args.token ?? userToken).post(
+      `/api/v1/agents/${args.agent ?? agentId}/generate${args.query ?? ''}`
+    );
+    if (args.header !== undefined) request.set('Idempotency-Key', args.header);
+    return request.send({
+      messages: [{ role: 'user', content: args.content ?? 'File the row.' }],
+      ...(args.key === undefined ? {} : { idempotency_key: args.key }),
+      ...args.extra,
+    });
   };
 
   const settle = async (generationId: string) => {
@@ -464,5 +465,64 @@ describe('POST /api/v1/agents/:agent_id/generate with an idempotency_key', () =>
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  describe('the Idempotency-Key header', () => {
+    test('names the request the way the body field does', async () => {
+      const key = newKey();
+      const first = await generate({ header: key, query: '?wait=true' });
+      expect(first.status).toBe(200);
+      const afterFirst = provider.completions();
+
+      const retry = await generate({ key, query: '?wait=true' });
+
+      expect(retry.status).toBe(202);
+      expect(retry.body.generation_id).toBe(first.body.id);
+      expect(provider.completions()).toBe(afterFirst);
+    });
+
+    test('is recorded on the generation', async () => {
+      const key = newKey();
+      const first = await generate({ header: key, query: '?wait=true' });
+
+      const record = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${first.body.id}`
+      );
+
+      expect(record.body.idempotency_key).toBe(key);
+    });
+
+    test('agreeing with the body field is one key', async () => {
+      const key = newKey();
+
+      const response = await generate({
+        key,
+        header: key,
+        query: '?wait=true',
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    test('disagreeing with the body field returns 400', async () => {
+      const response = await generate({
+        key: newKey(),
+        header: newKey(),
+        query: '?wait=true',
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test.each([
+      ['blank', '   '],
+      ['over 255 characters', 'k'.repeat(256)],
+    ])('a header that is %s returns 400', async (_label, header) => {
+      const response = await generate({ header, query: '?wait=true' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 });

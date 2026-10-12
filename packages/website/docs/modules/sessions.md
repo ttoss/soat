@@ -236,7 +236,7 @@ Channels like WhatsApp use at-least-once webhook delivery, so the same inbound m
 - **First call** — message is saved and generation is triggered if `auto_generate` is on. Returns `201 Created`.
 - **Subsequent calls with the same key** — returns the original message with `200 OK`. No new message or generation is created.
 
-The key is scoped to the session.
+The key is scoped to the session. The `Idempotency-Key` header carries the same key. Sending both with different values is `400 VALIDATION_FAILED`.
 
 ### Inactivity TTL
 

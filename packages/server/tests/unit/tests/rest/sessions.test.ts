@@ -715,6 +715,37 @@ describe('Sessions', () => {
         expect(second.body.content).toBe('Original message');
       });
 
+      test('the Idempotency-Key header names the message the way the body field does', async () => {
+        const key = 'idem-key-header-' + Date.now();
+
+        const first = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .set('Idempotency-Key', key)
+          .send({ message: 'Header message' });
+
+        expect(first.status).toBe(201);
+
+        const second = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ message: 'Retried message', idempotency_key: key });
+
+        expect(second.status).toBe(200);
+        expect(second.body.content).toBe('Header message');
+      });
+
+      test('an Idempotency-Key header disagreeing with idempotency_key returns 400', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .set('Idempotency-Key', 'idem-key-a-' + Date.now())
+          .send({
+            message: 'Two keys',
+            idempotency_key: 'idem-key-b-' + Date.now(),
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
       test('same idempotency_key in different sessions is allowed', async () => {
         const key = 'idem-key-cross-session-' + Date.now();
 

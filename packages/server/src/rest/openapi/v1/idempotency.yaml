@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: SOAT Idempotency
+  version: 1.0.0
+  description: >-
+    Shared components for the deduplication key every idempotent operation
+    accepts. This file declares no paths: an operation that takes
+    `idempotency_key` in its body references the header here, so both
+    spellings of the key ship together.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        The request's deduplication key. Equivalent to `idempotency_key` in
+        the request body; sending both with different values is
+        `400 VALIDATION_FAILED`. A non-empty string of at most 255 characters.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: discord-msg-1234567890

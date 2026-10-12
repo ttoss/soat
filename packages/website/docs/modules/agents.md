@@ -338,6 +338,8 @@ Pass `idempotency_key` in the body so a redelivered or retried request (an at-le
 }
 ```
 
+The `Idempotency-Key` header carries the same key. Sending both with different values is `400 VALIDATION_FAILED`.
+
 The first request under a key runs as usual. Every later request carrying it runs nothing and answers `202` with the handle of the generation the key names, in whatever state it has reached — whether the request is background, `?wait=true` or `stream: true`, and including a retry that arrives while the original is still running. Read the result through [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) and [`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript).
 
 The key is scoped to the project and claimed by the generation record for as long as the record exists. Every other body field except `stream` is the request a key names: reusing a key with any of them changed, or on another agent of the project, is `409 IDEMPOTENCY_KEY_REUSED` and runs nothing. `stream` and `wait` are not compared. [Session messages](./sessions.md#idempotency) dedupe the same way per session; [orchestration runs](./orchestrations.md#starting-a-run-at-most-once) per project.

@@ -34,7 +34,7 @@ import {
   resolveReadProjectIds,
   writePreconditionOf,
 } from './helpers';
-import { parseIdempotencyKey } from './idempotencyKey';
+import { idempotencyKeyOf } from './idempotencyKey';
 import {
   authorizeOrchestrationRead,
   authorizeOrchestrationWrite,
@@ -261,7 +261,6 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     input?: unknown;
     tool_context?: unknown;
     metadata?: unknown;
-    idempotency_key?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
@@ -271,7 +270,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   if (!orchestrationId) {
     throw new DomainError('VALIDATION_FAILED', 'orchestration_id is required');
   }
-  const idempotencyKey = parseIdempotencyKey(body.idempotency_key);
+  const idempotencyKey = idempotencyKeyOf(ctx);
 
   const scope = await resolveStartRunScope(ctx);
   if (!scope) return;
