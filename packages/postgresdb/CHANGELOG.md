@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.77.0](https://github.com/ttoss/soat/compare/v0.76.0...v0.77.0) (2026-10-12)
+
+* feat(server)!: one idempotency pattern, with the Idempotency-Key header, on every idempotent route (#1576) ([e2d9e10](https://github.com/ttoss/soat/commit/e2d9e10e3ea7d7ac80a54fddff005a7ac2633fa7)), closes [#1576](https://github.com/ttoss/soat/issues/1576)
+
+### BREAKING CHANGES
+
+* a session message key reused with a different `message`, `document_id` or `tool_context` is `409 IDEMPOTENCY_KEY_REUSED` instead of a `200` replay of the original.
+
 # [0.76.0](https://github.com/ttoss/soat/compare/v0.75.0...v0.76.0) (2026-10-08)
 
 **Note:** Version bump only for package @soat/postgresdb
