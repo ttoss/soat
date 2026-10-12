@@ -12,6 +12,7 @@ import {
 import { assertNoSystemTagKeys } from 'src/lib/tags';
 
 import { type AuthenticatedContext, parsePagination } from './helpers';
+import { idempotencyKeyOf } from './idempotencyKey';
 import { checkSessionAccess } from './sessions';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -55,7 +56,6 @@ sessionSubResourcesRouter.post(
       message?: string;
       document_id?: string;
       tool_context?: Record<string, string>;
-      idempotency_key?: string;
     };
 
     validateAddMessageBody(body);
@@ -67,7 +67,7 @@ sessionSubResourcesRouter.post(
       documentId: body.document_id,
       toolContext: body.tool_context,
       authUser: ctx.authUser,
-      idempotencyKey: body.idempotency_key,
+      idempotencyKey: idempotencyKeyOf(ctx),
     });
 
     const resultObj = result as Record<string, unknown>;

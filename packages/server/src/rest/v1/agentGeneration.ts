@@ -20,7 +20,7 @@ import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import { authorizeAgentWrite } from './agentAccess';
-import { parseIdempotencyKey } from './idempotencyKey';
+import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
@@ -126,7 +126,6 @@ type GenerateRequestBody = {
   action_id?: string;
   metadata?: unknown;
   guardrail_context?: unknown;
-  idempotency_key?: unknown;
 };
 
 /**
@@ -159,7 +158,7 @@ const buildGenerationArgs = (args: {
     guardrailContext: isRecord(body.guardrail_context)
       ? body.guardrail_context
       : undefined,
-    idempotencyKey: parseIdempotencyKey(body.idempotency_key),
+    idempotencyKey: idempotencyKeyOf(ctx),
   };
 };
 

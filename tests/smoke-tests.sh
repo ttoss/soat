@@ -6133,7 +6133,7 @@ echo "First call with idempotency_key: OK"
 
 IDEM_SECOND_RESP=$($SOAT_CLI add-session-message \
   --session_id "$IDEM_SESSION_ID" \
-  --message "different message" \
+  --message "first message" \
   --idempotency_key "$IDEM_KEY")
 IDEM_SECOND_CONTENT=$(printf '%s\n' "$IDEM_SECOND_RESP" | jq -r '.content')
 if [ "$IDEM_SECOND_CONTENT" != "first message" ]; then
@@ -6142,6 +6142,18 @@ if [ "$IDEM_SECOND_CONTENT" != "first message" ]; then
   exit 1
 fi
 echo "Duplicate call with idempotency_key returns original message: OK"
+
+IDEM_REUSED_RESP=$($SOAT_CLI add-session-message \
+  --session_id "$IDEM_SESSION_ID" \
+  --message "different message" \
+  --idempotency_key "$IDEM_KEY" 2>&1 || true)
+IDEM_REUSED_CODE=$(printf '%s\n' "$IDEM_REUSED_RESP" | jq -r '.error.code' 2>/dev/null || true)
+if [ "$IDEM_REUSED_CODE" != "IDEMPOTENCY_KEY_REUSED" ]; then
+  echo "ERROR: idempotency_key reused with a different message was not refused" >&2
+  printf '%s\n' "$IDEM_REUSED_RESP" >&2
+  exit 1
+fi
+echo "Reused idempotency_key with a different message returns 409: OK"
 
 echo "add-session-message idempotency_key: OK"
 

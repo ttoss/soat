@@ -342,7 +342,7 @@ curl -X POST https://api.example.com/api/v1/orchestration-runs \
 </TabItem>
 </Tabs>
 
-The first request under a key starts the run and answers `201`. Every later request carrying the same key answers `200` with that same run, in whatever state it has reached — including a retry that arrives while the original request is still in flight, which is the case a timeout produces. The key is scoped to the project and claimed by the run record for as long as that record exists, so it never expires out from under a caller and lets a second run through.
+The first request under a key starts the run and answers `201`. Every later request carrying the same key answers `200` with that same run, in whatever state it has reached — including a retry that arrives while the original request is still in flight, which is the case a timeout produces. The key is scoped to the project. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
 
 `orchestration_id`, `input`, `tool_context` and `metadata` are the request a key names. Reusing a key with any of them changed is `409 IDEMPOTENCY_KEY_REUSED` and starts nothing — a caller that changed the body and kept the key has a bug, and replaying a run that does something else would hide it. `wait` is not part of that comparison: it says how the caller waits, not what the run is.
 

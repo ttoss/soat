@@ -16,6 +16,7 @@ import {
   addResolvedSessionUserMessage,
   assertSessionMessageInput,
 } from './sessionMessageHelpers';
+import { stableDigest } from './stableDigest';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -293,6 +294,14 @@ export const addSessionMessage = async (args: {
     documentId: args.documentId,
     authUser: args.authUser,
     idempotencyKey: args.idempotencyKey,
+    // The request a key names: what the message says and what its tools see.
+    idempotencyDigest: args.idempotencyKey
+      ? stableDigest({
+          message: args.message,
+          documentId: args.documentId,
+          toolContext: args.toolContext,
+        })
+      : undefined,
   });
 
   const savedContent = userMsg.content ?? resolvedContent.content;

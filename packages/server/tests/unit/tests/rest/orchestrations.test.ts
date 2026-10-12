@@ -802,6 +802,45 @@ describe('Orchestrations', () => {
       expect(retry.body.idempotency_key).toBe(key);
     });
 
+    test('the Idempotency-Key header names the run the way the body field does', async () => {
+      const key = `dispatch-${Date.now()}-header`;
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .set('Idempotency-Key', key)
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: { greeting: 'once' },
+        });
+      expect(first.status).toBe(201);
+      expect(first.body.idempotency_key).toBe(key);
+
+      const retry = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: { greeting: 'once' },
+          idempotency_key: key,
+        });
+      expect(retry.status).toBe(200);
+      expect(retry.body.id).toBe(first.body.id);
+    });
+
+    test('an Idempotency-Key header disagreeing with idempotency_key returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .set('Idempotency-Key', `dispatch-${Date.now()}-h1`)
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: {},
+          idempotency_key: `dispatch-${Date.now()}-h2`,
+        });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('a run started without a key reads back a null idempotency_key', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')

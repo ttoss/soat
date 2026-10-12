@@ -38,7 +38,7 @@ export const claimIdempotencyKey = async <Created, Replayed>(args: {
  */
 export const idempotencyKeyReused = (args: {
   idempotencyKey: string;
-  claimedBy: 'run' | 'generation';
+  claimedBy: 'run' | 'generation' | 'message';
 }): DomainError => {
   return new DomainError(
     'IDEMPOTENCY_KEY_REUSED',

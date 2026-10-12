@@ -98,6 +98,15 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.STRING, allowNull: true, field: 'idempotency_key' })
   declare idempotencyKey: string | null;
 
+  // The digest of the request the key names, so a key reused with a different
+  // body is refused rather than replayed. Null on rows written without a key.
+  @Column({
+    type: DataType.STRING(64),
+    allowNull: true,
+    field: 'idempotency_digest',
+  })
+  declare idempotencyDigest: string | null;
+
   @Column({
     type: DataType.JSONB,
     allowNull: true,

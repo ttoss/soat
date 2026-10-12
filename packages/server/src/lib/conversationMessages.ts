@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { claimMessageKey } from './conversationMessageIdempotency';
 import { conversationEmbedsTurns } from './conversationRetrieval';
 import {
   conversationMessageTags,
@@ -170,6 +171,7 @@ const insertMessage = async (args: {
   metadata?: Record<string, unknown>;
   responseMessages?: unknown[];
   idempotencyKey: string | null;
+  idempotencyDigest?: string | null;
 }) => {
   return db.sequelize.transaction(async (t) => {
     const position = await resolveMessagePosition({
@@ -189,34 +191,17 @@ const insertMessage = async (args: {
         metadata: args.metadata ?? null,
         responseMessages: args.responseMessages ?? null,
         idempotencyKey: args.idempotencyKey,
+        idempotencyDigest: args.idempotencyKey
+          ? (args.idempotencyDigest ?? null)
+          : null,
       },
       { transaction: t }
     );
   });
 };
 
-const findIdempotentMessage = async (args: {
-  conversationId: number;
-  idempotencyKey: string;
-}) => {
-  const existing = await db.ConversationMessage.findOne({
-    where: {
-      conversationId: args.conversationId,
-      idempotencyKey: args.idempotencyKey,
-    },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-      { model: db.Agent, as: 'agent' },
-    ],
-  });
-  return existing
-    ? { ...(await mapMessage(existing)), idempotent: true as const }
-    : null;
+const replayOf = async (message: ConversationMessageRow) => {
+  return { ...(await mapMessage(message)), idempotent: true as const };
 };
 
 const emitMessageCreated = (args: {
@@ -236,7 +221,7 @@ const emitMessageCreated = (args: {
   });
 };
 
-export const addConversationMessage = async (args: {
+type AddConversationMessageArgs = {
   conversationId: string;
   message: string;
   role: string;
@@ -246,26 +231,15 @@ export const addConversationMessage = async (args: {
   metadata?: Record<string, unknown>;
   responseMessages?: unknown[];
   idempotencyKey?: string | null;
-}) => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.conversationId },
-    // The owner rides along: every turn is stamped with it, so a per-actor
-    // knowledge filter and an IAM condition both have something to name.
-    include: [{ model: db.Actor, as: 'actor' }],
-  });
+  idempotencyDigest?: string | null;
+};
 
-  if (!conversation) {
-    return null;
-  }
+type ConversationRow = InstanceType<(typeof db)['Conversation']>;
 
-  if (args.idempotencyKey) {
-    const hit = await findIdempotentMessage({
-      conversationId: conversation.id,
-      idempotencyKey: args.idempotencyKey,
-    });
-    if (hit) return hit;
-  }
-
+const createTextMessage = async (
+  args: AddConversationMessageArgs & { conversation: ConversationRow }
+) => {
+  const { conversation } = args;
   const participants = await resolveParticipantDbIds({
     actorId: args.actorId,
     agentId: args.agentId,
@@ -310,6 +284,7 @@ export const addConversationMessage = async (args: {
     metadata: args.metadata,
     responseMessages: args.responseMessages,
     idempotencyKey: args.idempotencyKey ?? null,
+    idempotencyDigest: args.idempotencyDigest,
   });
 
   const messageWithAssociations = await conversationMessages.reload(result);
@@ -325,7 +300,32 @@ export const addConversationMessage = async (args: {
   return mapped;
 };
 
-export const addConversationDocumentMessage = async (args: {
+export const addConversationMessage = async (
+  args: AddConversationMessageArgs
+) => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.conversationId },
+    // The owner rides along: every turn is stamped with it, so a per-actor
+    // knowledge filter and an IAM condition both have something to name.
+    include: [{ model: db.Actor, as: 'actor' }],
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  return claimMessageKey({
+    conversationId: conversation.id,
+    idempotencyKey: args.idempotencyKey,
+    idempotencyDigest: args.idempotencyDigest,
+    toReplay: replayOf,
+    create: () => {
+      return createTextMessage({ ...args, conversation });
+    },
+  });
+};
+
+type AddConversationDocumentMessageArgs = {
   conversationId: string;
   documentId: string;
   role: string;
@@ -333,15 +333,14 @@ export const addConversationDocumentMessage = async (args: {
   agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
-}) => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.conversationId },
-  });
+  idempotencyKey?: string | null;
+  idempotencyDigest?: string | null;
+};
 
-  if (!conversation) {
-    return null;
-  }
-
+const createDocumentMessage = async (
+  args: AddConversationDocumentMessageArgs & { conversation: ConversationRow }
+) => {
+  const { conversation } = args;
   const participants = await resolveParticipantDbIds({
     actorId: args.actorId,
     agentId: args.agentId,
@@ -369,7 +368,8 @@ export const addConversationDocumentMessage = async (args: {
     agentId: participants.agentDbId,
     position: args.position,
     metadata: args.metadata,
-    idempotencyKey: null,
+    idempotencyKey: args.idempotencyKey ?? null,
+    idempotencyDigest: args.idempotencyDigest,
   });
 
   const messageWithAssociations = await conversationMessages.reload(result);
@@ -383,6 +383,28 @@ export const addConversationDocumentMessage = async (args: {
   });
 
   return mapped;
+};
+
+export const addConversationDocumentMessage = async (
+  args: AddConversationDocumentMessageArgs
+) => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.conversationId },
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  return claimMessageKey({
+    conversationId: conversation.id,
+    idempotencyKey: args.idempotencyKey,
+    idempotencyDigest: args.idempotencyDigest,
+    toReplay: replayOf,
+    create: () => {
+      return createDocumentMessage({ ...args, conversation });
+    },
+  });
 };
 
 export const removeConversationMessage = async (args: {
