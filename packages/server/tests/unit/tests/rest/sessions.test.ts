@@ -708,11 +708,64 @@ describe('Sessions', () => {
 
         const second = await authenticatedTestClient(userToken)
           .post(`/api/v1/sessions/${sessionId}/messages`)
-          .send({ message: 'Different message', idempotency_key: key });
+          .send({ message: 'Original message', idempotency_key: key });
 
         expect(second.status).toBe(200);
         expect(second.body.role).toBe('user');
         expect(second.body.content).toBe('Original message');
+      });
+
+      test('reusing an idempotency_key with a different message returns 409', async () => {
+        const key = 'idem-key-reused-' + Date.now();
+
+        const first = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ message: 'Original message', idempotency_key: key });
+        expect(first.status).toBe(201);
+
+        const reused = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ message: 'Different message', idempotency_key: key });
+
+        expect(reused.status).toBe(409);
+        expect(reused.body.error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+      });
+
+      test('a document_id message is deduplicated by its key', async () => {
+        const key = 'idem-key-document-' + Date.now();
+        const document = await authenticatedTestClient(adminToken)
+          .post('/api/v1/documents')
+          .send({
+            project_id: projectId,
+            content: 'Idempotent document input',
+            filename: `idempotent-input-${Date.now()}.txt`,
+          });
+        expect(document.status).toBe(201);
+
+        const first = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ document_id: document.body.id, idempotency_key: key });
+        expect(first.status).toBe(201);
+
+        const retry = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ document_id: document.body.id, idempotency_key: key });
+
+        expect(retry.status).toBe(200);
+        expect(retry.body.document_id).toBe(document.body.id);
+      });
+
+      test('two concurrent messages sharing a key save one', async () => {
+        const key = 'idem-key-concurrent-' + Date.now();
+        const send = () => {
+          return authenticatedTestClient(userToken)
+            .post(`/api/v1/sessions/${sessionId}/messages`)
+            .send({ message: 'Concurrent message', idempotency_key: key });
+        };
+
+        const [a, b] = await Promise.all([send(), send()]);
+
+        expect([a.status, b.status].sort()).toEqual([200, 201]);
       });
 
       test('the Idempotency-Key header names the message the way the body field does', async () => {
@@ -727,7 +780,7 @@ describe('Sessions', () => {
 
         const second = await authenticatedTestClient(userToken)
           .post(`/api/v1/sessions/${sessionId}/messages`)
-          .send({ message: 'Retried message', idempotency_key: key });
+          .send({ message: 'Header message', idempotency_key: key });
 
         expect(second.status).toBe(200);
         expect(second.body.content).toBe('Header message');

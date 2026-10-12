@@ -236,7 +236,7 @@ Channels like WhatsApp use at-least-once webhook delivery, so the same inbound m
 - **First call** — message is saved and generation is triggered if `auto_generate` is on. Returns `201 Created`.
 - **Subsequent calls with the same key** — returns the original message with `200 OK`. No new message or generation is created.
 
-The key is scoped to the session. A key reused with a different body still returns the original message. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
+The key is scoped to the session and applies to both the `message` and the `document_id` variant. `message`, `document_id` and `tool_context` are the request a key names: reusing a key with any of them changed is `409 IDEMPOTENCY_KEY_REUSED` and saves nothing. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
 
 ### Inactivity TTL
 

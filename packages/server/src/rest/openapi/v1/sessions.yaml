@@ -264,6 +264,14 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          description: >-
+            `IDEMPOTENCY_KEY_REUSED` — the key is already claimed by a message
+            in this session sent from a different request. No message is saved.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: the session auto-generates and an `enforce`-mode
@@ -902,7 +910,9 @@ components:
                 Optional deduplication key scoped to this session. If a message
                 with the same key already exists in the session, the original
                 message is returned with HTTP 200 and no new message or
-                generation is triggered.
+                generation is triggered. Reusing the key with a different
+                `message`, `document_id` or `tool_context` is
+                `409 IDEMPOTENCY_KEY_REUSED`.
               example: wamid.HBgLNTUxMTk4...
         - type: object
           additionalProperties: false
@@ -932,7 +942,9 @@ components:
                 Optional deduplication key scoped to this session. If a message
                 with the same key already exists in the session, the original
                 message is returned with HTTP 200 and no new message or
-                generation is triggered.
+                generation is triggered. Reusing the key with a different
+                `message`, `document_id` or `tool_context` is
+                `409 IDEMPOTENCY_KEY_REUSED`.
               example: wamid.HBgLNTUxMTk4...
 
     AddSessionMessageSaved:

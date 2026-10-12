@@ -32,6 +32,7 @@ export const addResolvedSessionUserMessage = async (args: {
   documentId?: string;
   authUser?: AuthUser;
   idempotencyKey?: string;
+  idempotencyDigest?: string;
 }) => {
   const resolvedContent = await resolveMessageContent({
     content: args.documentId
@@ -46,6 +47,8 @@ export const addResolvedSessionUserMessage = async (args: {
         documentId: args.documentId,
         role: 'user',
         actorId: args.actorId ?? null,
+        idempotencyKey: args.idempotencyKey,
+        idempotencyDigest: args.idempotencyDigest,
       })
     : await addConversationMessage({
         conversationId: args.conversationId,
@@ -53,6 +56,7 @@ export const addResolvedSessionUserMessage = async (args: {
         role: 'user',
         actorId: args.actorId ?? null,
         idempotencyKey: args.idempotencyKey,
+        idempotencyDigest: args.idempotencyDigest,
       });
 
   if (!userMsg) {

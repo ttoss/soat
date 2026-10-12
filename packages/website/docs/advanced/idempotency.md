@@ -19,7 +19,7 @@ This page is the canonical definition. Module pages describe what their own repl
 | --- | --- | --- | --- | --- |
 | [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) | project | runs as usual | `202` with the generation handle | `409 IDEMPOTENCY_KEY_REUSED` |
 | [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | project | `201` | `200` with the run | `409 IDEMPOTENCY_KEY_REUSED` |
-| [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) | session | `201` | `200` with the original message | `200` with the original message; the new body is ignored |
+| [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) | session | `201` | `200` with the original message | `409 IDEMPOTENCY_KEY_REUSED` |
 
 A retry that arrives while the original is still running replays it too. What each operation compares to decide "same request" is on its module page: [agents](../modules/agents.md#running-a-generation-at-most-once), [orchestrations](../modules/orchestrations.md#starting-a-run-at-most-once), [sessions](../modules/sessions.md#idempotency).
 
