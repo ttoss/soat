@@ -106,7 +106,7 @@ const publishedPackages = () => {
   });
 };
 
-describe('published package metadata', () => {
+describe('published package metadata — what the release job ships', () => {
   /**
    * A package npm could accept but CI never publishes is a trap: nothing fails
    * while the release job names its packages one by one, and the day anyone
@@ -147,7 +147,9 @@ describe('published package metadata', () => {
       'no publishable package found — the checks below would pass vacuously'
     );
   });
+});
 
+describe('published package metadata — how each package presents itself', () => {
   test('every published package describes itself with the canonical phrase', () => {
     const offenders = publishedPackages()
       .filter((pkg) => {

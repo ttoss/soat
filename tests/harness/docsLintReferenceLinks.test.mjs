@@ -4,7 +4,7 @@ import { describe, test } from 'node:test';
 import {
   operationSlug,
   scanReferenceMentions,
-} from '../../scripts/docs-lint.mjs';
+} from '../../scripts/docs-lint/referenceLinks.mjs';
 
 /**
  * The two halves of docs-lint's API-reference-link check.

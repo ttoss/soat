@@ -13,13 +13,12 @@ const main = () => {
   const violations = metadataViolations({ pages });
 
   if (violations.length > 0) {
-    // eslint-disable-next-line no-console
     console.error(
       `SEO metadata: ${violations.length} problem(s) across ${pages.length} pages:\n${violations.join('\n')}`
     );
     process.exit(1);
   }
-  // eslint-disable-next-line no-console
+
   console.log(`SEO metadata: ${pages.length} pages checked.`);
 };
 

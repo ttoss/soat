@@ -723,14 +723,13 @@ const main = async () => {
   sections.push('');
 
   fs.writeFileSync(INDEX_OUTPUT_FILE, sections.join('\n'), 'utf-8');
-  // eslint-disable-next-line no-console
+
   console.log(`CLI commands docs written to: ${INDEX_OUTPUT_FILE}`);
-  // eslint-disable-next-line no-console
+
   console.log(`CLI module command docs written to: ${MODULES_OUTPUT_DIR}`);
 };
 
 main().catch((error: unknown) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

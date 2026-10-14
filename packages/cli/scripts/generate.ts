@@ -89,12 +89,11 @@ for (const [command, route] of Object.entries(routes)) {
 }
 
 if (dropped.length > 0) {
-  // eslint-disable-next-line no-console
   console.log(
     `Dropped ${dropped.length} non-REST command(s): ${dropped.join(', ')}`
   );
 }
 
 fs.writeFileSync(OUT_FILE, renderCliRoutesSource(routes));
-// eslint-disable-next-line no-console
+
 console.log(`Generated ${Object.keys(routes).length} routes → ${OUT_FILE}`);

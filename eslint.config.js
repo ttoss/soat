@@ -69,13 +69,15 @@ export const TEST_MAX_LINES_EXEMPT = [
 
 export default [
   {
-    // `pnpm design-bundle` writes it with esbuild, and
-    // `tests/harness/designSkillReferences.test.mjs` fails on any byte that
-    // differs from that output.
-    ignores: [
-      '**/src/generated/**',
-      '.claude/skills/soat-design/_ds_bundle.js',
-    ],
+    ignores: ['**/src/generated/**'],
+  },
+  {
+    // The design system is a Claude Design bundle rather than app code: its
+    // primitives are inline-styled `.jsx` written to run from a static HTML
+    // specimen with no build step, and `_ds_bundle.js` is esbuild's output
+    // from them. What they must obey is
+    // `.claude/skills/soat-design/_adherence.oxlintrc.json`.
+    ignores: ['.claude/skills/**'],
   },
   ...ttossEslintConfig,
   {
@@ -131,5 +133,11 @@ export default [
     rules: {
       'formatjs/no-literal-string-in-jsx': 'off',
     },
+  },
+  {
+    // Command-line scripts and the smoke stack's mock servers: stdout is the
+    // interface, the report a CI step or an operator reads.
+    files: ['scripts/**', 'packages/*/scripts/**', 'tests/mocks/**'],
+    rules: { 'no-console': 'off' },
   },
 ];

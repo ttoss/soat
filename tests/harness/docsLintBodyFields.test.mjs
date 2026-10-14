@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { objectEntriesAt } from '../../scripts/docs-lint.mjs';
+import { objectEntriesAt } from '../../scripts/docs-lint/bodyFields.mjs';
 
 /**
  * `objectEntriesAt` is the parser behind docs-lint's SDK/curl body-field check —

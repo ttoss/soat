@@ -11,8 +11,8 @@
 //   POST /v1/systemone  — TypeSafe Jev evaluation endpoint (decider tutorial).
 //   POST /v1/decisions  — OpenAI Decisions API (OpenAI decider tutorial).
 
-import http from 'node:http';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 
 const PORT = Number(process.env.PORT || 8090);
@@ -25,12 +25,17 @@ const TRANSCRIPT_TEXT = 'Launch is next Tuesday.';
 const receiptFixture = fs.readFileSync(path.join(FIXTURES_DIR, 'receipt.png'));
 const meetingFixture = fs.readFileSync(path.join(FIXTURES_DIR, 'meeting.mp3'));
 
-const readRawBuffer = (req) =>
-  new Promise((resolve) => {
+const readRawBuffer = (req) => {
+  return new Promise((resolve) => {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('data', (chunk) => {
+      return chunks.push(chunk);
+    });
+    req.on('end', () => {
+      return resolve(Buffer.concat(chunks));
+    });
   });
+};
 
 const parseJson = (raw) => {
   try {
@@ -149,17 +154,21 @@ const answerJevQuestions = (body) => {
 
 // Fixed figures in OpenAI's Decisions API response shape: a predicate holds at
 // 0.92; a choice is its first value; a score leans on its second level.
-const round2 = (n) => Math.round(n * 100) / 100;
+const round2 = (n) => {
+  return Math.round(n * 100) / 100;
+};
 
 const answerOpenAiDecision = (question) => {
   const { type, name } = question;
   if (type === 'predicate') return { type, name, probability: 0.92 };
   if (type === 'choice' && Array.isArray(question.choices)) {
     const rest = 0.1 / Math.max(question.choices.length - 1, 1);
-    const probabilities = question.choices.map((choice, index) => ({
-      value: choice.value,
-      probability: index === 0 ? 0.9 : round2(rest),
-    }));
+    const probabilities = question.choices.map((choice, index) => {
+      return {
+        value: choice.value,
+        probability: index === 0 ? 0.9 : round2(rest),
+      };
+    });
     return {
       type,
       name,
@@ -171,16 +180,17 @@ const answerOpenAiDecision = (question) => {
   if (type === 'score' && Array.isArray(question.levels)) {
     const top = Math.min(1, question.levels.length - 1);
     const rest = 0.3 / Math.max(question.levels.length - 1, 1);
-    const probabilities = question.levels.map((level, index) => ({
-      value: index,
-      label: level.label,
-      probability: index === top ? 0.7 : round2(rest),
-    }));
+    const probabilities = question.levels.map((level, index) => {
+      return {
+        value: index,
+        label: level.label,
+        probability: index === top ? 0.7 : round2(rest),
+      };
+    });
     const score = round2(
-      probabilities.reduce(
-        (sum, entry) => sum + entry.value * entry.probability,
-        0
-      )
+      probabilities.reduce((sum, entry) => {
+        return sum + entry.value * entry.probability;
+      }, 0)
     );
     return { type, name, score, probabilities, confidence: 0.55 };
   }
@@ -194,148 +204,188 @@ const answerOpenAiDecisions = (body) => {
   return answers.includes(null) ? null : answers;
 };
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const { pathname } = url;
+const sendJson = (res, status, payload) => {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+};
 
-  if (req.method === 'GET' && pathname === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
+const hasBearer = (req) => {
+  return /^Bearer \S+/.test(req.headers.authorization ?? '');
+};
+
+const handleHealth = (_req, res) => {
+  sendJson(res, 200, { status: 'ok' });
+};
+
+// Responses API (native OpenAI provider) — the vision OCR agent lands here.
+// Validates the embedded image against fixtures/receipt.png before
+// returning the canned OCR text.
+const handleResponses = async (req, res) => {
+  const raw = (await readRawBuffer(req)).toString('utf8');
+  const body = parseJson(raw);
+  const model = body.model || 'mock-model';
+
+  const imageBase64 = extractImageBase64(raw);
+  if (!imageBase64) {
+    jsonError(res, 400, 'expected an input_image data URL in the request');
+    return;
+  }
+  if (!Buffer.from(imageBase64, 'base64').equals(receiptFixture)) {
+    jsonError(
+      res,
+      422,
+      'uploaded image does not match fixtures/receipt.png — tutorial sent the wrong bytes'
+    );
     return;
   }
 
-  // Responses API (native OpenAI provider) — the vision OCR agent lands here.
-  // Validates the embedded image against fixtures/receipt.png before
-  // returning the canned OCR text.
-  if (req.method === 'POST' && pathname.endsWith('/responses')) {
-    const raw = (await readRawBuffer(req)).toString('utf8');
-    const body = parseJson(raw);
-    const model = body.model || 'mock-model';
-
-    const imageBase64 = extractImageBase64(raw);
-    if (!imageBase64) {
-      jsonError(res, 400, 'expected an input_image data URL in the request');
-      return;
-    }
-    if (!Buffer.from(imageBase64, 'base64').equals(receiptFixture)) {
-      jsonError(
-        res,
-        422,
-        'uploaded image does not match fixtures/receipt.png — tutorial sent the wrong bytes'
-      );
-      return;
-    }
-
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        id: 'resp_mock',
-        object: 'response',
-        created_at: 0,
-        model,
+  sendJson(res, 200, {
+    id: 'resp_mock',
+    object: 'response',
+    created_at: 0,
+    model,
+    status: 'completed',
+    error: null,
+    incomplete_details: null,
+    output: [
+      {
+        id: 'msg_mock',
+        type: 'message',
+        role: 'assistant',
         status: 'completed',
-        error: null,
-        incomplete_details: null,
-        output: [
-          {
-            id: 'msg_mock',
-            type: 'message',
-            role: 'assistant',
-            status: 'completed',
-            content: [{ type: 'output_text', text: OCR_TEXT, annotations: [] }],
-          },
-        ],
-        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-      })
+        content: [{ type: 'output_text', text: OCR_TEXT, annotations: [] }],
+      },
+    ],
+    usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+  });
+};
+
+// xAI-shaped speech-to-text REST endpoint — the audio *tool* converter
+// (an `http` tool with `body_mode: multipart`) lands here directly, no
+// agent/LLM wire protocol involved. Validates the uploaded file against
+// fixtures/meeting.mp3 before returning the canned transcript.
+const handleStt = async (req, res) => {
+  const contentType = req.headers['content-type'] || '';
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
+  const boundary = boundaryMatch?.[1] || boundaryMatch?.[2];
+  if (!boundary) {
+    jsonError(res, 400, 'expected multipart/form-data with a boundary');
+    return;
+  }
+
+  const raw = await readRawBuffer(req);
+  const parts = parseMultipart(raw, boundary);
+  const filePart = parts.find((part) => {
+    return part.name === 'file';
+  });
+  if (!filePart) {
+    jsonError(res, 400, 'expected a multipart "file" field');
+    return;
+  }
+  if (!filePart.body.equals(meetingFixture)) {
+    jsonError(
+      res,
+      422,
+      'uploaded audio does not match fixtures/meeting.mp3 — tutorial sent the wrong bytes'
     );
     return;
   }
 
-  // xAI-shaped speech-to-text REST endpoint — the audio *tool* converter
-  // (an `http` tool with `body_mode: multipart`) lands here directly, no
-  // agent/LLM wire protocol involved. Validates the uploaded file against
-  // fixtures/meeting.mp3 before returning the canned transcript.
-  if (req.method === 'POST' && pathname.endsWith('/stt')) {
-    const contentType = req.headers['content-type'] || '';
-    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
-    const boundary = boundaryMatch?.[1] || boundaryMatch?.[2];
-    if (!boundary) {
-      jsonError(res, 400, 'expected multipart/form-data with a boundary');
-      return;
-    }
+  sendJson(res, 200, {
+    text: TRANSCRIPT_TEXT,
+    language: 'en',
+    duration: 1.4,
+    words: TRANSCRIPT_TEXT.split(' ').map((word, i) => {
+      return {
+        text: word,
+        start: i * 0.3,
+        end: i * 0.3 + 0.25,
+      };
+    }),
+  });
+};
 
-    const raw = await readRawBuffer(req);
-    const parts = parseMultipart(raw, boundary);
-    const filePart = parts.find((part) => part.name === 'file');
-    if (!filePart) {
-      jsonError(res, 400, 'expected a multipart "file" field');
-      return;
-    }
-    if (!filePart.body.equals(meetingFixture)) {
-      jsonError(
-        res,
-        422,
-        'uploaded audio does not match fixtures/meeting.mp3 — tutorial sent the wrong bytes'
-      );
-      return;
-    }
-
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        text: TRANSCRIPT_TEXT,
-        language: 'en',
-        duration: 1.4,
-        words: TRANSCRIPT_TEXT.split(' ').map((word, i) => ({
-          text: word,
-          start: i * 0.3,
-          end: i * 0.3 + 0.25,
-        })),
-      })
-    );
+const handleSystemOne = async (req, res) => {
+  if (!hasBearer(req)) {
+    jsonError(res, 401, 'missing bearer token');
     return;
   }
-
-  if (req.method === 'POST' && pathname.endsWith('/systemone')) {
-    if (!/^Bearer \S+/.test(req.headers.authorization ?? '')) {
-      jsonError(res, 401, 'missing bearer token');
-      return;
-    }
-    const body = parseJson((await readRawBuffer(req)).toString('utf8'));
-    const answers = answerJevQuestions(body);
-    if (!body.model || answers === null) {
-      jsonError(res, 400, 'Invalid request.');
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        model: 'jev-1.13.0',
-        answers,
-        usage: { input_tokens: 300, output_tokens: 20 },
-      })
-    );
+  const body = parseJson((await readRawBuffer(req)).toString('utf8'));
+  const answers = answerJevQuestions(body);
+  if (!body.model || answers === null) {
+    jsonError(res, 400, 'Invalid request.');
     return;
   }
+  sendJson(res, 200, {
+    model: 'jev-1.13.0',
+    answers,
+    usage: { input_tokens: 300, output_tokens: 20 },
+  });
+};
 
-  if (req.method === 'POST' && pathname.endsWith('/decisions')) {
-    if (!/^Bearer \S+/.test(req.headers.authorization ?? '')) {
-      jsonError(res, 401, 'missing bearer token');
-      return;
-    }
-    const body = parseJson((await readRawBuffer(req)).toString('utf8'));
-    const answers = answerOpenAiDecisions(body);
-    if (!body.model || body.input === undefined || answers === null) {
-      jsonError(res, 400, 'Invalid request.');
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ answers }));
+const handleDecisions = async (req, res) => {
+  if (!hasBearer(req)) {
+    jsonError(res, 401, 'missing bearer token');
     return;
   }
+  const body = parseJson((await readRawBuffer(req)).toString('utf8'));
+  const answers = answerOpenAiDecisions(body);
+  if (!body.model || body.input === undefined || answers === null) {
+    jsonError(res, 400, 'Invalid request.');
+    return;
+  }
+  sendJson(res, 200, { answers });
+};
 
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'not_found', method: req.method, pathname }));
+/** First match wins, so `/health` is checked before any suffix route. */
+const ROUTES = [
+  [
+    'GET',
+    (pathname) => {
+      return pathname === '/health';
+    },
+    handleHealth,
+  ],
+  [
+    'POST',
+    (pathname) => {
+      return pathname.endsWith('/responses');
+    },
+    handleResponses,
+  ],
+  [
+    'POST',
+    (pathname) => {
+      return pathname.endsWith('/stt');
+    },
+    handleStt,
+  ],
+  [
+    'POST',
+    (pathname) => {
+      return pathname.endsWith('/systemone');
+    },
+    handleSystemOne,
+  ],
+  [
+    'POST',
+    (pathname) => {
+      return pathname.endsWith('/decisions');
+    },
+    handleDecisions,
+  ],
+];
+
+const server = http.createServer(async (req, res) => {
+  const { pathname } = new URL(req.url, `http://${req.headers.host}`);
+  const route = ROUTES.find(([method, matches]) => {
+    return req.method === method && matches(pathname);
+  });
+  if (route) {
+    await route[2](req, res);
+    return;
+  }
+  sendJson(res, 404, { error: 'not_found', method: req.method, pathname });
 });
 
 server.listen(PORT, () => {

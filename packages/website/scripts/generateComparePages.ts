@@ -44,7 +44,6 @@ for (const solution of compared) {
   );
 }
 
-// eslint-disable-next-line no-console
 console.log(
   `Generated ${path.relative(process.cwd(), OUTPUT_DIR)} (${compared.length} comparisons)`
 );

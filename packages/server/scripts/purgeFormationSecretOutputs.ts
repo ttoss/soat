@@ -33,7 +33,7 @@ const main = async (): Promise<void> => {
   const result = await purgeFormationSecretOutputs({ dryRun });
 
   // A CLI script: stdout is the interface.
-  /* eslint-disable no-console */
+
   console.log(
     `${dryRun ? 'would clear' : 'cleared'} ${result.removedOutputs} output(s) across ${result.cleared} of ${result.scanned} formation(s)`
   );
@@ -42,7 +42,6 @@ const main = async (): Promise<void> => {
       'rotate the trigger and webhook signing secrets those formations published'
     );
   }
-  /* eslint-enable no-console */
 
   await db.sequelize.close();
 };

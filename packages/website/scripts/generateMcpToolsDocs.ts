@@ -154,9 +154,9 @@ const main = (): void => {
   ];
 
   fs.writeFileSync(INDEX_OUTPUT_FILE, sections.join('\n'), 'utf-8');
-  // eslint-disable-next-line no-console
+
   console.log(`MCP tools index written to: ${INDEX_OUTPUT_FILE}`);
-  // eslint-disable-next-line no-console
+
   console.log(`MCP per-module tool docs written to: ${TOOLS_OUTPUT_DIR}`);
 };
 

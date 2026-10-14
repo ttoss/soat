@@ -64,82 +64,86 @@ const withoutCredential = (properties) => {
   return rest;
 };
 
+/** One handler per `request_type`, each answering `{ status, body }`. */
+const HANDLERS = {
+  validate: ({ properties }) => {
+    // The check a JSON Schema cannot express: which kinds this service knows.
+    const kind = properties?.kind;
+    const errors =
+      kind && !['whatsapp', 'discord'].includes(kind)
+        ? [
+            {
+              path: 'properties.kind',
+              message: `unsupported kind '${kind}'`,
+            },
+          ]
+        : [];
+    return { status: 200, body: { errors } };
+  },
+
+  create: ({ properties }) => {
+    counter += 1;
+    const id = `chan_smoke_${counter}`;
+    // The credential is used and dropped, never echoed back on `read` — a
+    // handler that returned it would put it straight back into the drift
+    // comparison the engine strips it from.
+    resources.set(id, withoutCredential(properties ?? {}));
+    return {
+      status: 200,
+      body: {
+        physical_resource_id: id,
+        outputs: { handler_url: HANDLER_URL },
+      },
+    };
+  },
+
+  update: ({ properties, physicalResourceId }) => {
+    if (!resources.has(physicalResourceId)) {
+      return {
+        status: 404,
+        body: { message: `no such channel: ${physicalResourceId}` },
+      };
+    }
+    resources.set(physicalResourceId, withoutCredential(properties ?? {}));
+    return {
+      status: 200,
+      body: { physical_resource_id: physicalResourceId },
+    };
+  },
+
+  delete: ({ physicalResourceId }) => {
+    // Idempotent by contract: deleting an already-gone resource is a 2xx.
+    resources.delete(physicalResourceId);
+    return { status: 200, body: {} };
+  },
+
+  read: ({ physicalResourceId }) => {
+    const stored = resources.get(physicalResourceId);
+    if (!stored) return { status: 200, body: { exists: false } };
+    return {
+      status: 200,
+      body: {
+        exists: true,
+        physical_resource_id: physicalResourceId,
+        properties: stored,
+        outputs: { handler_url: HANDLER_URL },
+      },
+    };
+  },
+};
+
 const handle = (body) => {
   const { request_type: requestType, properties } = body;
-  const physicalResourceId = body.physical_resource_id;
-
-  switch (requestType) {
-    case 'validate': {
-      // The check a JSON Schema cannot express: which kinds this service knows.
-      const kind = properties?.kind;
-      const errors =
-        kind && !['whatsapp', 'discord'].includes(kind)
-          ? [
-              {
-                path: 'properties.kind',
-                message: `unsupported kind '${kind}'`,
-              },
-            ]
-          : [];
-      return { status: 200, body: { errors } };
-    }
-
-    case 'create': {
-      counter += 1;
-      const id = `chan_smoke_${counter}`;
-      // The credential is used and dropped, never echoed back on `read` — a
-      // handler that returned it would put it straight back into the drift
-      // comparison the engine strips it from.
-      resources.set(id, withoutCredential(properties ?? {}));
-      return {
-        status: 200,
-        body: {
-          physical_resource_id: id,
-          outputs: { handler_url: HANDLER_URL },
-        },
-      };
-    }
-
-    case 'update': {
-      if (!resources.has(physicalResourceId)) {
-        return {
-          status: 404,
-          body: { message: `no such channel: ${physicalResourceId}` },
-        };
-      }
-      resources.set(physicalResourceId, withoutCredential(properties ?? {}));
-      return {
-        status: 200,
-        body: { physical_resource_id: physicalResourceId },
-      };
-    }
-
-    case 'delete': {
-      // Idempotent by contract: deleting an already-gone resource is a 2xx.
-      resources.delete(physicalResourceId);
-      return { status: 200, body: {} };
-    }
-
-    case 'read': {
-      const stored = resources.get(physicalResourceId);
-      if (!stored) return { status: 200, body: { exists: false } };
-      return {
-        status: 200,
-        body: {
-          exists: true,
-          physical_resource_id: physicalResourceId,
-          properties: stored,
-          outputs: { handler_url: HANDLER_URL },
-        },
-      };
-    }
-
-    default:
-      return {
-        status: 400,
-        body: { message: `unknown request_type: ${requestType}` },
-      };
+  if (!Object.hasOwn(HANDLERS, requestType)) {
+    return {
+      status: 400,
+      body: { message: `unknown request_type: ${requestType}` },
+    };
   }
+  return HANDLERS[requestType]({
+    properties,
+    physicalResourceId: body.physical_resource_id,
+  });
 };
 
 const server = createServer((req, res) => {

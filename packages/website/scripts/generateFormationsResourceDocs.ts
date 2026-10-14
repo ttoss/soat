@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 
 import { load } from 'js-yaml';
+
 import { escapeMdx } from './mdx';
 import { fitDescription, plainText } from './seoMetadata';
 
@@ -45,34 +46,62 @@ interface OpenApiSpec {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Convert a snake_case string to PascalCase. */
-const toPascalCase = (snake: string): string =>
-  snake
+const toPascalCase = (snake: string): string => {
+  return snake
     .split(/[_-]/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join('');
+};
 
 /**
  * `ModelRoute` → `model_route`. The inverse of `toPascalCase`, and the same
  * naming rule `schemaNameForResourceType` applies on the server side.
  */
-const pascalToSnakeCase = (pascal: string): string =>
-  pascal.replace(/(?<!^)([A-Z])/g, '_$1').toLowerCase();
+const pascalToSnakeCase = (pascal: string): string => {
+  return pascal.replace(/(?<!^)([A-Z])/g, '_$1').toLowerCase();
+};
 
 /** Convert a snake_case string to a kebab-case filename slug. */
-const toSlug = (snake: string): string => snake.replace(/_/g, '-');
+const toSlug = (snake: string): string => {
+  return snake.replace(/_/g, '-');
+};
 
 /** Human-readable title for a resource type. */
-const toTitle = (resourceType: string): string =>
-  resourceType
+const toTitle = (resourceType: string): string => {
+  return resourceType
     .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join(' ');
+};
 
 // ── Type name helpers ─────────────────────────────────────────────────────
 
 /** Capitalize the first letter of a string. */
-const capitalize = (s: string): string =>
-  s.charAt(0).toUpperCase() + s.slice(1);
+const capitalize = (s: string): string => {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+const hasProperties = (
+  schema: OpenApiSchema | undefined
+): schema is OpenApiSchema & { properties: Record<string, OpenApiSchema> } => {
+  return Boolean(
+    schema?.properties && Object.keys(schema.properties).length > 0
+  );
+};
+
+/** An array whose items are objects with their own section. */
+const isArrayOfObjects = (prop: OpenApiSchema): boolean => {
+  return prop.type === 'array' && hasProperties(prop.items);
+};
+
+/** An object with its own section. */
+const isObjectWithProperties = (prop: OpenApiSchema): boolean => {
+  return prop.type === 'object' && hasProperties(prop);
+};
 
 /** Map an OpenAPI schema to a simple YAML placeholder type name. */
 const getSimpleTypeName = (prop: OpenApiSchema): string => {
@@ -94,21 +123,14 @@ const getSimpleTypeName = (prop: OpenApiSchema): string => {
 
 /** Map an OpenAPI property to a display type string for the Properties section. */
 const renderDisplayType = (name: string, prop: OpenApiSchema): string => {
+  if (isArrayOfObjects(prop)) {
+    const typeName = toPascalCase(name);
+    return `Array of [${typeName}](#${typeName.toLowerCase()})`;
+  }
   if (prop.type === 'array') {
-    if (
-      prop.items?.properties &&
-      Object.keys(prop.items.properties).length > 0
-    ) {
-      const typeName = toPascalCase(name);
-      return `Array of [${typeName}](#${typeName.toLowerCase()})`;
-    }
     return `Array of ${capitalize(prop.items?.type ?? 'any')}`;
   }
-  if (
-    prop.type === 'object' &&
-    prop.properties &&
-    Object.keys(prop.properties).length > 0
-  ) {
+  if (isObjectWithProperties(prop)) {
     const typeName = toPascalCase(name);
     return `[${typeName}](#${typeName.toLowerCase()})`;
   }
@@ -117,7 +139,9 @@ const renderDisplayType = (name: string, prop: OpenApiSchema): string => {
 
 // ── YAML syntax block ─────────────────────────────────────────────────────
 
-const ind = (n: number): string => '  '.repeat(n);
+const ind = (n: number): string => {
+  return '  '.repeat(n);
+};
 
 /**
  * Render YAML syntax lines for a properties map.
@@ -126,38 +150,33 @@ const ind = (n: number): string => '  '.repeat(n);
  * - Arrays of objects     → `name: TypeName[]`
  * - Objects with props    → `name: TypeName`
  */
+const yamlSyntaxType = (name: string, prop: OpenApiSchema): string => {
+  if (isArrayOfObjects(prop)) return `${toPascalCase(name)}[]`;
+  if (prop.type === 'array')
+    return `${capitalize(prop.items?.type ?? 'any')}[]`;
+  if (isObjectWithProperties(prop)) return toPascalCase(name);
+  return getSimpleTypeName(prop);
+};
+
 const renderYamlSyntaxLines = (
   properties: Record<string, OpenApiSchema>,
   baseIndent: number
 ): string[] => {
-  const lines: string[] = [];
+  return Object.entries(properties).map(([name, prop]) => {
+    return `${ind(baseIndent)}${name}: ${yamlSyntaxType(name, prop)}`;
+  });
+};
 
-  for (const [name, prop] of Object.entries(properties)) {
-    if (prop.type === 'array') {
-      if (
-        prop.items?.properties &&
-        Object.keys(prop.items.properties).length > 0
-      ) {
-        // Array of objects → TypeName[]
-        lines.push(`${ind(baseIndent)}${name}: ${toPascalCase(name)}[]`);
-      } else {
-        // Array of simple types → Type[]
-        const itemType = capitalize(prop.items?.type ?? 'any');
-        lines.push(`${ind(baseIndent)}${name}: ${itemType}[]`);
-      }
-    } else if (
-      prop.type === 'object' &&
-      prop.properties &&
-      Object.keys(prop.properties).length > 0
-    ) {
-      // Object with known sub-properties → TypeName
-      lines.push(`${ind(baseIndent)}${name}: ${toPascalCase(name)}`);
-    } else {
-      lines.push(`${ind(baseIndent)}${name}: ${getSimpleTypeName(prop)}`);
-    }
+/** A link to the sub-type section a property has, if it has one. */
+const typeLink = (name: string, prop: OpenApiSchema): string | undefined => {
+  const typeName = toPascalCase(name);
+  if (isArrayOfObjects(prop)) {
+    return `[${typeName}[]](#${typeName.toLowerCase()})`;
   }
-
-  return lines;
+  if (isObjectWithProperties(prop)) {
+    return `[${typeName}](#${typeName.toLowerCase()})`;
+  }
+  return undefined;
 };
 
 /**
@@ -176,25 +195,10 @@ const renderSyntaxBlock = (
   ];
   const codeBlock = ['```yaml', ...lines, '```'].join('\n');
 
-  // Collect links for types that have a sub-type section
-  const typeLinks: string[] = [];
-  for (const [name, prop] of Object.entries(props)) {
-    if (
-      prop.type === 'array' &&
-      prop.items?.properties &&
-      Object.keys(prop.items.properties).length > 0
-    ) {
-      const typeName = toPascalCase(name);
-      typeLinks.push(`[${typeName}[]](#${typeName.toLowerCase()})`);
-    } else if (
-      prop.type === 'object' &&
-      prop.properties &&
-      Object.keys(prop.properties).length > 0
-    ) {
-      const typeName = toPascalCase(name);
-      typeLinks.push(`[${typeName}](#${typeName.toLowerCase()})`);
-    }
-  }
+  const typeLinks = Object.entries(props).flatMap(([name, prop]) => {
+    const link = typeLink(name, prop);
+    return link ? [link] : [];
+  });
 
   if (typeLinks.length === 0) {
     return codeBlock;
@@ -254,11 +258,7 @@ const collectSubTypes = (
   const result: SubType[] = [];
 
   for (const [name, prop] of Object.entries(properties)) {
-    if (
-      prop.type === 'object' &&
-      prop.properties &&
-      Object.keys(prop.properties).length > 0
-    ) {
+    if (prop.type === 'object' && hasProperties(prop)) {
       const typeName = toPascalCase(name);
       result.push({
         typeName,
@@ -267,11 +267,7 @@ const collectSubTypes = (
       });
       result.push(...collectSubTypes(prop.properties));
     }
-    if (
-      prop.type === 'array' &&
-      prop.items?.properties &&
-      Object.keys(prop.items.properties).length > 0
-    ) {
+    if (prop.type === 'array' && hasProperties(prop.items)) {
       const typeName = toPascalCase(name);
       result.push({
         typeName,
@@ -349,17 +345,11 @@ const renderResourcePage = (args: {
   ];
 
   if (operationNote) {
-    lines.push(`:::note`);
-    lines.push(operationNote);
-    lines.push(':::');
-    lines.push('');
+    lines.push(':::note', operationNote, ':::', '');
   }
 
   // Syntax section
-  lines.push('## Syntax');
-  lines.push('');
-  lines.push(renderSyntaxBlock(resourceType, schema));
-  lines.push('');
+  lines.push('## Syntax', '', renderSyntaxBlock(resourceType, schema), '');
 
   // Output section
   lines.push('## Output');
@@ -379,12 +369,10 @@ const renderResourcePage = (args: {
   const required = new Set(schema.required ?? []);
   const properties = schema.properties ?? {};
 
-  lines.push('## Properties');
-  lines.push('');
+  lines.push('## Properties', '');
 
   if (Object.keys(properties).length === 0) {
-    lines.push('_No properties defined._');
-    lines.push('');
+    lines.push('_No properties defined._', '');
   } else {
     for (const [name, prop] of Object.entries(properties)) {
       lines.push(renderPropertyEntry(name, prop, required));
@@ -394,8 +382,7 @@ const renderResourcePage = (args: {
   // Sub-type sections
   const subTypes = collectSubTypes(properties);
   if (subTypes.length > 0) {
-    lines.push('## Sub-types');
-    lines.push('');
+    lines.push('## Sub-types', '');
     for (const subType of subTypes) {
       lines.push(renderSubTypeSection(subType));
     }
@@ -453,7 +440,6 @@ const renderIndexPage = (
   ];
 
   for (const { resourceType, description } of resourceTypes) {
-    const title = toTitle(resourceType);
     const slug = toSlug(resourceType);
     // Absolute: the slug above lifts this page's route one level, so a
     // relative link would no longer resolve inside the folder.
@@ -515,7 +501,7 @@ const main = () => {
   const indexEntries: Array<{ resourceType: string; description: string }> = [];
 
   // Write one page per resource type
-  resourceTypeOrder.forEach((resourceType, idx) => {
+  for (const [idx, resourceType] of resourceTypeOrder.entries()) {
     const schemaName = `${toPascalCase(resourceType)}ResourceProperties`;
     const schema = schemas[schemaName];
 
@@ -526,7 +512,7 @@ const main = () => {
 
     if (!schema) {
       console.warn(`⚠  No schema found for ${schemaName} — skipping page`);
-      return;
+      continue;
     }
 
     const content = renderResourcePage({
@@ -538,7 +524,7 @@ const main = () => {
     const filePath = path.join(OUTPUT_DIR, `${toSlug(resourceType)}.md`);
     fs.writeFileSync(filePath, content, 'utf-8');
     console.log(`✓ Generated ${filePath}`);
-  });
+  }
 
   // Write index page
   const indexContent = renderIndexPage(indexEntries);
