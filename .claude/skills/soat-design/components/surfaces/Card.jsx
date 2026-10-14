@@ -24,9 +24,14 @@ export function Card({
     },
   };
 
-  const hoverStyle = interactive && hover
-    ? { transform: 'translateY(-4px)', boxShadow: 'var(--shadow-lg), var(--glow-cyan-sm)', borderColor: 'var(--color-primary)' }
-    : {};
+  const hoverStyle =
+    interactive && hover
+      ? {
+          transform: 'translateY(-4px)',
+          boxShadow: 'var(--shadow-lg), var(--glow-cyan-sm)',
+          borderColor: 'var(--color-primary)',
+        }
+      : {};
 
   return (
     <div
@@ -38,7 +43,8 @@ export function Card({
         border: '1px solid var(--border-default)',
         boxShadow: 'var(--shadow-sm)',
         color: 'var(--text-body)',
-        transition: 'transform var(--duration-slow) var(--ease-out), box-shadow var(--duration-slow) var(--ease-standard), border-color var(--duration-slow) var(--ease-standard)',
+        transition:
+          'transform var(--duration-slow) var(--ease-out), box-shadow var(--duration-slow) var(--ease-standard), border-color var(--duration-slow) var(--ease-standard)',
         ...variants[variant],
         ...hoverStyle,
         ...style,

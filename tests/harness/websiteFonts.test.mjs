@@ -18,7 +18,8 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const WEBSITE = path.resolve(__dirname, '../../packages/website');
 
-const FONT_HOSTS = /fonts\.(googleapis|gstatic)\.com|use\.typekit\.net|fonts\.bunny\.net/;
+const FONT_HOSTS =
+  /fonts\.(googleapis|gstatic)\.com|use\.typekit\.net|fonts\.bunny\.net/;
 
 /** The brand typefaces, each a dependency the site bundles. */
 const TYPEFACES = [

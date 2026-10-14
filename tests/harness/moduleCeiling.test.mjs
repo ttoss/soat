@@ -108,11 +108,15 @@ describeCeiling({
 
 describe('module ceiling: no self-exemption', () => {
   test('no file exempts itself with an inline disable', () => {
-    const tracked = execFileSync('git', ['ls-files', '-z', '*.ts', '*.tsx', '*.js', '*.jsx', '*.mjs'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      maxBuffer: 32 * 1024 * 1024,
-    })
+    const tracked = execFileSync(
+      'git',
+      ['ls-files', '-z', '*.ts', '*.tsx', '*.js', '*.jsx', '*.mjs'],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        maxBuffer: 32 * 1024 * 1024,
+      }
+    )
       .split('\0')
       .filter(Boolean);
 

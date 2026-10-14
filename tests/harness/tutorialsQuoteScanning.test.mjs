@@ -117,7 +117,7 @@ describe('command boundaries and quoting', () => {
   test('a genuinely unclosed single-quoted string still joins the next line', async () => {
     const file = await writeTutorial(
       'multiline-json',
-      ['echo \'{', '  "memory_ids": ["mem_1"]', '}\'', 'echo after-json'].join(
+      ["echo '{", '  "memory_ids": ["mem_1"]', "}'", 'echo after-json'].join(
         '\n'
       )
     );
@@ -154,7 +154,7 @@ describe('command boundaries and quoting', () => {
       'apostrophe-then-multiline',
       [
         'echo "Alice\'s renewal"',
-        "echo '[.data[] | select(.source_type == \"agent\")",
+        'echo \'[.data[] | select(.source_type == "agent")',
         "       | {content, source_type}]'",
         'echo after-filter',
       ].join('\n')

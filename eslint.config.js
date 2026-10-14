@@ -69,7 +69,13 @@ export const TEST_MAX_LINES_EXEMPT = [
 
 export default [
   {
-    ignores: ['**/src/generated/**'],
+    // `pnpm design-bundle` writes it with esbuild, and
+    // `tests/harness/designSkillReferences.test.mjs` fails on any byte that
+    // differs from that output.
+    ignores: [
+      '**/src/generated/**',
+      '.claude/skills/soat-design/_ds_bundle.js',
+    ],
   },
   ...ttossEslintConfig,
   {

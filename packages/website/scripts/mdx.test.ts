@@ -24,10 +24,7 @@ test('inline code spans are left verbatim', () => {
     escapeMdx('Expected `{ pages: [{ text }] }`, or nothing.'),
     'Expected `{ pages: [{ text }] }`, or nothing.'
   );
-  assert.equal(
-    escapeMdx('`<a>` but not <b>'),
-    '`<a>` but not \\<b\\>'
-  );
+  assert.equal(escapeMdx('`<a>` but not <b>'), '`<a>` but not \\<b\\>');
 });
 
 test('a stray backtick run does not swallow the rest of the line', () => {

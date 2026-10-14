@@ -48,7 +48,9 @@ const jsonError = (res, status, message) => {
 // Extracts the base64 payload from an AI SDK `input_image` data URL
 // (`"image_url":"data:image/png;base64,...."`) embedded in the raw JSON body.
 const extractImageBase64 = (raw) => {
-  const match = raw.match(/data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)/);
+  const match = raw.match(
+    /data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)/
+  );
   return match ? match[1] : null;
 };
 
@@ -158,7 +160,13 @@ const answerOpenAiDecision = (question) => {
       value: choice.value,
       probability: index === 0 ? 0.9 : round2(rest),
     }));
-    return { type, name, choice: question.choices[0].value, probabilities, confidence: 0.88 };
+    return {
+      type,
+      name,
+      choice: question.choices[0].value,
+      probabilities,
+      confidence: 0.88,
+    };
   }
   if (type === 'score' && Array.isArray(question.levels)) {
     const top = Math.min(1, question.levels.length - 1);
@@ -169,7 +177,10 @@ const answerOpenAiDecision = (question) => {
       probability: index === top ? 0.7 : round2(rest),
     }));
     const score = round2(
-      probabilities.reduce((sum, entry) => sum + entry.value * entry.probability, 0)
+      probabilities.reduce(
+        (sum, entry) => sum + entry.value * entry.probability,
+        0
+      )
     );
     return { type, name, score, probabilities, confidence: 0.55 };
   }
@@ -177,7 +188,8 @@ const answerOpenAiDecision = (question) => {
 };
 
 const answerOpenAiDecisions = (body) => {
-  if (!Array.isArray(body.questions) || body.questions.length === 0) return null;
+  if (!Array.isArray(body.questions) || body.questions.length === 0)
+    return null;
   const answers = body.questions.map(answerOpenAiDecision);
   return answers.includes(null) ? null : answers;
 };

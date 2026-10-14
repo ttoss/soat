@@ -4,8 +4,18 @@ import React from 'react';
  * SOAT Switch — boolean toggle. On state fills with brand color and, in
  * dark mode, emits a soft cyan glow.
  */
-export function Switch({ checked = false, onChange, label, disabled = false, id, style, ...rest }) {
-  const switchId = id || (label ? `sw-${label.replace(/\s+/g, '-').toLowerCase()}` : undefined);
+export function Switch({
+  checked = false,
+  onChange,
+  label,
+  disabled = false,
+  id,
+  style,
+  ...rest
+}) {
+  const switchId =
+    id ||
+    (label ? `sw-${label.replace(/\s+/g, '-').toLowerCase()}` : undefined);
   return (
     <label
       htmlFor={switchId}
@@ -37,10 +47,13 @@ export function Switch({ checked = false, onChange, label, disabled = false, id,
           borderRadius: 'var(--radius-full)',
           border: '1px solid',
           borderColor: checked ? 'transparent' : 'var(--border-strong)',
-          background: checked ? 'var(--color-primary)' : 'var(--surface-sunken)',
+          background: checked
+            ? 'var(--color-primary)'
+            : 'var(--surface-sunken)',
           boxShadow: checked ? 'var(--glow-cyan-sm)' : 'none',
           cursor: 'inherit',
-          transition: 'background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)',
+          transition:
+            'background var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)',
         }}
         {...rest}
       >
@@ -52,7 +65,8 @@ export function Switch({ checked = false, onChange, label, disabled = false, id,
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: '#ffffff', /* light knob reads on both the cyan track (on) and sunken track (off) in either theme */
+            background:
+              '#ffffff' /* light knob reads on both the cyan track (on) and sunken track (off) in either theme */,
             boxShadow: 'var(--shadow-sm)',
             transition: 'left var(--duration-base) var(--ease-out)',
           }}

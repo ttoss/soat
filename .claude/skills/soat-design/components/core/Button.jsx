@@ -20,9 +20,17 @@ export function Button({
   ...rest
 }) {
   const sizes = {
-    sm: { padding: '0.4rem 0.85rem', fontSize: 'var(--text-sm)', gap: '0.4rem' },
+    sm: {
+      padding: '0.4rem 0.85rem',
+      fontSize: 'var(--text-sm)',
+      gap: '0.4rem',
+    },
     md: { padding: '0.6rem 1.2rem', fontSize: 'var(--text-sm)', gap: '0.5rem' },
-    lg: { padding: '0.85rem 1.75rem', fontSize: 'var(--text-base)', gap: '0.6rem' },
+    lg: {
+      padding: '0.85rem 1.75rem',
+      fontSize: 'var(--text-base)',
+      gap: '0.6rem',
+    },
   };
 
   const base = {
@@ -36,7 +44,8 @@ export function Button({
     border: '1px solid transparent',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.5 : 1,
-    transition: 'transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard)',
+    transition:
+      'transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-standard), background var(--duration-base) var(--ease-standard)',
     whiteSpace: 'nowrap',
     lineHeight: 1.2,
     ...sizes[size],
@@ -60,13 +69,21 @@ export function Button({
   };
 
   const [hover, setHover] = React.useState(false);
-  const hoverStyle = !disabled && hover
-    ? variant === 'primary'
-      ? { transform: 'translateY(-2px)', background: 'var(--color-action-hover)', boxShadow: 'var(--glow-cyan-md)' }
-      : variant === 'secondary'
-        ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }
-        : { background: 'var(--surface-raised)' }
-    : {};
+  const hoverStyle =
+    !disabled && hover
+      ? variant === 'primary'
+        ? {
+            transform: 'translateY(-2px)',
+            background: 'var(--color-action-hover)',
+            boxShadow: 'var(--glow-cyan-md)',
+          }
+        : variant === 'secondary'
+          ? {
+              borderColor: 'var(--color-primary)',
+              color: 'var(--color-primary)',
+            }
+          : { background: 'var(--surface-raised)' }
+      : {};
 
   return (
     <button
@@ -78,9 +95,13 @@ export function Button({
       style={{ ...base, ...variants[variant], ...hoverStyle, ...style }}
       {...rest}
     >
-      {iconLeft ? <span style={{ display: 'inline-flex' }}>{iconLeft}</span> : null}
+      {iconLeft ? (
+        <span style={{ display: 'inline-flex' }}>{iconLeft}</span>
+      ) : null}
       {children}
-      {iconRight ? <span style={{ display: 'inline-flex' }}>{iconRight}</span> : null}
+      {iconRight ? (
+        <span style={{ display: 'inline-flex' }}>{iconRight}</span>
+      ) : null}
     </button>
   );
 }

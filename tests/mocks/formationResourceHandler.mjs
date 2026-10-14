@@ -93,16 +93,25 @@ const handle = (body) => {
       resources.set(id, withoutCredential(properties ?? {}));
       return {
         status: 200,
-        body: { physical_resource_id: id, outputs: { handler_url: HANDLER_URL } },
+        body: {
+          physical_resource_id: id,
+          outputs: { handler_url: HANDLER_URL },
+        },
       };
     }
 
     case 'update': {
       if (!resources.has(physicalResourceId)) {
-        return { status: 404, body: { message: `no such channel: ${physicalResourceId}` } };
+        return {
+          status: 404,
+          body: { message: `no such channel: ${physicalResourceId}` },
+        };
       }
       resources.set(physicalResourceId, withoutCredential(properties ?? {}));
-      return { status: 200, body: { physical_resource_id: physicalResourceId } };
+      return {
+        status: 200,
+        body: { physical_resource_id: physicalResourceId },
+      };
     }
 
     case 'delete': {
