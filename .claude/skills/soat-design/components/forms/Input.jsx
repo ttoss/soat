@@ -16,12 +16,29 @@ export function Input({
   ...rest
 }) {
   const [focus, setFocus] = React.useState(false);
-  const inputId = id || (label ? `in-${label.replace(/\s+/g, '-').toLowerCase()}` : undefined);
+  const inputId =
+    id ||
+    (label ? `in-${label.replace(/\s+/g, '-').toLowerCase()}` : undefined);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontFamily: 'var(--font-body)' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.4rem',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
       {label ? (
-        <label htmlFor={inputId} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--text-body)', letterSpacing: 'var(--tracking-ui)' }}>
+        <label
+          htmlFor={inputId}
+          style={{
+            fontSize: 'var(--text-sm)',
+            fontWeight: 'var(--weight-medium)',
+            color: 'var(--text-body)',
+            letterSpacing: 'var(--tracking-ui)',
+          }}
+        >
           {label}
         </label>
       ) : null}
@@ -35,10 +52,15 @@ export function Input({
           border: `1px solid ${error ? 'var(--color-danger)' : focus ? 'var(--border-focus)' : 'var(--border-default)'}`,
           borderRadius: 'var(--radius-md)',
           boxShadow: focus ? 'var(--ring-focus)' : 'none',
-          transition: 'border-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)',
+          transition:
+            'border-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)',
         }}
       >
-        {iconLeft ? <span style={{ display: 'inline-flex', color: 'var(--text-faint)' }}>{iconLeft}</span> : null}
+        {iconLeft ? (
+          <span style={{ display: 'inline-flex', color: 'var(--text-faint)' }}>
+            {iconLeft}
+          </span>
+        ) : null}
         <input
           id={inputId}
           type={type}
@@ -58,9 +80,17 @@ export function Input({
         />
       </div>
       {error ? (
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-danger)' }}>{error}</span>
+        <span
+          style={{ fontSize: 'var(--text-xs)', color: 'var(--color-danger)' }}
+        >
+          {error}
+        </span>
       ) : hint ? (
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)' }}>{hint}</span>
+        <span
+          style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)' }}
+        >
+          {hint}
+        </span>
       ) : null}
     </div>
   );

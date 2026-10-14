@@ -2,6 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { readRequestBody } from '../../fixtures/requestBody';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Tools', () => {
@@ -2824,18 +2825,13 @@ describe('Tools', () => {
       let lastPresetBody: Record<string, unknown> | undefined;
 
       beforeAll(async () => {
-        presetServer = http.createServer((req, res) => {
-          let raw = '';
-          req.on('data', (chunk) => {
-            raw += chunk;
-          });
-          req.on('end', () => {
-            lastPresetBody = raw
-              ? (JSON.parse(raw) as Record<string, unknown>)
-              : {};
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: true }));
-          });
+        presetServer = http.createServer(async (req, res) => {
+          const raw = await readRequestBody(req);
+          lastPresetBody = raw
+            ? (JSON.parse(raw) as Record<string, unknown>)
+            : {};
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true }));
         });
         await new Promise<void>((resolve) => {
           presetServer.listen(0, '127.0.0.1', resolve);

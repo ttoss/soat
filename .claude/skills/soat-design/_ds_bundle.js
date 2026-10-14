@@ -57,14 +57,44 @@ var SOATDesignSystem_de1198 = (() => {
 
   // .claude/skills/soat-design/components/core/Badge.jsx
   var import_react = __toESM(require_react(), 1);
-  function Badge({ children, tone = "neutral", dot = false, style, ...rest }) {
+  function Badge({
+    children,
+    tone = "neutral",
+    dot = false,
+    style,
+    ...rest
+  }) {
     const tones = {
-      neutral: { bg: "var(--surface-sunken)", fg: "var(--text-muted)", dot: "var(--text-faint)" },
-      primary: { bg: "color-mix(in srgb, var(--color-primary) 14%, transparent)", fg: "var(--color-primary)", dot: "var(--color-primary)" },
-      success: { bg: "color-mix(in srgb, var(--color-success) 14%, transparent)", fg: "var(--color-success)", dot: "var(--color-success)" },
-      danger: { bg: "color-mix(in srgb, var(--color-danger) 14%, transparent)", fg: "var(--color-danger)", dot: "var(--color-danger)" },
-      warning: { bg: "color-mix(in srgb, var(--color-warning) 16%, transparent)", fg: "var(--color-warning)", dot: "var(--color-warning)" },
-      glow: { bg: "color-mix(in srgb, var(--color-glow) 14%, transparent)", fg: "var(--color-primary)", dot: "var(--color-glow)" }
+      neutral: {
+        bg: "var(--surface-sunken)",
+        fg: "var(--text-muted)",
+        dot: "var(--text-faint)"
+      },
+      primary: {
+        bg: "color-mix(in srgb, var(--color-primary) 14%, transparent)",
+        fg: "var(--color-primary)",
+        dot: "var(--color-primary)"
+      },
+      success: {
+        bg: "color-mix(in srgb, var(--color-success) 14%, transparent)",
+        fg: "var(--color-success)",
+        dot: "var(--color-success)"
+      },
+      danger: {
+        bg: "color-mix(in srgb, var(--color-danger) 14%, transparent)",
+        fg: "var(--color-danger)",
+        dot: "var(--color-danger)"
+      },
+      warning: {
+        bg: "color-mix(in srgb, var(--color-warning) 16%, transparent)",
+        fg: "var(--color-warning)",
+        dot: "var(--color-warning)"
+      },
+      glow: {
+        bg: "color-mix(in srgb, var(--color-glow) 14%, transparent)",
+        fg: "var(--color-primary)",
+        dot: "var(--color-glow)"
+      }
     };
     const t = tones[tone] || tones.neutral;
     return /* @__PURE__ */ import_react.default.createElement(
@@ -88,7 +118,18 @@ var SOATDesignSystem_de1198 = (() => {
         },
         ...rest
       },
-      dot ? /* @__PURE__ */ import_react.default.createElement("span", { style: { width: 6, height: 6, borderRadius: "50%", background: t.dot, boxShadow: tone === "glow" ? "var(--glow-cyan-sm)" : "none" } }) : null,
+      dot ? /* @__PURE__ */ import_react.default.createElement(
+        "span",
+        {
+          style: {
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: t.dot,
+            boxShadow: tone === "glow" ? "var(--glow-cyan-sm)" : "none"
+          }
+        }
+      ) : null,
       children
     );
   }
@@ -108,9 +149,17 @@ var SOATDesignSystem_de1198 = (() => {
     ...rest
   }) {
     const sizes = {
-      sm: { padding: "0.4rem 0.85rem", fontSize: "var(--text-sm)", gap: "0.4rem" },
+      sm: {
+        padding: "0.4rem 0.85rem",
+        fontSize: "var(--text-sm)",
+        gap: "0.4rem"
+      },
       md: { padding: "0.6rem 1.2rem", fontSize: "var(--text-sm)", gap: "0.5rem" },
-      lg: { padding: "0.85rem 1.75rem", fontSize: "var(--text-base)", gap: "0.6rem" }
+      lg: {
+        padding: "0.85rem 1.75rem",
+        fontSize: "var(--text-base)",
+        gap: "0.6rem"
+      }
     };
     const base = {
       display: "inline-flex",
@@ -145,7 +194,14 @@ var SOATDesignSystem_de1198 = (() => {
       }
     };
     const [hover, setHover] = import_react2.default.useState(false);
-    const hoverStyle = !disabled && hover ? variant === "primary" ? { transform: "translateY(-2px)", background: "var(--color-action-hover)", boxShadow: "var(--glow-cyan-md)" } : variant === "secondary" ? { borderColor: "var(--color-primary)", color: "var(--color-primary)" } : { background: "var(--surface-raised)" } : {};
+    const hoverStyle = !disabled && hover ? variant === "primary" ? {
+      transform: "translateY(-2px)",
+      background: "var(--color-action-hover)",
+      boxShadow: "var(--glow-cyan-md)"
+    } : variant === "secondary" ? {
+      borderColor: "var(--color-primary)",
+      color: "var(--color-primary)"
+    } : { background: "var(--surface-raised)" } : {};
     return /* @__PURE__ */ import_react2.default.createElement(
       "button",
       {
@@ -244,48 +300,93 @@ var SOATDesignSystem_de1198 = (() => {
   }) {
     const [focus, setFocus] = import_react5.default.useState(false);
     const inputId = id || (label ? `in-${label.replace(/\s+/g, "-").toLowerCase()}` : void 0);
-    return /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "0.4rem", fontFamily: "var(--font-body)" } }, label ? /* @__PURE__ */ import_react5.default.createElement("label", { htmlFor: inputId, style: { fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)", color: "var(--text-body)", letterSpacing: "var(--tracking-ui)" } }, label) : null, /* @__PURE__ */ import_react5.default.createElement(
+    return /* @__PURE__ */ import_react5.default.createElement(
       "div",
       {
         style: {
           display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          padding: "0.6rem 0.75rem",
-          background: "var(--surface-page)",
-          border: `1px solid ${error ? "var(--color-danger)" : focus ? "var(--border-focus)" : "var(--border-default)"}`,
-          borderRadius: "var(--radius-md)",
-          boxShadow: focus ? "var(--ring-focus)" : "none",
-          transition: "border-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)"
+          flexDirection: "column",
+          gap: "0.4rem",
+          fontFamily: "var(--font-body)"
         }
       },
-      iconLeft ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { display: "inline-flex", color: "var(--text-faint)" } }, iconLeft) : null,
-      /* @__PURE__ */ import_react5.default.createElement(
-        "input",
+      label ? /* @__PURE__ */ import_react5.default.createElement(
+        "label",
         {
-          id: inputId,
-          type,
-          onFocus: () => setFocus(true),
-          onBlur: () => setFocus(false),
+          htmlFor: inputId,
           style: {
-            flex: 1,
-            border: "none",
-            outline: "none",
-            background: "transparent",
-            color: "var(--text-strong)",
-            fontFamily: "inherit",
             fontSize: "var(--text-sm)",
-            ...style
-          },
-          ...rest
-        }
-      )
-    ), error ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: "var(--text-xs)", color: "var(--color-danger)" } }, error) : hint ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: "var(--text-xs)", color: "var(--text-faint)" } }, hint) : null);
+            fontWeight: "var(--weight-medium)",
+            color: "var(--text-body)",
+            letterSpacing: "var(--tracking-ui)"
+          }
+        },
+        label
+      ) : null,
+      /* @__PURE__ */ import_react5.default.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.6rem 0.75rem",
+            background: "var(--surface-page)",
+            border: `1px solid ${error ? "var(--color-danger)" : focus ? "var(--border-focus)" : "var(--border-default)"}`,
+            borderRadius: "var(--radius-md)",
+            boxShadow: focus ? "var(--ring-focus)" : "none",
+            transition: "border-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard)"
+          }
+        },
+        iconLeft ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { display: "inline-flex", color: "var(--text-faint)" } }, iconLeft) : null,
+        /* @__PURE__ */ import_react5.default.createElement(
+          "input",
+          {
+            id: inputId,
+            type,
+            onFocus: () => setFocus(true),
+            onBlur: () => setFocus(false),
+            style: {
+              flex: 1,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              color: "var(--text-strong)",
+              fontFamily: "inherit",
+              fontSize: "var(--text-sm)",
+              ...style
+            },
+            ...rest
+          }
+        )
+      ),
+      error ? /* @__PURE__ */ import_react5.default.createElement(
+        "span",
+        {
+          style: { fontSize: "var(--text-xs)", color: "var(--color-danger)" }
+        },
+        error
+      ) : hint ? /* @__PURE__ */ import_react5.default.createElement(
+        "span",
+        {
+          style: { fontSize: "var(--text-xs)", color: "var(--text-faint)" }
+        },
+        hint
+      ) : null
+    );
   }
 
   // .claude/skills/soat-design/components/forms/Switch.jsx
   var import_react6 = __toESM(require_react(), 1);
-  function Switch({ checked = false, onChange, label, disabled = false, id, style, ...rest }) {
+  function Switch({
+    checked = false,
+    onChange,
+    label,
+    disabled = false,
+    id,
+    style,
+    ...rest
+  }) {
     const switchId = id || (label ? `sw-${label.replace(/\s+/g, "-").toLowerCase()}` : void 0);
     return /* @__PURE__ */ import_react6.default.createElement(
       "label",
@@ -339,7 +440,6 @@ var SOATDesignSystem_de1198 = (() => {
               height: 16,
               borderRadius: "50%",
               background: "#ffffff",
-              /* light knob reads on both the cyan track (on) and sunken track (off) in either theme */
               boxShadow: "var(--shadow-sm)",
               transition: "left var(--duration-base) var(--ease-out)"
             }
@@ -369,7 +469,11 @@ var SOATDesignSystem_de1198 = (() => {
         WebkitBackdropFilter: "blur(var(--blur-glass))"
       }
     };
-    const hoverStyle = interactive && hover ? { transform: "translateY(-4px)", boxShadow: "var(--shadow-lg), var(--glow-cyan-sm)", borderColor: "var(--color-primary)" } : {};
+    const hoverStyle = interactive && hover ? {
+      transform: "translateY(-4px)",
+      boxShadow: "var(--shadow-lg), var(--glow-cyan-sm)",
+      borderColor: "var(--color-primary)"
+    } : {};
     return /* @__PURE__ */ import_react7.default.createElement(
       "div",
       {
@@ -394,7 +498,13 @@ var SOATDesignSystem_de1198 = (() => {
 
   // .claude/skills/soat-design/components/surfaces/CodeBlock.jsx
   var import_react8 = __toESM(require_react(), 1);
-  function CodeBlock({ children, title = "Terminal", language, style, ...rest }) {
+  function CodeBlock({
+    children,
+    title = "Terminal",
+    language,
+    style,
+    ...rest
+  }) {
     const [copied, setCopied] = import_react8.default.useState(false);
     const code = typeof children === "string" ? children : String(children ?? "");
     const copy = () => {
@@ -471,7 +581,18 @@ var SOATDesignSystem_de1198 = (() => {
             overflowX: "auto"
           }
         },
-        /* @__PURE__ */ import_react8.default.createElement("code", { style: { background: "none", border: "none", padding: 0, fontFamily: "var(--font-mono)" } }, code)
+        /* @__PURE__ */ import_react8.default.createElement(
+          "code",
+          {
+            style: {
+              background: "none",
+              border: "none",
+              padding: 0,
+              fontFamily: "var(--font-mono)"
+            }
+          },
+          code
+        )
       )
     );
   }

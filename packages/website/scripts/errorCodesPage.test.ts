@@ -39,8 +39,6 @@ test('every section carries the same hint the API returns', () => {
   }
 });
 
-
-
 test('the descriptions that broke the build are escaped on the page', () => {
   for (const code of [
     'INVALID_TEMPLATE_TOKEN',

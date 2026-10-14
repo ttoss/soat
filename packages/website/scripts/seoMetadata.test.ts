@@ -41,7 +41,8 @@ test('plainText drops markdown links, code, emphasis and tags', () => {
 test('plainText keeps underscores and asterisks that are part of a name', () => {
   assert.equal(
     plainText({
-      markdown: 'Sets `guardrail_ids` and _this_ with *that* on the `tool_context`.',
+      markdown:
+        'Sets `guardrail_ids` and _this_ with *that* on the `tool_context`.',
     }),
     'Sets guardrail_ids and this with that on the tool_context.'
   );

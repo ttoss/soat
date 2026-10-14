@@ -10,6 +10,7 @@ import * as toolsModule from 'src/lib/tools';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
+import { readRequestBody } from '../../fixtures/requestBody';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Orchestrations', () => {
@@ -1681,17 +1682,11 @@ describe('Orchestrations', () => {
       // account it may touch) reaches the call without the model in between.
       test("is forwarded to a tool node, resolving the tool's {{context:}} preset", async () => {
         const bodies: unknown[] = [];
-        const server = createServer((req, res) => {
-          const chunks: Buffer[] = [];
-          req.on('data', (chunk: Buffer) => {
-            chunks.push(chunk);
-          });
-          req.on('end', () => {
-            const raw = Buffer.concat(chunks).toString('utf8');
-            bodies.push(raw ? JSON.parse(raw) : null);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
-          });
+        const server = createServer(async (req, res) => {
+          const raw = await readRequestBody(req);
+          bodies.push(raw ? JSON.parse(raw) : null);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
         });
         await new Promise<void>((resolve) => {
           server.listen(0, '127.0.0.1', resolve);

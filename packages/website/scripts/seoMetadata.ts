@@ -23,16 +23,18 @@ export type PageMeta = {
 
 /** Markdown and inline HTML reduced to the words a snippet shows. */
 export const plainText = (args: { markdown: string }): string => {
-  return args.markdown
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/`/g, '')
-    // Emphasis markers only: an underscore inside a name (`guardrail_ids`)
-    // is part of the name.
-    .replace(/(?<![\w*])(\*\*|__|\*|_)(?=\S)([^*_]*?\S)\1(?![\w*])/g, '$2')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([.,;:])/g, '$1')
-    .trim();
+  return (
+    args.markdown
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/`/g, '')
+      // Emphasis markers only: an underscore inside a name (`guardrail_ids`)
+      // is part of the name.
+      .replace(/(?<![\w*])(\*\*|__|\*|_)(?=\S)([^*_]*?\S)\1(?![\w*])/g, '$2')
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([.,;:])/g, '$1')
+      .trim()
+  );
 };
 
 const SENTENCE_END = /(?<=[.!?])\s+(?=[A-Z0-9`"'(])/;

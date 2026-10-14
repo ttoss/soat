@@ -343,7 +343,7 @@ describe('Guardrail-routed tool approvals', () => {
       { expiresAt: new Date(Date.now() - 1000) },
       { where: { projectId: fixture.projectInternalId, status: 'pending' } }
     );
-    let claimed = 0;
+    let claimed: number;
     do {
       claimed = await expireDueApprovals();
     } while (claimed > 0);

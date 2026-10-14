@@ -158,7 +158,7 @@ export const assertStorageQuota = async (args: {
   projectId: number;
   addedBytes: number;
 }): Promise<void> => {
-  let breach: QuotaBreach | null = null;
+  let breach: QuotaBreach | null;
   try {
     breach = await evaluateStorageQuotas(args);
   } catch (error) {

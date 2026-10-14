@@ -5,7 +5,13 @@ import React from 'react';
  * bar and a copy button. Matches the docs site code blocks (dark #0d1117
  * content, cyan-tinted title bar in dark mode). Pass plain string children.
  */
-export function CodeBlock({ children, title = 'Terminal', language, style, ...rest }) {
+export function CodeBlock({
+  children,
+  title = 'Terminal',
+  language,
+  style,
+  ...rest
+}) {
   const [copied, setCopied] = React.useState(false);
   const code = typeof children === 'string' ? children : String(children ?? '');
 
@@ -78,7 +84,16 @@ export function CodeBlock({ children, title = 'Terminal', language, style, ...re
           overflowX: 'auto',
         }}
       >
-        <code style={{ background: 'none', border: 'none', padding: 0, fontFamily: 'var(--font-mono)' }}>{code}</code>
+        <code
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {code}
+        </code>
       </pre>
     </div>
   );
