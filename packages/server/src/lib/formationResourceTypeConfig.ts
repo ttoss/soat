@@ -370,7 +370,8 @@ export const loadFormationResourceTypeConfig = (args: {
     throw new Error(
       `Could not read formation resource type config (${source}): ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
+      { cause: error }
     );
   }
 
@@ -381,7 +382,8 @@ export const loadFormationResourceTypeConfig = (args: {
     throw new Error(
       `Could not parse formation resource type config (${source}): ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
+      { cause: error }
     );
   }
 

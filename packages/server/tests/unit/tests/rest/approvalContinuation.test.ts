@@ -260,7 +260,7 @@ describe('Tool-call approval continuation', () => {
 
   /** Drains every due item, the way the scheduler's tick does. */
   const sweep = async (): Promise<void> => {
-    let claimed = 0;
+    let claimed: number;
     do {
       claimed = await expireDueApprovals();
     } while (claimed > 0);

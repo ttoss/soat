@@ -94,7 +94,6 @@ export const SpecProvider = ({
   );
 };
 
-// eslint-disable-next-line react-refresh/only-export-components -- consumer hook is intentionally colocated with its provider
 export const useSpec = (): SpecContextValue => {
   return React.useContext(SpecContext);
 };

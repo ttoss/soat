@@ -197,7 +197,7 @@ const resolveClass = (
   if (isActionClass(document.class)) {
     return document.class;
   }
-  let result: unknown = null;
+  let result: unknown;
   try {
     if (
       isPlainObject(document.class) &&

@@ -2324,6 +2324,22 @@ describe('Usage', () => {
       return res.body.id as string;
     };
 
+    // Generates once and returns every crossing captured up to the one
+    // `resourceId` emits.
+    const generateUntilCrossed = (args: {
+      content: string;
+      resourceId: string;
+    }): Promise<SoatEvent[]> => {
+      return withCapture(async (captured) => {
+        await generate(args.content);
+        await pollUntil(() => {
+          return captured.some((e) => {
+            return e.resourceId === args.resourceId;
+          });
+        });
+      });
+    };
+
     describe('CRUD', () => {
       test('unauthenticated requests return 401', async () => {
         expect((await testClient.get('/api/v1/usage/thresholds')).status).toBe(
@@ -2515,13 +2531,9 @@ describe('Usage', () => {
 
         // The project already has metered usage this month, so the next metered
         // generation drives evaluation and fires the (low) threshold.
-        const firstRound = await withCapture(async (captured) => {
-          await generate('threshold fire 1');
-          await pollUntil(() => {
-            return captured.some((e) => {
-              return e.resourceId === thresholdId;
-            });
-          });
+        const firstRound = await generateUntilCrossed({
+          content: 'threshold fire 1',
+          resourceId: thresholdId,
         });
         const fired = firstRound.filter((e) => {
           return e.resourceId === thresholdId;
@@ -2555,13 +2567,9 @@ describe('Usage', () => {
           window: 'rolling_24h',
           threshold: 5,
         });
-        const secondRound = await withCapture(async (captured) => {
-          await generate('threshold fire 2');
-          await pollUntil(() => {
-            return captured.some((e) => {
-              return e.resourceId === sentinelId;
-            });
-          });
+        const secondRound = await generateUntilCrossed({
+          content: 'threshold fire 2',
+          resourceId: sentinelId,
         });
         expect(
           secondRound.filter((e) => {
@@ -2603,13 +2611,9 @@ describe('Usage', () => {
           threshold: 0.000001,
         });
 
-        const round = await withCapture(async (captured) => {
-          await generate('cost threshold fire');
-          await pollUntil(() => {
-            return captured.some((e) => {
-              return e.resourceId === thresholdId;
-            });
-          });
+        const round = await generateUntilCrossed({
+          content: 'cost threshold fire',
+          resourceId: thresholdId,
         });
         const fired = round.filter((e) => {
           return e.resourceId === thresholdId;
@@ -2627,13 +2631,9 @@ describe('Usage', () => {
           threshold: 5,
         });
 
-        const round = await withCapture(async (captured) => {
-          await generate('rolling threshold fire');
-          await pollUntil(() => {
-            return captured.some((e) => {
-              return e.resourceId === thresholdId;
-            });
-          });
+        const round = await generateUntilCrossed({
+          content: 'rolling threshold fire',
+          resourceId: thresholdId,
         });
         const fired = round.filter((e) => {
           return e.resourceId === thresholdId;
@@ -2688,13 +2688,9 @@ describe('Usage', () => {
           threshold: 5,
         });
 
-        const round = await withCapture(async (captured) => {
-          await generate('below threshold');
-          await pollUntil(() => {
-            return captured.some((e) => {
-              return e.resourceId === sentinelId;
-            });
-          });
+        const round = await generateUntilCrossed({
+          content: 'below threshold',
+          resourceId: sentinelId,
         });
         expect(
           round.filter((e) => {

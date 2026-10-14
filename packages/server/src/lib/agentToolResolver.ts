@@ -747,7 +747,7 @@ const resolveHttpTool = (
     typeof typedTool.parameters === 'string'
       ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
       : typedTool.parameters;
-  let execute: HttpExecuteConfig | null = null;
+  let execute: HttpExecuteConfig | null;
   try {
     execute = parseHttpExecuteConfig(typedTool.execute);
   } catch {
