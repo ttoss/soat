@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const modelsDir = path.join(repoRoot, 'packages/postgresdb/src/models');

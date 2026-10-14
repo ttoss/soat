@@ -38,7 +38,9 @@ interface PermissionsJson {
 const toTitleCase = (kebab: string): string => {
   return kebab
     .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join(' ');
 };
 
@@ -46,7 +48,9 @@ const toTitleCase = (kebab: string): string => {
 const loadPermissionsFiles = (): PermissionsJson[] => {
   return fs
     .readdirSync(PERMISSIONS_DIR)
-    .filter((f) => f.endsWith('.json'))
+    .filter((f) => {
+      return f.endsWith('.json');
+    })
     .sort()
     .map((f) => {
       return JSON.parse(
@@ -63,18 +67,18 @@ const renderPermissionsTable = (operations: PermissionOperation[]): string => {
     '| ---------- | ----------- |',
   ];
 
-  const rows = operations.map(
-    ({ action, description }) => `| \`${action}\` | ${description} |`
-  );
+  const rows = operations.map(({ action, description }) => {
+    return `| \`${action}\` | ${description} |`;
+  });
 
   return [...header, ...rows].join('\n');
 };
 
 const renderSrnPatternsTable = (patterns: SrnPattern[]): string => {
   const header = ['| Pattern | Description |', '| ------- | ----------- |'];
-  const rows = patterns.map(
-    ({ pattern, description }) => `| \`${pattern}\` | ${description} |`
-  );
+  const rows = patterns.map(({ pattern, description }) => {
+    return `| \`${pattern}\` | ${description} |`;
+  });
   return [...header, ...rows].join('\n');
 };
 

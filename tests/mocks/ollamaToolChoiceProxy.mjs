@@ -98,28 +98,39 @@ const inferStringArgument = (args) => {
   return 'unknown';
 };
 
+/** A placeholder per non-string JSON Schema type, built fresh for each call. */
+const PLACEHOLDER_BY_TYPE = {
+  number: () => {
+    return 1;
+  },
+  integer: () => {
+    return 1;
+  },
+  boolean: () => {
+    return true;
+  },
+  array: () => {
+    return [];
+  },
+  object: () => {
+    return {};
+  },
+};
+
 const inferArgument = (args) => {
   const { schema, name, text } = args;
   if (Array.isArray(schema?.enum) && schema.enum.length > 0) {
     return schema.enum[0];
   }
-  switch (schema?.type) {
-    case 'number':
-    case 'integer':
-      return 1;
-    case 'boolean':
-      return true;
-    case 'array':
-      return [];
-    case 'object':
-      return {};
-    default:
-      return inferStringArgument({
-        name,
-        description: schema?.description,
-        text,
-      });
+  const type = schema?.type;
+  if (typeof type === 'string' && Object.hasOwn(PLACEHOLDER_BY_TYPE, type)) {
+    return PLACEHOLDER_BY_TYPE[type]();
   }
+  return inferStringArgument({
+    name,
+    description: schema?.description,
+    text,
+  });
 };
 
 /** Builds arguments for every required property of the forced tool. */
@@ -154,6 +165,42 @@ const forcedToolName = (toolChoice) => {
   );
 };
 
+/** A `tool_choice` that asks for no particular call. */
+const isUnforced = (toolChoice) => {
+  return !toolChoice || toolChoice === 'auto' || toolChoice === 'none';
+};
+
+const offeredNames = (tools) => {
+  return tools.map((tool) => {
+    return tool?.function?.name;
+  });
+};
+
+/** A `tool_choice` that names its tool: force it, refuse it, or forward it. */
+const decideNamed = (args) => {
+  const { name, allowlisted, offeredTools, toolNames } = args;
+  const match = allowlisted.find((tool) => {
+    return tool.function.name === name;
+  });
+  if (match) {
+    return { kind: 'force', tool: match.function };
+  }
+
+  if (toolNames.has(name)) {
+    return {
+      kind: 'reject',
+      message:
+        `tool_choice forces "${name}", which is allowlisted for deterministic ` +
+        `forcing, but the request offers no such tool (offered: ` +
+        `${offeredNames(offeredTools).join(', ') || 'none'}). ` +
+        `Forwarding this to the model would make the result nondeterministic, ` +
+        `so it is rejected instead.`,
+    };
+  }
+
+  return { kind: 'forward' };
+};
+
 /**
  * Decides what to do with one chat completion, as a tagged result:
  *
@@ -184,7 +231,7 @@ const forcedToolName = (toolChoice) => {
 const resolveDecision = (args) => {
   const { body, toolNames } = args;
   const toolChoice = body?.tool_choice;
-  if (!toolChoice || toolChoice === 'auto' || toolChoice === 'none') {
+  if (isUnforced(toolChoice)) {
     return { kind: 'forward' };
   }
 
@@ -207,32 +254,13 @@ const resolveDecision = (args) => {
     return { kind: 'forward' };
   }
 
-  const match = allowlisted.find((tool) => {
-    return tool.function.name === name;
-  });
-  if (match) {
-    return { kind: 'force', tool: match.function };
-  }
+  return decideNamed({ name, allowlisted, offeredTools, toolNames });
+};
 
-  if (toolNames.has(name)) {
-    return {
-      kind: 'reject',
-      message:
-        `tool_choice forces "${name}", which is allowlisted for deterministic ` +
-        `forcing, but the request offers no such tool (offered: ` +
-        `${
-          offeredTools
-            .map((tool) => {
-              return tool?.function?.name;
-            })
-            .join(', ') || 'none'
-        }). ` +
-        `Forwarding this to the model would make the result nondeterministic, ` +
-        `so it is rejected instead.`,
-    };
-  }
-
-  return { kind: 'forward' };
+const describeOutcome = (decision) => {
+  if (decision.kind === 'force') return `forced ${decision.tool.name}`;
+  if (decision.kind === 'reject') return 'REJECTED (400)';
+  return 'forwarded to model (not allowlisted)';
 };
 
 /**
@@ -248,7 +276,7 @@ const resolveDecision = (args) => {
 const logDecision = (args) => {
   const { body, decision } = args;
   const toolChoice = body?.tool_choice;
-  if (!toolChoice || toolChoice === 'auto' || toolChoice === 'none') {
+  if (isUnforced(toolChoice)) {
     return;
   }
 
@@ -257,23 +285,13 @@ const logDecision = (args) => {
       ? 'required'
       : (forcedToolName(toolChoice) ?? '?');
   const offered =
-    (Array.isArray(body?.tools) ? body.tools : [])
-      .map((tool) => {
-        return tool?.function?.name;
-      })
+    offeredNames(Array.isArray(body?.tools) ? body.tools : [])
       .filter(Boolean)
       .join(', ') || 'none';
-  const outcome =
-    decision.kind === 'force'
-      ? `forced ${decision.tool.name}`
-      : decision.kind === 'reject'
-        ? 'REJECTED (400)'
-        : 'forwarded to model (not allowlisted)';
 
-  // eslint-disable-next-line no-console
   console.log(
     `[tool-choice-proxy] tool_choice=${asked} offered=[${offered}] ` +
-      `model=${body?.model} → ${outcome}`
+      `model=${body?.model} → ${describeOutcome(decision)}`
   );
 };
 
@@ -463,7 +481,6 @@ export const createToolChoiceProxy = (args) => {
 
       sendForcedToolCall({ res, body, forcedTool: decision.tool });
     })().catch((error) => {
-      // eslint-disable-next-line no-console
       console.error('[tool-choice-proxy] error', error);
       if (!res.headersSent) {
         sendJson(res, 502, { error: { message: String(error) } });
@@ -492,7 +509,6 @@ if (isMain) {
   const maxCompletionTokens =
     Number(process.env.MAX_COMPLETION_TOKENS) || undefined;
   if (!upstreamBaseUrl) {
-    // eslint-disable-next-line no-console
     console.error('OLLAMA_UPSTREAM_URL is required');
     process.exit(1);
   }
@@ -501,7 +517,6 @@ if (isMain) {
     toolNames,
     maxCompletionTokens,
   }).listen(port, () => {
-    // eslint-disable-next-line no-console
     console.log(
       `[tool-choice-proxy] listening on :${port} → ${upstreamBaseUrl} ` +
         `(forcing: ${toolNames.join(', ') || 'none'}; ` +

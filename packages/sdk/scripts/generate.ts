@@ -42,7 +42,6 @@ const main = async () => {
   const skipped =
     Object.keys(merged.paths ?? {}).length - Object.keys(restPaths).length;
   if (skipped > 0) {
-    // eslint-disable-next-line no-console
     console.log(
       `Skipped ${skipped} non-REST path(s) outside ${REST_PATH_PREFIX}`
     );
@@ -53,7 +52,6 @@ const main = async () => {
     JSON.stringify({ ...merged, paths: restPaths }, null, 2)
   );
 
-  // eslint-disable-next-line no-console
   console.log(`Merged spec written to: ${MERGED_SPEC_FILE}`);
 
   try {
@@ -65,12 +63,10 @@ const main = async () => {
     fs.unlinkSync(MERGED_SPEC_FILE);
   }
 
-  // eslint-disable-next-line no-console
   console.log('SDK generation complete.');
 };
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

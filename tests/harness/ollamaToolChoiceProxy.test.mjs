@@ -55,56 +55,59 @@ const WEATHER_TOOL = {
   },
 };
 
-describe('ollamaToolChoiceProxy', () => {
-  /** Requests the fake upstream received, in order. */
-  const upstreamRequests = [];
-  let upstream;
-  let upstreamUrl;
-  let proxy;
-  let proxyUrl;
+/** Requests the fake upstream received, in order. */
+const upstreamRequests = [];
+let upstream;
+let upstreamUrl;
+let proxy;
+let proxyUrl;
 
-  before(async () => {
-    upstream = createServer((req, res) => {
-      let body = '';
-      req.on('data', (chunk) => {
-        body += chunk;
-      });
-      req.on('end', () => {
-        upstreamRequests.push({
-          method: req.method,
-          url: req.url,
-          body,
-        });
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ upstream: true, echo: body }));
-      });
-    });
-    upstreamUrl = await listen(upstream);
-
-    proxy = createToolChoiceProxy({
-      upstreamBaseUrl: upstreamUrl,
-      toolNames: [
-        'get_order_status',
-        'get_weather',
-        'call-stanza-1_create-agent-generation',
-      ],
-    });
-    proxyUrl = await listen(proxy);
+const recordUpstream = (req, res) => {
+  let body = '';
+  req.on('data', (chunk) => {
+    body += chunk;
   });
-
-  after(async () => {
-    await close(proxy);
-    await close(upstream);
-  });
-
-  const chat = (body) => {
-    return fetch(`${proxyUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+  req.on('end', () => {
+    upstreamRequests.push({
+      method: req.method,
+      url: req.url,
+      body,
     });
-  };
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ upstream: true, echo: body }));
+  });
+};
 
+before(async () => {
+  upstream = createServer(recordUpstream);
+  upstreamUrl = await listen(upstream);
+
+  proxy = createToolChoiceProxy({
+    upstreamBaseUrl: upstreamUrl,
+    toolNames: [
+      'get_order_status',
+      'get_weather',
+      'call-stanza-1_create-agent-generation',
+    ],
+  });
+  proxyUrl = await listen(proxy);
+});
+
+after(async () => {
+  await close(proxy);
+  await close(upstream);
+});
+
+/** A chat completion through the proxy at `baseUrl`, the shared one by default. */
+const chat = (body, baseUrl = proxyUrl) => {
+  return fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+};
+
+describe('ollamaToolChoiceProxy — synthesizing a forced call', () => {
   test('synthesizes a tool call when tool_choice names a tool', async () => {
     const before = upstreamRequests.length;
 
@@ -194,7 +197,9 @@ describe('ollamaToolChoiceProxy', () => {
       'get_order_status'
     );
   });
+});
 
+describe('ollamaToolChoiceProxy — streaming and pass-through', () => {
   test('streams the synthesized call when stream is true', async () => {
     const res = await chat({
       model: 'qwen2.5:0.5b',
@@ -247,7 +252,9 @@ describe('ollamaToolChoiceProxy', () => {
       );
     }
   });
+});
 
+describe('ollamaToolChoiceProxy — the allowlist', () => {
   // Forcing is honored only for explicitly listed tools. Other CI flows force
   // tools whose arguments carry meaning the model must produce (a document id,
   // the poem text in formations.md `step_rules`, the guardrail-gated tool in the
@@ -342,7 +349,9 @@ describe('ollamaToolChoiceProxy', () => {
     assert.equal(res.status, 200);
     assert.equal(upstreamRequests.length, before + 1);
   });
+});
 
+describe('ollamaToolChoiceProxy — what reaches the model untouched', () => {
   test('forwards "required" when the single tool is not listed', async () => {
     const before = upstreamRequests.length;
 
@@ -393,89 +402,74 @@ describe('ollamaToolChoiceProxy', () => {
     assert.equal((await res.json()).upstream, true);
     assert.equal(upstreamRequests.at(-1).url, '/v1/embeddings');
   });
-
-  // Output-token cap. Agents have no max_tokens field, so nothing bounds how
-  // many tokens the sandbox model emits per completion — the dominant, and
-  // wildly variable, cost of the smoke job. The cap is applied here, at the
-  // provider boundary, exactly like the tool_choice shim above.
-  describe('maxCompletionTokens', () => {
-    let capped;
-    let cappedUrl;
-
-    before(async () => {
-      capped = createToolChoiceProxy({
-        upstreamBaseUrl: upstreamUrl,
-        maxCompletionTokens: 64,
-      });
-      cappedUrl = await listen(capped);
-    });
-
-    after(async () => {
-      await close(capped);
-    });
-
-    const cappedChat = (body) => {
-      return fetch(`${cappedUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    };
-
-    test('injects max_tokens into a forwarded chat completion', async () => {
-      const res = await cappedChat({
-        model: 'qwen2.5:0.5b',
-        messages: [{ role: 'user', content: 'Hello' }],
-      });
-
-      assert.equal(res.status, 200);
-      const forwarded = JSON.parse(upstreamRequests.at(-1).body);
-      assert.equal(forwarded.max_tokens, 64);
-      assert.equal(forwarded.model, 'qwen2.5:0.5b');
-    });
-
-    test('lowers a caller max_tokens above the cap, keeps one below it', async () => {
-      await cappedChat({
-        model: 'qwen2.5:0.5b',
-        messages: [{ role: 'user', content: 'Hello' }],
-        max_tokens: 1000,
-      });
-      assert.equal(JSON.parse(upstreamRequests.at(-1).body).max_tokens, 64);
-
-      await cappedChat({
-        model: 'qwen2.5:0.5b',
-        messages: [{ role: 'user', content: 'Hello' }],
-        max_tokens: 16,
-      });
-      assert.equal(JSON.parse(upstreamRequests.at(-1).body).max_tokens, 16);
-    });
-
-    test('leaves non-chat routes such as embeddings untouched', async () => {
-      const body = { model: 'qwen3-embedding:0.6b', input: 'hi' };
-      await fetch(`${cappedUrl}/v1/embeddings`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      assert.deepEqual(JSON.parse(upstreamRequests.at(-1).body), body);
-    });
-
-    test('without the option the body is forwarded verbatim', async () => {
-      const body = {
-        model: 'qwen2.5:0.5b',
-        messages: [{ role: 'user', content: 'Hello' }],
-      };
-      await chat(body);
-
-      assert.deepEqual(JSON.parse(upstreamRequests.at(-1).body), body);
-    });
-  });
-
   test('serves a health endpoint without touching the model', async () => {
     const before = upstreamRequests.length;
     const res = await fetch(`${proxyUrl}/health`);
     assert.equal(res.status, 200);
     assert.equal(upstreamRequests.length, before);
+  });
+});
+
+// Output-token cap. Agents have no max_tokens field, so nothing bounds how
+// many tokens the sandbox model emits per completion — the dominant, and
+// wildly variable, cost of the smoke job. The cap is applied here, at the
+// provider boundary, exactly like the tool_choice shim above.
+describe('ollamaToolChoiceProxy — maxCompletionTokens', () => {
+  let capped;
+  let cappedUrl;
+
+  before(async () => {
+    capped = createToolChoiceProxy({
+      upstreamBaseUrl: upstreamUrl,
+      maxCompletionTokens: 64,
+    });
+    cappedUrl = await listen(capped);
+  });
+
+  after(async () => {
+    await close(capped);
+  });
+
+  const hello = {
+    model: 'qwen2.5:0.5b',
+    messages: [{ role: 'user', content: 'Hello' }],
+  };
+
+  test('injects max_tokens into a forwarded chat completion', async () => {
+    const res = await chat(hello, cappedUrl);
+
+    assert.equal(res.status, 200);
+    const forwarded = JSON.parse(upstreamRequests.at(-1).body);
+    assert.equal(forwarded.max_tokens, 64);
+    assert.equal(forwarded.model, 'qwen2.5:0.5b');
+  });
+
+  test('lowers a caller max_tokens above the cap, keeps one below it', async () => {
+    await chat({ ...hello, max_tokens: 1000 }, cappedUrl);
+    assert.equal(JSON.parse(upstreamRequests.at(-1).body).max_tokens, 64);
+
+    await chat({ ...hello, max_tokens: 16 }, cappedUrl);
+    assert.equal(JSON.parse(upstreamRequests.at(-1).body).max_tokens, 16);
+  });
+
+  test('leaves non-chat routes such as embeddings untouched', async () => {
+    const body = { model: 'qwen3-embedding:0.6b', input: 'hi' };
+    await fetch(`${cappedUrl}/v1/embeddings`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    assert.deepEqual(JSON.parse(upstreamRequests.at(-1).body), body);
+  });
+
+  test('without the option the body is forwarded verbatim', async () => {
+    const body = {
+      model: 'qwen2.5:0.5b',
+      messages: [{ role: 'user', content: 'Hello' }],
+    };
+    await chat(body);
+
+    assert.deepEqual(JSON.parse(upstreamRequests.at(-1).body), body);
   });
 });

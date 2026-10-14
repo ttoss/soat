@@ -6,8 +6,8 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const RUNNER = fileURLToPath(new URL('../tutorials-tests.sh', import.meta.url));
 

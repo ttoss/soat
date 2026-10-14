@@ -77,29 +77,30 @@ describe('mergeCoverage', () => {
   });
 });
 
-describe('evaluateThresholds', () => {
-  let cwd;
+/** A throwaway project root holding `src/a.ts` and `src/b.ts`. */
+let cwd;
 
-  before(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-coverage-'));
-    fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
-    fs.writeFileSync(path.join(cwd, 'src', 'a.ts'), '');
-    fs.writeFileSync(path.join(cwd, 'src', 'b.ts'), '');
-  });
+before(() => {
+  cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-coverage-'));
+  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'src', 'a.ts'), '');
+  fs.writeFileSync(path.join(cwd, 'src', 'b.ts'), '');
+});
 
-  after(() => {
-    fs.rmSync(cwd, { recursive: true, force: true });
-  });
+after(() => {
+  fs.rmSync(cwd, { recursive: true, force: true });
+});
 
-  const mapOf = (files) => {
-    const coverage = {};
-    for (const [name, hits] of Object.entries(files)) {
-      const filePath = path.join(cwd, 'src', name);
-      coverage[filePath] = fileCoverage({ path: filePath, hits });
-    }
-    return mergeCoverage({ coverages: [coverage] });
-  };
+const mapOf = (files) => {
+  const coverage = {};
+  for (const [name, hits] of Object.entries(files)) {
+    const filePath = path.join(cwd, 'src', name);
+    coverage[filePath] = fileCoverage({ path: filePath, hits });
+  }
+  return mergeCoverage({ coverages: [coverage] });
+};
 
+describe('evaluateThresholds — the global group', () => {
   test('passes when the global aggregate clears the bar', () => {
     const errors = evaluateThresholds({
       coverageMap: mapOf({ 'a.ts': [1, 1, 1, 1], 'b.ts': [1, 1, 1, 0] }),
@@ -134,7 +135,9 @@ describe('evaluateThresholds', () => {
     assert.equal(errors.length, 1);
     assert.match(errors[0], /statements \(50%\)/);
   });
+});
 
+describe('evaluateThresholds — glob groups and counts', () => {
   test('checks a glob group per file and names only the file below the bar', () => {
     const errors = evaluateThresholds({
       coverageMap: mapOf({ 'a.ts': [1, 1, 1, 1], 'b.ts': [1, 0, 0, 0] }),

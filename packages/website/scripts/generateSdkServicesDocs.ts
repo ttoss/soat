@@ -209,9 +209,9 @@ const main = (): void => {
   ];
 
   fs.writeFileSync(INDEX_OUTPUT_FILE, sections.join('\n'), 'utf-8');
-  // eslint-disable-next-line no-console
+
   console.log(`SDK services index written to: ${INDEX_OUTPUT_FILE}`);
-  // eslint-disable-next-line no-console
+
   console.log(`SDK per-module service docs written to: ${SERVICES_OUTPUT_DIR}`);
 };
 

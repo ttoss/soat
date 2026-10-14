@@ -4,7 +4,7 @@ import { describe, test } from 'node:test';
 import {
   checkDescriptions,
   frontMatterDescription,
-} from '../../scripts/docs-lint.mjs';
+} from '../../scripts/docs-lint/descriptions.mjs';
 
 /**
  * Check 7: every authored doc carries a non-empty, unique `description` front

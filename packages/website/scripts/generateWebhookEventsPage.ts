@@ -64,5 +64,4 @@ ${sections.join('\n\n')}
 
 fs.writeFileSync(OUTPUT_FILE, renderPage());
 
-// eslint-disable-next-line no-console
 console.log(`Generated ${path.relative(process.cwd(), OUTPUT_FILE)}`);

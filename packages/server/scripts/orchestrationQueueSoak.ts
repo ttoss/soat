@@ -61,7 +61,7 @@ const sleep = (ms: number): Promise<void> => {
 
 const report = (line: string): void => {
   // A CLI script: stdout is the interface.
-  // eslint-disable-next-line no-console
+
   console.log(line);
 };
 

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { ESLint } from 'eslint';
 
@@ -106,6 +106,24 @@ describeCeiling({
   budget: 20,
 });
 
+// Only a real directive counts: the comment has to *open* with
+// `eslint-disable`, and the rule has to be `max-lines` itself rather than
+// `max-lines-per-function`. Prose naming the rule is not an exemption.
+const DIRECTIVE =
+  /(?:\/\*|\/\/)\s*eslint-disable(?:-next-line|-line)?\s+([^\n]*?)(?:\*\/|$)/gm;
+
+const namesMaxLines = (rules) => {
+  return rules.split(',').some((rule) => {
+    return rule.trim() === 'max-lines';
+  });
+};
+
+const disablesMaxLines = (source) => {
+  return [...source.matchAll(DIRECTIVE)].some(([, rules]) => {
+    return namesMaxLines(rules);
+  });
+};
+
 describe('module ceiling: no self-exemption', () => {
   test('no file exempts itself with an inline disable', () => {
     const tracked = execFileSync(
@@ -120,19 +138,10 @@ describe('module ceiling: no self-exemption', () => {
       .split('\0')
       .filter(Boolean);
 
-    // Only a real directive counts: the comment has to *open* with
-    // `eslint-disable`, and the rule has to be `max-lines` itself rather than
-    // `max-lines-per-function`. Prose naming the rule is not an exemption.
-    const directive =
-      /(?:\/\*|\/\/)\s*eslint-disable(?:-next-line|-line)?\s+([^\n]*?)(?:\*\/|$)/gm;
-
     const selfExempt = tracked.filter((file) => {
-      const source = fs.readFileSync(path.join(repoRoot, file), 'utf8');
-      return [...source.matchAll(directive)].some(([, rules]) => {
-        return rules.split(',').some((rule) => {
-          return rule.trim() === 'max-lines';
-        });
-      });
+      return disablesMaxLines(
+        fs.readFileSync(path.join(repoRoot, file), 'utf8')
+      );
     });
 
     assert.deepEqual(

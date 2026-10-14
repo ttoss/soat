@@ -4,7 +4,7 @@ import { describe, test } from 'node:test';
 import {
   buildOperationDescriptions,
   checkOperationDescriptions,
-} from '../../scripts/docs-lint.mjs';
+} from '../../scripts/docs-lint/descriptions.mjs';
 
 /**
  * Check 8: every REST operation carries a description no other operation
