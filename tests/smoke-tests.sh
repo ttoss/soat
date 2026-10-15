@@ -4431,8 +4431,10 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   fi
   echo "Usage event shape (token components): OK"
 
-  # 34b-ii. Receipt — the metered generation has a reconcilable receipt
-  USAGE_GEN_ID=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.data[0].generation_id // empty')
+  # 34b-ii. Receipt — the metered generation has a reconcilable receipt. Read
+  # for $GEN_ID, whose agent is kept: the newest events can name generations
+  # of agents force-deleted above, which keep their ids but have no receipt.
+  USAGE_GEN_ID=$($SOAT_CLI list-usage-events --generation-id "$GEN_ID" | sanitize_json | jq -r '.data[0].generation_id // empty')
   if [ -n "$USAGE_GEN_ID" ]; then
     RECEIPT_RESP=$($SOAT_CLI get-usage-receipt --generation-id "$USAGE_GEN_ID" | sanitize_json)
     RECEIPT_OK=$(printf '%s\n' "$RECEIPT_RESP" | jq -r '((.generation_id | length > 0) and (.currency == "USD") and (.line_items | type == "array") and (.totals.input_tokens | type == "number"))')

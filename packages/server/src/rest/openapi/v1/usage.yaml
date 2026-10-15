@@ -240,11 +240,12 @@ paths:
         Narrowings intersect and apply to the whole rollup — every bucket,
         `totals` and `totals.distinct` alike — so each composes with any
         `group_by`, and all sixteen are echoed back under `filters`. The ten
-        naming a resource are resolved against the project (a tool also
-        through an accepted share), and one naming
-        nothing there empties the rollup rather than being dropped: a mistyped
-        id must never read back as the project's whole spend. The other six
-        are matched against the value the event recorded.
+        naming a resource match the id the event recorded, so a deleted
+        resource's spend stays selectable; an id no event recorded empties the
+        rollup rather than being dropped: a mistyped id must never read back as
+        the project's whole spend. `orchestration_id` is the exception — the
+        event records no orchestration, so a deleted one empties the rollup.
+        The other six are matched against the value the event recorded.
 
 
         `groups` is paginated. Its `total` is the number of distinct buckets in
