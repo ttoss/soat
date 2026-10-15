@@ -8069,6 +8069,44 @@ $SOAT_CLI delete-agent --agent-id "$DECIDER_AGENT_ID" --force true >/dev/null
 echo "Deciders: OK"
 
 echo ""
+echo "=== Playbooks ==="
+
+echo "--- Creating a playbook and a case ---"
+PLAYBOOK_RESP=$($SOAT_CLI create-playbook \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-pricing" \
+  --definition '{"nodes":[{"key":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]}]}')
+PLAYBOOK_ID=$(printf '%s\n' "$PLAYBOOK_RESP" | jq -r '.id')
+if ! printf '%s\n' "$PLAYBOOK_RESP" | jq -e '(.id | startswith("pbk_")) and .version == 1' >/dev/null 2>&1; then
+  echo "ERROR: create-playbook did not return a playbook at version 1" >&2
+  printf '%s\n' "$PLAYBOOK_RESP" >&2
+  exit 1
+fi
+CASE_RESP=$($SOAT_CLI create-playbook-case --playbook_id "$PLAYBOOK_ID" --subject "smoke client")
+CASE_ID=$(printf '%s\n' "$CASE_RESP" | jq -r '.id')
+
+echo "--- Asking what the final node needs, then writing it ---"
+MISSING_RESP=$($SOAT_CLI get-playbook-case-missing --case_id "$CASE_ID" --node pricing)
+if ! printf '%s\n' "$MISSING_RESP" | jq -e '.waves | length == 2' >/dev/null 2>&1; then
+  echo "ERROR: get-playbook-case-missing did not answer two waves" >&2
+  printf '%s\n' "$MISSING_RESP" >&2
+  exit 1
+fi
+WRITE_RESP=$($SOAT_CLI write-playbook-case-inputs \
+  --case_id "$CASE_ID" \
+  --inputs '[{"node":"revenue","name":"amount","value":100,"expected_revision":null}]')
+if [ "$(printf '%s\n' "$WRITE_RESP" | jq -r '.revision')" != "1" ]; then
+  echo "ERROR: write-playbook-case-inputs did not advance the case to revision 1" >&2
+  printf '%s\n' "$WRITE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Cleaning up playbook fixtures ---"
+$SOAT_CLI delete-playbook-case --case_id "$CASE_ID"
+$SOAT_CLI delete-playbook --playbook_id "$PLAYBOOK_ID"
+echo "Playbooks: OK"
+
+echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
 if [ "$APP_HTTP_CODE" != "200" ]; then

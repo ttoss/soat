@@ -1,0 +1,85 @@
+{
+  "module": "playbooks",
+  "operations": [
+    {
+      "operationId": "createPlaybook",
+      "action": "playbooks:CreatePlaybook",
+      "description": "Create a playbook"
+    },
+    {
+      "operationId": "validatePlaybook",
+      "action": "playbooks:ValidatePlaybook",
+      "description": "Statically validate a playbook definition"
+    },
+    {
+      "operationId": "listPlaybooks",
+      "action": "playbooks:ListPlaybooks",
+      "description": "List playbooks in a project"
+    },
+    {
+      "operationId": "getPlaybook",
+      "action": "playbooks:GetPlaybook",
+      "description": "Get a playbook by ID"
+    },
+    {
+      "operationId": "updatePlaybook",
+      "action": "playbooks:UpdatePlaybook",
+      "description": "Update a playbook"
+    },
+    {
+      "operationId": "deletePlaybook",
+      "action": "playbooks:DeletePlaybook",
+      "description": "Delete a playbook with no cases"
+    },
+    {
+      "operationId": "listPlaybookVersions",
+      "action": "playbooks:ListPlaybookVersions",
+      "description": "List a playbook's archived definitions"
+    },
+    {
+      "operationId": "getPlaybookVersion",
+      "action": "playbooks:GetPlaybookVersion",
+      "description": "Fetch one archived playbook definition"
+    },
+    {
+      "operationId": "restorePlaybookVersion",
+      "action": "playbooks:RestorePlaybookVersion",
+      "description": "Restore an archived playbook definition as a new version"
+    },
+    {
+      "operationId": "createPlaybookCase",
+      "action": "playbooks:CreatePlaybookCase",
+      "description": "Create a case on a playbook's current version"
+    },
+    {
+      "operationId": "listPlaybookCases",
+      "action": "playbooks:ListPlaybookCases",
+      "description": "List playbook cases in a project"
+    },
+    {
+      "operationId": "getPlaybookCase",
+      "action": "playbooks:GetPlaybookCase",
+      "description": "Get a case with its node states"
+    },
+    {
+      "operationId": "deletePlaybookCase",
+      "action": "playbooks:DeletePlaybookCase",
+      "description": "Delete a case and its entries"
+    },
+    {
+      "operationId": "writePlaybookCaseInputs",
+      "action": "playbooks:WritePlaybookCaseInputs",
+      "description": "Write a batch of a case's manual inputs"
+    },
+    {
+      "operationId": "getPlaybookCaseMissing",
+      "action": "playbooks:GetPlaybookCaseMissing",
+      "description": "List the inputs still to fill before a node"
+    },
+    {
+      "operationId": "listPlaybookCaseEntries",
+      "action": "playbooks:ListPlaybookCaseEntries",
+      "description": "List a case's entries, newest first"
+    }
+  ]
+}

@@ -73,6 +73,10 @@ export const PUBLIC_ID_PREFIXES = {
   decision: 'dec_',
   share: 'shr_',
   shareAcceptance: 'shr_acc_',
+  playbook: 'pbk_',
+  playbookVersion: 'pbk_ver_',
+  playbookCase: 'pbk_case_',
+  playbookEntry: 'pbk_ent_',
 } as const;
 
 /**

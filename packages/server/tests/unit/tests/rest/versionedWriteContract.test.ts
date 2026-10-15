@@ -180,6 +180,47 @@ describe('versioned write contract', () => {
         },
       ],
     },
+    'Playbook.ts': {
+      path: '/api/v1/playbooks',
+      archived: true,
+      create: () => {
+        return createIn('/api/v1/playbooks', {
+          project_id: projectId,
+          name: unique('contract-playbook'),
+          definition: {
+            nodes: [
+              { key: 'intake', title: 'Intake', kind: 'collect', inputs: [] },
+            ],
+          },
+        });
+      },
+      writes: [
+        {
+          name: 'updatePlaybook',
+          send: (id, extra) => {
+            return client()
+              .patch(`/api/v1/playbooks/${id}`)
+              .send({
+                definition: {
+                  nodes: [
+                    {
+                      key: 'intake',
+                      title: 'Intake v2',
+                      kind: 'collect',
+                      inputs: [],
+                    },
+                  ],
+                },
+                ...extra,
+              });
+          },
+        },
+        {
+          name: 'restorePlaybookVersion',
+          send: restore('/api/v1/playbooks', 1),
+        },
+      ],
+    },
     'Workflow.ts': {
       path: '/api/v1/workflows',
       archived: true,
@@ -287,6 +328,7 @@ describe('versioned write contract', () => {
         'guardrails:*',
         'orchestrations:*',
         'workflows:*',
+        'playbooks:*',
         'documents:*',
         'memories:*',
       ],

@@ -18,6 +18,8 @@ export const VERSIONED_RESOURCES: Record<
   // Only a changed question set bumps it; a rename or a new agent does not.
   'Decider.ts': [{ module: 'deciders.ts', update: 'updateDecider' }],
   'Guardrail.ts': [{ module: 'guardrails.ts', update: 'updateGuardrail' }],
+  // Only a changed definition bumps it; a case pins the version it was created on.
+  'Playbook.ts': [{ module: 'playbooks.ts', update: 'updatePlaybook' }],
   'Orchestration.ts': [
     { module: 'orchestrations.ts', update: 'updateOrchestration' },
   ],

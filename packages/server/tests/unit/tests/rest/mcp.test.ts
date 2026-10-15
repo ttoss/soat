@@ -3343,6 +3343,186 @@ describe('MCP tools - happy path', () => {
       expect(after.body.result?.isError).toBe(true);
     });
   });
+
+  // ── Playbooks ──────────────────────────────────────────────────────────────
+
+  describe('Playbooks', () => {
+    const definition = {
+      nodes: [
+        {
+          key: 'revenue',
+          title: 'Annual revenue',
+          kind: 'collect',
+          inputs: [
+            {
+              name: 'amount',
+              schema: { type: 'number' },
+              required: true,
+              source: 'manual',
+            },
+          ],
+        },
+        {
+          key: 'pricing',
+          title: 'Pricing',
+          kind: 'collect',
+          final: true,
+          inputs: [
+            {
+              name: 'revenue',
+              schema: { type: 'number' },
+              required: true,
+              source: { node: 'revenue', field: 'output.amount' },
+            },
+            {
+              name: 'margin',
+              schema: { type: 'number' },
+              required: true,
+              source: 'manual',
+            },
+          ],
+        },
+      ],
+    };
+    let playbookId: string;
+    let caseId: string;
+
+    beforeAll(async () => {
+      const playbookRes = await mcpCall('create-playbook', {
+        project_id: projectId,
+        name: 'mcp-pricing',
+        definition,
+      });
+      expect(playbookRes.status).toBe(200);
+      playbookId = parseResult(playbookRes).id;
+
+      const caseRes = await mcpCall('create-playbook-case', {
+        playbook_id: playbookId,
+        subject: 'ACME Ltda',
+      });
+      expect(caseRes.status).toBe(200);
+      caseId = parseResult(caseRes).id;
+    });
+
+    test('create-playbook returns the playbook at version 1', async () => {
+      const res = await mcpCall('get-playbook', { playbook_id: playbookId });
+
+      expect(res.status).toBe(200);
+      expect(playbookId).toMatch(/^pbk_/);
+      expect(parseResult(res).version).toBe(1);
+    });
+
+    test('validate-playbook reports a missing node', async () => {
+      const res = await mcpCall('validate-playbook', {
+        definition: {
+          nodes: [
+            {
+              key: 'a',
+              title: 'A',
+              kind: 'collect',
+              inputs: [
+                {
+                  name: 'x',
+                  schema: {},
+                  required: true,
+                  source: { node: 'nope', field: 'output' },
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).valid).toBe(false);
+    });
+
+    test('list-playbooks and list-playbook-versions page the playbook', async () => {
+      const list = await mcpCall('list-playbooks', { project_id: projectId });
+      expect(parseResult(list).total).toBeGreaterThan(0);
+
+      const versions = await mcpCall('list-playbook-versions', {
+        playbook_id: playbookId,
+      });
+      expect(parseResult(versions).data[0].version).toBe(1);
+    });
+
+    test('get-playbook-case-missing names what to ask, by wave', async () => {
+      const res = await mcpCall('get-playbook-case-missing', {
+        case_id: caseId,
+        node: 'pricing',
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).waves).toEqual([
+        [{ node: 'revenue', input: 'amount', schema: { type: 'number' } }],
+        [{ node: 'pricing', input: 'margin', schema: { type: 'number' } }],
+      ]);
+    });
+
+    test('write-playbook-case-inputs writes a batch and the history reads it back', async () => {
+      const res = await mcpCall('write-playbook-case-inputs', {
+        case_id: caseId,
+        inputs: [
+          {
+            node: 'revenue',
+            name: 'amount',
+            value: 100,
+            expected_revision: null,
+          },
+        ],
+      });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).revision).toBe(1);
+
+      const entries = await mcpCall('list-playbook-case-entries', {
+        case_id: caseId,
+      });
+      expect(parseResult(entries).data[0].value).toBe(100);
+
+      const cases = await mcpCall('list-playbook-cases', {
+        project_id: projectId,
+        playbook_id: playbookId,
+      });
+      expect(parseResult(cases).total).toBe(1);
+
+      const read = await mcpCall('get-playbook-case', { case_id: caseId });
+      expect(parseResult(read).revision).toBe(1);
+    });
+
+    test('update and restore archive new versions', async () => {
+      const updated = await mcpCall('update-playbook', {
+        playbook_id: playbookId,
+        definition: { nodes: [definition.nodes[0]] },
+      });
+      expect(parseResult(updated).version).toBe(2);
+
+      const version = await mcpCall('get-playbook-version', {
+        playbook_id: playbookId,
+        version: 1,
+      });
+      expect(parseResult(version).config.definition.nodes).toHaveLength(2);
+
+      const restored = await mcpCall('restore-playbook-version', {
+        playbook_id: playbookId,
+        version: 1,
+      });
+      expect(parseResult(restored).version).toBe(3);
+    });
+
+    test('delete-playbook-case then delete-playbook remove them', async () => {
+      const caseRes = await mcpCall('delete-playbook-case', {
+        case_id: caseId,
+      });
+      expect(caseRes.status).toBe(200);
+
+      const res = await mcpCall('delete-playbook', { playbook_id: playbookId });
+      expect(res.status).toBe(200);
+
+      const after = await mcpCall('get-playbook', { playbook_id: playbookId });
+      expect(after.body.result?.isError).toBe(true);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {
