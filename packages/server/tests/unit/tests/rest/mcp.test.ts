@@ -3587,6 +3587,43 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(one).file_id).toBeNull();
     });
 
+    test('upgrade-playbook-case moves a case and list-playbook-case-upgrades reads it', async () => {
+      const node = (key: string) => {
+        return { key, title: key, kind: 'collect', inputs: [] };
+      };
+      const upgradePlaybook = await mcpCall('create-playbook', {
+        project_id: projectId,
+        name: 'mcp-upgrades',
+        definition: { nodes: [node('first')] },
+      });
+      const upgradePlaybookId = parseResult(upgradePlaybook).id;
+      const created = await mcpCall('create-playbook-case', {
+        playbook_id: upgradePlaybookId,
+        subject: 'Upgrades Ltda',
+      });
+      const upgradeCaseId = parseResult(created).id;
+      await mcpCall('update-playbook', {
+        playbook_id: upgradePlaybookId,
+        definition: { nodes: [node('first'), node('second')] },
+      });
+
+      const res = await mcpCall('upgrade-playbook-case', {
+        case_id: upgradeCaseId,
+      });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).playbook_version).toBe(2);
+
+      const list = await mcpCall('list-playbook-case-upgrades', {
+        case_id: upgradeCaseId,
+      });
+      expect(parseResult(list).data[0]).toMatchObject({
+        from_version: 1,
+        to_version: 2,
+        diff: { added: ['second'] },
+      });
+      await flushPlaybookExecutions();
+    });
+
     test('confirm-playbook-case-node approves a confirm node', async () => {
       const confirmed = await mcpCall('create-playbook', {
         project_id: projectId,

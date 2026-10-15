@@ -40,17 +40,27 @@ export const playbookCases = makeResourceAccessor<PlaybookCaseRow>({
   label: 'Playbook case',
 });
 
-/** The definition of the version a case is pinned to. */
-export const caseDefinition = async (args: {
+/** The definition a version of the case's playbook holds. */
+export const versionDefinition = async (args: {
   row: PlaybookCaseRow;
+  version: number;
 }): Promise<PlaybookDefinition> => {
-  const { row } = args;
   const version = await playbookVersionStore.findVersionRow({
-    resource: toResourceRef(row.playbook),
-    version: row.playbookVersion,
+    resource: toResourceRef(args.row.playbook),
+    version: args.version,
   });
   const config = playbookVersionStore.readArchivedConfig(version);
   return parsePlaybookDefinition({ definition: config.definition });
+};
+
+/** The definition of the version a case is pinned to. */
+export const caseDefinition = (args: {
+  row: PlaybookCaseRow;
+}): Promise<PlaybookDefinition> => {
+  return versionDefinition({
+    row: args.row,
+    version: args.row.playbookVersion,
+  });
 };
 
 export const caseSnapshot = async (args: {

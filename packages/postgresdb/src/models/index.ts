@@ -55,6 +55,7 @@ export { PlaybookCase } from './PlaybookCase';
 export { PlaybookEntry } from './PlaybookEntry';
 export { PlaybookExecution } from './PlaybookExecution';
 export { PlaybookExport } from './PlaybookExport';
+export { PlaybookUpgrade } from './PlaybookUpgrade';
 export { PlaybookVersion } from './PlaybookVersion';
 export { Policy } from './Policy';
 export { PriceBook } from './PriceBook';

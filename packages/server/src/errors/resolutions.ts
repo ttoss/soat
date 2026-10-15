@@ -144,6 +144,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Make the tool answer the content type of the transformation's `format`, or declare the format it produces, and export the node again.",
   PLAYBOOK_EXPORT_INTERRUPTED:
     'Export the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`.',
+  PLAYBOOK_CASE_BUSY:
+    'Wait for the executions `meta.executions` names to settle — close a workflow task, or let an orchestration run end — then retry the upgrade.',
   PLAYBOOK_EXECUTION_FAILED:
     "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
   ORCHESTRATION_VALIDATION_FAILED:

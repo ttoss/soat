@@ -8196,6 +8196,21 @@ $SOAT_CLI delete-playbook-case --case_id "$EXPORT_CASE_ID"
 $SOAT_CLI delete-playbook --playbook_id "$EXPORT_PLAYBOOK_ID"
 $SOAT_CLI delete-tool --tool-id "$EXPORT_TOOL_ID" >/dev/null
 
+echo "--- Upgrading the case to a new version of its playbook ---"
+$SOAT_CLI update-playbook \
+  --playbook_id "$PLAYBOOK_ID" \
+  --definition '{"nodes":[{"key":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"contact","title":"Contact","kind":"collect","inputs":[{"name":"email","schema":{"type":"string"},"required":true,"source":"manual"}]}]}' >/dev/null
+UPGRADE_RESP=$($SOAT_CLI upgrade-playbook-case --case_id "$CASE_ID")
+if ! printf '%s\n' "$UPGRADE_RESP" | jq -e '.playbook_version == 2 and any(.nodes[]; .key == "contact")' >/dev/null 2>&1; then
+  echo "ERROR: upgrade-playbook-case did not move the case to version 2" >&2
+  printf '%s\n' "$UPGRADE_RESP" >&2
+  exit 1
+fi
+if ! $SOAT_CLI list-playbook-case-upgrades --case_id "$CASE_ID" | jq -e '.data[0].diff.added == ["contact"]' >/dev/null 2>&1; then
+  echo "ERROR: list-playbook-case-upgrades did not record the upgrade" >&2
+  exit 1
+fi
+
 echo "--- Cleaning up playbook fixtures ---"
 $SOAT_CLI delete-playbook-case --case_id "$CASE_ID"
 $SOAT_CLI delete-playbook --playbook_id "$PLAYBOOK_ID"

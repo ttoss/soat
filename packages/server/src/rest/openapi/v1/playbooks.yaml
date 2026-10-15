@@ -895,6 +895,98 @@ paths:
         '404':
           description: Case or export not found
 
+  /api/v1/playbook-cases/{case_id}/upgrade:
+    post:
+      tags:
+        - Playbooks
+      summary: Upgrade a case
+      description: >-
+        Moves a case to another version of its playbook: the playbook's
+        current version, or the `version` named, an earlier one included.
+        Values carry over by node key, and every node's state is read against
+        the new version: a node added is open, a node removed leaves the
+        structure while its entries stay, a node whose input reads another
+        field is `stale`, and a value its input's new schema refuses is
+        missing again. The cascade then runs what became runnable. Each
+        upgrade is recorded with what moved; the version the case is already
+        on records nothing.
+
+
+        An execution running is `409 PLAYBOOK_CASE_BUSY`; one queued but not
+        started settles `superseded`. An upgrade made with a credential the
+        case's own work runs as is `403 PLAYBOOK_SELF_WRITE`.
+      operationId: upgradePlaybookCase
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradePlaybookCaseRequest'
+      responses:
+        '200':
+          description: The case on its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '400':
+          description: Bad request — a version the playbook does not have
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden, or an upgrade from the case's own work
+        '404':
+          description: Case not found
+        '409':
+          description: An execution of the case is running
+
+  /api/v1/playbook-cases/{case_id}/upgrades:
+    get:
+      tags:
+        - Playbooks
+      summary: List a case's upgrades
+      description: Returns every version change of the case, newest first.
+      operationId: listPlaybookCaseUpgrades
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of upgrades, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookUpgrade'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case not found
+
   /api/v1/playbook-cases/{case_id}/pause:
     post:
       tags:
@@ -1800,6 +1892,79 @@ components:
           type: string
           format: date-time
           nullable: true
+    UpgradePlaybookCaseRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: integer
+          description: The version to move the case to; the playbook's current one when omitted
+          example: 2
+    PlaybookUpgrade:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pbk_upg_V1StGXR8Z5jdHi6B
+        case_id:
+          type: string
+          example: pbk_case_V1StGXR8Z5jdHi6B
+        from_version:
+          type: integer
+          description: The version the case was on
+        to_version:
+          type: integer
+          description: The version the case moved to
+        diff:
+          type: object
+          description: What moved between the two versions, by node key
+          properties:
+            added:
+              type: array
+              description: Nodes the new version adds
+              items:
+                type: string
+            removed:
+              type: array
+              description: Nodes the new version drops
+              items:
+                type: string
+            changed:
+              type: array
+              description: >-
+                Nodes in both whose executor or inputs changed; a title,
+                description or transformation change is not listed
+              items:
+                type: object
+                properties:
+                  node:
+                    type: string
+                  executor:
+                    type: boolean
+                    description: Whether the node's executor changed
+                  inputs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        change:
+                          type: string
+                          enum:
+                            - added
+                            - removed
+                            - source
+                            - schema
+                            - required
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+          description: Who upgraded the case
+        created_at:
+          type: string
+          format: date-time
     ConfirmPlaybookCaseNodeRequest:
       type: object
       additionalProperties: false

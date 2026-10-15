@@ -79,6 +79,7 @@ export const PUBLIC_ID_PREFIXES = {
   playbookEntry: 'pbk_ent_',
   playbookExecution: 'pbk_exe_',
   playbookExport: 'pbk_exp_',
+  playbookUpgrade: 'pbk_upg_',
 } as const;
 
 /**
