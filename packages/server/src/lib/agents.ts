@@ -7,6 +7,10 @@ import {
 } from './agentAccessor';
 import { assertValidOnApprovalExpiry } from './agentApprovalExpiry';
 import {
+  assertValidMaxOutputTokens,
+  assertValidReasoning,
+} from './agentModelSettings';
+import {
   assertForcedToolChoiceCanStop,
   assertValidStopConditions,
 } from './agentStopConditions';
@@ -64,6 +68,8 @@ const mapAgent = (agent: AgentRow): MappedAgent => {
     step_rules: agent.stepRules,
     boundary_policy: agent.boundaryPolicy,
     temperature: agent.temperature,
+    max_output_tokens: agent.maxOutputTokens,
+    reasoning: agent.reasoning,
     knowledge_config: (agent.knowledgeConfig as object | null) ?? null,
     output_schema: agent.outputSchema,
     prompt_caching: agent.promptCaching,
@@ -97,6 +103,8 @@ type AgentUpdateFields = {
   stepRules?: object[] | null;
   boundaryPolicy?: object | null;
   temperature?: number | null;
+  maxOutputTokens?: number | null;
+  reasoning?: object | null;
   knowledgeConfig?: object | null;
   outputSchema?: object | null;
   promptCaching?: object | null;
@@ -133,6 +141,8 @@ export const AGENT_SCALAR_FIELDS = [
   'stepRules',
   'boundaryPolicy',
   'temperature',
+  'maxOutputTokens',
+  'reasoning',
   'knowledgeConfig',
   'outputSchema',
   'promptCaching',
@@ -167,6 +177,8 @@ const AGENT_CREATE_DEFAULTS = {
   stepRules: null,
   boundaryPolicy: null,
   temperature: null,
+  maxOutputTokens: null,
+  reasoning: null,
   promptCaching: null,
   maxContextMessages: null,
   onApprovalExpiry: null,
@@ -188,6 +200,8 @@ export const createAgent = async (
     stepRules?: object[];
     boundaryPolicy?: object;
     temperature?: number;
+    maxOutputTokens?: number;
+    reasoning?: object;
     knowledgeConfig?: object;
     outputSchema?: object;
     promptCaching?: object;
@@ -203,6 +217,8 @@ export const createAgent = async (
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
   assertValidStopConditions(args.stopConditions);
   assertValidPromptCaching(args.promptCaching);
+  assertValidMaxOutputTokens(args.maxOutputTokens);
+  assertValidReasoning(args.reasoning);
   assertForcedToolChoiceCanStop({
     toolChoice: args.toolChoice,
     stopConditions: args.stopConditions,
@@ -352,6 +368,8 @@ export const updateAgent = async (
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
   assertValidStopConditions(args.stopConditions);
   assertValidPromptCaching(args.promptCaching);
+  assertValidMaxOutputTokens(args.maxOutputTokens);
+  assertValidReasoning(args.reasoning);
 
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two

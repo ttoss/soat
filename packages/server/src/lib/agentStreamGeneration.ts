@@ -13,6 +13,7 @@ import { streamText } from 'ai';
 import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
+import { modelCallSettings } from './agentModelSettings';
 import {
   buildPrepareStep,
   resolveAgentStepRuleToolIdToName,
@@ -260,7 +261,7 @@ export const runStreamGeneration = async (args: {
     toolChoice: args.toolChoice,
     prepareStep,
     stopWhen: resolveStopWhen(args.typedAgent),
-    temperature: (args.typedAgent.temperature as number) ?? undefined,
+    ...modelCallSettings(args.typedAgent),
     onError: ({ error }) => {
       streamError = error;
     },

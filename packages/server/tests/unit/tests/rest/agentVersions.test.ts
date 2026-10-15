@@ -133,6 +133,7 @@ describe('Agent versions', () => {
           'instructions',
           'knowledge_config',
           'max_context_messages',
+          'max_output_tokens',
           'max_steps',
           'model',
           'model_route_id',
@@ -145,6 +146,7 @@ describe('Agent versions', () => {
           // Configuration: whether a turn marked a cache breakpoint changes
           // what the provider was billed for, so a restore has to bring it back.
           'prompt_caching',
+          'reasoning',
           'single_session_per_actor',
           'step_rules',
           'stop_conditions',

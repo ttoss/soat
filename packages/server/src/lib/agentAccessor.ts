@@ -30,6 +30,9 @@ export type MappedAgent = {
   step_rules: object[] | null;
   boundary_policy: object | null;
   temperature: number | null;
+  max_output_tokens: number | null;
+  /** `{ effort }` — see `agentModelSettings.ts`. Null is the model's default. */
+  reasoning: object | null;
   knowledge_config: object | null;
   output_schema: object | null;
   /** `{ enabled }` — see `promptCaching.ts`. Null is off. */
