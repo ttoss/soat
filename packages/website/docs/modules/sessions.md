@@ -27,24 +27,25 @@ Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./a
 
 ### Session
 
-| Field                    | Type            | Description                                                                                                      |
-| ------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `id`                     | string          | Public identifier prefixed with `sess_`                                                                          |
-| `agent_id`               | string          | Public ID of the agent this session belongs to; kept after a [shared](./shares.md#using-a-shared-agent) agent is deleted by its owner |
-| `conversation_id`        | string          | Public ID of the underlying conversation                                                                         |
-| `status`                 | string          | `open` (default), `closed`, or `expired`                                                                         |
-| `name`                   | string          | Optional display name                                                                                            |
-| `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) linked on create (`actor_` prefix); `null` when none was supplied |
-| `tags`                   | object          | Free-form key-value metadata                                                                                     |
-| `auto_generate`          | boolean         | When `true`, saving a message automatically triggers LLM generation (default: `false`)                           |
-| `message_delay_seconds`  | integer \| null | Debounce delay in seconds before the LLM is called after a user message. `null` means no delay (default).        |
-| `inactivity_ttl_seconds` | integer         | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                         |
-| `last_activity_at`       | string \| null  | ISO 8601 timestamp of the last user message; `null` until the first message is added                             |
-| `forked_from_session_id` | string \| null  | Public ID of the session this one was [forked](#forking) from; `null` when it is not a fork, or once the parent is deleted |
-| `forked_from_position`   | integer \| null | Parent conversation `position` this session branched after; `null` when it is not a fork or was forked at the tip |
-| `usage`                  | object          | What the session's generations cost — `cost_usd` and token counts. Single-session read only; see [Session cost](#session-cost)                |
-| `created_at`             | string          | ISO 8601 creation timestamp                                                                                      |
-| `updated_at`             | string          | ISO 8601 last-updated timestamp                                                                                  |
+| Field                    | Type            | Description                                                                                                                                              |
+| ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | string          | Public identifier prefixed with `sess_`                                                                                                                  |
+| `agent_id`               | string          | Public ID of the agent this session belongs to; kept after a [shared](./shares.md#using-a-shared-agent) agent is deleted by its owner                    |
+| `conversation_id`        | string          | Public ID of the underlying conversation                                                                                                                 |
+| `status`                 | string          | `open` (default), `closed`, or `expired`                                                                                                                 |
+| `name`                   | string          | Optional display name                                                                                                                                    |
+| `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) linked on create (`actor_` prefix); `null` when none was supplied                                         |
+| `tags`                   | object          | Free-form key-value metadata                                                                                                                             |
+| `auto_generate`          | boolean         | When `true`, saving a message automatically triggers LLM generation (default: `false`)                                                                   |
+| `message_delay_seconds`  | integer \| null | Debounce delay in seconds before the LLM is called after a user message. `null` means no delay (default).                                                |
+| `inactivity_ttl_seconds` | integer         | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                                                                 |
+| `max_context_messages`   | integer \| null | Most recent messages sent to the model per generation, over the agent's own; `null` defers to the agent (default). See [Context window](#context-window) |
+| `last_activity_at`       | string \| null  | ISO 8601 timestamp of the last user message; `null` until the first message is added                                                                     |
+| `forked_from_session_id` | string \| null  | Public ID of the session this one was [forked](#forking) from; `null` when it is not a fork, or once the parent is deleted                               |
+| `forked_from_position`   | integer \| null | Parent conversation `position` this session branched after; `null` when it is not a fork or was forked at the tip                                        |
+| `usage`                  | object          | What the session's generations cost — `cost_usd` and token counts. Single-session read only; see [Session cost](#session-cost)                           |
+| `created_at`             | string          | ISO 8601 creation timestamp                                                                                                                              |
+| `updated_at`             | string          | ISO 8601 last-updated timestamp                                                                                                                          |
 
 ### Message (within a session)
 
@@ -160,12 +161,12 @@ curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
 </TabItem>
 </Tabs>
 
-| Field              | Default            | Meaning                                                                     |
-| ------------------ | ------------------ | --------------------------------------------------------------------------- |
-| `fork_at_position` | branch at the tip  | Parent `position` to branch **after**; positions `0..N` are carried over     |
+| Field              | Default            | Meaning                                                                              |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------ |
+| `fork_at_position` | branch at the tip  | Parent `position` to branch **after**; positions `0..N` are carried over             |
 | `agent_id`         | the parent's agent | The agent the fork runs against. Must be in the same project (`400 AGENT_NOT_FOUND`) |
-| `name`, `tags`     | —                  | Set on the new session                                                       |
-| `tool_context`     | inherited          | Overrides the parent's [tool context](#tool-context) on the fork             |
+| `name`, `tags`     | —                  | Set on the new session                                                               |
+| `tool_context`     | inherited          | Overrides the parent's [tool context](#tool-context) on the fork                     |
 
 **Fork by reference, not by copy.** The fork gets its own [conversation](./conversations.md) whose messages point at the **same [Document](./documents.md) rows** as the parent; only the ordering is duplicated. One stored copy of the content means a retention purge erases it from parent and fork together.
 
@@ -218,6 +219,10 @@ When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LL
 
 `POST .../messages` always returns immediately with the saved user message; generation fires asynchronously after the delay. `message_delay_seconds` has no effect when `auto_generate` is `false` or when a generation is already in progress.
 
+### Context window
+
+A generation sends the conversation's most recent messages and drops the oldest: the session's `max_context_messages` when set, else the agent's [`max_context_messages`](./agents.md#context-window-limiting), else the whole history. The agent's instructions are not counted. The value is a positive integer; `0` or a negative is `400 VALIDATION_FAILED`. A [fork](#forking) keeps its parent's value.
+
 ### Single Session Per Actor
 
 When the parent agent has `single_session_per_actor: true`, creating a session with an `actor_id` returns `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID. See [Single Session Per Actor](./agents.md#single-session-per-actor).
@@ -259,11 +264,11 @@ It does not outlive the session either: closing or expiring one — a caller-dri
 
 When a generation is triggered through a session, the server injects these keys into `tool_context`:
 
-| Injected key      | Forwarded header                 | Value                                                  |
-| ----------------- | -------------------------------- | ------------------------------------------------------ |
-| `actor_id`         | `X-Soat-Context-actor_id`         | Public ID of the session's actor; omitted if not set   |
+| Injected key        | Forwarded header                   | Value                                                  |
+| ------------------- | ---------------------------------- | ------------------------------------------------------ |
+| `actor_id`          | `X-Soat-Context-actor_id`          | Public ID of the session's actor; omitted if not set   |
 | `actor_external_id` | `X-Soat-Context-actor_external_id` | External ID of the session's actor; omitted if not set |
-| `session_id`       | `X-Soat-Context-session_id`       | Public ID of the session; always present               |
+| `session_id`        | `X-Soat-Context-session_id`        | Public ID of the session; always present               |
 
 These three keys are always taken from the session and actor: a caller-provided `actor_id`, `actor_external_id` or `session_id`, in the session's stored `tool_context` or a per-request one, is ignored. Any other key still wins in the usual way (a per-request value overrides the session's stored value).
 
@@ -308,7 +313,7 @@ All events include `session_id`; generation events also include `generation_id` 
 
 [Forking](#forking) reads a session's full history as well as creating a new
 session, so it checks **both** `agents:GetSession` and `agents:CreateSession` —
-each against the *parent* session's SRN,
+each against the _parent_ session's SRN,
 `srn:<project_id>:session:<session_id>`. The fork's own id does not exist yet,
 and the parent is the resource whose history the call reaches, so
 `agents:CreateSession` alone is never a way to read a history

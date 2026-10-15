@@ -1696,6 +1696,14 @@ components:
         inactivity_ttl_seconds:
           type: integer
           description: Number of seconds of inactivity after which the session expires. 0 means never expires.
+        max_context_messages:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            Maximum number of recent conversation messages sent to the model on
+            each generation, taking precedence over the agent's. null defers to
+            the agent.
         tool_context:
           type: object
           additionalProperties: true

@@ -4,6 +4,7 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { readMaxContextMessages } from '../sessionContextWindow';
 import {
   createSession,
   deleteSession,
@@ -23,6 +24,16 @@ const getSessionAgentInternalId = async (
     throw new Error(`Session not found: ${sessionPublicId}`);
   }
   return session.agentId;
+};
+
+/** A template declares the whole session, so an undeclared window is null. */
+const maxContextMessagesOf = (
+  properties: Record<string, unknown>
+): number | null => {
+  const value = properties.max_context_messages;
+  return (
+    readMaxContextMessages(typeof value === 'number' ? value : null) ?? null
+  );
 };
 
 export const sessionsFormationModule = defineFormationModule({
@@ -54,6 +65,7 @@ export const sessionsFormationModule = defineFormationModule({
         typeof properties.inactivity_ttl_seconds === 'number'
           ? properties.inactivity_ttl_seconds
           : undefined,
+      maxContextMessages: maxContextMessagesOf(properties),
       toolContext: toStoredToolContext(properties.tool_context),
     });
   },
@@ -70,6 +82,7 @@ export const sessionsFormationModule = defineFormationModule({
         typeof properties.auto_generate === 'boolean'
           ? properties.auto_generate
           : undefined,
+      maxContextMessages: maxContextMessagesOf(properties),
       toolContext: toStoredToolContext(properties.tool_context),
     });
   },

@@ -202,15 +202,18 @@ export const resolveConversationAndAgent = async (args: {
 const loadGenerationContext = async (args: {
   conversationId: string;
   agentId: string;
+  /** The session's window; `null` or absent defers to the agent's. */
+  maxContextMessages?: number | null;
 }): Promise<GenerationContext> => {
   const { conversation, generatingAgent } = await resolveConversationAndAgent({
     conversationId: args.conversationId,
     agentId: args.agentId,
   });
 
-  const maxContextMessages = (
-    generatingAgent as unknown as { maxContextMessages: number | null }
-  ).maxContextMessages;
+  const maxContextMessages =
+    args.maxContextMessages ??
+    (generatingAgent as unknown as { maxContextMessages: number | null })
+      .maxContextMessages;
 
   const allMessages = await db.ConversationMessage.findAll({
     where: { conversationId: conversation.id },
@@ -320,10 +323,12 @@ export const generateConversationMessage = async (args: {
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
   initiatorGenerationId?: string | null;
+  maxContextMessages?: number | null;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
     agentId: args.agentId,
+    maxContextMessages: args.maxContextMessages,
   });
 
   const { conversation, generatingAgent, messages, snapshotPosition } = ctx;

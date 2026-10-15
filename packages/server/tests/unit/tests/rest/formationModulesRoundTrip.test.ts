@@ -238,10 +238,28 @@ const CASES: RoundTripCase[] = [
     route: 'sessions',
     build: () => {
       return {
-        create: { agent_id: fx.agentId, name: 'Sess A', auto_generate: true },
-        expectRead: { name: 'Sess A', auto_generate: true },
-        update: { agent_id: fx.agentId, name: 'Sess B', auto_generate: false },
-        expectAfterUpdate: { name: 'Sess B', auto_generate: false },
+        create: {
+          agent_id: fx.agentId,
+          name: 'Sess A',
+          auto_generate: true,
+          max_context_messages: 20,
+        },
+        expectRead: {
+          name: 'Sess A',
+          auto_generate: true,
+          max_context_messages: 20,
+        },
+        update: {
+          agent_id: fx.agentId,
+          name: 'Sess B',
+          auto_generate: false,
+          max_context_messages: 30,
+        },
+        expectAfterUpdate: {
+          name: 'Sess B',
+          auto_generate: false,
+          max_context_messages: 30,
+        },
       };
     },
   },

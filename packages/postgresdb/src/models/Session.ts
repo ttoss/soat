@@ -195,6 +195,14 @@ export class Session extends Model {
   })
   declare messageDelaySeconds: number | null;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    defaultValue: null,
+    field: 'max_context_messages',
+  })
+  declare maxContextMessages: number | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

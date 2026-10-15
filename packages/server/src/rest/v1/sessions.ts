@@ -4,6 +4,7 @@ import { DomainError } from 'src/errors';
 import { agents } from 'src/lib/agentAccessor';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { readMaxContextMessages } from 'src/lib/sessionContextWindow';
 import {
   createSession,
   deleteSession,
@@ -111,6 +112,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     tool_context?: Record<string, string> | null;
     inactivity_ttl_seconds?: number;
     message_delay_seconds?: number | null;
+    max_context_messages?: number | null;
   };
 
   // A credential confined to a grantee project opens the session there, on an
@@ -135,6 +137,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     toolContext: body.tool_context,
     inactivityTtlSeconds: body.inactivity_ttl_seconds,
     messageDelaySeconds: body.message_delay_seconds,
+    maxContextMessages: readMaxContextMessages(body.max_context_messages),
   });
 
   ctx.status = 201;
@@ -214,6 +217,7 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
     tool_context?: Record<string, string> | null;
     inactivity_ttl_seconds?: number;
     message_delay_seconds?: number | null;
+    max_context_messages?: number | null;
   };
 
   ctx.body = await updateSession({
@@ -225,6 +229,7 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
     toolContext: body.tool_context,
     inactivityTtlSeconds: body.inactivity_ttl_seconds,
     messageDelaySeconds: body.message_delay_seconds,
+    maxContextMessages: readMaxContextMessages(body.max_context_messages),
   });
 });
 

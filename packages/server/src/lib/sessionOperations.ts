@@ -221,6 +221,7 @@ export const generateSessionResponse = async (args: {
       sessionId: session.publicId,
       authHeader: args.authHeader,
       initiatorGenerationId: args.initiatorGenerationId,
+      maxContextMessages: session.maxContextMessages,
     });
   } finally {
     if (!controller.signal.aborted) {
