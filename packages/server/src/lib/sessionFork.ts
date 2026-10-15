@@ -185,6 +185,19 @@ const announceFork = async (args: {
   return mapped;
 };
 
+/** The per-session settings a fork carries over from its parent. */
+const inheritedSettings = (parent: {
+  inactivityTtlSeconds: number | null;
+  messageDelaySeconds: number | null;
+  maxContextMessages: number | null;
+}) => {
+  return {
+    inactivityTtlSeconds: parent.inactivityTtlSeconds ?? 0,
+    messageDelaySeconds: parent.messageDelaySeconds ?? null,
+    maxContextMessages: parent.maxContextMessages ?? null,
+  };
+};
+
 export const forkSession = async (args: {
   agentId: number;
   sessionId: string;
@@ -253,8 +266,7 @@ export const forkSession = async (args: {
           toolContext === undefined
             ? (parent.toolContext ?? null)
             : toolContext,
-        inactivityTtlSeconds: parent.inactivityTtlSeconds ?? 0,
-        messageDelaySeconds: parent.messageDelaySeconds ?? null,
+        ...inheritedSettings(parent),
         lastActivityAt: null,
         forkedFromSessionId: parent.id,
         forkedFromPosition:

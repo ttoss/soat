@@ -97,6 +97,7 @@ export const createSession = async (args: {
   toolContext?: Record<string, string> | null;
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
+  maxContextMessages?: number | null;
 }) => {
   const toolContext = await acceptStoredToolContext({
     toolContext: args.toolContext,
@@ -137,6 +138,7 @@ export const createSession = async (args: {
       toolContext,
       inactivityTtlSeconds: args.inactivityTtlSeconds,
       messageDelaySeconds: args.messageDelaySeconds,
+      maxContextMessages: args.maxContextMessages,
       transaction: t,
     });
   });
@@ -323,6 +325,7 @@ const applySessionFieldUpdates = (args: {
   autoGenerate?: boolean;
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
+  maxContextMessages?: number | null;
 }): void => {
   const { session } = args;
   if (args.name !== undefined) session.name = args.name;
@@ -333,6 +336,9 @@ const applySessionFieldUpdates = (args: {
   }
   if (args.messageDelaySeconds !== undefined) {
     session.messageDelaySeconds = args.messageDelaySeconds;
+  }
+  if (args.maxContextMessages !== undefined) {
+    session.maxContextMessages = args.maxContextMessages;
   }
 };
 
@@ -345,6 +351,7 @@ export const updateSession = async (args: {
   toolContext?: Record<string, string> | null;
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
+  maxContextMessages?: number | null;
 }) => {
   const toolContext = await acceptStoredToolContextUpdate({
     toolContext: args.toolContext,

@@ -40,6 +40,7 @@ const extractSessionOptional = (session: SessionRow) => {
     inactivity_ttl_seconds: session.inactivityTtlSeconds ?? 0,
     last_activity_at: session.lastActivityAt ?? null,
     message_delay_seconds: session.messageDelaySeconds ?? null,
+    max_context_messages: session.maxContextMessages ?? null,
     forked_from_position: session.forkedFromPosition ?? null,
   };
 };

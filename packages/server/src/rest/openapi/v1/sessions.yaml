@@ -694,6 +694,16 @@ components:
             Number of seconds to wait after the last user message before sending to the LLM.
             Acts as a debounce: each new message resets the timer. null or absent means no delay (immediate processing).
           example: 3
+        max_context_messages:
+          type: integer
+          nullable: true
+          default: null
+          description: >
+            Maximum number of recent conversation messages sent to the model on
+            each generation. Takes precedence over the agent's
+            `max_context_messages`; null defers to it. A fork keeps its
+            parent's value.
+          example: 20
         last_activity_at:
           type: string
           format: date-time
@@ -832,6 +842,16 @@ components:
             Number of seconds to wait after the last user message before sending to the LLM.
             Acts as a debounce: each new message resets the timer. null or absent means no delay (immediate processing).
           example: 3
+        max_context_messages:
+          type: integer
+          nullable: true
+          minimum: 1
+          default: null
+          description: >
+            Maximum number of recent conversation messages sent to the model on
+            each generation, taking precedence over the agent's
+            `max_context_messages`. null or absent defers to the agent.
+          example: 20
 
     UpdateSessionRequest:
       type: object
@@ -879,6 +899,15 @@ components:
             Number of seconds to wait after the last user message before sending to the LLM.
             Acts as a debounce: each new message resets the timer. Set to null to disable the delay.
           example: 3
+        max_context_messages:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >
+            Maximum number of recent conversation messages sent to the model on
+            each generation, taking precedence over the agent's
+            `max_context_messages`. Set to null to defer to the agent.
+          example: 20
 
     AddSessionMessageRequest:
       oneOf:
