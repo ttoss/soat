@@ -337,7 +337,8 @@ paths:
         not override them, so delete or repoint those resources first. Soft
         dependents — price overrides and usage/generation records — also block
         with `409` unless `force=true`, which deletes the provider's price
-        overrides and unlinks (nulls) its usage history, preserving those rows.
+        overrides and unlinks its usage history, preserving those rows: each
+        usage event keeps the provider's id as its `ai_provider_id`.
         The `409` body's `error.meta`
         reports the counts, a sample of offending IDs, and a `forcible` flag that
         is `true` when a `force=true` retry would succeed.

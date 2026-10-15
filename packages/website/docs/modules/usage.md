@@ -38,10 +38,10 @@ Every metered occurrence writes one **usage event** (attribution, total cost) pl
 | `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book. On a [routed](./model-routes.md) generation this is the target the route actually picked, not the agent's binding (a routed agent pins no provider) |
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
-| `tool_id`        | string \| null  | [Tool](./tools.md) a `tool_execution` event metered; `null` on every other meter, for an inline tool, and once the tool is deleted |
+| `tool_id`        | string \| null  | [Tool](./tools.md) a `tool_execution` event metered; `null` on every other meter and for an inline tool |
 | `publisher_project_id` | string \| null | Project that owns the resource this event metered, when the call reached it through a [share](./shares.md); `null` for a call on the project's own resources |
-| `document_id`    | string \| null  | [Document](./documents.md) an [embedding](./embeddings.md#metering) event embedded a chunk of; `null` on a query embedding, every other meter, and once the document is deleted |
-| `memory_store_id` | string \| null | [Memory store](./memories.md) an embedding event embedded written content for; `null` on a query embedding, every other meter, and once the store is deleted |
+| `document_id`    | string \| null  | [Document](./documents.md) an [embedding](./embeddings.md#metering) event embedded a chunk of; `null` on a query embedding and every other meter |
+| `memory_store_id` | string \| null | [Memory store](./memories.md) an embedding event embedded written content for; `null` on a query embedding and every other meter |
 | `outcome`        | string \| null  | How a `tool_execution` call ended: `ok`, `error` or `timeout`; `null` on every other meter |
 | `source`         | string \| null  | The workload behind the spend when it is not ordinary agent traffic; see [Workload source](#workload-source) |
 | `meter_type`     | string          | What the event measures: `llm_tokens`, `compute_execution`, `api_request`, `storage`, or `tool_execution` |
@@ -233,6 +233,10 @@ Set by the platform at the metering choke point; a caller cannot bill eval spend
 
 An event bills against the provider that served it: the target a [model route](./model-routes.md) picked (read from what the turn did, so a failed-over generation meters against the target that answered), or the agent's pinned provider. An event with no provider resolves no price row and reports the `unknown` provider slug.
 
+### Attribution outlives deletion
+
+Every attribution id on an event — `agent_id`, `generation_id`, `trace_id`, `orchestration_run_id`, `actor_id`, `session_id`, `ai_provider_id`, `tool_id`, `publisher_project_id`, `document_id`, `memory_store_id` — is recorded at write time and kept when the resource it names is deleted. The event listing still names it, `group_by` still buckets its spend under it, and a filter on it still selects that spend.
+
 ### End-user attribution
 
 An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen**; renaming or deleting either never rewrites spend. Set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never from the request (`tool_context` is caller-writable and not read).
@@ -363,7 +367,7 @@ Sixteen filters narrow the rollup before bucketing. They intersect and apply to 
 | `tool_id`, `outcome` | One tool's [executions](#tool-executions), a shared one included; the ones that ended `ok`, `error` or `timeout` |
 | `publisher_project_id` | The calls made [through a share](#calls-through-a-share) of one publisher's resources |
 
-The **ten naming a resource** are resolved against the project first (a publisher project by id alone, since the events are already the project's own); an id naming nothing empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. The **six carrying a value** are matched as the event recorded them, so an unrecognised meter, model, source or outcome selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
+The **ten naming a resource** match the id the event recorded, so they still select the spend of a resource since deleted ([Attribution outlives deletion](#attribution-outlives-deletion)); an id no event recorded empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. `orchestration_id` is the exception: the event records no orchestration, so a deleted orchestration empties the rollup. The **six carrying a value** are matched as the event recorded them, so an unrecognised meter, model, source or outcome selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
 
 `orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started (metered against the child orchestration), so summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
 
@@ -409,7 +413,7 @@ Nulls are not counted: a generation-less completion (`chat`, `memory_extraction`
 
 - **Opt-in because it costs**: each key sorts the window once more. Count entities with one request at `limit=1&include=distinct`; page for spend with no `include`.
 - **On `totals` only**; groups never carry `distinct` (a `COUNT(DISTINCT)` per bucket).
-- **Deletion does not lower a count**: each key counts the entity's id as the event recorded it, so deleting an agent, its generations and traces, an orchestration and its runs, an actor, a session, a provider, a tool, a document or a memory store leaves every figure unchanged, even where the event's own attribution field reads `null` afterwards.
+- **Deletion does not lower a count**: each key counts the entity's id as the event recorded it, so deleting an agent, its generations and traces, an orchestration and its runs, an actor, a session, a provider, a tool, a document or a memory store leaves every figure unchanged.
 - **Figures describe one window and do not add**: adjacent windows' `distinct.sessions` overlap where a session spans the boundary, and a run straddling midnight is in two `day` windows. A wider figure is a wider query.
 
 Any `include` value other than `distinct` is a `400`.

@@ -1,8 +1,11 @@
 import { db } from '../db';
 import { emptyPage, paginatedList } from './pagination';
-import type { ScopedIdResource } from './scopedIdFilters';
-import { applyScopedIdFilters, resolveScopedIds } from './scopedIdFilters';
-import { VALUE_NARROWING_KEYS } from './usageNarrowings';
+import type { RecordedIdKey } from './usageNarrowings';
+import {
+  RECORDED_ID_COLUMNS,
+  resolveIdNarrowings,
+  VALUE_NARROWING_KEYS,
+} from './usageNarrowings';
 
 // The write path is split across three modules and re-exported here, so the
 // module's public surface is one import. This file owns the read path.
@@ -113,19 +116,16 @@ const mapComponent = (
   };
 };
 
+const recorded = (publicId: string | null | undefined): string | null => {
+  return publicId ?? null;
+};
+
+// Every attribution id is the public id the event recorded beside its FK
+// (`USAGE_EVENT_DURABLE_IDS`), not the FK's join: deleting an entity nulls the
+// FK, and its events must keep naming it.
 const mapUsageEvent = (
   event: InstanceType<(typeof db)['UsageEvent']> & {
     project?: InstanceType<(typeof db)['Project']>;
-    agent?: InstanceType<(typeof db)['Agent']> | null;
-    generation?: InstanceType<(typeof db)['Generation']> | null;
-    run?: InstanceType<(typeof db)['OrchestrationRun']> | null;
-    trace?: InstanceType<(typeof db)['Trace']> | null;
-    actor?: InstanceType<(typeof db)['Actor']> | null;
-    session?: InstanceType<(typeof db)['Session']> | null;
-    aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
-    tool?: InstanceType<(typeof db)['Tool']> | null;
-    document?: InstanceType<(typeof db)['Document']> | null;
-    memoryStore?: InstanceType<(typeof db)['MemoryStore']> | null;
     components?: InstanceType<(typeof db)['UsageComponent']>[];
   }
 ): PersistedUsageEvent => {
@@ -135,20 +135,20 @@ const mapUsageEvent = (
   return {
     id: event.publicId,
     project_id: event.project.publicId,
-    orchestration_run_id: assocPublicId(event.orchestrationRun),
+    orchestration_run_id: recorded(event.orchestrationRunPublicId),
     node_id: event.nodeId,
-    agent_id: assocPublicId(event.agent),
-    generation_id: assocPublicId(event.generation),
-    trace_id: assocPublicId(event.trace),
-    actor_id: assocPublicId(event.actor),
-    session_id: assocPublicId(event.session),
-    ai_provider_id: assocPublicId(event.aiProvider),
+    agent_id: recorded(event.agentPublicId),
+    generation_id: recorded(event.generationPublicId),
+    trace_id: recorded(event.tracePublicId),
+    actor_id: recorded(event.actorPublicId),
+    session_id: recorded(event.sessionPublicId),
+    ai_provider_id: recorded(event.aiProviderPublicId),
     trigger_id: event.triggerId,
     action_id: event.actionId,
-    tool_id: assocPublicId(event.tool),
-    publisher_project_id: event.publisherProjectPublicId ?? null,
-    document_id: assocPublicId(event.document),
-    memory_store_id: assocPublicId(event.memoryStore),
+    tool_id: recorded(event.toolPublicId),
+    publisher_project_id: recorded(event.publisherProjectPublicId),
+    document_id: recorded(event.documentPublicId),
+    memory_store_id: recorded(event.memoryStorePublicId),
     outcome: event.outcome ?? null,
     meter_type: event.meterType,
     source: event.source ?? null,
@@ -160,83 +160,23 @@ const mapUsageEvent = (
   };
 };
 
-type ScopedFilterArgs = {
-  agentId?: string;
-  generationId?: string;
-  traceId?: string;
-  actorId?: string;
-  sessionId?: string;
-  aiProviderId?: string;
-  orchestrationRunId?: string;
-  toolId?: string;
-  publisherProjectId?: string;
-};
-
-// The publicId filters that resolve to an internal FK on the event, and the
-// table each one resolves against. Adding a filter is one entry here.
-// `orchestrationId` is not among them: the event carries no such column, so it
-// narrows through the run association instead (see `eventIncludes`).
-const SCOPED_FILTERS: ReadonlyArray<{
-  key: keyof ScopedFilterArgs;
-  resource: ScopedIdResource;
-}> = [
-  { key: 'agentId', resource: 'agent' },
-  { key: 'generationId', resource: 'generation' },
-  { key: 'traceId', resource: 'trace' },
-  { key: 'actorId', resource: 'actor' },
-  { key: 'sessionId', resource: 'session' },
-  { key: 'aiProviderId', resource: 'aiProvider' },
-  { key: 'orchestrationRunId', resource: 'orchestrationRun' },
-  { key: 'toolId', resource: 'tool' },
-  { key: 'publisherProjectId', resource: 'publisherProject' },
-];
-
-// Resolves the publicId filters into `where` (mutating it). Returns false when
-// a referenced resource does not exist in scope, so the caller yields an empty
-// page rather than silently dropping the filter and over-reporting.
-const applyUsageScopeFilters = async (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  where: Record<string, any>,
-  args: ScopedFilterArgs & { projectIds?: number[] }
-): Promise<boolean> => {
-  return applyScopedIdFilters({
-    where,
-    filters: SCOPED_FILTERS.map((filter) => {
-      return {
-        key: filter.key,
-        resource: filter.resource,
-        publicId: args[filter.key],
-      };
-    }),
-    ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
-  });
-};
-
 // The associations every returned event hydrates. `orchestrationId` is the one
 // narrowing with no column on the event — the orchestration is the run's — so
-// it is applied by making the run join required rather than by a subquery.
+// it is applied by joining the run, required, rather than by a subquery.
 const eventIncludes = (args: { orchestrationId?: number }) => {
   return [
     { model: db.Project, as: 'project' },
-    { model: db.Agent, as: 'agent' },
-    { model: db.Generation, as: 'generation' },
-    {
-      model: db.OrchestrationRun,
-      as: 'orchestrationRun',
-      ...(args.orchestrationId === undefined
-        ? {}
-        : {
+    ...(args.orchestrationId === undefined
+      ? []
+      : [
+          {
+            model: db.OrchestrationRun,
+            as: 'orchestrationRun',
+            attributes: [],
             where: { orchestrationId: args.orchestrationId },
             required: true,
-          }),
-    },
-    { model: db.Trace, as: 'trace' },
-    { model: db.Actor, as: 'actor' },
-    { model: db.Session, as: 'session' },
-    { model: db.AiProvider, as: 'aiProvider' },
-    { model: db.Tool, as: 'tool' },
-    { model: db.Document, as: 'document' },
-    { model: db.MemoryStore, as: 'memoryStore' },
+          },
+        ]),
     {
       model: db.UsageComponent,
       as: 'components',
@@ -256,6 +196,7 @@ export const listUsageEvents = async (args: {
   orchestrationRunId?: string;
   orchestrationId?: string;
   toolId?: string;
+  publisherProjectId?: string;
   triggerId?: string;
   actionId?: string;
   outcome?: string;
@@ -278,30 +219,19 @@ export const listUsageEvents = async (args: {
     if (value !== undefined) where[key] = value;
   }
 
-  const resolved = await applyUsageScopeFilters(where, {
-    agentId: args.agentId,
-    generationId: args.generationId,
-    traceId: args.traceId,
-    actorId: args.actorId,
-    sessionId: args.sessionId,
-    aiProviderId: args.aiProviderId,
-    orchestrationRunId: args.orchestrationRunId,
-    toolId: args.toolId,
-    projectIds: args.projectIds,
+  const resolved = await resolveIdNarrowings({
+    narrowings: args,
+    ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
   });
   if (!resolved) return emptyPage(args);
 
-  const orchestration = await resolveScopedIds({
-    filters: [
-      {
-        key: 'orchestrationId' as const,
-        resource: 'orchestration' as const,
-        publicId: args.orchestrationId,
-      },
-    ],
-    ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
-  });
-  if (!orchestration) return emptyPage(args);
+  const { orchestrationId, ...ids } = resolved.ids;
+  Object.assign(where, ids);
+  for (const [key, publicId] of Object.entries(resolved.recordedIds) as Array<
+    [RecordedIdKey, string]
+  >) {
+    where[RECORDED_ID_COLUMNS[key].attribute] = publicId;
+  }
 
   return paginatedList({
     limit: args.limit,
@@ -310,7 +240,7 @@ export const listUsageEvents = async (args: {
     query: ({ limit, offset, order }) => {
       return db.UsageEvent.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
-        include: eventIncludes(orchestration),
+        include: eventIncludes({ orchestrationId }),
         order,
         limit,
         offset,
