@@ -221,6 +221,18 @@ describe('Playbooks', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('NAME_CONFLICT');
     });
+
+    test('returns 400 for a description that is not a string', async () => {
+      const res = await createPlaybook(adminToken, { description: 5 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('returns 400 for a blank name', async () => {
+      const res = await createPlaybook(adminToken, { name: '   ' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   describe('POST /api/v1/playbooks/validate', () => {
@@ -266,6 +278,91 @@ describe('Playbooks', () => {
         .post('/api/v1/playbooks/validate')
         .send({ definition: DEFINITION });
       expect(res.status).toBe(401);
+    });
+
+    const node = (fields: Record<string, unknown> = {}) => {
+      return { key: 'a', title: 'A', kind: 'collect', inputs: [], ...fields };
+    };
+    const input = (fields: Record<string, unknown> = {}) => {
+      return node({
+        inputs: [
+          {
+            name: 'x',
+            schema: {},
+            required: true,
+            source: 'manual',
+            ...fields,
+          },
+        ],
+      });
+    };
+    const executor = (fields: Record<string, unknown> = {}) => {
+      return node({
+        kind: 'execute',
+        executor: { type: 'tool', id: 'tool_V1StGXR8Z5jdHi6B', ...fields },
+      });
+    };
+    const transformation = (fields: Record<string, unknown> = {}) => {
+      return node({
+        final: true,
+        transformations: [
+          {
+            name: 'proposal',
+            format: 'pdf',
+            tool: 'tool_V1StGXR8Z5jdHi6B',
+            ...fields,
+          },
+        ],
+      });
+    };
+
+    test.each([
+      ['no nodes', []],
+      [
+        'too many nodes',
+        Array.from({ length: 201 }, () => {
+          return node();
+        }),
+      ],
+      ['a node that is not an object', ['a']],
+      ['an empty title', [node({ title: ' ' })]],
+      ['an unknown kind', [node({ kind: 'review' })]],
+      ['a non-boolean final', [node({ final: 'yes' })]],
+      ['a non-string node description', [node({ description: 5 })]],
+      ['inputs that are not an array', [node({ inputs: 'x' })]],
+      ['too many inputs', [node({ inputs: Array.from({ length: 51 }) })]],
+      ['an input that is not an object', [node({ inputs: ['x'] })]],
+      ['a schema that is not an object', [input({ schema: 'number' })]],
+      ['a non-boolean required', [input({ required: 'yes' })]],
+      ['a non-string input description', [input({ description: 5 })]],
+      ['an unknown source', [input({ source: 'agent' })]],
+      ['an executor that is not an object', [node({ executor: 'tool' })]],
+      ['an unknown executor type', [executor({ type: 'webhook' })]],
+      ['an empty executor id', [executor({ id: '' })]],
+      [
+        'transformations that are not an array',
+        [node({ transformations: 'x' })],
+      ],
+      [
+        'a transformation that is not an object',
+        [node({ transformations: ['x'] })],
+      ],
+      ['an empty transformation format', [transformation({ format: '' })]],
+      ['an empty transformation tool', [transformation({ tool: '' })]],
+    ])('returns 400 for %s', async (_label, nodes) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/playbooks/validate')
+        .send({ definition: { nodes } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('returns 400 for a definition without nodes', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/playbooks/validate')
+        .send({ definition: {} });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 
@@ -336,6 +433,27 @@ describe('Playbooks', () => {
         });
       expect(changed.status).toBe(200);
       expect(changed.body.version).toBe(2);
+    });
+
+    test('updates the description without a new version', async () => {
+      const playbook = await newPlaybook({ description: 'Before' });
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/playbooks/${playbook.id}`)
+        .send({ description: null });
+      expect(res.status).toBe(200);
+      expect(res.body.description).toBeNull();
+      expect(res.body.version).toBe(1);
+    });
+
+    test('returns 409 for a name another playbook holds', async () => {
+      const name = unique('taken');
+      await newPlaybook({ name });
+      const playbook = await newPlaybook();
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/playbooks/${playbook.id}`)
+        .send({ name });
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('NAME_CONFLICT');
     });
 
     test('returns 409 for a stale expected_version', async () => {

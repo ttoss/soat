@@ -46,15 +46,6 @@ const isNonEmptyString = (value: unknown): value is string => {
   return typeof value === 'string' && value.trim() !== '';
 };
 
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null) return true;
-  if (['string', 'number', 'boolean'].includes(typeof value)) {
-    return typeof value !== 'number' || Number.isFinite(value);
-  }
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  return isPlainObject(value) && Object.values(value).every(isJsonValue);
-};
-
 const readIdentifier = (args: { path: string; value: unknown }): string => {
   if (typeof args.value !== 'string' || !IDENTIFIER.test(args.value)) {
     throw invalid(
@@ -96,7 +87,7 @@ const readSource = (args: {
 const readInput = (args: { path: string; input: unknown }): PlaybookInput => {
   const { path, input } = args;
   if (!isPlainObject(input)) throw invalid(`${path} must be an object.`);
-  if (!isPlainObject(input.schema) || !isJsonValue(input.schema)) {
+  if (!isPlainObject(input.schema)) {
     throw invalid(`${path}.schema must be a JSON Schema object.`);
   }
   if (typeof input.required !== 'boolean') {
@@ -130,13 +121,13 @@ const readExecutor = (args: {
   if (!isNonEmptyString(executor.id)) {
     throw invalid(`${path}.id must be a non-empty string.`);
   }
-  if (executor.input !== undefined && !isJsonValue(executor.input)) {
-    throw invalid(`${path}.input must be JSON.`);
-  }
   return {
     type: executor.type as PlaybookExecutorType,
     id: executor.id,
-    ...(executor.input !== undefined && { input: executor.input }),
+    ...(executor.input !== undefined && {
+      // Read off a JSON body, so already a JSON value.
+      input: executor.input as JsonValue,
+    }),
   };
 };
 

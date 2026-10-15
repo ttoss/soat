@@ -55,7 +55,7 @@ const mapEntry = (row: EntryRow) => {
     node: row.node,
     kind: row.kind,
     input: row.field,
-    value: row.value ?? null,
+    value: row.value,
     basis: row.basis,
     playbook_version: row.playbookVersion,
     created_by: row.createdBy?.publicId ?? null,

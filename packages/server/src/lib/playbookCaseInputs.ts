@@ -181,8 +181,8 @@ export const writePlaybookCaseInputs = async (args: {
       where: { id: found.id as number },
       lock: transaction.LOCK.UPDATE,
       transaction,
+      rejectOnEmpty: playbookCases.notFound(args.id),
     });
-    if (!locked) throw playbookCases.notFound(args.id);
 
     const snapshot = await caseSnapshot({
       caseDbId: locked.id as number,

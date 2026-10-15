@@ -1,7 +1,6 @@
 import { compileJsonSchema } from './jsonSchemaValidator';
 import type { JsonValue } from './playbookDefinition';
 import type {
-  PlaybookBasis,
   PlaybookCaseSnapshot,
   PlaybookConforms,
   PlaybookNodeRecord,
@@ -11,16 +10,13 @@ import type {
 export type PlaybookEntryFields = {
   revision: number;
   node: string;
-  kind: string;
   field: string | null;
   value: unknown;
-  basis: object | null;
 };
 
 /**
- * Folds a case's entries, oldest first, into the latest value of each field.
- * A confirmation is the node's output; a rejection holds only while it is
- * newer than the node's last confirmation.
+ * Folds a case's input entries, oldest first, into the latest value of each
+ * field.
  */
 export const snapshotFromEntries = (args: {
   entries: PlaybookEntryFields[];
@@ -30,20 +26,13 @@ export const snapshotFromEntries = (args: {
   for (const entry of args.entries) {
     const record: PlaybookNodeRecord = snapshot[entry.node] ?? {};
     snapshot[entry.node] = record;
-    const value = entry.value as JsonValue;
-    const basis = (entry.basis ?? {}) as PlaybookBasis;
-
-    if (entry.kind === 'input' && entry.field !== null) {
-      record.inputs = {
-        ...record.inputs,
-        [entry.field]: { revision: entry.revision, value },
-      };
-    } else if (entry.kind === 'output' || entry.kind === 'confirmation') {
-      record.output = { revision: entry.revision, value, basis };
-      delete record.rejection;
-    } else if (entry.kind === 'rejection') {
-      record.rejection = { basis };
-    }
+    record.inputs = {
+      ...record.inputs,
+      [entry.field as string]: {
+        revision: entry.revision,
+        value: entry.value as JsonValue,
+      },
+    };
   }
 
   return snapshot;

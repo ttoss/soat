@@ -67,30 +67,30 @@ const mapNodes = (args: {
   definition: PlaybookDefinition;
   snapshot: PlaybookCaseSnapshot;
 }) => {
-  const views = playbookNodeStates({
-    ...args,
-    conforms: conformsToInputSchema,
-  });
+  // One view per node, in definition order.
+  const views = [
+    ...playbookNodeStates({
+      ...args,
+      conforms: conformsToInputSchema,
+    }).values(),
+  ];
 
-  return args.definition.nodes.map((node) => {
-    const view = views.get(node.key);
-    const output = args.snapshot[node.key]?.output;
+  return args.definition.nodes.map((node, index) => {
+    const view = views[index];
 
     return {
       key: node.key,
-      state: view?.state ?? 'blocked',
-      missing: view?.missing ?? [],
-      waiting: view?.waiting ?? [],
+      state: view.state,
+      missing: view.missing,
+      waiting: view.waiting,
       inputs: node.inputs.map((input) => {
         return {
           name: input.name,
-          value: view?.values[input.name] ?? null,
-          revision: view?.basis[input.name]?.revision ?? null,
+          value: view.values[input.name] ?? null,
+          revision: view.basis[input.name]?.revision ?? null,
         };
       }),
-      output: output
-        ? { value: output.value, revision: output.revision }
-        : null,
+      output: null,
     };
   });
 };

@@ -156,6 +156,14 @@ describe('Playbook cases', () => {
         .send({});
       expect(res.status).toBe(400);
     });
+
+    test('returns 400 for a blank subject', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/playbooks/${playbookId}/cases`)
+        .send({ subject: '   ' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   describe('POST /api/v1/playbook-cases/{case_id}/inputs', () => {
@@ -271,6 +279,46 @@ describe('Playbook cases', () => {
       expect(res.body.error.code).toBe('PLAYBOOK_INPUT_INVALID');
     });
 
+    test.each([
+      ['an empty batch', []],
+      [
+        'more than 100 writes',
+        Array.from({ length: 101 }, () => {
+          return { node: 'revenue', name: 'annual_revenue', value: 1 };
+        }),
+      ],
+      ['a write with no value', [{ node: 'revenue', name: 'annual_revenue' }]],
+      [
+        'a fractional expected_revision',
+        [
+          {
+            node: 'revenue',
+            name: 'annual_revenue',
+            value: 1,
+            expected_revision: 1.5,
+          },
+        ],
+      ],
+    ])('returns 400 for %s', async (_label, inputs) => {
+      const playbookCase = await newCase();
+      const res = await writeInputs(playbookCase.id, inputs);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('returns 400 for a field written twice in one call', async () => {
+      const playbookCase = await newCase();
+      const write = {
+        node: 'revenue',
+        name: 'annual_revenue',
+        value: 1,
+        expected_revision: null,
+      };
+      const res = await writeInputs(playbookCase.id, [write, write]);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_INPUT_INVALID');
+    });
+
     test('returns 400 for an input the version does not declare', async () => {
       const playbookCase = await newCase();
       const res = await writeInputs(playbookCase.id, [
@@ -382,6 +430,45 @@ describe('Playbook cases', () => {
       expect(res.body.data[0].kind).toBe('input');
       expect(res.body.data[0].input).toBe('annual_revenue');
     });
+
+    test('lists every node without a filter', async () => {
+      const playbookCase = await newCase();
+      await writeInputs(playbookCase.id, [
+        {
+          node: 'revenue',
+          name: 'annual_revenue',
+          value: 1,
+          expected_revision: null,
+        },
+        {
+          node: 'activity',
+          name: 'cnae',
+          value: '6201501',
+          expected_revision: null,
+        },
+      ]);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/playbook-cases/${playbookCase.id}/entries`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((entry: { node: string; value: unknown }) => {
+          return [entry.node, entry.value];
+        })
+      ).toEqual([
+        ['activity', '6201501'],
+        ['revenue', 1],
+      ]);
+    });
+
+    test('returns 404 to a caller without permission', async () => {
+      const playbookCase = await newCase();
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/playbook-cases/${playbookCase.id}/entries`
+      );
+      expect(res.status).toBe(404);
+    });
   });
 
   describe('GET /api/v1/playbook-cases', () => {
@@ -396,6 +483,18 @@ describe('Playbook cases', () => {
       });
       expect(ids).toContain(playbookCase.id);
       expect(res.body.data[0].nodes).toBeUndefined();
+    });
+
+    test('lists every case an admin reaches without a filter', async () => {
+      const playbookCase = await newCase();
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/playbook-cases?limit=100'
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((row: { id: string }) => {
+        return row.id;
+      });
+      expect(ids).toContain(playbookCase.id);
     });
 
     test('an unknown playbook filters to nothing', async () => {

@@ -63,12 +63,9 @@ const validateName = (name: unknown): string => {
   return name;
 };
 
-const validateDescription = (description: unknown): string | null => {
-  if (description === undefined || description === null) return null;
-  if (typeof description !== 'string') {
-    throw new DomainError('VALIDATION_FAILED', 'description must be a string.');
-  }
-  return description;
+/** The spec's type check has already refused anything but a string or null. */
+const readDescription = (description: unknown): string | null => {
+  return typeof description === 'string' ? description : null;
 };
 
 const assertNameAvailable = async (args: {
@@ -119,7 +116,7 @@ export const createPlaybook = async (
   log('createPlaybook: projectId=%d', args.projectId);
 
   const name = validateName(args.name);
-  const description = validateDescription(args.description);
+  const description = readDescription(args.description);
   const definition = readDefinition(args.definition);
   await assertNameAvailable({ projectId: args.projectId, name });
 
@@ -214,7 +211,7 @@ export const updatePlaybook = async (
     playbook.name = name;
   }
   if (args.description !== undefined) {
-    playbook.description = validateDescription(args.description);
+    playbook.description = readDescription(args.description);
   }
   if (definition !== undefined) playbook.definition = definition;
 
