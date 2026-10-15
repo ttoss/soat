@@ -30,6 +30,7 @@ import {
   MetadataSchemas as MetadataSchemasSdk,
   ModelRoutes as ModelRoutesSdk,
   Orchestrations as OrchestrationsSdk,
+  Playbooks as PlaybooksSdk,
   Policies as PoliciesSdk,
   Projects as ProjectsSdk,
   Quotas as QuotasSdk,
@@ -143,6 +144,7 @@ export class SoatClient {
   readonly metadataSchemas: typeof MetadataSchemasSdk;
   readonly modelRoutes: typeof ModelRoutesSdk;
   readonly orchestrations: typeof OrchestrationsSdk;
+  readonly playbooks: typeof PlaybooksSdk;
   readonly policies: typeof PoliciesSdk;
   readonly projects: typeof ProjectsSdk;
   readonly quotas: typeof QuotasSdk;
@@ -198,6 +200,7 @@ export class SoatClient {
     this.metadataSchemas = bindResource(MetadataSchemasSdk, httpClient);
     this.modelRoutes = bindResource(ModelRoutesSdk, httpClient);
     this.orchestrations = bindResource(OrchestrationsSdk, httpClient);
+    this.playbooks = bindResource(PlaybooksSdk, httpClient);
     this.policies = bindResource(PoliciesSdk, httpClient);
     this.projects = bindResource(ProjectsSdk, httpClient);
     this.quotas = bindResource(QuotasSdk, httpClient);
