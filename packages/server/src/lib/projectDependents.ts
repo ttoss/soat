@@ -55,6 +55,10 @@ export const PROJECT_CASCADE_ORDER = [
   'Trigger',
   'Task',
   'Workflow',
+  // A case's RESTRICT playbookId FK points at its playbook; entries and
+  // versions cascade at the DB level.
+  'PlaybookCase',
+  'Playbook',
 
   // Evaluations — Eval carries the runs (and their results) that hang off it,
   // Dataset the items; both cascade at the DB level.
@@ -159,6 +163,8 @@ export const PROJECT_COUNTED_MODELS = [
   'ModelRoute',
   'Orchestration',
   'OrchestrationRun',
+  'Playbook',
+  'PlaybookCase',
   'Quota',
   'Secret',
   'Session',

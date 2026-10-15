@@ -42,6 +42,8 @@ import {
   findRunOrchestrationId,
   orchestrations,
 } from './orchestrationAccessor';
+import { playbookCases } from './playbookCases';
+import { playbooks } from './playbooks';
 import { quotas } from './quotas';
 import type { ResourceScope } from './resourceAccessor';
 import { findSessionAccess } from './sessions';
@@ -229,6 +231,20 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
   // type its routes have always probed — naming the run itself would be a new
   // type no existing `srn:<project>:orchestration:*` statement covers.
   orchestration_run: { via: 'orchestration', parentId: findRunOrchestrationId },
+
+  playbook: {
+    accessor: () => {
+      return playbooks;
+    },
+    resourceType: 'playbook',
+  },
+
+  playbook_case: {
+    accessor: () => {
+      return playbookCases;
+    },
+    resourceType: 'playbook_case',
+  },
 
   quota: {
     accessor: () => {

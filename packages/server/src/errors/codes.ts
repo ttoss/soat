@@ -644,6 +644,26 @@ export const ERROR_CODES = {
     description:
       'The workflow has one or more open tasks and cannot be deleted.',
   },
+  PLAYBOOK_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The playbook definition is invalid: a duplicate node or input, an input reading a missing node or field, an executor on a node that may not have one or missing from one that must, transformations on a non-final node, or a cycle. `meta.problems` lists every one.',
+  },
+  PLAYBOOK_HAS_CASES: {
+    httpStatus: 409,
+    description:
+      'The playbook has cases and cannot be deleted; a case is the record of what was filled against it.',
+  },
+  PLAYBOOK_INPUT_INVALID: {
+    httpStatus: 400,
+    description:
+      "An input write names a node or input the case's playbook version does not declare, an input that reads another node, or a value its input's schema refuses.",
+  },
+  PLAYBOOK_INPUT_CONFLICT: {
+    httpStatus: 409,
+    description:
+      "An input write's `expected_revision` is not the field's current revision: someone wrote it since it was read. `meta.conflicts` lists each field with both revisions; nothing in the batch was written.",
+  },
   TASK_NOT_FOUND: {
     httpStatus: 404,
     description: 'The task does not exist or is not accessible.',

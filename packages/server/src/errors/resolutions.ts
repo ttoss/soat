@@ -113,6 +113,14 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'A resource with this name already exists in the project. Pick another name, or update the existing resource instead of creating a second one.',
   IDEMPOTENCY_KEY_REUSED:
     'Send the changed request under a new `idempotency_key`; repeating the original body under this key replays what it already names.',
+  PLAYBOOK_VALIDATION_FAILED:
+    'Fix every problem `meta.problems` lists and retry. `POST /api/v1/playbooks/validate` answers the same check without writing.',
+  PLAYBOOK_HAS_CASES:
+    'Delete the playbook’s cases first, or keep the playbook and stop creating cases from it.',
+  PLAYBOOK_INPUT_INVALID:
+    "Read the case's `nodes` for the inputs its version declares and which of them are filled by a person; correct the value to its input's schema.",
+  PLAYBOOK_INPUT_CONFLICT:
+    'Re-read the case, decide each conflicting field against its current value, and retry with the revisions `meta.conflicts` names.',
   ORCHESTRATION_VALIDATION_FAILED:
     'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `POST /api/v1/orchestrations/{orchestration_id}/validate` reports every problem at once.',
   ORCHESTRATION_CYCLE_DETECTED:

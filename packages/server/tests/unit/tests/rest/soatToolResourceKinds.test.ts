@@ -68,6 +68,8 @@ const KINDS = [
   'model_route',
   'orchestration',
   'orchestration_run',
+  'playbook',
+  'playbook_case',
   'quota',
   'session',
   'tool',
@@ -151,6 +153,19 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
         { type: 'predicate', name: 'escalate', instructions: 'Escalate?' },
       ],
     });
+    const playbookId = await create('/api/v1/playbooks', {
+      project_id: projectId,
+      name: 'kinds-playbook',
+      definition: {
+        nodes: [
+          { key: 'intake', title: 'Intake', kind: 'collect', inputs: [] },
+        ],
+      },
+    });
+    const playbookCaseId = await create(
+      `/api/v1/playbooks/${playbookId}/cases`,
+      { subject: 'kinds' }
+    );
 
     // Rows no single request creates on its own: a run, a recorded turn and
     // its trace, a chain, an audit entry and a decision are each the residue
@@ -385,6 +400,20 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
         realId: run.publicId,
         absentId: 'orch_run_absent',
       },
+      own({
+        kind: 'playbook',
+        action: 'get-playbook',
+        from: 'playbook_id',
+        realId: playbookId,
+        absentId: 'pbk_absent',
+      }),
+      own({
+        kind: 'playbook_case',
+        action: 'get-playbook-case',
+        from: 'case_id',
+        realId: playbookCaseId,
+        absentId: 'pbk_case_absent',
+      }),
       own({
         kind: 'quota',
         action: 'get-quota',

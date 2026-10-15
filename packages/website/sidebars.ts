@@ -105,6 +105,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'modules/orchestrations',
             'modules/workflows',
+            'modules/playbooks',
             'modules/triggers',
             'modules/webhooks',
             'modules/approvals',

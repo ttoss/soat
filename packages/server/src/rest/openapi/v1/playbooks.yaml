@@ -1,0 +1,1140 @@
+openapi: 3.0.3
+info:
+  title: SOAT Playbooks API
+  version: 1.0.0
+  description: >-
+    API for playbooks — versioned templates of nodes whose inputs a person
+    fills or an earlier node produces — and the cases that fill one version
+    for one subject.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Playbooks
+    description: Manage playbooks and the cases filled against them
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/playbooks:
+    get:
+      tags:
+        - Playbooks
+      summary: List playbooks
+      description: Returns the playbooks defined in a project, newest first.
+      operationId: listPlaybooks
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of playbooks
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Playbook'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags:
+        - Playbooks
+      summary: Create a playbook
+      description: >-
+        Creates a playbook at version 1. The definition is refused with
+        `400 PLAYBOOK_VALIDATION_FAILED` when it holds a duplicate node or
+        input, an input reading a missing node or field, an `execute` node
+        without an executor or another kind with one, transformations on a
+        non-final node, or a cycle; `meta.problems` lists every one. A duplicate
+        `name` in the project is `409 NAME_CONFLICT`.
+      operationId: createPlaybook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaybookRequest'
+      responses:
+        '201':
+          description: Playbook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Playbook'
+        '400':
+          description: Bad request — a malformed or invalid definition
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: A playbook with this name already exists in the project
+
+  /api/v1/playbooks/validate:
+    post:
+      tags:
+        - Playbooks
+      summary: Validate a playbook definition
+      description: >-
+        Answers what a create or update would be told about a definition,
+        without writing: `valid`, and every graph problem it holds. A definition
+        whose shape cannot be read is `400 VALIDATION_FAILED`, as on a write.
+      operationId: validatePlaybook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidatePlaybookRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookValidationResult'
+        '400':
+          description: Bad request — the definition's shape cannot be read
+        '401':
+          description: Unauthorized
+
+  /api/v1/playbooks/{playbook_id}:
+    get:
+      tags:
+        - Playbooks
+      summary: Get a playbook
+      description: Returns a playbook with its current definition and version.
+      operationId: getPlaybook
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+      responses:
+        '200':
+          description: The playbook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Playbook'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Playbook not found
+    patch:
+      tags:
+        - Playbooks
+      summary: Update a playbook
+      description: >-
+        Updates any of `name`, `description` and `definition`. Only a change to
+        `definition` archives a new version; a rename or a rewrite of the
+        definition the playbook already holds leaves `version` where it is. A
+        case keeps the version it was created on.
+      operationId: updatePlaybook
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlaybookRequest'
+      responses:
+        '200':
+          description: Playbook updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Playbook'
+        '400':
+          description: Bad request — a malformed or invalid definition
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Playbook not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
+    delete:
+      tags:
+        - Playbooks
+      summary: Delete a playbook
+      description: >-
+        Deletes a playbook and its version archive. A playbook with cases is
+        refused with `409 PLAYBOOK_HAS_CASES`.
+      operationId: deletePlaybook
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+      responses:
+        '204':
+          description: Playbook deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Playbook not found
+        '409':
+          description: The playbook has cases
+
+  /api/v1/playbooks/{playbook_id}/versions:
+    get:
+      tags:
+        - Playbooks
+      summary: List a playbook's versions
+      description: >-
+        Returns the playbook's archived definitions, newest first. A version is
+        written on create and on every write that changes `definition`.
+      operationId: listPlaybookVersions
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of playbook versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookVersion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Playbook not found
+
+  /api/v1/playbooks/{playbook_id}/versions/{version}:
+    get:
+      tags:
+        - Playbooks
+      summary: Fetch an archived playbook version
+      description: >-
+        Returns the definition a version held: what a case pinned to it is
+        evaluated against.
+      operationId: getPlaybookVersion
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+        - $ref: '#/components/parameters/Version'
+      responses:
+        '200':
+          description: Archived playbook version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookVersion'
+        '400':
+          description: Bad request — version is not a positive integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /api/v1/playbooks/{playbook_id}/versions/{version}/restore:
+    post:
+      tags:
+        - Playbooks
+      summary: Restore an archived playbook version
+      description: >-
+        Writes an archived definition back as the playbook's live one, which
+        archives it again as a new version rather than rewinding the counter.
+        Restoring the definition the playbook already holds is a no-op.
+      operationId: restorePlaybookVersion
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+        - $ref: '#/components/parameters/Version'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestorePlaybookVersionRequest'
+      responses:
+        '200':
+          description: The playbook, at its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Playbook'
+        '400':
+          description: Bad request — version is not a positive integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          $ref: './concurrency.yaml#/components/responses/VersionConflict'
+
+  /api/v1/playbooks/{playbook_id}/cases:
+    post:
+      tags:
+        - Playbooks
+      summary: Create a case
+      description: >-
+        Creates a case for one subject on the playbook's current version. The
+        case stays on that version however the playbook changes later.
+      operationId: createPlaybookCase
+      x-soat-resource:
+        kind: playbook
+        from: playbook_id
+      parameters:
+        - $ref: '#/components/parameters/PlaybookId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaybookCaseRequest'
+      responses:
+        '201':
+          description: Case created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '400':
+          description: Bad request — subject is missing
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Playbook not found
+
+  /api/v1/playbook-cases:
+    get:
+      tags:
+        - Playbooks
+      summary: List playbook cases
+      description: >-
+        Returns a project's cases, newest first, without node states; read one
+        case for those.
+      operationId: listPlaybookCases
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: playbook_id
+          in: query
+          description: Only the cases of this playbook
+          schema:
+            type: string
+            example: pbk_V1StGXR8Z5jdHi6B
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of cases
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookCaseSummary'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/playbook-cases/{case_id}:
+    get:
+      tags:
+        - Playbooks
+      summary: Get a case
+      description: >-
+        Returns a case with every node's state, computed from its entries on
+        each read and never stored.
+      operationId: getPlaybookCase
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: The case
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case not found
+    delete:
+      tags:
+        - Playbooks
+      summary: Delete a case
+      description: Deletes a case and every entry written to it.
+      operationId: deletePlaybookCase
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '204':
+          description: Case deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Case not found
+
+  /api/v1/playbook-cases/{case_id}/inputs:
+    post:
+      tags:
+        - Playbooks
+      summary: Write a case's inputs
+      description: >-
+        Writes a batch of manual inputs, all or none. Each write names the
+        revision it read in `expected_revision`, `null` for a field still unset;
+        when any field has moved on the whole batch is refused with
+        `409 PLAYBOOK_INPUT_CONFLICT` and `meta.conflicts` names each field. An
+        input the case's version does not declare, one that reads another node,
+        or a value its schema refuses is `400 PLAYBOOK_INPUT_INVALID`. A value
+        equal to the field's current one writes no revision.
+      operationId: writePlaybookCaseInputs
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WritePlaybookCaseInputsRequest'
+      responses:
+        '200':
+          description: The case after the write
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '400':
+          description: Bad request — an unknown input, a non-manual input or a value its schema refuses
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Case not found
+        '409':
+          description: A field changed since it was read; nothing was written
+
+  /api/v1/playbook-cases/{case_id}/missing:
+    get:
+      tags:
+        - Playbooks
+      summary: List what a node still needs
+      description: >-
+        Returns the manual inputs still unset, or refused by their schema,
+        before `node` can be reached, grouped in waves: nothing in a later wave
+        can run before the earlier ones are filled.
+      operationId: getPlaybookCaseMissing
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: node
+          in: query
+          required: true
+          description: The key of the node to reach, usually a final node
+          schema:
+            type: string
+            example: pricing
+      responses:
+        '200':
+          description: The missing inputs, by wave
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCaseMissing'
+        '400':
+          description: Bad request — node names no node of the case's version
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case not found
+
+  /api/v1/playbook-cases/{case_id}/entries:
+    get:
+      tags:
+        - Playbooks
+      summary: List a case's entries
+      description: >-
+        Returns every value written to the case, newest first. Entries are never
+        rewritten, so this is the case's full history.
+      operationId: listPlaybookCaseEntries
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: node
+          in: query
+          description: Only the entries of this node
+          schema:
+            type: string
+            example: revenue
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of entries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookEntry'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    PlaybookId:
+      name: playbook_id
+      in: path
+      required: true
+      description: The playbook ID
+      schema:
+        type: string
+        example: pbk_V1StGXR8Z5jdHi6B
+    CaseId:
+      name: case_id
+      in: path
+      required: true
+      description: The case ID
+      schema:
+        type: string
+        example: pbk_case_V1StGXR8Z5jdHi6B
+    Version:
+      name: version
+      in: path
+      required: true
+      description: The archived version number
+      schema:
+        type: integer
+        minimum: 1
+  schemas:
+    PlaybookInputSource:
+      description: >-
+        `manual` for an input a person or an integration writes, or the field of
+        an earlier node it reads: `output[.path]`, or `input.<name>[.path]`.
+        Sources are the playbook's edges.
+      oneOf:
+        - type: string
+          enum:
+            - manual
+        - type: object
+          additionalProperties: false
+          required:
+            - node
+            - field
+          properties:
+            node:
+              type: string
+              example: revenue
+            field:
+              type: string
+              example: output.annual_revenue
+    PlaybookInput:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - schema
+        - required
+        - source
+      properties:
+        name:
+          type: string
+          description: Letters, digits and underscores, starting with a letter or underscore
+          example: revenue
+        schema:
+          type: object
+          description: The JSON Schema a value must satisfy
+          example:
+            type: number
+        required:
+          type: boolean
+          description: The node cannot run until a required input is set
+        description:
+          type: string
+          description: What to ask for; shown with the input when it is missing
+        source:
+          $ref: '#/components/schemas/PlaybookInputSource'
+    PlaybookExecutor:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - id
+      properties:
+        type:
+          type: string
+          enum:
+            - agent
+            - tool
+            - decider
+            - workflow
+            - orchestration
+        id:
+          type: string
+          description: The ID of the agent, tool, decider, workflow or orchestration
+          example: dcd_V1StGXR8Z5jdHi6B
+        input:
+          description: JSON Logic over the node's inputs, as an orchestration's `input_mapping`
+    PlaybookTransformation:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - format
+        - tool
+      properties:
+        name:
+          type: string
+          example: proposal
+        format:
+          type: string
+          example: pdf
+        tool:
+          type: string
+          description: The tool that renders the final node's output as a file
+          example: tool_V1StGXR8Z5jdHi6B
+    PlaybookNode:
+      type: object
+      additionalProperties: false
+      required:
+        - key
+        - title
+        - kind
+        - inputs
+      properties:
+        key:
+          type: string
+          description: >-
+            Stable across versions: a case's values carry over by key. Letters,
+            digits and underscores, starting with a letter or underscore.
+          example: regime
+        title:
+          type: string
+          example: Tax regime
+        description:
+          type: string
+        kind:
+          type: string
+          enum:
+            - collect
+            - execute
+            - confirm
+          description: >-
+            `collect` outputs its inputs, `execute` runs its executor, `confirm`
+            waits for a person to confirm its inputs.
+        final:
+          type: boolean
+          description: A goal of the playbook; only a final node carries transformations
+          default: false
+        inputs:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PlaybookInput'
+        executor:
+          $ref: '#/components/schemas/PlaybookExecutor'
+        transformations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybookTransformation'
+    PlaybookDefinition:
+      type: object
+      additionalProperties: false
+      required:
+        - nodes
+      properties:
+        nodes:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PlaybookNode'
+    Playbook:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pbk_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: client-pricing
+        description:
+          type: string
+          nullable: true
+        version:
+          type: integer
+          description: >-
+            The definition's version. Bumped only by a write that changes
+            `definition`.
+          example: 1
+        definition:
+          $ref: '#/components/schemas/PlaybookDefinition'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreatePlaybookRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - definition
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Project ID (required if not using project key auth)
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Human-readable name, unique per project
+          example: client-pricing
+        description:
+          description: What the playbook is for
+          type: string
+          nullable: true
+        definition:
+          description: The nodes and how their inputs are sourced
+          allOf:
+            - $ref: '#/components/schemas/PlaybookDefinition'
+        version_label:
+          type: string
+          description: Optional tag for version 1, e.g. `initial`
+          example: initial
+    UpdatePlaybookRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          description: Human-readable name, unique per project
+          type: string
+        description:
+          description: What the playbook is for
+          type: string
+          nullable: true
+        definition:
+          description: Replaces the whole definition; a change archives a new version
+          allOf:
+            - $ref: '#/components/schemas/PlaybookDefinition'
+        version_label:
+          type: string
+          description: >-
+            Optional tag for the version this write archives. Ignored when the
+            write changes no definition, since no version is archived.
+        expected_version:
+          description: Refuses the write unless the playbook is at this version.
+          allOf:
+            - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
+    ValidatePlaybookRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - definition
+      properties:
+        definition:
+          description: The definition to check
+          allOf:
+            - $ref: '#/components/schemas/PlaybookDefinition'
+    PlaybookDefinitionProblem:
+      type: object
+      description: >-
+        One reason a definition cannot be stored. `node` and `input` name where
+        it is; a `cycle` names every node on it in `nodes`.
+      properties:
+        code:
+          type: string
+          enum:
+            - duplicate_node
+            - duplicate_input
+            - missing_node
+            - unknown_field
+            - executor_required
+            - executor_forbidden
+            - transformations_not_final
+            - cycle
+        node:
+          type: string
+        input:
+          type: string
+        nodes:
+          type: array
+          items:
+            type: string
+    PlaybookValidationResult:
+      type: object
+      required:
+        - valid
+        - problems
+      properties:
+        valid:
+          type: boolean
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybookDefinitionProblem'
+    PlaybookVersion:
+      type: object
+      description: An immutable archive of a playbook's definition at one version.
+      properties:
+        id:
+          type: string
+          example: pbk_ver_V1StGXR8Z5jdHi6B
+        playbook_id:
+          x-soat-ref: playbooks
+          type: string
+          example: pbk_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          example: 1
+        config:
+          type: object
+          additionalProperties: true
+          description: The versioned surface as it stood at this version.
+          properties:
+            definition:
+              $ref: '#/components/schemas/PlaybookDefinition'
+        label:
+          type: string
+          nullable: true
+          example: restored from v2
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    RestorePlaybookVersionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          description: Optional tag for the new version. Defaults to `restored from vN`.
+          example: rollback
+    CreatePlaybookCaseRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - subject
+      properties:
+        subject:
+          type: string
+          description: Who or what the case is about, as you name it
+          example: ACME Ltda (CNPJ 12.345.678/0001-90)
+    PlaybookNodeState:
+      type: string
+      enum:
+        - blocked
+        - ready
+        - running
+        - done
+        - stale
+        - failed
+        - rejected
+      description: >-
+        `blocked` while a required input is unset or reads a node that is not
+        `done`; `ready` when it can run; `done` when its output is current;
+        `stale` when an input changed after its output was produced.
+    PlaybookCaseNode:
+      type: object
+      properties:
+        key:
+          type: string
+          example: regime
+        state:
+          $ref: '#/components/schemas/PlaybookNodeState'
+        missing:
+          type: array
+          description: Required inputs that are unset or refused by their schema
+          items:
+            type: string
+        waiting:
+          type: array
+          description: Nodes it reads that must be `done` first
+          items:
+            type: string
+        inputs:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                description: The value it reads now; null when unset
+              revision:
+                type: integer
+                nullable: true
+                description: The revision of the entry the value comes from
+        output:
+          type: object
+          nullable: true
+          properties:
+            value:
+              description: The node's latest output
+            revision:
+              type: integer
+    PlaybookCaseSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pbk_case_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        playbook_id:
+          x-soat-ref: playbooks
+          type: string
+          example: pbk_V1StGXR8Z5jdHi6B
+        playbook_version:
+          type: integer
+          description: The version the case was created on and is evaluated against
+          example: 1
+        subject:
+          type: string
+        revision:
+          type: integer
+          description: The case's revision counter; every entry takes the next value
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PlaybookCase:
+      allOf:
+        - $ref: '#/components/schemas/PlaybookCaseSummary'
+        - type: object
+          properties:
+            nodes:
+              type: array
+              description: Every node of the case's version, in definition order
+              items:
+                $ref: '#/components/schemas/PlaybookCaseNode'
+    PlaybookInputWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - node
+        - name
+        - value
+        - expected_revision
+      properties:
+        node:
+          type: string
+          example: revenue
+        name:
+          type: string
+          example: revenue
+        value:
+          description: The value, which must satisfy the input's schema
+          example: 4000000
+        expected_revision:
+          type: integer
+          nullable: true
+          description: >-
+            The revision of the field the writer read, or `null` for a field it
+            read as unset. Any other current revision refuses the batch.
+          example: null
+    WritePlaybookCaseInputsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - inputs
+      properties:
+        inputs:
+          description: The writes, applied all or none
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/PlaybookInputWrite'
+    PlaybookMissingInput:
+      type: object
+      properties:
+        node:
+          type: string
+        input:
+          type: string
+        schema:
+          type: object
+          description: The JSON Schema a value must satisfy
+        description:
+          type: string
+    PlaybookCaseMissing:
+      type: object
+      properties:
+        case_id:
+          type: string
+          example: pbk_case_V1StGXR8Z5jdHi6B
+        node:
+          type: string
+          example: pricing
+        waves:
+          type: array
+          description: Missing inputs grouped by the wave of the node that holds them
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/PlaybookMissingInput'
+    PlaybookEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pbk_ent_V1StGXR8Z5jdHi6B
+        revision:
+          type: integer
+        node:
+          type: string
+        kind:
+          type: string
+          enum:
+            - input
+            - output
+            - confirmation
+            - rejection
+        input:
+          type: string
+          nullable: true
+          description: The input written, on an `input` entry
+        value:
+          description: The value written
+        basis:
+          type: object
+          nullable: true
+          description: What an output, confirmation or rejection was decided on
+        playbook_version:
+          type: integer
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
