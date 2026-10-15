@@ -42,6 +42,8 @@ export type TypedAgent = {
   stepRules: unknown;
   boundaryPolicy: unknown;
   temperature: unknown;
+  maxOutputTokens: unknown;
+  reasoning: unknown;
   knowledgeConfig: unknown;
   outputSchema: unknown;
   promptCaching: unknown;
@@ -96,6 +98,9 @@ export type PendingAgentConfig = {
   activeToolIds: string[] | null;
   stepRules: unknown;
   temperature: number | null;
+  /** Absent on a turn paused before the field existed; reads as unset. */
+  maxOutputTokens?: number | null;
+  reasoning?: unknown;
   outputSchema: unknown;
   /**
    * The agent's `prompt_caching` as it stood when the turn started. Read by
@@ -125,6 +130,8 @@ export const toAgentConfig = (typedAgent: TypedAgent): PendingAgentConfig => {
     activeToolIds: typedAgent.activeToolIds as string[] | null,
     stepRules: typedAgent.stepRules,
     temperature: typedAgent.temperature as number | null,
+    maxOutputTokens: typedAgent.maxOutputTokens as number | null,
+    reasoning: typedAgent.reasoning,
     outputSchema: typedAgent.outputSchema,
     promptCaching: typedAgent.promptCaching,
   };
@@ -147,6 +154,8 @@ export const fromAgentConfig = (pending: PendingGeneration): TypedAgent => {
     stepRules: pending.agentConfig.stepRules,
     boundaryPolicy: null,
     temperature: pending.agentConfig.temperature,
+    maxOutputTokens: pending.agentConfig.maxOutputTokens ?? null,
+    reasoning: pending.agentConfig.reasoning ?? null,
     knowledgeConfig: null,
     // The cache breakpoint was marked when the paused turn's history was
     // assembled and is persisted on it, so a continuation replays the mark

@@ -722,6 +722,31 @@ components:
           type: integer
           nullable: true
           description: Maximum number of recent messages to include in the context window sent to the model. When null, all messages are included.
+        max_output_tokens:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            Maximum number of tokens the model may generate per step of a turn.
+            A response that reaches it stops with `stop_reason` `length`. Null
+            leaves the model's default.
+          example: 1024
+        reasoning:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [effort]
+          description: >-
+            How much the model reasons before answering. Translated per provider
+            (Anthropic thinking, Gemini thinking config, OpenAI reasoning effort)
+            against what the model supports; a model that cannot reason ignores
+            it. `none` turns reasoning off where the model allows it. Reasoning
+            tokens are metered as output. Null leaves the model's default.
+          properties:
+            effort:
+              type: string
+              enum: [none, low, medium, high]
+              example: low
         single_session_per_actor:
           type: boolean
           nullable: true

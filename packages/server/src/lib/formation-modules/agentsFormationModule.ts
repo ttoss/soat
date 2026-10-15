@@ -112,6 +112,8 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
     boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
     temperature: toOptional(toNullableNumber(properties.temperature)),
+    maxOutputTokens: toOptional(toNullableNumber(properties.max_output_tokens)),
+    reasoning: toOptional(toNullableObject(properties.reasoning)),
     maxContextMessages: toOptional(
       toNullableNumber(properties.max_context_messages)
     ),
@@ -182,6 +184,8 @@ export const agentsFormationModule = defineFormationModule({
       stepRules: toNullableArray<object>(properties.step_rules),
       boundaryPolicy: toNullableObject(properties.boundary_policy),
       temperature: toNullableNumber(properties.temperature),
+      maxOutputTokens: toNullableNumber(properties.max_output_tokens),
+      reasoning: toNullableObject(properties.reasoning),
       maxContextMessages: toNullableNumber(properties.max_context_messages),
       singleSessionPerActor: toOptionalBoolean(
         properties.single_session_per_actor
@@ -227,6 +231,8 @@ export const agentsFormationModule = defineFormationModule({
       step_rules: agent.step_rules,
       boundary_policy: agent.boundary_policy,
       temperature: agent.temperature,
+      max_output_tokens: agent.max_output_tokens,
+      reasoning: agent.reasoning,
       max_context_messages: agent.max_context_messages,
       single_session_per_actor: agent.single_session_per_actor,
       trace_content_mode: agent.trace_content_mode,

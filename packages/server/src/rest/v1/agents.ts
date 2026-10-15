@@ -44,6 +44,8 @@ type CreateAgentBody = {
   step_rules?: unknown;
   boundary_policy?: unknown;
   temperature?: unknown;
+  max_output_tokens?: unknown;
+  reasoning?: unknown;
   knowledge_config?: unknown;
   output_schema?: unknown;
   prompt_caching?: unknown;
@@ -86,6 +88,9 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     stepRules: parseOptional<object[] | null>(body.step_rules),
     boundaryPolicy: parseOptional<object | null>(body.boundary_policy),
     temperature: parseOptional<number | null>(body.temperature),
+    // Forwarded unvalidated: the lib owns both shapes, so a bad value is a 400.
+    maxOutputTokens: parseOptional<number | null>(body.max_output_tokens),
+    reasoning: parseOptional<object | null>(body.reasoning),
     knowledgeConfig:
       body.knowledge_config === undefined
         ? undefined
@@ -177,6 +182,8 @@ const buildCreateAgentArgs = (args: {
     stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
     boundaryPolicy: body.boundary_policy as object | undefined,
     temperature: parseNumber(body.temperature),
+    maxOutputTokens: parseOptional<number>(body.max_output_tokens),
+    reasoning: parseOptional<object>(body.reasoning),
     knowledgeConfig: toStoredKnowledgeConfig(body.knowledge_config) as
       object | undefined,
     outputSchema: body.output_schema as object | undefined,

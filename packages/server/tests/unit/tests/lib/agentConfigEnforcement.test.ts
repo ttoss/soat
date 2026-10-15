@@ -153,8 +153,8 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     enforces: 'Decides which cross-project resources the agent may reach.',
   },
   temperature: {
-    modules: ['agentNonStreamGeneration.ts', 'agentStreamGeneration.ts'],
-    enforces: 'Sent to the provider on the generation call.',
+    modules: ['agentModelSettings.ts'],
+    enforces: 'Sent to the provider on every step of the generation call.',
   },
   knowledgeConfig: {
     modules: ['agentKnowledge.ts'],
@@ -168,6 +168,14 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     modules: ['agentGenerationContext.ts'],
     enforces:
       'Marks the cache breakpoint on the assembled history, at the end of the static prefix.',
+  },
+  maxOutputTokens: {
+    modules: ['agentModelSettings.ts'],
+    enforces: 'Sent to the provider as the response token cap on every step.',
+  },
+  reasoning: {
+    modules: ['agentModelSettings.ts'],
+    enforces: 'Sent to the provider as the portable reasoning effort.',
   },
   maxContextMessages: {
     modules: ['conversationGeneration.ts'],

@@ -2048,23 +2048,29 @@ describe('Agents', () => {
     });
   });
 
-  describe('no reasoning config on an agent', () => {
-    // The agent OpenAPI schema declares no `reasoning` field, so the
-    // strict-fields middleware rejects it as unknown before the handler.
-    test('rejects reasoning on agent create', async () => {
+  describe('no reasoning pipeline on an agent', () => {
+    // `reasoning` carries only the provider-native `effort`; the pipeline
+    // shapes (`mode`, `steps`, `branches`, `rounds`) belong to no module, so a
+    // config written for them is refused rather than silently ignored.
+    test.each([
+      { mode: 'pipeline', steps: [] },
+      { effort: 'high', branches: [{ prompt: 'critique' }] },
+      { rounds: 2 },
+    ])('rejects reasoning %j on agent create', async (reasoning) => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
           project_id: projectId,
           ai_provider_id: aiProviderId,
-          name: 'no-reasoning',
-          reasoning: { effort: 'high' },
+          name: 'no-reasoning-pipeline',
+          reasoning,
         });
       expect(res.status).toBe(400);
-      expect(JSON.stringify(res.body.error)).toMatch(/reasoning/);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/reasoning/);
     });
 
-    test('rejects reasoning on agent update', async () => {
+    test('rejects a reasoning pipeline on agent update', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
@@ -2074,23 +2080,10 @@ describe('Agents', () => {
         });
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/agents/${created.body.id}`)
-        .send({ reasoning: { effort: 'low' } });
+        .send({ reasoning: { mode: 'pipeline', steps: [] } });
       expect(res.status).toBe(400);
-      expect(JSON.stringify(res.body.error)).toMatch(/reasoning/);
-    });
-
-    test('rejects reasoning on a per-generation override', async () => {
-      const created = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents')
-        .send({
-          project_id: projectId,
-          ai_provider_id: aiProviderId,
-          name: 'gen-agent',
-        });
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${created.body.id}/generate?wait=true`)
-        .send({ prompt: 'hi', reasoning: { effort: 'high' } });
-      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/reasoning/);
     });
   });
   describe('stop_conditions validation', () => {

@@ -113,6 +113,13 @@ export class Agent extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxContextMessages: number | null;
 
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare maxOutputTokens: number | null;
+
+  /** `{ effort }` — see `agentModelSettings.ts`. Null is the model's default. */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare reasoning: object | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare knowledgeConfig: object | null;
 

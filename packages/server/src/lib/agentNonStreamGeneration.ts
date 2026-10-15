@@ -21,6 +21,7 @@ import {
   toAgentConfig,
   type TypedAgent,
 } from './agentGenerationTypes';
+import { modelCallSettings } from './agentModelSettings';
 import {
   buildPrepareStep,
   normalizeToolChoice,
@@ -138,7 +139,7 @@ const callGenerateText = async (args: {
       toolChoice: args.toolChoice,
       prepareStep: args.prepareStep,
       stopWhen: resolveStopWhen(args.typedAgent),
-      temperature: (args.typedAgent.temperature as number) ?? undefined,
+      ...modelCallSettings(args.typedAgent),
       abortSignal: args.abortSignal,
       // The route config is the only retry authority for a routed model; a
       // non-routed model keeps the SDK default.
@@ -524,7 +525,7 @@ export const runToolOutputsGeneration = async (args: {
         ...args.pending.agentConfig,
         stepsAlreadySpent,
       }),
-      temperature: args.pending.agentConfig.temperature ?? undefined,
+      ...modelCallSettings(args.pending.agentConfig),
       maxRetries: routedMaxRetries(args.pending.resolvedModel),
       output: buildStructuredOutput(args.pending.agentConfig.outputSchema),
       onStepEnd: (step) => {

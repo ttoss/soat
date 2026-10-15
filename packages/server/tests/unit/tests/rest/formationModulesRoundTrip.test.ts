@@ -223,12 +223,23 @@ const CASES: RoundTripCase[] = [
           limit: 25,
         },
         tool_bindings: [{ tool_id: fx.converterToolId }],
+        max_output_tokens: 512,
+        reasoning: { effort: 'low' },
       };
       return {
         create: declared,
         expectRead: declared,
-        update: { ...declared, name: 'Agent B' },
-        expectAfterUpdate: { name: 'Agent B' },
+        update: {
+          ...declared,
+          name: 'Agent B',
+          max_output_tokens: 1024,
+          reasoning: { effort: 'high' },
+        },
+        expectAfterUpdate: {
+          name: 'Agent B',
+          max_output_tokens: 1024,
+          reasoning: { effort: 'high' },
+        },
       };
     },
   },

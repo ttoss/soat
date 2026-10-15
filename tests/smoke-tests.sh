@@ -3348,17 +3348,17 @@ fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
 echo "knowledge_config write grant round-trip: OK"
 
-# 22b3. `reasoning` is not an agent field — it is rejected (as an unknown
-# field) with a 400.
-echo "--- Asserting reasoning is rejected on agents ---"
+# 22b3. `reasoning` carries only `effort`: a reasoning pipeline config is
+# rejected (as an unknown field) with a 400.
+echo "--- Asserting a reasoning pipeline is rejected on agents ---"
 RC_REMOVED_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"effort":"low"}' 2>&1 || true)
+  --reasoning '{"mode":"pipeline","steps":[]}' 2>&1 || true)
 if ! printf '%s\n' "$RC_REMOVED_RESP" | jq -e '.status == 400' >/dev/null 2>&1; then
-  echo "ERROR: reasoning on an agent was not rejected with a 400" >&2
+  echo "ERROR: a reasoning pipeline on an agent was not rejected with a 400" >&2
   echo "$RC_REMOVED_RESP" >&2
   exit 1
 fi
-echo "reasoning rejected on agents: OK"
+echo "reasoning pipeline rejected on agents: OK"
 
 # ── Agent versions and staged rollout ────────────────────────────────────────
 # Covers the full lifecycle: snapshot on create, snapshot on update, restore as

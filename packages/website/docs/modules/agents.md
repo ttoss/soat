@@ -46,6 +46,8 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 | `step_rules`               | array          | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                                                                     |
 | `boundary_policy`          | object         | Boundary policy that limits which `builtin` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions)                                            |
 | `temperature`              | number         | Sampling temperature                                                                                                                                                           |
+| `max_output_tokens`        | integer/null   | Most tokens the model may generate per step; `null` (default) leaves the model's own limit — see [Output and Reasoning Limits](#output-and-reasoning-limits)                   |
+| `reasoning`                | object/null    | `{ "effort": "none" \| "low" \| "medium" \| "high" }`; `null` (default) leaves the model's own behavior — see [Output and Reasoning Limits](#output-and-reasoning-limits)      |
 | `knowledge_config`         | object         | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                                                                        |
 | `output_schema`            | object         | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)                                                         |
 | `prompt_caching`           | object/null    | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)                                                     |
@@ -90,22 +92,22 @@ The `active_release` object on an agent, not a standalone resource: set with `se
 
 One agent execution; its steps are on its [trace](./traces.md).
 
-| Field                       | Type        | Description                                                           |
-| --------------------------- | ----------- | --------------------------------------------------------------------- |
-| `id`                        | string      | Public identifier (`gen_` prefix)                                     |
-| `project_id`                | string      | Project the generation belongs to                                     |
-| `agent_id`                  | string      | Agent that was executed                                               |
-| `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                       |
-| `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations) |
-| `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status) |
-| `started_at`                | string      | ISO 8601 timestamp when execution began                               |
-| `completed_at`              | string/null | ISO 8601 timestamp when execution finished                            |
-| `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                              |
-| `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)            |
-| `started_by_principal_type` | string/null | Type of the principal that triggered the generation                   |
-| `started_by_principal_id`   | string/null | Public id of that principal                                           |
+| Field                       | Type        | Description                                                                                                        |
+| --------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| `id`                        | string      | Public identifier (`gen_` prefix)                                                                                  |
+| `project_id`                | string      | Project the generation belongs to                                                                                  |
+| `agent_id`                  | string      | Agent that was executed                                                                                            |
+| `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                                                                    |
+| `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations)                       |
+| `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status)                                              |
+| `started_at`                | string      | ISO 8601 timestamp when execution began                                                                            |
+| `completed_at`              | string/null | ISO 8601 timestamp when execution finished                                                                         |
+| `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                                                                           |
+| `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)                                                         |
+| `started_by_principal_type` | string/null | Type of the principal that triggered the generation                                                                |
+| `started_by_principal_id`   | string/null | Public id of that principal                                                                                        |
 | `idempotency_key`           | string/null | Key the generation was started under — see [Running a generation at most once](#running-a-generation-at-most-once) |
-| `created_at`                | string      | ISO 8601 creation timestamp                                           |
+| `created_at`                | string      | ISO 8601 creation timestamp                                                                                        |
 
 #### Generation Status
 
@@ -432,9 +434,9 @@ curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
 
 Two breakpoints are marked on every request — the request is ordered tools → system → messages, and each mark caches everything up to it:
 
-| Mark | Covers | Read back by |
-| --- | --- | --- |
-| The last system block | tool definitions and instructions | every step and turn, while they are unchanged |
+| Mark                         | Covers                                         | Read back by                                                         |
+| ---------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| The last system block        | tool definitions and instructions              | every step and turn, while they are unchanged                        |
 | The last message of the step | all of the above, plus the conversation so far | the next step, and the next turn of the session within the cache TTL |
 
 Each step reads the previous step's whole prefix at the cache-read rate and writes only what it appended. The message mark moves every step and is never stored: a turn that pauses for a client tool or an approval (see [Generation Loop](#generation-loop)) persists its messages unmarked, and the resumed step marks its own last message.
@@ -454,6 +456,17 @@ Nothing else about the turn changes: the same messages, tools and instructions a
 ### Context Window Limiting
 
 `max_context_messages` caps the recent messages sent to the model per generation; older ones leave the context but stay stored. `null` (default) sends all.
+
+### Output and Reasoning Limits
+
+`max_output_tokens` caps what the model generates on each step of a turn; a step that reaches it ends with `stop_reason` `length`. `reasoning.effort` sets how much the model reasons before answering, translated per provider against what the model supports:
+
+| `effort`                | Anthropic                                                           | Gemini                                  | OpenAI                          |
+| ----------------------- | ------------------------------------------------------------------- | --------------------------------------- | ------------------------------- |
+| `none`                  | thinking disabled                                                   | minimum thinking level / budget `0`     | lowest effort                   |
+| `low`, `medium`, `high` | thinking enabled with a budget, or adaptive thinking at that effort | thinking level or budget at that effort | `reasoningEffort` at that level |
+
+A model that cannot reason ignores `reasoning`. Reasoning tokens are metered as output tokens. Both default to `null`, which sends nothing and leaves the model's own defaults; an invalid value is `400 VALIDATION_FAILED`.
 
 ### Zero-Retention
 
@@ -516,21 +529,21 @@ Each tag names its source row: a memory result carries its memory id, resolvable
 
 What was injected is recorded on the generation as [`retrieval`](./generations.md#what-retrieval-served) — each document with the version read, each memory by id — so a turn can be traced back to the exact text it was given.
 
-| Field             | Type                  | Description                                                                                                                                                                                                                       |
-| ----------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `memory_store_ids` | `string[]`            | Search memories within these specific memory stores (`mstore_` prefix)                                                                                                                                                                     |
-| `document_ids`    | `string[]`            | Scope document results to these specific document IDs                                                                                                                                                                             |
-| `document_paths`  | `string[]`            | Scope document results to files under these path prefixes                                                                                                                                                                         |
-| `tags`            | `object`              | Scope **both** documents and memories to results whose `tags` contain all these key-value pairs (exact)                                                                                                                     |
-| `min_score`       | `number`              | Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked (default: none — omitted means no floor, and every one of the `limit` nearest chunks is injected however weak). The same floor the search endpoint spells `min_similarity` — see [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
-| `rrf_k`           | `number`              | The `k` in the fusion term `1 / (k + rank)` — smaller weights the top of each ranking more heavily (default: the deployment's `KNOWLEDGE_RRF_K`, itself `60`). See [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
-| `recency_half_life_days` | `number`       | Half-life of the decay applied to **memory** results after fusion; `0` disables it (default: the deployment's `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, itself `0`) |
-| `limit`           | `number`              | Maximum number of results to inject (default: 10)                                                                                                                                                                                 |
-| `write_memory_store_id` | `string`              | When set, automatically injects a `write_memory` tool that writes facts to this memory store                                                                                                                                            |
+| Field                    | Type       | Description                                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory_store_ids`       | `string[]` | Search memories within these specific memory stores (`mstore_` prefix)                                                                                                                                                                                                                                                        |
+| `document_ids`           | `string[]` | Scope document results to these specific document IDs                                                                                                                                                                                                                                                                         |
+| `document_paths`         | `string[]` | Scope document results to files under these path prefixes                                                                                                                                                                                                                                                                     |
+| `tags`                   | `object`   | Scope **both** documents and memories to results whose `tags` contain all these key-value pairs (exact)                                                                                                                                                                                                                       |
+| `min_score`              | `number`   | Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked (default: none — omitted means no floor, and every one of the `limit` nearest chunks is injected however weak). The same floor the search endpoint spells `min_similarity` — see [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
+| `rrf_k`                  | `number`   | The `k` in the fusion term `1 / (k + rank)` — smaller weights the top of each ranking more heavily (default: the deployment's `KNOWLEDGE_RRF_K`, itself `60`). See [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs)                                                                                              |
+| `recency_half_life_days` | `number`   | Half-life of the decay applied to **memory** results after fusion; `0` disables it (default: the deployment's `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, itself `0`)                                                                                                                                                                 |
+| `limit`                  | `number`   | Maximum number of results to inject (default: 10)                                                                                                                                                                                                                                                                             |
+| `write_memory_store_id`  | `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory store                                                                                                                                                                                                                                  |
 
 `knowledge_config` is the request [knowledge search](./knowledge.md) takes, minus the query — which the agent's own messages supply. `knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_store_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score`, `rrf_k`, `recency_half_life_days` and `limit` take the per-generation value. `write_memory_store_id` is agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
 
-Writing back from a *completed* turn is not configured here. It is the destination store's own ingestion policy — a [memory rule](./memories.md#memory-rules) — so one store's writers are readable in one place and one agent can feed two stores under different rules.
+Writing back from a _completed_ turn is not configured here. It is the destination store's own ingestion policy — a [memory rule](./memories.md#memory-rules) — so one store's writers are readable in one place and one agent can feed two stores under different rules.
 
 Only `memory_store_ids` set → memory-only search. Document search runs when `document_ids`/`document_paths` are set or no scoping filter is set. `tags` scopes both stores, so it counts on both sides ([Knowledge](./knowledge.md#search-modes)).
 
@@ -617,7 +630,9 @@ That tool writes in-process, so its boundary check is resource-scoped like the R
       {
         "effect": "Allow",
         "action": ["memories:CreateMemory", "memories:UpdateMemory"],
-        "resource": ["srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"]
+        "resource": [
+          "srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"
+        ]
       }
     ]
   }
@@ -635,7 +650,9 @@ A `builtin` action that names a resource is evaluated against that resource's SR
       {
         "effect": "Allow",
         "action": ["memories:*"],
-        "resource": ["srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"]
+        "resource": [
+          "srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"
+        ]
       }
     ]
   }
@@ -644,16 +661,16 @@ A `builtin` action that names a resource is evaluated against that resource's SR
 
 The SRN is the one the route enforces, which is not always the id in the argument: a memory and a [memory rule](./memories.md#memory-rules) both authorize through their **memory store**, so a boundary naming the store covers every operation on the memories and rules inside it.
 
-| Resource named by the action | Scoped today |
-| --- | --- |
-| Memory store, memory, memory rule | ✅ against the store's SRN and tags |
-| Actor, conversation, session | ✅ against its own SRN and tags |
-| Agent | ✅ against its own SRN (agents carry no tags) |
-| Tool, guardrail, quota, model route, ingestion rule, chain, trace, generation, audit entry, usage threshold | ✅ against its own SRN |
-| Orchestration, and any run of one | ✅ against the orchestration's SRN |
-| Dataset, and any item in one | ✅ against the dataset's SRN |
-| Eval, and any run of one | ✅ against the eval's SRN |
-| Everything else | evaluated against `*` |
+| Resource named by the action                                                                                | Scoped today                                  |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Memory store, memory, memory rule                                                                           | ✅ against the store's SRN and tags           |
+| Actor, conversation, session                                                                                | ✅ against its own SRN and tags               |
+| Agent                                                                                                       | ✅ against its own SRN (agents carry no tags) |
+| Tool, guardrail, quota, model route, ingestion rule, chain, trace, generation, audit entry, usage threshold | ✅ against its own SRN                        |
+| Orchestration, and any run of one                                                                           | ✅ against the orchestration's SRN            |
+| Dataset, and any item in one                                                                                | ✅ against the dataset's SRN                  |
+| Eval, and any run of one                                                                                    | ✅ against the eval's SRN                     |
+| Everything else                                                                                             | evaluated against `*`                         |
 
 Two cases stay `*`, and both refuse rather than admit when a statement names a resource:
 
@@ -772,7 +789,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
+`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is not snapshotted: a version records the `knowledge_config`, not the documents or memories it resolves at generation time.
 
@@ -863,9 +880,13 @@ soat abort-agent-release   --agent-id agent_V1StGXR8Z5jdHi6B   # back to stable
 
 ```ts
 // canary wins
-await soat.agentVersions.promoteAgentRelease({ path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' } });
+await soat.agentVersions.promoteAgentRelease({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+});
 // back to stable
-await soat.agentVersions.abortAgentRelease({ path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' } });
+await soat.agentVersions.abortAgentRelease({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
+});
 ```
 
 </TabItem>

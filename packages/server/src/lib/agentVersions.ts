@@ -134,6 +134,8 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     stepRules: configArray<object>(config.step_rules),
     boundaryPolicy: configObject(config.boundary_policy),
     temperature: configNumber(config.temperature),
+    maxOutputTokens: configNumber(config.max_output_tokens),
+    reasoning: configObject(config.reasoning),
     knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
     promptCaching: configObject(config.prompt_caching),
