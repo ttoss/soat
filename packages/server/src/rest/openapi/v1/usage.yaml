@@ -43,7 +43,9 @@ paths:
         for audit and reconciliation.
 
 
-        An id naming nothing in scope yields an empty page rather than dropping
+        An id filter matches the id the event recorded, so it still selects
+        the spend of an agent, provider, session or tool since deleted. An id
+        no event in scope recorded yields an empty page rather than dropping
         the filter, so a mistyped narrowing can never widen the list past what
         was asked for.
       operationId: listUsageEvents
@@ -70,32 +72,28 @@ paths:
           in: query
           required: false
           description: >
-            Filter by the actor (end user) the usage is attributed to. An actor
-            that does not exist in scope yields an empty page.
+            Filter by the actor (end user) the usage is attributed to.
           schema:
             type: string
         - name: session_id
           in: query
           required: false
           description: >
-            Filter by the session the usage was produced in. A session that does
-            not exist in scope yields an empty page.
+            Filter by the session the usage was produced in.
           schema:
             type: string
         - name: ai_provider_id
           in: query
           required: false
           description: >
-            Filter by the provider record the spend was billed against. A
-            provider that does not exist in scope yields an empty page.
+            Filter by the provider record the spend was billed against.
           schema:
             type: string
         - name: orchestration_run_id
           in: query
           required: false
           description: >
-            Filter by the orchestration run that metered the event. A run that
-            does not exist in scope yields an empty page.
+            Filter by the orchestration run that metered the event.
           schema:
             type: string
         - name: orchestration_id
@@ -134,8 +132,7 @@ paths:
           required: false
           description: >
             Filter by the tool a `tool_execution` event metered, including a
-            tool another project shares with one in scope. A tool that does not
-            exist in scope yields an empty page.
+            tool another project shares with one in scope.
           schema:
             type: string
         - name: publisher_project_id
@@ -143,7 +140,7 @@ paths:
           required: false
           description: >
             Filter to the calls made through a share of a resource the named
-            project owns. A project that does not exist yields an empty page.
+            project owns.
           schema:
             type: string
         - name: outcome
@@ -337,9 +334,10 @@ paths:
             Narrow the whole rollup — every bucket, `totals` and
             `totals.distinct` alike — to one session's traffic. Combines with
             `group_by`: `group_by=day&session_id=…` is a conversation's spend
-            per day, `group_by=model` is the same spend split by model. An id
-            naming no session in this project yields an empty rollup, never the
-            project total.
+            per day, `group_by=model` is the same spend split by model. Like
+            every id narrowing it matches the id the event recorded, so a
+            deleted session's spend stays selectable; an id no event in this
+            project recorded yields an empty rollup, never the project total.
           schema:
             type: string
         - name: actor_id
@@ -444,8 +442,7 @@ paths:
           required: false
           description: >
             Narrow to the executions of one tool, including one another project
-            shares with this one. An id naming no tool in reach yields an empty
-            rollup.
+            shares with this one.
           schema:
             type: string
         - name: publisher_project_id
@@ -453,7 +450,7 @@ paths:
           required: false
           description: >
             Narrow to the calls made through a share of a resource the named
-            project owns. A project that does not exist yields an empty rollup.
+            project owns.
           schema:
             type: string
         - name: outcome
@@ -874,9 +871,9 @@ components:
           nullable: true
           description: >
             Public ID of the AI provider instance billed — the target a model
-            route picked for the turn, or the agent's pinned provider. Null if
-            the provider was later deleted; the `provider`/`model` snapshot
-            still records what was billed.
+            route picked for the turn, or the agent's pinned provider. Kept
+            after the provider is deleted, like every attribution id on the
+            event.
         trigger_id:
           x-soat-ref: triggers
           type: string
@@ -896,8 +893,7 @@ components:
           nullable: true
           description: >
             Public ID of the tool a `tool_execution` event metered. Null on
-            every other meter, for an inline tool definition, and once the tool
-            is deleted.
+            every other meter and for an inline tool definition.
         publisher_project_id:
           x-soat-ref: projects
           type: string
@@ -913,7 +909,7 @@ components:
           description: >
             Public ID of the document an `embedding` event embedded a chunk of —
             ingestion, a re-chunk, a conversation's turns. Null on a query
-            embedding, on every other meter, and once the document is deleted.
+            embedding and on every other meter.
         memory_store_id:
           x-soat-ref: memory-stores
           type: string
@@ -922,7 +918,7 @@ components:
             Public ID of the memory store an `embedding` event embedded written
             content for. The store rather than the memory: stored content is
             shared by every memory in the store that states it. Null on a query
-            embedding, on every other meter, and once the store is deleted.
+            embedding and on every other meter.
         outcome:
           type: string
           nullable: true

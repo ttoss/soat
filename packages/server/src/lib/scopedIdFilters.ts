@@ -6,13 +6,15 @@ import { agentReferences, toolReferences } from './resourceReferences';
  * Resolving the public ids a listing or a rollup filters on into the internal
  * ids a `where` clause keys on.
  *
- * Its own module because three surfaces need the same rule and the same
- * failure mode — the usage event listing, the generation listing and the usage
- * rollup — and each held its own copy of it. A filter naming a resource that
- * does not exist in the caller's project scope resolves to `null` and empties
- * the answer instead of being dropped (a publisher project is looked up by id
- * alone: the listing is already confined to the caller's projects): a narrowing silently ignored reads back
- * as the project's whole traffic, a wrong answer rather than a missing one.
+ * Its own module because three surfaces need the same rule — the usage event
+ * listing, the generation listing and the usage rollup. A filter naming a
+ * resource that does not exist in the caller's project scope resolves to
+ * `null` instead of being dropped (a publisher project is looked up by id
+ * alone: the listing is already confined to the caller's projects): a
+ * narrowing silently ignored reads back as the project's whole traffic, a
+ * wrong answer rather than a missing one. The generation listing empties its
+ * answer on a `null`; a usage read matches the public id its events recorded
+ * instead (`usageNarrowings.ts`).
  */
 
 type Finder = (
@@ -110,18 +112,16 @@ const resolveOne = async (args: {
 };
 
 /**
- * The internal id of every filter that named one, keyed as the caller asked.
- * Filters left unset are absent from the result; `null` is returned when any
- * one of them names nothing in scope, which is the caller's cue to answer
- * empty.
+ * Each filter that named something, resolved on its own: its internal id, or
+ * `null` when it names nothing in scope. Filters left unset are absent.
  *
  * The reads are independent, so they go together — a rollup narrowed on five
  * dimensions should not cost five round trips before the first aggregate runs.
  */
-export const resolveScopedIds = async <K extends string>(args: {
+export const resolveEachScopedId = async <K extends string>(args: {
   filters: Array<ScopedIdFilter<K>>;
   projectIds?: number[];
-}): Promise<Partial<Record<K, number>> | null> => {
+}): Promise<Partial<Record<K, number | null>>> => {
   const requested = args.filters.filter(
     (filter): filter is ScopedIdFilter<K> & { publicId: string } => {
       return filter.publicId !== undefined;
@@ -143,10 +143,25 @@ export const resolveScopedIds = async <K extends string>(args: {
     })
   );
 
+  const ids: Partial<Record<K, number | null>> = {};
+  for (const entry of resolved) ids[entry.key] = entry.id;
+  return ids;
+};
+
+/**
+ * The internal id of every filter that named one, keyed as the caller asked.
+ * `null` is returned when any one of them names nothing in scope, which is the
+ * caller's cue to answer empty.
+ */
+export const resolveScopedIds = async <K extends string>(args: {
+  filters: Array<ScopedIdFilter<K>>;
+  projectIds?: number[];
+}): Promise<Partial<Record<K, number>> | null> => {
+  const each = await resolveEachScopedId(args);
   const ids: Partial<Record<K, number>> = {};
-  for (const entry of resolved) {
-    if (entry.id === null) return null;
-    ids[entry.key] = entry.id;
+  for (const [key, id] of Object.entries(each) as Array<[K, number | null]>) {
+    if (id === null) return null;
+    ids[key] = id;
   }
   return ids;
 };

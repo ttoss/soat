@@ -267,7 +267,7 @@ Both are authorized by the caller's access to the provider's own project (`ai-pr
 | Chats, agents | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
 | [Model routes](./model-routes.md) whose targets name the provider | **Live reference** | Always block with `409`. A target references its provider by id inside the route's `targets`, so no foreign key protects it — the guard is explicit. Repoint or delete the route first. |
 | Price overrides | **Soft dependent** | Block with `409` unless `force=true`, which **deletes** the overrides (meaningless without the provider). |
-| Usage/generation records | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them (nulls the provider FK), preserving the row and its as-billed receipt. |
+| Usage/generation records | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them, preserving the row, its as-billed receipt and its `ai_provider_id` ([Usage](./usage.md#attribution-outlives-deletion)). |
 
 A delete with no dependents (or `force=true` and only soft dependents) returns `204`. On a `409` the response carries `error.code = "AI_PROVIDER_HAS_DEPENDENTS"` and an `error.meta` describing what blocked it:
 

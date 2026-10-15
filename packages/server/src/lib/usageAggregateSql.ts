@@ -6,6 +6,8 @@ import {
   readSqlNullableText,
   readSqlText,
 } from './sqlRow';
+import type { RecordedIdKey } from './usageNarrowings';
+import { RECORDED_ID_COLUMNS } from './usageNarrowings';
 
 // `day` buckets on the UTC calendar day; the rest on the matching column. Work
 // with no end user behind it collapses into the `null` bucket rather than being
@@ -50,74 +52,41 @@ const COMPONENT_TABLE = 'usage_components';
 const ORCHESTRATION_RUN_TABLE = 'orchestration_runs';
 
 /**
- * How each dimension is bucketed in SQL.
+ * How each dimension is bucketed in SQL: the grouped expression.
  *
- * `keyExpr` is the grouped expression, `join` the single association it needs
- * (against the six a row-by-row rollup would hydrate for every event). The
- * `model` dimension is the only one that also reports a provider — see
- * `providerExpr` below.
+ * An entity dimension keys on the public id the event recorded beside its FK
+ * (`USAGE_EVENT_DURABLE_IDS`), never on a join through the FK: deleting the
+ * entity nulls the FK, and its spend must keep its bucket rather than fall into
+ * the null one. That also leaves every dimension join-free.
  */
-type GroupDimension = {
-  keyExpr: string;
-  join?: { table: string; alias: string; foreignKey: string };
-};
-
 // Exhaustive over `UsageGroupBy`, so a new dimension without a bucketing rule
 // is a type error rather than a silent `null` bucket.
-const GROUP_DIMENSIONS: { [K in UsageGroupBy]: GroupDimension } = {
-  model: { keyExpr: 'e."model"' },
-  meter_type: { keyExpr: 'e."meter_type"' },
+const GROUP_KEYS: { [K in UsageGroupBy]: string } = {
+  model: 'e."model"',
+  meter_type: 'e."meter_type"',
   // What the spend was incurred *for*: `eval` / `eval_judge` mark verification
   // spend, so it can be priced apart from the traffic serving real users.
   // Ordinary traffic carries no source and buckets under the single null key.
-  source: { keyExpr: 'e."source"' },
+  source: 'e."source"',
   // The provider instance the spend was billed against — a routed generation's
   // serving target, or the agent's pinned provider.
-  ai_provider: {
-    keyExpr: 'prov."public_id"',
-    join: {
-      table: 'ai_providers',
-      alias: 'prov',
-      foreignKey: 'ai_provider_id',
-    },
-  },
-  agent: {
-    keyExpr: 'agt."public_id"',
-    join: { table: 'agents', alias: 'agt', foreignKey: 'agent_id' },
-  },
+  ai_provider: 'e."ai_provider_public_id"',
+  agent: 'e."agent_public_id"',
   // Buckets on the orchestration run the event belongs to. Traffic that runs
   // no orchestration — a direct agent generation, an eval item, a trigger
   // firing — carries no run and collapses into the single null bucket, so the
   // bucket count is not a count of anything. `totals.distinct` is what answers
   // "how many".
-  orchestration_run: {
-    keyExpr: 'run."public_id"',
-    join: {
-      table: 'orchestration_runs',
-      alias: 'run',
-      foreignKey: 'orchestration_run_id',
-    },
-  },
-  actor: {
-    keyExpr: 'act."public_id"',
-    join: { table: 'actors', alias: 'act', foreignKey: 'actor_id' },
-  },
-  session: {
-    keyExpr: 'sess."public_id"',
-    join: { table: 'sessions', alias: 'sess', foreignKey: 'session_id' },
-  },
+  orchestration_run: 'e."orchestration_run_public_id"',
+  actor: 'e."actor_public_id"',
+  session: 'e."session_public_id"',
   // Only `tool_execution` events name a tool; every other meter collapses into
   // the single null bucket.
-  tool: {
-    keyExpr: 'tl."public_id"',
-    join: { table: 'tools', alias: 'tl', foreignKey: 'tool_id' },
-  },
+  tool: 'e."tool_public_id"',
   // Immutable events carry only created_at; bucket on its UTC calendar day.
   // `to_char` on the UTC-shifted timestamp keeps the key a `YYYY-MM-DD` string
   // regardless of the server's own timezone.
-  day: {
-    keyExpr: `to_char(e."created_at" AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
-  },
+  day: `to_char(e."created_at" AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
 };
 
 /**
@@ -132,35 +101,8 @@ const GROUP_DIMENSIONS: { [K in UsageGroupBy]: GroupDimension } = {
  * unanswerable. Events with no provider (a compute or storage meter) keep
  * collapsing into a single null-provider bucket.
  */
-const MODEL_PROVIDER_JOIN = {
-  table: 'ai_providers',
-  alias: 'mprov',
-  foreignKey: 'ai_provider_id',
-};
-
-// The joins one dimension needs: its own, plus the provider sibling the `model`
-// dimension reports. `ai_provider` already joins the same table under its own
-// alias, so the two are never emitted together.
-const joinsFor = (
-  groupBy: UsageGroupBy
-): Array<{ table: string; alias: string; foreignKey: string }> => {
-  const dimension = GROUP_DIMENSIONS[groupBy];
-  const joins = dimension.join ? [dimension.join] : [];
-  return groupBy === 'model' ? [...joins, MODEL_PROVIDER_JOIN] : joins;
-};
-
 const providerExpr = (groupBy: UsageGroupBy): string => {
-  return groupBy === 'model'
-    ? `${MODEL_PROVIDER_JOIN.alias}."public_id"`
-    : 'NULL';
-};
-
-const joinClause = (groupBy: UsageGroupBy): string => {
-  return joinsFor(groupBy)
-    .map((join) => {
-      return `LEFT JOIN "${join.table}" ${join.alias} ON ${join.alias}."id" = e."${join.foreignKey}"`;
-    })
-    .join('\n       ');
+  return groupBy === 'model' ? 'e."ai_provider_public_id"' : 'NULL';
 };
 
 /**
@@ -199,6 +141,11 @@ type IdNarrowings = {
 
 export type EventFilter = {
   projectId: number;
+  /**
+   * Id narrowings naming a deleted resource, matched on the public id the
+   * event recorded (see `usageNarrowings.ts`).
+   */
+  recordedIds?: Partial<Record<RecordedIdKey, string>>;
   from: Date | null;
   to: Date | null;
   /**
@@ -263,6 +210,13 @@ const eventFilter = (
     if (value === undefined) continue;
     clauses.push(`e."${NARROWING_COLUMNS[key]}" = :${key}`);
     replacements[key] = value;
+  }
+
+  for (const [key, publicId] of Object.entries(
+    filter.recordedIds ?? {}
+  ) as Array<[RecordedIdKey, string]>) {
+    clauses.push(`e."${RECORDED_ID_COLUMNS[key].column}" = :recorded_${key}`);
+    replacements[`recorded_${key}`] = publicId;
   }
 
   // The one narrowing the event carries no column for: the orchestration is
@@ -447,13 +401,11 @@ export const countGroups = async (args: {
   groupBy: UsageGroupBy;
 }): Promise<number> => {
   const where = eventFilter(args.filter);
-  const dimension = GROUP_DIMENSIONS[args.groupBy];
   const rows = await runQuery({
     sql: `SELECT COUNT(*) AS group_count
-            FROM (SELECT ${dimension.keyExpr} AS group_key,
+            FROM (SELECT ${GROUP_KEYS[args.groupBy]} AS group_key,
                          ${providerExpr(args.groupBy)} AS ai_provider_id
                     FROM "${EVENT_TABLE}" e
-                    ${joinClause(args.groupBy)}
                    WHERE ${where.sql}
                    GROUP BY 1, 2) buckets`,
     replacements: where.replacements,
@@ -475,12 +427,11 @@ export const countGroups = async (args: {
  */
 const PAGE_CTE = (groupBy: UsageGroupBy, where: string): string => {
   return `page AS (
-            SELECT ${GROUP_DIMENSIONS[groupBy].keyExpr} AS group_key,
+            SELECT ${GROUP_KEYS[groupBy]} AS group_key,
                    ${providerExpr(groupBy)} AS ai_provider_id,
                    COUNT(*) AS event_count,
                    SUM(e."cost_usd") AS cost_usd
               FROM "${EVENT_TABLE}" e
-              ${joinClause(groupBy)}
              WHERE ${where}
              GROUP BY 1, 2
              ORDER BY 4 DESC NULLS LAST, 1 ASC NULLS LAST, 2 ASC NULLS LAST
@@ -533,10 +484,9 @@ export const loadPageComponents = async (args: {
     sql: `WITH ${PAGE_CTE(args.groupBy, where.sql)},
                keyed AS (
                  SELECT e."id" AS event_id,
-                        ${GROUP_DIMENSIONS[args.groupBy].keyExpr} AS group_key,
+                        ${GROUP_KEYS[args.groupBy]} AS group_key,
                         ${providerExpr(args.groupBy)} AS ai_provider_id
                    FROM "${EVENT_TABLE}" e
-                   ${joinClause(args.groupBy)}
                   WHERE ${where.sql}
                )
           SELECT keyed.group_key AS group_key,

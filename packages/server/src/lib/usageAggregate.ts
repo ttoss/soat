@@ -406,12 +406,12 @@ export const aggregateUsage = async (
     offset
   );
 
-  const ids = await resolveIdNarrowings({
-    projectId: args.projectId,
+  const resolved = await resolveIdNarrowings({
+    projectIds: [args.projectId],
     narrowings: args,
   });
 
-  if (!ids) {
+  if (!resolved) {
     return emptyAggregate({
       projectPublicId: args.projectPublicId,
       from,
@@ -429,7 +429,8 @@ export const aggregateUsage = async (
       from,
       to,
       ...valueNarrowings(args),
-      ...ids,
+      ...resolved.ids,
+      recordedIds: resolved.recordedIds,
     },
     groupBy,
     includeDistinct,

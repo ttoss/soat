@@ -496,6 +496,7 @@ describe('Usage — embedding metering', () => {
         const update = jest
           .spyOn(db.UsageEvent, 'update')
           .mockRejectedValueOnce(new Error('simulated link failure'));
+        let generationId: string;
         try {
           const genRes = await authenticatedTestClient(userToken)
             .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
@@ -503,13 +504,16 @@ describe('Usage — embedding metering', () => {
           expect(genRes.status).toBe(200);
           expect(genRes.body.status).toBe('completed');
           expect(update).toHaveBeenCalled();
+          generationId = genRes.body.id;
         } finally {
           update.mockRestore();
         }
 
+        // The embedding still names the turn it recorded; the agent, which
+        // only the link supplies, stays unattributed.
         const rows = await waitForMeters(before.length + 1);
         expect(rows[0].source).toBe('embedding');
-        expect(rows[0].generation_id).toBeNull();
+        expect(rows[0].generation_id).toBe(generationId);
         expect(rows[0].agent_id).toBeNull();
       } finally {
         await model.close();
