@@ -1,4 +1,7 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const PLAYBOOK_ACTIONS = [
@@ -12,6 +15,8 @@ const PLAYBOOK_ACTIONS = [
   'playbooks:GetPlaybookVersion',
   'playbooks:RestorePlaybookVersion',
   'playbooks:CreatePlaybookCase',
+  'tools:CallTool',
+  'deciders:CreateDecision',
 ];
 
 /** Revenue is filled by a person; the regime reads it; pricing reads both. */
@@ -226,6 +231,22 @@ describe('Playbooks', () => {
       const res = await createPlaybook(adminToken, { description: 5 });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('returns 403 when the writer may not start an executor', async () => {
+      const token = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'pbkwriternostart',
+        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
+      });
+      const res = await createPlaybook(token);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
+      expect(res.body.error.meta).toEqual({
+        node: 'tax_regime',
+        action: 'deciders:CreateDecision',
+      });
     });
 
     test('returns 400 for a blank name', async () => {

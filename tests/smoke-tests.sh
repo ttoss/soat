@@ -8101,6 +8101,20 @@ if [ "$(printf '%s\n' "$WRITE_RESP" | jq -r '.revision')" != "1" ]; then
   exit 1
 fi
 
+echo "--- Running the collect node and reading its execution back ---"
+RUN_RESP=$($SOAT_CLI run-playbook-case-node --case_id "$CASE_ID" --node revenue --wait true)
+if ! printf '%s\n' "$RUN_RESP" | jq -e '.status == "succeeded" and .output.amount == 100 and .output_revision == 2' >/dev/null 2>&1; then
+  echo "ERROR: run-playbook-case-node did not write the collect node's output" >&2
+  printf '%s\n' "$RUN_RESP" >&2
+  exit 1
+fi
+EXECUTIONS_RESP=$($SOAT_CLI list-playbook-case-executions --case_id "$CASE_ID")
+if [ "$(printf '%s\n' "$EXECUTIONS_RESP" | jq -r '.data[0].id')" != "$(printf '%s\n' "$RUN_RESP" | jq -r '.id')" ]; then
+  echo "ERROR: list-playbook-case-executions did not list the run" >&2
+  printf '%s\n' "$EXECUTIONS_RESP" >&2
+  exit 1
+fi
+
 echo "--- Cleaning up playbook fixtures ---"
 $SOAT_CLI delete-playbook-case --case_id "$CASE_ID"
 $SOAT_CLI delete-playbook --playbook_id "$PLAYBOOK_ID"

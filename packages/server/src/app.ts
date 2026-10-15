@@ -14,6 +14,7 @@ import type { Context } from './Context';
 import { initializeActivityListener } from './lib/activity';
 import { initializeExceptionsListener } from './lib/exceptionAutoFile';
 import { initializeMemoryRuleListener } from './lib/memoryRuleDispatch';
+import { initializePlaybookExecutionListener } from './lib/playbookExecutions';
 import { initializeTriggerEventListener } from './lib/triggerEventDispatch';
 import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
@@ -36,6 +37,7 @@ initializeExceptionsListener();
 initializeActivityListener();
 initializeTriggerEventListener();
 initializeMemoryRuleListener();
+initializePlaybookExecutionListener();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());

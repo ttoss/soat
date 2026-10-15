@@ -80,6 +80,21 @@
       "operationId": "listPlaybookCaseEntries",
       "action": "playbooks:ListPlaybookCaseEntries",
       "description": "List a case's entries, newest first"
+    },
+    {
+      "operationId": "runPlaybookCaseNode",
+      "action": "playbooks:RunPlaybookCaseNode",
+      "description": "Run one node of a case now"
+    },
+    {
+      "operationId": "listPlaybookCaseExecutions",
+      "action": "playbooks:ListPlaybookCaseExecutions",
+      "description": "List a case's node executions"
+    },
+    {
+      "operationId": "getPlaybookCaseExecution",
+      "action": "playbooks:GetPlaybookCaseExecution",
+      "description": "Get one node execution of a case"
     }
   ]
 }

@@ -14,6 +14,11 @@ import {
   getPlaybookCase,
   listPlaybookCases,
 } from 'src/lib/playbookCases';
+import {
+  getPlaybookCaseExecution,
+  listPlaybookCaseExecutions,
+  runPlaybookNode,
+} from 'src/lib/playbookExecutions';
 
 import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 import { playbookAccess, playbookCaseAccess } from './playbookAccess';
@@ -163,6 +168,76 @@ playbookCasesRouter.get(
       id: ctx.params.case_id,
       node: parseString(ctx.query.node),
       ...parsePagination(ctx),
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/nodes/{node}/run:
+ *   post:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1nodes~1{node}~1run/post'
+ */
+playbookCasesRouter.post(
+  '/playbook-cases/:case_id/nodes/:node/run',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeWrite({
+      ctx,
+      action: 'playbooks:RunPlaybookCaseNode',
+    });
+    requireAuth(ctx);
+    const body = ctx.request.body as Record<string, unknown>;
+
+    ctx.status = 201;
+    ctx.body = await runPlaybookNode({
+      projectIds,
+      caseId: ctx.params.case_id,
+      node: ctx.params.node,
+      wait: body.wait === true,
+      createdByUserId: ctx.authUser.id,
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/executions:
+ *   get:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1executions/get'
+ */
+playbookCasesRouter.get(
+  '/playbook-cases/:case_id/executions',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeRead({
+      ctx,
+      action: 'playbooks:ListPlaybookCaseExecutions',
+    });
+    ctx.body = await listPlaybookCaseExecutions({
+      projectIds,
+      caseId: ctx.params.case_id,
+      node: parseString(ctx.query.node),
+      ...parsePagination(ctx),
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/executions/{execution_id}:
+ *   get:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1executions~1{execution_id}/get'
+ */
+playbookCasesRouter.get(
+  '/playbook-cases/:case_id/executions/:execution_id',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeRead({
+      ctx,
+      action: 'playbooks:GetPlaybookCaseExecution',
+    });
+    ctx.body = await getPlaybookCaseExecution({
+      projectIds,
+      caseId: ctx.params.case_id,
+      id: ctx.params.execution_id,
     });
   }
 );

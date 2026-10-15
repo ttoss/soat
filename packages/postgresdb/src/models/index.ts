@@ -53,6 +53,7 @@ export { OrchestrationVersion } from './OrchestrationVersion';
 export { Playbook } from './Playbook';
 export { PlaybookCase } from './PlaybookCase';
 export { PlaybookEntry } from './PlaybookEntry';
+export { PlaybookExecution } from './PlaybookExecution';
 export { PlaybookVersion } from './PlaybookVersion';
 export { Policy } from './Policy';
 export { PriceBook } from './PriceBook';

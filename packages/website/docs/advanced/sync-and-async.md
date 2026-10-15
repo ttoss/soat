@@ -1,5 +1,5 @@
 ---
-description: "The wait toggle: every long-running endpoint runs in the background by default and returns a handle to poll; wait=true blocks until it settles."
+description: 'The wait toggle: every long-running endpoint runs in the background by default and returns a handle to poll; wait=true blocks until it settles.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -15,10 +15,10 @@ This page is the canonical definition. Module pages describe their own handle an
 
 ## The toggle
 
-| | Value | Response | Use when |
-| --- | --- | --- | --- |
-| **Default** | `wait` omitted or `false` | `202 Accepted` — or `201 Created` when a run is created — plus a handle to poll (see [Status codes](#status-codes)) | The work may take a while and you have somewhere to put the result: a poll loop, a webhook, a UI that refreshes |
-| **Blocking** | `wait=true` | `200`/`201` + the settled result | A script that needs the answer on the next line, or any flow that must observe `requires_action` |
+|              | Value                     | Response                                                                                                            | Use when                                                                                                        |
+| ------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Default**  | `wait` omitted or `false` | `202 Accepted` — or `201 Created` when a run is created — plus a handle to poll (see [Status codes](#status-codes)) | The work may take a while and you have somewhere to put the result: a poll loop, a webhook, a UI that refreshes |
+| **Blocking** | `wait=true`               | `200`/`201` + the settled result                                                                                    | A script that needs the answer on the next line, or any flow that must observe `requires_action`                |
 
 `wait` is a **query parameter** on the generation and ingestion endpoints, and a **body field** on the run endpoints (`start-orchestration-run`, `start-eval-run`, `create-decision`, `create-inline-decision`); same name, same meaning.
 
@@ -40,7 +40,10 @@ soat create-agent-generation --agent-id agent_01 --wait true \
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 // Background (default): returns a handle immediately
 const { data: handle, error } = await soat.agents.createAgentGeneration({
@@ -50,11 +53,12 @@ const { data: handle, error } = await soat.agents.createAgentGeneration({
 if (error) throw new Error(JSON.stringify(error));
 
 // Blocking: returns the finished generation
-const { data: generation, error: waitError } = await soat.agents.createAgentGeneration({
-  path: { agent_id: 'agent_01' },
-  query: { wait: true },
-  body: { messages: [{ role: 'user', content: 'Summarize Q1' }] },
-});
+const { data: generation, error: waitError } =
+  await soat.agents.createAgentGeneration({
+    path: { agent_id: 'agent_01' },
+    query: { wait: true },
+    body: { messages: [{ role: 'user', content: 'Summarize Q1' }] },
+  });
 if (waitError) throw new Error(JSON.stringify(waitError));
 ```
 
@@ -80,16 +84,17 @@ curl -X POST "$SOAT_URL/api/v1/agents/agent_01/generate?wait=true" \
 
 ## Where it applies
 
-| Operation | Handle returned by default | Poll it with |
-| --- | --- | --- |
-| [`POST /agents/{agent_id}/generate`](../modules/agents.md#background-generation) | `generation_id`, `trace_id` | [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) |
-| [`POST /sessions/{session_id}/generate`](../modules/sessions.md#background-generation) | `session_id` | [`GET /conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages) |
-| [`POST /conversations/{conversation_id}/generate`](../modules/conversations.md#generating-the-next-message) | `conversation_id` | [`GET /conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages) |
-| [`POST /documents/ingest`](../modules/documents.md#async-file-ingestion) and [`POST /documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | the document, in `status: pending` | [`GET /documents/{document_id}/status`](/docs/api/documents/get-document-status) |
-| [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution) | the run, in `status: queued` | [`GET /orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run) |
-| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs) | the run, in `status: queued` | [`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run) |
-| [`POST /deciders/{decider_id}/decisions`](../modules/deciders.md#requesting-a-decision) | the decision, in `status: queued` | [`GET /decisions/{decision_id}`](/docs/api/deciders/get-decision) |
-| [`POST /decisions`](../modules/deciders.md#inline-questions) | the decision, in `status: queued` | [`GET /decisions/{decision_id}`](/docs/api/deciders/get-decision) |
+| Operation                                                                                                                                                    | Handle returned by default          | Poll it with                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`POST /agents/{agent_id}/generate`](../modules/agents.md#background-generation)                                                                             | `generation_id`, `trace_id`         | [`GET /generations/{generation_id}`](/docs/api/generations/get-generation)                                   |
+| [`POST /sessions/{session_id}/generate`](../modules/sessions.md#background-generation)                                                                       | `session_id`                        | [`GET /conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages)        |
+| [`POST /conversations/{conversation_id}/generate`](../modules/conversations.md#generating-the-next-message)                                                  | `conversation_id`                   | [`GET /conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages)        |
+| [`POST /documents/ingest`](../modules/documents.md#async-file-ingestion) and [`POST /documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | the document, in `status: pending`  | [`GET /documents/{document_id}/status`](/docs/api/documents/get-document-status)                             |
+| [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution)                                                                      | the run, in `status: queued`        | [`GET /orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run)           |
+| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs)                                                                        | the run, in `status: queued`        | [`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run)                              |
+| [`POST /deciders/{decider_id}/decisions`](../modules/deciders.md#requesting-a-decision)                                                                      | the decision, in `status: queued`   | [`GET /decisions/{decision_id}`](/docs/api/deciders/get-decision)                                            |
+| [`POST /decisions`](../modules/deciders.md#inline-questions)                                                                                                 | the decision, in `status: queued`   | [`GET /decisions/{decision_id}`](/docs/api/deciders/get-decision)                                            |
+| [`POST /playbook-cases/{case_id}/nodes/{node}/run`](../modules/playbooks.md#running-a-node)                                                                  | the execution, in `status: running` | [`GET /playbook-cases/{case_id}/executions/{execution_id}`](/docs/api/playbooks/get-playbook-case-execution) |
 
 ## What the default does **not** change
 
@@ -101,14 +106,14 @@ Backgrounding defers the slow part, never the checks. Everything that can reject
 - **Admission control** — a breached [quota](../modules/quotas.md) is `429`, and the agent-to-agent [call-depth guard](../modules/agents.md#nested-agent-calls) still fires.
 - **The record write** — the generation record exists before the response is written, so the `generation_id` is immediately readable. It reports `in_progress` until the run reaches `completed` or `failed`.
 
-An accepted response means *admitted*; the only failures discovered by polling are those of the model call itself.
+An accepted response means _admitted_; the only failures discovered by polling are those of the model call itself.
 
 ## Status codes
 
-| Family | Background | Blocking | Why |
-| --- | --- | --- | --- |
-| Work on an existing resource — [agent](../modules/agents.md#background-generation), [session](../modules/sessions.md#background-generation) and [conversation](../modules/conversations.md#generating-the-next-message) generation, [document ingestion](../modules/documents.md#async-file-ingestion) | `202 Accepted` | `200` (`201` for ingestion) | The request is *accepting work*; no new resource's creation to report |
-| Run creation — [orchestration runs](../modules/orchestrations.md#durable-background-execution), [eval runs](../modules/evaluations.md#synchronous-and-queued-runs), [decisions](../modules/deciders.md#requesting-a-decision), [inline decisions](../modules/deciders.md#inline-questions) | `201 Created` | `201 Created` | A run row is created either way and is immediately readable; the mode shows in its `status` (`queued`), not the status code |
+| Family                                                                                                                                                                                                                                                                                                                                                   | Background     | Blocking                    | Why                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Work on an existing resource — [agent](../modules/agents.md#background-generation), [session](../modules/sessions.md#background-generation) and [conversation](../modules/conversations.md#generating-the-next-message) generation, [document ingestion](../modules/documents.md#async-file-ingestion)                                                   | `202 Accepted` | `200` (`201` for ingestion) | The request is _accepting work_; no new resource's creation to report                                                       |
+| Run creation — [orchestration runs](../modules/orchestrations.md#durable-background-execution), [eval runs](../modules/evaluations.md#synchronous-and-queued-runs), [decisions](../modules/deciders.md#requesting-a-decision), [inline decisions](../modules/deciders.md#inline-questions), [playbook node runs](../modules/playbooks.md#running-a-node) | `201 Created`  | `201 Created`               | A run row is created either way and is immediately readable; the mode shows in its `status` (`queued`), not the status code |
 
 Branch on `wait` and on the run's own `status` field, never on `202` alone. The uniform rule: the response always carries something you can poll, and a caller that omitted `wait` never receives a settled result.
 
@@ -118,7 +123,7 @@ A [trigger](../modules/triggers.md) firing has no `wait`: it always starts an ev
 
 **Streaming implies waiting.** `stream: true` holds the response open, so it is a blocking call whether or not you pass `wait`. `stream: true` with `?wait=false` is contradictory and returns `400 VALIDATION_FAILED`.
 
-**A tool call always waits where the result is the point of the call and the work is bounded.** That is `create-agent-generation`, `generate-conversation-message`, `generate-session-response`, `create-decision` and `create-inline-decision` ([requesting a decision](../modules/deciders.md#requesting-a-decision), [inline questions](../modules/deciders.md#inline-questions)), as `builtin` tools and as the MCP tools derived from the same specs: a tool call is one request returning one result, and an agent step or an orchestration `tool` node reading a queued record would find no answer in it. The field is not offered on the tool surface, like `stream`. See [Agent-to-Agent Calls](../modules/agents.md#nested-agent-calls). Runs that can pause or run long keep `wait` on the tool surface, since polling them is the point: `start-orchestration-run`, `start-eval-run`, `ingest-document` and `reingest-document`.
+**A tool call always waits where the result is the point of the call and the work is bounded.** That is `create-agent-generation`, `generate-conversation-message`, `generate-session-response`, `create-decision` and `create-inline-decision` ([requesting a decision](../modules/deciders.md#requesting-a-decision), [inline questions](../modules/deciders.md#inline-questions)), as `builtin` tools and as the MCP tools derived from the same specs: a tool call is one request returning one result, and an agent step or an orchestration `tool` node reading a queued record would find no answer in it. The field is not offered on the tool surface, like `stream`. See [Agent-to-Agent Calls](../modules/agents.md#nested-agent-calls). Runs that can pause or run long keep `wait` on the tool surface, since polling them is the point: `start-orchestration-run`, `start-eval-run`, `run-playbook-case-node`, `ingest-document` and `reingest-document`.
 
 ## Choosing a mode
 

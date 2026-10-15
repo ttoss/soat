@@ -24,7 +24,7 @@ import {
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
-import { playbookAccess } from './playbookAccess';
+import { playbookAccess, playbookAuthorOf } from './playbookAccess';
 import { playbookCasesRouter } from './playbookCases';
 
 const playbooksRouter = new Router<Context>();
@@ -82,6 +82,7 @@ playbooksRouter.post('/playbooks', async (ctx: Context) => {
     definition: body.definition,
     versionLabel: parseString(body.version_label),
     createdByUserId: ctx.authUser.id,
+    author: playbookAuthorOf(ctx),
   });
 });
 
@@ -140,6 +141,7 @@ playbooksRouter.patch('/playbooks/:playbook_id', async (ctx: Context) => {
     versionLabel: parseString(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
     createdByUserId: ctx.authUser.id,
+    author: playbookAuthorOf(ctx),
   });
 });
 
@@ -237,6 +239,7 @@ playbooksRouter.post(
       version: parseVersionParam(ctx.params.version),
       label: parseString(body.label),
       createdByUserId: ctx.authUser.id,
+      author: playbookAuthorOf(ctx),
     });
   }
 );

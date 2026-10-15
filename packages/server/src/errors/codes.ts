@@ -664,6 +664,26 @@ export const ERROR_CODES = {
     description:
       "An input write's `expected_revision` is not the field's current revision: someone wrote it since it was read. `meta.conflicts` lists each field with both revisions; nothing in the batch was written.",
   },
+  PLAYBOOK_EXECUTOR_FORBIDDEN: {
+    httpStatus: 403,
+    description:
+      "The playbook version's author may not start an executor the definition names. Refused when the version is written, and again when a node runs if the author's permission was removed since. `meta` names the `node` and the IAM `action`.",
+  },
+  PLAYBOOK_AUTHOR_UNAVAILABLE: {
+    httpStatus: 409,
+    description:
+      "The case's playbook version has no author a node can run as: the user or API key that wrote it no longer exists, or it was written with a trigger or OAuth token, which carry their boundary in the token.",
+  },
+  PLAYBOOK_NODE_NOT_RUNNABLE: {
+    httpStatus: 409,
+    description:
+      'The node cannot run now: it is a `confirm` node, a required input is unset or reads a node that is not `done`, it is already `running`, or its output is current (`done`). `meta` carries the `state`, `missing` and `waiting`.',
+  },
+  PLAYBOOK_EXECUTION_FAILED: {
+    httpStatus: 422,
+    description:
+      "A node's executor settled without a value the node can hold as its output: an agent that returned neither text nor an object, a decision or orchestration run that failed, or a task closed without a payload. Recorded on the execution's `error`, never answered by a request.",
+  },
   TASK_NOT_FOUND: {
     httpStatus: 404,
     description: 'The task does not exist or is not accessible.',

@@ -11,7 +11,7 @@ A **playbook** is a versioned template of nodes; a **case** fills one version of
 
 ## Overview
 
-A playbook declares what has to be known before a goal can be reached: each node holds inputs, and each input is either written by a person or an integration (`manual`) or read from a field of an earlier node. Those sources are the graph's edges. A case is one subject — a client, an application, a claim — filled against the version the playbook was at when the case was created. Every write to a case is an append-only entry, and each node's state is computed from the entries on every read.
+A playbook declares what has to be known before a goal can be reached: each node holds inputs, and each input is either written by a person or an integration (`manual`) or read from a field of an earlier node. Those sources are the graph's edges. A case is one subject — a client, an application, a claim — filled against the version the playbook was at when the case was created. Every write to a case is an append-only entry, and each node's state is computed from the entries and executions on every read. A node runs its executor — an [agent](./agents.md), [tool](./tools.md), [decider](./deciders.md), [workflow](./workflows.md) or [orchestration](./orchestrations.md) — as the author of the case's version.
 
 An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, and a [workflow](./workflows.md) task holds one state; a case keeps a value per field and answers what is still missing before a node can be reached.
 
@@ -34,16 +34,16 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 ### Node
 
-| Field             | Type    | Description                                                                                                                                                                                      |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `key`             | string  | Stable across versions. Letters, digits and underscores, starting with a letter or underscore                                                                                                    |
-| `title`           | string  | Human-readable label                                                                                                                                                                             |
-| `description`     | string  | Optional                                                                                                                                                                                         |
-| `kind`            | string  | `collect` (its output is its inputs), `execute` (its executor produces the output), `confirm` (a person confirms its inputs)                                                                     |
-| `final`           | boolean | A goal of the playbook. Default `false`                                                                                                                                                          |
-| `inputs`          | array   | Up to 50 [inputs](#input)                                                                                                                                                                        |
-| `executor`        | object  | Required on an `execute` node, refused on any other: `{ type, id, input? }`, `type` one of `agent`, `tool`, `decider`, `workflow`, `orchestration`; `input` is JSON Logic over the node's inputs |
-| `transformations` | array   | Final nodes only: `{ name, format, tool }`, a tool that renders the node's output as a file                                                                                                      |
+| Field             | Type    | Description                                                                                                                                                                                                                              |
+| ----------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`             | string  | Stable across versions. Letters, digits and underscores, starting with a letter or underscore                                                                                                                                            |
+| `title`           | string  | Human-readable label                                                                                                                                                                                                                     |
+| `description`     | string  | Optional                                                                                                                                                                                                                                 |
+| `kind`            | string  | `collect` (its output is its inputs), `execute` (its executor produces the output), `confirm` (a person confirms its inputs)                                                                                                             |
+| `final`           | boolean | A goal of the playbook. Default `false`                                                                                                                                                                                                  |
+| `inputs`          | array   | Up to 50 [inputs](#input)                                                                                                                                                                                                                |
+| `executor`        | object  | Required on an `execute` node, refused on any other: `{ type, id, input? }`, `type` one of `agent`, `tool`, `decider`, `workflow`, `orchestration`; `input` maps each field of the executor's input to JSON Logic over the node's inputs |
+| `transformations` | array   | Final nodes only: `{ name, format, tool }`, a tool that renders the node's output as a file                                                                                                                                              |
 
 ### Input
 
@@ -81,6 +81,25 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `playbook_version` | integer        | The version the case was on when it was written                                |
 | `created_by`       | string \| null | The user who wrote it                                                          |
 
+### Execution
+
+| Field              | Type            | Description                                                                          |
+| ------------------ | --------------- | ------------------------------------------------------------------------------------ |
+| `id`               | string          | Public identifier (`pbk_exe_…`)                                                      |
+| `case_id`          | string          | The case                                                                             |
+| `node`             | string          | The node that ran                                                                    |
+| `playbook_version` | integer         | The version the case runs on                                                         |
+| `executor`         | object \| null  | `{ type, id }`; null for a `collect` node                                            |
+| `status`           | string          | `running`, `succeeded` or `failed`                                                   |
+| `result`           | string \| null  | Once settled: `current`, or `superseded` when the node's inputs changed while it ran |
+| `run_id`           | string \| null  | The generation, decision, task or orchestration run it started                       |
+| `input`            | any             | What the executor was given                                                          |
+| `output`           | any             | What the executor answered; null until it succeeds                                   |
+| `output_revision`  | integer \| null | The revision of the output entry it wrote; null when it wrote none                   |
+| `error`            | object \| null  | Why it failed                                                                        |
+| `created_by`       | string \| null  | Who asked for the run                                                                |
+| `finished_at`      | string \| null  | ISO 8601 settle timestamp                                                            |
+
 ## Key Concepts
 
 ### Definition checks
@@ -95,7 +114,7 @@ A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the def
 
 ### Node states
 
-Computed from the case's entries on each read, never stored:
+Computed from the case's entries and executions on each read, never stored:
 
 | State      | When                                                                                   |
 | ---------- | -------------------------------------------------------------------------------------- |
@@ -120,6 +139,28 @@ Computed from the case's entries on each read, never stored:
 ### What a node still needs
 
 [`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a node key and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one is filled. Each carries its `schema` and `description`, which is what an agent asks for.
+
+### Running a node
+
+[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now and records an [execution](#execution). Only a `ready`, `stale` or `failed` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `done` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `waiting`.
+
+A `collect` node's output is its input values. Any other node starts its executor with the node's input values, mapped through the executor's `input` when it declares one:
+
+| Executor        | Started as                                  | Output                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------- |
+| `agent`         | A generation with the input as JSON         | The object its output schema asked for, else its text |
+| `tool`          | A call, under the project's tool guardrails | The tool's result                                     |
+| `decider`       | A decision                                  | `answers_by_name`                                     |
+| `workflow`      | A task whose `payload` is the input         | The task's `payload` when it closes                   |
+| `orchestration` | A run whose `input` is the input            | The run's `output` when it succeeds                   |
+
+When the execution settles, its output is written as an `output` entry. A value equal to the node's current output writes no revision, so nothing reading the node goes `stale`. An execution whose node's inputs changed while it ran settles as `superseded` and writes nothing. A failed executor, a failed decision or orchestration run, or an agent that answers with neither text nor an object fails the execution with its cause in `error`; the node is `failed` and can run again.
+
+Without `wait` the request answers `201` with the execution `running` and it settles in the background; poll [`GET /api/v1/playbook-cases/{case_id}/executions/{execution_id}`](/docs/api/playbooks/get-playbook-case-execution). With `wait: true` it answers once the executor settles, or once it parks: a workflow task still open, or an orchestration run waiting on a person or a timer, settles the node when it closes or ends. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/executions`](/docs/api/playbooks/list-playbook-case-executions) lists a case's executions, newest first.
+
+### Who a node runs as
+
+A node's executor runs as the user or API key that wrote the case's playbook version, with that credential's permissions as they stand when it runs; an API key's own policies still bound it. Writing a definition therefore requires the start action of every executor it names — `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask` or `orchestrations:StartRun` — and is refused with `403 PLAYBOOK_EXECUTOR_FORBIDDEN` otherwise. Each run checks it again, so a permission removed since stops the next run with the same error. A definition with executors written with a trigger or OAuth token, or a version whose author no longer exists, is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`.
 
 ### Entries
 
@@ -360,14 +401,63 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/inputs \
 </TabItem>
 </Tabs>
 
+### Run a node
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat run-playbook-case-node --case-id pbk_case_… --node revenue --wait true
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.playbooks.runPlaybookCaseNode({
+  path: { case_id: 'pbk_case_…', node: 'revenue' },
+  body: { wait: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/revenue/run \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "wait": true }'
+```
+
+</TabItem>
+</Tabs>
+
+```json
+{
+  "id": "pbk_exe_…",
+  "case_id": "pbk_case_…",
+  "node": "revenue",
+  "executor": null,
+  "status": "succeeded",
+  "result": "current",
+  "output": { "amount": 4000000 },
+  "output_revision": 3
+}
+```
+
 ## Errors
 
-| Code                         | Status | When                                                                                          |
-| ---------------------------- | ------ | --------------------------------------------------------------------------------------------- |
-| `VALIDATION_FAILED`          | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` |
-| `PLAYBOOK_VALIDATION_FAILED` | 400    | The definition has graph problems; `meta.problems` lists them                                 |
-| `PLAYBOOK_INPUT_INVALID`     | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses         |
-| `NAME_CONFLICT`              | 409    | Another playbook in the project has the name                                                  |
-| `VERSION_CONFLICT`           | 409    | `expected_version` is stale                                                                   |
-| `PLAYBOOK_HAS_CASES`         | 409    | A delete of a playbook that has cases                                                         |
-| `PLAYBOOK_INPUT_CONFLICT`    | 409    | An input write's `expected_revision` is not the field's current one                           |
+| Code                          | Status | When                                                                                                   |
+| ----------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
+| `VALIDATION_FAILED`           | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` or a run |
+| `PLAYBOOK_VALIDATION_FAILED`  | 400    | The definition has graph problems; `meta.problems` lists them                                          |
+| `PLAYBOOK_INPUT_INVALID`      | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                  |
+| `NAME_CONFLICT`               | 409    | Another playbook in the project has the name                                                           |
+| `VERSION_CONFLICT`            | 409    | `expected_version` is stale                                                                            |
+| `PLAYBOOK_HAS_CASES`          | 409    | A delete of a playbook that has cases                                                                  |
+| `PLAYBOOK_INPUT_CONFLICT`     | 409    | An input write's `expected_revision` is not the field's current one                                    |
+| `PLAYBOOK_EXECUTOR_FORBIDDEN` | 403    | The version's author may not start an executor the definition names                                    |
+| `PLAYBOOK_AUTHOR_UNAVAILABLE` | 409    | The version has no author a node can run as                                                            |
+| `PLAYBOOK_NODE_NOT_RUNNABLE`  | 409    | The node is a `confirm` node, blocked, `running` or `done`                                             |

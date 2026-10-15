@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import type { PlaybookAuthor } from './playbookAuthor';
 import { type MappedPlaybook, playbooks, updatePlaybook } from './playbooks';
 import { playbookVersionStore } from './playbookVersionSnapshot';
 import {
@@ -27,22 +28,26 @@ export const mapPlaybookVersion = (
   };
 };
 
-const playbookVersionArchive = makeVersionArchive({
-  store: playbookVersionStore,
-  loadResource: async (args) => {
-    return toResourceRef(await playbooks.getByPublicId(args));
-  },
-  mapVersion: mapPlaybookVersion,
-  applyConfig: async (args): Promise<MappedPlaybook> => {
-    return updatePlaybook({
-      projectIds: args.projectIds,
-      id: args.id,
-      definition: args.config.definition,
-      versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
-    });
-  },
-});
+/** The archive, with the author a restore writes the new version as. */
+const playbookVersionArchive = (author?: PlaybookAuthor) => {
+  return makeVersionArchive({
+    store: playbookVersionStore,
+    loadResource: async (args) => {
+      return toResourceRef(await playbooks.getByPublicId(args));
+    },
+    mapVersion: mapPlaybookVersion,
+    applyConfig: async (args): Promise<MappedPlaybook> => {
+      return updatePlaybook({
+        projectIds: args.projectIds,
+        id: args.id,
+        definition: args.config.definition,
+        versionLabel: args.label,
+        createdByUserId: args.createdByUserId,
+        author: author!,
+      });
+    },
+  });
+};
 
 export const listPlaybookVersions = async (args: {
   projectIds?: number[];
@@ -51,7 +56,7 @@ export const listPlaybookVersions = async (args: {
   offset?: number;
 }) => {
   log('listPlaybookVersions: id=%s', args.playbookId);
-  return playbookVersionArchive.listVersions({
+  return playbookVersionArchive().listVersions({
     projectIds: args.projectIds,
     resourceId: args.playbookId,
     limit: args.limit,
@@ -65,7 +70,7 @@ export const getPlaybookVersion = async (args: {
   version: number;
 }) => {
   log('getPlaybookVersion: id=%s version=%d', args.playbookId, args.version);
-  return playbookVersionArchive.getVersion({
+  return playbookVersionArchive().getVersion({
     projectIds: args.projectIds,
     resourceId: args.playbookId,
     version: args.version,
@@ -79,13 +84,14 @@ export const restorePlaybookVersion = async (args: {
   version: number;
   label?: string | null;
   createdByUserId: number | null;
+  author: PlaybookAuthor;
 }): Promise<MappedPlaybook> => {
   log(
     'restorePlaybookVersion: id=%s version=%d',
     args.playbookId,
     args.version
   );
-  return playbookVersionArchive.restoreVersion({
+  return playbookVersionArchive(args.author).restoreVersion({
     projectIds: args.projectIds,
     resourceId: args.playbookId,
     version: args.version,
