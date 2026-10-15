@@ -5,6 +5,10 @@ import {
   writePlaybookCaseInputs,
 } from 'src/lib/playbookCaseInputs';
 import {
+  pausePlaybookCase,
+  resumePlaybookCase,
+} from 'src/lib/playbookCasePause';
+import {
   getPlaybookCaseMissing,
   listPlaybookCaseEntries,
 } from 'src/lib/playbookCaseReads';
@@ -14,10 +18,6 @@ import {
   getPlaybookCase,
   listPlaybookCases,
 } from 'src/lib/playbookCases';
-import {
-  pausePlaybookCase,
-  resumePlaybookCase,
-} from 'src/lib/playbookCasePause';
 import {
   getPlaybookCaseExecution,
   listPlaybookCaseExecutions,
