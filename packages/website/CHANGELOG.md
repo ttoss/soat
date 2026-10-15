@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.78.0](https://github.com/ttoss/soat/compare/v0.77.1...v0.78.0) (2026-10-15)
+
+### Features
+
+* **agents:** add max_output_tokens and reasoning.effort to the agent ([#1586](https://github.com/ttoss/soat/issues/1586)) ([fbf7f11](https://github.com/ttoss/soat/commit/fbf7f1124fe1769bc272943f5dabed62a497ea74))
+* **sessions:** add max_context_messages to cap a session's context window ([#1585](https://github.com/ttoss/soat/issues/1585)) ([75b450d](https://github.com/ttoss/soat/commit/75b450dd1531799e3b552968d3c0f66f03638930))
+
 ## [0.77.1](https://github.com/ttoss/soat/compare/v0.77.0...v0.77.1) (2026-10-15)
 
 ### Bug Fixes
