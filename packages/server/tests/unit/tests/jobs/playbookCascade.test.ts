@@ -4,6 +4,7 @@ import {
   flushPlaybookExecutions,
   recoverPlaybookExecutions,
 } from 'src/lib/playbookCascade';
+import { recoverPlaybookExports } from 'src/lib/playbookExportRender';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -232,5 +233,58 @@ describe('recoverPlaybookExecutions', () => {
       status: 'failed',
       error: { code: 'PLAYBOOK_EXECUTION_FAILED' },
     });
+  });
+});
+
+describe('recoverPlaybookExports', () => {
+  test('fails, as interrupted, an export a stopped process left running', async () => {
+    const caseId = await newCase(COLLECT);
+    await withWorker(() => {
+      return writeAmount(caseId);
+    });
+    const row = await db.PlaybookCase.findOne({ where: { publicId: caseId } });
+    // A process recorded it, called the tool and stopped before settling.
+    const left = await db.PlaybookExport.create({
+      caseId: row!.id as number,
+      node: 'revenue',
+      revision: 2,
+      playbookVersion: 1,
+      transformation: 'proposal',
+      format: 'pdf',
+      toolId: 'tool_gone',
+      status: 'running',
+      leaseExpiresAt: new Date(Date.now() - 1000),
+      createdByUserId: null,
+    });
+
+    expect(await recoverPlaybookExports({ now: new Date() })).toBe(1);
+
+    const res = await asAdmin().get(
+      `/api/v1/playbook-cases/${caseId}/exports/${left.publicId}`
+    );
+    expect(res.body).toMatchObject({
+      status: 'failed',
+      error: { code: 'PLAYBOOK_EXPORT_INTERRUPTED' },
+      finished_at: expect.any(String),
+    });
+  });
+
+  test('leaves an export inside its lease running', async () => {
+    const caseId = await newCase(COLLECT);
+    const row = await db.PlaybookCase.findOne({ where: { publicId: caseId } });
+    await db.PlaybookExport.create({
+      caseId: row!.id as number,
+      node: 'revenue',
+      revision: 1,
+      playbookVersion: 1,
+      transformation: 'proposal',
+      format: 'pdf',
+      toolId: 'tool_live',
+      status: 'running',
+      leaseExpiresAt: new Date(Date.now() + 60_000),
+      createdByUserId: null,
+    });
+
+    expect(await recoverPlaybookExports({ now: new Date() })).toBe(0);
   });
 });

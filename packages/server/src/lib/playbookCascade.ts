@@ -11,6 +11,7 @@ import {
 import { settleExecution, settleFromRun } from './playbookExecutionSettle';
 import { executeClaimed } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
+import { recoverPlaybookExports } from './playbookExportRender';
 import { playbookNodeStates } from './playbookState';
 import { createScheduler, createSweep } from './scheduler';
 
@@ -234,7 +235,11 @@ const scheduler = createScheduler({
   defaultIntervalMs: 30_000,
   envVar: 'PLAYBOOK_SCHEDULER_INTERVAL_MS',
   disabledEnvVar: 'PLAYBOOK_WORKER_DISABLED',
-  sweeps: [drainPlaybookExecutions, recoverPlaybookExecutions],
+  sweeps: [
+    drainPlaybookExecutions,
+    recoverPlaybookExecutions,
+    recoverPlaybookExports,
+  ],
 });
 
 /** Starts the cascade's sweeps. Called once from `server.ts`. */

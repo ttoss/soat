@@ -3514,6 +3514,79 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(one).output_revision).toBeNull();
     });
 
+    test('export-playbook-case-node waits for the file and the exports read it back', async () => {
+      // Its tool does not exist, so the export settles failed.
+      const exportPlaybook = await mcpCall('create-playbook', {
+        project_id: projectId,
+        name: 'mcp-exports',
+        definition: {
+          nodes: [
+            {
+              key: 'pricing',
+              title: 'Pricing',
+              kind: 'collect',
+              final: true,
+              inputs: [
+                {
+                  name: 'amount',
+                  schema: { type: 'number' },
+                  required: true,
+                  source: 'manual',
+                },
+              ],
+              transformations: [
+                {
+                  name: 'proposal',
+                  format: 'pdf',
+                  tool: 'tool_V1StGXR8Z5jdHi6B',
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const created = await mcpCall('create-playbook-case', {
+        playbook_id: parseResult(exportPlaybook).id,
+        subject: 'Exports Ltda',
+      });
+      const exportCaseId = parseResult(created).id;
+      await mcpCall('write-playbook-case-inputs', {
+        case_id: exportCaseId,
+        inputs: [
+          {
+            node: 'pricing',
+            name: 'amount',
+            value: 5,
+            expected_revision: null,
+          },
+        ],
+      });
+      await flushPlaybookExecutions();
+
+      const res = await mcpCall('export-playbook-case-node', {
+        case_id: exportCaseId,
+        node: 'pricing',
+      });
+      expect(res.status).toBe(200);
+      const [exported] = parseResult(res).data;
+      expect(exported).toMatchObject({
+        id: expect.stringMatching(/^pbk_exp_/),
+        status: 'failed',
+        transformation: 'proposal',
+      });
+
+      const list = await mcpCall('list-playbook-case-exports', {
+        case_id: exportCaseId,
+      });
+      expect(parseResult(list).total).toBe(1);
+
+      const one = await mcpCall('get-playbook-case-export', {
+        case_id: exportCaseId,
+        export_id: exported.id,
+      });
+      expect(parseResult(one).file_id).toBeNull();
+    });
+
     test('confirm-playbook-case-node approves a confirm node', async () => {
       const confirmed = await mcpCall('create-playbook', {
         project_id: projectId,

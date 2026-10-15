@@ -136,6 +136,14 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Return the value as the executor's result instead: it becomes the node's output, which the nodes reading it take as input.",
   PLAYBOOK_NODE_NOT_CONFIRMABLE:
     'Read the case: confirm only a `confirm` node, after filling what `missing` names and once the nodes `waiting` names are `done`.',
+  PLAYBOOK_NODE_NOT_EXPORTABLE:
+    "Wait for the node to settle, or run it again if it `failed`; to export an earlier output, name its `revision` from the case's entries.",
+  PLAYBOOK_EXPORT_FAILED:
+    "Read the export's `error`, make the transformation's tool answer a file (`execute.response_mode: base64`), and export the node again.",
+  PLAYBOOK_EXPORT_FORMAT_MISMATCH:
+    "Make the tool answer the content type of the transformation's `format`, or declare the format it produces, and export the node again.",
+  PLAYBOOK_EXPORT_INTERRUPTED:
+    'Export the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`.',
   PLAYBOOK_EXECUTION_FAILED:
     "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
   ORCHESTRATION_VALIDATION_FAILED:

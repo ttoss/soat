@@ -14,6 +14,7 @@ export type PlaybookDefinitionProblem =
   | { code: 'executor_required'; node: string }
   | { code: 'executor_forbidden'; node: string }
   | { code: 'transformations_not_final'; node: string }
+  | { code: 'duplicate_transformation'; node: string; transformation: string }
   | { code: 'cycle'; nodes: string[] };
 
 /** A collect or confirm node's output is its inputs, so its fields are known. */
@@ -40,6 +41,27 @@ const fieldExists = (args: {
   );
 };
 
+/** A transformation's name is how an export selects it, so it is unique per node. */
+const transformationProblems = (args: {
+  node: PlaybookNode;
+}): PlaybookDefinitionProblem[] => {
+  const { key, transformations } = args.node;
+  const problems: PlaybookDefinitionProblem[] = [];
+  const names = new Set<string>();
+  for (const { name } of transformations ?? []) {
+    if (names.has(name)) {
+      problems.push({
+        code: 'duplicate_transformation',
+        node: key,
+        transformation: name,
+      });
+    }
+    names.add(name);
+  }
+
+  return problems;
+};
+
 const nodeProblems = (args: {
   node: PlaybookNode;
 }): PlaybookDefinitionProblem[] => {
@@ -58,6 +80,8 @@ const nodeProblems = (args: {
   if (transformations?.length && !final) {
     problems.push({ code: 'transformations_not_final', node: key });
   }
+
+  problems.push(...transformationProblems({ node: args.node }));
 
   return problems;
 };

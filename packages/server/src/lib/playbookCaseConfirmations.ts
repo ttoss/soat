@@ -12,7 +12,7 @@ import {
 } from './playbookCases';
 import { conformsToInputSchema } from './playbookCaseState';
 import type { PlaybookNode } from './playbookDefinition';
-import { nodesByKey } from './playbookGraph';
+import { readCaseNode } from './playbookExecutions';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookNodeStates, type PlaybookNodeView } from './playbookState';
 
@@ -116,14 +116,7 @@ export const confirmPlaybookCaseNode = async (args: {
     runWorkPublicId: args.runWorkPublicId,
   });
   const definition = await caseDefinition({ row });
-  const node = nodesByKey({ definition }).get(args.node);
-  if (!node) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `node must name a node of the case's playbook version.`,
-      { node: args.node }
-    );
-  }
+  const node = readCaseNode({ definition, node: args.node });
   const { confirmation } = args;
 
   await db.sequelize.transaction(async (transaction) => {

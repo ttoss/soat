@@ -26,9 +26,34 @@ export type PlaybookExecutor = {
   input?: Record<string, JsonValue>;
 };
 
+/** The content type an export of each format must carry. */
+export const PLAYBOOK_EXPORT_FORMATS = {
+  csv: 'text/csv',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  html: 'text/html',
+  jpg: 'image/jpeg',
+  json: 'application/json',
+  md: 'text/markdown',
+  pdf: 'application/pdf',
+  png: 'image/png',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+} as const;
+
+export type PlaybookExportFormat = keyof typeof PLAYBOOK_EXPORT_FORMATS;
+
+export const isPlaybookExportFormat = (
+  value: unknown
+): value is PlaybookExportFormat => {
+  return (
+    typeof value === 'string' && Object.hasOwn(PLAYBOOK_EXPORT_FORMATS, value)
+  );
+};
+
 export type PlaybookTransformation = {
   name: string;
-  format: string;
+  format: PlaybookExportFormat;
   tool: string;
 };
 

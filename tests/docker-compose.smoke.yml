@@ -155,7 +155,7 @@ services:
       # run that does not override OLLAMA_URL.
       # `127.0.0.1:1` is deliberately absent: the model-route suite points its
       # dead target there and needs it refused.
-      TOOL_EGRESS_ALLOWED_HOSTS: server:50477,ollama-tool-choice:11434,ollama:11434
+      TOOL_EGRESS_ALLOWED_HOSTS: server:50477,ollama-tool-choice:11434,ollama:11434,formation-handler:50480
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
@@ -228,7 +228,7 @@ services:
       # run that does not override OLLAMA_URL.
       # `127.0.0.1:1` is deliberately absent: the model-route suite points its
       # dead target there and needs it refused.
-      TOOL_EGRESS_ALLOWED_HOSTS: server:50477,ollama-tool-choice:11434,ollama:11434
+      TOOL_EGRESS_ALLOWED_HOSTS: server:50477,ollama-tool-choice:11434,ollama:11434,formation-handler:50480
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
