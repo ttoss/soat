@@ -136,7 +136,8 @@ Computed from the case's entries and executions on each read, never stored:
 
 - a field written since is refused with `409 PLAYBOOK_INPUT_CONFLICT`, `meta.conflicts` naming each field with both revisions, and nothing in the batch is written;
 - an input the case's version does not declare, one that reads another node, or a value its schema refuses is `400 PLAYBOOK_INPUT_INVALID`;
-- a value equal to the field's current one writes no revision.
+- a value equal to the field's current one writes no revision;
+- a write made with a credential the case's own work runs as is `403 PLAYBOOK_SELF_WRITE` ([own work](#writes-from-a-cases-own-work)).
 
 ### What a node still needs
 
@@ -174,6 +175,21 @@ Without `wait` the request answers `201` with the execution `running` and it set
 ### Pausing a case
 
 [`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `paused` or `idle`.
+
+### Confirming a node
+
+A `confirm` node never runs: a person approves or rejects its inputs with [`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/confirmation`](/docs/api/playbooks/confirm-playbook-case-node). `expected_revisions` maps each of the node's inputs to the revision read (`nodes[].inputs[].revision` on the case); an input that moved since is `409 PLAYBOOK_INPUT_CONFLICT` and nothing is written.
+
+| `decision` | Writes                                          | Then                                                                                       |
+| ---------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `approve`  | A `confirmation` entry: the node's input values | The node is `done` with them as its output, and the nodes reading it run                   |
+| `reject`   | A `rejection` entry with the `reason`           | The node is `rejected`, and its readers blocked, until its inputs change or it is approved |
+
+A confirmed node whose inputs change is `stale`, and holds everything reading it until it is confirmed again. Another node, or a `confirm` node with a required input unset or reading a node that is not `done`, is `409 PLAYBOOK_NODE_NOT_CONFIRMABLE`.
+
+### Writes from a case's own work
+
+A case refuses input writes and confirmations made with the run-as credential of its own work — the case, one of its executions in flight, or the task or orchestration run one started — with `403 PLAYBOOK_SELF_WRITE`. An executor's result reaches its case only as the node's output.
 
 ### Who a node runs as
 
@@ -418,6 +434,43 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/inputs \
 </TabItem>
 </Tabs>
 
+### Confirm a node
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat confirm-playbook-case-node \
+  --case-id pbk_case_… \
+  --node approve \
+  --decision approve \
+  --expected-revisions '{ "amount": 3 }'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.playbooks.confirmPlaybookCaseNode({
+  path: { case_id: 'pbk_case_…', node: 'approve' },
+  body: { decision: 'approve', expected_revisions: { amount: 3 } },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/approve/confirmation \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "decision": "approve", "expected_revisions": { "amount": 3 } }'
+```
+
+</TabItem>
+</Tabs>
+
 ### Retry a failed node
 
 <Tabs groupId="client">
@@ -497,17 +550,19 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 
 ## Errors
 
-| Code                          | Status | When                                                                                                   |
-| ----------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| `VALIDATION_FAILED`           | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` or a run |
-| `PLAYBOOK_VALIDATION_FAILED`  | 400    | The definition has graph problems; `meta.problems` lists them                                          |
-| `PLAYBOOK_INPUT_INVALID`      | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                  |
-| `NAME_CONFLICT`               | 409    | Another playbook in the project has the name                                                           |
-| `VERSION_CONFLICT`            | 409    | `expected_version` is stale                                                                            |
-| `PLAYBOOK_HAS_CASES`          | 409    | A delete of a playbook that has cases                                                                  |
-| `PLAYBOOK_INPUT_CONFLICT`     | 409    | An input write's `expected_revision` is not the field's current one                                    |
-| `PLAYBOOK_EXECUTOR_FORBIDDEN` | 403    | The version's author may not start an executor the definition names                                    |
-| `PLAYBOOK_AUTHOR_UNAVAILABLE` | 409    | The version has no author a node can run as                                                            |
-| `PLAYBOOK_NODE_NOT_RUNNABLE`  | 409    | The node is a `confirm` node, blocked, `running` or `done`                                             |
-| `PLAYBOOK_CASE_PAUSED`        | 409    | A run of a node in a paused case                                                                       |
-| `PLAYBOOK_CASE_NOT_PAUSED`    | 409    | A resume of a case that is not paused                                                                  |
+| Code                            | Status | When                                                                                                   |
+| ------------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
+| `VALIDATION_FAILED`             | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` or a run |
+| `PLAYBOOK_VALIDATION_FAILED`    | 400    | The definition has graph problems; `meta.problems` lists them                                          |
+| `PLAYBOOK_INPUT_INVALID`        | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                  |
+| `NAME_CONFLICT`                 | 409    | Another playbook in the project has the name                                                           |
+| `VERSION_CONFLICT`              | 409    | `expected_version` is stale                                                                            |
+| `PLAYBOOK_HAS_CASES`            | 409    | A delete of a playbook that has cases                                                                  |
+| `PLAYBOOK_INPUT_CONFLICT`       | 409    | An input write's `expected_revision` is not the field's current one                                    |
+| `PLAYBOOK_EXECUTOR_FORBIDDEN`   | 403    | The version's author may not start an executor the definition names                                    |
+| `PLAYBOOK_AUTHOR_UNAVAILABLE`   | 409    | The version has no author a node can run as                                                            |
+| `PLAYBOOK_NODE_NOT_RUNNABLE`    | 409    | The node is a `confirm` node, blocked, `running` or `done`                                             |
+| `PLAYBOOK_CASE_PAUSED`          | 409    | A run of a node in a paused case                                                                       |
+| `PLAYBOOK_CASE_NOT_PAUSED`      | 409    | A resume of a case that is not paused                                                                  |
+| `PLAYBOOK_NODE_NOT_CONFIRMABLE` | 409    | A confirmation of a node that is not a `confirm` node, or is blocked                                   |
+| `PLAYBOOK_SELF_WRITE`           | 403    | An input write or confirmation from the case's own work                                                |

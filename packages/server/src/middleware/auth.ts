@@ -167,10 +167,12 @@ const buildScopedIdentityFields = (args: {
   isTriggerToken: boolean;
   isRunToken: boolean;
   runApiKeyPublicId?: string;
+  runWorkPublicId?: string;
 }): {
   oauthProjectPublicId?: string;
   isTriggerToken?: boolean;
   isRunToken?: boolean;
+  runWorkPublicId?: string;
   apiKeyPublicId?: string;
 } => {
   return {
@@ -179,6 +181,9 @@ const buildScopedIdentityFields = (args: {
       : {}),
     ...(args.isTriggerToken ? { isTriggerToken: true } : {}),
     ...(args.isRunToken ? { isRunToken: true } : {}),
+    ...(args.isRunToken && args.runWorkPublicId
+      ? { runWorkPublicId: args.runWorkPublicId }
+      : {}),
     // Gated on `isRunToken`: only a run token's `key` claim names an acting key.
     ...(args.isRunToken && args.runApiKeyPublicId
       ? { apiKeyPublicId: args.runApiKeyPublicId }
@@ -295,6 +300,7 @@ export const resolveJwtAuthUser = async (args: {
       isTriggerToken,
       isRunToken,
       runApiKeyPublicId,
+      runWorkPublicId: payload.orn,
     }),
     isAllowed,
     resolveProjectIds: scopedProjectPublicId

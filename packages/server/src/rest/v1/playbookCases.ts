@@ -1,6 +1,10 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import {
+  confirmPlaybookCaseNode,
+  parseConfirmation,
+} from 'src/lib/playbookCaseConfirmations';
+import {
   parseInputWrites,
   writePlaybookCaseInputs,
 } from 'src/lib/playbookCaseInputs';
@@ -130,6 +134,7 @@ playbookCasesRouter.post(
       id: ctx.params.case_id,
       writes: parseInputWrites(body.inputs),
       createdByUserId: ctx.authUser.id,
+      runWorkPublicId: ctx.authUser.runWorkPublicId,
     });
   }
 );
@@ -278,6 +283,33 @@ playbookCasesRouter.post(
       action: 'playbooks:ResumePlaybookCase',
     });
     ctx.body = await resumePlaybookCase({ projectIds, id: ctx.params.case_id });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/nodes/{node}/confirmation:
+ *   post:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1nodes~1{node}~1confirmation/post'
+ */
+playbookCasesRouter.post(
+  '/playbook-cases/:case_id/nodes/:node/confirmation',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeWrite({
+      ctx,
+      action: 'playbooks:ConfirmPlaybookCaseNode',
+    });
+    requireAuth(ctx);
+    const body = ctx.request.body as Record<string, unknown>;
+
+    ctx.body = await confirmPlaybookCaseNode({
+      projectIds,
+      id: ctx.params.case_id,
+      node: ctx.params.node,
+      confirmation: parseConfirmation(body),
+      createdByUserId: ctx.authUser.id,
+      runWorkPublicId: ctx.authUser.runWorkPublicId,
+    });
   }
 );
 

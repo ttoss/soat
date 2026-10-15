@@ -105,6 +105,11 @@
       "operationId": "resumePlaybookCase",
       "action": "playbooks:ResumePlaybookCase",
       "description": "Resume a paused case"
+    },
+    {
+      "operationId": "confirmPlaybookCaseNode",
+      "action": "playbooks:ConfirmPlaybookCaseNode",
+      "description": "Approve or reject a confirm node of a case"
     }
   ]
 }

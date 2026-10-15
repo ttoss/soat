@@ -494,7 +494,9 @@ paths:
         or a value its schema refuses is `400 PLAYBOOK_INPUT_INVALID`. A value
         equal to the field's current one writes no revision. Once written, every
         node the write makes runnable is queued to run, unless the case is
-        paused.
+        paused. A write made with a credential the case's own work runs as — the
+        case, one of its executions in flight, or the task or run one started —
+        is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
       x-soat-resource:
         kind: playbook_case
@@ -805,6 +807,58 @@ paths:
           description: Case not found
         '409':
           description: The case is not paused
+
+  /api/v1/playbook-cases/{case_id}/nodes/{node}/confirmation:
+    post:
+      tags:
+        - Playbooks
+      summary: Confirm a node of a case
+      description: >-
+        Approves or rejects a `confirm` node on the inputs the confirmer read.
+        `expected_revisions` names the revision of each of the node's inputs as
+        read (`nodes[].inputs[].revision` on the case); an input that moved
+        since is `409 PLAYBOOK_INPUT_CONFLICT`, `meta.conflicts` naming each,
+        and nothing is written.
+
+
+        An approval writes a `confirmation` entry whose value is the node's
+        input values: it is the node's output, and the nodes reading it run
+        next. A rejection writes a `rejection` entry with the `reason`: the node
+        is `rejected`, and every node reading it is blocked, until its inputs
+        change or it is approved. Another node, or a `confirm` node with a
+        required input unset or reading a node that is not `done`, is `409
+        PLAYBOOK_NODE_NOT_CONFIRMABLE`. A confirmation made with a credential the
+        case's own work runs as is `403 PLAYBOOK_SELF_WRITE`.
+      operationId: confirmPlaybookCaseNode
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/NodeKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPlaybookCaseNodeRequest'
+      responses:
+        '200':
+          description: The case after the confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '400':
+          description: Bad request — an unknown decision, a rejection without a reason, or a node the version does not declare
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden, or a write from the case's own work
+        '404':
+          description: Case not found
+        '409':
+          description: The node cannot be confirmed now, or an input changed since it was read
 
 components:
   securitySchemes:
@@ -1481,3 +1535,30 @@ components:
           type: string
           format: date-time
           nullable: true
+    ConfirmPlaybookCaseNodeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - expected_revisions
+      properties:
+        decision:
+          type: string
+          description: Whether the node's inputs, as read, are approved
+          enum:
+            - approve
+            - reject
+        reason:
+          type: string
+          description: Why the inputs were rejected; required on a rejection
+          example: The revenue does not match the filed statement
+        expected_revisions:
+          type: object
+          description: >-
+            Each of the node's inputs, by name, mapped to the revision read, or
+            null for one read as unset
+          additionalProperties:
+            type: integer
+            nullable: true
+          example:
+            revenue: 3

@@ -74,6 +74,11 @@ export type AuthUser = {
    * ordinary user moves.
    */
   isRunToken?: boolean;
+  /**
+   * The work a run token acts for (its `orn`). Read only to refuse a write
+   * back into the work that minted it, so it can narrow and never grant.
+   */
+  runWorkPublicId?: string;
 };
 
 export type Context = {
