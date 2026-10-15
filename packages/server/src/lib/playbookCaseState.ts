@@ -37,7 +37,8 @@ const recordOf = (args: {
 
 /**
  * Folds a case's entries and executions, each oldest first, into the latest
- * value of each field and the latest execution of each node. An output is
+ * value of each field and the latest execution of each node. A rejection holds
+ * only while it is newer than the node's last confirmation. An output is
  * current for the basis of the newest execution that settled on it, which
  * moves without a new revision when an execution returns an equal value.
  */
@@ -50,17 +51,18 @@ export const snapshotFromRecords = (args: {
   for (const entry of args.entries) {
     const record = recordOf({ snapshot, node: entry.node });
     const value = entry.value as JsonValue;
-    if (entry.kind === 'output') {
-      record.output = {
-        revision: entry.revision,
-        value,
-        basis: entry.basis as PlaybookBasis,
-      };
-    } else {
+    const basis = entry.basis as PlaybookBasis;
+    if (entry.kind === 'input') {
       record.inputs = {
         ...record.inputs,
         [entry.field as string]: { revision: entry.revision, value },
       };
+    } else if (entry.kind === 'rejection') {
+      record.rejection = { basis };
+    } else {
+      // An output or a confirmation; a confirmation lifts an earlier rejection.
+      record.output = { revision: entry.revision, value, basis };
+      delete record.rejection;
     }
   }
 

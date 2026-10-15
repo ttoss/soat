@@ -8129,6 +8129,35 @@ if [ "$(printf '%s\n' "$RESUME_RESP" | jq -r '.pause_requested_at')" != "null" ]
   exit 1
 fi
 
+echo "--- Approving a confirm node once its input is collected ---"
+CONFIRM_PLAYBOOK_RESP=$($SOAT_CLI create-playbook \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-confirmed" \
+  --definition '{"nodes":[{"key":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"approve","title":"Approve","kind":"confirm","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":{"node":"revenue","field":"output.amount"}}]}]}')
+CONFIRM_PLAYBOOK_ID=$(printf '%s\n' "$CONFIRM_PLAYBOOK_RESP" | jq -r '.id')
+CONFIRM_CASE_ID=$($SOAT_CLI create-playbook-case --playbook_id "$CONFIRM_PLAYBOOK_ID" --subject "smoke confirm" | jq -r '.id')
+$SOAT_CLI write-playbook-case-inputs \
+  --case_id "$CONFIRM_CASE_ID" \
+  --inputs '[{"node":"revenue","name":"amount","value":7,"expected_revision":null}]' >/dev/null
+APPROVE_STATE=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  APPROVE_STATE=$($SOAT_CLI get-playbook-case --case_id "$CONFIRM_CASE_ID" | jq -r '.nodes[] | select(.key == "approve") | .state')
+  [ "$APPROVE_STATE" = "ready" ] && break
+  sleep 1
+done
+CONFIRM_RESP=$($SOAT_CLI confirm-playbook-case-node \
+  --case_id "$CONFIRM_CASE_ID" \
+  --node approve \
+  --decision approve \
+  --expected_revisions '{"amount":2}')
+if ! printf '%s\n' "$CONFIRM_RESP" | jq -e '.nodes[] | select(.key == "approve") | .state == "done" and .output.value.amount == 7' >/dev/null 2>&1; then
+  echo "ERROR: confirm-playbook-case-node did not approve the node" >&2
+  printf '%s\n' "$CONFIRM_RESP" >&2
+  exit 1
+fi
+$SOAT_CLI delete-playbook-case --case_id "$CONFIRM_CASE_ID"
+$SOAT_CLI delete-playbook --playbook_id "$CONFIRM_PLAYBOOK_ID"
+
 echo "--- Cleaning up playbook fixtures ---"
 $SOAT_CLI delete-playbook-case --case_id "$CASE_ID"
 $SOAT_CLI delete-playbook --playbook_id "$PLAYBOOK_ID"

@@ -3514,6 +3514,64 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(one).output_revision).toBeNull();
     });
 
+    test('confirm-playbook-case-node approves a confirm node', async () => {
+      const confirmed = await mcpCall('create-playbook', {
+        project_id: projectId,
+        name: 'mcp-confirmed',
+        definition: {
+          nodes: [
+            definition.nodes[0],
+            {
+              key: 'approve',
+              title: 'Approve',
+              kind: 'confirm',
+              inputs: [
+                {
+                  name: 'amount',
+                  schema: { type: 'number' },
+                  required: true,
+                  source: { node: 'revenue', field: 'output.amount' },
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const created = await mcpCall('create-playbook-case', {
+        playbook_id: parseResult(confirmed).id,
+        subject: 'Confirms Ltda',
+      });
+      const confirmCaseId = parseResult(created).id;
+      await mcpCall('write-playbook-case-inputs', {
+        case_id: confirmCaseId,
+        inputs: [
+          {
+            node: 'revenue',
+            name: 'amount',
+            value: 8,
+            expected_revision: null,
+          },
+        ],
+      });
+      await flushPlaybookExecutions();
+
+      const res = await mcpCall('confirm-playbook-case-node', {
+        case_id: confirmCaseId,
+        node: 'approve',
+        decision: 'approve',
+        expected_revisions: { amount: 2 },
+      });
+
+      expect(res.status).toBe(200);
+      const approve = parseResult(res).nodes.find((node: { key: string }) => {
+        return node.key === 'approve';
+      });
+      expect(approve).toMatchObject({
+        state: 'done',
+        output: { value: { amount: 8 } },
+      });
+    });
+
     test('get-playbook-case-missing names what to ask, by wave', async () => {
       const res = await mcpCall('get-playbook-case-missing', {
         case_id: caseId,

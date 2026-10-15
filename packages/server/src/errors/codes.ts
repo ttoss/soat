@@ -693,6 +693,16 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'The case carries no pause, so there is nothing to resume.',
   },
+  PLAYBOOK_SELF_WRITE: {
+    httpStatus: 403,
+    description:
+      "A write into a case from the work it is running: a run-as credential minted for the case, for one of its executions in flight, or for the task or orchestration run one started. An executor's output reaches its case only as the node's output.",
+  },
+  PLAYBOOK_NODE_NOT_CONFIRMABLE: {
+    httpStatus: 409,
+    description:
+      'The node cannot be confirmed: it is not a `confirm` node, or a required input is unset or reads a node that is not `done`. `meta` carries the `state`, `missing` and `waiting`.',
+  },
   PLAYBOOK_EXECUTION_FAILED: {
     httpStatus: 422,
     description:

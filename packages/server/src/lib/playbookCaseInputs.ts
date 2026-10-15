@@ -14,6 +14,7 @@ import {
 } from './playbookCases';
 import type { PlaybookDefinition, PlaybookInput } from './playbookDefinition';
 import { nodesByKey } from './playbookGraph';
+import { assertNotOwnWork } from './playbookSelfWrite';
 import type { PlaybookCaseSnapshot } from './playbookState';
 import { stableDigest } from './stableDigest';
 
@@ -169,9 +170,15 @@ export const writePlaybookCaseInputs = async (args: {
   id: string;
   writes: PlaybookInputWrite[];
   createdByUserId: number | null;
+  runWorkPublicId?: string;
 }): Promise<MappedPlaybookCase> => {
   log('writePlaybookCaseInputs: id=%s count=%d', args.id, args.writes.length);
   const found = await playbookCases.getByPublicId(args);
+  await assertNotOwnWork({
+    caseDbId: found.id as number,
+    casePublicId: found.publicId,
+    runWorkPublicId: args.runWorkPublicId,
+  });
   const definition = await caseDefinition({ row: found });
   assertWritesValid({ definition, writes: args.writes });
 

@@ -132,6 +132,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_CASE_PAUSED:
     'Resume the case with `POST /api/v1/playbook-cases/{case_id}/resume`, then retry.',
   PLAYBOOK_CASE_NOT_PAUSED: 'Nothing to do: the case is already running.',
+  PLAYBOOK_SELF_WRITE:
+    "Return the value as the executor's result instead: it becomes the node's output, which the nodes reading it take as input.",
+  PLAYBOOK_NODE_NOT_CONFIRMABLE:
+    'Read the case: confirm only a `confirm` node, after filling what `missing` names and once the nodes `waiting` names are `done`.',
   PLAYBOOK_EXECUTION_FAILED:
     "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
   ORCHESTRATION_VALIDATION_FAILED:
