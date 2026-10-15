@@ -723,6 +723,11 @@ export const ERROR_CODES = {
     description:
       'Recorded on an export, never returned by a request: the process rendering it stopped before it settled. It is not rendered again on its own; export the node again.',
   },
+  PLAYBOOK_CASE_BUSY: {
+    httpStatus: 409,
+    description:
+      'An upgrade of a case while one of its executions is running: it would settle against nodes the new version may not have. `meta.executions` names each by `id` and `node`.',
+  },
   PLAYBOOK_EXECUTION_FAILED: {
     httpStatus: 422,
     description:

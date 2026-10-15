@@ -23,6 +23,10 @@ import {
   listPlaybookCases,
 } from 'src/lib/playbookCases';
 import {
+  listPlaybookCaseUpgrades,
+  upgradePlaybookCase,
+} from 'src/lib/playbookCaseUpgrades';
+import {
   getPlaybookCaseExecution,
   listPlaybookCaseExecutions,
   runPlaybookNode,
@@ -309,6 +313,53 @@ playbookCasesRouter.post(
       confirmation: parseConfirmation(body),
       createdByUserId: ctx.authUser.id,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/upgrade:
+ *   post:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1upgrade/post'
+ */
+playbookCasesRouter.post(
+  '/playbook-cases/:case_id/upgrade',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeWrite({
+      ctx,
+      action: 'playbooks:UpgradePlaybookCase',
+    });
+    requireAuth(ctx);
+    const body = ctx.request.body as Record<string, unknown>;
+
+    ctx.body = await upgradePlaybookCase({
+      projectIds,
+      id: ctx.params.case_id,
+      version: body.version,
+      createdByUserId: ctx.authUser.id,
+      runWorkPublicId: ctx.authUser.runWorkPublicId,
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/upgrades:
+ *   get:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1upgrades/get'
+ */
+playbookCasesRouter.get(
+  '/playbook-cases/:case_id/upgrades',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeRead({
+      ctx,
+      action: 'playbooks:ListPlaybookCaseUpgrades',
+    });
+    ctx.body = await listPlaybookCaseUpgrades({
+      projectIds,
+      caseId: ctx.params.case_id,
+      ...parsePagination(ctx),
     });
   }
 );

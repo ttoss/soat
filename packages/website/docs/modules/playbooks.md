@@ -121,6 +121,17 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `created_by`       | string \| null | Who asked for the export                                                           |
 | `finished_at`      | string \| null | ISO 8601 settle timestamp                                                          |
 
+### Upgrade
+
+| Field          | Type           | Description                                                                                                                                                                                      |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`           | string         | Public identifier (`pbk_upg_…`)                                                                                                                                                                  |
+| `case_id`      | string         | The case                                                                                                                                                                                         |
+| `from_version` | integer        | The version the case was on                                                                                                                                                                      |
+| `to_version`   | integer        | The version it moved to                                                                                                                                                                          |
+| `diff`         | object         | `{ added, removed, changed }`: node keys added and removed, and each node whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
+| `created_by`   | string \| null | Who upgraded the case                                                                                                                                                                            |
+
 ## Key Concepts
 
 ### Definition checks
@@ -129,7 +140,7 @@ A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the def
 
 ### Versions
 
-`version` starts at 1 and increments on every write that changes `definition`; each version's definition is archived. A rename, a new description or a rewrite of the definition the playbook already holds leaves it alone. A case runs on the version it was created on, so editing a playbook never reshapes a case in flight.
+`version` starts at 1 and increments on every write that changes `definition`; each version's definition is archived. A rename, a new description or a rewrite of the definition the playbook already holds leaves it alone. A case runs on the version it was created on, so editing a playbook never reshapes a case in flight until it is [upgraded](#upgrading-a-case).
 
 [`PATCH /api/v1/playbooks/{playbook_id}`](/docs/api/playbooks/update-playbook) takes `expected_version` (or `If-Match`) and answers `409 VERSION_CONFLICT` on a stale one. [`POST /api/v1/playbooks/{playbook_id}/versions/{version}/restore`](/docs/api/playbooks/restore-playbook-version) writes an archived definition back as a new version. A playbook with cases cannot be deleted (`409 PLAYBOOK_HAS_CASES`).
 
@@ -208,7 +219,7 @@ A confirmed node whose inputs change is `stale`, and holds everything reading it
 
 ### Writes from a case's own work
 
-A case refuses input writes and confirmations made with the run-as credential of its own work — the case, one of its executions in flight, or the task or orchestration run one started — with `403 PLAYBOOK_SELF_WRITE`. An executor's result reaches its case only as the node's output.
+A case refuses input writes, confirmations and upgrades made with the run-as credential of its own work — the case, one of its executions in flight, or the task or orchestration run one started — with `403 PLAYBOOK_SELF_WRITE`. An executor's result reaches its case only as the node's output.
 
 ### Who a node runs as
 
@@ -240,6 +251,20 @@ The file is kept in the project's [files](./files.md) under `/.system/playbooks/
 - A tool that fails or answers no file fails the export with `PLAYBOOK_EXPORT_FAILED`; a file of another content type with `PLAYBOOK_EXPORT_FORMAT_MISMATCH`. An export whose server stopped while rendering it fails as `PLAYBOOK_EXPORT_INTERRUPTED` and is not rendered again on its own.
 
 Without `wait` the request answers `201` with every export `running`; poll [`GET /api/v1/playbook-cases/{case_id}/exports/{export_id}`](/docs/api/playbooks/get-playbook-case-export). With `wait: true` it answers once each has its `file_id` or its `error`; a tool call always waits. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/exports`](/docs/api/playbooks/list-playbook-case-exports) lists a case's exports, newest first, optionally for one `node` or `transformation`.
+
+### Upgrading a case
+
+[`POST /api/v1/playbook-cases/{case_id}/upgrade`](/docs/api/playbooks/upgrade-playbook-case) moves a case to the playbook's current version, or to the `version` named, an earlier one included. Values carry over by node key, and every node is read against the new version:
+
+| Change in the new version        | Effect on the case                                    |
+| -------------------------------- | ----------------------------------------------------- |
+| Node added                       | Open                                                  |
+| Node removed                     | Leaves the structure; its [entries](#entries) stay    |
+| An input now reads another field | The node is `stale`, and the cascade runs it again    |
+| Input schema changed             | A value it refuses is `missing` again                 |
+| Executor, title or description   | None; [run the node](#running-a-node) to recompute it |
+
+The cascade then runs what became runnable, unless the case is [paused](#pausing-a-case). An execution running answers `409 PLAYBOOK_CASE_BUSY`, `meta.executions` naming each; one queued but not started settles `superseded`. Each upgrade is recorded as an [upgrade](#upgrade), listed by [`GET /api/v1/playbook-cases/{case_id}/upgrades`](/docs/api/playbooks/list-playbook-case-upgrades), newest first; the version the case is already on records nothing. A version the playbook does not have is `400 VALIDATION_FAILED`, and an upgrade from the case's own work is `403 PLAYBOOK_SELF_WRITE`.
 
 ### Entries
 
@@ -618,6 +643,45 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
 }
 ```
 
+### Upgrade a case
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat upgrade-playbook-case --case-id pbk_case_…
+soat list-playbook-case-upgrades --case-id pbk_case_…
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.playbooks.upgradePlaybookCase({
+  path: { case_id: 'pbk_case_…' },
+  body: {},
+});
+if (error) throw new Error(JSON.stringify(error));
+const upgrades = await soat.playbooks.listPlaybookCaseUpgrades({
+  path: { case_id: 'pbk_case_…' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/upgrade \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+curl https://api.example.com/api/v1/playbook-cases/pbk_case_…/upgrades \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
 ### Pause a case
 
 <Tabs groupId="client">
@@ -666,8 +730,9 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 | `PLAYBOOK_CASE_PAUSED`            | 409    | A run of a node in a paused case                                                                                                                                                                                               |
 | `PLAYBOOK_CASE_NOT_PAUSED`        | 409    | A resume of a case that is not paused                                                                                                                                                                                          |
 | `PLAYBOOK_NODE_NOT_CONFIRMABLE`   | 409    | A confirmation of a node that is not a `confirm` node, or is blocked                                                                                                                                                           |
-| `PLAYBOOK_SELF_WRITE`             | 403    | An input write or confirmation from the case's own work                                                                                                                                                                        |
+| `PLAYBOOK_SELF_WRITE`             | 403    | An input write, confirmation or upgrade from the case's own work                                                                                                                                                               |
 | `PLAYBOOK_NODE_NOT_EXPORTABLE`    | 409    | An export of the latest revision of a node that is not `done`                                                                                                                                                                  |
 | `PLAYBOOK_EXPORT_FAILED`          | 422    | On an export's `error`: its tool failed or answered no file                                                                                                                                                                    |
 | `PLAYBOOK_EXPORT_FORMAT_MISMATCH` | 422    | On an export's `error`: its file is not of the transformation's `format`                                                                                                                                                       |
 | `PLAYBOOK_EXPORT_INTERRUPTED`     | 500    | On an export's `error`: the server stopped while rendering it                                                                                                                                                                  |
+| `PLAYBOOK_CASE_BUSY`              | 409    | An upgrade while one of the case's executions is running                                                                                                                                                                       |

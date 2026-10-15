@@ -125,6 +125,16 @@
       "operationId": "getPlaybookCaseExport",
       "action": "playbooks:GetPlaybookCaseExport",
       "description": "Get an export of a case"
+    },
+    {
+      "operationId": "upgradePlaybookCase",
+      "action": "playbooks:UpgradePlaybookCase",
+      "description": "Move a case to another version of its playbook"
+    },
+    {
+      "operationId": "listPlaybookCaseUpgrades",
+      "action": "playbooks:ListPlaybookCaseUpgrades",
+      "description": "List a case's upgrades, newest first"
     }
   ]
 }
