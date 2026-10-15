@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.79.0](https://github.com/ttoss/soat/compare/v0.78.0...v0.79.0) (2026-10-15)
+
+### Features
+
+* **playbooks:** confirm nodes and refuse writes from a case's own work ([#1592](https://github.com/ttoss/soat/issues/1592)) ([f924a4d](https://github.com/ttoss/soat/commit/f924a4d3f7bd62cf85fca112db0e28eb6e53e8ce))
+* **playbooks:** export final nodes as files through transformation tools ([#1593](https://github.com/ttoss/soat/issues/1593)) ([0839959](https://github.com/ttoss/soat/commit/0839959d9abcadaada2c18c0e6eb1499d1eebc5b))
+* **playbooks:** playbooks, versions, cases and input writes ([#1589](https://github.com/ttoss/soat/issues/1589)) ([8cd1f15](https://github.com/ttoss/soat/commit/8cd1f15bffa84ae940f56aa9b0edc2cdb078d648))
+* **playbooks:** pure graph core for readiness, staleness and waves ([#1587](https://github.com/ttoss/soat/issues/1587)) ([93d4d94](https://github.com/ttoss/soat/commit/93d4d94a1a5148067798049cbbd8350b32517a56))
+* **playbooks:** run nodes automatically on a durable cascade ([#1591](https://github.com/ttoss/soat/issues/1591)) ([598eac5](https://github.com/ttoss/soat/commit/598eac53e770900aeb5cc6fed83d0c8cc2008759))
+* **playbooks:** run nodes through their executors as the version's author ([#1590](https://github.com/ttoss/soat/issues/1590)) ([ec9772f](https://github.com/ttoss/soat/commit/ec9772f61bb7af6805f8207cbb823b844d8d7a54))
+* **playbooks:** upgrade a case to another version of its playbook ([#1594](https://github.com/ttoss/soat/issues/1594)) ([3af42c8](https://github.com/ttoss/soat/commit/3af42c8b7d8c4b63e062fdc45d84bff2f52ac669))
+
 # [0.78.0](https://github.com/ttoss/soat/compare/v0.77.1...v0.78.0) (2026-10-15)
 
 ### Features
