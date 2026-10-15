@@ -3,6 +3,11 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { paginatedList, type PaginatedResult } from './pagination';
+import {
+  assertAuthorCanRun,
+  authorColumns,
+  type PlaybookAuthor,
+} from './playbookAuthor';
 import type { PlaybookDefinition } from './playbookDefinition';
 import {
   type PlaybookDefinitionProblem,
@@ -111,6 +116,7 @@ export const createPlaybook = async (
     name: unknown;
     description?: unknown;
     definition: unknown;
+    author: PlaybookAuthor;
   } & VersionedWrite
 ): Promise<MappedPlaybook> => {
   log('createPlaybook: projectId=%d', args.projectId);
@@ -119,6 +125,14 @@ export const createPlaybook = async (
   const description = readDescription(args.description);
   const definition = readDefinition(args.definition);
   await assertNameAvailable({ projectId: args.projectId, name });
+  const project = await db.Project.findByPk(args.projectId, {
+    attributes: ['publicId'],
+  });
+  await assertAuthorCanRun({
+    definition,
+    projectPublicId: project!.publicId as string,
+    author: args.author,
+  });
 
   const playbook = await db.Playbook.create({
     projectId: args.projectId,
@@ -137,6 +151,7 @@ export const createPlaybook = async (
     config: buildPlaybookConfigSnapshot(mapped),
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,
+    columns: authorColumns(args.author.principal),
   });
 
   log('createPlaybook: created id=%s', playbook.publicId);
@@ -187,6 +202,7 @@ export const updatePlaybook = async (
     name?: unknown;
     description?: unknown;
     definition?: unknown;
+    author: PlaybookAuthor;
   } & VersionedWrite
 ): Promise<MappedPlaybook> => {
   log('updatePlaybook: id=%s', args.id);
@@ -197,6 +213,13 @@ export const updatePlaybook = async (
   });
   const definition =
     args.definition === undefined ? undefined : readDefinition(args.definition);
+  if (definition !== undefined) {
+    await assertAuthorCanRun({
+      definition,
+      projectPublicId: playbook.project.publicId,
+      author: args.author,
+    });
+  }
 
   // `save` mutates the instance in place, so this one reference yields both the
   // pre- and post-write definition.
@@ -223,6 +246,7 @@ export const updatePlaybook = async (
     before,
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,
+    columns: authorColumns(args.author.principal),
     applyWrite: async ({ transaction }) => {
       await playbook.save({ transaction });
       return {

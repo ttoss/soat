@@ -6,7 +6,7 @@ import type { Transaction } from './dbTransaction';
 import { paginatedList, type PaginatedResult } from './pagination';
 import {
   conformsToInputSchema,
-  snapshotFromEntries,
+  snapshotFromRecords,
 } from './playbookCaseState';
 import type { PlaybookDefinition } from './playbookDefinition';
 import { playbooks } from './playbooks';
@@ -55,12 +55,19 @@ export const caseSnapshot = async (args: {
   caseDbId: number;
   transaction?: Transaction;
 }): Promise<PlaybookCaseSnapshot> => {
-  const entries = await db.PlaybookEntry.findAll({
-    where: { caseId: args.caseDbId },
-    order: [['revision', 'ASC']],
-    transaction: args.transaction,
-  });
-  return snapshotFromEntries({ entries });
+  const [entries, executions] = await Promise.all([
+    db.PlaybookEntry.findAll({
+      where: { caseId: args.caseDbId },
+      order: [['revision', 'ASC']],
+      transaction: args.transaction,
+    }),
+    db.PlaybookExecution.findAll({
+      where: { caseId: args.caseDbId },
+      order: [['id', 'ASC']],
+      transaction: args.transaction,
+    }),
+  ]);
+  return snapshotFromRecords({ entries, executions });
 };
 
 const mapNodes = (args: {
@@ -77,6 +84,7 @@ const mapNodes = (args: {
 
   return args.definition.nodes.map((node, index) => {
     const view = views[index];
+    const output = args.snapshot[node.key]?.output;
 
     return {
       key: node.key,
@@ -90,7 +98,9 @@ const mapNodes = (args: {
           revision: view.basis[input.name]?.revision ?? null,
         };
       }),
-      output: null,
+      output: output
+        ? { value: output.value, revision: output.revision }
+        : null,
     };
   });
 };

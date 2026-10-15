@@ -76,6 +76,14 @@ paths:
         without an executor or another kind with one, transformations on a
         non-final node, or a cycle; `meta.problems` lists every one. A duplicate
         `name` in the project is `409 NAME_CONFLICT`.
+
+
+        The caller becomes the version's author, whom its executors run as, so
+        it must be allowed to start every executor the definition names
+        (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A definition with executors
+        written with a trigger or OAuth token is `409
+        PLAYBOOK_AUTHOR_UNAVAILABLE`: those carry their boundary in the token,
+        so no run can act as them.
       operationId: createPlaybook
       requestBody:
         required: true
@@ -159,6 +167,11 @@ paths:
         `definition` archives a new version; a rename or a rewrite of the
         definition the playbook already holds leaves `version` where it is. A
         case keeps the version it was created on.
+
+
+        A new version is authored by the caller, checked as on create: `403
+        PLAYBOOK_EXECUTOR_FORBIDDEN` for an executor it may not start, `409
+        PLAYBOOK_AUTHOR_UNAVAILABLE` for a trigger or OAuth token.
       operationId: updatePlaybook
       x-soat-resource:
         kind: playbook
@@ -295,7 +308,8 @@ paths:
       description: >-
         Writes an archived definition back as the playbook's live one, which
         archives it again as a new version rather than rewinding the counter.
-        Restoring the definition the playbook already holds is a no-op.
+        Restoring the definition the playbook already holds is a no-op. The
+        caller authors the new version, checked as on create.
       operationId: restorePlaybookVersion
       x-soat-resource:
         kind: playbook
@@ -590,6 +604,137 @@ paths:
         '404':
           description: Case not found
 
+  /api/v1/playbook-cases/{case_id}/nodes/{node}/run:
+    post:
+      tags:
+        - Playbooks
+      summary: Run a node of a case
+      description: >-
+        Runs one node now: a `collect` node takes its own input values as its
+        output, any other node starts its executor with the node's input
+        values mapped through the executor's `input`. The executor runs as the
+        author of the case's playbook version, whose permission to start it is
+        checked again here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`); an author that
+        no longer exists is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`. Only a `ready`,
+        `stale` or `failed` node with every required input set runs; anything
+        else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`.
+
+
+        The output is written as an entry when the execution settles. A value
+        equal to the node's current output writes no revision. If the node's
+        inputs change while it runs, the execution settles as `superseded` and
+        writes nothing.
+
+
+        Without `wait` the execution answers `running` and settles in the
+        background. With `wait: true` it answers once the executor settles, or
+        once it parks: a workflow task still open, or an orchestration run
+        waiting on a person or a timer, settles the node when it closes or
+        ends.
+      operationId: runPlaybookCaseNode
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/NodeKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunPlaybookCaseNodeRequest'
+      responses:
+        '201':
+          description: The execution, `running` or settled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookExecution'
+        '400':
+          description: Bad request — a node the case's version does not declare
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden, or the author may not start the executor
+        '404':
+          description: Case not found
+        '409':
+          description: The node cannot run now, or the version has no author to run as
+
+  /api/v1/playbook-cases/{case_id}/executions:
+    get:
+      tags:
+        - Playbooks
+      summary: List a case's executions
+      description: Returns every run of the case's nodes, newest first.
+      operationId: listPlaybookCaseExecutions
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: node
+          in: query
+          description: Only the executions of this node
+          schema:
+            type: string
+            example: revenue
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of executions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookExecution'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case not found
+
+  /api/v1/playbook-cases/{case_id}/executions/{execution_id}:
+    get:
+      tags:
+        - Playbooks
+      summary: Get an execution
+      description: Returns one run of a case's node.
+      operationId: getPlaybookCaseExecution
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '200':
+          description: The execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookExecution'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case or execution not found
+
 components:
   securitySchemes:
     bearerAuth:
@@ -613,6 +758,22 @@ components:
       schema:
         type: string
         example: pbk_case_V1StGXR8Z5jdHi6B
+    NodeKey:
+      name: node
+      in: path
+      required: true
+      description: The key of a node of the case's playbook version
+      schema:
+        type: string
+        example: revenue
+    ExecutionId:
+      name: execution_id
+      in: path
+      required: true
+      description: The execution ID
+      schema:
+        type: string
+        example: pbk_exe_V1StGXR8Z5jdHi6B
     Version:
       name: version
       in: path
@@ -689,7 +850,11 @@ components:
           description: The ID of the agent, tool, decider, workflow or orchestration
           example: dcd_V1StGXR8Z5jdHi6B
         input:
-          description: JSON Logic over the node's inputs, as an orchestration's `input_mapping`
+          type: object
+          description: >-
+            JSON Logic over the node's inputs, as an orchestration's
+            `input_mapping`: each key is a field of the executor's input. Absent,
+            the executor receives the node's input values as they are.
     PlaybookTransformation:
       type: object
       additionalProperties: false
@@ -1138,3 +1303,89 @@ components:
         created_at:
           type: string
           format: date-time
+    RunPlaybookCaseNodeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once the executor settles or parks instead of right away
+    PlaybookExecution:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pbk_exe_V1StGXR8Z5jdHi6B
+        case_id:
+          type: string
+          example: pbk_case_V1StGXR8Z5jdHi6B
+        node:
+          type: string
+          description: The key of the node that ran
+          example: revenue
+        playbook_version:
+          type: integer
+          description: The playbook version the case runs on
+        executor:
+          type: object
+          nullable: true
+          description: What ran; null for a `collect` node
+          properties:
+            type:
+              type: string
+              enum:
+                - agent
+                - tool
+                - decider
+                - workflow
+                - orchestration
+            id:
+              type: string
+              description: The ID of the agent, tool, decider, workflow or orchestration
+              example: agent_V1StGXR8Z5jdHi6B
+        status:
+          type: string
+          enum:
+            - running
+            - succeeded
+            - failed
+        result:
+          type: string
+          nullable: true
+          enum:
+            - current
+            - superseded
+            - null
+          description: >-
+            Once settled: `superseded` when the node's inputs changed while it
+            ran, so its output was not written
+        run_id:
+          type: string
+          nullable: true
+          description: The generation, decision, task or orchestration run it started
+        input:
+          description: What the executor was given
+        output:
+          description: What the executor answered; null until it succeeds
+        output_revision:
+          type: integer
+          nullable: true
+          description: The revision of the output entry it wrote; null when it wrote none
+        error:
+          type: object
+          nullable: true
+          description: Why it failed
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+          description: Who asked for the run
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true

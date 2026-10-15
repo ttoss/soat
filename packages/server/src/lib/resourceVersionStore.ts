@@ -62,6 +62,8 @@ type WriteVersionArgs = {
   label?: string | null;
   /** Required so a write path states its author; `null` is a platform write. */
   createdByUserId: number | null;
+  /** Columns only this resource's version table carries. */
+  columns?: Record<string, unknown>;
   transaction?: Transaction;
 };
 
@@ -96,6 +98,8 @@ type CommitConfigChangeArgs = {
   label?: string | null;
   /** Required so a write path states its author; `null` is a platform write. */
   createdByUserId: number | null;
+  /** Columns only this resource's version table carries. */
+  columns?: Record<string, unknown>;
 };
 
 type AssertWritableArgs = {
@@ -289,6 +293,7 @@ const makeWriteVersion = (args: VersionTable) => {
         config: a.config,
         label: a.label ?? null,
         createdByUserId: a.createdByUserId ?? null,
+        ...a.columns,
       },
       { transaction: a.transaction }
     );
@@ -442,6 +447,7 @@ const makeCommitConfigChange = (args: {
         config: after,
         label: a.label,
         createdByUserId: a.createdByUserId,
+        columns: a.columns,
         transaction,
       });
 

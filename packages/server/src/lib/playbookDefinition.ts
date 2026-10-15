@@ -23,7 +23,7 @@ export type PlaybookExecutor = {
   type: PlaybookExecutorType;
   id: string;
   /** JSON Logic over the node's inputs, as an orchestration's `input_mapping`. */
-  input?: JsonValue;
+  input?: Record<string, JsonValue>;
 };
 
 export type PlaybookTransformation = {

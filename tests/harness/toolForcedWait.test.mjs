@@ -27,6 +27,8 @@ const TOOL_CHOOSES_WAIT = {
     'ingestion runs as long as the file takes to extract and embed',
   StartOrchestrationRunRequest: 'a run can pause on human input or run long',
   startEvalRun: 'a run scores a whole dataset',
+  RunPlaybookCaseNodeRequest:
+    'a node runs as long as its executor, which may be a task left open',
 };
 
 /** The `wait` fields declared directly on `node`. */

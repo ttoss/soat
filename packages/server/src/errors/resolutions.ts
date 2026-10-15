@@ -121,6 +121,14 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Read the case's `nodes` for the inputs its version declares and which of them are filled by a person; correct the value to its input's schema.",
   PLAYBOOK_INPUT_CONFLICT:
     'Re-read the case, decide each conflicting field against its current value, and retry with the revisions `meta.conflicts` names.',
+  PLAYBOOK_EXECUTOR_FORBIDDEN:
+    "Grant the author the start action `meta.action` names on the executor, or have someone who holds it write the playbook's definition, which makes them the author of the new version.",
+  PLAYBOOK_AUTHOR_UNAVAILABLE:
+    "Write the playbook's definition again as a user or API key that can start its executors; cases created on that version run as them.",
+  PLAYBOOK_NODE_NOT_RUNNABLE:
+    'Read the case: fill what `missing` names, wait for the nodes `waiting` names, or confirm a `confirm` node instead of running it. A `running` node settles on its own.',
+  PLAYBOOK_EXECUTION_FAILED:
+    "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
   ORCHESTRATION_VALIDATION_FAILED:
     'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `POST /api/v1/orchestrations/{orchestration_id}/validate` reports every problem at once.',
   ORCHESTRATION_CYCLE_DETECTED:

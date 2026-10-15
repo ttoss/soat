@@ -121,12 +121,15 @@ const readExecutor = (args: {
   if (!isNonEmptyString(executor.id)) {
     throw invalid(`${path}.id must be a non-empty string.`);
   }
+  if (executor.input !== undefined && !isPlainObject(executor.input)) {
+    throw invalid(`${path}.input must be an object of JSON Logic expressions.`);
+  }
   return {
     type: executor.type as PlaybookExecutorType,
     id: executor.id,
     ...(executor.input !== undefined && {
       // Read off a JSON body, so already a JSON value.
-      input: executor.input as JsonValue,
+      input: executor.input as Record<string, JsonValue>,
     }),
   };
 };

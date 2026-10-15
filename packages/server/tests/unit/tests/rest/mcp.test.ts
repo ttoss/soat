@@ -3447,6 +3447,53 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(versions).data[0].version).toBe(1);
     });
 
+    test('run-playbook-case-node runs a node and the executions read it back', async () => {
+      // Its own playbook, so the shared one keeps the single case the tests
+      // below count and delete.
+      const runPlaybook = await mcpCall('create-playbook', {
+        project_id: projectId,
+        name: 'mcp-runs',
+        definition,
+      });
+      const created = await mcpCall('create-playbook-case', {
+        playbook_id: parseResult(runPlaybook).id,
+        subject: 'Runs Ltda',
+      });
+      const runCaseId = parseResult(created).id;
+      await mcpCall('write-playbook-case-inputs', {
+        case_id: runCaseId,
+        inputs: [
+          {
+            node: 'revenue',
+            name: 'amount',
+            value: 5,
+            expected_revision: null,
+          },
+        ],
+      });
+
+      const res = await mcpCall('run-playbook-case-node', {
+        case_id: runCaseId,
+        node: 'revenue',
+        wait: true,
+      });
+      expect(res.status).toBe(200);
+      const execution = parseResult(res);
+      expect(execution.status).toBe('succeeded');
+      expect(execution.output).toEqual({ amount: 5 });
+
+      const list = await mcpCall('list-playbook-case-executions', {
+        case_id: runCaseId,
+      });
+      expect(parseResult(list).data[0].id).toBe(execution.id);
+
+      const one = await mcpCall('get-playbook-case-execution', {
+        case_id: runCaseId,
+        execution_id: execution.id,
+      });
+      expect(parseResult(one).output_revision).toBe(2);
+    });
+
     test('get-playbook-case-missing names what to ask, by wave', async () => {
       const res = await mcpCall('get-playbook-case-missing', {
         case_id: caseId,

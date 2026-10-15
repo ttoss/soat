@@ -234,11 +234,20 @@ const verifyJwtClaims = (token: string): JwtClaims | null => {
   }
 };
 
-const resolveJwt = async (ctx: Context, token: string) => {
+/**
+ * The caller one of our own JWTs resolves to, or undefined when it is not a
+ * valid token of ours. Also how request-less work evaluates the run-as token
+ * it minted, so it is authorized by the same evaluator a request is.
+ */
+export const resolveJwtAuthUser = async (args: {
+  db: Context['db'];
+  token: string;
+}): Promise<Context['authUser']> => {
+  const { db, token } = args;
   const payload = verifyJwtClaims(token);
   if (!payload) return;
 
-  const user = await ctx.db.User.findOne({
+  const user = await db.User.findOne({
     where: { publicId: payload.publicId },
     attributes: AUTH_USER_ATTRIBUTES,
   });
@@ -247,7 +256,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const userId = user.id as number;
   const role = user.role as 'admin' | 'user';
   const userPolicyIds = (user.policyIds as number[]) ?? [];
-  const jwtIsAllowed = createJwtIsAllowed({ role, userPolicyIds, db: ctx.db });
+  const jwtIsAllowed = createJwtIsAllowed({ role, userPolicyIds, db });
   const scopedProjectPublicId = payload.prj;
   const isTriggerToken = typeof payload.trg === 'string';
   const isRunToken = typeof payload.orn === 'string';
@@ -262,7 +271,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
     isRunToken,
     runApiKeyPublicId,
     scopeClaim: payload.scope,
-    db: ctx.db,
+    db,
   });
 
   const isAllowed: IsAllowedFn = scopedProjectPublicId
@@ -272,11 +281,11 @@ const resolveJwt = async (ctx: Context, token: string) => {
         userPolicyIds,
         apiKeyPolicyIds: [],
         boundaryPolicyDocs,
-        db: ctx.db,
+        db,
       })
     : jwtIsAllowed;
 
-  ctx.authUser = {
+  return {
     id: userId,
     publicId: user.publicId as string,
     username: user.username as string,
@@ -292,13 +301,13 @@ const resolveJwt = async (ctx: Context, token: string) => {
       ? createApiKeyResolveProjectIds({
           apiKeyProjectPublicId: scopedProjectPublicId,
           apiKeyIsAllowed: isAllowed,
-          db: ctx.db,
+          db,
         })
       : createJwtResolveProjectIds({
           role,
           userPolicyIds,
           jwtIsAllowed,
-          db: ctx.db,
+          db,
         }),
     getPolicies: scopedProjectPublicId
       ? createApiKeyGetPolicies({
@@ -307,10 +316,15 @@ const resolveJwt = async (ctx: Context, token: string) => {
           boundaryPolicyDocs,
           userPolicyIds,
           role,
-          db: ctx.db,
+          db,
         })
-      : createJwtGetPolicies({ role, userPolicyIds, db: ctx.db }),
+      : createJwtGetPolicies({ role, userPolicyIds, db }),
   };
+};
+
+const resolveJwt = async (ctx: Context, token: string) => {
+  const authUser = await resolveJwtAuthUser({ db: ctx.db, token });
+  if (authUser) ctx.authUser = authUser;
 };
 
 /**
