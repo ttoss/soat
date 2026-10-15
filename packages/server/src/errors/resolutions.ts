@@ -127,6 +127,11 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Write the playbook's definition again as a user or API key that can start its executors; cases created on that version run as them.",
   PLAYBOOK_NODE_NOT_RUNNABLE:
     'Read the case: fill what `missing` names, wait for the nodes `waiting` names, or confirm a `confirm` node instead of running it. A `running` node settles on its own.',
+  PLAYBOOK_EXECUTION_INTERRUPTED:
+    'Run the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run` once whatever its executor called is known not to need undoing.',
+  PLAYBOOK_CASE_PAUSED:
+    'Resume the case with `POST /api/v1/playbook-cases/{case_id}/resume`, then retry.',
+  PLAYBOOK_CASE_NOT_PAUSED: 'Nothing to do: the case is already running.',
   PLAYBOOK_EXECUTION_FAILED:
     "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
   ORCHESTRATION_VALIDATION_FAILED:

@@ -7,6 +7,7 @@ import {
   updateGenerationRecord,
 } from 'src/lib/generations';
 import * as pdfModule from 'src/lib/pdf';
+import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { saveTrace } from 'src/lib/traces';
 
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
@@ -3447,13 +3448,30 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(versions).data[0].version).toBe(1);
     });
 
-    test('run-playbook-case-node runs a node and the executions read it back', async () => {
+    test('run-playbook-case-node retries a failed node and the executions read it back', async () => {
       // Its own playbook, so the shared one keeps the single case the tests
-      // below count and delete.
+      // below count and delete. Its tool does not exist, so the node fails.
       const runPlaybook = await mcpCall('create-playbook', {
         project_id: projectId,
         name: 'mcp-runs',
-        definition,
+        definition: {
+          nodes: [
+            {
+              key: 'pricing',
+              title: 'Pricing',
+              kind: 'execute',
+              inputs: [
+                {
+                  name: 'amount',
+                  schema: { type: 'number' },
+                  required: true,
+                  source: 'manual',
+                },
+              ],
+              executor: { type: 'tool', id: 'tool_V1StGXR8Z5jdHi6B' },
+            },
+          ],
+        },
       });
       const created = await mcpCall('create-playbook-case', {
         playbook_id: parseResult(runPlaybook).id,
@@ -3464,34 +3482,36 @@ describe('MCP tools - happy path', () => {
         case_id: runCaseId,
         inputs: [
           {
-            node: 'revenue',
+            node: 'pricing',
             name: 'amount',
             value: 5,
             expected_revision: null,
           },
         ],
       });
+      await flushPlaybookExecutions();
 
       const res = await mcpCall('run-playbook-case-node', {
         case_id: runCaseId,
-        node: 'revenue',
+        node: 'pricing',
         wait: true,
       });
       expect(res.status).toBe(200);
       const execution = parseResult(res);
-      expect(execution.status).toBe('succeeded');
-      expect(execution.output).toEqual({ amount: 5 });
+      expect(execution.status).toBe('failed');
+      expect(execution.input).toEqual({ amount: 5 });
 
       const list = await mcpCall('list-playbook-case-executions', {
         case_id: runCaseId,
       });
+      expect(parseResult(list).total).toBe(2);
       expect(parseResult(list).data[0].id).toBe(execution.id);
 
       const one = await mcpCall('get-playbook-case-execution', {
         case_id: runCaseId,
         execution_id: execution.id,
       });
-      expect(parseResult(one).output_revision).toBe(2);
+      expect(parseResult(one).output_revision).toBeNull();
     });
 
     test('get-playbook-case-missing names what to ask, by wave', async () => {
@@ -3520,12 +3540,23 @@ describe('MCP tools - happy path', () => {
         ],
       });
       expect(res.status).toBe(200);
-      expect(parseResult(res).revision).toBe(1);
+      // The write queues the collect node, whose output is the next entry.
+      await flushPlaybookExecutions();
 
       const entries = await mcpCall('list-playbook-case-entries', {
         case_id: caseId,
+        node: 'revenue',
       });
-      expect(parseResult(entries).data[0].value).toBe(100);
+      expect(
+        parseResult(entries).data.map(
+          (entry: { kind: string; value: unknown }) => {
+            return [entry.kind, entry.value];
+          }
+        )
+      ).toEqual([
+        ['output', { amount: 100 }],
+        ['input', 100],
+      ]);
 
       const cases = await mcpCall('list-playbook-cases', {
         project_id: projectId,
@@ -3534,7 +3565,7 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(cases).total).toBe(1);
 
       const read = await mcpCall('get-playbook-case', { case_id: caseId });
-      expect(parseResult(read).revision).toBe(1);
+      expect(parseResult(read).revision).toBe(2);
     });
 
     test('update and restore archive new versions', async () => {

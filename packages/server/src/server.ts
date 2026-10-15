@@ -19,6 +19,7 @@ import { initFormationResourceTypes } from './lib/formationsRegistry';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
+import { startPlaybookScheduler } from './lib/playbookCascade';
 import { startTasksScheduler } from './lib/tasksScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
 import { backfillUsageRenames } from './lib/usageRenameBackfill';
@@ -98,6 +99,9 @@ const startServer = async () => {
     startTasksScheduler();
     // Settles decisions a restart left unsettled.
     startDecisionsScheduler();
+    // Runs queued playbook node executions, and recovers ones a restart left
+    // running or whose task or run ended without an event.
+    startPlaybookScheduler();
     // Start the webhook delivery outbox sweep so failed deliveries are retried
     // behind their backoff, and so deliveries interrupted mid-attempt by a
     // restart are reclaimed once their lease expires instead of being stranded.

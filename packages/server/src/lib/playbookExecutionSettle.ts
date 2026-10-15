@@ -3,9 +3,11 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { Transaction } from './dbTransaction';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
+import { advancePlaybookCase } from './playbookCascade';
 import { caseDefinition, caseSnapshot, playbookCases } from './playbookCases';
 import { conformsToInputSchema } from './playbookCaseState';
 import type { JsonValue } from './playbookDefinition';
+import { PARKED_RECHECK_MS } from './playbookExecutionLease';
 import {
   type ExecutorOutcome,
   orchestrationOutcome,
@@ -113,24 +115,19 @@ const writeOutput = async (args: {
   return revision;
 };
 
-/**
- * Settles a running execution once, under the case's lock. An execution whose
- * inputs moved while it ran is kept as `superseded` and writes nothing; one
- * that returned the node's current value writes no revision, which leaves
- * every node reading it current.
- */
-export const settleExecution = async (args: {
+/** The settle itself; answers the case it settled in, null when it did not. */
+const settleOnce = async (args: {
   executionId: number;
   settlement: ExecutionSettlement;
-}): Promise<void> => {
+}): Promise<number | null> => {
   const { settlement } = args;
 
-  await db.sequelize.transaction(async (transaction) => {
+  return db.sequelize.transaction(async (transaction) => {
     const running = await lockRunning({
       executionId: args.executionId,
       transaction,
     });
-    if (!running) return;
+    if (!running) return null;
     const { locked, execution } = running;
     const { result, output } = await readNode({
       locked,
@@ -145,7 +142,7 @@ export const settleExecution = async (args: {
         { status: 'failed', result, error: settlement.error, finishedAt },
         { transaction }
       );
-      return;
+      return locked.id as number;
     }
 
     const changed =
@@ -177,7 +174,22 @@ export const settleExecution = async (args: {
       },
       { transaction }
     );
+    return locked.id as number;
   });
+};
+
+/**
+ * Settles a running execution once, under the case's lock, then advances the
+ * case. An execution whose inputs moved while it ran is kept as `superseded`
+ * and writes nothing; one that returned the node's current value writes no
+ * revision, which leaves every node reading it current.
+ */
+export const settleExecution = async (args: {
+  executionId: number;
+  settlement: ExecutionSettlement;
+}): Promise<void> => {
+  const caseDbId = await settleOnce(args);
+  if (caseDbId !== null) await advancePlaybookCase({ caseDbId });
 };
 
 type PendingOutcome = Extract<ExecutorOutcome, { kind: 'pending' }>;
@@ -251,6 +263,9 @@ export const settleFromOutcome = async (args: {
   // The run id is stored before the run is read back, so a completion event
   // arriving in between finds the execution, and one that arrived before it
   // is caught by the read.
-  await args.execution.update({ runId: pending.runId });
+  await args.execution.update({
+    runId: pending.runId,
+    leaseExpiresAt: new Date(Date.now() + PARKED_RECHECK_MS),
+  });
   await settleFromRun({ execution: args.execution });
 };

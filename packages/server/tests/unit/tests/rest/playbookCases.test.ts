@@ -98,6 +98,16 @@ describe('Playbook cases', () => {
     }) as Record<string, unknown>;
   };
 
+  // These tests are about input writes: with the worker off the cascade only
+  // queues executions, so every revision below is an input's.
+  beforeAll(() => {
+    process.env.PLAYBOOK_WORKER_DISABLED = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.PLAYBOOK_WORKER_DISABLED;
+  });
+
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'playbookcases',
