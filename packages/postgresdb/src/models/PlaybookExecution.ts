@@ -32,6 +32,10 @@ import { User } from './User';
       name: 'playbook_executions_run_id_idx',
       fields: ['executor_type', 'run_id'],
     },
+    {
+      name: 'playbook_executions_status_lease_idx',
+      fields: ['status', 'lease_expires_at'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: PlaybookExecution) => {
@@ -82,7 +86,7 @@ export class PlaybookExecution extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare runId: string | null;
 
-  /** `running` | `succeeded` | `failed`. */
+  /** `pending` | `running` | `succeeded` | `failed`. */
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare status: string;
 
@@ -119,6 +123,14 @@ export class PlaybookExecution extends Model {
     return User;
   })
   declare createdBy: User | null;
+
+  /**
+   * Until when a `running` execution is known alive: extended while a worker
+   * runs it, and the next re-read of a task or run it waits on. A sweep
+   * recovers it once past.
+   */
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare leaseExpiresAt: Date | null;
 
   @Column({ type: DataType.DATE, allowNull: true })
   declare finishedAt: Date | null;

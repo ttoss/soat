@@ -399,6 +399,11 @@ paths:
           schema:
             type: string
             example: pbk_V1StGXR8Z5jdHi6B
+        - name: automation_status
+          in: query
+          description: Only the cases in this automation status
+          schema:
+            $ref: '#/components/schemas/PlaybookAutomationStatus'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -487,7 +492,9 @@ paths:
         `409 PLAYBOOK_INPUT_CONFLICT` and `meta.conflicts` names each field. An
         input the case's version does not declare, one that reads another node,
         or a value its schema refuses is `400 PLAYBOOK_INPUT_INVALID`. A value
-        equal to the field's current one writes no revision.
+        equal to the field's current one writes no revision. Once written, every
+        node the write makes runnable is queued to run, unless the case is
+        paused.
       operationId: writePlaybookCaseInputs
       x-soat-resource:
         kind: playbook_case
@@ -610,14 +617,18 @@ paths:
         - Playbooks
       summary: Run a node of a case
       description: >-
-        Runs one node now: a `collect` node takes its own input values as its
-        output, any other node starts its executor with the node's input
-        values mapped through the executor's `input`. The executor runs as the
+        Runs one node now. The cascade already runs every node whose inputs
+        are set once a write, a settle or a resume makes it runnable, and never
+        reruns a `failed` one: this is how a failed node is retried. A `collect`
+        node takes its own input values as its output, any other node starts
+        its executor with the node's input values mapped through the
+        executor's `input`. The executor runs as the
         author of the case's playbook version, whose permission to start it is
         checked again here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`); an author that
         no longer exists is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`. Only a `ready`,
         `stale` or `failed` node with every required input set runs; anything
-        else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`.
+        else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
+        PLAYBOOK_CASE_PAUSED`.
 
 
         The output is written as an entry when the execution settles. A value
@@ -660,7 +671,7 @@ paths:
         '404':
           description: Case not found
         '409':
-          description: The node cannot run now, or the version has no author to run as
+          description: The node cannot run now, the case is paused, or the version has no author to run as
 
   /api/v1/playbook-cases/{case_id}/executions:
     get:
@@ -734,6 +745,66 @@ paths:
           description: Unauthorized
         '404':
           description: Case or execution not found
+
+  /api/v1/playbook-cases/{case_id}/pause:
+    post:
+      tags:
+        - Playbooks
+      summary: Pause a case
+      description: >-
+        Stops the case starting anything: no node is queued and no queued
+        execution starts until it is resumed. Executions already running
+        settle. Input writes are still accepted. Pausing a paused case keeps the
+        first pause.
+      operationId: pausePlaybookCase
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: The paused case
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Case not found
+
+  /api/v1/playbook-cases/{case_id}/resume:
+    post:
+      tags:
+        - Playbooks
+      summary: Resume a case
+      description: >-
+        Lifts the pause and starts what became runnable while the case was
+        paused. A case that is not paused is `409 PLAYBOOK_CASE_NOT_PAUSED`.
+      operationId: resumePlaybookCase
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: The resumed case
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookCase'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Case not found
+        '409':
+          description: The case is not paused
 
 components:
   securitySchemes:
@@ -1185,12 +1256,28 @@ components:
           type: integer
           description: The case's revision counter; every entry takes the next value
           example: 0
+        automation_status:
+          $ref: '#/components/schemas/PlaybookAutomationStatus'
+        pause_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the case was paused; null while it runs
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    PlaybookAutomationStatus:
+      type: string
+      description: >-
+        `paused` while a pause stands, else `running` while any execution is
+        pending or running, else `idle`
+      enum:
+        - idle
+        - running
+        - paused
     PlaybookCase:
       allOf:
         - $ref: '#/components/schemas/PlaybookCaseSummary'
@@ -1347,7 +1434,12 @@ components:
               example: agent_V1StGXR8Z5jdHi6B
         status:
           type: string
+          description: >-
+            `pending` until a worker claims it, `running` while its executor
+            runs or a task or run it started is open, then `succeeded` or
+            `failed`
           enum:
+            - pending
             - running
             - succeeded
             - failed

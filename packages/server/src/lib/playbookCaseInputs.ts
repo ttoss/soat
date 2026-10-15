@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import { isPlainObject } from './plainObject';
+import { advancePlaybookCase } from './playbookCascade';
 import {
   caseDefinition,
   caseSnapshot,
@@ -229,5 +230,6 @@ export const writePlaybookCaseInputs = async (args: {
     }
   });
 
+  await advancePlaybookCase({ caseDbId: found.id as number });
   return mapPlaybookCase(await playbookCases.reload(found));
 };

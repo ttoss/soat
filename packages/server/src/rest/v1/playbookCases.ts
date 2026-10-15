@@ -5,6 +5,10 @@ import {
   writePlaybookCaseInputs,
 } from 'src/lib/playbookCaseInputs';
 import {
+  pausePlaybookCase,
+  resumePlaybookCase,
+} from 'src/lib/playbookCasePause';
+import {
   getPlaybookCaseMissing,
   listPlaybookCaseEntries,
 } from 'src/lib/playbookCaseReads';
@@ -71,6 +75,7 @@ playbookCasesRouter.get('/playbook-cases', async (ctx: Context) => {
   ctx.body = await listPlaybookCases({
     projectIds,
     playbookId: parseString(ctx.query.playbook_id),
+    automationStatus: parseString(ctx.query.automation_status),
     ...parsePagination(ctx),
   });
 });
@@ -239,6 +244,40 @@ playbookCasesRouter.get(
       caseId: ctx.params.case_id,
       id: ctx.params.execution_id,
     });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/pause:
+ *   post:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1pause/post'
+ */
+playbookCasesRouter.post(
+  '/playbook-cases/:case_id/pause',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeWrite({
+      ctx,
+      action: 'playbooks:PausePlaybookCase',
+    });
+    ctx.body = await pausePlaybookCase({ projectIds, id: ctx.params.case_id });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/playbook-cases/{case_id}/resume:
+ *   post:
+ *     $ref: 'openapi/v1/playbooks.yaml#/paths/~1api~1v1~1playbook-cases~1{case_id}~1resume/post'
+ */
+playbookCasesRouter.post(
+  '/playbook-cases/:case_id/resume',
+  async (ctx: Context) => {
+    const { projectIds } = await playbookCaseAccess.authorizeWrite({
+      ctx,
+      action: 'playbooks:ResumePlaybookCase',
+    });
+    ctx.body = await resumePlaybookCase({ projectIds, id: ctx.params.case_id });
   }
 );
 

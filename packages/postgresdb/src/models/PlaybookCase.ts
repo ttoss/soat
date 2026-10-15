@@ -98,6 +98,10 @@ export class PlaybookCase extends Model {
   })
   declare entries: PlaybookEntry[];
 
+  /** Set while the case starts no new execution; cleared by a resume. */
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare pauseRequestedAt: Date | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

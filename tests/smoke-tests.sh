@@ -8101,17 +8101,31 @@ if [ "$(printf '%s\n' "$WRITE_RESP" | jq -r '.revision')" != "1" ]; then
   exit 1
 fi
 
-echo "--- Running the collect node and reading its execution back ---"
-RUN_RESP=$($SOAT_CLI run-playbook-case-node --case_id "$CASE_ID" --node revenue --wait true)
-if ! printf '%s\n' "$RUN_RESP" | jq -e '.status == "succeeded" and .output.amount == 100 and .output_revision == 2' >/dev/null 2>&1; then
-  echo "ERROR: run-playbook-case-node did not write the collect node's output" >&2
-  printf '%s\n' "$RUN_RESP" >&2
+echo "--- The write runs the collect node; reading its execution back ---"
+EXECUTION_STATUS=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  EXECUTIONS_RESP=$($SOAT_CLI list-playbook-case-executions --case_id "$CASE_ID")
+  EXECUTION_STATUS=$(printf '%s\n' "$EXECUTIONS_RESP" | jq -r '.data[0].status // empty')
+  [ "$EXECUTION_STATUS" = "succeeded" ] && break
+  sleep 1
+done
+if ! printf '%s\n' "$EXECUTIONS_RESP" | jq -e '.data[0].node == "revenue" and .data[0].output.amount == 100 and .data[0].output_revision == 2' >/dev/null 2>&1; then
+  echo "ERROR: the cascade did not run the collect node" >&2
+  printf '%s\n' "$EXECUTIONS_RESP" >&2
   exit 1
 fi
-EXECUTIONS_RESP=$($SOAT_CLI list-playbook-case-executions --case_id "$CASE_ID")
-if [ "$(printf '%s\n' "$EXECUTIONS_RESP" | jq -r '.data[0].id')" != "$(printf '%s\n' "$RUN_RESP" | jq -r '.id')" ]; then
-  echo "ERROR: list-playbook-case-executions did not list the run" >&2
-  printf '%s\n' "$EXECUTIONS_RESP" >&2
+
+echo "--- Pausing and resuming the case ---"
+PAUSE_RESP=$($SOAT_CLI pause-playbook-case --case_id "$CASE_ID")
+if [ "$(printf '%s\n' "$PAUSE_RESP" | jq -r '.automation_status')" != "paused" ]; then
+  echo "ERROR: pause-playbook-case did not pause the case" >&2
+  printf '%s\n' "$PAUSE_RESP" >&2
+  exit 1
+fi
+RESUME_RESP=$($SOAT_CLI resume-playbook-case --case_id "$CASE_ID")
+if [ "$(printf '%s\n' "$RESUME_RESP" | jq -r '.pause_requested_at')" != "null" ]; then
+  echo "ERROR: resume-playbook-case did not lift the pause" >&2
+  printf '%s\n' "$RESUME_RESP" >&2
   exit 1
 fi
 

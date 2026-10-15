@@ -11,7 +11,7 @@ A **playbook** is a versioned template of nodes; a **case** fills one version of
 
 ## Overview
 
-A playbook declares what has to be known before a goal can be reached: each node holds inputs, and each input is either written by a person or an integration (`manual`) or read from a field of an earlier node. Those sources are the graph's edges. A case is one subject — a client, an application, a claim — filled against the version the playbook was at when the case was created. Every write to a case is an append-only entry, and each node's state is computed from the entries and executions on every read. A node runs its executor — an [agent](./agents.md), [tool](./tools.md), [decider](./deciders.md), [workflow](./workflows.md) or [orchestration](./orchestrations.md) — as the author of the case's version.
+A playbook declares what has to be known before a goal can be reached: each node holds inputs, and each input is either written by a person or an integration (`manual`) or read from a field of an earlier node. Those sources are the graph's edges. A case is one subject — a client, an application, a claim — filled against the version the playbook was at when the case was created. Every write to a case is an append-only entry, and each node's state is computed from the entries and executions on every read. A node runs its executor — an [agent](./agents.md), [tool](./tools.md), [decider](./deciders.md), [workflow](./workflows.md) or [orchestration](./orchestrations.md) — as the author of the case's version, on its own once its inputs are set, and again whenever one of them changes.
 
 An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, and a [workflow](./workflows.md) task holds one state; a case keeps a value per field and answers what is still missing before a node can be reached.
 
@@ -57,15 +57,17 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 ### Case
 
-| Field              | Type    | Description                                                                              |
-| ------------------ | ------- | ---------------------------------------------------------------------------------------- |
-| `id`               | string  | Public identifier (`pbk_case_…`)                                                         |
-| `project_id`       | string  | Owning project                                                                           |
-| `playbook_id`      | string  | The playbook                                                                             |
-| `playbook_version` | integer | The version the case was created on and is evaluated against                             |
-| `subject`          | string  | Who or what the case is about                                                            |
-| `revision`         | integer | The case's counter; every entry takes the next value                                     |
-| `nodes`            | array   | On a single-case read: every node's `state`, `missing`, `waiting`, `inputs` and `output` |
+| Field                | Type           | Description                                                                                                             |
+| -------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | string         | Public identifier (`pbk_case_…`)                                                                                        |
+| `project_id`         | string         | Owning project                                                                                                          |
+| `playbook_id`        | string         | The playbook                                                                                                            |
+| `playbook_version`   | integer        | The version the case was created on and is evaluated against                                                            |
+| `subject`            | string         | Who or what the case is about                                                                                           |
+| `revision`           | integer        | The case's counter; every entry takes the next value                                                                    |
+| `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) stands, else `running` while any execution is pending or running, else `idle` |
+| `pause_requested_at` | string \| null | When the case was paused                                                                                                |
+| `nodes`              | array          | On a single-case read: every node's `state`, `missing`, `waiting`, `inputs` and `output`                                |
 
 ### Entry
 
@@ -90,7 +92,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `node`             | string          | The node that ran                                                                    |
 | `playbook_version` | integer         | The version the case runs on                                                         |
 | `executor`         | object \| null  | `{ type, id }`; null for a `collect` node                                            |
-| `status`           | string          | `running`, `succeeded` or `failed`                                                   |
+| `status`           | string          | `pending` until a worker claims it, `running`, then `succeeded` or `failed`          |
 | `result`           | string \| null  | Once settled: `current`, or `superseded` when the node's inputs changed while it ran |
 | `run_id`           | string \| null  | The generation, decision, task or orchestration run it started                       |
 | `input`            | any             | What the executor was given                                                          |
@@ -140,9 +142,9 @@ Computed from the case's entries and executions on each read, never stored:
 
 [`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a node key and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one is filled. Each carries its `schema` and `description`, which is what an agent asks for.
 
-### Running a node
+### The cascade
 
-[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now and records an [execution](#execution). Only a `ready`, `stale` or `failed` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `done` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `waiting`.
+Every write that can make a node runnable — a case created, inputs written, an execution settled, a pause lifted — queues an [execution](#execution) for each node that is now `ready` or `stale` with every required input set. A `confirm` node never runs. Queued executions are run by the server's worker; a node reading another runs once that one is `done`, so a node reading two changed nodes runs once.
 
 A `collect` node's output is its input values. Any other node starts its executor with the node's input values, mapped through the executor's `input` when it declares one:
 
@@ -154,9 +156,24 @@ A `collect` node's output is its input values. Any other node starts its executo
 | `workflow`      | A task whose `payload` is the input         | The task's `payload` when it closes                   |
 | `orchestration` | A run whose `input` is the input            | The run's `output` when it succeeds                   |
 
-When the execution settles, its output is written as an `output` entry. A value equal to the node's current output writes no revision, so nothing reading the node goes `stale`. An execution whose node's inputs changed while it ran settles as `superseded` and writes nothing. A failed executor, a failed decision or orchestration run, or an agent that answers with neither text nor an object fails the execution with its cause in `error`; the node is `failed` and can run again.
+When an execution settles, its output is written as an `output` entry and the nodes reading it run next:
+
+- a value equal to the node's current output writes no revision, so nothing reading it goes `stale` and the cascade stops there;
+- an execution whose node's inputs changed while it was queued or running settles as `superseded`, writes nothing, and the node runs again on the new inputs;
+- a failed executor, a failed decision or orchestration run, or an agent that answers with neither text nor an object fails the execution with its cause in `error`. The node is `failed` and is not run again until [run by hand](#running-a-node);
+- an agent, tool or decider whose server stopped while running it fails as `PLAYBOOK_EXECUTION_INTERRUPTED` and is never re-run on its own, so a call with side effects runs at most once.
+
+A workflow task or an orchestration run settles its node when the task closes or the run ends. One that ends without an event — a run `cancelled` or `expired` — is read again every few minutes and settles the node then.
+
+### Running a node
+
+[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now; it is how a `failed` node is retried. Only a `ready`, `stale` or `failed` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `done` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `waiting`. A paused case answers `409 PLAYBOOK_CASE_PAUSED`.
 
 Without `wait` the request answers `201` with the execution `running` and it settles in the background; poll [`GET /api/v1/playbook-cases/{case_id}/executions/{execution_id}`](/docs/api/playbooks/get-playbook-case-execution). With `wait: true` it answers once the executor settles, or once it parks: a workflow task still open, or an orchestration run waiting on a person or a timer, settles the node when it closes or ends. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/executions`](/docs/api/playbooks/list-playbook-case-executions) lists a case's executions, newest first.
+
+### Pausing a case
+
+[`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `paused` or `idle`.
 
 ### Who a node runs as
 
@@ -401,13 +418,13 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/inputs \
 </TabItem>
 </Tabs>
 
-### Run a node
+### Retry a failed node
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat run-playbook-case-node --case-id pbk_case_… --node revenue --wait true
+soat run-playbook-case-node --case-id pbk_case_… --node pricing --wait true
 ```
 
 </TabItem>
@@ -415,7 +432,7 @@ soat run-playbook-case-node --case-id pbk_case_… --node revenue --wait true
 
 ```ts
 const { data, error } = await soat.playbooks.runPlaybookCaseNode({
-  path: { case_id: 'pbk_case_…', node: 'revenue' },
+  path: { case_id: 'pbk_case_…', node: 'pricing' },
   body: { wait: true },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -425,7 +442,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/revenue/run \
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pricing/run \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{ "wait": true }'
@@ -438,14 +455,45 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/re
 {
   "id": "pbk_exe_…",
   "case_id": "pbk_case_…",
-  "node": "revenue",
-  "executor": null,
+  "node": "pricing",
+  "executor": { "type": "tool", "id": "tool_…" },
   "status": "succeeded",
   "result": "current",
-  "output": { "amount": 4000000 },
-  "output_revision": 3
+  "output": { "price": 12000 },
+  "output_revision": 5
 }
 ```
+
+### Pause a case
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat pause-playbook-case --case-id pbk_case_…
+soat resume-playbook-case --case-id pbk_case_…
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await soat.playbooks.pausePlaybookCase({ path: { case_id: 'pbk_case_…' } });
+await soat.playbooks.resumePlaybookCase({ path: { case_id: 'pbk_case_…' } });
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/pause \
+  -H "Authorization: Bearer <token>"
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 ## Errors
 
@@ -461,3 +509,5 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/re
 | `PLAYBOOK_EXECUTOR_FORBIDDEN` | 403    | The version's author may not start an executor the definition names                                    |
 | `PLAYBOOK_AUTHOR_UNAVAILABLE` | 409    | The version has no author a node can run as                                                            |
 | `PLAYBOOK_NODE_NOT_RUNNABLE`  | 409    | The node is a `confirm` node, blocked, `running` or `done`                                             |
+| `PLAYBOOK_CASE_PAUSED`        | 409    | A run of a node in a paused case                                                                       |
+| `PLAYBOOK_CASE_NOT_PAUSED`    | 409    | A resume of a case that is not paused                                                                  |

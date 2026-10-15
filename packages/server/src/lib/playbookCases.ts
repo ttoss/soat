@@ -1,9 +1,11 @@
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { advancePlaybookCase } from './playbookCascade';
 import {
   conformsToInputSchema,
   snapshotFromRecords,
@@ -105,6 +107,51 @@ const mapNodes = (args: {
   });
 };
 
+export const AUTOMATION_STATUSES = ['idle', 'running', 'paused'] as const;
+
+/**
+ * `paused` while a pause stands, else `running` while any execution is
+ * pending or running, else `idle`: what a spend stop lists to find a case
+ * with work in flight.
+ */
+const automationFields = (args: {
+  row: PlaybookCaseRow;
+  inFlight: boolean;
+}) => {
+  const { row } = args;
+  const status: (typeof AUTOMATION_STATUSES)[number] = row.pauseRequestedAt
+    ? 'paused'
+    : args.inFlight
+      ? 'running'
+      : 'idle';
+  return {
+    automation_status: status,
+    pause_requested_at: row.pauseRequestedAt,
+  };
+};
+
+/** Every case holding a `pending` or `running` execution. */
+const inFlightCaseIds = () => {
+  return db.sequelize.literal(
+    "(SELECT case_id FROM playbook_executions WHERE status IN ('pending', 'running'))"
+  );
+};
+
+const automationWhere = (status: string | undefined) => {
+  if (status === undefined) return {};
+  if (!(AUTOMATION_STATUSES as readonly string[]).includes(status)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `automation_status must be one of ${AUTOMATION_STATUSES.join(', ')}.`
+    );
+  }
+  if (status === 'paused') return { pauseRequestedAt: { [Op.ne]: null } };
+  return {
+    pauseRequestedAt: null,
+    id: { [status === 'running' ? Op.in : Op.notIn]: inFlightCaseIds() },
+  };
+};
+
 export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
   const [definition, snapshot] = await Promise.all([
     caseDefinition({ row }),
@@ -118,6 +165,14 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
     playbook_version: row.playbookVersion,
     subject: row.subject,
     revision: row.revision,
+    ...automationFields({
+      row,
+      inFlight: Object.values(snapshot).some((record) => {
+        return record.execution
+          ? ['pending', 'running'].includes(record.execution.status)
+          : false;
+      }),
+    }),
     nodes: mapNodes({ definition, snapshot }),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
@@ -127,7 +182,7 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
 export type MappedPlaybookCase = Awaited<ReturnType<typeof mapPlaybookCase>>;
 
 /** A case outside a list: the listing carries no node states. */
-const mapCaseSummary = (row: PlaybookCaseRow) => {
+const mapCaseSummary = (row: PlaybookCaseRow, inFlight: boolean) => {
   return {
     id: row.publicId,
     project_id: row.project.publicId,
@@ -135,6 +190,7 @@ const mapCaseSummary = (row: PlaybookCaseRow) => {
     playbook_version: row.playbookVersion,
     subject: row.subject,
     revision: row.revision,
+    ...automationFields({ row, inFlight }),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -167,17 +223,19 @@ export const createPlaybookCase = async (args: {
   });
 
   log('createPlaybookCase: created id=%s', created.publicId);
+  await advancePlaybookCase({ caseDbId: created.id as number });
   return mapPlaybookCase(await playbookCases.reload(created));
 };
 
 export const listPlaybookCases = async (args: {
   projectIds?: number[];
   playbookId?: string;
+  automationStatus?: string;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<ReturnType<typeof mapCaseSummary>>> => {
   log('listPlaybookCases: projectIds=%o', args.projectIds);
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = automationWhere(args.automationStatus);
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
   if (args.playbookId !== undefined) {
     const playbook = await playbooks.findByPublicId({
@@ -188,7 +246,7 @@ export const listPlaybookCases = async (args: {
     where.playbookId = (playbook?.id as number | undefined) ?? -1;
   }
 
-  return paginatedList({
+  const page = await paginatedList({
     limit: args.limit,
     offset: args.offset,
     order: [['createdAt', 'DESC']],
@@ -203,9 +261,29 @@ export const listPlaybookCases = async (args: {
       });
     },
     map: (row) => {
-      return mapCaseSummary(row as PlaybookCaseRow);
+      return row as PlaybookCaseRow;
     },
   });
+  const inFlight = await db.PlaybookExecution.findAll({
+    where: {
+      caseId: page.data.map((row) => {
+        return row.id as number;
+      }),
+      status: ['pending', 'running'],
+    },
+    attributes: ['caseId'],
+  });
+  const flying = new Set(
+    inFlight.map((execution) => {
+      return execution.caseId;
+    })
+  );
+  return {
+    ...page,
+    data: page.data.map((row) => {
+      return mapCaseSummary(row, flying.has(row.id as number));
+    }),
+  };
 };
 
 export const getPlaybookCase = async (args: {

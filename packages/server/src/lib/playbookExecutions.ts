@@ -4,21 +4,13 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { onEvent, retryOrRecordDrop, type SoatEvent } from './eventBus';
 import { paginatedList } from './pagination';
-import {
-  assertExecutorStartable,
-  type PlaybookRunAs,
-  resolvePlaybookRunAs,
-} from './playbookAuthor';
-import {
-  caseDefinition,
-  caseSnapshot,
-  type PlaybookCaseRow,
-  playbookCases,
-} from './playbookCases';
+import { caseDefinition, caseSnapshot, playbookCases } from './playbookCases';
 import { conformsToInputSchema } from './playbookCaseState';
-import type { JsonValue, PlaybookNode } from './playbookDefinition';
-import { settleFromOutcome, settleFromRun } from './playbookExecutionSettle';
-import { executorInput, startExecutor } from './playbookExecutors';
+import type { PlaybookNode } from './playbookDefinition';
+import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
+import { settleFromRun } from './playbookExecutionSettle';
+import { executeClaimed, resolveRunAs } from './playbookExecutionWork';
+import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import { playbookNodeStates, type PlaybookNodeView } from './playbookState';
 
@@ -102,58 +94,6 @@ const readNode = (args: {
   return found;
 };
 
-/** The case's author, checked against this node's executor before it runs. */
-const resolveRunAs = async (args: {
-  row: PlaybookCaseRow;
-  node: PlaybookNode;
-}): Promise<PlaybookRunAs | null> => {
-  const { row, node } = args;
-  if (!node.executor) return null;
-  const version = await db.PlaybookVersion.findOne({
-    where: { playbookId: row.playbookId, version: row.playbookVersion },
-    attributes: ['principalKind', 'principalId'],
-  });
-  const runAs = await resolvePlaybookRunAs({
-    version: version!,
-    projectId: row.projectId,
-    workPublicId: row.publicId,
-  });
-  await assertExecutorStartable({
-    node: node.key,
-    executor: node.executor,
-    projectPublicId: row.project.publicId,
-    isAllowed: runAs.isAllowed,
-  });
-  return runAs;
-};
-
-const execute = async (args: {
-  row: PlaybookCaseRow;
-  node: PlaybookNode;
-  execution: ExecutionRow;
-  values: Record<string, JsonValue>;
-  runAs: PlaybookRunAs | null;
-}): Promise<void> => {
-  const { row, node, execution, values, runAs } = args;
-  await settleFromOutcome({
-    execution,
-    outcome: async () => {
-      if (!node.executor || !runAs) {
-        return { kind: 'settled', output: values, runId: null };
-      }
-      return startExecutor({
-        executor: node.executor,
-        values,
-        input: execution.input as Record<string, unknown>,
-        projectId: row.projectId,
-        executionPublicId: execution.publicId,
-        title: `${row.subject} · ${node.title}`,
-        runAs,
-      });
-    },
-  });
-};
-
 export const getPlaybookCaseExecution = async (args: {
   projectIds?: number[];
   caseId: string;
@@ -181,17 +121,13 @@ export const getPlaybookCaseExecution = async (args: {
 };
 
 /** An execution nothing awaits; settling never throws back at the caller. */
-const executeInBackground = async (
-  args: Parameters<typeof execute>[0]
-): Promise<void> => {
+const executeInBackground = async (args: {
+  executionId: number;
+}): Promise<void> => {
   try {
-    await execute(args);
+    await executeClaimed(args);
   } catch (error) {
-    log(
-      'executeInBackground: %s did not settle: %o',
-      args.execution.publicId,
-      error
-    );
+    log('executeInBackground: %d did not settle: %o', args.executionId, error);
   }
 };
 
@@ -216,51 +152,58 @@ export const runPlaybookNode = async (args: {
   });
   const definition = await caseDefinition({ row });
   const node = readNode({ definition, node: args.node });
-  const runAs = await resolveRunAs({ row, node });
+  if (node.executor) {
+    await resolveRunAs({ row, node: { ...node, executor: node.executor } });
+  }
 
-  const { execution, values } = await db.sequelize.transaction(
-    async (transaction) => {
-      // The case lock serializes this with input writes and settles, so the
-      // state checked is the state the execution is recorded against.
-      await db.PlaybookCase.findByPk(row.id as number, {
-        lock: transaction.LOCK.UPDATE,
-        transaction,
-      });
-      const view = playbookNodeStates({
-        definition,
-        snapshot: await caseSnapshot({
-          caseDbId: row.id as number,
-          transaction,
-        }),
-        conforms: conformsToInputSchema,
-      }).get(node.key)!;
-      assertRunnable({ node, view });
-      const created = await db.PlaybookExecution.create(
-        {
-          caseId: row.id as number,
-          node: node.key,
-          playbookVersion: row.playbookVersion,
-          executorType: node.executor?.type ?? null,
-          executorId: node.executor?.id ?? null,
-          status: 'running',
-          basis: view.basis,
-          input: executorInput({
-            executor: node.executor,
-            values: view.values,
-          }),
-          createdByUserId: args.createdByUserId,
-        },
-        { transaction }
+  const execution = await db.sequelize.transaction(async (transaction) => {
+    // The case lock serializes this with input writes, settles and the
+    // cascade, so the state checked is the state the execution is recorded
+    // against.
+    const locked = await db.PlaybookCase.findByPk(row.id as number, {
+      lock: transaction.LOCK.UPDATE,
+      transaction,
+    });
+    if (locked!.pauseRequestedAt) {
+      throw new DomainError(
+        'PLAYBOOK_CASE_PAUSED',
+        `Case '${row.publicId}' is paused.`
       );
-      return { execution: created, values: view.values };
     }
-  );
+    const view = playbookNodeStates({
+      definition,
+      snapshot: await caseSnapshot({
+        caseDbId: row.id as number,
+        transaction,
+      }),
+      conforms: conformsToInputSchema,
+    }).get(node.key)!;
+    assertRunnable({ node, view });
+    // Recorded as claimed by this process, so the drain never runs it too.
+    return db.PlaybookExecution.create(
+      {
+        caseId: row.id as number,
+        node: node.key,
+        playbookVersion: row.playbookVersion,
+        executorType: node.executor?.type ?? null,
+        executorId: node.executor?.id ?? null,
+        status: 'running',
+        leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
+        basis: view.basis,
+        input: executorInput({
+          executor: node.executor,
+          values: view.values,
+        }),
+        createdByUserId: args.createdByUserId,
+      },
+      { transaction }
+    );
+  });
 
-  const work = { row, node, execution, values, runAs };
   if (args.wait) {
-    await execute(work);
+    await executeClaimed({ executionId: execution.id as number });
   } else {
-    void executeInBackground(work);
+    void executeInBackground({ executionId: execution.id as number });
   }
 
   return getPlaybookCaseExecution({

@@ -95,6 +95,16 @@
       "operationId": "getPlaybookCaseExecution",
       "action": "playbooks:GetPlaybookCaseExecution",
       "description": "Get one node execution of a case"
+    },
+    {
+      "operationId": "pausePlaybookCase",
+      "action": "playbooks:PausePlaybookCase",
+      "description": "Pause a case so none of its nodes starts"
+    },
+    {
+      "operationId": "resumePlaybookCase",
+      "action": "playbooks:ResumePlaybookCase",
+      "description": "Resume a paused case"
     }
   ]
 }

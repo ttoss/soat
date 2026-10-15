@@ -1,3 +1,5 @@
+import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
+
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   createScopedPrincipal,
@@ -13,6 +15,9 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 const CASE_ACTIONS = [
   'playbooks:CreatePlaybook',
+  'playbooks:ListPlaybookCases',
+  'playbooks:PausePlaybookCase',
+  'playbooks:ResumePlaybookCase',
   'playbooks:CreatePlaybookCase',
   'playbooks:GetPlaybookCase',
   'playbooks:WritePlaybookCaseInputs',
@@ -160,6 +165,29 @@ describe('Playbook executions', () => {
         }),
       });
     expect(res.status).toBe(200);
+    await flushPlaybookExecutions();
+  };
+
+  const executionsOf = async (caseId: string) => {
+    const res = await asAdmin().get(
+      `/api/v1/playbook-cases/${caseId}/executions?limit=100`
+    );
+    return res.body.data;
+  };
+
+  const pause = async (caseId: string) => {
+    const res = await authenticatedTestClient(userToken).post(
+      `/api/v1/playbook-cases/${caseId}/pause`
+    );
+    expect(res.status).toBe(200);
+    return res.body;
+  };
+
+  const closeTask = async (taskId: string) => {
+    const res = await asAdmin()
+      .post(`/api/v1/tasks/${taskId}/transitions`)
+      .send({ transition: 'finish' });
+    expect(res.status).toBe(200);
   };
 
   const run = (
@@ -303,8 +331,8 @@ describe('Playbook executions', () => {
     await stub.close();
   });
 
-  describe('POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run', () => {
-    test('a collect node takes its inputs as its output', async () => {
+  describe('the cascade', () => {
+    test('an input runs its collect node and then every node reading it', async () => {
       const caseId = await newCase({
         definition: readsAmount({
           type: 'tool',
@@ -312,101 +340,69 @@ describe('Playbook executions', () => {
           input: { value: { var: 'amount' } },
         }),
       });
-      await write(caseId, [{ node: 'revenue', name: 'amount', value: 10 }]);
 
-      const res = await run(caseId, 'revenue');
+      await write(caseId, [{ node: 'revenue', name: 'amount', value: 21 }]);
 
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({
-        id: expect.stringMatching(/^pbk_exe_/),
-        case_id: caseId,
+      expect(await nodeOf(caseId, 'revenue')).toMatchObject({
+        state: 'done',
+        output: { value: { amount: 21 }, revision: 2 },
+      });
+      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
+        state: 'done',
+        output: { value: { doubled: 42 }, revision: 3 },
+      });
+      const [tool, collect] = await executionsOf(caseId);
+      expect(collect).toMatchObject({
         node: 'revenue',
         executor: null,
         status: 'succeeded',
         result: 'current',
-        output: { amount: 10 },
-        output_revision: 2,
+        created_by: null,
       });
-      expect(await nodeOf(caseId, 'revenue')).toMatchObject({
-        state: 'done',
-        output: { value: { amount: 10 }, revision: 2 },
-      });
-      expect((await nodeOf(caseId, 'pricing')).state).toBe('ready');
-    });
-
-    test('a tool node calls the tool with its mapped input', async () => {
-      const caseId = await newCase({
-        definition: readsAmount({
-          type: 'tool',
-          id: doubleToolId,
-          input: { value: { var: 'amount' } },
-        }),
-      });
-      await write(caseId, [{ node: 'revenue', name: 'amount', value: 21 }]);
-      await run(caseId, 'revenue');
-
-      const res = await run(caseId, 'pricing');
-
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({
+      expect(tool).toMatchObject({
+        node: 'pricing',
         executor: { type: 'tool', id: doubleToolId },
-        status: 'succeeded',
         input: { value: 21 },
         output: { doubled: 42 },
       });
-      expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
     });
 
-    test('an output equal to the current one writes no revision', async () => {
+    test('an equal output writes no revision and stops there', async () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: constantToolId }),
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-      const first = await run(caseId, 'pricing');
-      expect(first.body.output_revision).toBe(2);
+
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 2 }]);
-      expect((await nodeOf(caseId, 'pricing')).state).toBe('stale');
 
-      const res = await run(caseId, 'pricing');
-
-      expect(res.body.output).toEqual({ ok: true });
-      expect(res.body.output_revision).toBeNull();
+      const [second, first] = await executionsOf(caseId);
+      expect(first.output_revision).toBe(2);
+      expect(second).toMatchObject({
+        output: { ok: true },
+        output_revision: null,
+      });
       expect(await nodeOf(caseId, 'pricing')).toMatchObject({
         state: 'done',
         output: { revision: 2 },
       });
     });
 
-    test('a failed executor fails the node, which can run again', async () => {
+    test('a failed node stays failed until it is run again', async () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: failingToolId }),
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
 
-      const res = await run(caseId, 'pricing');
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('failed');
-      expect(res.body.error).toEqual(
+      expect((await nodeOf(caseId, 'pricing')).state).toBe('failed');
+      const [failed] = await executionsOf(caseId);
+      expect(failed.error).toEqual(
         expect.objectContaining({ code: expect.any(String) })
       );
-      expect((await nodeOf(caseId, 'pricing')).state).toBe('failed');
-      expect((await run(caseId, 'pricing')).status).toBe(201);
-    });
 
-    test('without wait it answers running and settles in the background', async () => {
-      const caseId = await newCase({
-        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
-      });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-
-      const res = await run(caseId, 'pricing', {});
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('running');
-      expect((await settled(caseId, res.body.id)).output).toEqual({
-        ok: true,
-      });
+      const retried = await run(caseId, 'pricing');
+      expect(retried.status).toBe(201);
+      expect(retried.body.status).toBe('failed');
+      expect(await executionsOf(caseId)).toHaveLength(2);
     });
 
     test('an agent node answers with its text', async () => {
@@ -416,12 +412,23 @@ describe('Playbook executions', () => {
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
 
-      const res = await run(caseId, 'pricing');
-
-      expect(res.body).toMatchObject({
+      expect((await executionsOf(caseId))[0]).toMatchObject({
         status: 'succeeded',
         output: 'Simples Nacional',
         run_id: expect.stringMatching(/^gen_/),
+      });
+    });
+
+    test('an agent that stops for a client tool fails the node', async () => {
+      stub.reply(toolCallCompletion([{ id: 'call_confirm', name: 'confirm' }]));
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'agent', id: clientToolAgentId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      expect((await executionsOf(caseId))[0]).toMatchObject({
+        status: 'failed',
+        error: { code: 'PLAYBOOK_EXECUTION_FAILED' },
       });
     });
 
@@ -431,11 +438,19 @@ describe('Playbook executions', () => {
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
 
-      const res = await run(caseId, 'pricing');
+      const [execution] = await executionsOf(caseId);
+      expect(execution.status).toBe('succeeded');
+      expect(execution.output.escalate).toMatchObject({ probability: 0.9 });
+      expect(execution.run_id).toMatch(/^dec/);
+    });
 
-      expect(res.body.status).toBe('succeeded');
-      expect(res.body.output.escalate).toMatchObject({ probability: 0.9 });
-      expect(res.body.run_id).toMatch(/^dec/);
+    test('a failed decision fails the node', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'decider', id: misdeciderId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      expect((await nodeOf(caseId, 'pricing')).state).toBe('failed');
     });
 
     test('an orchestration node answers with its run output', async () => {
@@ -447,36 +462,8 @@ describe('Playbook executions', () => {
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
 
-      const res = await run(caseId, 'pricing');
-
-      expect(res.body.status).toBe('succeeded');
-      expect(res.body.run_id).toEqual(expect.any(String));
+      expect((await executionsOf(caseId))[0].status).toBe('succeeded');
       expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
-    });
-
-    test('an agent that stops for a client tool fails the node', async () => {
-      stub.reply(toolCallCompletion([{ id: 'call_confirm', name: 'confirm' }]));
-      const caseId = await newCase({
-        definition: runsOnAmount({ type: 'agent', id: clientToolAgentId }),
-      });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-
-      const res = await run(caseId, 'pricing');
-
-      expect(res.body.status).toBe('failed');
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTION_FAILED');
-    });
-
-    test('a failed decision fails the node', async () => {
-      const caseId = await newCase({
-        definition: runsOnAmount({ type: 'decider', id: misdeciderId }),
-      });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-
-      const res = await run(caseId, 'pricing');
-
-      expect(res.body.status).toBe('failed');
-      expect((await nodeOf(caseId, 'pricing')).state).toBe('failed');
     });
 
     test('a failed orchestration run fails the node', async () => {
@@ -488,10 +475,10 @@ describe('Playbook executions', () => {
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
 
-      const res = await run(caseId, 'pricing');
-
-      expect(res.body.status).toBe('failed');
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTION_FAILED');
+      expect((await executionsOf(caseId))[0]).toMatchObject({
+        status: 'failed',
+        error: { code: 'PLAYBOOK_EXECUTION_FAILED' },
+      });
     });
 
     test('an orchestration run parked on a person settles when it ends', async () => {
@@ -502,16 +489,15 @@ describe('Playbook executions', () => {
         }),
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-
-      const res = await run(caseId, 'pricing');
-      expect(res.body.status).toBe('running');
+      const [parked] = await executionsOf(caseId);
+      expect(parked.status).toBe('running');
 
       const answered = await asAdmin()
-        .post(`/api/v1/orchestration-runs/${res.body.run_id}/human-input`)
+        .post(`/api/v1/orchestration-runs/${parked.run_id}/human-input`)
         .send({ node_id: 'ask', output: { approved: true } });
       expect(answered.body.status).toBe('succeeded');
 
-      expect((await settled(caseId, res.body.id)).status).toBe('succeeded');
+      expect((await settled(caseId, parked.id)).status).toBe('succeeded');
       expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
     });
 
@@ -520,19 +506,13 @@ describe('Playbook executions', () => {
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 7 }]);
-
-      const res = await run(caseId, 'pricing');
-      expect(res.body.status).toBe('running');
-      expect(res.body.run_id).toMatch(/^task_/);
+      const [parked] = await executionsOf(caseId);
+      expect(parked.run_id).toMatch(/^task_/);
       expect((await nodeOf(caseId, 'pricing')).state).toBe('running');
 
-      const closed = await asAdmin()
-        .post(`/api/v1/tasks/${res.body.run_id}/transitions`)
-        .send({ transition: 'finish' });
-      expect(closed.status).toBe(200);
+      await closeTask(parked.run_id);
 
-      const execution = await settled(caseId, res.body.id);
-      expect(execution).toMatchObject({
+      expect(await settled(caseId, parked.id)).toMatchObject({
         status: 'succeeded',
         result: 'current',
         output: { amount: 7 },
@@ -540,28 +520,108 @@ describe('Playbook executions', () => {
       expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
     });
 
-    test('an input changed while it ran supersedes its output', async () => {
+    test('an input changed while it ran supersedes it, and the node runs again', async () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 7 }]);
-      const res = await run(caseId, 'pricing');
+      const [first] = await executionsOf(caseId);
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 8 }]);
+      expect(await executionsOf(caseId)).toHaveLength(1);
 
-      await asAdmin()
-        .post(`/api/v1/tasks/${res.body.run_id}/transitions`)
-        .send({ transition: 'finish' });
+      await closeTask(first.run_id);
 
-      const execution = await settled(caseId, res.body.id);
-      expect(execution).toMatchObject({
-        status: 'succeeded',
+      expect(await settled(caseId, first.id)).toMatchObject({
         result: 'superseded',
         output_revision: null,
       });
-      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
-        state: 'ready',
-        output: null,
+      const again = await pollUntil({
+        read: () => {
+          return executionsOf(caseId);
+        },
+        done: (rows) => {
+          return rows.length === 2;
+        },
       });
+      expect(again[0]).toMatchObject({
+        status: 'running',
+        input: { amount: 8 },
+      });
+    });
+
+    test('runs as the author, and fails once the author may no longer start it', async () => {
+      const authorToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'pbkauthorrevoked',
+        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
+      });
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
+        token: authorToken,
+      });
+      const me =
+        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
+      await asAdmin()
+        .put(`/api/v1/users/${me.body.id}/policies`)
+        .send({ policy_ids: [] });
+
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      expect((await executionsOf(caseId))[0].error).toMatchObject({
+        code: 'PLAYBOOK_EXECUTOR_FORBIDDEN',
+        meta: { node: 'pricing', action: 'tools:CallTool' },
+      });
+      const res = await run(caseId, 'pricing', { wait: true }, adminToken);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
+    });
+
+    test('fails when the author no longer exists', async () => {
+      const authorToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'pbkauthorgone',
+        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
+      });
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
+        token: authorToken,
+      });
+      const me =
+        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
+      expect(
+        (await asAdmin().delete(`/api/v1/users/${me.body.id}`)).status
+      ).toBe(204);
+
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      expect((await executionsOf(caseId))[0].error.code).toBe(
+        'PLAYBOOK_AUTHOR_UNAVAILABLE'
+      );
+      const res = await run(caseId, 'pricing', { wait: true }, adminToken);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PLAYBOOK_AUTHOR_UNAVAILABLE');
+    });
+  });
+
+  describe('POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run', () => {
+    test('without wait it answers running and settles in the background', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: failingToolId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      const res = await run(caseId, 'pricing', {});
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        id: expect.stringMatching(/^pbk_exe_/),
+        case_id: caseId,
+        status: 'running',
+        created_by: expect.any(String),
+      });
+      expect((await settled(caseId, res.body.id)).status).toBe('failed');
     });
 
     test('returns 409 for a node that cannot run now', async () => {
@@ -578,7 +638,6 @@ describe('Playbook executions', () => {
       });
 
       await write(caseId, [{ node: 'revenue', name: 'amount', value: 1 }]);
-      await run(caseId, 'revenue');
       const done = await run(caseId, 'revenue');
       expect(done.status).toBe(409);
       expect(done.body.error.meta.state).toBe('done');
@@ -599,10 +658,22 @@ describe('Playbook executions', () => {
       expect(confirm.status).toBe(409);
       expect(confirm.body.error.code).toBe('PLAYBOOK_NODE_NOT_RUNNABLE');
 
-      await run(caseId, 'pricing');
       const running = await run(caseId, 'pricing');
       expect(running.status).toBe(409);
       expect(running.body.error.meta.state).toBe('running');
+    });
+
+    test('returns 409 while the case is paused', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: failingToolId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await pause(caseId);
+
+      const res = await run(caseId, 'pricing');
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_PAUSED');
     });
 
     test('returns 400 for a node the version does not declare', async () => {
@@ -612,58 +683,6 @@ describe('Playbook executions', () => {
       const res = await run(caseId, 'nope');
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-    });
-
-    test('returns 403 once the author may no longer start the executor', async () => {
-      const authorToken = await createScopedPrincipal({
-        adminToken,
-        projectId,
-        username: 'pbkauthorrevoked',
-        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
-      });
-      const caseId = await newCase({
-        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
-        token: authorToken,
-      });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-      const me =
-        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
-      await asAdmin()
-        .put(`/api/v1/users/${me.body.id}/policies`)
-        .send({ policy_ids: [] });
-
-      const res = await run(caseId, 'pricing', { wait: true }, adminToken);
-
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
-      expect(res.body.error.meta).toEqual({
-        node: 'pricing',
-        action: 'tools:CallTool',
-      });
-    });
-
-    test('returns 409 when the author no longer exists', async () => {
-      const authorToken = await createScopedPrincipal({
-        adminToken,
-        projectId,
-        username: 'pbkauthorgone',
-        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
-      });
-      const caseId = await newCase({
-        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
-        token: authorToken,
-      });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
-      const me =
-        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
-      expect(
-        (await asAdmin().delete(`/api/v1/users/${me.body.id}`)).status
-      ).toBe(204);
-
-      const res = await run(caseId, 'pricing', { wait: true }, adminToken);
-
-      expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe('PLAYBOOK_AUTHOR_UNAVAILABLE');
     });
 
     test('returns 401 without a token', async () => {
@@ -682,30 +701,121 @@ describe('Playbook executions', () => {
     });
   });
 
+  describe('POST /api/v1/playbook-cases/{case_id}/pause and /resume', () => {
+    test('a paused case starts nothing until it is resumed', async () => {
+      const caseId = await newCase({
+        definition: readsAmount({
+          type: 'tool',
+          id: doubleToolId,
+          input: { value: { var: 'amount' } },
+        }),
+      });
+
+      const paused = await pause(caseId);
+      expect(paused).toMatchObject({
+        automation_status: 'paused',
+        pause_requested_at: expect.any(String),
+      });
+      await write(caseId, [{ node: 'revenue', name: 'amount', value: 2 }]);
+      expect(await executionsOf(caseId)).toEqual([]);
+      expect((await pause(caseId)).pause_requested_at).toBe(
+        paused.pause_requested_at
+      );
+
+      const resumed = await authenticatedTestClient(userToken).post(
+        `/api/v1/playbook-cases/${caseId}/resume`
+      );
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.pause_requested_at).toBeNull();
+      await flushPlaybookExecutions();
+      expect((await nodeOf(caseId, 'pricing')).output.value).toEqual({
+        doubled: 4,
+      });
+    });
+
+    test('resume returns 409 for a case that is not paused', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+      const res = await authenticatedTestClient(userToken).post(
+        `/api/v1/playbook-cases/${caseId}/resume`
+      );
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_NOT_PAUSED');
+    });
+
+    test('returns 401 without a token', async () => {
+      const res = await testClient.post(
+        '/api/v1/playbook-cases/pbk_case_absent/pause'
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('returns 404 to a caller without permission', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+      const res = await authenticatedTestClient(noPermToken).post(
+        `/api/v1/playbook-cases/${caseId}/resume`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/v1/playbook-cases?automation_status=', () => {
+    test('lists cases by what their automation is doing', async () => {
+      const running = await newCase({
+        definition: runsOnAmount({ type: 'workflow', id: workflowId }),
+      });
+      await write(running, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      const paused = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+      await pause(paused);
+      const idle = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+
+      const idsIn = async (status: string) => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/playbook-cases?project_id=${projectId}&automation_status=${status}&limit=100`
+        );
+        expect(res.status).toBe(200);
+        return res.body.data.map(
+          (row: { id: string; automation_status: string }) => {
+            expect(row.automation_status).toBe(status);
+            return row.id;
+          }
+        );
+      };
+
+      expect(await idsIn('running')).toContain(running);
+      expect(await idsIn('paused')).toContain(paused);
+      expect(await idsIn('idle')).toContain(idle);
+    });
+
+    test('returns 400 for an unknown status', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/playbook-cases?project_id=${projectId}&automation_status=busy`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('GET /api/v1/playbook-cases/{case_id}/executions', () => {
-    test('lists executions newest first, by node', async () => {
+    test('filters by node', async () => {
       const caseId = await newCase({
         definition: readsAmount({ type: 'tool', id: doubleToolId }),
       });
       await write(caseId, [{ node: 'revenue', name: 'amount', value: 3 }]);
-      const collect = await run(caseId, 'revenue');
-      const tool = await run(caseId, 'pricing');
-
-      const all = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${caseId}/executions`
-      );
-      expect(all.status).toBe(200);
-      expect(
-        all.body.data.map((row: { id: string }) => {
-          return row.id;
-        })
-      ).toEqual([tool.body.id, collect.body.id]);
 
       const one = await authenticatedTestClient(userToken).get(
         `/api/v1/playbook-cases/${caseId}/executions?node=revenue`
       );
+      expect(one.status).toBe(200);
       expect(one.body.data).toHaveLength(1);
-      expect(one.body.data[0].created_by).toEqual(expect.any(String));
+      expect(one.body.data[0].node).toBe('revenue');
     });
 
     test('returns 404 to a caller without permission', async () => {

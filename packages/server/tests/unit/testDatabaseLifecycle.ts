@@ -3,6 +3,7 @@ import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize } from '@ttoss/postgresdb';
 import { app } from 'src/app';
 import { initializeDatabase } from 'src/db';
+import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import {
   createTestDatabase,
@@ -54,6 +55,9 @@ export const installTestDatabase = (args?: {
   });
 
   afterAll(async () => {
+    // A cascade a request started may still be draining; let it finish
+    // before its connection goes.
+    await flushPlaybookExecutions();
     await sequelize?.close();
 
     if (database) {

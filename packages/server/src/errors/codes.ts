@@ -679,6 +679,20 @@ export const ERROR_CODES = {
     description:
       'The node cannot run now: it is a `confirm` node, a required input is unset or reads a node that is not `done`, it is already `running`, or its output is current (`done`). `meta` carries the `state`, `missing` and `waiting`.',
   },
+  PLAYBOOK_EXECUTION_INTERRUPTED: {
+    httpStatus: 500,
+    description:
+      "Recorded on an execution, never returned by a request: the process running the node's agent, tool or decider stopped before it settled. It is not run again on its own, so a call with side effects never runs twice; run the node again.",
+  },
+  PLAYBOOK_CASE_PAUSED: {
+    httpStatus: 409,
+    description:
+      'The case is paused, so none of its nodes starts: neither the cascade nor a run of one node. Executions already in flight settle. Resume the case first.',
+  },
+  PLAYBOOK_CASE_NOT_PAUSED: {
+    httpStatus: 409,
+    description: 'The case carries no pause, so there is nothing to resume.',
+  },
   PLAYBOOK_EXECUTION_FAILED: {
     httpStatus: 422,
     description:
