@@ -764,15 +764,25 @@ describe('Playbook executions', () => {
 
   describe('GET /api/v1/playbook-cases?automation_status=', () => {
     test('lists cases by what their automation is doing', async () => {
-      const running = await newCase({
+      const onTask = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
-      await write(running, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(onTask, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      const onRun = await newCase({
+        definition: runsOnAmount({
+          type: 'orchestration',
+          id: humanOrchestrationId,
+        }),
+      });
+      await write(onRun, [{ node: 'pricing', name: 'amount', value: 1 }]);
       const paused = await newCase({
         definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
       });
       await pause(paused);
       const idle = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+      const running = await newCase({
         definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
       });
 
@@ -789,9 +799,40 @@ describe('Playbook executions', () => {
         );
       };
 
-      expect(await idsIn('running')).toContain(running);
-      expect(await idsIn('paused')).toContain(paused);
-      expect(await idsIn('idle')).toContain(idle);
+      // With the worker off the write only queues the execution.
+      process.env.PLAYBOOK_WORKER_DISABLED = 'true';
+      try {
+        await write(running, [{ node: 'pricing', name: 'amount', value: 1 }]);
+        const runningIds = await idsIn('running');
+        expect(runningIds).toContain(running);
+        expect(runningIds).not.toContain(onTask);
+        expect(runningIds).not.toContain(onRun);
+        expect(await idsIn('waiting')).toEqual(
+          expect.arrayContaining([onTask, onRun])
+        );
+        expect(await idsIn('paused')).toContain(paused);
+        expect(await idsIn('idle')).toContain(idle);
+      } finally {
+        delete process.env.PLAYBOOK_WORKER_DISABLED;
+      }
+      await pause(running);
+    });
+
+    test('a case waiting on a task it started reads waiting until the task closes', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'workflow', id: workflowId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      const waiting = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
+      expect(waiting.body.automation_status).toBe('waiting');
+      const [parked] = await executionsOf(caseId);
+      expect(parked).toMatchObject({ status: 'running' });
+
+      await closeTask(parked.run_id);
+      await settled(caseId, parked.id);
+      const closed = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
+      expect(closed.body.automation_status).toBe('idle');
     });
 
     test('returns 400 for an unknown status', async () => {
