@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.77.1](https://github.com/ttoss/soat/compare/v0.77.0...v0.77.1) (2026-10-15)
+
+### Bug Fixes
+
+* **usage:** keep a deleted entity's attribution in usage reads ([#1583](https://github.com/ttoss/soat/issues/1583)) ([b8be8b1](https://github.com/ttoss/soat/commit/b8be8b1c60ceb5f94520dc39c1ad5b9eff8c108d)), closes [#1582](https://github.com/ttoss/soat/issues/1582)
+
 # [0.77.0](https://github.com/ttoss/soat/compare/v0.76.0...v0.77.0) (2026-10-12)
 
 * feat(server)!: one idempotency pattern, with the Idempotency-Key header, on every idempotent route (#1576) ([e2d9e10](https://github.com/ttoss/soat/commit/e2d9e10e3ea7d7ac80a54fddff005a7ac2633fa7)), closes [#1576](https://github.com/ttoss/soat/issues/1576)
