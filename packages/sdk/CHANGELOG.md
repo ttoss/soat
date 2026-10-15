@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.79.0](https://github.com/ttoss/soat/compare/v0.78.0...v0.79.0) (2026-10-15)
+
+### Features
+
+* **playbooks:** playbooks, versions, cases and input writes ([#1589](https://github.com/ttoss/soat/issues/1589)) ([8cd1f15](https://github.com/ttoss/soat/commit/8cd1f15bffa84ae940f56aa9b0edc2cdb078d648))
+
 # [0.78.0](https://github.com/ttoss/soat/compare/v0.77.1...v0.78.0) (2026-10-15)
 
 **Note:** Version bump only for package @soat/sdk
