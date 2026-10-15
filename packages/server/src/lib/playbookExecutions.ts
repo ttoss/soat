@@ -76,7 +76,8 @@ const assertRunnable = (args: {
   );
 };
 
-const readNode = (args: {
+/** The node of the case's version a route names. */
+export const readCaseNode = (args: {
   definition: Parameters<typeof nodesByKey>[0]['definition'];
   node: unknown;
 }): PlaybookNode => {
@@ -151,9 +152,9 @@ export const runPlaybookNode = async (args: {
     id: args.caseId,
   });
   const definition = await caseDefinition({ row });
-  const node = readNode({ definition, node: args.node });
+  const node = readCaseNode({ definition, node: args.node });
   if (node.executor) {
-    await resolveRunAs({ row, node: { ...node, executor: node.executor } });
+    await resolveRunAs({ row, node: node.key, executors: [node.executor] });
   }
 
   const execution = await db.sequelize.transaction(async (transaction) => {

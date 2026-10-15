@@ -147,7 +147,12 @@ const handle = (body) => {
 };
 
 const server = createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/health') {
+  // By path alone: the playbook export smoke step calls it as a GET tool,
+  // which carries the tool's arguments as a query string.
+  if (
+    req.method === 'GET' &&
+    new URL(req.url, 'http://localhost').pathname === '/health'
+  ) {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('{"status":"ok"}');
     return;

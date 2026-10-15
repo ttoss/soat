@@ -43,7 +43,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `final`           | boolean | A goal of the playbook. Default `false`                                                                                                                                                                                                  |
 | `inputs`          | array   | Up to 50 [inputs](#input)                                                                                                                                                                                                                |
 | `executor`        | object  | Required on an `execute` node, refused on any other: `{ type, id, input? }`, `type` one of `agent`, `tool`, `decider`, `workflow`, `orchestration`; `input` maps each field of the executor's input to JSON Logic over the node's inputs |
-| `transformations` | array   | Final nodes only: `{ name, format, tool }`, a tool that renders the node's output as a file                                                                                                                                              |
+| `transformations` | array   | Final nodes only: `{ name, format, tool }`, a tool that renders the node's output as a file of `format`; see [Exports](#exports)                                                                                                         |
 
 ### Input
 
@@ -102,11 +102,30 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `created_by`       | string \| null  | Who asked for the run                                                                |
 | `finished_at`      | string \| null  | ISO 8601 settle timestamp                                                            |
 
+### Export
+
+| Field              | Type           | Description                                                                        |
+| ------------------ | -------------- | ---------------------------------------------------------------------------------- |
+| `id`               | string         | Public identifier (`pbk_exp_…`)                                                    |
+| `case_id`          | string         | The case                                                                           |
+| `node`             | string         | The final node rendered                                                            |
+| `revision`         | integer        | The output or confirmation entry rendered                                          |
+| `playbook_version` | integer        | The version whose transformation rendered it                                       |
+| `transformation`   | string         | The transformation's `name`                                                        |
+| `format`           | string         | The transformation's `format`                                                      |
+| `tool_id`          | string         | The tool called                                                                    |
+| `status`           | string         | `running`, then `succeeded` or `failed`                                            |
+| `stale`            | boolean        | `revision` is no longer the node's current output, or the node is no longer `done` |
+| `file_id`          | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted       |
+| `error`            | object \| null | Why it failed                                                                      |
+| `created_by`       | string \| null | Who asked for the export                                                           |
+| `finished_at`      | string \| null | ISO 8601 settle timestamp                                                          |
+
 ## Key Concepts
 
 ### Definition checks
 
-A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, or a cycle. `meta.problems` lists every one, each with its `code` and the `node`, `input` or `nodes` it concerns. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
+A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one, each with its `code` and the `node`, `input`, `transformation` or `nodes` it concerns. A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
 
 ### Versions
 
@@ -193,7 +212,34 @@ A case refuses input writes and confirmations made with the run-as credential of
 
 ### Who a node runs as
 
-A node's executor runs as the user or API key that wrote the case's playbook version, with that credential's permissions as they stand when it runs; an API key's own policies still bound it. Writing a definition therefore requires the start action of every executor it names — `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask` or `orchestrations:StartRun` — and is refused with `403 PLAYBOOK_EXECUTOR_FORBIDDEN` otherwise. Each run checks it again, so a permission removed since stops the next run with the same error. A definition with executors written with a trigger or OAuth token, or a version whose author no longer exists, is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`.
+A node's executor, and the tool of each of its [transformations](#exports), runs as the user or API key that wrote the case's playbook version, with that credential's permissions as they stand when it runs; an API key's own policies still bound it. Writing a definition therefore requires the start action of every executor it names — `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask` or `orchestrations:StartRun` — and `tools:CallTool` on every transformation's tool, and is refused with `403 PLAYBOOK_EXECUTOR_FORBIDDEN` otherwise. Each run and each export checks it again, so a permission removed since stops the next one with the same error. A definition with executors or transformations written with a trigger or OAuth token, or a version whose author no longer exists, is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`.
+
+### Exports
+
+[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`](/docs/api/playbooks/export-playbook-case-node) renders one revision of a final node as files, one [export](#export) per transformation it names in `transformations` (every one when omitted). Each transformation's tool is called with `case_id`, `subject`, `node`, `revision` and that revision's `output`, and must answer a file — an http tool with `execute.response_mode: base64` (see [Tools](./tools.md)) — whose content type is its `format`'s:
+
+| `format` | Content type                                                                |
+| -------- | --------------------------------------------------------------------------- |
+| `csv`    | `text/csv`                                                                  |
+| `docx`   | `application/vnd.openxmlformats-officedocument.wordprocessingml.document`   |
+| `html`   | `text/html`                                                                 |
+| `jpg`    | `image/jpeg`                                                                |
+| `json`   | `application/json`                                                          |
+| `md`     | `text/markdown`                                                             |
+| `pdf`    | `application/pdf`                                                           |
+| `png`    | `image/png`                                                                 |
+| `pptx`   | `application/vnd.openxmlformats-officedocument.presentationml.presentation` |
+| `txt`    | `text/plain`                                                                |
+| `xlsx`   | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`         |
+
+The file is kept in the project's [files](./files.md) under `/.system/playbooks/` and is never deleted by the case. An export never feeds a node: whatever a file shows is in the node's output, so every format of one revision agrees.
+
+- Without `revision`, the node's current output is exported, which needs the node `done`: otherwise `409 PLAYBOOK_NODE_NOT_EXPORTABLE`, `meta` carrying its `state`. A `revision` names any earlier output or confirmation of the node (an [entry](#entries)); another is `400 VALIDATION_FAILED`.
+- An export is `stale` once its revision is not the node's current output, or the node is not `done`.
+- A node without transformations, or a name it does not declare, is `400 VALIDATION_FAILED`. A paused case is `409 PLAYBOOK_CASE_PAUSED`.
+- A tool that fails or answers no file fails the export with `PLAYBOOK_EXPORT_FAILED`; a file of another content type with `PLAYBOOK_EXPORT_FORMAT_MISMATCH`. An export whose server stopped while rendering it fails as `PLAYBOOK_EXPORT_INTERRUPTED` and is not rendered again on its own.
+
+Without `wait` the request answers `201` with every export `running`; poll [`GET /api/v1/playbook-cases/{case_id}/exports/{export_id}`](/docs/api/playbooks/get-playbook-case-export). With `wait: true` it answers once each has its `file_id` or its `error`; a tool call always waits. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/exports`](/docs/api/playbooks/list-playbook-case-exports) lists a case's exports, newest first, optionally for one `node` or `transformation`.
 
 ### Entries
 
@@ -517,6 +563,61 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
 }
 ```
 
+### Export a final node
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat export-playbook-case-node \
+  --case-id pbk_case_… \
+  --node pricing \
+  --transformations '["proposal"]' \
+  --wait true
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.playbooks.exportPlaybookCaseNode({
+  path: { case_id: 'pbk_case_…', node: 'pricing' },
+  body: { transformations: ['proposal'], wait: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pricing/exports \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "transformations": ["proposal"], "wait": true }'
+```
+
+</TabItem>
+</Tabs>
+
+```json
+{
+  "data": [
+    {
+      "id": "pbk_exp_…",
+      "case_id": "pbk_case_…",
+      "node": "pricing",
+      "revision": 5,
+      "transformation": "proposal",
+      "format": "pdf",
+      "status": "succeeded",
+      "stale": false,
+      "file_id": "file_…"
+    }
+  ]
+}
+```
+
 ### Pause a case
 
 <Tabs groupId="client">
@@ -550,19 +651,23 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 
 ## Errors
 
-| Code                            | Status | When                                                                                                   |
-| ------------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| `VALIDATION_FAILED`             | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` or a run |
-| `PLAYBOOK_VALIDATION_FAILED`    | 400    | The definition has graph problems; `meta.problems` lists them                                          |
-| `PLAYBOOK_INPUT_INVALID`        | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                  |
-| `NAME_CONFLICT`                 | 409    | Another playbook in the project has the name                                                           |
-| `VERSION_CONFLICT`              | 409    | `expected_version` is stale                                                                            |
-| `PLAYBOOK_HAS_CASES`            | 409    | A delete of a playbook that has cases                                                                  |
-| `PLAYBOOK_INPUT_CONFLICT`       | 409    | An input write's `expected_revision` is not the field's current one                                    |
-| `PLAYBOOK_EXECUTOR_FORBIDDEN`   | 403    | The version's author may not start an executor the definition names                                    |
-| `PLAYBOOK_AUTHOR_UNAVAILABLE`   | 409    | The version has no author a node can run as                                                            |
-| `PLAYBOOK_NODE_NOT_RUNNABLE`    | 409    | The node is a `confirm` node, blocked, `running` or `done`                                             |
-| `PLAYBOOK_CASE_PAUSED`          | 409    | A run of a node in a paused case                                                                       |
-| `PLAYBOOK_CASE_NOT_PAUSED`      | 409    | A resume of a case that is not paused                                                                  |
-| `PLAYBOOK_NODE_NOT_CONFIRMABLE` | 409    | A confirmation of a node that is not a `confirm` node, or is blocked                                   |
-| `PLAYBOOK_SELF_WRITE`           | 403    | An input write or confirmation from the case's own work                                                |
+| Code                              | Status | When                                                                                                                                                                                                                           |
+| --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VALIDATION_FAILED`               | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` or a run; on an export, a node without transformations, an undeclared transformation or a revision that is no output of the node |
+| `PLAYBOOK_VALIDATION_FAILED`      | 400    | The definition has graph problems; `meta.problems` lists them                                                                                                                                                                  |
+| `PLAYBOOK_INPUT_INVALID`          | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                                                                                                                                          |
+| `NAME_CONFLICT`                   | 409    | Another playbook in the project has the name                                                                                                                                                                                   |
+| `VERSION_CONFLICT`                | 409    | `expected_version` is stale                                                                                                                                                                                                    |
+| `PLAYBOOK_HAS_CASES`              | 409    | A delete of a playbook that has cases                                                                                                                                                                                          |
+| `PLAYBOOK_INPUT_CONFLICT`         | 409    | An input write's `expected_revision` is not the field's current one                                                                                                                                                            |
+| `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | The version's author may not start an executor the definition names                                                                                                                                                            |
+| `PLAYBOOK_AUTHOR_UNAVAILABLE`     | 409    | The version has no author a node can run as                                                                                                                                                                                    |
+| `PLAYBOOK_NODE_NOT_RUNNABLE`      | 409    | The node is a `confirm` node, blocked, `running` or `done`                                                                                                                                                                     |
+| `PLAYBOOK_CASE_PAUSED`            | 409    | A run of a node in a paused case                                                                                                                                                                                               |
+| `PLAYBOOK_CASE_NOT_PAUSED`        | 409    | A resume of a case that is not paused                                                                                                                                                                                          |
+| `PLAYBOOK_NODE_NOT_CONFIRMABLE`   | 409    | A confirmation of a node that is not a `confirm` node, or is blocked                                                                                                                                                           |
+| `PLAYBOOK_SELF_WRITE`             | 403    | An input write or confirmation from the case's own work                                                                                                                                                                        |
+| `PLAYBOOK_NODE_NOT_EXPORTABLE`    | 409    | An export of the latest revision of a node that is not `done`                                                                                                                                                                  |
+| `PLAYBOOK_EXPORT_FAILED`          | 422    | On an export's `error`: its tool failed or answered no file                                                                                                                                                                    |
+| `PLAYBOOK_EXPORT_FORMAT_MISMATCH` | 422    | On an export's `error`: its file is not of the transformation's `format`                                                                                                                                                       |
+| `PLAYBOOK_EXPORT_INTERRUPTED`     | 500    | On an export's `error`: the server stopped while rendering it                                                                                                                                                                  |

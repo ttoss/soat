@@ -748,6 +748,153 @@ paths:
         '404':
           description: Case or execution not found
 
+  /api/v1/playbook-cases/{case_id}/nodes/{node}/exports:
+    post:
+      tags:
+        - Playbooks
+      summary: Export a final node
+      description: >-
+        Renders one revision of a final node as files, one export per
+        transformation: each transformation's tool is called with the case's
+        `case_id` and `subject`, the `node`, the `revision` and that revision's
+        `output`, and must answer a file (`execute.response_mode: base64`) of
+        its `format`'s content type. The file is kept in the project's files
+        under `/.system/playbooks/`. An export never feeds a node.
+
+
+        Without `revision` the node's current output is exported, which needs
+        the node `done` (`409 PLAYBOOK_NODE_NOT_EXPORTABLE`); a `revision`
+        names an earlier output or confirmation of the node. Each tool runs as
+        the author of the case's playbook version, whose permission to call it
+        is checked here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A paused case is
+        `409 PLAYBOOK_CASE_PAUSED`.
+
+
+        Without `wait` every export answers `running` and settles in the
+        background; with `wait: true` it answers once each has its file or its
+        error.
+      operationId: exportPlaybookCaseNode
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/NodeKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportPlaybookCaseNodeRequest'
+      responses:
+        '201':
+          description: One export per transformation, `running` or settled
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookExport'
+        '400':
+          description: >-
+            Bad request — a node the version does not declare or that has no
+            transformations, a transformation it does not declare, or a
+            revision that is no output of the node
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden, or the author may not call a transformation's tool
+        '404':
+          description: Case not found
+        '409':
+          description: >-
+            The node has no current output, the case is paused, or the version
+            has no author to run as
+
+  /api/v1/playbook-cases/{case_id}/exports:
+    get:
+      tags:
+        - Playbooks
+      summary: List a case's exports
+      description: Returns every file rendered from the case's final nodes, newest first.
+      operationId: listPlaybookCaseExports
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: node
+          in: query
+          description: Only the exports of this node
+          schema:
+            type: string
+            example: pricing
+        - name: transformation
+          in: query
+          description: Only the exports of this transformation
+          schema:
+            type: string
+            example: proposal
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of exports, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaybookExport'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case not found
+
+  /api/v1/playbook-cases/{case_id}/exports/{export_id}:
+    get:
+      tags:
+        - Playbooks
+      summary: Get an export
+      description: Returns one file rendered from a case's final node.
+      operationId: getPlaybookCaseExport
+      x-soat-resource:
+        kind: playbook_case
+        from: case_id
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ExportId'
+      responses:
+        '200':
+          description: The export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookExport'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Case or export not found
+
   /api/v1/playbook-cases/{case_id}/pause:
     post:
       tags:
@@ -899,6 +1046,14 @@ components:
       schema:
         type: string
         example: pbk_exe_V1StGXR8Z5jdHi6B
+    ExportId:
+      name: export_id
+      in: path
+      required: true
+      description: The export ID
+      schema:
+        type: string
+        example: pbk_exp_V1StGXR8Z5jdHi6B
     Version:
       name: version
       in: path
@@ -993,10 +1148,30 @@ components:
           example: proposal
         format:
           type: string
+          description: >-
+            The file's format; the tool must answer its content type:
+            `application/pdf` for `pdf`, the Office Open XML types for `docx`,
+            `xlsx` and `pptx`, `text/csv`, `text/html`, `text/markdown`,
+            `text/plain`, `application/json`, `image/png` and `image/jpeg` for
+            `jpg`
+          enum:
+            - csv
+            - docx
+            - html
+            - jpg
+            - json
+            - md
+            - pdf
+            - png
+            - pptx
+            - txt
+            - xlsx
           example: pdf
         tool:
           type: string
-          description: The tool that renders the final node's output as a file
+          description: >-
+            The tool that renders the final node's output as a file, answering
+            with `execute.response_mode: base64`
           example: tool_V1StGXR8Z5jdHi6B
     PlaybookNode:
       type: object
@@ -1162,10 +1337,13 @@ components:
             - executor_required
             - executor_forbidden
             - transformations_not_final
+            - duplicate_transformation
             - cycle
         node:
           type: string
         input:
+          type: string
+        transformation:
           type: string
         nodes:
           type: array
@@ -1528,6 +1706,93 @@ components:
           type: string
           nullable: true
           description: Who asked for the run
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+    ExportPlaybookCaseNodeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        transformations:
+          type: array
+          minItems: 1
+          description: The names of the transformations to render; every one the node declares when omitted
+          items:
+            type: string
+            example: proposal
+        revision:
+          type: integer
+          description: >-
+            The output or confirmation of the node to render; its current
+            output when omitted
+        wait:
+          type: boolean
+          default: false
+          # Pinned to `true` for tool calls: a tool caller wants the file, and
+          # a render is one bounded tool call per transformation.
+          x-soat-tool-forced: true
+          description: >-
+            Answer once every export settles instead of right away. A tool
+            call, `builtin` or MCP, always waits.
+    PlaybookExport:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pbk_exp_V1StGXR8Z5jdHi6B
+        case_id:
+          type: string
+          example: pbk_case_V1StGXR8Z5jdHi6B
+        node:
+          type: string
+          description: The key of the final node rendered
+          example: pricing
+        revision:
+          type: integer
+          description: The output or confirmation entry rendered
+        playbook_version:
+          type: integer
+          description: The playbook version whose transformation rendered it
+        transformation:
+          type: string
+          example: proposal
+        format:
+          type: string
+          example: pdf
+        tool_id:
+          type: string
+          example: tool_V1StGXR8Z5jdHi6B
+        status:
+          type: string
+          description: '`running` while its tool runs, then `succeeded` or `failed`'
+          enum:
+            - running
+            - succeeded
+            - failed
+        stale:
+          type: boolean
+          description: >-
+            Whether `revision` is no longer the node's current output, or the
+            node is no longer `done`
+        file_id:
+          type: string
+          nullable: true
+          x-soat-ref: files
+          description: The file rendered; null until it succeeds, and once the file is deleted
+          example: file_V1StGXR8Z5jdHi6B
+        error:
+          type: object
+          nullable: true
+          description: Why it failed
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+          description: Who asked for the export
         created_at:
           type: string
           format: date-time

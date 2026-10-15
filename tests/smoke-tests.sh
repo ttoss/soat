@@ -8158,6 +8158,44 @@ fi
 $SOAT_CLI delete-playbook-case --case_id "$CONFIRM_CASE_ID"
 $SOAT_CLI delete-playbook --playbook_id "$CONFIRM_PLAYBOOK_ID"
 
+echo "--- Exporting a final node through a transformation tool ---"
+EXPORT_TOOL_ID=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-playbook-render \
+  --type http \
+  --execute '{"url":"http://formation-handler:50480/health","method":"GET","response_mode":"base64"}' | jq -r '.id')
+EXPORT_PLAYBOOK_ID=$($SOAT_CLI create-playbook \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-exported" \
+  --definition "{\"nodes\":[{\"key\":\"pricing\",\"title\":\"Pricing\",\"kind\":\"collect\",\"final\":true,\"inputs\":[{\"name\":\"amount\",\"schema\":{\"type\":\"number\"},\"required\":true,\"source\":\"manual\"}],\"transformations\":[{\"name\":\"summary\",\"format\":\"json\",\"tool\":\"$EXPORT_TOOL_ID\"}]}]}" | jq -r '.id')
+EXPORT_CASE_ID=$($SOAT_CLI create-playbook-case --playbook_id "$EXPORT_PLAYBOOK_ID" --subject "smoke export" | jq -r '.id')
+$SOAT_CLI write-playbook-case-inputs \
+  --case_id "$EXPORT_CASE_ID" \
+  --inputs '[{"node":"pricing","name":"amount","value":3,"expected_revision":null}]' >/dev/null
+PRICING_STATE=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  PRICING_STATE=$($SOAT_CLI get-playbook-case --case_id "$EXPORT_CASE_ID" | jq -r '.nodes[0].state')
+  [ "$PRICING_STATE" = "done" ] && break
+  sleep 1
+done
+EXPORT_RESP=$($SOAT_CLI export-playbook-case-node \
+  --case_id "$EXPORT_CASE_ID" \
+  --node pricing \
+  --wait true)
+if ! printf '%s\n' "$EXPORT_RESP" | jq -e '.data[0].status == "succeeded" and .data[0].stale == false and (.data[0].file_id | startswith("file_"))' >/dev/null 2>&1; then
+  echo "ERROR: export-playbook-case-node did not render the file" >&2
+  printf '%s\n' "$EXPORT_RESP" >&2
+  exit 1
+fi
+EXPORT_FILE_ID=$(printf '%s\n' "$EXPORT_RESP" | jq -r '.data[0].file_id')
+if ! $SOAT_CLI get-file --file-id "$EXPORT_FILE_ID" | jq -e '.content_type == "application/json" and (.path | startswith("/.system/playbooks/"))' >/dev/null 2>&1; then
+  echo "ERROR: the export's file is not filed under /.system/playbooks/" >&2
+  exit 1
+fi
+$SOAT_CLI delete-playbook-case --case_id "$EXPORT_CASE_ID"
+$SOAT_CLI delete-playbook --playbook_id "$EXPORT_PLAYBOOK_ID"
+$SOAT_CLI delete-tool --tool-id "$EXPORT_TOOL_ID" >/dev/null
+
 echo "--- Cleaning up playbook fixtures ---"
 $SOAT_CLI delete-playbook-case --case_id "$CASE_ID"
 $SOAT_CLI delete-playbook --playbook_id "$PLAYBOOK_ID"

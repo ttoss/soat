@@ -3,7 +3,12 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 /** One answer the stub gives: an HTTP status and a JSON body. */
-export type StubReply = { status?: number; body: unknown };
+/** `body` is sent as JSON, or as it is when a `Buffer` with its `contentType`. */
+export type StubReply = {
+  status?: number;
+  body: unknown;
+  contentType?: string;
+};
 
 /** A request the stub received, with its JSON body parsed. */
 export type RecordedRequest = {
@@ -165,9 +170,11 @@ export const startChatCompletionsStub = async (
       }
 
       res.writeHead(reply.status ?? 200, {
-        'Content-Type': 'application/json',
+        'Content-Type': reply.contentType ?? 'application/json',
       });
-      res.end(JSON.stringify(reply.body));
+      res.end(
+        Buffer.isBuffer(reply.body) ? reply.body : JSON.stringify(reply.body)
+      );
     });
   });
 

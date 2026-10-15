@@ -13,7 +13,7 @@ import {
   playbookCases,
 } from './playbookCases';
 import { conformsToInputSchema } from './playbookCaseState';
-import type { PlaybookNode } from './playbookDefinition';
+import type { PlaybookExecutor } from './playbookDefinition';
 import { settleExecution, settleFromOutcome } from './playbookExecutionSettle';
 import { startExecutor } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
@@ -21,12 +21,13 @@ import { playbookNodeStates, samePlaybookBasis } from './playbookState';
 
 const log = createDebug('soat:playbookExecutions');
 
-/** The case's author, checked against this node's executor before it runs. */
+/** The case's author, checked against what a node starts before it runs. */
 export const resolveRunAs = async (args: {
   row: PlaybookCaseRow;
-  node: PlaybookNode & { executor: NonNullable<PlaybookNode['executor']> };
+  node: string;
+  executors: PlaybookExecutor[];
 }): Promise<PlaybookRunAs> => {
-  const { row, node } = args;
+  const { row } = args;
   const version = await db.PlaybookVersion.findOne({
     where: { playbookId: row.playbookId, version: row.playbookVersion },
     attributes: ['principalKind', 'principalId'],
@@ -36,12 +37,14 @@ export const resolveRunAs = async (args: {
     projectId: row.projectId,
     workPublicId: row.publicId,
   });
-  await assertExecutorStartable({
-    node: node.key,
-    executor: node.executor,
-    projectPublicId: row.project.publicId,
-    isAllowed: runAs.isAllowed,
-  });
+  for (const executor of args.executors) {
+    await assertExecutorStartable({
+      node: args.node,
+      executor,
+      projectPublicId: row.project.publicId,
+      isAllowed: runAs.isAllowed,
+    });
+  }
   return runAs;
 };
 
@@ -95,7 +98,11 @@ export const executeClaimed = async (args: {
         projectId: row.projectId,
         executionPublicId: execution.publicId,
         title: `${row.subject} · ${node.title}`,
-        runAs: await resolveRunAs({ row, node: { ...node, executor } }),
+        runAs: await resolveRunAs({
+          row,
+          node: node.key,
+          executors: [executor],
+        }),
       });
     },
   });

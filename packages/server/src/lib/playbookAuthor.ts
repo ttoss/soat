@@ -11,6 +11,7 @@ import type {
   PlaybookDefinition,
   PlaybookExecutor,
   PlaybookExecutorType,
+  PlaybookNode,
 } from './playbookDefinition';
 import type { RequestPrincipal } from './principals';
 
@@ -68,6 +69,16 @@ export const assertExecutorStartable = async (args: {
   }
 };
 
+/** What a node starts as its author: its executor and each export's tool. */
+export const executorsOf = (node: PlaybookNode): PlaybookExecutor[] => {
+  return [
+    ...(node.executor ? [node.executor] : []),
+    ...(node.transformations ?? []).map((transformation) => {
+      return { type: 'tool' as const, id: transformation.tool };
+    }),
+  ];
+};
+
 /**
  * Refuses an executor `isAllowed` may not start. Run against the writer when a
  * version is written, and against the version's author before each run, so a
@@ -79,12 +90,9 @@ export const assertExecutorsStartable = async (args: {
   isAllowed: IsAllowedFn;
 }): Promise<void> => {
   for (const node of args.definition.nodes) {
-    if (!node.executor) continue;
-    await assertExecutorStartable({
-      ...args,
-      node: node.key,
-      executor: node.executor,
-    });
+    for (const executor of executorsOf(node)) {
+      await assertExecutorStartable({ ...args, node: node.key, executor });
+    }
   }
 };
 
@@ -106,12 +114,12 @@ export const assertAuthorCanRun = async (args: {
 }): Promise<void> => {
   const { definition, author } = args;
   const runs = definition.nodes.some((node) => {
-    return node.executor !== undefined;
+    return executorsOf(node).length > 0;
   });
   if (runs && !author.principal) {
     throw new DomainError(
       'PLAYBOOK_AUTHOR_UNAVAILABLE',
-      'A definition with executors must be written by a user or an API key: its executors run as the credential that wrote it.'
+      'A definition with executors or transformations must be written by a user or an API key: they run as the credential that wrote it.'
     );
   }
   await assertExecutorsStartable({

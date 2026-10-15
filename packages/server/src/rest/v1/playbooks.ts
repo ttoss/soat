@@ -26,6 +26,7 @@ import {
 } from './helpers';
 import { playbookAccess, playbookAuthorOf } from './playbookAccess';
 import { playbookCasesRouter } from './playbookCases';
+import { playbookExportsRouter } from './playbookExports';
 
 const playbooksRouter = new Router<Context>();
 
@@ -246,5 +247,7 @@ playbooksRouter.post(
 
 playbooksRouter.use(playbookCasesRouter.routes());
 playbooksRouter.use(playbookCasesRouter.allowedMethods());
+playbooksRouter.use(playbookExportsRouter.routes());
+playbooksRouter.use(playbookExportsRouter.allowedMethods());
 
 export { playbooksRouter };

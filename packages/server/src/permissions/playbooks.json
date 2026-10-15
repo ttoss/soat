@@ -110,6 +110,21 @@
       "operationId": "confirmPlaybookCaseNode",
       "action": "playbooks:ConfirmPlaybookCaseNode",
       "description": "Approve or reject a confirm node of a case"
+    },
+    {
+      "operationId": "exportPlaybookCaseNode",
+      "action": "playbooks:ExportPlaybookCaseNode",
+      "description": "Render a revision of a final node as files"
+    },
+    {
+      "operationId": "listPlaybookCaseExports",
+      "action": "playbooks:ListPlaybookCaseExports",
+      "description": "List a case's exports, newest first"
+    },
+    {
+      "operationId": "getPlaybookCaseExport",
+      "action": "playbooks:GetPlaybookCaseExport",
+      "description": "Get an export of a case"
     }
   ]
 }

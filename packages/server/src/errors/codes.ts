@@ -647,7 +647,7 @@ export const ERROR_CODES = {
   PLAYBOOK_VALIDATION_FAILED: {
     httpStatus: 400,
     description:
-      'The playbook definition is invalid: a duplicate node or input, an input reading a missing node or field, an executor on a node that may not have one or missing from one that must, transformations on a non-final node, or a cycle. `meta.problems` lists every one.',
+      'The playbook definition is invalid: a duplicate node or input, an input reading a missing node or field, an executor on a node that may not have one or missing from one that must, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one.',
   },
   PLAYBOOK_HAS_CASES: {
     httpStatus: 409,
@@ -702,6 +702,26 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description:
       'The node cannot be confirmed: it is not a `confirm` node, or a required input is unset or reads a node that is not `done`. `meta` carries the `state`, `missing` and `waiting`.',
+  },
+  PLAYBOOK_NODE_NOT_EXPORTABLE: {
+    httpStatus: 409,
+    description:
+      'An export of the latest revision of a node that is not `done`: it has no output yet, or its output is `stale`, `running` or `failed`. `meta` carries the `state`. Name a `revision` to export an earlier output.',
+  },
+  PLAYBOOK_EXPORT_FAILED: {
+    httpStatus: 422,
+    description:
+      "Recorded on an export, never returned by a request: the transformation's tool failed, or answered no file. A tool answers a file with `execute.response_mode: base64`.",
+  },
+  PLAYBOOK_EXPORT_FORMAT_MISMATCH: {
+    httpStatus: 422,
+    description:
+      "Recorded on an export, never returned by a request: the transformation's tool answered a file whose content type is not its `format`'s. `meta` carries both.",
+  },
+  PLAYBOOK_EXPORT_INTERRUPTED: {
+    httpStatus: 500,
+    description:
+      'Recorded on an export, never returned by a request: the process rendering it stopped before it settled. It is not rendered again on its own; export the node again.',
   },
   PLAYBOOK_EXECUTION_FAILED: {
     httpStatus: 422,

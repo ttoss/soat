@@ -1,16 +1,18 @@
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
-import type {
-  JsonSchema,
-  JsonValue,
-  PlaybookDefinition,
-  PlaybookExecutor,
-  PlaybookExecutorType,
-  PlaybookInput,
-  PlaybookInputSource,
-  PlaybookNode,
-  PlaybookNodeKind,
-  PlaybookTransformation,
+import {
+  isPlaybookExportFormat,
+  type JsonSchema,
+  type JsonValue,
+  PLAYBOOK_EXPORT_FORMATS,
+  type PlaybookDefinition,
+  type PlaybookExecutor,
+  type PlaybookExecutorType,
+  type PlaybookInput,
+  type PlaybookInputSource,
+  type PlaybookNode,
+  type PlaybookNodeKind,
+  type PlaybookTransformation,
 } from './playbookDefinition';
 import { validatePlaybookDefinition } from './playbookValidation';
 
@@ -146,15 +148,18 @@ const readTransformations = (args: {
   return transformations.map((item, index) => {
     const at = `${path}[${index}]`;
     if (!isPlainObject(item)) throw invalid(`${at} must be an object.`);
-    for (const key of ['format', 'tool'] as const) {
-      if (!isNonEmptyString(item[key])) {
-        throw invalid(`${at}.${key} must be a non-empty string.`);
-      }
+    if (!isNonEmptyString(item.tool)) {
+      throw invalid(`${at}.tool must be a non-empty string.`);
+    }
+    if (!isPlaybookExportFormat(item.format)) {
+      throw invalid(
+        `${at}.format must be one of: ${Object.keys(PLAYBOOK_EXPORT_FORMATS).join(', ')}.`
+      );
     }
     return {
       name: readIdentifier({ path: `${at}.name`, value: item.name }),
-      format: item.format as string,
-      tool: item.tool as string,
+      format: item.format,
+      tool: item.tool,
     };
   });
 };
