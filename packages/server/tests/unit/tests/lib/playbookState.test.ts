@@ -155,10 +155,10 @@ describe('nodeStates', () => {
   });
 
   test.each([
-    ['output.bands.1', 20, 'set'],
-    ['output.bands.9', undefined, 'unset'],
-    ['output.regime.deeper', undefined, 'unset'],
-  ])('reading %s leaves the input %s', (field, value) => {
+    ['output.bands.1', 20],
+    ['output.bands.9', undefined],
+    ['output.regime.deeper', undefined],
+  ])('reading %s gives %j', (field, value) => {
     const views = nodeStates({
       definition: {
         nodes: [execute('a', []), execute('b', [reads('v', 'a', field)])],
