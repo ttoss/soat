@@ -21,7 +21,7 @@ import {
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
-import { HttpToolError } from './httpToolError';
+import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
   readBase64ToolResponse,
@@ -697,7 +697,7 @@ const sendHttpToolRequest = async (
       method,
       error,
     });
-    throw error;
+    throw toToolUnreachableError({ error, url, method }) ?? error;
   }
 };
 

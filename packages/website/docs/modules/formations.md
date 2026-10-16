@@ -403,7 +403,7 @@ The formation-level `metadata` field supplied alongside `template` on `create-fo
 
 ### Topological Ordering
 
-The dependency graph is built from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs inside `sub` strings, then topologically sorted (Kahn's algorithm) for creation order. A cycle fails validation.
+The dependency graph is built from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs inside `sub` strings, then sorted so each resource is created after what it depends on, in declaration order among independent ones. A cycle fails validation with an error naming the resources in it.
 
 ### Resource Lifecycle
 
@@ -442,7 +442,7 @@ A deploy is a reconciler, so the two failure kinds are reported differently:
 }
 ```
 
-`error` stays on `get-formation` while the stack is `failed`; the next successful deploy clears it. `list-formation-events` keeps every operation with the same `error` bag.
+`error.code` is the resource's own failure (`VALIDATION_FAILED`, `SECRET_NOT_FOUND`, `RESOURCE_NOT_FOUND`, …), and `error.meta` carries its details beside `logical_id` and `resource_type`; an unexpected failure reads `INTERNAL_ERROR` with `Internal Server Error`, as every [stored error](/docs/api) does. `error` stays on `get-formation` while the stack is `failed`; the next successful deploy clears it. `list-formation-events` keeps every operation with the same `error` bag.
 
 **The CLI exits non-zero on that body.** `create-formation` and `update-formation` print the payload to stdout (`$(…)` capture and `| jq` unaffected), write the reason to stderr and exit `1`:
 

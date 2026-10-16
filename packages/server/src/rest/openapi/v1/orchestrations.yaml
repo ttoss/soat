@@ -1498,7 +1498,7 @@ components:
         error:
           type: object
           nullable: true
-          description: Error details when status is failed.
+          description: '`{ code, message, meta? }` when status is failed.'
         trace_id:
           x-soat-ref: traces
           type: string
@@ -1675,7 +1675,7 @@ components:
         error:
           type: object
           nullable: true
-          description: Error details when status is failed.
+          description: '`{ code, message, meta? }` when status is failed.'
         started_at:
           type: string
           format: date-time

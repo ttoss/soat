@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { readProjectPause } from './projectPause';
+import { adoptProjectPause } from './projectPause';
 import { applyLocked, stillInState } from './tasksAutomationLocking';
 
 const log = createDebug('soat:tasks');
@@ -64,25 +64,17 @@ export const markDispatchPaused = async (args: {
   );
 };
 
-/**
- * Whether the task's project is paused, flagging the task as the project's
- * when it is. The project's pause sweep flags every open task it finds; a task
- * written while the sweep ran is caught here, at its first dispatch, so the
- * project's resume finds it with the rest.
- */
-export const adoptProjectPause = async (args: {
+/** {@link adoptProjectPause} for a task about to dispatch. */
+export const adoptTaskProjectPause = (args: {
   taskId: number;
   projectId: number;
 }): Promise<boolean> => {
-  const pause = await readProjectPause({ projectId: args.projectId });
-  if (!pause) return false;
-  await db.Task.update(
-    {
-      pauseRequestedAt: pause.pausedAt,
-      pauseReason: pause.reason,
-      pausedByProject: true,
+  return adoptProjectPause({
+    projectId: args.projectId,
+    flag: (values) => {
+      return db.Task.update(values, {
+        where: { id: args.taskId, pauseRequestedAt: null },
+      });
     },
-    { where: { id: args.taskId, pauseRequestedAt: null } }
-  );
-  return true;
+  });
 };

@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { detectCycleExcludingLoopNodes } from './orchestrationGraph';
+import { cyclesExcludingLoopNodes, describeCycles } from './orchestrationGraph';
 import {
   buildPredecessors,
   computeDominators,
@@ -301,12 +301,10 @@ export const validateOrchestrationGraph = (args: {
   // Loop nodes legitimately introduce iteration via a sub-orchestration, so
   // they (and edges touching them) are excluded from cycle detection —
   // but a genuine cycle among the remaining nodes still fails validation.
-  const cyclic = detectCycleExcludingLoopNodes(nodes, edges);
+  const cycles = cyclesExcludingLoopNodes(nodes, edges);
+  const cyclic = cycles.length > 0;
   if (cyclic) {
-    errors.push({
-      path: 'edges',
-      message: 'Cycle detected in orchestration graph.',
-    });
+    errors.push({ path: 'edges', message: describeCycles(cycles) });
   }
 
   const danglingEdges = errors.some((e) => {

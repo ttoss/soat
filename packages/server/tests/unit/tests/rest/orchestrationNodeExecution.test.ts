@@ -505,6 +505,34 @@ describe('an agent node', () => {
 });
 
 describe('a tool node', () => {
+  test('a target that never answers fails the run naming the network failure', async () => {
+    // A port this process just released, so nothing is listening on it.
+    const closed = http.createServer();
+    await new Promise<void>((resolve) => {
+      closed.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = closed.address() as AddressInfo;
+    await new Promise((resolve) => {
+      closed.close(resolve);
+    });
+    const url = `http://127.0.0.1:${port}/never`;
+    const toolId = await createTool({ name: `unreachable-${port}`, url });
+    const orchestrationId = await createOrchestration({
+      nodes: [{ id: 'call', type: 'tool', tool_id: toolId }],
+    });
+
+    const run = await runToRest(orchestrationId);
+
+    expect(run.status).toBe('failed');
+    expect(run.error).toEqual({
+      code: 'TOOL_UNREACHABLE',
+      message: expect.stringMatching(
+        /^Tool target could not be reached: .*ECONNREFUSED/
+      ),
+      meta: { tool_url: url, tool_method: 'POST' },
+    });
+  });
+
   test('wraps a primitive tool result under `result`', async () => {
     const orchestrationId = await createOrchestration({
       nodes: [{ id: 'call', type: 'tool', tool_id: primitiveToolId }],
@@ -555,7 +583,7 @@ describe('a transform node whose expression throws', () => {
 
     expect(run.status).toBe('failed');
     expect(run.error).toEqual({
-      code: 'UNKNOWN',
+      code: 'EXPRESSION_FAILED',
       message: '{"type":"kaboom"}',
     });
   });
@@ -574,7 +602,10 @@ describe('a transform node whose expression throws', () => {
     const run = await runToRest(orchestrationId);
 
     expect(run.status).toBe('failed');
-    expect(run.error).toEqual({ code: 'UNKNOWN', message: '[object Object]' });
+    expect(run.error).toEqual({
+      code: 'EXPRESSION_FAILED',
+      message: '[object Object]',
+    });
   });
 });
 

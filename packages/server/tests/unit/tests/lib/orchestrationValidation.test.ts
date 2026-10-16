@@ -178,11 +178,29 @@ describe('validateOrchestrationGraph', () => {
           { from: 'b', to: 'a' },
         ],
       });
-      expect(result.errors).toContainEqual(
-        expect.objectContaining({
-          message: expect.stringContaining('Cycle detected'),
-        })
-      );
+      expect(result.errors).toContainEqual({
+        path: 'edges',
+        message: 'Cycle detected in orchestration graph: a, b.',
+      });
+    });
+
+    test('names each cycle apart, a self-loop included', () => {
+      const result = validate({
+        nodes: [
+          { id: 'a', type: 'transform', expression: 1 },
+          { id: 'b', type: 'transform', expression: 2 },
+          { id: 'c', type: 'transform', expression: 3 },
+        ],
+        edges: [
+          { from: 'a', to: 'a' },
+          { from: 'b', to: 'c' },
+          { from: 'c', to: 'b' },
+        ],
+      });
+      expect(result.errors).toContainEqual({
+        path: 'edges',
+        message: 'Cycle detected in orchestration graph: a; b, c.',
+      });
     });
 
     test('allows a cycle when a loop node is present', () => {

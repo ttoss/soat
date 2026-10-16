@@ -2,8 +2,10 @@ import { Cron } from 'croner';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { agentReferences, toolReferences } from './resourceReferences';
 import { SOAT_EVENT_TYPES } from './soatEvents';
+import { mayStart, type StartableType } from './startActions';
 
 export const TRIGGER_TYPES = [
   'manual',
@@ -16,33 +18,45 @@ export const TRIGGER_TARGET_TYPES = [
   'agent',
   'tool',
   'eval',
-] as const;
+] as const satisfies readonly StartableType[];
 
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
 export type TriggerTargetType = (typeof TRIGGER_TARGET_TYPES)[number];
 
 /**
- * The permission action a caller must hold — in addition to `triggers:*` — to
- * bind a trigger to (or fire) a target of the given type. This is the
- * no-privilege-escalation guard: you can only make a trigger start something you
- * could start yourself.
+ * Narrows a `target_type` to the ones a trigger can start; anything else is a
+ * `400` before any permission is asked.
  */
-export const targetStartAction = (targetType: string): string => {
-  switch (targetType) {
-    case 'orchestration':
-      return 'orchestrations:StartRun';
-    case 'agent':
-      return 'agents:CreateAgentGeneration';
-    case 'tool':
-      return 'tools:CallTool';
-    case 'eval':
-      return 'evaluations:RunEval';
-    default:
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        `Unknown target_type '${targetType}'.`
-      );
+const isTriggerTargetType = (value: string): value is TriggerTargetType => {
+  return (TRIGGER_TARGET_TYPES as readonly string[]).includes(value);
+};
+
+export const readTargetType = (targetType: string): TriggerTargetType => {
+  if (!isTriggerTargetType(targetType)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `Unknown target_type '${targetType}'.`
+    );
   }
+  return targetType;
+};
+
+/**
+ * Whether `isAllowed` may start the target — the no-privilege-escalation
+ * guard: a trigger can only start what its creator could start directly.
+ */
+export const mayStartTarget = (args: {
+  isAllowed: IsAllowedFn;
+  projectPublicId: string;
+  targetType: string;
+  targetId: string;
+}): Promise<boolean> => {
+  return mayStart({
+    isAllowed: args.isAllowed,
+    projectPublicId: args.projectPublicId,
+    type: readTargetType(args.targetType),
+    id: args.targetId,
+  });
 };
 
 /**

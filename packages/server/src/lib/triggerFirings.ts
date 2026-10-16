@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { paginatedList } from './pagination';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:triggers');
 
@@ -92,7 +93,7 @@ export const finalizeFiringSucceeded = async (args: {
 
 export const finalizeFiringFailed = async (args: {
   firing: InstanceType<(typeof db)['TriggerFiring']>;
-  error: Record<string, unknown>;
+  error: StoredError;
 }) => {
   args.firing.status = 'failed';
   args.firing.error = args.error;

@@ -233,7 +233,10 @@ describe('PUT /api/v1/formations/:formation_id — a changed declaration updates
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('failed');
-    expect(res.body.error.message).toBe(`Memory not found: ${memoryId}`);
+    expect(res.body.error).toMatchObject({
+      code: 'RESOURCE_NOT_FOUND',
+      message: `Memory not found: ${memoryId}`,
+    });
   });
 });
 
@@ -570,8 +573,9 @@ describe('POST /api/v1/formations — actor declarations', () => {
     });
 
     expect(res.body.status).toBe('failed');
-    expect(res.body.error.message).toBe(
-      "Actor field 'name' must be a non-empty string"
-    );
+    expect(res.body.error).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      message: "Actor field 'name' must be a non-empty string",
+    });
   });
 });

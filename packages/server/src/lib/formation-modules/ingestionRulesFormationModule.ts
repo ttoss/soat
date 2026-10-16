@@ -1,7 +1,8 @@
+import { DomainError } from '../../errors';
 import {
   lookupAgentInternalId,
   lookupToolInternalId,
-} from '../formationsHelpers';
+} from '../formationLookups';
 import type { FileDelivery, NativeExtraction } from '../ingestionRules';
 import {
   createIngestionRule,
@@ -62,7 +63,8 @@ const resolveAgentId = async (args: {
 
 const requireString = (args: { value: unknown; fieldName: string }): string => {
   if (typeof args.value !== 'string' || args.value.trim().length === 0) {
-    throw new Error(
+    throw new DomainError(
+      'VALIDATION_FAILED',
       `Ingestion rule field '${args.fieldName}' must be a non-empty string`
     );
   }

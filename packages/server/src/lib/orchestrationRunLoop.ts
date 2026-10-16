@@ -4,7 +4,8 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { processNodeResultBatch } from './orchestrationBatchResults';
 import {
-  detectCycleExcludingLoopNodes,
+  cyclesExcludingLoopNodes,
+  describeCycles,
   findStartNodes,
 } from './orchestrationGraph';
 import { newLeaseExpiry } from './orchestrationLease';
@@ -258,10 +259,11 @@ const assertNoCycle = (args: {
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
 }): void => {
-  if (detectCycleExcludingLoopNodes(args.nodes, args.edges)) {
+  const cycles = cyclesExcludingLoopNodes(args.nodes, args.edges);
+  if (cycles.length > 0) {
     throw new DomainError(
       'ORCHESTRATION_CYCLE_DETECTED',
-      'Cycle detected in orchestration graph.'
+      describeCycles(cycles)
     );
   }
 };

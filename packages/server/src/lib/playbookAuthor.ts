@@ -5,44 +5,16 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveJwtAuthUser } from '../middleware/auth';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import { buildSrn } from './iam';
 import { buildRunAuthHeader } from './orchestrationRunToken';
 import type {
   PlaybookDefinition,
   PlaybookExecutor,
-  PlaybookExecutorType,
   PlaybookNode,
 } from './playbookDefinition';
 import type { RequestPrincipal } from './principals';
+import { mayStart, START_ACTIONS } from './startActions';
 
 const log = createDebug('soat:playbooks');
-
-/**
- * What starting each executor takes, as the executor's own start route checks
- * it. A workflow executor creates a task, which no task id names yet.
- */
-const EXECUTOR_START: Record<
-  PlaybookExecutorType,
-  { action: string; resourceType: string; byId: boolean }
-> = {
-  agent: {
-    action: 'agents:CreateAgentGeneration',
-    resourceType: 'agent',
-    byId: true,
-  },
-  tool: { action: 'tools:CallTool', resourceType: 'tool', byId: true },
-  decider: {
-    action: 'deciders:CreateDecision',
-    resourceType: 'decider',
-    byId: true,
-  },
-  workflow: { action: 'tasks:CreateTask', resourceType: 'task', byId: false },
-  orchestration: {
-    action: 'orchestrations:StartRun',
-    resourceType: 'orchestration',
-    byId: true,
-  },
-};
 
 export const assertExecutorStartable = async (args: {
   node: string;
@@ -50,21 +22,17 @@ export const assertExecutorStartable = async (args: {
   projectPublicId: string;
   isAllowed: IsAllowedFn;
 }): Promise<void> => {
-  const start = EXECUTOR_START[args.executor.type];
-  const allowed = await args.isAllowed({
+  const allowed = await mayStart({
+    isAllowed: args.isAllowed,
     projectPublicId: args.projectPublicId,
-    action: start.action,
-    resource: buildSrn({
-      projectPublicId: args.projectPublicId,
-      resourceType: start.resourceType,
-      resourceId: start.byId ? args.executor.id : '*',
-    }),
+    type: args.executor.type,
+    id: args.executor.id,
   });
   if (!allowed) {
     throw new DomainError(
       'PLAYBOOK_EXECUTOR_FORBIDDEN',
       `The playbook's author may not start the ${args.executor.type} on node '${args.node}'.`,
-      { node: args.node, action: start.action }
+      { node: args.node, action: START_ACTIONS[args.executor.type].action }
     );
   }
 };

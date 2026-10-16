@@ -20,7 +20,7 @@ import {
 
 export type { TriggerTargetType, TriggerType } from './triggerValidation';
 export {
-  targetStartAction,
+  mayStartTarget,
   TRIGGER_TARGET_TYPES,
   TRIGGER_TYPES,
   validateCronExpression,

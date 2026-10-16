@@ -8,9 +8,10 @@ export class DomainError extends Error {
   constructor(
     code: ErrorCode,
     message: string,
-    meta?: Record<string, unknown>
+    meta?: Record<string, unknown>,
+    options?: { cause?: unknown }
   ) {
-    super(message);
+    super(message, options);
     this.name = 'DomainError';
     this.code = code;
     this.httpStatus = ERROR_CODES[code].httpStatus;

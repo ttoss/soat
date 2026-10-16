@@ -221,6 +221,7 @@ While `paused_at` is set:
 | Live [orchestration runs](./orchestrations.md) | [Paused](./orchestrations.md): parked at the next checkpoint with `required_action.type: paused` and the project's `pause_reason` | Resumed in the background |
 | Open [tasks](./workflows.md) | Automation paused: transitions work, state dispatches are suppressed | Suppressed dispatches run, as the caller who resumed |
 | Queued [eval](./evaluations.md) items | Not claimed; the run stays `running` | Continue from where they stopped |
+| [Playbook cases](./playbooks.md) | Node runs, exports and a case's own resume are `409 PROJECT_PAUSED`; queued executions are not started, and the case reads `automation_status: paused` | Queued executions start |
 
 A generation, node or eval item already in flight finishes. Reads and writes keep working, so the project can be inspected and fixed while paused — including writes that embed content, such as document ingestion and memory writes, which are not starts. `loop` / `sub_orchestration` children started under the pause are born paused.
 

@@ -3962,11 +3962,11 @@ describe('Orchestrations', () => {
         expect(results).toHaveLength(3);
         expect(results[0]).toEqual({ read: { result: [] } });
         expect(results[2]).toEqual({ read: { result: [] } });
-        // The child fails with an unregistered code, so the entry carries the
-        // same fallback the default mode would have failed the run with.
+        // The entry carries the child's own code, as the default mode would
+        // have failed the run with it.
         expect(results[1]).toEqual({
           error: {
-            code: 'ORCHESTRATION_NESTED_RUN_FAILED',
+            code: 'EXPRESSION_FAILED',
             message: expect.any(String),
           },
           orchestration_run_id: expect.any(String),

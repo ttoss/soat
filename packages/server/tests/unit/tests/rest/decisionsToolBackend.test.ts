@@ -769,7 +769,14 @@ describe('Decisions — tool backend', () => {
       const res = await decide({ decider });
 
       expect(res.body.status).toBe('failed');
-      expect(res.body.error.code).toBe('INTERNAL_ERROR');
+      expect(res.body.error).toMatchObject({
+        code: 'TOOL_UNREACHABLE',
+        message: expect.stringContaining('ECONNREFUSED'),
+        meta: {
+          tool_url: `http://127.0.0.1:${port}/gone`,
+          tool_method: 'POST',
+        },
+      });
     });
 
     test('a tool that came to pin the questions is refused before any decision is written', async () => {

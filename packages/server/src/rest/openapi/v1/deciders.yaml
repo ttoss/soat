@@ -948,6 +948,9 @@ components:
               example: OUTPUT_SCHEMA_VALIDATION_FAILED
             message:
               type: string
+            meta:
+              type: object
+              description: The failure's own details, when it names any
         generation_id:
           x-soat-ref: generations
           type: string

@@ -33,6 +33,7 @@ import {
   buildFormationError,
   type FormationAuthorizer,
   type FormationEvent,
+  formationFailure,
   type FormationTemplate,
 } from './formationsTypes';
 
@@ -171,7 +172,7 @@ export const performResourceDeletions = async (args: {
         continue;
       }
       hasError = true;
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = formationFailure(error).message;
       events.push({
         timestamp: new Date().toISOString(),
         logicalId: resource.logicalId,

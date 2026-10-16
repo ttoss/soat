@@ -1,10 +1,6 @@
 import type { JsonSchema, PlaybookDefinition } from './playbookDefinition';
 import { nodesByKey, topologicalWaves, upstreamOf } from './playbookGraph';
-import {
-  type PlaybookCaseSnapshot,
-  type PlaybookConforms,
-  playbookNodeStates,
-} from './playbookState';
+import type { PlaybookNodeView } from './playbookState';
 
 export type PlaybookMissingInput = {
   node: string;
@@ -19,13 +15,11 @@ export type PlaybookMissingInput = {
  */
 export const playbookMissingInputs = (args: {
   definition: PlaybookDefinition;
-  snapshot: PlaybookCaseSnapshot;
+  views: Map<string, PlaybookNodeView>;
   node: string;
-  conforms?: PlaybookConforms;
 }): PlaybookMissingInput[][] => {
-  const { definition } = args;
+  const { definition, views } = args;
 
-  const views = playbookNodeStates(args);
   const upstream = upstreamOf(args);
   const byKey = nodesByKey({ definition });
 

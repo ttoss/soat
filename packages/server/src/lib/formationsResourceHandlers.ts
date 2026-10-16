@@ -1,3 +1,4 @@
+import { DomainError } from '../errors';
 import { normalizeDeclaredProperties } from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
 import type {
@@ -23,10 +24,13 @@ const requireFormationModule = (args: {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
   });
-  if (!formationModule)
-    throw new Error(
-      `Unsupported resource type for ${args.operation}: ${args.resourceType}`
+  if (!formationModule) {
+    throw new DomainError(
+      'FORMATION_RESOURCE_TYPE_UNREGISTERED',
+      `Unsupported resource type for ${args.operation}: ${args.resourceType}`,
+      { resource_type: args.resourceType }
     );
+  }
   return formationModule;
 };
 

@@ -1,3 +1,4 @@
+import { topologicalOrder } from './orchestrationGraph';
 import type { OrchestrationEdge } from './orchestrations';
 
 // ── Graph traversal ───────────────────────────────────────────────────────
@@ -29,48 +30,6 @@ export const transitivePredecessors = (args: {
     for (const p of preds.get(current) ?? []) stack.push(p);
   }
   return seen;
-};
-
-const buildGraphIndexes = (args: {
-  nodeIds: string[];
-  edges: OrchestrationEdge[];
-}): { indegree: Map<string, number>; adjacency: Map<string, string[]> } => {
-  const { nodeIds, edges } = args;
-  const idSet = new Set(nodeIds);
-  const indegree = new Map<string, number>();
-  const adjacency = new Map<string, string[]>();
-  for (const id of nodeIds) indegree.set(id, 0);
-  for (const edge of edges) {
-    if (!idSet.has(edge.to) || !idSet.has(edge.from)) continue;
-    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
-    const list = adjacency.get(edge.from) ?? [];
-    list.push(edge.to);
-    adjacency.set(edge.from, list);
-  }
-  return { indegree, adjacency };
-};
-
-/** Kahn's algorithm — a topological ordering of the (acyclic) graph. */
-const topologicalOrder = (args: {
-  nodeIds: string[];
-  edges: OrchestrationEdge[];
-}): string[] => {
-  const { nodeIds, edges } = args;
-  const { indegree, adjacency } = buildGraphIndexes({ nodeIds, edges });
-  const queue = nodeIds.filter((id) => {
-    return (indegree.get(id) ?? 0) === 0;
-  });
-  const order: string[] = [];
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    order.push(current);
-    for (const next of adjacency.get(current) ?? []) {
-      const remaining = (indegree.get(next) ?? 0) - 1;
-      indegree.set(next, remaining);
-      if (remaining === 0) queue.push(next);
-    }
-  }
-  return order;
 };
 
 const intersectSets = (a: Set<string>, b: Set<string>): Set<string> => {
