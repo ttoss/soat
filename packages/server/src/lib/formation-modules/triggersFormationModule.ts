@@ -1,4 +1,4 @@
-import { lookupPolicyInternalIds } from '../formationsHelpers';
+import { lookupPolicyInternalIds } from '../formationLookups';
 import type { ValidationError } from '../formationsTypes';
 import {
   toNullableString,

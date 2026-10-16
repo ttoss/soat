@@ -13,6 +13,7 @@ import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { fileException } from './exceptions';
 import { projectPausedError, readProjectPause } from './projectPause';
 import { evaluateRequestQuotas, quotaBreachError } from './quotaEnforcement';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { retryTransient } from './transientRetry';
 import { reserveEventFiring } from './triggerEventFirings';
 import { createFiringRecord, finalizeFiringFailed } from './triggerFirings';
@@ -113,11 +114,11 @@ const recordRefusedFiring = async (args: {
   });
   await finalizeFiringFailed({
     firing,
-    error: {
-      code: args.error.code,
-      message: args.error.message,
-      meta: args.error.meta ?? null,
-    },
+    error: toStoredError({
+      error: args.error,
+      opaque: INTERNAL_FAILURE,
+      label: 'trigger firing',
+    }),
   });
 };
 

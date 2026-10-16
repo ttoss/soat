@@ -1,3 +1,6 @@
+import { DomainError } from '../errors';
+import { isFetchFailure } from './providerError';
+
 /**
  * Thrown when a tool call's target responds with a non-2xx status: an
  * `http`-type tool's external endpoint, or a `soat`-type tool's loopback call
@@ -43,3 +46,28 @@ export class HttpToolError extends Error {
     };
   }
 }
+
+/**
+ * A tool call that never got a response — the host did not resolve, refused or
+ * dropped the connection, or timed out — as a `TOOL_UNREACHABLE` naming the
+ * reason, which `fetch` keeps only on its cause. Null for any other failure.
+ * The original stays the cause, so a timeout still reads as one.
+ */
+export const toToolUnreachableError = (args: {
+  error: unknown;
+  url: string;
+  method: string;
+}): DomainError | null => {
+  if (!isFetchFailure(args.error)) return null;
+  // `fetch failed` always carries the network error as its cause.
+  const cause: { message?: unknown } | undefined = Reflect.get(
+    args.error,
+    'cause'
+  );
+  return new DomainError(
+    'TOOL_UNREACHABLE',
+    `Tool target could not be reached: ${String(cause?.message)}`,
+    { tool_url: args.url, tool_method: args.method },
+    { cause: args.error }
+  );
+};

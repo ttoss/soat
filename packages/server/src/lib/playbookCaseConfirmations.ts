@@ -1,20 +1,20 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
 import { advancePlaybookCase } from './playbookCascade';
 import {
+  appendEntries,
   caseDefinition,
-  caseSnapshot,
+  caseNodeStates,
   mapPlaybookCase,
   playbookCases,
+  withLockedCase,
 } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
 import type { PlaybookNode } from './playbookDefinition';
 import { readCaseNode } from './playbookExecutions';
 import { assertNotOwnWork } from './playbookSelfWrite';
-import { playbookNodeStates, type PlaybookNodeView } from './playbookState';
+import type { PlaybookNodeView } from './playbookState';
 
 const log = createDebug('soat:playbookCases');
 
@@ -119,52 +119,52 @@ export const confirmPlaybookCaseNode = async (args: {
   const node = readCaseNode({ definition, node: args.node });
   const { confirmation } = args;
 
-  await db.sequelize.transaction(async (transaction) => {
-    const locked = await db.PlaybookCase.findByPk(row.id as number, {
-      lock: transaction.LOCK.UPDATE,
-      transaction,
-    });
-    const view = playbookNodeStates({
-      definition,
-      snapshot: await caseSnapshot({ caseDbId: row.id as number, transaction }),
-      conforms: conformsToInputSchema,
-    }).get(node.key)!;
-    assertConfirmable({ node, view });
+  await withLockedCase({
+    row,
+    work: async ({ locked, transaction }) => {
+      const { views } = await caseNodeStates({
+        caseDbId: locked.id as number,
+        definition,
+        transaction,
+      });
+      const view = views.get(node.key)!;
+      assertConfirmable({ node, view });
 
-    const conflicts = conflictsOf({
-      node,
-      view,
-      expectedRevisions: confirmation.expectedRevisions,
-    });
-    if (conflicts.length > 0) {
-      throw new DomainError(
-        'PLAYBOOK_INPUT_CONFLICT',
-        `${conflicts.length} input(s) changed since they were read.`,
-        { conflicts }
-      );
-    }
+      const conflicts = conflictsOf({
+        node,
+        view,
+        expectedRevisions: confirmation.expectedRevisions,
+      });
+      if (conflicts.length > 0) {
+        throw new DomainError(
+          'PLAYBOOK_INPUT_CONFLICT',
+          `${conflicts.length} input(s) changed since they were read.`,
+          { conflicts }
+        );
+      }
 
-    const revision = locked!.revision + 1;
-    await db.PlaybookEntry.create(
-      {
-        caseId: row.id as number,
-        revision,
-        node: args.node,
-        kind:
-          confirmation.decision === 'approve' ? 'confirmation' : 'rejection',
-        field: null,
-        value:
-          confirmation.decision === 'approve'
-            ? view.values
-            : { reason: confirmation.reason },
-        basis: view.basis,
-        playbookVersion: row.playbookVersion,
-        createdByUserId: args.createdByUserId,
-      },
-      { transaction }
-    );
-    locked!.revision = revision;
-    await locked!.save({ transaction });
+      await appendEntries({
+        locked,
+        transaction,
+        entries: [
+          {
+            node: node.key,
+            kind:
+              confirmation.decision === 'approve'
+                ? 'confirmation'
+                : 'rejection',
+            field: null,
+            value:
+              confirmation.decision === 'approve'
+                ? view.values
+                : { reason: confirmation.reason },
+            basis: view.basis,
+            playbookVersion: row.playbookVersion,
+            createdByUserId: args.createdByUserId,
+          },
+        ],
+      });
+    },
   });
 
   await advancePlaybookCase({ caseDbId: row.id as number });

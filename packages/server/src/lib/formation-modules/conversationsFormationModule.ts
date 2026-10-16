@@ -4,7 +4,7 @@ import {
   getConversation,
   updateConversation,
 } from '../conversations';
-import { lookupActorInternalId } from '../formationsHelpers';
+import { lookupActorInternalId } from '../formationLookups';
 import {
   toNullableString,
   toOptionalString,

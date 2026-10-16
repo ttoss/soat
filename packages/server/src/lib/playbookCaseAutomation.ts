@@ -23,6 +23,12 @@ const OWN_WORK =
   "status = 'pending' OR (status = 'running' AND run_id IS NULL)";
 const PARKED = "status = 'running' AND run_id IS NOT NULL";
 
+const PAUSED_PROJECTS = () => {
+  return db.sequelize.literal(
+    '(SELECT id FROM projects WHERE paused_at IS NOT NULL)'
+  );
+};
+
 const casesWhere = (condition: string) => {
   return db.sequelize.literal(
     `(SELECT case_id FROM playbook_executions WHERE ${condition})`
@@ -30,11 +36,16 @@ const casesWhere = (condition: string) => {
 };
 
 /**
- * `paused` while a pause stands, `running` while the case has work of its own
- * in flight, `waiting` while it only waits on tasks or runs it started, else
- * `idle`. What a spend stop lists to find a case doing work.
+ * `paused` while the case's pause or its project's stands, `running` while the
+ * case has work of its own in flight, `waiting` while it only waits on tasks or
+ * runs it started, else `idle`. What a spend stop lists to find a case doing
+ * work.
  */
-type CaseRow = { id?: unknown; pauseRequestedAt: Date | null };
+type CaseRow = {
+  id?: unknown;
+  pauseRequestedAt: Date | null;
+  project: { pausedAt: Date | null };
+};
 
 export const caseAutomation = async (args: {
   rows: CaseRow[];
@@ -64,13 +75,14 @@ export const caseAutomation = async (args: {
   );
   return (row) => {
     const id = row.id as number;
-    const status: AutomationStatus = row.pauseRequestedAt
-      ? 'paused'
-      : own.has(id)
-        ? 'running'
-        : parked.has(id)
-          ? 'waiting'
-          : 'idle';
+    const status: AutomationStatus =
+      row.pauseRequestedAt || row.project.pausedAt
+        ? 'paused'
+        : own.has(id)
+          ? 'running'
+          : parked.has(id)
+            ? 'waiting'
+            : 'idle';
     return {
       automation_status: status,
       pause_requested_at: row.pauseRequestedAt,
@@ -88,7 +100,14 @@ export const automationWhere = (
       `automation_status must be one of ${AUTOMATION_STATUSES.join(', ')}.`
     );
   }
-  if (status === 'paused') return { pauseRequestedAt: { [Op.ne]: null } };
+  const projectPaused = {
+    projectId: { [Op.in]: PAUSED_PROJECTS() },
+  };
+  if (status === 'paused') {
+    return {
+      [Op.or]: [{ pauseRequestedAt: { [Op.ne]: null } }, projectPaused],
+    };
+  }
   const has = (condition: string) => {
     return { id: { [Op.in]: casesWhere(condition) } };
   };
@@ -100,5 +119,8 @@ export const automationWhere = (
     waiting: [lacks(OWN_WORK), has(PARKED)],
     idle: [lacks(OWN_WORK), lacks(PARKED)],
   }[status];
-  return { pauseRequestedAt: null, [Op.and]: conditions };
+  return {
+    pauseRequestedAt: null,
+    [Op.and]: [{ projectId: { [Op.notIn]: PAUSED_PROJECTS() } }, ...conditions],
+  };
 };

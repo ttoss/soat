@@ -9,10 +9,12 @@
 import type { JSONSchema7, JSONValue, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 
+import { DomainError } from '../errors';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
 } from './externalToolCall';
+import { toToolUnreachableError } from './httpToolError';
 import {
   type DeferredProxy,
   describeDeferredTools,
@@ -31,6 +33,25 @@ import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
+
+/** The `tools/call` request, sent straight or through a deferred server's `call`. */
+const toolsCallBody = (args: {
+  viaCall?: string;
+  toolName: string;
+  callArgs: unknown;
+}): string => {
+  return JSON.stringify({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/call',
+    params: args.viaCall
+      ? {
+          name: args.viaCall,
+          arguments: { name: args.toolName, arguments: args.callArgs },
+        }
+      : { name: args.toolName, arguments: args.callArgs },
+  });
+};
 
 export const buildMcpToolExecute = (args: {
   mcpUrl: string;
@@ -62,7 +83,8 @@ export const buildMcpToolExecute = (args: {
     if (args.allowInner) {
       const inner = innerToolName(callArgs);
       if (inner === undefined || !args.allowInner(inner)) {
-        throw new Error(
+        throw new DomainError(
+          'VALIDATION_FAILED',
           `action "${inner ?? ''}" is not available on this tool.`
         );
       }
@@ -77,19 +99,10 @@ export const buildMcpToolExecute = (args: {
               method: 'POST',
               headers: args.mcpHeaders,
               signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'tools/call',
-                params: args.viaCall
-                  ? {
-                      name: args.viaCall,
-                      arguments: {
-                        name: args.mcpToolName,
-                        arguments: callArgs,
-                      },
-                    }
-                  : { name: args.mcpToolName, arguments: callArgs },
+              body: toolsCallBody({
+                viaCall: args.viaCall,
+                toolName: args.mcpToolName,
+                callArgs,
               }),
             },
             {
@@ -113,7 +126,10 @@ export const buildMcpToolExecute = (args: {
         method: 'POST',
         error,
       });
-      throw error;
+      throw (
+        toToolUnreachableError({ error, url: args.mcpUrl, method: 'POST' }) ??
+        error
+      );
     }
   };
 };

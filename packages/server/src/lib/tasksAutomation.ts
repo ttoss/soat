@@ -15,7 +15,7 @@ import {
 import { runDispatchWithRetry } from './tasksAutomationRetry';
 import { type DispatchResult, failedDispatchIds } from './tasksDispatch';
 import {
-  adoptProjectPause,
+  adoptTaskProjectPause,
   isTaskPaused,
   markDispatchPaused,
 } from './tasksPause';
@@ -380,7 +380,7 @@ const suppressIfPaused = async (args: {
 }): Promise<boolean> => {
   if (
     !isTaskPaused(args.task) &&
-    !(await adoptProjectPause({
+    !(await adoptTaskProjectPause({
       taskId: args.task.id as number,
       projectId: args.task.projectId as number,
     }))

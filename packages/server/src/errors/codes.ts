@@ -11,6 +11,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced actor does not exist.',
   },
+  MEMORY_STORE_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced memory store does not exist.',
+  },
   CHAT_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced chat does not exist.',
@@ -305,6 +309,11 @@ export const ERROR_CODES = {
     description:
       "A resource type registered by the deployment operator delegates its lifecycle to an external HTTP handler, and that handler did not answer successfully — it returned a non-2xx status, timed out, was unreachable, or replied with a body the protocol does not allow (a create with no `physical_resource_id`, for instance). `meta.resource_type` and `meta.request_type` name the type and the operation, and the handler's own message is relayed when it sent one. This is an operator-side failure: the template is not at fault and re-deploying it unchanged will fail the same way until the handler is fixed.",
   },
+  FORMATION_RESOURCE_TYPE_UNREGISTERED: {
+    httpStatus: 409,
+    description:
+      'The formation holds a resource whose type the deployment no longer registers, so the platform has no handler to act on it. `meta.resource_type` names the type.',
+  },
   FORMATION_INVALID_METADATA: {
     httpStatus: 400,
     description:
@@ -528,10 +537,20 @@ export const ERROR_CODES = {
     description:
       'An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. The error `meta` carries the tool name and the server URL. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.',
   },
+  TOOL_UNREACHABLE: {
+    httpStatus: 502,
+    description:
+      "An http-type tool call never got a response: the target's host did not resolve, refused or dropped the connection, or timed out. The message names the network failure and the error `meta` carries the URL and method. Distinct from `TOOL_HTTP_ERROR`, which is the target answering with a non-2xx status.",
+  },
   TOOL_AUTH_FAILED: {
     httpStatus: 502,
     description:
       "An http-type tool's `execute.auth` credentials could not be turned into a request credential — malformed service account JSON, an unusable private key, or a token endpoint that rejected the assertion. The error `meta` carries the token endpoint's status and body when it responded. Distinct from `TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call.",
+  },
+  EXPRESSION_FAILED: {
+    httpStatus: 422,
+    description:
+      'A JSON Logic expression failed to evaluate: it names an operator the engine does not know, or it ran a `throw`. The message carries what the expression threw.',
   },
   INVALID_CRON_EXPRESSION: {
     httpStatus: 400,

@@ -16,7 +16,9 @@ import {
   buildFormationError,
   type FormationActor,
   type FormationEvent,
+  formationFailure,
 } from './formationsTypes';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:formations');
 
@@ -172,7 +174,7 @@ export const rollbackCreatedResources = async (args: {
       if (!isResourceAlreadyGone(error)) {
         // Reported, never thrown: the original failure is the one the operator
         // needs to see, and re-throwing here would bury it.
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = formationFailure(error).message;
         log(
           'rollbackCreatedResources: failed logicalId=%s error=%s',
           resource.logicalId,
@@ -214,9 +216,8 @@ export const failFormationOperation = async (args: {
   logicalId: string;
   resourceType: string;
   action: 'create' | 'update';
-  errorMessage: string;
-  /** `formationErrorCode(thrown)` — the code the failure is reported under. */
-  errorCode: string;
+  /** What the resource failed with, from `formationFailure`. */
+  failure: StoredError;
   /**
    * Events produced by the unwind that this failure triggered. They are
    * appended *after* the failure event so the operation history reads in the
@@ -232,16 +233,20 @@ export const failFormationOperation = async (args: {
     resourceType: args.resourceType,
     action: args.action,
     status: 'failed',
-    error: args.errorMessage,
+    error: args.failure.message,
   });
   args.events.push(...args.rollbackEvents);
   // The same bag on both records: the operation is the history, the formation
   // is what the deploy response returns, and a caller reading either gets the
   // failure in the platform's `{ code, message, meta }` shape.
   const error = buildFormationError({
-    code: args.errorCode,
-    message: args.errorMessage,
-    meta: { logical_id: args.logicalId, resource_type: args.resourceType },
+    code: args.failure.code,
+    message: args.failure.message,
+    meta: {
+      ...args.failure.meta,
+      logical_id: args.logicalId,
+      resource_type: args.resourceType,
+    },
   });
   await args.operation.update({
     status: 'failed',

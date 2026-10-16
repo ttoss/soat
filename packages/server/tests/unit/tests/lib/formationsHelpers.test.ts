@@ -1,5 +1,11 @@
 import { db } from 'src/db';
 import {
+  lookupActorInternalId,
+  lookupAgentInternalId,
+  lookupPolicyInternalIds,
+  lookupToolInternalId,
+} from 'src/lib/formationLookups';
+import {
   buildAuditableParameters,
   buildDependencyGraph,
   buildResolvedParamsMap,
@@ -11,10 +17,6 @@ import {
   isRef,
   isRefAttr,
   isSub,
-  lookupActorInternalId,
-  lookupAgentInternalId,
-  lookupPolicyInternalIds,
-  lookupToolInternalId,
   parseRefAttr,
   resolveParamExpressions,
   resolveRefs,
@@ -762,7 +764,10 @@ describe('formationsHelpers', () => {
           publicId: 'actor_doesnotexist000',
           projectId,
         })
-      ).rejects.toThrow('Actor not found: actor_doesnotexist000');
+      ).rejects.toMatchObject({
+        code: 'ACTOR_NOT_FOUND',
+        message: 'Actor not found: actor_doesnotexist000',
+      });
     });
 
     // A template deployed into one project could name another
@@ -778,7 +783,10 @@ describe('formationsHelpers', () => {
 
       await expect(
         lookupActorInternalId({ publicId: actor.publicId, projectId })
-      ).rejects.toThrow(`Actor not found: ${actor.publicId}`);
+      ).rejects.toMatchObject({
+        code: 'ACTOR_NOT_FOUND',
+        message: `Actor not found: ${actor.publicId}`,
+      });
     });
 
     test('lookupAgentInternalId resolves a public id to its internal id', async () => {
@@ -827,7 +835,10 @@ describe('formationsHelpers', () => {
 
       await expect(
         lookupPolicyInternalIds([policyA.publicId, 'pol_doesnotexist000'])
-      ).rejects.toThrow('Policy not found: pol_doesnotexist000');
+      ).rejects.toMatchObject({
+        code: 'POLICY_NOT_FOUND',
+        message: 'Policy not found: pol_doesnotexist000',
+      });
     });
   });
 

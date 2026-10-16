@@ -1,7 +1,8 @@
 import type { MemorySource } from '@soat/postgresdb';
 import { db } from 'src/db';
 
-import { lookupMemoryStoreInternalId } from '../formationsHelpers';
+import { DomainError } from '../../errors';
+import { lookupMemoryStoreInternalId } from '../formationLookups';
 import {
   assertMemoryStorageQuota,
   createMemory,
@@ -63,7 +64,10 @@ export const memoriesFormationModule = defineFormationModule({
     });
 
     if (!entry) {
-      throw new Error(`Memory not found: ${physicalResourceId}`);
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Memory not found: ${physicalResourceId}`
+      );
     }
 
     // Through the lib rather than the row: a content change re-points the

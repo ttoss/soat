@@ -768,11 +768,30 @@ describe('validateFormationTemplate', () => {
       },
     });
     expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual({
+      path: 'resources',
+      message: 'Circular dependency detected in resources: A, B',
+    });
+  });
+
+  test('a resource downstream of a cycle is not named in it', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        A: { type: 'memory_store', properties: {}, depends_on: ['B'] },
+        B: { type: 'memory_store', properties: {}, depends_on: ['A'] },
+        C: { type: 'memory_store', properties: {}, depends_on: ['A'] },
+      },
+    });
     expect(
-      result.errors.some((e) => {
+      result.errors.filter((e) => {
         return e.message.includes('Circular');
       })
-    ).toBe(true);
+    ).toEqual([
+      {
+        path: 'resources',
+        message: 'Circular dependency detected in resources: A, B',
+      },
+    ]);
   });
 
   // ── valid template ─────────────────────────────────────────────────────

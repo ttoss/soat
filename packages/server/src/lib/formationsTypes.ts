@@ -1,6 +1,11 @@
-import { DomainError } from '../errors';
+import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { RequestPrincipal } from './principals';
+import {
+  INTERNAL_FAILURE,
+  type StoredError,
+  toStoredError,
+} from './storedError';
 
 // ── Template Types ────────────────────────────────────────────────────────
 
@@ -371,25 +376,26 @@ export type FormationEvent = {
  * Being a stored bag it is written snake_case, like every other wire value.
  */
 export type FormationError = {
-  code: string;
+  code: ErrorCode;
   message: string;
   meta?: Record<string, unknown>;
 };
 
 /**
- * The error code a thrown value carries, for the `FormationError` bag.
- *
- * A `DomainError` names its own failure (`RESOURCE_NOT_FOUND`,
- * `VALIDATION_FAILED`); anything else — a Sequelize validation, a bug — has no
- * code to report, and mislabelling it would be worse than saying so. Mirrors
- * `buildRunError` on the orchestration side.
+ * A failed resource as the formation records it, on its error bag and in its
+ * events: the thrown `DomainError`'s code, message and meta, or the opaque
+ * internal failure for anything else.
  */
-export const formationErrorCode = (error: unknown): string => {
-  return error instanceof DomainError ? error.code : 'UNKNOWN';
+export const formationFailure = (error: unknown): StoredError => {
+  return toStoredError({
+    error,
+    opaque: INTERNAL_FAILURE,
+    label: 'formation resource',
+  });
 };
 
 export const buildFormationError = (args: {
-  code: string;
+  code: ErrorCode;
   message: string;
   meta?: Record<string, unknown>;
 }): FormationError => {

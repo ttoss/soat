@@ -4,15 +4,21 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { onEvent, retryOrRecordDrop, type SoatEvent } from './eventBus';
 import { paginatedList } from './pagination';
-import { caseDefinition, caseSnapshot, playbookCases } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
+import {
+  assertCaseAcceptsWork,
+  caseDefinition,
+  caseNodeStates,
+  playbookCases,
+  withLockedCase,
+} from './playbookCases';
 import type { PlaybookNode } from './playbookDefinition';
 import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
 import { settleFromRun } from './playbookExecutionSettle';
 import { executeClaimed, resolveRunAs } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
-import { playbookNodeStates, type PlaybookNodeView } from './playbookState';
+import type { PlaybookNodeView } from './playbookState';
+import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -153,52 +159,43 @@ export const runPlaybookNode = async (args: {
   });
   const definition = await caseDefinition({ row });
   const node = readCaseNode({ definition, node: args.node });
+  await assertProjectAcceptsWork({ projectId: row.projectId });
   if (node.executor) {
     await resolveRunAs({ row, node: node.key, executors: [node.executor] });
   }
 
-  const execution = await db.sequelize.transaction(async (transaction) => {
-    // The case lock serializes this with input writes, settles and the
-    // cascade, so the state checked is the state the execution is recorded
-    // against.
-    const locked = await db.PlaybookCase.findByPk(row.id as number, {
-      lock: transaction.LOCK.UPDATE,
-      transaction,
-    });
-    if (locked!.pauseRequestedAt) {
-      throw new DomainError(
-        'PLAYBOOK_CASE_PAUSED',
-        `Case '${row.publicId}' is paused.`
+  const execution = await withLockedCase({
+    row,
+    work: async ({ locked, transaction }) => {
+      assertCaseAcceptsWork({ locked, publicId: row.publicId });
+      const view = (
+        await caseNodeStates({
+          caseDbId: row.id as number,
+          definition,
+          transaction,
+        })
+      ).views.get(node.key)!;
+      assertRunnable({ node, view });
+      // Recorded as claimed by this process, so the drain never runs it too.
+      return db.PlaybookExecution.create(
+        {
+          caseId: row.id as number,
+          node: node.key,
+          playbookVersion: row.playbookVersion,
+          executorType: node.executor?.type ?? null,
+          executorId: node.executor?.id ?? null,
+          status: 'running',
+          leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
+          basis: view.basis,
+          input: executorInput({
+            executor: node.executor,
+            values: view.values,
+          }),
+          createdByUserId: args.createdByUserId,
+        },
+        { transaction }
       );
-    }
-    const view = playbookNodeStates({
-      definition,
-      snapshot: await caseSnapshot({
-        caseDbId: row.id as number,
-        transaction,
-      }),
-      conforms: conformsToInputSchema,
-    }).get(node.key)!;
-    assertRunnable({ node, view });
-    // Recorded as claimed by this process, so the drain never runs it too.
-    return db.PlaybookExecution.create(
-      {
-        caseId: row.id as number,
-        node: node.key,
-        playbookVersion: row.playbookVersion,
-        executorType: node.executor?.type ?? null,
-        executorId: node.executor?.id ?? null,
-        status: 'running',
-        leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
-        basis: view.basis,
-        input: executorInput({
-          executor: node.executor,
-          values: view.values,
-        }),
-        createdByUserId: args.createdByUserId,
-      },
-      { transaction }
-    );
+    },
   });
 
   if (args.wait) {

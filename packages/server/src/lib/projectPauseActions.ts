@@ -9,6 +9,7 @@ import {
   resumeOrchestrationRun,
 } from './orchestrationRunActions';
 import { clearRunPause, PAUSABLE_RUN_STATUSES } from './orchestrationRunPause';
+import { kickPlaybookWorker } from './playbookCascade';
 import type { RequestPrincipal } from './principals';
 import { readPauseReason } from './projectPause';
 import { getProjectOrThrow, mapProject } from './projects';
@@ -262,6 +263,9 @@ export const resumeProject = async (args: {
     where: { projectId, pausedByProject: true },
   });
   await forEachRow({ rows: runs, label: 'resumeProject', step: resumeRun });
+  // A case holds no flag of its own: its queued executions waited on the
+  // project, so the drain picks them up now.
+  kickPlaybookWorker();
 
   const mapped = mapProject(project);
   emitProjectEvent({ type: 'projects.resumed', projectId, project: mapped });

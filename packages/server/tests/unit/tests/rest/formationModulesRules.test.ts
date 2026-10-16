@@ -551,7 +551,10 @@ describe('PUT /api/v1/formations/:formation_id — rules only the apply can chec
     );
 
     expect(updated.status).toBe('failed');
-    expect(updated.error.message).toMatch(/Policy document is invalid/);
+    expect(updated.error).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      message: expect.stringMatching(/Policy document is invalid/),
+    });
   });
 
   test('an ingestion_rule switches its converter from a tool to an agent', async () => {

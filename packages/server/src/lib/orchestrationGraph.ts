@@ -1,59 +1,30 @@
+import { type Dag, topologicalWaves } from './dag';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
-const detectCycleDfs = (args: {
-  nodeId: string;
-  edges: OrchestrationEdge[];
-  visited: Set<string>;
-  inStack: Set<string>;
-}): boolean => {
-  const { nodeId, edges, visited, inStack } = args;
-  visited.add(nodeId);
-  inStack.add(nodeId);
-
-  for (const edge of edges) {
-    if (edge.from !== nodeId) continue;
-    if (!visited.has(edge.to)) {
-      if (detectCycleDfs({ nodeId: edge.to, edges, visited, inStack }))
-        return true;
-    } else if (inStack.has(edge.to)) {
-      return true;
-    }
+/** The orchestration as a graph: a node reads every node with an edge into it. */
+const dagOf = (args: { keys: string[]; edges: OrchestrationEdge[] }): Dag => {
+  const sources = new Map<string, string[]>();
+  for (const edge of args.edges) {
+    sources.set(edge.to, [...(sources.get(edge.to) ?? []), edge.from]);
   }
-
-  inStack.delete(nodeId);
-  return false;
-};
-
-export const detectCycle = (
-  nodes: OrchestrationNode[],
-  edges: OrchestrationEdge[]
-): boolean => {
-  const visited = new Set<string>();
-  const inStack = new Set<string>();
-
-  for (const node of nodes) {
-    if (
-      !visited.has(node.id) &&
-      detectCycleDfs({ nodeId: node.id, edges, visited, inStack })
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  return {
+    keys: args.keys,
+    sourcesOf: (key) => {
+      return sources.get(key) ?? [];
+    },
+  };
 };
 
 /**
- * Detects a cycle while ignoring `loop` nodes, which legitimately introduce
- * intentional iteration via a sub-orchestration rather than a graph cycle.
- * Excluding only `loop` nodes (and edges touching them) — rather than
- * skipping cycle detection entirely whenever one is present — still catches
- * a genuine, unrelated cycle among the remaining nodes.
+ * Every cycle in the graph, ignoring `loop` nodes, which introduce iteration
+ * through a sub-orchestration rather than a graph cycle. Only `loop` nodes and
+ * the edges touching them are excluded, so a genuine, unrelated cycle among
+ * the remaining nodes is still found.
  */
-export const detectCycleExcludingLoopNodes = (
+export const cyclesExcludingLoopNodes = (
   nodes: OrchestrationNode[],
   edges: OrchestrationEdge[]
-): boolean => {
+): string[][] => {
   const loopNodeIds = new Set(
     nodes
       .filter((n) => {
@@ -63,15 +34,39 @@ export const detectCycleExcludingLoopNodes = (
         return n.id;
       })
   );
-  if (loopNodeIds.size === 0) return detectCycle(nodes, edges);
+  return topologicalWaves(
+    dagOf({
+      keys: nodes
+        .map((n) => {
+          return n.id;
+        })
+        .filter((id) => {
+          return !loopNodeIds.has(id);
+        }),
+      edges: edges.filter((e) => {
+        return !loopNodeIds.has(e.from) && !loopNodeIds.has(e.to);
+      }),
+    })
+  ).cycles;
+};
 
-  const nonLoopNodes = nodes.filter((n) => {
-    return !loopNodeIds.has(n.id);
-  });
-  const nonLoopEdges = edges.filter((e) => {
-    return !loopNodeIds.has(e.from) && !loopNodeIds.has(e.to);
-  });
-  return detectCycle(nonLoopNodes, nonLoopEdges);
+/** The message naming each cycle, as validation and the run loop report it. */
+export const describeCycles = (cycles: string[][]): string => {
+  return `Cycle detected in orchestration graph: ${cycles
+    .map((cycle) => {
+      return cycle.join(', ');
+    })
+    .join('; ')}.`;
+};
+
+/** A topological order of the nodes, for a graph with no cycle. */
+export const topologicalOrder = (args: {
+  nodeIds: string[];
+  edges: OrchestrationEdge[];
+}): string[] => {
+  return topologicalWaves(
+    dagOf({ keys: args.nodeIds, edges: args.edges })
+  ).waves.flat();
 };
 
 export const findStartNodes = (

@@ -597,10 +597,9 @@ resources:
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      // A bare `Error` from the resource handler has no code to report, so the
-      // bag says so rather than inventing one.
+      // The handler's own reference error, with the resource it failed on.
       expect(res.body.error).toEqual({
-        code: 'UNKNOWN',
+        code: 'SECRET_NOT_FOUND',
         message: expect.stringContaining('sec_nonexistent'),
         meta: { logical_id: 'MyProvider', resource_type: 'ai_provider' },
       });
@@ -672,7 +671,7 @@ resources:
           template: template('sec_nonexistent'),
         });
       expect(failed.status).toBe(201);
-      expect(failed.body.error.code).toBe('UNKNOWN');
+      expect(failed.body.error.code).toBe('SECRET_NOT_FOUND');
 
       const fixed = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${failed.body.id}`)

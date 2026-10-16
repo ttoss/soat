@@ -75,6 +75,34 @@ export const projectPausedError = (pause: ProjectPause): DomainError => {
   );
 };
 
+/** The columns that mark a run or task as held by its project's pause. */
+export type ProjectPauseFlag = {
+  pauseRequestedAt: Date;
+  pauseReason: string | null;
+  pausedByProject: true;
+};
+
+/**
+ * Whether the project is paused, flagging the row as the project's when it
+ * is. The project's pause sweep flags every live run and task it finds; one
+ * written while the sweep ran is caught by the next driver to touch it, so
+ * the project's resume finds it with the rest. `flag` writes the columns only
+ * on a row with no pause of its own.
+ */
+export const adoptProjectPause = async (args: {
+  projectId: number;
+  flag: (values: ProjectPauseFlag) => Promise<unknown>;
+}): Promise<boolean> => {
+  const pause = await readProjectPause({ projectId: args.projectId });
+  if (!pause) return false;
+  await args.flag({
+    pauseRequestedAt: pause.pausedAt,
+    pauseReason: pause.reason,
+    pausedByProject: true,
+  });
+  return true;
+};
+
 /** Throws `PROJECT_PAUSED` when the project is paused. */
 export const assertProjectAcceptsWork = async (args: {
   projectId: number;

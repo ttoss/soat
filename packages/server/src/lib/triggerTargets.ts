@@ -1,4 +1,3 @@
-import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import { startEvalRun } from './evaluationRuns';
 import { startOrchestrationRun } from './orchestrationEngine';
@@ -29,16 +28,6 @@ const truncateOutput = (value: unknown): unknown => {
     return value;
   }
   return { truncated: true, preview: serialized.slice(0, OUTPUT_MAX_CHARS) };
-};
-
-export const toErrorObject = (err: unknown): Record<string, unknown> => {
-  if (err instanceof DomainError) {
-    return { code: err.code, message: err.message, meta: err.meta ?? null };
-  }
-  if (err instanceof Error) {
-    return { code: 'INTERNAL', message: err.message };
-  }
-  return { code: 'INTERNAL', message: String(err) };
 };
 
 export type DispatchArgs = {

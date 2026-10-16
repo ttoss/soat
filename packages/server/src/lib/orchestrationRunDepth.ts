@@ -4,7 +4,7 @@
  * Nesting is unbounded by construction: a `sub_orchestration` node naming its
  * own graph — directly, or through a cycle of two graphs — starts a child run
  * that starts a child run, and nothing intra-graph can see it
- * (`detectCycleExcludingLoopNodes` is intra-graph by construction, and excludes
+ * (`cyclesExcludingLoopNodes` is intra-graph by construction, and excludes
  * loop nodes deliberately). None of the platform's other bounds reaches it
  * either: `Task.automationChainDepth` bounds the workflow↔dispatch cycle (a
  * nested run transitions no task), `max_call_depth` bounds agent→agent

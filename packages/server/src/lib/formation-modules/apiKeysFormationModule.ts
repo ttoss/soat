@@ -4,7 +4,7 @@ import {
   getApiKey,
   updateApiKey,
 } from '../apiKeys';
-import { lookupPolicyInternalIds } from '../formationsHelpers';
+import { lookupPolicyInternalIds } from '../formationLookups';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 

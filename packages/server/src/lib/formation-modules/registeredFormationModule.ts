@@ -18,6 +18,7 @@
 
 import createDebug from 'debug';
 
+import { DomainError } from '../../errors';
 import {
   callFormationHandler,
   requirePhysicalResourceId,
@@ -367,7 +368,9 @@ export const buildRegisteredFormationModule = (args: {
       basePath: `resources.<${resourceType}>.properties`,
       forUpdate: assertArgs.forUpdate,
     });
-    if (errors.length > 0) throw new Error(errors[0].message);
+    if (errors.length > 0) {
+      throw new DomainError('VALIDATION_FAILED', errors[0].message);
+    }
     return normalizeDeclaredProperties(
       assertArgs.properties as Record<string, unknown>
     );

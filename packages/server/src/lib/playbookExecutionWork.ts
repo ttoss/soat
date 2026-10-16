@@ -8,16 +8,15 @@ import {
 } from './playbookAuthor';
 import {
   caseDefinition,
-  caseSnapshot,
+  caseNodeStates,
   type PlaybookCaseRow,
   playbookCases,
 } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
 import type { PlaybookExecutor } from './playbookDefinition';
 import { settleExecution, settleFromOutcome } from './playbookExecutionSettle';
 import { startExecutor } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
-import { playbookNodeStates, samePlaybookBasis } from './playbookState';
+import { samePlaybookBasis } from './playbookState';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -64,11 +63,11 @@ export const executeClaimed = async (args: {
   );
   const definition = await caseDefinition({ row });
   const node = nodesByKey({ definition }).get(execution.node)!;
-  const view = playbookNodeStates({
+  const { views } = await caseNodeStates({
+    caseDbId: row.id as number,
     definition,
-    snapshot: await caseSnapshot({ caseDbId: row.id as number }),
-    conforms: conformsToInputSchema,
-  }).get(node.key)!;
+  });
+  const view = views.get(node.key)!;
 
   if (
     !samePlaybookBasis({

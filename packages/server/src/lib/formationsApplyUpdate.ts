@@ -19,7 +19,11 @@ import {
   applyDeleteResource,
   applyUpdateResource,
 } from './formationsResourceHandlers';
-import type { FormationActor, FormationEvent } from './formationsTypes';
+import {
+  type FormationActor,
+  type FormationEvent,
+  formationFailure,
+} from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
@@ -154,7 +158,7 @@ export const runPendingCleanups = async (args: {
       });
     } catch (error) {
       if (!isResourceAlreadyGone(error)) {
-        const message = error instanceof Error ? error.message : String(error);
+        const { message } = formationFailure(error);
         log(
           'runPendingCleanups: leaked %s id=%s error=%s',
           resourceType,

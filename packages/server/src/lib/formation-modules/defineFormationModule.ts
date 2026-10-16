@@ -17,6 +17,7 @@
 
 import createDebug from 'debug';
 
+import { DomainError } from '../../errors';
 import { normalizeDeclaredProperties } from '../formationsProperties';
 import type {
   FormationActor,
@@ -248,8 +249,8 @@ const buildReader = <TResource>(args: {
 
 /**
  * The three write operations. Each re-validates first — `create`/`update` are
- * public entry points of their own, so a bad bag surfaces as the plain `Error`
- * `formationsApply` records against the failing resource — then delegates to the
+ * public entry points of their own, so a bad bag surfaces as the
+ * `VALIDATION_FAILED` `formationsApply` records against the failing resource — then delegates to the
  * module and logs. A module that declares no `update` validates and no-ops.
  */
 const buildOperations = <TResource>(args: {
@@ -419,7 +420,7 @@ export const defineFormationModule = <TResource>(
       forUpdate: args.forUpdate,
     });
     if (errors.length > 0) {
-      throw new Error(errors[0].message);
+      throw new DomainError('VALIDATION_FAILED', errors[0].message);
     }
     return normalizeDeclaredProperties(
       args.properties as Record<string, unknown>

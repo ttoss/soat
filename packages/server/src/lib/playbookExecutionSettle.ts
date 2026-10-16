@@ -4,22 +4,27 @@ import { db } from '../db';
 import type { Transaction } from './dbTransaction';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import { advancePlaybookCase } from './playbookCascade';
-import { caseDefinition, caseSnapshot, playbookCases } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
+import {
+  appendEntries,
+  caseDefinition,
+  caseNodeStates,
+  lockCase,
+  playbookCases,
+} from './playbookCases';
 import type { JsonValue } from './playbookDefinition';
 import { PARKED_RECHECK_MS } from './playbookExecutionLease';
 import {
   type ExecutorOutcome,
   orchestrationOutcome,
 } from './playbookExecutors';
-import {
-  type PlaybookBasis,
-  playbookNodeStates,
-  samePlaybookBasis,
-} from './playbookState';
+import { type PlaybookBasis, samePlaybookBasis } from './playbookState';
 import { stableDigest } from './stableDigest';
+import {
+  INTERNAL_FAILURE,
+  type StoredError,
+  toStoredError,
+} from './storedError';
 import { getTask } from './tasks';
-import { toErrorObject } from './triggerTargets';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -27,8 +32,7 @@ type ExecutionRow = InstanceType<(typeof db)['PlaybookExecution']>;
 
 /** How an execution ended: the executor's output, or why it has none. */
 export type ExecutionSettlement =
-  | { output: JsonValue; runId: string | null }
-  | { error: Record<string, unknown> };
+  { output: JsonValue; runId: string | null } | { error: StoredError };
 
 type CaseRow = InstanceType<(typeof db)['PlaybookCase']>;
 
@@ -44,10 +48,7 @@ const lockRunning = async (args: {
   // Deleting the case deletes its executions, so there is nothing to settle.
   if (!unlocked) return null;
   // Lock order matches every other case write: the case, then its rows.
-  const locked = await db.PlaybookCase.findByPk(unlocked.caseId, {
-    lock: transaction.LOCK.UPDATE,
-    transaction,
-  });
+  const locked = await lockCase({ caseDbId: unlocked.caseId, transaction });
   const execution = await db.PlaybookExecution.findByPk(args.executionId, {
     lock: transaction.LOCK.UPDATE,
     transaction,
@@ -68,15 +69,12 @@ const readNode = async (args: {
 }) => {
   const { execution } = args;
   const row = await playbookCases.reload(args.locked);
-  const snapshot = await caseSnapshot({
+  const { snapshot, views } = await caseNodeStates({
     caseDbId: row.id as number,
+    definition: await caseDefinition({ row }),
     transaction: args.transaction,
   });
-  const view = playbookNodeStates({
-    definition: await caseDefinition({ row }),
-    snapshot,
-    conforms: conformsToInputSchema,
-  }).get(execution.node)!;
+  const view = views.get(execution.node)!;
   const current = samePlaybookBasis({
     left: execution.basis as PlaybookBasis,
     right: view.basis,
@@ -94,24 +92,22 @@ const writeOutput = async (args: {
   output: JsonValue;
   transaction: Transaction;
 }): Promise<number> => {
-  const { locked, execution, transaction } = args;
-  const revision = locked.revision + 1;
-  await db.PlaybookEntry.create(
-    {
-      caseId: locked.id as number,
-      revision,
-      node: execution.node,
-      kind: 'output',
-      field: null,
-      value: args.output,
-      basis: execution.basis,
-      playbookVersion: execution.playbookVersion,
-      createdByUserId: null,
-    },
-    { transaction }
-  );
-  locked.revision = revision;
-  await locked.save({ transaction });
+  const { execution } = args;
+  const [revision] = await appendEntries({
+    locked: args.locked,
+    transaction: args.transaction,
+    entries: [
+      {
+        node: execution.node,
+        kind: 'output',
+        field: null,
+        value: args.output,
+        basis: execution.basis as PlaybookBasis,
+        playbookVersion: execution.playbookVersion,
+        createdByUserId: null,
+      },
+    ],
+  });
   return revision;
 };
 
@@ -206,7 +202,13 @@ const settleUnlessPending = async (args: {
   } catch (error) {
     await settleExecution({
       executionId,
-      settlement: { error: toErrorObject(error) },
+      settlement: {
+        error: toStoredError({
+          error,
+          opaque: INTERNAL_FAILURE,
+          label: 'playbook execution',
+        }),
+      },
     });
     return null;
   }

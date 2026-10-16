@@ -39,6 +39,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.',
   FORCED_TOOL_CHOICE_CANNOT_STOP:
     'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
+  FORMATION_RESOURCE_TYPE_UNREGISTERED:
+    'Register the resource type again so its handler can act on the resource, or remove the resource outside the formation.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   DECIDER_AGENT_NOT_TOOL_LESS:
@@ -85,6 +87,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
   EMBEDDING_NOT_CONFIGURED:
     'Knowledge search needs an embedding model. Configure one on the project or the AI provider before ingesting or searching.',
+  TOOL_UNREACHABLE:
+    "Check the tool's URL and that its host is reachable from the server; the message names the network failure. A timeout or a dropped connection may succeed on retry.",
+  EXPRESSION_FAILED:
+    'Fix the JSON Logic expression the message names: an unknown operator, or a `throw` the expression reached with the data it was given.',
   INTERNAL_ERROR:
     'Retry with backoff. The underlying exception is logged server-side and deliberately never forwarded, so the response carries nothing further to act on.',
   NOT_IMPLEMENTED:

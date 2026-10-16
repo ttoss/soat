@@ -8,8 +8,12 @@ import { upsertFileByPath } from './files';
 import { isPlainObject } from './plainObject';
 import { PLAYBOOK_EXPORT_FORMATS } from './playbookDefinition';
 import type { RequestPrincipal } from './principals';
+import {
+  INTERNAL_FAILURE,
+  type StoredError,
+  toStoredError,
+} from './storedError';
 import { runDispatch } from './tasksDispatch';
-import { toErrorObject } from './triggerTargets';
 
 const log = createDebug('soat:playbookExports');
 
@@ -120,12 +124,18 @@ export const renderPlaybookExport = async (args: {
 }): Promise<void> => {
   const exported = (await db.PlaybookExport.findByPk(args.exportId))!;
   log('renderPlaybookExport: %s', exported.publicId);
-  let settlement: { fileId: number } | { error: Record<string, unknown> };
+  let settlement: { fileId: number } | { error: StoredError };
   try {
     settlement = { fileId: await renderFile({ ...args, exported }) };
   } catch (error) {
     log('renderPlaybookExport: %s failed %o', exported.publicId, error);
-    settlement = { error: toErrorObject(error) };
+    settlement = {
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'playbook export',
+      }),
+    };
   }
   await db.PlaybookExport.update(
     {

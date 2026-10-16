@@ -2477,9 +2477,10 @@ components:
           type: string
           description: >-
             The failing operation's error code (`VALIDATION_FAILED`,
-            `RESOURCE_NOT_FOUND`, `FORMATION_DELETE_FAILED`,
-            `FORMATION_REPLACE_CLEANUP_FAILED`, …), or `UNKNOWN` when the
-            underlying failure carried no code.
+            `RESOURCE_NOT_FOUND`, `SECRET_NOT_FOUND`, `FORMATION_DELETE_FAILED`,
+            `FORMATION_REPLACE_CLEANUP_FAILED`, …), or `INTERNAL_ERROR` with
+            the message `Internal Server Error` for an unexpected failure,
+            whose detail reaches the server log only.
           example: VALIDATION_FAILED
         message:
           type: string

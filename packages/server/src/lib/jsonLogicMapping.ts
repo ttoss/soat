@@ -1,6 +1,8 @@
 import createDebug from 'debug';
 import { LogicEngine } from 'json-logic-engine';
 
+import { DomainError } from '../errors';
+
 const log = createDebug('soat:jsonLogicMapping');
 
 /**
@@ -31,6 +33,24 @@ export const isLogic = (value: unknown): boolean => {
 };
 
 /**
+ * What an expression threw, as text. The engine throws bare objects — an
+ * unknown operator is `{ type: 'Unknown Operator' }`, a `throw` is
+ * `{ type: <value> }` — which `String()` would collapse to "[object Object]".
+ */
+const describeThrown = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    try {
+      const json = JSON.stringify(error);
+      if (json && json !== '{}') return json;
+    } catch {
+      // A circular value has no JSON form; its string form stands.
+    }
+  }
+  return String(error);
+};
+
+/**
  * Evaluates a value against `context`, resolving JSON Logic expressions at any
  * nesting depth: `{ var: 'key' }` reads `context.key` (a missing path resolves
  * to `null`); `{ cat: [...] }`, `{ '>': [...] }`, `{ map: [...] }`, etc.
@@ -44,7 +64,16 @@ export const isLogic = (value: unknown): boolean => {
  */
 export const evaluateLogic = (value: unknown, context: unknown): unknown => {
   if (isLogic(value)) {
-    return engine.run(value, context);
+    try {
+      return engine.run(value, context);
+    } catch (error) {
+      throw new DomainError(
+        'EXPRESSION_FAILED',
+        describeThrown(error),
+        undefined,
+        { cause: error }
+      );
+    }
   }
   if (Array.isArray(value)) {
     return value.map((item) => {

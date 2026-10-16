@@ -32,8 +32,8 @@ import { applyDeleteResource } from './formationsResourceHandlers';
 import {
   buildFormationError,
   type FormationActor,
-  formationErrorCode,
   type FormationEvent,
+  formationFailure,
   type FormationTemplate,
   type ResourceDeclaration,
 } from './formationsTypes';
@@ -74,14 +74,13 @@ export const handleOrphanedDeletes = async (args: {
         await markResourceDeleted({ resource, events });
         continue;
       }
-      const errorMsg = error instanceof Error ? error.message : String(error);
       events.push({
         timestamp: new Date().toISOString(),
         logicalId: resource.logicalId,
         resourceType: resource.resourceType,
         action: 'delete',
         status: 'failed',
-        error: errorMsg,
+        error: formationFailure(error).message,
       });
     }
   }
@@ -237,11 +236,11 @@ const runResourceChanges = async (args: {
       });
       if (isCreate) created.push(resourceRow);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const failure = formationFailure(error);
       log(
         'applyFormationTemplate: failed logicalId=%s error=%s',
         logicalId,
-        errorMsg
+        failure.message
       );
       const rollbackEvents = await rollbackCreatedResources({
         created,
@@ -255,8 +254,7 @@ const runResourceChanges = async (args: {
         logicalId,
         resourceType: decl.type,
         action: existing ? 'update' : 'create',
-        errorMessage: errorMsg,
-        errorCode: formationErrorCode(error),
+        failure,
         rollbackEvents,
       });
       return false;
