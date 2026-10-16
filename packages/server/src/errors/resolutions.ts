@@ -126,7 +126,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_AUTHOR_UNAVAILABLE:
     "Write the playbook's definition again as a user or API key that can start its executors; cases created on that version run as them.",
   PLAYBOOK_NODE_NOT_RUNNABLE:
-    'Read the case: fill what `missing` names, wait for the nodes `waiting` names, or confirm a `confirm` node instead of running it. A `running` node settles on its own.',
+    'Read the case: fill what `missing` names, wait for the nodes `blocked_by` names, or confirm a `confirm` node instead of running it. A `running` node settles on its own; a `waiting` one settles when the task or run its `run` names closes or ends.',
   PLAYBOOK_EXECUTION_INTERRUPTED:
     'Run the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run` once whatever its executor called is known not to need undoing.',
   PLAYBOOK_CASE_PAUSED:
@@ -135,7 +135,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_SELF_WRITE:
     "Return the value as the executor's result instead: it becomes the node's output, which the nodes reading it take as input.",
   PLAYBOOK_NODE_NOT_CONFIRMABLE:
-    'Read the case: confirm only a `confirm` node, after filling what `missing` names and once the nodes `waiting` names are `done`.',
+    'Read the case: confirm only a `confirm` node, after filling what `missing` names and once the nodes `blocked_by` names are `done`.',
   PLAYBOOK_NODE_NOT_EXPORTABLE:
     "Wait for the node to settle, or run it again if it `failed`; to export an earlier output, name its `revision` from the case's entries.",
   PLAYBOOK_EXPORT_FAILED:

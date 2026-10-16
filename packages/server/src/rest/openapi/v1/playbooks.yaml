@@ -1509,14 +1509,53 @@ components:
         - blocked
         - ready
         - running
+        - waiting
         - done
         - stale
         - failed
         - rejected
       description: >-
         `blocked` while a required input is unset or reads a node that is not
-        `done`; `ready` when it can run; `done` when its output is current;
-        `stale` when an input changed after its output was produced.
+        `done`; `ready` when it can run; `running` while its execution is
+        queued or runs its executor; `waiting` while it waits on the workflow
+        task or orchestration run it started, named by `run`; `done` when its
+        output is current; `stale` when an input changed after its output was
+        produced; `failed` when its execution failed on its current inputs;
+        `rejected` when a person rejected its current inputs.
+    PlaybookNodeRun:
+      type: object
+      required:
+        - type
+        - id
+      properties:
+        type:
+          type: string
+          enum:
+            - task
+            - orchestration_run
+        id:
+          type: string
+          description: The task's or orchestration run's ID
+          example: task_V1StGXR8Z5jdHi6B
+        state:
+          type: string
+          nullable: true
+          description: >-
+            A task's workflow state; absent for a run, null once the task no
+            longer exists
+        automation_status:
+          type: string
+          nullable: true
+          description: >-
+            A task's automation status: `failed` when its state's dispatch
+            failed and no `on_failure` routes it, so the task waits on a person
+            to move it. Absent for a run.
+        status:
+          type: string
+          nullable: true
+          description: >-
+            A run's status, such as `awaiting_input`; absent for a task, null
+            once the run no longer exists
     PlaybookCaseNode:
       type: object
       properties:
@@ -1530,11 +1569,18 @@ components:
           description: Required inputs that are unset or refused by their schema
           items:
             type: string
-        waiting:
+        blocked_by:
           type: array
           description: Nodes it reads that must be `done` first
           items:
             type: string
+        run:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/PlaybookNodeRun'
+          description: >-
+            The task or run a `waiting` node waits on, read live on every case
+            read; null in every other state.
         inputs:
           type: array
           items:
