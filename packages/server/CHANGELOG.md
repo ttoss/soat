@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.80.0](https://github.com/ttoss/soat/compare/v0.79.1...v0.80.0) (2026-10-16)
+
+### Features
+
+* **playbooks:** a node waiting on a task or run it started reads waiting and names it ([#1598](https://github.com/ttoss/soat/issues/1598)) ([dd3b52d](https://github.com/ttoss/soat/commit/dd3b52d66722df64d21d39f01e0479ac01f6398d))
+
+### BREAKING CHANGES
+
+* **playbooks:** a playbook case node's `waiting` array is renamed `blocked_by`, in case reads and in the `meta` of `PLAYBOOK_NODE_NOT_RUNNABLE` and `PLAYBOOK_NODE_NOT_CONFIRMABLE`; a node waiting on its task or run reads `waiting` instead of `running`.
+
 ## [0.79.1](https://github.com/ttoss/soat/compare/v0.79.0...v0.79.1) (2026-10-16)
 
 ### Bug Fixes
