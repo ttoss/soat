@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.80.0](https://github.com/ttoss/soat/compare/v0.79.1...v0.80.0) (2026-10-16)
+
+### Bug Fixes
+
+* **server:** consolidate playbook helpers, graph ordering, start actions, project pause and stored errors ([#1600](https://github.com/ttoss/soat/issues/1600)) ([17ffb0b](https://github.com/ttoss/soat/commit/17ffb0b9dccc33c6ff415b60042368e0a0d158e6))
+
+### Features
+
+* **formations:** a formation declares playbooks, written as the deploying credential ([#1601](https://github.com/ttoss/soat/issues/1601)) ([3d3716a](https://github.com/ttoss/soat/commit/3d3716a7f68f35d45ce23a7e382084a54f2fbf67))
+* **playbooks:** a node waiting on a task or run it started reads waiting and names it ([#1598](https://github.com/ttoss/soat/issues/1598)) ([dd3b52d](https://github.com/ttoss/soat/commit/dd3b52d66722df64d21d39f01e0479ac01f6398d))
+
+### BREAKING CHANGES
+
+* **playbooks:** a playbook case node's `waiting` array is renamed `blocked_by`, in case reads and in the `meta` of `PLAYBOOK_NODE_NOT_RUNNABLE` and `PLAYBOOK_NODE_NOT_CONFIRMABLE`; a node waiting on its task or run reads `waiting` instead of `running`.
+* **server:** a stored `error` carries a registered code: `UNKNOWN` and `INTERNAL` are gone, an unexpected failure reads `INTERNAL_ERROR` with `Internal Server Error`, a JSON Logic expression that throws is `EXPRESSION_FAILED` (422 on a request path), an unreachable http or mcp tool target is `TOOL_UNREACHABLE` (502), and formations record their resources' own codes (`*_NOT_FOUND`, `VALIDATION_FAILED`, `RESOURCE_NOT_FOUND`, `FORMATION_RESOURCE_TYPE_UNREGISTERED`). Running a node, exporting one or resuming a case in a paused project answers `409 PROJECT_PAUSED`, and such a case reads `automation_status: paused`.
+
 ## [0.79.1](https://github.com/ttoss/soat/compare/v0.79.0...v0.79.1) (2026-10-16)
 
 ### Bug Fixes
