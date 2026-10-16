@@ -289,7 +289,7 @@ A project prices a tool or agent it owns with **resource rows**: rows naming its
 | Key | What it is |
 | --- | --- |
 | `input` | The arguments sent, presets merged |
-| `action` | The `mcp` or `builtin` action called; `null` for `http` |
+| `action` | The `mcp` or `builtin` action called — on a deferred `mcp` server, the tool its `call` targets; `null` for `http` |
 | `response` | The tool's answer after its `output_mapping`; `null` unless `outcome` is `ok` |
 | `outcome` | `ok`, `error` or `timeout` |
 | `duration_ms` | How long the call took |

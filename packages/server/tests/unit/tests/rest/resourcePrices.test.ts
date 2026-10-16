@@ -2,6 +2,13 @@ import type { Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { App, bodyParser } from '@ttoss/http-server';
+import {
+  createMcpRouter,
+  McpServer,
+  registerTools,
+} from '@ttoss/http-server-mcp';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 type Component = {
@@ -24,6 +31,7 @@ type UsageEvent = {
 describe('Resource prices', () => {
   let toolStub: Server;
   let toolUrl: string;
+  const mcpServers: Server[] = [];
   let adminToken: string;
   let publisherId: string;
   let granteeId: string;
@@ -48,6 +56,33 @@ describe('Resource prices', () => {
     });
     const { port } = toolStub.address() as AddressInfo;
     return `http://127.0.0.1:${port}/hook`;
+  };
+
+  const startMcpServer = async (args: { defer: boolean }): Promise<string> => {
+    const mcp = new McpServer({ name: 'priced', version: '1.0.0' });
+    registerTools({
+      server: mcp,
+      tools: [
+        {
+          name: 'echo',
+          description: 'Echoes.',
+          inputSchema: { type: 'object' as const, properties: {} },
+          handler: async () => {
+            return { content: [{ type: 'text' as const, text: '{}' }] };
+          },
+        },
+      ],
+      defer: args.defer,
+    });
+    const app = new App();
+    app.use(bodyParser());
+    app.use(createMcpRouter(mcp).routes());
+    const server = app.listen(0, '127.0.0.1');
+    mcpServers.push(server);
+    await new Promise<void>((resolve) => {
+      server.once('listening', resolve);
+    });
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`;
   };
 
   const createTool = async (extra: Record<string, unknown> = {}) => {
@@ -103,11 +138,15 @@ describe('Resource prices', () => {
   const callTool = (args: {
     toolId: string;
     key: string;
+    action?: string;
     input?: Record<string, unknown>;
   }) => {
     return authenticatedTestClient(args.key)
       .post(`/api/v1/tools/${args.toolId}/call`)
-      .send({ input: args.input ?? {} });
+      .send({
+        ...(args.action ? { action: args.action } : {}),
+        input: args.input ?? {},
+      });
   };
 
   const lastEvent = async (args: { toolId: string; key: string }) => {
@@ -152,11 +191,15 @@ describe('Resource prices', () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve) => {
-      toolStub.close(() => {
-        return resolve();
-      });
-    });
+    await Promise.all(
+      [toolStub, ...mcpServers].map((server) => {
+        return new Promise<void>((resolve) => {
+          server.close(() => {
+            return resolve();
+          });
+        });
+      })
+    );
   });
 
   describe('PUT /api/v1/projects/:project_id/prices', () => {
@@ -370,6 +413,39 @@ describe('Resource prices', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  describe('a priced mcp call reads the action invoked', () => {
+    const ON_ECHO = { if: [{ '==': [{ var: 'action' }, 'echo'] }, 1, 0] };
+
+    test.each([
+      ['a listing server', false, 'echo', {}],
+      ['a deferred server, by name', true, 'echo', {}],
+      [
+        "a deferred server, through its proxy's call",
+        true,
+        'call',
+        { name: 'echo', arguments: {} },
+      ],
+    ])('%s', async (_label, defer, action, input) => {
+      const mcpUrl = await startMcpServer({ defer });
+      const toolId = await createTool({
+        type: 'mcp',
+        mcp: { url: mcpUrl },
+        parameters: undefined,
+        execute: undefined,
+      });
+      await putPrices({
+        projectId: publisherId,
+        rows: [priceRow({ toolId, component: 'op', quantity: ON_ECHO })],
+      });
+
+      const call = await callTool({ toolId, key: publisherKey, action, input });
+
+      expect(call.status).toBe(200);
+      const event = await lastEvent({ toolId, key: publisherKey });
+      expect(componentOf(event, 'op')).toMatchObject({ quantity: 1 });
     });
   });
 

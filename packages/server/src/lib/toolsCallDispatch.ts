@@ -153,9 +153,10 @@ const assertActionBound = (args: {
 
 /**
  * On a deferred server (`mcpDeferredProxy.ts`): the proxy to send `action`
- * through when the server does not list it, after holding a direct call of
- * the proxy to the binding's lists by the tool it targets. `undefined` on a
- * server that lists its tools, or whose listing cannot be read.
+ * through when the server does not list it, or `proxyCall` on a direct call
+ * of the proxy, after holding it to the binding's lists by the tool it
+ * targets. Empty on a server that lists its tools, or whose listing cannot be
+ * read.
  */
 const deferredRoute = async (args: {
   tool: CallableToolDefinition;
@@ -163,26 +164,26 @@ const deferredRoute = async (args: {
   input: Record<string, unknown>;
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
-}): Promise<string | undefined> => {
+}): Promise<{ viaCall?: string; proxyCall?: boolean }> => {
   const listing = await fetchMcpToolListing({
     mcpUrl: args.mcpUrl,
     mcpHeaders: args.mcpHeaders,
     logToolCallingError: noopLogToolCallingError,
   });
   const proxy = listing ? findDeferredProxy(listing) : null;
-  if (!listing || !proxy) return undefined;
+  if (!listing || !proxy) return {};
 
   if (args.action === proxy.callName) {
     assertActionBound({
       tool: args.tool,
       action: innerToolName(args.input) ?? '',
     });
-    return undefined;
+    return { proxyCall: true };
   }
   const listed = listing.some((mcpTool) => {
     return mcpTool.name === args.action;
   });
-  return listed ? undefined : proxy.callName;
+  return listed ? {} : { viaCall: proxy.callName };
 };
 
 export const callMcpTool = async (
@@ -229,7 +230,7 @@ export const callMcpTool = async (
     ...(mcpHeaders ?? {}),
     ...buildContextHeaders({ toolContext, contextKeys: tool.contextKeys }),
   };
-  const viaCall = await deferredRoute({
+  const route = await deferredRoute({
     tool,
     action,
     input: mergedInput,
@@ -240,7 +241,7 @@ export const callMcpTool = async (
     mcpUrl,
     mcpHeaders: headers,
     mcpToolName: action,
-    viaCall,
+    ...route,
     meter,
     // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,
