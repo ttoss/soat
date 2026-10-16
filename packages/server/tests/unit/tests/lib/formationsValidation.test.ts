@@ -991,7 +991,7 @@ describe('validateFormationTemplate', () => {
             name: 'my-tool',
             execute: {
               url: { sub: '${AppUrl}/api/endpoint' },
-              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+              headers: { 'X-Client-Id': { sub: 'client ${ApiKey}' } },
             },
           },
         },

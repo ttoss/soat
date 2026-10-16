@@ -28,6 +28,7 @@ import {
   mapArchivedVersionFields,
   toResourceRef,
 } from './resourceVersions';
+import { redactAgentToolSecrets } from './toolSecretRedaction';
 
 const log = createDebug('soat:agents');
 
@@ -72,9 +73,12 @@ export const mapAgentVersion = (
   version: ArchivedVersionRow,
   agentPublicId: string
 ) => {
+  const fields = mapArchivedVersionFields(version);
   return {
     agent_id: agentPublicId,
-    ...mapArchivedVersionFields(version),
+    ...fields,
+    // Wire-only: a restore replays the stored row, never this projection.
+    config: redactAgentToolSecrets(fields.config),
     eval_run_id: versionEvalRunId(version),
   };
 };

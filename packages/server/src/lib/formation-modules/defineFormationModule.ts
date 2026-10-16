@@ -146,6 +146,10 @@ export type FormationModuleDefinition<TResource> = {
    * rather than each surface remembering.
    */
   writeOnlyProperties?: readonly string[];
+  /** See `FormationModule.maskCredentials`. */
+  maskCredentials?: (
+    properties: Record<string, unknown>
+  ) => Record<string, unknown>;
   /**
    * Attribute names that may not be resolved into a formation output. A
    * built-in module publishes no attributes, so a `ref_attr` naming one of these
@@ -339,6 +343,7 @@ const buildOptionalMembers = <TResource>(
     warnChecks,
     writeOnlyProperties,
     sensitiveAttributes,
+    maskCredentials,
     deletionBlocker,
   } = definition;
   return {
@@ -366,6 +371,7 @@ const buildOptionalMembers = <TResource>(
         }
       : {}),
     ...(sensitiveAttributes ? { sensitiveAttributes } : {}),
+    ...(maskCredentials ? { maskCredentials } : {}),
   };
 };
 

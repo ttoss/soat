@@ -27,6 +27,8 @@ export const errorCodesDocsUrl = (): string => {
  * to act on. Codes not listed here fall back to `STATUS_RESOLUTIONS`.
  */
 export const ERROR_RESOLUTIONS: Record<string, string> = {
+  LITERAL_CREDENTIAL:
+    'Create the value with `POST /secrets` and write `{{secret:<secret_id>}}` where the literal was (for example `Authorization: Bearer {{secret:sec_...}}`); `meta.paths` names every field to change.',
   UNAUTHORIZED:
     'Send `Authorization: Bearer <token>` — a user token from `POST /api/v1/users/login`, a project API key (`sk_…`), or an OAuth access token. Discovery metadata for the OAuth flow is at `/.well-known/oauth-authorization-server`.',
   FORBIDDEN:

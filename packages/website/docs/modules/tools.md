@@ -407,11 +407,19 @@ Credential and scope both come from the run, neither from the model. A key missi
 
 Presets and model arguments reach the action wherever the OpenAPI operation declares the parameter (path, query, body): a `list-*` action's `project_id`, filters and pagination are query parameters, so `{ "project_id": "proj_abc123" }` locks a `builtin` tool to one project. An omitted argument is left out, never sent empty.
 
-### Literal Credentials Are Masked on Read
+### Credentials Are References, Never Literals
 
-A tool is readable by anyone holding `tools:GetTool`, so a literal credential is stored and sent on every call but never echoed: `secret_access_key`, `session_token` and `credentials` under `execute.auth`, and any credential-named `headers` value in `execute` or `mcp` (`Authorization`, `Cookie`, or a name containing `api-key` / `token` / `secret` / `password`) read back as `{"no_echo": true}`. The mask is an object so a read-edit-write round trip fails the schema's `type: string` check instead of storing the placeholder as the credential.
+A tool is readable by anyone holding `tools:GetTool`, so a credential slot takes a `{{secret:...}}` reference (or, in `headers`, a `{{context:<key>}}` one) and refuses a literal with `400 LITERAL_CREDENTIAL`, `meta.paths` naming each field. The slots, in `execute` and `mcp`:
 
-A `{{secret:...}}` reference stays readable; it is the wiring, not the credential.
+| Slot | Literal refused when |
+| --- | --- |
+| `auth.secret_access_key`, `auth.session_token`, `auth.credentials` | always |
+| `headers.<name>` | the name contains `authorization`, `cookie`, `api-key` / `api_key` / `apikey`, `token`, `secret` or `password` (any case) |
+| `url` | it carries a password (`https://user:pass@host`), or a query parameter named as a header above, or `key`, `sig` or `signature` |
+
+A `{param}` placeholder filled from the call's arguments is not a literal. The rule holds for every definition: a stored tool, a pipeline step's inline `tool`, an agent's `tool_bindings[].tool` and a formation's `tool` resource.
+
+A literal stored before the rule reads back as `{"no_echo": true}` wherever the definition is serialized (a `url` holding one is masked whole); the call still sends it. The mask is an object so a read-edit-write round trip fails the schema's `type: string` check instead of storing the placeholder as the credential. Replace it with a reference.
 
 ### Where a Tool May Reach (Egress)
 

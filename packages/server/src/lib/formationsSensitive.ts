@@ -5,18 +5,9 @@ import type {
   PlanChange,
   ResourceDeclaration,
 } from './formationsTypes';
+import { SENSITIVE_PLACEHOLDER } from './sensitivePlaceholder';
 
-/**
- * What a credential-bearing value reads as once it has been stored.
- *
- * Deliberately an object rather than a masking string: a stored template is a
- * record a caller can read back, and the obvious next move is to edit it and
- * send it again. A string mask would round-trip as the new secret and silently
- * replace one; this fails the schema's `type: string` check instead, so the
- * mistake surfaces as a refusal rather than as a rotated credential nobody
- * asked for.
- */
-export const SENSITIVE_PLACEHOLDER = { no_echo: true } as const;
+export { SENSITIVE_PLACEHOLDER };
 
 const writeOnlyPropertiesFor = (resourceType: string): readonly string[] => {
   return getFormationModule({ resourceType })?.writeOnlyProperties ?? [];
@@ -26,10 +17,14 @@ const redactProperties = (args: {
   resourceType: string;
   properties: Record<string, unknown>;
 }): Record<string, unknown> => {
+  const module = getFormationModule({ resourceType: args.resourceType });
+  const masked = module?.maskCredentials
+    ? module.maskCredentials(args.properties)
+    : args.properties;
   const names = writeOnlyPropertiesFor(args.resourceType);
-  if (names.length === 0) return args.properties;
+  if (names.length === 0) return masked;
 
-  const redacted: Record<string, unknown> = { ...args.properties };
+  const redacted: Record<string, unknown> = { ...masked };
   for (const name of names) {
     if (name in redacted) redacted[name] = SENSITIVE_PLACEHOLDER;
   }

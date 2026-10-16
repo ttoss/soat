@@ -8,6 +8,7 @@ import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
 import { getShareProjection } from 'src/lib/shareableTypes';
+import { redactAgentToolSecrets } from 'src/lib/toolSecretRedaction';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
@@ -257,7 +258,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   );
 
   ctx.status = 201;
-  ctx.body = result;
+  ctx.body = redactAgentToolSecrets(result);
 });
 
 agentsRouter.get('/agents', async (ctx: Context) => {
@@ -272,7 +273,8 @@ agentsRouter.get('/agents', async (ctx: Context) => {
     resourceType: 'agent',
   });
 
-  ctx.body = await listAgents({ projectIds, ...parsePagination(ctx) });
+  const page = await listAgents({ projectIds, ...parsePagination(ctx) });
+  ctx.body = { ...page, data: page.data.map(redactAgentToolSecrets) };
 });
 
 agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
@@ -296,7 +298,9 @@ agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
     action: 'agents:GetAgent',
   });
 
-  ctx.body = await getAgent({ projectIds, id: ctx.params.agent_id });
+  ctx.body = redactAgentToolSecrets(
+    await getAgent({ projectIds, id: ctx.params.agent_id })
+  );
 });
 
 agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
@@ -305,7 +309,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
     action: 'agents:UpdateAgent',
   });
 
-  ctx.body = await runAgentUpdate({ ctx, projectIds });
+  ctx.body = redactAgentToolSecrets(await runAgentUpdate({ ctx, projectIds }));
 });
 
 agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
@@ -314,7 +318,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
     action: 'agents:UpdateAgent',
   });
 
-  ctx.body = await runAgentUpdate({ ctx, projectIds });
+  ctx.body = redactAgentToolSecrets(await runAgentUpdate({ ctx, projectIds }));
 });
 
 agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {

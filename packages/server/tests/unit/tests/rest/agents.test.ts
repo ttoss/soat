@@ -191,7 +191,7 @@ describe('Agents', () => {
           description: 'SOAT MCP server',
           mcp: {
             url: 'http://localhost:5047/mcp',
-            headers: { Authorization: 'Bearer test-token' },
+            headers: { Authorization: 'Bearer {{context:userToken}}' },
           },
           project_id: projectId,
         });
