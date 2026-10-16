@@ -263,8 +263,7 @@ const assertNoCycle = (args: {
   if (cycles.length > 0) {
     throw new DomainError(
       'ORCHESTRATION_CYCLE_DETECTED',
-      describeCycles(cycles),
-      { cycles }
+      describeCycles(cycles)
     );
   }
 };
