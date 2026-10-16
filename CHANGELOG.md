@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.80.1](https://github.com/ttoss/soat/compare/v0.80.0...v0.80.1) (2026-10-16)
+
+* feat(server)!: refuse literal credentials in tool definitions and mask stored ones everywhere (#1604) ([aabb230](https://github.com/ttoss/soat/commit/aabb2304c602690afcc06249219a38a9680d518e)), closes [#1604](https://github.com/ttoss/soat/issues/1604)
+
+### Bug Fixes
+
+* **server:** record the invoked action on mcp tool calls for resource prices ([#1605](https://github.com/ttoss/soat/issues/1605)) ([fb37a55](https://github.com/ttoss/soat/commit/fb37a554700da85a9dc52239c549b66bc7e1be6a)), closes [#1603](https://github.com/ttoss/soat/issues/1603)
+
+### BREAKING CHANGES
+
+* a tool definition carrying a literal credential is
+  refused with 400 LITERAL_CREDENTIAL; store the value with POST /secrets
+  and reference it as {{secret:sec_...}}. Restoring or releasing an agent
+  version that holds one is refused the same way.
+
 # [0.80.0](https://github.com/ttoss/soat/compare/v0.79.1...v0.80.0) (2026-10-16)
 
 ### Bug Fixes
