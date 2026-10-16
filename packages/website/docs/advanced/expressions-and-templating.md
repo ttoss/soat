@@ -54,6 +54,10 @@ To pass an object that looks like an expression (for example the literal payload
 { "payload": { "preserve": { "var": "x" } } }
 ```
 
+### An expression that fails
+
+An expression naming an operator the engine does not know, or one that reaches a `throw`, fails with `EXPRESSION_FAILED` (`422`); the message carries what it threw, as JSON (`{"type":"kaboom"}`).
+
 ## Dotted paths
 
 Plain dotted strings appear where a value is an **address**, not an expression:

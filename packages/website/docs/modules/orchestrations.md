@@ -91,7 +91,7 @@ One record per node attempt, listed oldest first by [`GET /api/v1/orchestration-
 | `status`       | string         | `running` \| `completed` \| `failed` \| `requires_action` \| `skipped` (`running` is the transient pre-completion state of a side-effecting node) |
 | `input`        | object \| null | Resolved `input_mapping` the node received               |
 | `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
-| `error`        | object \| null | `{ code, message }` when `status` is `failed`            |
+| `error`        | object \| null | `{ code, message, meta? }` when `status` is `failed`     |
 | `started_at`   | string \| null | ISO 8601 timestamp when the node began executing         |
 | `completed_at` | string \| null | ISO 8601 timestamp when the record was written           |
 | `created_at`   | string         | ISO 8601 creation timestamp                              |

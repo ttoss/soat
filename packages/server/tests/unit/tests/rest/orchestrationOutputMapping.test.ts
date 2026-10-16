@@ -153,9 +153,10 @@ describe('Orchestration output_mapping', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       expect(res.body.output).toBeNull();
-      expect(res.body.error).toEqual(
-        expect.objectContaining({ code: 'UNKNOWN' })
-      );
+      expect(res.body.error).toEqual({
+        code: 'EXPRESSION_FAILED',
+        message: '{"type":"bad mapping"}',
+      });
     });
 
     test('a sub_orchestration node reads the child run mapped output', async () => {

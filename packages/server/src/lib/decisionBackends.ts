@@ -1,4 +1,4 @@
-import { DomainError, type ErrorCode } from '../errors';
+import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import {
@@ -23,6 +23,7 @@ import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { quotaBreachError } from './quotaBreach';
 import { checkGenerationQuota } from './quotaEnforcement';
+import { type StoredError, toStoredError } from './storedError';
 
 /**
  * The two backends a decision is answered by — a tool-less agent over the
@@ -36,28 +37,27 @@ export type DecisionOutcome =
       answers: DecisionAnswer[];
       generationId: string | null;
     }
-  | { status: 'failed'; error: { code: ErrorCode; message: string } };
+  | { status: 'failed'; error: StoredError };
 
-type FailureCause = { code: ErrorCode; message: string };
-
-const GENERATION_FAILURE: FailureCause = {
+const GENERATION_FAILURE: StoredError = {
   code: 'GENERATION_FAILED',
   message: 'The generation failed.',
 };
 
-const TOOL_FAILURE: FailureCause = {
+const TOOL_FAILURE: StoredError = {
   code: 'INTERNAL_ERROR',
   message: 'The tool call failed.',
 };
 
-/** The backend's own code when it raised one; anything else is opaque. */
+/** The backend's own error when it raised one; anything else is opaque. */
 export const failedOutcome = (args: {
   error: unknown;
-  opaque: FailureCause;
+  opaque: StoredError;
 }): DecisionOutcome => {
-  const { code, message } =
-    args.error instanceof DomainError ? args.error : args.opaque;
-  return { status: 'failed', error: { code, message } };
+  return {
+    status: 'failed',
+    error: toStoredError({ ...args, label: 'decision' }),
+  };
 };
 
 /* istanbul ignore next -- a non-streamed generation of a tool-less agent with
@@ -78,7 +78,7 @@ const outcomeOf = (args: {
   const answer = answerOf(result);
   /* istanbul ignore next -- see `answerOf`. */
   if (answer === null || result instanceof ReadableStream) {
-    return failedOutcome({ error: null, opaque: GENERATION_FAILURE });
+    return { status: 'failed', error: GENERATION_FAILURE };
   }
   return {
     status: 'completed',
@@ -129,7 +129,7 @@ const answerWithAgent = async (args: {
 
 export type DecisionEvaluation = {
   answer: () => Promise<DecisionOutcome>;
-  opaqueFailure: FailureCause;
+  opaqueFailure: StoredError;
 };
 
 /**

@@ -1800,7 +1800,7 @@ components:
         error:
           type: object
           nullable: true
-          description: Why it failed
+          description: 'Why it failed: `{ code, message, meta? }`'
         created_by:
           x-soat-ref: users
           type: string
@@ -1887,7 +1887,7 @@ components:
         error:
           type: object
           nullable: true
-          description: Why it failed
+          description: 'Why it failed: `{ code, message, meta? }`'
         created_by:
           x-soat-ref: users
           type: string

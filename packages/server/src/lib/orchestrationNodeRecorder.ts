@@ -1,7 +1,6 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import { applyInputMapping } from './jsonLogicMapping';
 import type { NodeOutcome, ReservedRow } from './orchestrationIdempotency';
 import {
@@ -18,46 +17,21 @@ import {
   resolveRetryPolicy,
 } from './orchestrationRetry';
 import type { OrchestrationNode } from './orchestrations';
+import {
+  INTERNAL_FAILURE,
+  type StoredError,
+  toStoredError,
+} from './storedError';
 
 const log = createDebug('soat:orchestrations');
 
-/**
- * Normalizes any thrown value into the structured error shape persisted on a
- * run (and on each failing node execution).
- */
-const describeThrown = (error: unknown): string => {
-  if (error instanceof Error) {
-    // `fetch` throws a generic `TypeError: fetch failed` with the real reason
-    // only on `.cause`. Dropped, nothing distinguishes a bad host from a
-    // timeout or a DNS failure.
-    if (error.cause !== undefined) {
-      const causeMessage =
-        error.cause instanceof Error
-          ? error.cause.message
-          : String(error.cause);
-      return `${error.message}: ${causeMessage}`;
-    }
-    return error.message;
-  }
-  // Third-party evaluators throw non-Errors — json-logic-engine throws a bare
-  // `{ type: 'Unknown Operator' }` — which `String(obj)` would collapse to
-  // "[object Object]".
-  if (typeof error === 'object' && error !== null) {
-    try {
-      const json = JSON.stringify(error);
-      if (json && json !== '{}') return json;
-    } catch {
-      // fall through to String() for circular / non-serializable values
-    }
-  }
-  return String(error);
-};
-
-export const buildRunError = (error: unknown): object => {
-  return {
-    message: describeThrown(error),
-    code: error instanceof DomainError ? error.code : 'UNKNOWN',
-  };
+/** The error a failed node or run records. */
+export const buildRunError = (error: unknown): StoredError => {
+  return toStoredError({
+    error,
+    opaque: INTERNAL_FAILURE,
+    label: 'orchestration run',
+  });
 };
 
 const recordNodeExecution = async (args: {

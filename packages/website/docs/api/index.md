@@ -97,6 +97,12 @@ as the `x-error-codes` extension of [/openapi.json](/openapi.json), and on the
 [Error Codes](/docs/error-codes) page. `INTERNAL_ERROR` always carries exactly
 that message; the underlying exception is logged server-side, never forwarded.
 
+Work that fails after its request has answered — an orchestration run or node,
+a trigger firing, a decision, a playbook execution or export — records the same
+shape in its `error` field: `{ code, message, meta? }`. A failure the platform
+names keeps its code, message and `meta`; any other records `INTERNAL_ERROR`
+with the same constant message, and its detail reaches the server log only.
+
 Common status codes:
 
 - **200** — Success

@@ -85,6 +85,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
   EMBEDDING_NOT_CONFIGURED:
     'Knowledge search needs an embedding model. Configure one on the project or the AI provider before ingesting or searching.',
+  TOOL_UNREACHABLE:
+    "Check the tool's URL and that its host is reachable from the server; the message names the network failure. A timeout or a dropped connection may succeed on retry.",
+  EXPRESSION_FAILED:
+    'Fix the JSON Logic expression the message names: an unknown operator, or a `throw` the expression reached with the data it was given.',
   INTERNAL_ERROR:
     'Retry with backoff. The underlying exception is logged server-side and deliberately never forwarded, so the response carries nothing further to act on.',
   NOT_IMPLEMENTED:

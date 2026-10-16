@@ -19,8 +19,12 @@ import {
 } from './playbookExecutors';
 import { type PlaybookBasis, samePlaybookBasis } from './playbookState';
 import { stableDigest } from './stableDigest';
+import {
+  INTERNAL_FAILURE,
+  type StoredError,
+  toStoredError,
+} from './storedError';
 import { getTask } from './tasks';
-import { toErrorObject } from './triggerTargets';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -28,8 +32,7 @@ type ExecutionRow = InstanceType<(typeof db)['PlaybookExecution']>;
 
 /** How an execution ended: the executor's output, or why it has none. */
 export type ExecutionSettlement =
-  | { output: JsonValue; runId: string | null }
-  | { error: Record<string, unknown> };
+  { output: JsonValue; runId: string | null } | { error: StoredError };
 
 type CaseRow = InstanceType<(typeof db)['PlaybookCase']>;
 
@@ -199,7 +202,13 @@ const settleUnlessPending = async (args: {
   } catch (error) {
     await settleExecution({
       executionId,
-      settlement: { error: toErrorObject(error) },
+      settlement: {
+        error: toStoredError({
+          error,
+          opaque: INTERNAL_FAILURE,
+          label: 'playbook execution',
+        }),
+      },
     });
     return null;
   }

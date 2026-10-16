@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { createJwtIsAllowed } from './permissions';
 import { assertProjectAcceptsWork } from './projectPause';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
   createFiringRecord,
@@ -13,7 +14,7 @@ import {
   mapTriggerFiring,
   reloadFiring,
 } from './triggerFirings';
-import { dispatchToTarget, toErrorObject } from './triggerTargets';
+import { dispatchToTarget } from './triggerTargets';
 import { signTriggerToken } from './triggerToken';
 import { mayStartTarget } from './triggerValidation';
 
@@ -337,7 +338,14 @@ export const runFiringDispatch = async (
     await finalizeFiringSucceeded({ firing, result });
     log('runFiringDispatch: firing=%s succeeded', firing.publicId);
   } catch (error) {
-    await finalizeFiringFailed({ firing, error: toErrorObject(error) });
+    await finalizeFiringFailed({
+      firing,
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'trigger firing',
+      }),
+    });
     log('runFiringDispatch: firing=%s failed %o', firing.publicId, error);
   }
 
@@ -386,7 +394,14 @@ export const runReservedFiring = async (args: {
       authHeader,
     });
   } catch (error) {
-    await finalizeFiringFailed({ firing, error: toErrorObject(error) });
+    await finalizeFiringFailed({
+      firing,
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'trigger firing',
+      }),
+    });
     log('runReservedFiring: firing=%s refused %o', firing.publicId, error);
   }
 };
