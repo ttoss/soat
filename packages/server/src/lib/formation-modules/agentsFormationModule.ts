@@ -209,7 +209,7 @@ export const agentsFormationModule = defineFormationModule({
     return findAgentDeletionBlocker({ id: physicalResourceId, alsoDeleting });
   },
 
-  maskLiveCredentials: redactAgentToolSecrets,
+  maskCredentials: redactAgentToolSecrets,
 
   fetch: ({ physicalResourceId }) => {
     return getAgent({ id: physicalResourceId });

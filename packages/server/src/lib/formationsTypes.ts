@@ -300,11 +300,12 @@ export type FormationModule = {
    */
   writeOnlyProperties?: readonly string[];
   /**
-   * Masks credential material nested inside a property the live read must
+   * Masks credential material nested inside a property every read must
    * return — a tool's `execute`/`mcp` headers, an agent's inline bindings —
    * where naming the property whole in `writeOnlyProperties` would hide it.
+   * Applied wherever a declared or live property set leaves the API.
    */
-  maskLiveCredentials?: (
+  maskCredentials?: (
     properties: Record<string, unknown>
   ) => Record<string, unknown>;
   /**

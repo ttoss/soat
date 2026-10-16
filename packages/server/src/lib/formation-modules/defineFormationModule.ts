@@ -146,8 +146,8 @@ export type FormationModuleDefinition<TResource> = {
    * rather than each surface remembering.
    */
   writeOnlyProperties?: readonly string[];
-  /** See `FormationModule.maskLiveCredentials`. */
-  maskLiveCredentials?: (
+  /** See `FormationModule.maskCredentials`. */
+  maskCredentials?: (
     properties: Record<string, unknown>
   ) => Record<string, unknown>;
   /**
@@ -343,7 +343,7 @@ const buildOptionalMembers = <TResource>(
     warnChecks,
     writeOnlyProperties,
     sensitiveAttributes,
-    maskLiveCredentials,
+    maskCredentials,
     deletionBlocker,
   } = definition;
   return {
@@ -371,7 +371,7 @@ const buildOptionalMembers = <TResource>(
         }
       : {}),
     ...(sensitiveAttributes ? { sensitiveAttributes } : {}),
-    ...(maskLiveCredentials ? { maskLiveCredentials } : {}),
+    ...(maskCredentials ? { maskCredentials } : {}),
   };
 };
 

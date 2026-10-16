@@ -1,6 +1,8 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { readRequestBody } from '../../fixtures/requestBody';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -260,6 +262,14 @@ describe('Tools', () => {
     });
 
     test('every declared execute field is still accepted', async () => {
+      const secret = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: 'declared-execute-secret',
+          value: '{"type":"service_account"}',
+        });
+      const reference = `{{secret:${secret.body.id}}}`;
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
@@ -269,12 +279,12 @@ describe('Tools', () => {
           execute: {
             url: 'https://example.com/{userId}',
             method: 'POST',
-            headers: { Authorization: 'Bearer static' },
+            headers: { Authorization: `Bearer ${reference}` },
             body_mode: 'json',
             response_mode: 'base64',
             auth: {
               type: 'gcp_service_account',
-              credentials: '{"type":"service_account"}',
+              credentials: reference,
               scopes: ['https://www.googleapis.com/auth/cloud-platform'],
             },
           },
@@ -1072,16 +1082,14 @@ describe('Tools', () => {
           mcp: {
             url: 'https://mcp.example.com/sse',
             headers: {
-              Authorization: 'Bearer plain-token',
+              authorization: `Bearer {{secret:${secretId}}}`,
               'X-Custom-Trace': 'Keep-This-Casing',
             },
           },
         });
 
-      // The credential-shaped header keeps its key and loses its literal
-      // value; every other header round-trips key and value verbatim.
       const expectedHeaders = {
-        Authorization: { no_echo: true },
+        authorization: `Bearer {{secret:${secretId}}}`,
         'X-Custom-Trace': 'Keep-This-Casing',
       };
 
@@ -1140,21 +1148,52 @@ describe('Tools', () => {
       expect(lastRequest.url).toContain('key=sk-live-topsecret');
     });
 
-    test('a literal credential is masked on read yet still sent on a call', async () => {
+    test('a literal credential is refused on write', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'literal-credential-refused-tool',
+          type: 'http',
+          execute: {
+            url: `${echoServerUrl}/convert`,
+            headers: { Authorization: 'Bearer literal-not-a-reference' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('LITERAL_CREDENTIAL');
+      expect(res.body.error.meta.paths).toEqual([
+        'execute.headers.Authorization',
+      ]);
+    });
+
+    test('a literal stored before the rule is masked on read yet still sent on a call', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
           name: 'literal-credential-call-tool',
           type: 'http',
+          execute: { url: `${echoServerUrl}/convert`, method: 'POST' },
+        });
+      expect(createRes.status).toBe(201);
+      // The API refuses the literal, so the stored row is planted directly.
+      await db.Tool.update(
+        {
           execute: {
             url: `${echoServerUrl}/convert`,
             method: 'POST',
             headers: { Authorization: 'Bearer literal-not-a-reference' },
           },
-        });
-      expect(createRes.status).toBe(201);
-      expect(createRes.body.execute.headers.Authorization).toEqual({
+        },
+        { where: { publicId: createRes.body.id } }
+      );
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.body.execute.headers.Authorization).toEqual({
         no_echo: true,
       });
 
@@ -1321,7 +1360,7 @@ describe('Tools', () => {
               type: 'aws_sigv4',
               service: 's3',
               access_key_id: 'AKIA',
-              secret_access_key: 'shh',
+              secret_access_key: `{{secret:${awsSecretSecretId}}}`,
             },
           },
         });
@@ -1340,7 +1379,10 @@ describe('Tools', () => {
           type: 'http',
           execute: {
             url: 'https://example.com',
-            auth: { type: 'gcp_service_account', credentials: '{}' },
+            auth: {
+              type: 'gcp_service_account',
+              credentials: `{{secret:${awsSecretSecretId}}}`,
+            },
           },
         });
 
@@ -1365,7 +1407,7 @@ describe('Tools', () => {
               region: 'us-east-1',
               service: 's3',
               access_key_id: 'AKIA',
-              secret_access_key: 'shh',
+              secret_access_key: `{{secret:${awsSecretSecretId}}}`,
             },
           },
         });
@@ -1525,7 +1567,7 @@ describe('Tools', () => {
               region: 'us-east-1',
               service: 's3',
               access_key_id: 'AKIA',
-              secret_access_key: 'shh',
+              secret_access_key: `{{secret:${awsSecretSecretId}}}`,
             },
           },
         });

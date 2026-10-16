@@ -647,16 +647,18 @@ components:
             stored reference is what is echoed back, never the resolved value.
 
 
-            A credential written as a **literal** is stored and still sent on
-            every call, but it is masked on every read: `secret_access_key`,
-            `session_token` and `credentials` under `auth`, and any
-            credential-named `headers` value (`Authorization`, `Cookie`, or a
-            name containing `api-key`/`token`/`secret`/`password`), come back as
-            `{"no_echo": true}`. The mask is an object rather than a string so a
-            read-edit-write round trip fails the schema check instead of writing
-            the placeholder in as the credential. A value carrying a
-            `{{secret:...}}` reference is the wiring, not the credential, and
-            stays readable.
+            A credential slot takes a reference, never a literal: a literal
+            `secret_access_key`, `session_token` or `credentials` under `auth`, a
+            literal credential-named `headers` value (`Authorization`, `Cookie`, or
+            a name containing `api-key`/`token`/`secret`/`password`), or a `url`
+            carrying a password or a literal credential-named query parameter
+            (those names, plus `key` and `sig`/`signature`) is refused with `400
+            LITERAL_CREDENTIAL`, `meta.paths` naming each one. A stored literal reads
+            back as `{"no_echo": true}` (a `url` holding one is masked whole), an
+            object rather than a string so a read-edit-write round trip fails the
+            schema check instead of writing the placeholder in as the credential.
+            A value carrying a `{{secret:...}}` reference is the wiring, not the
+            credential, and stays readable.
 
 
             `headers` values additionally accept `{{context:<key>}}` references,
@@ -675,7 +677,7 @@ components:
             MCP server config (`url`, `headers`). `headers` values accept
             `{{secret:...}}` and `{{context:<key>}}` references, resolved right
             before the outbound MCP request; `url` accepts `{{secret:...}}` only.
-            A literal credential in `headers` is masked on read, exactly as in
+            A literal credential in `headers` or `url` is refused, exactly as in
             `execute`.
         actions:
           type: array
@@ -748,7 +750,7 @@ components:
             executed directly without a Tool row, but never both. An inline
             step `tool` cannot itself be of type `pipeline`. An optional
             `output` maps the final result. A literal credential in an inline
-            step `tool` is masked on read, exactly as in `execute`.
+            step `tool` is refused, exactly as in `execute`.
         output_mapping:
           type: object
           nullable: true
@@ -1064,16 +1066,18 @@ components:
         stored reference is what is echoed back, never the resolved value.
 
 
-        A credential written as a **literal** is stored and still sent on
-        every call, but it is masked on every read: `secret_access_key`,
-        `session_token` and `credentials` under `auth`, and any
-        credential-named `headers` value (`Authorization`, `Cookie`, or a
-        name containing `api-key`/`token`/`secret`/`password`), come back as
-        `{"no_echo": true}`. The mask is an object rather than a string so a
-        read-edit-write round trip fails the schema check instead of writing
-        the placeholder in as the credential. A value carrying a
-        `{{secret:...}}` reference is the wiring, not the credential, and
-        stays readable.
+        A credential slot takes a reference, never a literal: a literal
+        `secret_access_key`, `session_token` or `credentials` under `auth`, a
+        literal credential-named `headers` value (`Authorization`, `Cookie`, or
+        a name containing `api-key`/`token`/`secret`/`password`), or a `url`
+        carrying a password or a literal credential-named query parameter
+        (those names, plus `key` and `sig`/`signature`) is refused with `400
+        LITERAL_CREDENTIAL`, `meta.paths` naming each one. A stored literal reads
+        back as `{"no_echo": true}` (a `url` holding one is masked whole), an
+        object rather than a string so a read-edit-write round trip fails the
+        schema check instead of writing the placeholder in as the credential.
+        A value carrying a `{{secret:...}}` reference is the wiring, not the
+        credential, and stays readable.
 
 
         `headers` values additionally accept `{{context:<key>}}` references,
@@ -1134,8 +1138,8 @@ components:
         value cannot be expressed as a static header. `aws_sigv4` requires
         `region`, `service`, `access_key_id` and `secret_access_key`;
         `gcp_service_account` requires `credentials` and `scopes`. Every
-        credential field accepts a `{{secret:...}}` reference and should
-        carry one, since a literal is stored as written and masked on read.
+        credential field takes a `{{secret:...}}` reference; a literal is
+        refused with `400 LITERAL_CREDENTIAL`.
       required:
         - type
       properties:
@@ -1161,20 +1165,20 @@ components:
           type: string
           nullable: true
           description: >-
-            `aws_sigv4`: the secret access key. Masked on read as
-            `{"no_echo": true}` when written as a literal.
+            `aws_sigv4`: the secret access key, as a `{{secret:...}}`
+            reference; a literal is refused.
         session_token:
           type: string
           nullable: true
           description: >-
-            `aws_sigv4`: the session token of a temporary credential.
-            Masked on read, like `secret_access_key`.
+            `aws_sigv4`: the session token of a temporary credential, as a
+            reference, like `secret_access_key`.
         credentials:
           type: string
           nullable: true
           description: >-
             `gcp_service_account`: the service account key file JSON, as a
-            string. Masked on read, like `secret_access_key`.
+            reference to a secret holding it, like `secret_access_key`.
         scopes:
           type: array
           nullable: true
@@ -1189,7 +1193,7 @@ components:
         MCP server config (`url`, `headers`). `headers` values accept
         `{{secret:...}}` and `{{context:<key>}}` references, resolved right
         before the outbound MCP request; `url` accepts `{{secret:...}}` only.
-        A literal credential in `headers` is masked on read, exactly as in
+        A literal credential in `headers` or `url` is refused, exactly as in
         `execute`.
       properties:
         url:

@@ -22,6 +22,7 @@ import {
   callResolvedTool,
   type InlineToolDefinition,
 } from './toolsCall';
+import { assertNoLiteralCredentials } from './toolSecretRedaction';
 import { assertValidToolTemplateTokens } from './toolTemplates';
 import type { ToolCallAttribution } from './usageToolRecording';
 
@@ -174,6 +175,7 @@ export const validateToolDefinition = async (args: {
   }
 
   assertToolTypeSupported(definition.type ?? 'http');
+  assertNoLiteralCredentials(definition);
 
   if (definition.type === 'pipeline') {
     const config = validatePipelineConfig(definition.pipeline);
@@ -356,6 +358,7 @@ const validateToolUpdate = async (params: {
   if (args.type !== undefined) {
     assertToolTypeSupported(args.type);
   }
+  assertNoLiteralCredentials(args);
   if (args.pipeline !== undefined && args.pipeline !== null) {
     const config = validatePipelineConfig(args.pipeline);
     await assertPipelineStepToolsValid({

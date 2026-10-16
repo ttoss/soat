@@ -17,10 +17,14 @@ const redactProperties = (args: {
   resourceType: string;
   properties: Record<string, unknown>;
 }): Record<string, unknown> => {
+  const module = getFormationModule({ resourceType: args.resourceType });
+  const masked = module?.maskCredentials
+    ? module.maskCredentials(args.properties)
+    : args.properties;
   const names = writeOnlyPropertiesFor(args.resourceType);
-  if (names.length === 0) return args.properties;
+  if (names.length === 0) return masked;
 
-  const redacted: Record<string, unknown> = { ...args.properties };
+  const redacted: Record<string, unknown> = { ...masked };
   for (const name of names) {
     if (name in redacted) redacted[name] = SENSITIVE_PLACEHOLDER;
   }
@@ -62,20 +66,6 @@ export const redactTemplateSecrets = (args: {
  * auditable parameter record deliberately masks. The change decision is computed
  * before this runs, so masking costs the caller no signal about what will happen.
  */
-/**
- * The live side of a diff is the resource as it stands, which any caller may
- * have written a literal credential into, whatever the template declared.
- */
-const maskLive = (args: {
-  resourceType: string;
-  properties: Record<string, unknown>;
-}): Record<string, unknown> => {
-  const mask = getFormationModule({
-    resourceType: args.resourceType,
-  })?.maskLiveCredentials;
-  return mask ? mask(args.properties) : args.properties;
-};
-
 export const redactPlanChanges = (args: {
   changes: PlanChange[];
 }): PlanChange[] => {
@@ -90,12 +80,9 @@ export const redactPlanChanges = (args: {
           properties: change.diff.desired,
         }),
         current: change.diff.current
-          ? maskLive({
+          ? redactProperties({
               resourceType,
-              properties: redactProperties({
-                resourceType,
-                properties: change.diff.current,
-              }),
+              properties: change.diff.current,
             })
           : change.diff.current,
       },

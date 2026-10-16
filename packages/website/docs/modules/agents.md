@@ -175,7 +175,7 @@ Neither or both is `400 VALIDATION_FAILED`. A `tool_id` names a tool in the agen
 
 `tool` takes the [Create Tool](./tools.md#data-model) body minus `project_id` (`{{secret:...}}` resolves in the agent's project), stored on the agent and resolved at generation time with no Tool resource: absent from [`GET /tools`](/docs/api/tools/list-tools), untargetable by `active_tool_ids` or `step_rules`, never of type `pipeline` (bind a persisted one by `tool_id`).
 
-A literal credential in an inline definition is masked exactly as on a persisted tool ([Literal Credentials Are Masked on Read](./tools.md#literal-credentials-are-masked-on-read)) on every agent read, in [version history](#versioning-and-staged-rollout) and in `agents.*` webhook payloads; generation and restore use the stored value. An archived version cannot be edited, so a credential once written as a literal is rotated, not removed — use `{{secret:...}}`.
+A credential in an inline definition is a `{{secret:...}}` reference; a literal is refused with `400 LITERAL_CREDENTIAL` ([Credentials Are References, Never Literals](./tools.md#credentials-are-references-never-literals)). A literal stored before the rule is masked on every agent read, in [version history](#versioning-and-staged-rollout) and in `agents.*` webhook payloads, and restoring or releasing a version that holds one is refused the same way. An archived version cannot be edited, so such a credential is rotated, not removed.
 
 #### A binding that cannot be resolved
 

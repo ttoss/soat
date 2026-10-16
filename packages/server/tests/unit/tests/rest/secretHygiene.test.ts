@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { models } from '@soat/postgresdb';
 import { App, Router } from '@ttoss/http-server';
+import { db } from 'src/db';
 import { recordClaimLatency } from 'src/lib/orchestrationQueueMetrics';
 import { errorLoggerMiddleware } from 'src/middleware/errorLogger';
 import request from 'supertest';
@@ -123,32 +124,56 @@ describe('Secret hygiene', () => {
   });
 
   describe('GET /api/v1/tools/{tool_id}', () => {
-    test('a literal credential in execute.auth is not echoed back', async () => {
+    // The API refuses a literal credential, so a row holding one from before
+    // the rule is planted directly; reads must still never echo it.
+    const plantExecute = async (args: {
+      name: string;
+      execute: Record<string, unknown>;
+    }) => {
       const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: args.name,
+          type: 'http',
+          execute: { url: 'https://example.test/thing', method: 'POST' },
+        });
+      expect(created.status).toBe(201);
+      await db.Tool.update(
+        { execute: args.execute },
+        { where: { publicId: created.body.id } }
+      );
+      return created.body.id as string;
+    };
+
+    test('a literal credential in execute.auth is refused, and a stored one is not echoed back', async () => {
+      const execute = {
+        url: 'https://example.test/thing',
+        method: 'POST',
+        auth: {
+          type: 'aws_sigv4',
+          region: 'us-east-1',
+          service: 'execute-api',
+          access_key_id: 'AKIAIOSFODNN7EXAMPLE',
+          secret_access_key: 'wJalrXUtnFEMI-do-not-echo',
+          session_token: 'FwoGZXIvYXdz-do-not-echo',
+        },
+      };
+      const refused = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
           name: 'sigv4-tool',
           type: 'http',
-          execute: {
-            url: 'https://example.test/thing',
-            method: 'POST',
-            auth: {
-              type: 'aws_sigv4',
-              region: 'us-east-1',
-              service: 'execute-api',
-              access_key_id: 'AKIAIOSFODNN7EXAMPLE',
-              secret_access_key: 'wJalrXUtnFEMI-do-not-echo',
-              session_token: 'FwoGZXIvYXdz-do-not-echo',
-            },
-          },
+          execute,
         });
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('LITERAL_CREDENTIAL');
+      expect(JSON.stringify(refused.body)).not.toContain('do-not-echo');
 
-      expect(created.status).toBe(201);
-      expect(JSON.stringify(created.body)).not.toContain('do-not-echo');
-
+      const toolId = await plantExecute({ name: 'sigv4-stored-tool', execute });
       const read = await authenticatedTestClient(adminToken).get(
-        `/api/v1/tools/${created.body.id}`
+        `/api/v1/tools/${toolId}`
       );
 
       expect(read.status).toBe(200);
@@ -156,27 +181,21 @@ describe('Secret hygiene', () => {
       expect(read.body.execute.auth.region).toBe('us-east-1');
     });
 
-    test('a credential-shaped header is not echoed, an ordinary one is', async () => {
-      const created = await authenticatedTestClient(adminToken)
-        .post('/api/v1/tools')
-        .send({
-          project_id: projectId,
-          name: 'header-tool',
-          type: 'http',
-          execute: {
-            url: 'https://example.test/thing',
-            method: 'POST',
-            headers: {
-              Authorization: 'Bearer sk-live-do-not-echo',
-              'Content-Type': 'application/json',
-            },
+    test('a stored credential-shaped header is not echoed, an ordinary one is', async () => {
+      const toolId = await plantExecute({
+        name: 'header-tool',
+        execute: {
+          url: 'https://example.test/thing',
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sk-live-do-not-echo',
+            'Content-Type': 'application/json',
           },
-        });
-
-      expect(created.status).toBe(201);
+        },
+      });
 
       const read = await authenticatedTestClient(adminToken).get(
-        `/api/v1/tools/${created.body.id}`
+        `/api/v1/tools/${toolId}`
       );
 
       expect(read.status).toBe(200);
@@ -184,6 +203,24 @@ describe('Secret hygiene', () => {
       expect(read.body.execute.headers['Content-Type']).toBe(
         'application/json'
       );
+    });
+
+    test('a stored url credential is not echoed', async () => {
+      const toolId = await plantExecute({
+        name: 'url-key-tool',
+        execute: {
+          url: 'https://example.test/thing?api_key=sk-url-do-not-echo',
+          method: 'POST',
+        },
+      });
+
+      const read = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${toolId}`
+      );
+
+      expect(read.status).toBe(200);
+      expect(JSON.stringify(read.body)).not.toContain('do-not-echo');
+      expect(read.body.execute.url).toEqual({ no_echo: true });
     });
 
     test('a {{secret:...}} reference stays readable', async () => {

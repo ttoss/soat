@@ -84,6 +84,18 @@ PROJECT_RESP=$($SOAT_CLI create-project --name smoke-test-project)
 PROJECT_PUBLIC_ID=$(printf '%s\n' "$PROJECT_RESP" | jq -r '.id')
 echo "Project id: $PROJECT_PUBLIC_ID"
 
+# A tool takes a credential only as a {{secret:...}} reference, so every tool
+# that calls back into this server authenticates through this secret.
+ADMIN_TOKEN_SECRET_RESP=$($SOAT_CLI create-secret \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-admin-token --value "$TOKEN")
+ADMIN_TOKEN_SECRET_ID=$(printf '%s\n' "$ADMIN_TOKEN_SECRET_RESP" | jq -r '.id')
+if [ -z "$ADMIN_TOKEN_SECRET_ID" ] || [ "$ADMIN_TOKEN_SECRET_ID" = "null" ]; then
+  echo "ERROR: Failed to create the admin token secret" >&2
+  echo "$ADMIN_TOKEN_SECRET_RESP" >&2
+  exit 1
+fi
+ADMIN_TOKEN_REF="Bearer {{secret:$ADMIN_TOKEN_SECRET_ID}}"
+
 # 3a. Rename the project
 echo "--- Renaming project ---"
 PROJECT_RENAME_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --name smoke-test-project-renamed)
@@ -586,7 +598,7 @@ expect_cli_error_status 400 create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-bad-auth-multipart-tool \
   --type http \
-  --execute '{"url":"https://example.com","method":"POST","body_mode":"multipart","auth":{"type":"aws_sigv4","region":"us-east-1","service":"s3","access_key_id":"AKIA","secret_access_key":"shh"}}'
+  --execute "{\"url\":\"https://example.com\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"auth\":$SIGV4_AUTH_JSON}"
 
 $SOAT_CLI delete-tool --tool-id "$SIGV4_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$GCP_TOOL_ID"
@@ -1307,7 +1319,7 @@ CONVERTER_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Deterministic stub call used as an ingestion-rule converter step." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 CONVERTER_HTTP_TOOL_ID=$(printf '%s\n' "$CONVERTER_HTTP_TOOL_RESP" | jq -r '.id')
 echo "Converter http tool id: $CONVERTER_HTTP_TOOL_ID"
 
@@ -1395,7 +1407,7 @@ ASYNC_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Deterministic stub call used as an async ingestion-rule converter step." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 ASYNC_HTTP_TOOL_ID=$(printf '%s\n' "$ASYNC_HTTP_TOOL_RESP" | jq -r '.id')
 
 ASYNC_PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
@@ -2989,7 +3001,7 @@ TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Lists all projects from the SOAT API. Call this tool whenever the user asks for the list of projects." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 TOOL_ID=$(printf '%s\n' "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 
@@ -3095,7 +3107,7 @@ OUTPUT_MAPPING_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Lists projects and extracts the first project's id via output_mapping" \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}" \
   --output-mapping '{"var":"output.data.0.id"}')
 OUTPUT_MAPPING_TOOL_ID=$(printf '%s\n' "$OUTPUT_MAPPING_TOOL_RESP" | jq -r '.id')
 if [ -z "$OUTPUT_MAPPING_TOOL_ID" ] || [ "$OUTPUT_MAPPING_TOOL_ID" = "null" ]; then
@@ -3130,7 +3142,7 @@ MULTIPART_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Uploads a file via multipart/form-data." \
   --parameters '{"type":"object","properties":{"project_id":{"type":"string"},"file":{"type":"object"}},"required":["file"]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/files/upload\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/files/upload\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 MULTIPART_TOOL_ID=$(printf '%s\n' "$MULTIPART_TOOL_RESP" | jq -r '.id')
 if [ -z "$MULTIPART_TOOL_ID" ] || [ "$MULTIPART_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create multipart http tool"
@@ -3513,7 +3525,7 @@ PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Gets the current smoke test project." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 PROJECT_DETAIL_TOOL_ID=$(printf '%s\n' "$PROJECT_DETAIL_TOOL_RESP" | jq -r '.id')
 echo "Project-detail tool id: $PROJECT_DETAIL_TOOL_ID"
 
@@ -3571,7 +3583,7 @@ GATED_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Reads the smoke test project; guardrail-gated." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 GATED_TOOL_ID=$(printf '%s\n' "$GATED_TOOL_RESP" | jq -r '.id')
 echo "Guardrail-gated tool id: $GATED_TOOL_ID"
 
@@ -3722,7 +3734,7 @@ ACT_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Reads the smoke test project; records on the activity feed." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 ACT_TOOL_ID=$(printf '%s\n' "$ACT_TOOL_RESP" | jq -r '.id')
 echo "Activity-recorded tool id: $ACT_TOOL_ID"
 
@@ -3808,7 +3820,7 @@ MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --name soat-mcp \
   --type mcp \
   --description "SOAT MCP server - exposes the list-agents tool over MCP." \
-  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}" \
   --actions '["list-agents"]')
 MCP_TOOL_ID=$(printf '%s\n' "$MCP_TOOL_RESP" | jq -r '.id')
 echo "MCP Agent Tool id: $MCP_TOOL_ID"
@@ -3857,7 +3869,7 @@ SCOPED_MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --name soat-mcp-readonly \
   --type mcp \
   --description "SOAT MCP server scoped to a read-only action." \
-  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}" \
   --actions '["list-agents"]')
 SCOPED_MCP_TOOL_ID=$(printf '%s\n' "$SCOPED_MCP_TOOL_RESP" | jq -r '.id')
 echo "Scoped MCP Tool id: $SCOPED_MCP_TOOL_ID"
@@ -3894,7 +3906,7 @@ DENY_MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --name soat-mcp-denylist \
   --type mcp \
   --description "SOAT MCP server with a write action denied." \
-  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}" \
   --denied_actions '["create-agent"]')
 DENY_MCP_TOOL_ID=$(printf '%s\n' "$DENY_MCP_TOOL_RESP" | jq -r '.id')
 echo "Denylist MCP Tool id: $DENY_MCP_TOOL_ID"
@@ -5315,7 +5327,7 @@ echo "--- Calling a shared tool from the grantee ---"
 CALLED_TOOL_ID=$($SOAT_CLI create-tool --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-shared-http-tool --type http \
   --parameters '{"type":"object","properties":{}}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}" \
   | jq -r '.id')
 CALLED_SHARE_ID=$($SOAT_CLI create-share --project-id "$PROJECT_PUBLIC_ID" \
   --resource "srn:$PROJECT_PUBLIC_ID:tool:$CALLED_TOOL_ID" \
@@ -7691,7 +7703,7 @@ SCORER_PING_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Scorer pipeline step target" \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 SCORER_PING_TOOL_ID=$(printf '%s\n' "$SCORER_PING_TOOL_RESP" | jq -r '.id')
 SCORER_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -8005,7 +8017,7 @@ DECIDER_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Deterministic stub call behind the decider engine." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$ADMIN_TOKEN_REF\"}}")
 DECIDER_HTTP_TOOL_ID=$(printf '%s\n' "$DECIDER_HTTP_TOOL_RESP" | jq -r '.id')
 DECIDER_ENGINE_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \

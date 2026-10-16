@@ -199,11 +199,109 @@ describe('a formation never echoes secret material', () => {
     });
   });
 
-  describe('a literal written into a live resource the formation manages', () => {
+  describe('a literal credential in a tool resource', () => {
+    const client = () => {
+      return authenticatedTestClient(adminToken);
+    };
+    const mcpUrl = 'https://mcp.example.com/mcp';
+
+    test('validate-formation refuses it, naming the field', async () => {
+      const res = await client()
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              LiteralTool: {
+                type: 'tool',
+                properties: {
+                  name: 'fse-literal-tool',
+                  type: 'mcp',
+                  mcp: { url: mcpUrl, headers: { Authorization: 'Bearer sk' } },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.map((error: { path: string }) => {
+          return error.path;
+        })
+      ).toContain('resources.LiteralTool.properties.mcp.headers.Authorization');
+    });
+
+    test('a secret resource referenced through a sub deploys a reference', async () => {
+      const res = await client()
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `fse-secret-sub-${Date.now()}`,
+          parameters: { ApiKey: 'sk-from-parameter' },
+          template: {
+            parameters: { ApiKey: { type: 'string', no_echo: true } },
+            resources: {
+              ApiKeySecret: {
+                type: 'secret',
+                properties: {
+                  name: `fse-sub-secret-${Date.now()}`,
+                  value: { param: 'ApiKey' },
+                },
+              },
+              SubTool: {
+                type: 'tool',
+                properties: {
+                  name: 'fse-sub-tool',
+                  type: 'mcp',
+                  mcp: {
+                    url: mcpUrl,
+                    headers: {
+                      Authorization: {
+                        sub: 'Bearer {{secret:${ApiKeySecret}}}',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      const toolId = JSON.stringify(res.body).match(
+        /tool_[A-Za-z0-9]{16}/
+      )?.[0];
+      const tool = await client().get(`/api/v1/tools/${toolId}`);
+      expect(tool.body.mcp.headers.Authorization).toMatch(
+        /^Bearer \{\{secret:sec_[A-Za-z0-9]+\}\}$/
+      );
+    });
+  });
+
+  describe('a literal already stored in a tool or agent the formation manages', () => {
     const literal = 'Bearer fse-live-literal-must-not-leak';
     const mcpUrl = 'https://mcp.example.com/mcp';
     let formationId: string;
     let template: Record<string, unknown>;
+
+    /** The API refuses a literal, so a stored one is planted in its column. */
+    const plantLiteral = async (args: {
+      row: {
+        get: (field: string) => unknown;
+        update: (values: object) => Promise<unknown>;
+      };
+      field: string;
+      reference: string;
+    }) => {
+      const planted = JSON.parse(
+        JSON.stringify(args.row.get(args.field))
+          .split(args.reference)
+          .join(literal)
+      );
+      await args.row.update({ [args.field]: planted });
+    };
 
     beforeAll(async () => {
       const client = () => {
@@ -219,15 +317,12 @@ describe('a formation never echoes secret material', () => {
         .post('/api/v1/secrets')
         .send({ project_id: projectId, name: 'fse-live-ref', value: 'x' });
       const reference = `Bearer {{secret:${secret.body.id}}}`;
+      const mcp = { url: mcpUrl, headers: { Authorization: reference } };
       template = {
         resources: {
           LiveTool: {
             type: 'tool',
-            properties: {
-              name: 'fse-live-tool',
-              type: 'mcp',
-              mcp: { url: mcpUrl, headers: { Authorization: reference } },
-            },
+            properties: { name: 'fse-live-tool', type: 'mcp', mcp },
           },
           LiveAgent: {
             type: 'agent',
@@ -249,21 +344,30 @@ describe('a formation never echoes secret material', () => {
       );
       const toolId = formation.match(/tool_[A-Za-z0-9]{16}/)?.[0];
       const agentId = formation.match(/agent_[A-Za-z0-9]{16}/)?.[0];
-      const mcp = { url: mcpUrl, headers: { Authorization: literal } };
-      expect(
-        (await client().patch(`/api/v1/tools/${toolId}`).send({ mcp })).status
-      ).toBe(200);
-      expect(
-        (
-          await client()
-            .patch(`/api/v1/agents/${agentId}`)
-            .send({
-              tool_bindings: [
-                { tool: { name: 'fse-inline', type: 'mcp', mcp } },
-              ],
-            })
-        ).status
-      ).toBe(200);
+      const patched = await client()
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({
+          tool_bindings: [{ tool: { name: 'fse-inline', type: 'mcp', mcp } }],
+        });
+      expect(patched.status).toBe(200);
+
+      await plantLiteral({
+        row: (await db.Tool.findOne({ where: { publicId: toolId } }))!,
+        field: 'mcp',
+        reference,
+      });
+      await plantLiteral({
+        row: (await db.Agent.findOne({ where: { publicId: agentId } }))!,
+        field: 'toolBindings',
+        reference,
+      });
+      await plantLiteral({
+        row: (await db.Formation.findOne({
+          where: { publicId: formationId },
+        }))!,
+        field: 'template',
+        reference,
+      });
     });
 
     test('a plan masks it in the live side of every diff', async () => {
@@ -285,6 +389,19 @@ describe('a formation never echoes secret material', () => {
       });
       expect(
         byId.LiveAgent.current.tool_bindings[0].tool.mcp.headers.Authorization
+      ).toEqual({ no_echo: true });
+    });
+
+    test('reading the formation masks it in the stored template', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/formations/${formationId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).not.toContain(literal);
+      expect(
+        res.body.template.resources.LiveTool.properties.mcp.headers
+          .Authorization
       ).toEqual({ no_echo: true });
     });
   });

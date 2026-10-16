@@ -101,6 +101,11 @@ export const ERROR_CODES = {
     description:
       'A secret referenced by a {{secret:...}} token does not exist in this project.',
   },
+  LITERAL_CREDENTIAL: {
+    httpStatus: 400,
+    description:
+      'A tool definition carries a credential as a literal value: a credential-named header, a secret field under execute.auth, or a credential-named query parameter in a url. Store it as a secret and write a {{secret:sec_...}} reference (or a {{context:<key>}} reference in a header) instead.',
+  },
   INVALID_TEMPLATE_TOKEN: {
     httpStatus: 400,
     description:

@@ -15,7 +15,10 @@ import {
 import { assertValidToolContextAllowlist } from '../toolContext';
 import { deleteTool, findToolDeletionBlocker } from '../toolDelete';
 import { createTool, getTool, updateTool } from '../tools';
-import { redactToolSecrets } from '../toolSecretRedaction';
+import {
+  literalCredentialPaths,
+  redactToolSecrets,
+} from '../toolSecretRedaction';
 import {
   describeToolTemplateTokenProblems,
   findInvalidTemplateTokens,
@@ -74,6 +77,46 @@ const pushExecuteErrors = (args: {
   }
 };
 
+/**
+ * A parameter resolves to whatever the deployer passes, so in a credential slot
+ * it is a literal; a `sub` is one unless its text carries the reference. Read
+ * as the strings they become, the template meets the REST rule at validate time
+ * rather than part-way through an apply.
+ */
+const asResolvedText = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(asResolvedText);
+  if (!isObjectRecord(value)) return value;
+  if (typeof value.param === 'string') return 'parameter-value';
+  if (typeof value.sub === 'string') {
+    return value.sub.replace(/\$\{[^}]*\}/g, 'value');
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      return [key, asResolvedText(entry)];
+    })
+  );
+};
+
+const pushLiteralCredentialErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  const { execute, mcp, pipeline } = args.properties;
+  const resolved = {
+    execute: asResolvedText(execute),
+    mcp: asResolvedText(mcp),
+    pipeline: asResolvedText(pipeline),
+  };
+  for (const path of literalCredentialPaths(resolved)) {
+    args.errors.push({
+      path: `${args.basePath}.${path}`,
+      message:
+        'A credential cannot be written as a literal; declare a secret resource and reference it as {{secret:...}}.',
+    });
+  }
+};
+
 export const toolsFormationModule = defineFormationModule({
   resourceType: 'tool',
   authorization: {
@@ -97,6 +140,7 @@ export const toolsFormationModule = defineFormationModule({
     }
 
     pushExecuteErrors({ properties, basePath, errors });
+    pushLiteralCredentialErrors({ properties, basePath, errors });
 
     // The same rule the REST write path enforces, from the same function, so a
     // template cannot author a tool the API would reject — and so the error
@@ -219,7 +263,7 @@ export const toolsFormationModule = defineFormationModule({
     return findToolDeletionBlocker({ id: physicalResourceId, alsoDeleting });
   },
 
-  maskLiveCredentials: redactToolSecrets,
+  maskCredentials: redactToolSecrets,
 
   fetch: ({ physicalResourceId }) => {
     return getTool({ id: physicalResourceId });

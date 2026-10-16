@@ -1722,6 +1722,13 @@ resources:
     });
 
     test('carries execute.auth through an apply', async () => {
+      const secret = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: `formation-sigv4-secret-${Date.now()}`,
+          value: 'formation-secret',
+        });
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
@@ -1742,7 +1749,7 @@ resources:
                       region: 'us-east-1',
                       service: 's3',
                       access_key_id: 'AKIAFORMATION',
-                      secret_access_key: 'formation-secret',
+                      secret_access_key: `{{secret:${secret.body.id}}}`,
                     },
                   },
                 },
@@ -1761,6 +1768,39 @@ resources:
       expect(toolRes.status).toBe(200);
       expect(toolRes.body.execute.auth.service).toBe('s3');
       expect(toolRes.body.execute.auth.region).toBe('us-east-1');
+    });
+
+    test('refuses a parameter in a credential slot at validate time', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            parameters: { ApiKey: { type: 'string', no_echo: true } },
+            resources: {
+              ParamCredentialTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-param-credential-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://example.com',
+                    headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.map((error: { path: string }) => {
+          return error.path;
+        })
+      ).toContain(
+        'resources.ParamCredentialTool.properties.execute.headers.Authorization'
+      );
     });
 
     test('rejects a malformed execute.auth at validate time', async () => {
@@ -2047,7 +2087,7 @@ resources:
             name: 'param-tool',
             execute: {
               url: { sub: '${ToolUrl}/endpoint' },
-              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+              headers: { 'X-Client-Id': { sub: 'client ${ApiKey}' } },
             },
           },
         },
@@ -2315,7 +2355,7 @@ resources:
                 name: 'underscore-param-tool',
                 execute: {
                   url: 'https://example.com/endpoint',
-                  headers: { Authorization: { sub: 'Bearer ${api_token}' } },
+                  headers: { 'X-Client-Id': { sub: 'client ${api_token}' } },
                 },
               },
             },
@@ -2827,6 +2867,13 @@ resources:
     });
 
     test('creates formation with mcp tool type', async () => {
+      const secret = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: `formation-mcp-secret-${Date.now()}`,
+          value: 'token',
+        });
       const mcpTemplate = {
         resources: {
           MyMcpTool: {
@@ -2836,7 +2883,9 @@ resources:
               type: 'mcp',
               mcp: {
                 url: 'https://mcp.example.com/sse',
-                headers: { Authorization: 'Bearer token' },
+                headers: {
+                  Authorization: `Bearer {{secret:${secret.body.id}}}`,
+                },
               },
             },
           },

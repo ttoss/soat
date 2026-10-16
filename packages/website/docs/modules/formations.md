@@ -160,13 +160,19 @@ Parameters inject deploy-time values without changing the template:
         "secret_id": { "param": "SecretId" }
       }
     },
+    "ApiKeySecret": {
+      "type": "secret",
+      "properties": { "name": "my-api-key", "value": { "param": "ApiKey" } }
+    },
     "MyTool": {
       "type": "tool",
       "properties": {
         "name": "my-tool",
         "execute": {
           "url": { "sub": "${AppUrl}/api/endpoint" },
-          "headers": { "Authorization": { "sub": "Bearer ${ApiKey}" } }
+          "headers": {
+            "Authorization": { "sub": "Bearer {{secret:${ApiKeySecret}}}" }
+          }
         }
       }
     }
@@ -351,7 +357,7 @@ The stored header is `Bearer {{secret:sec_01HXYZ}}`; the decrypted value is subs
 
 The placeholder is an object so that a read-edit-write round trip sending it back fails the schema's `type: string` check with a `400` instead of rotating the secret.
 
-The live side of a `plan-formation` diff masks a tool's literal credentials, and those in an agent's inline `tool_bindings`, the way a [tool read](./tools.md#literal-credentials-are-masked-on-read) does.
+A `tool` resource follows [Credentials Are References, Never Literals](./tools.md#credentials-are-references-never-literals): `validate-formation` reports a literal credential at its path, and the header references a `secret` resource instead (`{ "sub": "Bearer {{secret:${ApiSecret}}}" }`). A literal stored in a tool or agent before the rule is masked in the stored `template` and on both sides of a `plan-formation` diff.
 
 The stored template keeps the value it was given (an update with no new template re-applies the stored one). Declare the value through a `no_echo` parameter to keep it out of the database as well:
 
