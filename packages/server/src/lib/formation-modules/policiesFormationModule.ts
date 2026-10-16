@@ -1,3 +1,4 @@
+import { DomainError } from '../../errors';
 import type { PolicyDocument } from '../iam';
 import { validatePolicyActions } from '../iam';
 import {
@@ -43,7 +44,8 @@ export const policiesFormationModule = defineFormationModule({
     });
 
     if ('invalid' in result) {
-      throw new Error(
+      throw new DomainError(
+        'VALIDATION_FAILED',
         `Policy document is invalid: ${result.errors.join(', ')}`
       );
     }
@@ -60,7 +62,8 @@ export const policiesFormationModule = defineFormationModule({
     });
 
     if ('invalid' in result) {
-      throw new Error(
+      throw new DomainError(
+        'VALIDATION_FAILED',
         `Policy document is invalid: ${result.errors.join(', ')}`
       );
     }

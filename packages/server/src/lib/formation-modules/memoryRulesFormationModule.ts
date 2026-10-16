@@ -1,6 +1,6 @@
 import type { MemoryRuleEvent } from '@soat/postgresdb';
 
-import { lookupMemoryStoreInternalId } from '../formationsHelpers';
+import { lookupMemoryStoreInternalId } from '../formationLookups';
 import { assertSourceAgentIds, resolveMemoryRuleRefs } from '../memoryRuleRefs';
 import {
   createMemoryRule,

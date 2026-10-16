@@ -6,7 +6,7 @@ import {
   getAiProvider,
   updateAiProvider,
 } from '../aiProviders';
-import { lookupSecretInternalId } from '../formationsHelpers';
+import { lookupSecretInternalId } from '../formationLookups';
 import {
   toNullableObject,
   toNullableString,

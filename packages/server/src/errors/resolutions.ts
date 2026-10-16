@@ -39,6 +39,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.',
   FORCED_TOOL_CHOICE_CANNOT_STOP:
     'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
+  FORMATION_RESOURCE_TYPE_UNREGISTERED:
+    'Register the resource type again so its handler can act on the resource, or remove the resource outside the formation.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   DECIDER_AGENT_NOT_TOOL_LESS:

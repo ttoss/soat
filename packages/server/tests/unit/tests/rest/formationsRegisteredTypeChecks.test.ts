@@ -99,6 +99,7 @@ beforeAll(async () => {
       'formations:PlanFormation',
       'formations:CreateFormation',
       'formations:GetFormation',
+      'formations:DeleteFormation',
       'memories:CreateMemoryStore',
     ],
     createNoPermUser: false,
@@ -272,6 +273,35 @@ describe('POST /api/v1/formations/validate — operator-registered type', () => 
       expect(res.body.valid).toBe(true);
       expect(handler.recorded).toEqual([]);
     });
+  });
+});
+
+describe('DELETE /api/v1/formations/{formation_id} — a type no longer registered', () => {
+  withRegisteredType();
+
+  test('names the unregistered type on the resource that could not be removed', async () => {
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'chn_gone' },
+    };
+    const created = await createFormation(
+      channelTemplate({ name: 'Support', kind: 'whatsapp' })
+    );
+    unregister();
+
+    const res = await authenticatedTestClient(userToken).delete(
+      `/api/v1/formations/${created.body.id}`
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('FORMATION_DELETE_FAILED');
+    expect(res.body.error.meta.failures).toEqual([
+      {
+        logical_id: 'Chan',
+        resource_type: 'test_channel',
+        error: 'Unsupported resource type for delete: test_channel',
+      },
+    ]);
   });
 });
 

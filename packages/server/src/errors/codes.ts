@@ -11,6 +11,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced actor does not exist.',
   },
+  MEMORY_STORE_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced memory store does not exist.',
+  },
   CHAT_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced chat does not exist.',
@@ -304,6 +308,11 @@ export const ERROR_CODES = {
     httpStatus: 502,
     description:
       "A resource type registered by the deployment operator delegates its lifecycle to an external HTTP handler, and that handler did not answer successfully — it returned a non-2xx status, timed out, was unreachable, or replied with a body the protocol does not allow (a create with no `physical_resource_id`, for instance). `meta.resource_type` and `meta.request_type` name the type and the operation, and the handler's own message is relayed when it sent one. This is an operator-side failure: the template is not at fault and re-deploying it unchanged will fail the same way until the handler is fixed.",
+  },
+  FORMATION_RESOURCE_TYPE_UNREGISTERED: {
+    httpStatus: 409,
+    description:
+      'The formation holds a resource whose type the deployment no longer registers, so the platform has no handler to act on it. `meta.resource_type` names the type.',
   },
   FORMATION_INVALID_METADATA: {
     httpStatus: 400,

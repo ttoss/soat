@@ -1,3 +1,4 @@
+import { DomainError } from '../../errors';
 import {
   createActor,
   deleteActor,
@@ -14,7 +15,8 @@ import { defineFormationModule } from './defineFormationModule';
 
 const requireString = (args: { value: unknown; fieldName: string }): string => {
   if (typeof args.value !== 'string' || args.value.trim().length === 0) {
-    throw new Error(
+    throw new DomainError(
+      'VALIDATION_FAILED',
       `Actor field '${args.fieldName}' must be a non-empty string`
     );
   }

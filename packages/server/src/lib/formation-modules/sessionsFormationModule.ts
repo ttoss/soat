@@ -1,5 +1,6 @@
 import { db } from '../../db';
-import { lookupAgentInternalId } from '../formationsHelpers';
+import { DomainError } from '../../errors';
+import { lookupAgentInternalId } from '../formationLookups';
 import {
   toNullableString,
   toOptionalString,
@@ -21,7 +22,10 @@ const getSessionAgentInternalId = async (
     where: { publicId: sessionPublicId },
   });
   if (!session?.agentId) {
-    throw new Error(`Session not found: ${sessionPublicId}`);
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Session not found: ${sessionPublicId}`
+    );
   }
   return session.agentId;
 };
