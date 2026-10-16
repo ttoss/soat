@@ -65,7 +65,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `playbook_version`   | integer        | The version the case was created on and is evaluated against                                                            |
 | `subject`            | string         | Who or what the case is about                                                                                           |
 | `revision`           | integer        | The case's counter; every entry takes the next value                                                                    |
-| `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) stands, else `running` while any execution is pending or running, else `idle` |
+| `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) stands, else `running` while an execution is queued or runs its executor, else `waiting` while every execution in flight waits on a task or run it started, else `idle` |
 | `pause_requested_at` | string \| null | When the case was paused                                                                                                |
 | `nodes`              | array          | On a single-case read: every node's `state`, `missing`, `waiting`, `inputs` and `output`                                |
 
@@ -204,7 +204,7 @@ Without `wait` the request answers `201` with the execution `running` and it set
 
 ### Pausing a case
 
-[`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `paused` or `idle`.
+[`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `waiting`, `paused` or `idle`. A case `waiting` spends nothing of its own: what runs is the task or run it started, which may wait on a person indefinitely.
 
 ### Confirming a node
 

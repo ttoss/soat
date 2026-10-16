@@ -1596,11 +1596,14 @@ components:
     PlaybookAutomationStatus:
       type: string
       description: >-
-        `paused` while a pause stands, else `running` while any execution is
-        pending or running, else `idle`
+        `paused` while a pause stands, else `running` while an execution is
+        queued or runs its executor, else `waiting` while every execution in
+        flight waits on a workflow task or orchestration run it started, else
+        `idle`
       enum:
         - idle
         - running
+        - waiting
         - paused
     PlaybookCase:
       allOf:
