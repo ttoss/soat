@@ -23,6 +23,9 @@ export type PlaybookFieldValue = { revision: number; value: JsonValue };
 export type PlaybookExecutionStatus =
   'pending' | 'running' | 'succeeded' | 'failed';
 
+/** A workflow task or orchestration run an execution started and waits on. */
+export type PlaybookRunRef = { type: 'task' | 'orchestration_run'; id: string };
+
 export type PlaybookNodeRecord = {
   /** Manual inputs, the latest entry of each. */
   inputs?: Record<string, PlaybookFieldValue>;
@@ -33,15 +36,26 @@ export type PlaybookNodeRecord = {
   output?: PlaybookFieldValue & { basis: PlaybookBasis };
   /** Present only when the latest decision on a confirm node rejected it. */
   rejection?: { basis: PlaybookBasis };
-  /** The latest execution. */
-  execution?: { status: PlaybookExecutionStatus; basis: PlaybookBasis };
+  /** The latest execution, with the task or run it waits on while it does. */
+  execution?: {
+    status: PlaybookExecutionStatus;
+    basis: PlaybookBasis;
+    run?: PlaybookRunRef;
+  };
 };
 
 /** A case's entries and executions, by node key. */
 export type PlaybookCaseSnapshot = Record<string, PlaybookNodeRecord>;
 
 export type PlaybookNodeState =
-  'blocked' | 'ready' | 'running' | 'done' | 'stale' | 'failed' | 'rejected';
+  | 'blocked'
+  | 'ready'
+  | 'running'
+  | 'waiting'
+  | 'done'
+  | 'stale'
+  | 'failed'
+  | 'rejected';
 
 export type PlaybookNodeView = {
   state: PlaybookNodeState;
@@ -53,7 +67,7 @@ export type PlaybookNodeView = {
   /** Required inputs that are unset or that their schema refuses. */
   missing: string[];
   /** Nodes it reads that must reach `done` first. */
-  waiting: string[];
+  blockedBy: string[];
   /** Will produce a value without anyone filling an input. */
   settling: boolean;
 };
@@ -199,6 +213,15 @@ const isCurrent = (args: {
   );
 };
 
+/** `waiting` while it waits on a task or run it started, else `running`. */
+const inFlightState = (args: {
+  execution: PlaybookNodeRecord['execution'];
+}): PlaybookNodeState | undefined => {
+  const { execution } = args;
+  if (!execution || !IN_FLIGHT.has(execution.status)) return undefined;
+  return execution.run ? 'waiting' : 'running';
+};
+
 const stateOf = (args: {
   record: PlaybookNodeRecord;
   basis: PlaybookBasis;
@@ -207,7 +230,8 @@ const stateOf = (args: {
   const { record, basis, blocked } = args;
   const { execution, rejection, output } = record;
 
-  if (execution && IN_FLIGHT.has(execution.status)) return 'running';
+  const inFlight = inFlightState({ execution });
+  if (inFlight) return inFlight;
 
   if (isCurrent({ read: rejection, basis, blocked })) return 'rejected';
 
@@ -226,7 +250,7 @@ const stateOf = (args: {
 };
 
 type Reads = Pick<PlaybookNodeView, 'basis' | 'values' | 'missing'> & {
-  waiting: Set<string>;
+  blockedBy: Set<string>;
 };
 
 const readInputs = (args: {
@@ -241,14 +265,14 @@ const readInputs = (args: {
     basis: {},
     values: {},
     missing: [],
-    waiting: new Set(),
+    blockedBy: new Set(),
   };
 
   for (const input of node.inputs) {
     const read = readInput({ ...args, input });
 
     if (read.held) {
-      if (input.source !== 'manual') reads.waiting.add(input.source.node);
+      if (input.source !== 'manual') reads.blockedBy.add(input.source.node);
       continue;
     }
 
@@ -280,12 +304,12 @@ const settles = (args: {
 }): boolean => {
   const { state, reads, views } = args;
 
-  if (state === 'running') return true;
+  if (state === 'running' || state === 'waiting') return true;
 
   return (
     (state === 'ready' || state === 'stale') &&
     reads.missing.length === 0 &&
-    [...reads.waiting].every((key) => {
+    [...reads.blockedBy].every((key) => {
       return views.get(key)?.settling;
     })
   );
@@ -300,7 +324,7 @@ const viewOf = (args: {
   const { node, snapshot, views } = args;
 
   const reads = readInputs(args);
-  const blocked = reads.waiting.size > 0 || reads.missing.length > 0;
+  const blocked = reads.blockedBy.size > 0 || reads.missing.length > 0;
   const state = stateOf({
     record: snapshot[node.key] ?? {},
     basis: reads.basis,
@@ -316,7 +340,7 @@ const viewOf = (args: {
     basis: reads.basis,
     values: reads.values,
     missing: reads.missing,
-    waiting: [...reads.waiting],
+    blockedBy: [...reads.blockedBy],
     settling: settles({ state, reads, views }),
   };
 };
@@ -350,7 +374,7 @@ export const playbookNodeStates = (args: {
         basis: {},
         values: {},
         missing: [],
-        waiting: sourcesOf({ node }),
+        blockedBy: sourcesOf({ node }),
         settling: false,
       };
 

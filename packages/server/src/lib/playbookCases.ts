@@ -11,6 +11,7 @@ import {
   snapshotFromRecords,
 } from './playbookCaseState';
 import type { JsonValue, PlaybookDefinition } from './playbookDefinition';
+import { type PlaybookNodeRun, playbookNodeRuns } from './playbookNodeRuns';
 import { playbooks } from './playbooks';
 import {
   type PlaybookBasis,
@@ -196,6 +197,7 @@ const mapNodes = (args: {
   definition: PlaybookDefinition;
   snapshot: PlaybookCaseSnapshot;
   views: Map<string, PlaybookNodeView>;
+  runs: Map<string, PlaybookNodeRun>;
 }) => {
   // One view per node, in definition order.
   const views = [...args.views.values()];
@@ -208,7 +210,8 @@ const mapNodes = (args: {
       key: node.key,
       state: view.state,
       missing: view.missing,
-      waiting: view.waiting,
+      blocked_by: view.blockedBy,
+      run: args.runs.get(node.key) ?? null,
       inputs: node.inputs.map((input) => {
         return {
           name: input.name,
@@ -238,7 +241,12 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
     subject: row.subject,
     revision: row.revision,
     ...(await caseAutomation({ rows: [row] }))(row),
-    nodes: mapNodes({ definition, snapshot, views }),
+    nodes: mapNodes({
+      definition,
+      snapshot,
+      views,
+      runs: await playbookNodeRuns({ snapshot }),
+    }),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

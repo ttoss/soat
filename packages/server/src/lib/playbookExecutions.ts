@@ -64,7 +64,7 @@ const assertRunnable = (args: {
   view: PlaybookNodeView;
 }): void => {
   const { node, view } = args;
-  const blocked = view.missing.length > 0 || view.waiting.length > 0;
+  const blocked = view.missing.length > 0 || view.blockedBy.length > 0;
   if (node.kind !== 'confirm' && !blocked && RUNNABLE_STATES.has(view.state)) {
     return;
   }
@@ -77,7 +77,7 @@ const assertRunnable = (args: {
       node: node.key,
       state: view.state,
       missing: view.missing,
-      waiting: view.waiting,
+      blocked_by: view.blockedBy,
     }
   );
 };

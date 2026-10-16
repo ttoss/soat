@@ -107,12 +107,12 @@ describe('nodeStates', () => {
       state: 'blocked',
       runnable: false,
       missing: ['cnpj', 'annual_revenue'],
-      waiting: [],
+      blockedBy: [],
     });
     expect(views.get('tax_regime')).toMatchObject({
       state: 'blocked',
       missing: ['cnae'],
-      waiting: ['client'],
+      blockedBy: ['client'],
     });
   });
 
@@ -255,7 +255,7 @@ describe('nodeStates', () => {
       expect(runnableOf({ definition: diamond(), snapshot })).toEqual(['c']);
       expect(
         nodeStates({ definition: diamond(), snapshot }).get('d')
-      ).toMatchObject({ state: 'stale', waiting: ['c'] });
+      ).toMatchObject({ state: 'stale', blockedBy: ['c'] });
 
       snapshot.c.output = {
         revision: 9,
@@ -300,7 +300,33 @@ describe('nodeStates', () => {
         state: 'running',
         runnable: false,
       });
-      expect(views.get('b')).toMatchObject({ state: 'stale', waiting: ['a'] });
+      expect(views.get('b')).toMatchObject({
+        state: 'stale',
+        blockedBy: ['a'],
+      });
+    });
+
+    test('an execution waiting on a run it started is waiting and holds its readers', () => {
+      const snapshot = settledDiamond();
+
+      snapshot.a.inputs = { x: { revision: 6, value: 'two' } };
+      snapshot.a.execution = {
+        status: 'running',
+        basis: basis({ x: ['manual', 6] }),
+        run: { type: 'task', id: 'task_1' },
+      };
+
+      const views = nodeStates({ definition: diamond(), snapshot });
+
+      expect(views.get('a')).toMatchObject({
+        state: 'waiting',
+        runnable: false,
+        settling: true,
+      });
+      expect(views.get('b')).toMatchObject({
+        state: 'stale',
+        blockedBy: ['a'],
+      });
     });
 
     test('a result read on an outdated basis is superseded', () => {
@@ -418,7 +444,7 @@ describe('nodeStates', () => {
       expect(views.get('after')).toMatchObject({
         state: 'stale',
         runnable: false,
-        waiting: ['ok'],
+        blockedBy: ['ok'],
       });
     });
 
@@ -481,7 +507,7 @@ describe('nodeStates', () => {
       expect(nodeStates({ definition, snapshot }).get('b')).toMatchObject({
         state: 'blocked',
         runnable: false,
-        waiting: ['hint'],
+        blockedBy: ['hint'],
       });
     });
   });
