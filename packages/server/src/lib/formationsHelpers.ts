@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 
+import { type Dag, topologicalWaves } from './dag';
 import type {
   FormationTemplate,
   ParameterDeclaration,
@@ -365,31 +366,31 @@ export const buildDependencyGraph = (
   return graph;
 };
 
+const dagOf = (graph: Map<string, Set<string>>): Dag => {
+  return {
+    keys: [...graph.keys()],
+    sourcesOf: (key) => {
+      return [...(graph.get(key) ?? [])];
+    },
+  };
+};
+
+/**
+ * Dependencies before dependents, in declaration order within a level; null
+ * when the graph has a cycle.
+ */
 export const topologicalSort = (
   graph: Map<string, Set<string>>
 ): string[] | null => {
-  const depCount = new Map<string, number>();
-  for (const [node, deps] of graph.entries()) {
-    depCount.set(node, deps.size);
-  }
-  const queue: string[] = [];
-  for (const [node, count] of depCount.entries()) {
-    if (count === 0) queue.push(node);
-  }
-  const sorted: string[] = [];
-  while (queue.length > 0) {
-    const node = queue.shift()!;
-    sorted.push(node);
-    for (const [other, deps] of graph.entries()) {
-      if (deps.has(node)) {
-        const newCount = (depCount.get(other) ?? 1) - 1;
-        depCount.set(other, newCount);
-        if (newCount === 0) queue.push(other);
-      }
-    }
-  }
-  if (sorted.length !== graph.size) return null;
-  return sorted;
+  const { waves, cycles } = topologicalWaves(dagOf(graph));
+  return cycles.length > 0 ? null : waves.flat();
+};
+
+/** Each dependency cycle's resources, in declaration order. */
+export const dependencyCycles = (
+  graph: Map<string, Set<string>>
+): string[][] => {
+  return topologicalWaves(dagOf(graph)).cycles;
 };
 
 // ── Internal ID Lookups ───────────────────────────────────────────────────

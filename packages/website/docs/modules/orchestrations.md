@@ -488,7 +488,7 @@ Edges without an `activation_group` always pass through unconditionally.
 
 ### Cycle Detection
 
-A DFS cycle check runs at create/update ([Static Validation](#static-validation)) and before a run begins; graphs with a `loop` node are exempt. A cycle reaching execution creates the run as `failed` with `error.code: "ORCHESTRATION_CYCLE_DETECTED"`.
+A cycle check runs at create/update ([Static Validation](#static-validation)) and before a run begins. `loop` nodes and the edges touching them are left out, so their iteration is not a cycle while any other cycle still is. The error names each cycle's nodes. A cycle reaching execution creates the run as `failed` with `error.code: "ORCHESTRATION_CYCLE_DETECTED"`.
 
 ### Nesting depth
 

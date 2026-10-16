@@ -403,7 +403,7 @@ The formation-level `metadata` field supplied alongside `template` on `create-fo
 
 ### Topological Ordering
 
-The dependency graph is built from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs inside `sub` strings, then topologically sorted (Kahn's algorithm) for creation order. A cycle fails validation.
+The dependency graph is built from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs inside `sub` strings, then sorted so each resource is created after what it depends on, in declaration order among independent ones. A cycle fails validation with an error naming the resources in it.
 
 ### Resource Lifecycle
 

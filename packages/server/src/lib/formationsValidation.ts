@@ -1,6 +1,6 @@
 import { load } from 'js-yaml';
 
-import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
+import { buildDependencyGraph, dependencyCycles } from './formationsHelpers';
 import { normalizeDeclaredProperties } from './formationsProperties';
 import {
   validateOutputRefs,
@@ -385,11 +385,10 @@ export const validateFormationTemplate = (
   if (allDeclsAreObjects) {
     const castTemplate = template as FormationTemplate;
     const graph = buildDependencyGraph(castTemplate);
-    const sorted = topologicalSort(graph);
-    if (!sorted) {
+    for (const cycle of dependencyCycles(graph)) {
       errors.push({
         path: 'resources',
-        message: 'Circular dependency detected in resources',
+        message: `Circular dependency detected in resources: ${cycle.join(', ')}`,
       });
     }
   }
