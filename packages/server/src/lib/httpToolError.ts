@@ -47,14 +47,6 @@ export class HttpToolError extends Error {
   }
 }
 
-const causeOf = (error: object): string | null => {
-  const cause = 'cause' in error ? error.cause : undefined;
-  if (typeof cause === 'object' && cause !== null && 'message' in cause) {
-    return String(cause.message);
-  }
-  return cause === undefined ? null : String(cause);
-};
-
 /**
  * A tool call that never got a response — the host did not resolve, refused or
  * dropped the connection, or timed out — as a `TOOL_UNREACHABLE` naming the
@@ -67,10 +59,14 @@ export const toToolUnreachableError = (args: {
   method: string;
 }): DomainError | null => {
   if (!isFetchFailure(args.error)) return null;
-  const reason = causeOf(args.error);
+  // `fetch failed` always carries the network error as its cause.
+  const cause: { message?: unknown } | undefined = Reflect.get(
+    args.error,
+    'cause'
+  );
   return new DomainError(
     'TOOL_UNREACHABLE',
-    `Tool target could not be reached${reason ? `: ${reason}` : '.'}`,
+    `Tool target could not be reached: ${String(cause?.message)}`,
     { tool_url: args.url, tool_method: args.method },
     { cause: args.error }
   );
