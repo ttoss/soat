@@ -12,7 +12,11 @@ import {
   applyCreateResource,
   applyDeleteResource,
 } from './formationsResourceHandlers';
-import { buildFormationError, type FormationEvent } from './formationsTypes';
+import {
+  buildFormationError,
+  type FormationActor,
+  type FormationEvent,
+} from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
@@ -78,7 +82,7 @@ export const applyCreateChange = async (args: {
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   logicalId: string;
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
@@ -88,7 +92,7 @@ export const applyCreateChange = async (args: {
     resourceType,
     resolvedProperties,
     projectId,
-    actingUserId,
+    actor,
     logicalId,
     resolvedIds,
     events,
@@ -97,7 +101,7 @@ export const applyCreateChange = async (args: {
     resourceType,
     resolvedProperties,
     projectId,
-    actingUserId,
+    actor,
     logicalId,
     resourceKey: resourceRow.publicId,
   });
@@ -136,7 +140,7 @@ export const applyCreateChange = async (args: {
 export const rollbackCreatedResources = async (args: {
   created: ResourceRow[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
 }): Promise<FormationEvent[]> => {
   const events: FormationEvent[] = [];
 
@@ -160,7 +164,7 @@ export const rollbackCreatedResources = async (args: {
         resourceType: resource.resourceType,
         physicalResourceId,
         projectId: args.projectId,
-        actingUserId: args.actingUserId,
+        actor: args.actor,
         logicalId: resource.logicalId,
         resourceKey: resource.publicId,
       });

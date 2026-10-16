@@ -49,10 +49,10 @@ export const decidersFormationModule = defineFormationModule({
     }
   },
 
-  create: ({ properties, projectId, actingUserId }) => {
+  create: ({ properties, projectId, actor }) => {
     return createDecider({
       projectId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       name: properties.name,
       description: toNullableString(properties.description),
       agentId: properties.agent_id,
@@ -61,10 +61,10 @@ export const decidersFormationModule = defineFormationModule({
     });
   },
 
-  update: ({ properties, physicalResourceId, actingUserId }) => {
+  update: ({ properties, physicalResourceId, actor }) => {
     return updateDecider({
       id: physicalResourceId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       agentId: properties.agent_id,

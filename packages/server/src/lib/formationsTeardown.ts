@@ -31,6 +31,7 @@ import {
 } from './formationsResourceHandlers';
 import {
   buildFormationError,
+  type FormationActor,
   type FormationAuthorizer,
   type FormationEvent,
   type FormationTemplate,
@@ -132,7 +133,7 @@ export const collectDeletionBlockers = async (
 export const performResourceDeletions = async (args: {
   orderedResources: ResourceRow[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
 }): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
   const events: FormationEvent[] = [];
   let hasError = false;
@@ -147,7 +148,7 @@ export const performResourceDeletions = async (args: {
       existingResources: args.orderedResources,
     }),
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     events,
   });
 
@@ -159,7 +160,7 @@ export const performResourceDeletions = async (args: {
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId,
           projectId: args.projectId,
-          actingUserId: args.actingUserId,
+          actor: args.actor,
           logicalId: resource.logicalId,
           resourceKey: resource.publicId,
         });
@@ -259,7 +260,7 @@ export const throwDeletionFailure = (args: {
 export const deleteFormation = async (args: {
   id: string;
   authorize: FormationAuthorizer;
-  actingUserId: number;
+  actor: FormationActor;
 }): Promise<{ success: true }> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
@@ -312,7 +313,7 @@ export const deleteFormation = async (args: {
   const { events, hasError } = await performResourceDeletions({
     orderedResources,
     projectId: formation.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
   });
 
   if (hasError) {

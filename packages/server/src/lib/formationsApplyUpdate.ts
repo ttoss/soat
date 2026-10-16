@@ -19,7 +19,7 @@ import {
   applyDeleteResource,
   applyUpdateResource,
 } from './formationsResourceHandlers';
-import type { FormationEvent } from './formationsTypes';
+import type { FormationActor, FormationEvent } from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
@@ -120,7 +120,7 @@ export type CleanupFailure = {
 export const runPendingCleanups = async (args: {
   pendingCleanups: PendingCleanup[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   events: FormationEvent[];
 }): Promise<CleanupFailure[]> => {
   const { events } = args;
@@ -148,7 +148,7 @@ export const runPendingCleanups = async (args: {
         resourceType,
         physicalResourceId,
         projectId: args.projectId,
-        actingUserId: args.actingUserId,
+        actor: args.actor,
         logicalId,
         resourceKey: resourceRow.publicId,
       });
@@ -230,7 +230,7 @@ export const applyUpdateChange = async (args: {
   resolvedProperties: Record<string, unknown>;
   logicalId: string;
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
   /** Collects the disposal a replacement here defers to the end of the apply. */
@@ -243,7 +243,7 @@ export const applyUpdateChange = async (args: {
     resolvedProperties,
     logicalId,
     projectId,
-    actingUserId,
+    actor,
     resolvedIds,
     events,
   } = args;
@@ -267,7 +267,7 @@ export const applyUpdateChange = async (args: {
       physicalResourceId: previousPhysicalResourceId,
       resolvedProperties: mergedProperties,
       projectId,
-      actingUserId,
+      actor,
       logicalId,
       resourceKey: resourceRow.publicId,
     });

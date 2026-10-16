@@ -28,7 +28,7 @@ export const memoriesFormationModule = defineFormationModule({
   },
   propertiesLabel: 'Memory',
 
-  create: async ({ properties, projectId, actingUserId }) => {
+  create: async ({ properties, projectId, actor }) => {
     const memoryStoreId = await lookupMemoryStoreInternalId({
       publicId: properties.memory_store_id as string,
       projectId,
@@ -52,7 +52,7 @@ export const memoriesFormationModule = defineFormationModule({
       // formation write has no generation and no agent behind it.
       assertion: {
         mechanism: 'formation',
-        ...(await resolveFormationPrincipal({ actingUserId })),
+        ...(await resolveFormationPrincipal({ actingUserId: actor.userId })),
       },
     });
   },

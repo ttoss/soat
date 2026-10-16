@@ -277,7 +277,7 @@ Rules:
 }
 ```
 
-- **`type`** — a built-in type (`ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`, `dataset_item`, `decider`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory_store`, `memory`, `model_route`, `eval`, `orchestration`, `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`, `trigger`, `workflow`) or a [custom resource type](#custom-resource-types) the deployment registered. Properties reference for the built-in ones: [Formations Types](/docs/formations-types).
+- **`type`** — a built-in type (`ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`, `dataset_item`, `decider`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory_store`, `memory`, `model_route`, `eval`, `orchestration`, `playbook`, `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`, `trigger`, `workflow`) or a [custom resource type](#custom-resource-types) the deployment registered. Properties reference for the built-in ones: [Formations Types](/docs/formations-types).
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependencies in addition to implicit `ref` dependencies
 - **`deletion_policy`** — what happens to the physical resource when it is removed from the stack: `delete` (default) deletes it; `retain` keeps it alive and only removes the formation record

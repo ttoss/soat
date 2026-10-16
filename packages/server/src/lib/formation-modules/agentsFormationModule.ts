@@ -155,18 +155,18 @@ export const agentsFormationModule = defineFormationModule({
     pushModelBindingErrors({ properties, basePath, errors });
   },
 
-  create: async ({ properties, projectId, actingUserId }) => {
+  create: async ({ properties, projectId, actor }) => {
     return createAgent({
       projectId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       ...mapAgentProperties(properties),
     });
   },
 
-  update: async ({ properties, physicalResourceId, actingUserId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     await updateAgent({
       id: physicalResourceId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       // REST PATCH semantics: an explicit `null` clears the binding, an
       // undeclared field leaves it alone.
       aiProviderId: toNullableString(properties.ai_provider_id),

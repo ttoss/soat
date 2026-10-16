@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { buildRegisteredFormationModule } from 'src/lib/formation-modules/registeredFormationModule';
 import { registerFormationResourceTypes } from 'src/lib/formationsRegistry';
+import type { FormationActor } from 'src/lib/formationsTypes';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
@@ -17,7 +18,7 @@ import {
 
 let handler: FakeFormationHandler;
 let projectId: number;
-let actingUserId: number;
+let actor: FormationActor;
 
 beforeAll(async () => {
   handler = await startFakeFormationHandler();
@@ -33,7 +34,13 @@ beforeAll(async () => {
   projectId = project!.id;
 
   const user = await db.User.findOne({ where: { publicId: setup.userId } });
-  actingUserId = user!.id as number;
+  actor = {
+    userId: user!.id as number,
+    principal: { principalType: 'user', principalId: setup.userId },
+    isAllowed: async () => {
+      return true;
+    },
+  };
 });
 
 afterAll(async () => {
@@ -66,17 +73,17 @@ describe('the module contract holds for a direct caller', () => {
     await built.create({
       properties: { name: 'A', kind: 'whatsapp' },
       projectId,
-      actingUserId,
+      actor,
     });
     await built.update({
       projectId,
-      actingUserId,
+      actor,
       properties: { name: 'B', kind: 'whatsapp' },
       physicalResourceId: 'chn_500',
     });
     await built.delete({
       projectId,
-      actingUserId,
+      actor,
       physicalResourceId: 'chn_500',
     });
 
@@ -101,7 +108,7 @@ describe('the module contract holds for a direct caller', () => {
     await module().create({
       properties: { name: 'A', kind: 'whatsapp' },
       projectId,
-      actingUserId,
+      actor,
       logicalId: 'OnlyLogicalId',
     });
 
