@@ -12,8 +12,8 @@ import {
   getTrigger,
   getTriggerSecret,
   listTriggers,
+  mayStartTarget,
   rotateTriggerSecret,
-  targetStartAction,
   updateTrigger,
 } from 'src/lib/triggers';
 
@@ -112,14 +112,11 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   // No privilege escalation: the caller must also hold the target-start action.
   const projectPublicId =
     body.project_id ?? ctx.authUser!.apiKeyProjectPublicId;
-  const canStartTarget = await ctx.authUser!.isAllowed({
+  const canStartTarget = await mayStartTarget({
+    isAllowed: ctx.authUser!.isAllowed,
     projectPublicId: projectPublicId!,
-    action: targetStartAction(body.target_type),
-    resource: buildSrn({
-      projectPublicId: projectPublicId!,
-      resourceType: body.target_type,
-      resourceId: body.target_id,
-    }),
+    targetType: body.target_type,
+    targetId: body.target_id,
   });
   if (!canStartTarget) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
@@ -177,14 +174,11 @@ const assertMayStartUpdatedTarget = async (args: {
   const targetType = body.target_type ?? (trigger.target_type as string);
   const targetId = body.target_id ?? (trigger.target_id as string);
 
-  const canStartTarget = await authUser.isAllowed({
+  const canStartTarget = await mayStartTarget({
+    isAllowed: authUser.isAllowed,
     projectPublicId,
-    action: targetStartAction(targetType),
-    resource: buildSrn({
-      projectPublicId,
-      resourceType: targetType,
-      resourceId: targetId,
-    }),
+    targetType,
+    targetId,
   });
   if (!canStartTarget) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
