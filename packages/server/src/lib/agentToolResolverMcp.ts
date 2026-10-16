@@ -69,6 +69,11 @@ export const buildMcpToolExecute = (args: {
   viaCall?: string;
   /** On a deferred server's own `call`: whether the tool it targets is bound. */
   allowInner?: (name: string) => boolean;
+  /**
+   * This is a deferred server's own `call`, so the action metered is the tool
+   * it targets — the name `allowInner` holds to the binding.
+   */
+  proxyCall?: boolean;
 }) => {
   return async (toolArgs: unknown) => {
     const presetParameters = resolvePresetParametersForCall({
@@ -80,14 +85,12 @@ export const buildMcpToolExecute = (args: {
     const callArgs = presetParameters
       ? mergePresetParameters({ presetParameters, input: toolArgs })
       : toolArgs;
-    if (args.allowInner) {
-      const inner = innerToolName(callArgs);
-      if (inner === undefined || !args.allowInner(inner)) {
-        throw new DomainError(
-          'VALIDATION_FAILED',
-          `action "${inner ?? ''}" is not available on this tool.`
-        );
-      }
+    const inner = innerToolName(callArgs);
+    if (args.allowInner && (inner === undefined || !args.allowInner(inner))) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `action "${inner ?? ''}" is not available on this tool.`
+      );
     }
     try {
       return await meterToolExecution({
@@ -107,7 +110,10 @@ export const buildMcpToolExecute = (args: {
             },
             {
               onRequest: () => {
-                markSent({ input: callArgs });
+                markSent({
+                  input: callArgs,
+                  action: args.proxyCall ? inner : args.mcpToolName,
+                });
               },
             }
           );
@@ -162,6 +168,7 @@ const buildMcpToolEntry = (args: {
   logToolCallingError: LogToolCallingError;
   viaCall?: string;
   allowInner?: (name: string) => boolean;
+  proxyCall?: boolean;
 }): Tool => {
   const { mcpTool } = args;
   const entry = {
@@ -188,6 +195,7 @@ const buildMcpToolEntry = (args: {
       logToolCallingError: args.logToolCallingError,
       viaCall: args.viaCall,
       allowInner: args.allowInner,
+      proxyCall: args.proxyCall,
     }),
   };
 
@@ -339,7 +347,7 @@ export const resolveMcpTools = async (args: {
         ? { viaCall: proxy.callName }
         : {}),
       ...(proxy && mcpTool.name === proxy.callName
-        ? { allowInner: isBound }
+        ? { allowInner: isBound, proxyCall: true }
         : {}),
     });
   }
