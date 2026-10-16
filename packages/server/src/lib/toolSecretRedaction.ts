@@ -1,5 +1,5 @@
-import { SENSITIVE_PLACEHOLDER } from './formationsSensitive';
 import { isPlainObject } from './plainObject';
+import { SENSITIVE_PLACEHOLDER } from './sensitivePlaceholder';
 
 /**
  * Fields of an `http` tool's `execute.auth` that are the credential itself

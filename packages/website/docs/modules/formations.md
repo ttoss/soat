@@ -351,6 +351,8 @@ The stored header is `Bearer {{secret:sec_01HXYZ}}`; the decrypted value is subs
 
 The placeholder is an object so that a read-edit-write round trip sending it back fails the schema's `type: string` check with a `400` instead of rotating the secret.
 
+The live side of a `plan-formation` diff masks a tool's literal credentials, and those in an agent's inline `tool_bindings`, the way a [tool read](./tools.md#literal-credentials-are-masked-on-read) does.
+
 The stored template keeps the value it was given (an update with no new template re-applies the stored one). Declare the value through a `no_echo` parameter to keep it out of the database as well:
 
 ```yaml

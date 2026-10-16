@@ -13,6 +13,7 @@ import {
   toNullableStringOrObject,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { redactAgentToolSecrets } from '../toolSecretRedaction';
 import { defineFormationModule } from './defineFormationModule';
 import { isObjectRecord } from './formationSpecLoader';
 
@@ -207,6 +208,8 @@ export const agentsFormationModule = defineFormationModule({
   deletionBlocker: ({ physicalResourceId, alsoDeleting }) => {
     return findAgentDeletionBlocker({ id: physicalResourceId, alsoDeleting });
   },
+
+  maskLiveCredentials: redactAgentToolSecrets,
 
   fetch: ({ physicalResourceId }) => {
     return getAgent({ id: physicalResourceId });

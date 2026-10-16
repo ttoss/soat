@@ -15,6 +15,7 @@ import {
 import { assertValidToolContextAllowlist } from '../toolContext';
 import { deleteTool, findToolDeletionBlocker } from '../toolDelete';
 import { createTool, getTool, updateTool } from '../tools';
+import { redactToolSecrets } from '../toolSecretRedaction';
 import {
   describeToolTemplateTokenProblems,
   findInvalidTemplateTokens,
@@ -217,6 +218,8 @@ export const toolsFormationModule = defineFormationModule({
   deletionBlocker: ({ physicalResourceId, alsoDeleting }) => {
     return findToolDeletionBlocker({ id: physicalResourceId, alsoDeleting });
   },
+
+  maskLiveCredentials: redactToolSecrets,
 
   fetch: ({ physicalResourceId }) => {
     return getTool({ id: physicalResourceId });

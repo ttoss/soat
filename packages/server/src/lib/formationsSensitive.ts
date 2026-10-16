@@ -5,18 +5,9 @@ import type {
   PlanChange,
   ResourceDeclaration,
 } from './formationsTypes';
+import { SENSITIVE_PLACEHOLDER } from './sensitivePlaceholder';
 
-/**
- * What a credential-bearing value reads as once it has been stored.
- *
- * Deliberately an object rather than a masking string: a stored template is a
- * record a caller can read back, and the obvious next move is to edit it and
- * send it again. A string mask would round-trip as the new secret and silently
- * replace one; this fails the schema's `type: string` check instead, so the
- * mistake surfaces as a refusal rather than as a rotated credential nobody
- * asked for.
- */
-export const SENSITIVE_PLACEHOLDER = { no_echo: true } as const;
+export { SENSITIVE_PLACEHOLDER };
 
 const writeOnlyPropertiesFor = (resourceType: string): readonly string[] => {
   return getFormationModule({ resourceType })?.writeOnlyProperties ?? [];
@@ -71,6 +62,20 @@ export const redactTemplateSecrets = (args: {
  * auditable parameter record deliberately masks. The change decision is computed
  * before this runs, so masking costs the caller no signal about what will happen.
  */
+/**
+ * The live side of a diff is the resource as it stands, which any caller may
+ * have written a literal credential into, whatever the template declared.
+ */
+const maskLive = (args: {
+  resourceType: string;
+  properties: Record<string, unknown>;
+}): Record<string, unknown> => {
+  const mask = getFormationModule({
+    resourceType: args.resourceType,
+  })?.maskLiveCredentials;
+  return mask ? mask(args.properties) : args.properties;
+};
+
 export const redactPlanChanges = (args: {
   changes: PlanChange[];
 }): PlanChange[] => {
@@ -85,9 +90,12 @@ export const redactPlanChanges = (args: {
           properties: change.diff.desired,
         }),
         current: change.diff.current
-          ? redactProperties({
+          ? maskLive({
               resourceType,
-              properties: change.diff.current,
+              properties: redactProperties({
+                resourceType,
+                properties: change.diff.current,
+              }),
             })
           : change.diff.current,
       },

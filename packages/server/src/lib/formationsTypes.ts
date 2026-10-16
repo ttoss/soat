@@ -300,6 +300,14 @@ export type FormationModule = {
    */
   writeOnlyProperties?: readonly string[];
   /**
+   * Masks credential material nested inside a property the live read must
+   * return — a tool's `execute`/`mcp` headers, an agent's inline bindings —
+   * where naming the property whole in `writeOnlyProperties` would hide it.
+   */
+  maskLiveCredentials?: (
+    properties: Record<string, unknown>
+  ) => Record<string, unknown>;
+  /**
    * `getAttributes` names that carry credential material and therefore may not
    * be resolved into a formation output — an output is a readable surface by
    * definition, and a signing secret has its own permission-gated route.

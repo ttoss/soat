@@ -198,4 +198,94 @@ describe('a formation never echoes secret material', () => {
       ).toBe(true);
     });
   });
+
+  describe('a literal written into a live resource the formation manages', () => {
+    const literal = 'Bearer fse-live-literal-must-not-leak';
+    const mcpUrl = 'https://mcp.example.com/mcp';
+    let formationId: string;
+    let template: Record<string, unknown>;
+
+    beforeAll(async () => {
+      const client = () => {
+        return authenticatedTestClient(adminToken);
+      };
+      const provider = await client().post('/api/v1/ai-providers').send({
+        project_id: projectId,
+        name: 'fse-live-provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+      const secret = await client()
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: 'fse-live-ref', value: 'x' });
+      const reference = `Bearer {{secret:${secret.body.id}}}`;
+      template = {
+        resources: {
+          LiveTool: {
+            type: 'tool',
+            properties: {
+              name: 'fse-live-tool',
+              type: 'mcp',
+              mcp: { url: mcpUrl, headers: { Authorization: reference } },
+            },
+          },
+          LiveAgent: {
+            type: 'agent',
+            properties: {
+              name: 'fse-live-agent',
+              ai_provider_id: provider.body.id,
+            },
+          },
+        },
+      };
+      const created = await client()
+        .post('/api/v1/formations')
+        .send({ project_id: projectId, name: 'fse-live', template });
+      expect(created.status).toBe(201);
+      formationId = created.body.id;
+
+      const formation = JSON.stringify(
+        (await client().get(`/api/v1/formations/${formationId}`)).body
+      );
+      const toolId = formation.match(/tool_[A-Za-z0-9]{16}/)?.[0];
+      const agentId = formation.match(/agent_[A-Za-z0-9]{16}/)?.[0];
+      const mcp = { url: mcpUrl, headers: { Authorization: literal } };
+      expect(
+        (await client().patch(`/api/v1/tools/${toolId}`).send({ mcp })).status
+      ).toBe(200);
+      expect(
+        (
+          await client()
+            .patch(`/api/v1/agents/${agentId}`)
+            .send({
+              tool_bindings: [
+                { tool: { name: 'fse-inline', type: 'mcp', mcp } },
+              ],
+            })
+        ).status
+      ).toBe(200);
+    });
+
+    test('a plan masks it in the live side of every diff', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, formation_id: formationId, template });
+
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).not.toContain(literal);
+      const byId = Object.fromEntries(
+        res.body.changes.map(
+          (change: { logical_id: string; diff: unknown }) => {
+            return [change.logical_id, change.diff];
+          }
+        )
+      );
+      expect(byId.LiveTool.current.mcp.headers.Authorization).toEqual({
+        no_echo: true,
+      });
+      expect(
+        byId.LiveAgent.current.tool_bindings[0].tool.mcp.headers.Authorization
+      ).toEqual({ no_echo: true });
+    });
+  });
 });
