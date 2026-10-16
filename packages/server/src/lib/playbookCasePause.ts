@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { advancePlaybookCase, kickPlaybookWorker } from './playbookCascade';
 import { mapPlaybookCase, playbookCases } from './playbookCases';
+import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookCases');
 
@@ -34,6 +35,9 @@ export const resumePlaybookCase = async (args: {
       `Case '${args.id}' is not paused.`
     );
   }
+  // Lifting one case's pause under a paused project would restart the work the
+  // project's pause holds; the project's resume hands its cases back.
+  await assertProjectAcceptsWork({ projectId: row.projectId });
   await row.update({ pauseRequestedAt: null });
   await advancePlaybookCase({ caseDbId: row.id as number });
   // Executions queued before the pause are pending still.

@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { ScheduledWait } from './orchestrationNodeTypes';
-import { readProjectPause } from './projectPause';
+import { adoptProjectPause, readProjectPause } from './projectPause';
 
 const log = createDebug('soat:orchestrations');
 
@@ -197,31 +197,6 @@ export const clearRunPause = async (args: {
 };
 
 /**
- * Flags an unflagged run as its paused project's, returning whether the
- * project is paused. The project's pause sweep flags every live run it finds;
- * a run written while the sweep ran is caught by the next driver to touch it,
- * so the project's resume finds it with the rest.
- */
-const adoptProjectPause = async (args: {
-  run: InstanceType<typeof db.OrchestrationRun>;
-}): Promise<boolean> => {
-  const projectPause = await readProjectPause({
-    projectId: args.run.projectId as number,
-  });
-  if (!projectPause) return false;
-  await db.OrchestrationRun.update(
-    {
-      pauseRequestedAt: projectPause.pausedAt,
-      pauseReason: projectPause.reason,
-      pausedByProject: true,
-    },
-    { where: { id: args.run.id as number, pauseRequestedAt: null } }
-  );
-  await args.run.reload();
-  return true;
-};
-
-/**
  * {@link isRunPaused} for a driver about to drive a run it loaded: the run's
  * own flag, or its project's pause, which it adopts. The row is reloaded when
  * it adopts, so `pauseReason` on it is the project's.
@@ -230,7 +205,16 @@ export const isRunPausedForDrive = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<boolean> => {
   if (isRunPaused(args.run)) return true;
-  return adoptProjectPause({ run: args.run });
+  const adopted = await adoptProjectPause({
+    projectId: args.run.projectId as number,
+    flag: (values) => {
+      return db.OrchestrationRun.update(values, {
+        where: { id: args.run.id as number, pauseRequestedAt: null },
+      });
+    },
+  });
+  if (adopted) await args.run.reload();
+  return adopted;
 };
 
 /**

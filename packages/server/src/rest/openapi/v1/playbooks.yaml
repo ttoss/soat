@@ -630,7 +630,8 @@ paths:
         no longer exists is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`. Only a `ready`,
         `stale` or `failed` node with every required input set runs; anything
         else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
-        PLAYBOOK_CASE_PAUSED`.
+        PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
+        PROJECT_PAUSED`.
 
 
         The output is written as an entry when the execution settles. A value
@@ -767,7 +768,8 @@ paths:
         names an earlier output or confirmation of the node. Each tool runs as
         the author of the case's playbook version, whose permission to call it
         is checked here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A paused case is
-        `409 PLAYBOOK_CASE_PAUSED`.
+        `409 PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
+        PROJECT_PAUSED`.
 
 
         Without `wait` every export answers `running` and settles in the
@@ -1024,7 +1026,9 @@ paths:
       summary: Resume a case
       description: >-
         Lifts the pause and starts what became runnable while the case was
-        paused. A case that is not paused is `409 PLAYBOOK_CASE_NOT_PAUSED`.
+        paused. A case that is not paused is `409 PLAYBOOK_CASE_NOT_PAUSED`;
+        one in a paused project is `409 PROJECT_PAUSED` and stays paused until
+        the project resumes.
       operationId: resumePlaybookCase
       x-soat-resource:
         kind: playbook_case
@@ -1596,7 +1600,8 @@ components:
     PlaybookAutomationStatus:
       type: string
       description: >-
-        `paused` while a pause stands, else `running` while an execution is
+        `paused` while a pause of the case or of its project stands, else
+        `running` while an execution is
         queued or runs its executor, else `waiting` while every execution in
         flight waits on a workflow task or orchestration run it started, else
         `idle`

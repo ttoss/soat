@@ -23,6 +23,7 @@ import { resolveRunAs } from './playbookExecutionWork';
 import { type ExportCase, renderPlaybookExport } from './playbookExportRender';
 import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
 import type { RequestPrincipal } from './principals';
+import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExports');
 
@@ -272,6 +273,7 @@ export const exportPlaybookCaseNode = async (args: {
     node,
     names: args.transformations,
   });
+  await assertProjectAcceptsWork({ projectId: row.projectId });
   const runAs = await resolveRunAs({
     row,
     node: node.key,

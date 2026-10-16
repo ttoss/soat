@@ -18,6 +18,7 @@ import { executeClaimed, resolveRunAs } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import type { PlaybookNodeView } from './playbookState';
+import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -158,6 +159,7 @@ export const runPlaybookNode = async (args: {
   });
   const definition = await caseDefinition({ row });
   const node = readCaseNode({ definition, node: args.node });
+  await assertProjectAcceptsWork({ projectId: row.projectId });
   if (node.executor) {
     await resolveRunAs({ row, node: node.key, executors: [node.executor] });
   }
