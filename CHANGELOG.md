@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.79.1](https://github.com/ttoss/soat/compare/v0.79.0...v0.79.1) (2026-10-16)
+
+### Bug Fixes
+
+* **playbooks:** a case parked on a task or run reads waiting, not running ([#1596](https://github.com/ttoss/soat/issues/1596)) ([a2df68b](https://github.com/ttoss/soat/commit/a2df68b47b0edf082f858ceed54002c606621d87))
+
 # [0.79.0](https://github.com/ttoss/soat/compare/v0.78.0...v0.79.0) (2026-10-15)
 
 ### Features
