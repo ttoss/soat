@@ -8,6 +8,7 @@ import {
   mapPlaybookCase,
   playbookCases,
   versionDefinition,
+  withLockedCase,
 } from './playbookCases';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookUpgradeDiff } from './playbookUpgrade';
@@ -85,51 +86,53 @@ export const upgradePlaybookCase = async (args: {
   });
   const to = await versionDefinition({ row, version: target });
 
-  const upgraded = await db.sequelize.transaction(async (transaction) => {
-    const locked = (await db.PlaybookCase.findByPk(row.id as number, {
-      lock: transaction.LOCK.UPDATE,
-      transaction,
-    }))!;
-    const from = locked.playbookVersion;
-    if (from === target) return false;
+  const upgraded = await withLockedCase({
+    row,
+    work: async ({ locked, transaction }) => {
+      const from = locked.playbookVersion;
+      if (from === target) return false;
 
-    const running = await db.PlaybookExecution.findAll({
-      where: { caseId: locked.id as number, status: 'running' },
-      attributes: ['publicId', 'node'],
-      transaction,
-    });
-    if (running.length > 0) {
-      throw new DomainError(
-        'PLAYBOOK_CASE_BUSY',
-        `Case '${row.publicId}' has ${running.length} execution(s) running.`,
+      const running = await db.PlaybookExecution.findAll({
+        where: { caseId: locked.id as number, status: 'running' },
+        attributes: ['publicId', 'node'],
+        transaction,
+      });
+      if (running.length > 0) {
+        throw new DomainError(
+          'PLAYBOOK_CASE_BUSY',
+          `Case '${row.publicId}' has ${running.length} execution(s) running.`,
+          {
+            executions: running.map((execution) => {
+              return { id: execution.publicId, node: execution.node };
+            }),
+          }
+        );
+      }
+      await db.PlaybookExecution.update(
+        { status: 'succeeded', result: 'superseded', finishedAt: new Date() },
         {
-          executions: running.map((execution) => {
-            return { id: execution.publicId, node: execution.node };
-          }),
+          where: { caseId: locked.id as number, status: 'pending' },
+          transaction,
         }
       );
-    }
-    await db.PlaybookExecution.update(
-      { status: 'succeeded', result: 'superseded', finishedAt: new Date() },
-      { where: { caseId: locked.id as number, status: 'pending' }, transaction }
-    );
 
-    await db.PlaybookUpgrade.create(
-      {
-        caseId: locked.id as number,
-        fromVersion: from,
-        toVersion: target,
-        diff: playbookUpgradeDiff({
-          from: await versionDefinition({ row, version: from }),
-          to,
-        }),
-        createdByUserId: args.createdByUserId,
-      },
-      { transaction }
-    );
-    locked.playbookVersion = target;
-    await locked.save({ transaction });
-    return true;
+      await db.PlaybookUpgrade.create(
+        {
+          caseId: locked.id as number,
+          fromVersion: from,
+          toVersion: target,
+          diff: playbookUpgradeDiff({
+            from: await versionDefinition({ row, version: from }),
+            to,
+          }),
+          createdByUserId: args.createdByUserId,
+        },
+        { transaction }
+      );
+      locked.playbookVersion = target;
+      await locked.save({ transaction });
+      return true;
+    },
   });
 
   if (upgraded) await advancePlaybookCase({ caseDbId: row.id as number });

@@ -1,6 +1,9 @@
-import { playbookMissingInputs as missingFor } from 'src/lib/playbookMissing';
+import type { PlaybookDefinition } from 'src/lib/playbookDefinition';
+import { playbookMissingInputs } from 'src/lib/playbookMissing';
 import {
-  playbookNodeStates as nodeStates,
+  type PlaybookCaseSnapshot,
+  type PlaybookConforms,
+  playbookNodeStates,
   samePlaybookBasis,
 } from 'src/lib/playbookState';
 
@@ -15,6 +18,31 @@ import {
   pricing,
   reads,
 } from '../../fixtures/playbooks';
+
+const anyValue: PlaybookConforms = () => {
+  return true;
+};
+
+/** The states with every value conforming, unless a test says otherwise. */
+const nodeStates = (args: {
+  definition: PlaybookDefinition;
+  snapshot: PlaybookCaseSnapshot;
+  conforms?: PlaybookConforms;
+}) => {
+  return playbookNodeStates({ conforms: anyValue, ...args });
+};
+
+const missingFor = (args: {
+  definition: PlaybookDefinition;
+  snapshot: PlaybookCaseSnapshot;
+  node: string;
+}) => {
+  return playbookMissingInputs({
+    definition: args.definition,
+    node: args.node,
+    views: nodeStates(args),
+  });
+};
 
 const statesOf = (
   ...args: Parameters<typeof nodeStates>

@@ -5,12 +5,13 @@ import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { paginatedList } from './pagination';
 import {
+  assertCaseAcceptsWork,
   caseDefinition,
-  caseSnapshot,
+  caseNodeStates,
   type PlaybookCaseRow,
   playbookCases,
+  withLockedCase,
 } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
 import type {
   PlaybookDefinition,
   PlaybookNode,
@@ -20,7 +21,7 @@ import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
 import { readCaseNode } from './playbookExecutions';
 import { resolveRunAs } from './playbookExecutionWork';
 import { type ExportCase, renderPlaybookExport } from './playbookExportRender';
-import { type PlaybookCaseSnapshot, playbookNodeStates } from './playbookState';
+import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
 import type { RequestPrincipal } from './principals';
 
 const log = createDebug('soat:playbookExports');
@@ -32,15 +33,11 @@ type ExportRow = InstanceType<(typeof db)['PlaybookExport']> & {
 
 /** Each node's output revision while the node is `done`. */
 const currentRevisions = (args: {
-  definition: PlaybookDefinition;
   snapshot: PlaybookCaseSnapshot;
+  views: Map<string, PlaybookNodeView>;
 }): Map<string, number> => {
-  const views = playbookNodeStates({
-    ...args,
-    conforms: conformsToInputSchema,
-  });
   const current = new Map<string, number>();
-  for (const [key, view] of views) {
+  for (const [key, view] of args.views) {
     const output = args.snapshot[key]?.output;
     if (view.state === 'done' && output) current.set(key, output.revision);
   }
@@ -48,10 +45,12 @@ const currentRevisions = (args: {
 };
 
 const caseCurrentRevisions = async (row: PlaybookCaseRow) => {
-  return currentRevisions({
-    definition: await caseDefinition({ row }),
-    snapshot: await caseSnapshot({ caseDbId: row.id as number }),
-  });
+  return currentRevisions(
+    await caseNodeStates({
+      caseDbId: row.id as number,
+      definition: await caseDefinition({ row }),
+    })
+  );
 };
 
 const mapPlaybookExport = (args: {
@@ -134,26 +133,17 @@ const resolveRevision = async (args: {
 }): Promise<number> => {
   const { row, node, transaction } = args;
   if (args.revision === undefined) {
-    const snapshot = await caseSnapshot({
+    const states = await caseNodeStates({
       caseDbId: row.id as number,
+      definition: args.definition,
       transaction,
     });
-    const latest = currentRevisions({
-      definition: args.definition,
-      snapshot,
-    }).get(node.key);
+    const latest = currentRevisions(states).get(node.key);
     if (latest === undefined) {
       throw new DomainError(
         'PLAYBOOK_NODE_NOT_EXPORTABLE',
         `Node '${node.key}' has no current output to export.`,
-        {
-          node: node.key,
-          state: playbookNodeStates({
-            definition: args.definition,
-            snapshot,
-            conforms: conformsToInputSchema,
-          }).get(node.key)!.state,
-        }
+        { node: node.key, state: states.views.get(node.key)!.state }
       );
     }
     return latest;
@@ -201,39 +191,33 @@ const recordExports = (args: {
   createdByUserId: number | null;
 }) => {
   const { row, node } = args;
-  return db.sequelize.transaction(async (transaction) => {
-    const locked = await db.PlaybookCase.findByPk(row.id as number, {
-      lock: transaction.LOCK.UPDATE,
-      transaction,
-    });
-    if (locked!.pauseRequestedAt) {
-      throw new DomainError(
-        'PLAYBOOK_CASE_PAUSED',
-        `Case '${row.publicId}' is paused.`
-      );
-    }
-    const revision = await resolveRevision({ ...args, transaction });
-    const rows = [];
-    for (const transformation of args.transformations) {
-      rows.push(
-        await db.PlaybookExport.create(
-          {
-            caseId: row.id as number,
-            node: node.key,
-            revision,
-            playbookVersion: row.playbookVersion,
-            transformation: transformation.name,
-            format: transformation.format,
-            toolId: transformation.tool,
-            status: 'running',
-            leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
-            createdByUserId: args.createdByUserId,
-          },
-          { transaction }
-        )
-      );
-    }
-    return rows;
+  return withLockedCase({
+    row,
+    work: async ({ locked, transaction }) => {
+      assertCaseAcceptsWork({ locked, publicId: row.publicId });
+      const revision = await resolveRevision({ ...args, transaction });
+      const rows = [];
+      for (const transformation of args.transformations) {
+        rows.push(
+          await db.PlaybookExport.create(
+            {
+              caseId: row.id as number,
+              node: node.key,
+              revision,
+              playbookVersion: row.playbookVersion,
+              transformation: transformation.name,
+              format: transformation.format,
+              toolId: transformation.tool,
+              status: 'running',
+              leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
+              createdByUserId: args.createdByUserId,
+            },
+            { transaction }
+          )
+        );
+      }
+      return rows;
+    },
   });
 };
 

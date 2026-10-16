@@ -3,8 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { paginatedList } from './pagination';
-import { caseDefinition, caseSnapshot, playbookCases } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
+import { caseDefinition, caseNodeStates, playbookCases } from './playbookCases';
 import { nodesByKey } from './playbookGraph';
 import { playbookMissingInputs } from './playbookMissing';
 
@@ -34,12 +33,11 @@ export const getPlaybookCaseMissing = async (args: {
     );
   }
 
-  const waves = playbookMissingInputs({
+  const { views } = await caseNodeStates({
+    caseDbId: row.id as number,
     definition,
-    snapshot: await caseSnapshot({ caseDbId: row.id as number }),
-    node: args.node,
-    conforms: conformsToInputSchema,
   });
+  const waves = playbookMissingInputs({ definition, views, node: args.node });
 
   return { case_id: row.publicId, node: args.node, waves };
 };

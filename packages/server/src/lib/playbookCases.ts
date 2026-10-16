@@ -10,9 +10,14 @@ import {
   conformsToInputSchema,
   snapshotFromRecords,
 } from './playbookCaseState';
-import type { PlaybookDefinition } from './playbookDefinition';
+import type { JsonValue, PlaybookDefinition } from './playbookDefinition';
 import { playbooks } from './playbooks';
-import { type PlaybookCaseSnapshot, playbookNodeStates } from './playbookState';
+import {
+  type PlaybookBasis,
+  type PlaybookCaseSnapshot,
+  playbookNodeStates,
+  type PlaybookNodeView,
+} from './playbookState';
 import { playbookVersionStore } from './playbookVersionSnapshot';
 import { parsePlaybookDefinition } from './playbookWire';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -82,17 +87,118 @@ export const caseSnapshot = async (args: {
   return snapshotFromRecords({ entries, executions });
 };
 
+/**
+ * Every node's state in a case, with each input's schema deciding what counts
+ * as set. The one read of node states, so no reader can count a value its
+ * schema refuses.
+ */
+export const caseNodeStates = async (args: {
+  caseDbId: number;
+  definition: PlaybookDefinition;
+  transaction?: Transaction;
+}): Promise<{
+  snapshot: PlaybookCaseSnapshot;
+  views: Map<string, PlaybookNodeView>;
+}> => {
+  const snapshot = await caseSnapshot(args);
+  return {
+    snapshot,
+    views: playbookNodeStates({
+      definition: args.definition,
+      snapshot,
+      conforms: conformsToInputSchema,
+    }),
+  };
+};
+
+type CaseRow = InstanceType<(typeof db)['PlaybookCase']>;
+
+/** The case row under its update lock; null once the case is deleted. */
+export const lockCase = (args: {
+  caseDbId: number;
+  transaction: Transaction;
+}): Promise<CaseRow | null> => {
+  return db.PlaybookCase.findByPk(args.caseDbId, {
+    lock: args.transaction.LOCK.UPDATE,
+    transaction: args.transaction,
+  });
+};
+
+/**
+ * Runs `work` holding the case's lock. Every write to a case locks the case
+ * before any of its rows, so the revision counter and every state check read
+ * what the previous writer committed.
+ */
+export const withLockedCase = <T>(args: {
+  row: { id?: unknown; publicId: string };
+  work: (locked: { locked: CaseRow; transaction: Transaction }) => Promise<T>;
+}): Promise<T> => {
+  return db.sequelize.transaction(async (transaction) => {
+    const locked = await lockCase({
+      caseDbId: args.row.id as number,
+      transaction,
+    });
+    if (!locked) throw playbookCases.notFound(args.row.publicId);
+    return args.work({ locked, transaction });
+  });
+};
+
+/** Refuses to start work in a paused case. */
+export const assertCaseAcceptsWork = (args: {
+  locked: CaseRow;
+  publicId: string;
+}): void => {
+  if (args.locked.pauseRequestedAt) {
+    throw new DomainError(
+      'PLAYBOOK_CASE_PAUSED',
+      `Case '${args.publicId}' is paused.`
+    );
+  }
+};
+
+export type PlaybookEntryWrite = {
+  node: string;
+  kind: 'input' | 'output' | 'confirmation' | 'rejection';
+  field: string | null;
+  value: JsonValue | Record<string, unknown>;
+  basis: PlaybookBasis | null;
+  playbookVersion: number;
+  createdByUserId: number | null;
+};
+
+/**
+ * Appends entries to a locked case, each at the next revision of the case's
+ * one counter; answers the revisions written.
+ */
+export const appendEntries = async (args: {
+  locked: CaseRow;
+  entries: PlaybookEntryWrite[];
+  transaction: Transaction;
+}): Promise<number[]> => {
+  const { locked, transaction } = args;
+  const revisions: number[] = [];
+  for (const entry of args.entries) {
+    const revision = locked.revision + revisions.length + 1;
+    await db.PlaybookEntry.create(
+      { ...entry, caseId: locked.id as number, revision },
+      { transaction }
+    );
+    revisions.push(revision);
+  }
+  if (revisions.length > 0) {
+    locked.revision += revisions.length;
+    await locked.save({ transaction });
+  }
+  return revisions;
+};
+
 const mapNodes = (args: {
   definition: PlaybookDefinition;
   snapshot: PlaybookCaseSnapshot;
+  views: Map<string, PlaybookNodeView>;
 }) => {
   // One view per node, in definition order.
-  const views = [
-    ...playbookNodeStates({
-      ...args,
-      conforms: conformsToInputSchema,
-    }).values(),
-  ];
+  const views = [...args.views.values()];
 
   return args.definition.nodes.map((node, index) => {
     const view = views[index];
@@ -118,10 +224,11 @@ const mapNodes = (args: {
 };
 
 export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
-  const [definition, snapshot] = await Promise.all([
-    caseDefinition({ row }),
-    caseSnapshot({ caseDbId: row.id as number }),
-  ]);
+  const definition = await caseDefinition({ row });
+  const { snapshot, views } = await caseNodeStates({
+    caseDbId: row.id as number,
+    definition,
+  });
 
   return {
     id: row.publicId,
@@ -131,7 +238,7 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
     subject: row.subject,
     revision: row.revision,
     ...(await caseAutomation({ rows: [row] }))(row),
-    nodes: mapNodes({ definition, snapshot }),
+    nodes: mapNodes({ definition, snapshot, views }),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

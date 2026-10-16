@@ -2,8 +2,12 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { caseDefinition, caseSnapshot, playbookCases } from './playbookCases';
-import { conformsToInputSchema } from './playbookCaseState';
+import {
+  caseDefinition,
+  caseNodeStates,
+  lockCase,
+  playbookCases,
+} from './playbookCases';
 import {
   EXECUTION_LEASE_MS,
   PARKED_RECHECK_MS,
@@ -12,7 +16,6 @@ import { settleExecution, settleFromRun } from './playbookExecutionSettle';
 import { executeClaimed } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { recoverPlaybookExports } from './playbookExportRender';
-import { playbookNodeStates } from './playbookState';
 import { createScheduler, createSweep } from './scheduler';
 
 const log = createDebug('soat:playbookCascade');
@@ -127,18 +130,15 @@ export const advancePlaybookCase = async (args: {
   caseDbId: number;
 }): Promise<void> => {
   const queued = await db.sequelize.transaction(async (transaction) => {
-    const locked = await db.PlaybookCase.findByPk(args.caseDbId, {
-      lock: transaction.LOCK.UPDATE,
-      transaction,
-    });
+    const locked = await lockCase({ caseDbId: args.caseDbId, transaction });
     if (!locked || locked.pauseRequestedAt) return 0;
 
     const row = await playbookCases.reload(locked);
     const definition = await caseDefinition({ row });
-    const views = playbookNodeStates({
+    const { views } = await caseNodeStates({
+      caseDbId: args.caseDbId,
       definition,
-      snapshot: await caseSnapshot({ caseDbId: args.caseDbId, transaction }),
-      conforms: conformsToInputSchema,
+      transaction,
     });
 
     let count = 0;

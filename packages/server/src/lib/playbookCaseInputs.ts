@@ -1,18 +1,23 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import { isPlainObject } from './plainObject';
 import { advancePlaybookCase } from './playbookCascade';
 import {
+  appendEntries,
   caseDefinition,
   caseSnapshot,
   type MappedPlaybookCase,
   mapPlaybookCase,
   playbookCases,
+  withLockedCase,
 } from './playbookCases';
-import type { PlaybookDefinition, PlaybookInput } from './playbookDefinition';
+import type {
+  JsonValue,
+  PlaybookDefinition,
+  PlaybookInput,
+} from './playbookDefinition';
 import { nodesByKey } from './playbookGraph';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import type { PlaybookCaseSnapshot } from './playbookState';
@@ -182,59 +187,46 @@ export const writePlaybookCaseInputs = async (args: {
   const definition = await caseDefinition({ row: found });
   assertWritesValid({ definition, writes: args.writes });
 
-  await db.sequelize.transaction(async (transaction) => {
-    // The row lock serializes writers on one case, so the revision counter and
-    // the conflict check read what the previous writer committed.
-    const locked = await db.PlaybookCase.findOne({
-      where: { id: found.id as number },
-      lock: transaction.LOCK.UPDATE,
-      transaction,
-      rejectOnEmpty: playbookCases.notFound(args.id),
-    });
-
-    const snapshot = await caseSnapshot({
-      caseDbId: locked.id as number,
-      transaction,
-    });
-    const conflicts = conflictsOf({ writes: args.writes, snapshot });
-    if (conflicts.length > 0) {
-      throw new DomainError(
-        'PLAYBOOK_INPUT_CONFLICT',
-        `${conflicts.length} input(s) changed since they were read.`,
-        { conflicts }
-      );
-    }
-
-    let revision = locked.revision;
-    for (const write of args.writes) {
-      const current = snapshot[write.node]?.inputs?.[write.name];
-      if (
-        current &&
-        stableDigest(current.value) === stableDigest(write.value)
-      ) {
-        continue;
+  await withLockedCase({
+    row: found,
+    work: async ({ locked, transaction }) => {
+      const snapshot = await caseSnapshot({
+        caseDbId: locked.id as number,
+        transaction,
+      });
+      const conflicts = conflictsOf({ writes: args.writes, snapshot });
+      if (conflicts.length > 0) {
+        throw new DomainError(
+          'PLAYBOOK_INPUT_CONFLICT',
+          `${conflicts.length} input(s) changed since they were read.`,
+          { conflicts }
+        );
       }
-      revision += 1;
-      await db.PlaybookEntry.create(
-        {
-          caseId: locked.id as number,
-          revision,
-          node: write.node,
-          kind: 'input',
-          field: write.name,
-          value: write.value,
-          basis: null,
-          playbookVersion: locked.playbookVersion,
-          createdByUserId: args.createdByUserId,
-        },
-        { transaction }
-      );
-    }
 
-    if (revision !== locked.revision) {
-      locked.revision = revision;
-      await locked.save({ transaction });
-    }
+      await appendEntries({
+        locked,
+        transaction,
+        entries: args.writes
+          .filter((write) => {
+            const current = snapshot[write.node]?.inputs?.[write.name];
+            return (
+              !current ||
+              stableDigest(current.value) !== stableDigest(write.value)
+            );
+          })
+          .map((write) => {
+            return {
+              node: write.node,
+              kind: 'input' as const,
+              field: write.name,
+              value: write.value as JsonValue,
+              basis: null,
+              playbookVersion: locked.playbookVersion,
+              createdByUserId: args.createdByUserId,
+            };
+          }),
+      });
+    },
   });
 
   await advancePlaybookCase({ caseDbId: found.id as number });

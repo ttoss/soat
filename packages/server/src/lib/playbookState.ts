@@ -329,15 +329,9 @@ const viewOf = (args: {
 export const playbookNodeStates = (args: {
   definition: PlaybookDefinition;
   snapshot: PlaybookCaseSnapshot;
-  conforms?: PlaybookConforms;
+  conforms: PlaybookConforms;
 }): Map<string, PlaybookNodeView> => {
-  const {
-    definition,
-    snapshot,
-    conforms = () => {
-      return true;
-    },
-  } = args;
+  const { definition, snapshot, conforms } = args;
 
   const byKey = nodesByKey({ definition });
   const views = new Map<string, PlaybookNodeView>();
