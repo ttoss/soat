@@ -40,6 +40,7 @@ import { assertValidPromptCaching } from './promptCaching';
 import { parseActiveRelease } from './releaseAssignment';
 import { toResourceRef } from './resourceVersions';
 import { type InlineToolDefinition } from './tools';
+import { redactAgentToolSecrets } from './toolSecretRedaction';
 import { invalidateTraceContentModeCache } from './traceContentPolicy';
 import type { VersionedWrite } from './writePrecondition';
 
@@ -265,7 +266,7 @@ export const createAgent = async (
     projectPublicId: created.project.publicId,
     resourceType: 'agent',
     resourceId: mapped.id,
-    data: mapped,
+    data: redactAgentToolSecrets(mapped),
   });
 
   return mapped;
@@ -450,7 +451,7 @@ export const updateAgent = async (
     projectPublicId: updated.project.publicId,
     resourceType: 'agent',
     resourceId: mapped.id,
-    data: mapped,
+    data: redactAgentToolSecrets(mapped),
   });
 
   return mapped;

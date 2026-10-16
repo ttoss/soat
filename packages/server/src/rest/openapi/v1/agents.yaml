@@ -983,7 +983,7 @@ components:
           type: array
           nullable: true
           items:
-            $ref: '#/components/schemas/ToolBinding'
+            $ref: '#/components/schemas/ToolBindingRead'
           description: >-
             Tools attached to this agent, one binding object per tool — the
             canonical attachment field. See
@@ -1271,6 +1271,8 @@ components:
             `guardrail_ids`, `ai_provider_id`,
             `model_route_id`, `name`), and none of its identity or bookkeeping
             fields (`id`, `project_id`, `version`, `active_release`, timestamps).
+            A literal credential in an inline `tool_bindings` definition is
+            masked as on the `Agent` read; a restore replays the stored value.
 
 
             Deliberately open rather than a fixed schema: an archive written by
@@ -1356,6 +1358,7 @@ components:
 
     ToolBinding:
       type: object
+      additionalProperties: false
       description: >-
         One agent↔tool attachment. Exactly one of `tool_id` (persisted tool
         reference) or `tool` (inline ephemeral definition) per entry. Tool-call
@@ -1372,6 +1375,28 @@ components:
           # time, never persisted as a Tool resource. Exactly one of
           # `tool_id`/`tool`. Cannot be of type `pipeline`.
           $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+
+    ToolBindingRead:
+      type: object
+      description: >-
+        One agent↔tool attachment as read back: `tool_id`, or the inline `tool`
+        definition as written, with every literal credential masked.
+      properties:
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: Public ID of a persisted tool in the agent's own project.
+          example: tool_V1StGXR8Z5jdHi6B
+        tool:
+          type: object
+          additionalProperties: true
+          description: >-
+            Inline tool definition, in the `CreateToolRequest` shape. A
+            credential written as a literal in `execute` or `mcp` is masked as
+            `{"no_echo": true}`, exactly as on a persisted tool, so a
+            read-edit-write round trip fails the schema check instead of writing
+            the mask in as the credential. A `{{secret:...}}` reference stays
+            readable.
 
     CreateAgentRequest:
       type: object

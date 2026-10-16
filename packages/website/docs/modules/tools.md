@@ -411,6 +411,8 @@ Presets and model arguments reach the action wherever the OpenAPI operation decl
 
 A tool is readable by anyone holding `tools:GetTool`, so a literal credential is stored and sent on every call but never echoed: `secret_access_key`, `session_token` and `credentials` under `execute.auth`, and any credential-named `headers` value in `execute` or `mcp` (`Authorization`, `Cookie`, or a name containing `api-key` / `token` / `secret` / `password`) read back as `{"no_echo": true}`. The mask is an object so a read-edit-write round trip fails the schema's `type: string` check instead of storing the placeholder as the credential.
 
+The same mask applies to every inline definition: a pipeline step's `tool`, and an agent's `tool_bindings[].tool` wherever the agent is read.
+
 A `{{secret:...}}` reference stays readable; it is the wiring, not the credential.
 
 ### Where a Tool May Reach (Egress)

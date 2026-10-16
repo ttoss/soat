@@ -175,6 +175,8 @@ Neither or both is `400 VALIDATION_FAILED`. A `tool_id` names a tool in the agen
 
 `tool` takes the [Create Tool](./tools.md#data-model) body minus `project_id` (`{{secret:...}}` resolves in the agent's project), stored on the agent and resolved at generation time with no Tool resource: absent from [`GET /tools`](/docs/api/tools/list-tools), untargetable by `active_tool_ids` or `step_rules`, never of type `pipeline` (bind a persisted one by `tool_id`).
 
+A literal credential in an inline definition is masked exactly as on a persisted tool ([Literal Credentials Are Masked on Read](./tools.md#literal-credentials-are-masked-on-read)) on every agent read, in [version history](#versioning-and-staged-rollout) and in `agents.*` webhook payloads; generation and restore use the stored value. An archived version cannot be edited, so a credential once written as a literal is rotated, not removed — use `{{secret:...}}`.
+
 #### A binding that cannot be resolved
 
 A binding whose source cannot be reached — an [MCP](./tools.md) server that refuses the credential or is down, an unresolvable `{{secret:...}}` in a URL or header template, a [shared](./shares.md#using-a-shared-tool) tool whose share was suspended or revoked — contributes no tool and is dropped rather than failing the turn: one flaky third-party server must not take an agent down.

@@ -74,14 +74,54 @@ const redactTransport = (transport: unknown): unknown => {
   return redacted;
 };
 
+/**
+ * Masks a tool definition, stored or inline, including every inline
+ * definition nested in its pipeline steps. Applied where a definition leaves
+ * the API, never in `mapTool` / `mapAgent`: a call builds its definition from
+ * the mapped tool and a version archives the mapped agent, and both need the
+ * real value.
+ */
 export const redactToolSecrets = <
-  T extends { execute?: unknown; mcp?: unknown },
+  T extends { execute?: unknown; mcp?: unknown; pipeline?: unknown },
 >(
   tool: T
 ): T => {
-  return {
+  const redacted: T = {
     ...tool,
     execute: redactTransport(tool.execute),
     mcp: redactTransport(tool.mcp),
   };
+  const { pipeline } = tool;
+  if (isPlainObject(pipeline) && Array.isArray(pipeline.steps)) {
+    redacted.pipeline = {
+      ...pipeline,
+      steps: pipeline.steps.map((step: unknown) => {
+        if (!isPlainObject(step) || !isPlainObject(step.tool)) return step;
+        return { ...step, tool: redactToolSecrets(step.tool) };
+      }),
+    };
+  }
+  return redacted;
+};
+
+const redactToolBindings = (bindings: unknown): unknown => {
+  if (!Array.isArray(bindings)) return bindings;
+  return bindings.map((binding: unknown) => {
+    if (!isPlainObject(binding) || !isPlainObject(binding.tool)) {
+      return binding;
+    }
+    return { ...binding, tool: redactToolSecrets(binding.tool) };
+  });
+};
+
+/**
+ * Masks the inline tool definitions an agent — or an archived agent config —
+ * carries in `tool_bindings`, on every surface an agent leaves through: its
+ * routes, its version history and its `agents.*` event payloads.
+ */
+export const redactAgentToolSecrets = <T extends { tool_bindings?: unknown }>(
+  agent: T
+): T => {
+  if (!('tool_bindings' in agent)) return agent;
+  return { ...agent, tool_bindings: redactToolBindings(agent.tool_bindings) };
 };

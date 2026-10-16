@@ -747,7 +747,8 @@ components:
             the same shape as `CreateToolRequest` minus `project_id` —
             executed directly without a Tool row, but never both. An inline
             step `tool` cannot itself be of type `pipeline`. An optional
-            `output` maps the final result.
+            `output` maps the final result. A literal credential in an inline
+            step `tool` is masked on read, exactly as in `execute`.
         output_mapping:
           type: object
           nullable: true
@@ -778,6 +779,7 @@ components:
 
     CreateToolRequest:
       type: object
+      additionalProperties: false
       required:
         - name
       properties:

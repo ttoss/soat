@@ -9,6 +9,7 @@ import {
   restoreAgentVersion,
   setAgentRelease,
 } from 'src/lib/agentVersions';
+import { redactAgentToolSecrets } from 'src/lib/toolSecretRedaction';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
 import { parsePagination, requireAuth } from './helpers';
@@ -90,13 +91,15 @@ agentVersionsRouter.post(
     });
     const body = ctx.request.body as { label?: unknown };
 
-    ctx.body = await restoreAgentVersion({
-      projectIds,
-      agentId: ctx.params.agent_id,
-      version: parseVersionParam(ctx.params.version),
-      label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser.id,
-    });
+    ctx.body = redactAgentToolSecrets(
+      await restoreAgentVersion({
+        projectIds,
+        agentId: ctx.params.agent_id,
+        version: parseVersionParam(ctx.params.version),
+        label: typeof body.label === 'string' ? body.label : undefined,
+        createdByUserId: ctx.authUser.id,
+      })
+    );
   }
 );
 
@@ -120,14 +123,16 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
 
   // Shape validation lives in the lib so the rule has one home; the handler
   // only names the wire fields.
-  ctx.body = await setAgentRelease({
-    projectIds,
-    agentId: ctx.params.agent_id,
-    stableVersion: body.stable_version,
-    canaryVersion: body.canary_version,
-    canaryPercent: body.canary_percent,
-    promotionGate: body.promotion_gate,
-  });
+  ctx.body = redactAgentToolSecrets(
+    await setAgentRelease({
+      projectIds,
+      agentId: ctx.params.agent_id,
+      stableVersion: body.stable_version,
+      canaryVersion: body.canary_version,
+      canaryPercent: body.canary_percent,
+      promotionGate: body.promotion_gate,
+    })
+  );
 });
 
 /**
@@ -144,11 +149,13 @@ agentVersionsRouter.post(
       ctx,
       action: 'agents:SetAgentRelease',
     });
-    ctx.body = await promoteAgentRelease({
-      projectIds,
-      agentId: ctx.params.agent_id,
-      createdByUserId: ctx.authUser.id,
-    });
+    ctx.body = redactAgentToolSecrets(
+      await promoteAgentRelease({
+        projectIds,
+        agentId: ctx.params.agent_id,
+        createdByUserId: ctx.authUser.id,
+      })
+    );
   }
 );
 
@@ -166,10 +173,12 @@ agentVersionsRouter.post(
       ctx,
       action: 'agents:SetAgentRelease',
     });
-    ctx.body = await abortAgentRelease({
-      projectIds,
-      agentId: ctx.params.agent_id,
-      createdByUserId: ctx.authUser.id,
-    });
+    ctx.body = redactAgentToolSecrets(
+      await abortAgentRelease({
+        projectIds,
+        agentId: ctx.params.agent_id,
+        createdByUserId: ctx.authUser.id,
+      })
+    );
   }
 );
