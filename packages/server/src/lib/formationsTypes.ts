@@ -1,4 +1,6 @@
 import type { ErrorCode } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import type { RequestPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
   type StoredError,
@@ -87,18 +89,25 @@ export type FormationResourceContext = {
  * The caller a mutation is performed for — what the REST routes take from the
  * request, and what a formation deploy had no way to name.
  *
- * Three modules need it, and for two of them it is what bounds the resource's
- * authority rather than merely labelling it: an `api_key` mints under
- * it, so the key can never exceed whoever deployed it, and a `trigger`'s
- * `created_by` is the run-as identity a firing mints a token for. An `agent`
- * version uses it as authorship.
+ * `userId` is the account it acts for (a key acts for its owner): an `api_key`
+ * mints under it, so the key can never exceed whoever deployed it, a
+ * `trigger`'s `created_by` is the run-as identity a firing mints a token for,
+ * and a config version names it as author. `principal` and `isAllowed` are the
+ * credential itself, which a `playbook` version runs as, so a deploying key's
+ * own boundary bounds what the playbook may start.
  *
  * Carried by the three **write** operations only, and required there: every path
  * that mutates comes from an authenticated route, so a call site that cannot
  * name its caller is a mistake rather than a case to handle. A `read` is
  * attributed to nobody, and the plan path never writes, so neither invents one.
  */
-export type FormationActingPrincipal = { actingUserId: number };
+export type FormationActor = {
+  userId: number;
+  principal: RequestPrincipal | null;
+  isAllowed: IsAllowedFn;
+};
+
+export type FormationActingPrincipal = { actor: FormationActor };
 
 /**
  * What an `update` did, when it did more than mutate in place.

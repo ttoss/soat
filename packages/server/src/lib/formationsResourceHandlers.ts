@@ -50,7 +50,7 @@ export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
   return formationModule.create({
     properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });
@@ -72,7 +72,7 @@ export const applyUpdateResource = async (
     physicalResourceId: args.physicalResourceId,
     properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });
@@ -124,7 +124,7 @@ export const applyDeleteResource = async (
   return formationModule.delete({
     physicalResourceId: args.physicalResourceId,
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });

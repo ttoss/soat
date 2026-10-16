@@ -259,6 +259,25 @@ export const updatePlaybook = async (
   return mapPlaybook(await playbooks.reload(playbook));
 };
 
+const casesOf = (playbook: PlaybookRow): Promise<number> => {
+  return db.PlaybookCase.count({
+    where: { playbookId: playbook.id as number },
+  });
+};
+
+const hasCasesMessage = (args: { id: string; cases: number }): string => {
+  return `Playbook '${args.id}' has ${args.cases} case(s) and cannot be deleted.`;
+};
+
+/** Why deleting the playbook would refuse, or `null` when it would not. */
+export const findPlaybookDeletionBlocker = async (args: {
+  id: string;
+}): Promise<string | null> => {
+  log('findPlaybookDeletionBlocker: id=%s', args.id);
+  const cases = await casesOf(await playbooks.getByPublicId(args));
+  return cases > 0 ? hasCasesMessage({ id: args.id, cases }) : null;
+};
+
 export const deletePlaybook = async (args: {
   projectIds?: number[];
   id: string;
@@ -266,13 +285,11 @@ export const deletePlaybook = async (args: {
   log('deletePlaybook: id=%s', args.id);
   const playbook = await playbooks.getByPublicId(args);
 
-  const cases = await db.PlaybookCase.count({
-    where: { playbookId: playbook.id as number },
-  });
+  const cases = await casesOf(playbook);
   if (cases > 0) {
     throw new DomainError(
       'PLAYBOOK_HAS_CASES',
-      `Playbook '${args.id}' has ${cases} case(s) and cannot be deleted.`,
+      hasCasesMessage({ id: args.id, cases }),
       { cases }
     );
   }

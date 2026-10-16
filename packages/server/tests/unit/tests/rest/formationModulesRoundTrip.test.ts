@@ -535,6 +535,42 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
+    name: 'playbook',
+    type: 'playbook',
+    route: 'playbooks',
+    build: (seed) => {
+      const definition = {
+        nodes: [
+          {
+            key: 'lookup',
+            title: 'Lookup',
+            kind: 'execute',
+            inputs: [
+              {
+                name: 'query',
+                schema: { type: 'string' },
+                required: true,
+                source: 'manual',
+              },
+            ],
+            executor: { type: 'tool', id: fx.converterToolId },
+          },
+        ],
+      };
+      const declared = {
+        name: `playbook-${seed}`,
+        description: 'a playbook',
+        definition,
+      };
+      return {
+        create: declared,
+        expectRead: declared,
+        update: { ...declared, name: `playbook-${seed}-updated` },
+        expectAfterUpdate: { name: `playbook-${seed}-updated` },
+      };
+    },
+  },
+  {
     name: 'guardrail',
     type: 'guardrail',
     route: 'guardrails',

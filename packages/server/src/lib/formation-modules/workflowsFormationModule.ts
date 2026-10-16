@@ -29,10 +29,10 @@ export const workflowsFormationModule = defineFormationModule({
     delete: 'workflows:DeleteWorkflow',
   },
 
-  create: ({ properties, projectId, actingUserId }) => {
+  create: ({ properties, projectId, actor }) => {
     return createWorkflow({
       projectId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       name: properties.name as string,
       description: toNullableString(properties.description),
       // Both are required and schema-checked before reaching here, so the
@@ -48,10 +48,10 @@ export const workflowsFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId, actingUserId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     await updateWorkflow({
       id: physicalResourceId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       states: toCamelCollection<WorkflowState>(properties.states),

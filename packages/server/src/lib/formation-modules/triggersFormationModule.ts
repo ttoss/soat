@@ -101,7 +101,7 @@ export const triggersFormationModule = defineFormationModule({
 
   extraChecks: pushShapeRuleErrors,
 
-  create: async ({ properties, projectId, actingUserId }) => {
+  create: async ({ properties, projectId, actor }) => {
     // `createdByUserId` is the run-as identity a firing mints a token for, not
     // attribution: the deploying caller, so a firing can never exceed whoever
     // declared the trigger.
@@ -112,7 +112,7 @@ export const triggersFormationModule = defineFormationModule({
 
     return createTrigger({
       projectId,
-      createdByUserId: actingUserId,
+      createdByUserId: actor.userId,
       policyId,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,

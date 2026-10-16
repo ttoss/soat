@@ -18,6 +18,7 @@ import { memoryStoresFormationModule } from './formation-modules/memoryStoresFor
 import { metadataSchemasFormationModule } from './formation-modules/metadataSchemasFormationModule';
 import { modelRoutesFormationModule } from './formation-modules/modelRoutesFormationModule';
 import { orchestrationsFormationModule } from './formation-modules/orchestrationsFormationModule';
+import { playbooksFormationModule } from './formation-modules/playbooksFormationModule';
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
 import { projectPricesFormationModule } from './formation-modules/projectPricesFormationModule';
 import { quotasFormationModule } from './formation-modules/quotasFormationModule';
@@ -74,6 +75,7 @@ registerFormationModule({ module: datasetItemsFormationModule });
 registerFormationModule({ module: evalsFormationModule });
 registerFormationModule({ module: workflowsFormationModule });
 registerFormationModule({ module: decidersFormationModule });
+registerFormationModule({ module: playbooksFormationModule });
 
 /**
  * The types that ship with SOAT, frozen after the registrations above.

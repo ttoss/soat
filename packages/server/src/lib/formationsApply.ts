@@ -31,6 +31,7 @@ import {
 import { applyDeleteResource } from './formationsResourceHandlers';
 import {
   buildFormationError,
+  type FormationActor,
   type FormationEvent,
   formationFailure,
   type FormationTemplate,
@@ -43,7 +44,7 @@ export const handleOrphanedDeletes = async (args: {
   template: FormationTemplate;
   existingResources: InstanceType<(typeof db)['FormationResource']>[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   events: FormationEvent[];
 }): Promise<void> => {
   const { template, existingResources, events } = args;
@@ -62,7 +63,7 @@ export const handleOrphanedDeletes = async (args: {
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId!,
           projectId: args.projectId,
-          actingUserId: args.actingUserId,
+          actor: args.actor,
           logicalId: resource.logicalId,
           resourceKey: resource.publicId,
         });
@@ -123,7 +124,7 @@ export const processResourceChange = async (args: {
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   formationId: number;
   pendingCleanups: PendingCleanup[];
 }): Promise<ResourceRow> => {
@@ -134,7 +135,7 @@ export const processResourceChange = async (args: {
     resolvedIds,
     events,
     projectId,
-    actingUserId,
+    actor,
     formationId,
   } = args;
   // At the top of the pipeline, so the diff and the `lastAppliedProperties`
@@ -162,7 +163,7 @@ export const processResourceChange = async (args: {
         resourceType: decl.type,
         resolvedProperties,
         projectId,
-        actingUserId,
+        actor,
         logicalId,
         resolvedIds,
         events,
@@ -178,7 +179,7 @@ export const processResourceChange = async (args: {
         resolvedProperties,
         logicalId,
         projectId: args.projectId,
-        actingUserId: args.actingUserId,
+        actor: args.actor,
         resolvedIds,
         events,
         pendingCleanups: args.pendingCleanups,
@@ -209,7 +210,7 @@ const runResourceChanges = async (args: {
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   formationId: number;
   formation: InstanceType<(typeof db)['Formation']>;
   operation: InstanceType<(typeof db)['FormationOperation']>;
@@ -229,7 +230,7 @@ const runResourceChanges = async (args: {
         resolvedIds: args.resolvedIds,
         events,
         projectId: args.projectId,
-        actingUserId: args.actingUserId,
+        actor: args.actor,
         formationId: args.formationId,
         pendingCleanups: args.pendingCleanups,
       });
@@ -244,7 +245,7 @@ const runResourceChanges = async (args: {
       const rollbackEvents = await rollbackCreatedResources({
         created,
         projectId: args.projectId,
-        actingUserId: args.actingUserId,
+        actor: args.actor,
       });
       await failFormationOperation({
         operation: args.operation,
@@ -297,7 +298,7 @@ const finalizeSucceededFormation = async (args: {
   events: FormationEvent[];
   resolvedIds: Map<string, string>;
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   cleanupFailures: CleanupFailure[];
 }): Promise<void> => {
   const {
@@ -341,7 +342,7 @@ export const applyFormationTemplate = async (args: {
   template: FormationTemplate;
   existingResources: InstanceType<(typeof db)['FormationResource']>[];
   projectId: number;
-  actingUserId: number;
+  actor: FormationActor;
   operation: InstanceType<(typeof db)['FormationOperation']>;
   parameters?: Record<string, string>;
 }): Promise<void> => {
@@ -381,7 +382,7 @@ export const applyFormationTemplate = async (args: {
     resolvedIds,
     events,
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     formationId,
     formation,
     operation,
@@ -393,7 +394,7 @@ export const applyFormationTemplate = async (args: {
     template: workingTemplate,
     existingResources,
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     events,
   });
 
@@ -403,7 +404,7 @@ export const applyFormationTemplate = async (args: {
   const cleanupFailures = await runPendingCleanups({
     pendingCleanups,
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     events,
   });
 
@@ -416,7 +417,7 @@ export const applyFormationTemplate = async (args: {
     events,
     resolvedIds,
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     cleanupFailures,
   });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);

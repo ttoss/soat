@@ -2153,6 +2153,34 @@ components:
             `levels`), 1 to 20 of them, validated as the deciders REST contract
             validates them.
 
+    PlaybookResourceProperties:
+      description: >-
+        Creates a playbook — a versioned template of nodes that cases are
+        filled against. An executor's `id` and a transformation's `tool` accept
+        a `{ "ref": … }` to a resource in the same template. The version a
+        deploy writes runs as the credential that deployed it, checked as a
+        direct write is: `playbooks:CreatePlaybook` plus the start action of
+        every executor it names. Only a change to `definition` archives a new
+        version; a playbook with cases is not deleted. Mirrors the playbooks
+        REST contract.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - definition
+      properties:
+        name:
+          type: string
+          description: Human-readable name, unique per project
+        description:
+          type: string
+          nullable: true
+          description: What the playbook is for
+        definition:
+          description: The nodes and how their inputs are sourced
+          allOf:
+            - $ref: './playbooks.yaml#/components/schemas/PlaybookDefinition'
+
     ResourceDeclaration:
       type: object
       required:
@@ -2167,7 +2195,7 @@ components:
             `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`,
             `dataset_item`, `decider`, `document`, `file`, `guardrail`, `ingestion_rule`,
             `memory_store`, `memory`, `memory_rule`, `metadata_schema`,
-            `model_route`, `eval`, `orchestration`,
+            `model_route`, `eval`, `orchestration`, `playbook`,
             `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`,
             `trigger` and `workflow`.
 

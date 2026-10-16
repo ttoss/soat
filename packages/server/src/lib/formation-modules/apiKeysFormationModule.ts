@@ -22,7 +22,7 @@ export const apiKeysFormationModule = defineFormationModule({
   // permissions as a ceiling, so one minted under the *project owner* would let
   // any caller who can deploy a formation escalate to the owner's access.
   // Owning it themselves, they gain nothing they did not already have.
-  create: async ({ properties, projectId, actingUserId }) => {
+  create: async ({ properties, projectId, actor }) => {
     const rawPolicyIds = properties.policy_ids;
     const policyPublicIds = Array.isArray(rawPolicyIds)
       ? (rawPolicyIds as string[])
@@ -33,7 +33,7 @@ export const apiKeysFormationModule = defineFormationModule({
         : undefined;
 
     return createApiKey({
-      userId: actingUserId,
+      userId: actor.userId,
       projectId,
       name: properties.name as string,
       policyIds,

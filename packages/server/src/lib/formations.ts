@@ -19,6 +19,7 @@ import {
   redactTemplateSecrets,
 } from './formationsSensitive';
 import {
+  type FormationActor,
   type FormationAuthorizer,
   type FormationError,
   type FormationEvent,
@@ -44,6 +45,7 @@ export { planFormation } from './formationsPlan';
 export { detectStaticMetadataViolations } from './formationsMetadata';
 export { deleteFormation } from './formationsTeardown';
 export type {
+  FormationActor,
   FormationAuthorizationDenial,
   FormationAuthorizer,
   FormationError,
@@ -170,7 +172,7 @@ export const createFormation = async (args: {
   metadata?: Record<string, unknown>;
   parameters?: Record<string, string>;
   authorize: FormationAuthorizer;
-  actingUserId: number;
+  actor: FormationActor;
 }): Promise<MappedFormation> => {
   log(
     'createFormation: projectId=%d name=%s resources=%d',
@@ -225,7 +227,7 @@ export const createFormation = async (args: {
     template: args.template,
     existingResources: [],
     projectId: args.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     operation,
     parameters: args.parameters,
   });
@@ -282,7 +284,7 @@ export const updateFormation = async (args: {
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
   authorize: FormationAuthorizer;
-  actingUserId: number;
+  actor: FormationActor;
 }): Promise<MappedFormation> => {
   log(
     'updateFormation: formationId=%s updateTemplate=%s',
@@ -338,7 +340,7 @@ export const updateFormation = async (args: {
     template: newTemplate,
     existingResources,
     projectId: formation.projectId,
-    actingUserId: args.actingUserId,
+    actor: args.actor,
     operation,
     parameters: args.parameters,
   });

@@ -5,6 +5,7 @@ import {
   createFormation,
   deleteFormation,
   detectStaticMetadataViolations,
+  type FormationActor,
   type FormationAuthorizer,
   type FormationTemplate,
   getFormation,
@@ -28,6 +29,7 @@ import {
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
 } from './helpers';
+import { playbookAuthorOf } from './playbookAccess';
 
 export const formationsRouter = new Router<Context>();
 
@@ -65,6 +67,13 @@ const formationAuthorizer = (args: {
 
     return allowed;
   };
+};
+
+/** The deploying caller: the account it acts for and the credential itself. */
+const formationActorOf = (
+  ctx: Context & { authUser: AuthUser }
+): FormationActor => {
+  return { userId: ctx.authUser.id, ...playbookAuthorOf(ctx) };
 };
 
 const missingParamsToErrors = (
@@ -214,7 +223,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
         projectPublicId: body.project_id,
       }),
     }),
-    actingUserId: ctx.authUser.id,
+    actor: formationActorOf(ctx),
   });
 
   ctx.status = 201;
@@ -313,7 +322,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
       ctx,
       projectPublicId: formation.project_id,
     }),
-    actingUserId: ctx.authUser.id,
+    actor: formationActorOf(ctx),
   });
 
   ctx.body = updated;
@@ -343,7 +352,7 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
       ctx,
       projectPublicId: formation.project_id,
     }),
-    actingUserId: ctx.authUser.id,
+    actor: formationActorOf(ctx),
   });
   ctx.status = 200;
   ctx.body = result;

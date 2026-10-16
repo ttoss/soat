@@ -20,6 +20,7 @@ import createDebug from 'debug';
 import { DomainError } from '../../errors';
 import { normalizeDeclaredProperties } from '../formationsProperties';
 import type {
+  FormationActor,
   FormationModule,
   FormationModuleAuthorization,
   ValidationError,
@@ -101,7 +102,7 @@ export type FormationModuleDefinition<TResource> = {
   create: (args: {
     properties: Record<string, unknown>;
     projectId: number;
-    actingUserId: number;
+    actor: FormationActor;
   }) => Promise<{ id: string }>;
   /**
    * Omit for a resource that cannot be updated — the apply becomes a no-op.
@@ -112,7 +113,7 @@ export type FormationModuleDefinition<TResource> = {
     properties: Record<string, unknown>;
     physicalResourceId: string;
     projectId: number;
-    actingUserId: number;
+    actor: FormationActor;
   }) => Promise<unknown>;
   remove: (args: { physicalResourceId: string }) => Promise<unknown>;
   /**
@@ -264,12 +265,12 @@ const buildOperations = <TResource>(args: {
   const type = definition.resourceType;
 
   return {
-    create: async ({ properties: raw, projectId, actingUserId }) => {
+    create: async ({ properties: raw, projectId, actor }) => {
       const properties = assertValid({ properties: raw, forUpdate: false });
       const created = await definition.create({
         properties,
         projectId,
-        actingUserId,
+        actor,
       });
       log(
         'created %s from formation: projectId=%d id=%s',
@@ -284,7 +285,7 @@ const buildOperations = <TResource>(args: {
       properties: raw,
       physicalResourceId,
       projectId,
-      actingUserId,
+      actor,
     }) => {
       const properties = assertValid({ properties: raw, forUpdate: true });
       if (!definition.update) {
@@ -299,7 +300,7 @@ const buildOperations = <TResource>(args: {
         properties,
         physicalResourceId,
         projectId,
-        actingUserId,
+        actor,
       });
       log('updated %s from formation: id=%s', type, physicalResourceId);
     },
