@@ -6,6 +6,7 @@ import type {
   PlaybookConforms,
   PlaybookExecutionStatus,
   PlaybookNodeRecord,
+  PlaybookRunRef,
 } from './playbookState';
 
 /** What the snapshot needs of an entry row, so it reads no model type. */
@@ -24,6 +25,23 @@ export type PlaybookExecutionFields = {
   status: string;
   result: string | null;
   basis: object;
+  executorType: string | null;
+  runId: string | null;
+};
+
+const RUN_TYPES: Record<string, PlaybookRunRef['type']> = {
+  workflow: 'task',
+  orchestration: 'orchestration_run',
+};
+
+/** The task or run a running execution started and now waits on. */
+const runOf = (
+  execution: PlaybookExecutionFields
+): PlaybookRunRef | undefined => {
+  const type = RUN_TYPES[execution.executorType ?? ''];
+  return execution.status === 'running' && type && execution.runId
+    ? { type, id: execution.runId }
+    : undefined;
 };
 
 const recordOf = (args: {
@@ -69,9 +87,11 @@ export const snapshotFromRecords = (args: {
   for (const execution of args.executions) {
     const record = recordOf({ snapshot, node: execution.node });
     const basis = execution.basis as PlaybookBasis;
+    const run = runOf(execution);
     record.execution = {
       status: execution.status as PlaybookExecutionStatus,
       basis,
+      ...(run && { run }),
     };
     if (
       record.output &&

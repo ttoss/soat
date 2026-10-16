@@ -67,7 +67,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `revision`           | integer        | The case's counter; every entry takes the next value                                                                    |
 | `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) stands, else `running` while an execution is queued or runs its executor, else `waiting` while every execution in flight waits on a task or run it started, else `idle` |
 | `pause_requested_at` | string \| null | When the case was paused                                                                                                |
-| `nodes`              | array          | On a single-case read: every node's `state`, `missing`, `waiting`, `inputs` and `output`                                |
+| `nodes`              | array          | On a single-case read: every node's `state`, `missing`, `blocked_by`, `run`, `inputs` and `output`                      |
 
 ### Entry
 
@@ -152,13 +152,16 @@ Computed from the case's entries and executions on each read, never stored:
 | ---------- | -------------------------------------------------------------------------------------- |
 | `blocked`  | A required input is unset or refused by its schema, or reads a node that is not `done` |
 | `ready`    | Every required input is set and current, and there is no output yet                    |
-| `running`  | An execution is in flight                                                              |
+| `running`  | An execution is queued or runs its executor                                            |
+| `waiting`  | Its execution waits on the workflow task or orchestration run it started               |
 | `done`     | The output exists and every input still has the revision it was produced from          |
 | `stale`    | The output exists and an input changed since                                           |
 | `failed`   | The last execution failed on the current inputs                                        |
 | `rejected` | A `confirm` node's inputs were rejected and have not changed since                     |
 
-`missing` names the required inputs a node lacks; `waiting` names the nodes it reads that are not `done`.
+`missing` names the required inputs a node lacks; `blocked_by` names the nodes it reads that are not `done`.
+
+A `waiting` node names what it waits on in `run`, read live on every case read and null in every other state: `{ "type": "task", "id", "state", "automation_status" }` for a workflow task, `{ "type": "orchestration_run", "id", "status" }` for a run. A task whose state's dispatch failed with no `on_failure` reads `automation_status: "failed"`: it waits on a person to move it, and the node settles when it closes.
 
 ### Writing inputs
 
@@ -198,7 +201,7 @@ A workflow task or an orchestration run settles its node when the task closes or
 
 ### Running a node
 
-[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now; it is how a `failed` node is retried. Only a `ready`, `stale` or `failed` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `done` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `waiting`. A paused case answers `409 PLAYBOOK_CASE_PAUSED`.
+[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now; it is how a `failed` node is retried. Only a `ready`, `stale` or `failed` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `done` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `blocked_by`. A paused case answers `409 PLAYBOOK_CASE_PAUSED`.
 
 Without `wait` the request answers `201` with the execution `running` and it settles in the background; poll [`GET /api/v1/playbook-cases/{case_id}/executions/{execution_id}`](/docs/api/playbooks/get-playbook-case-execution). With `wait: true` it answers once the executor settles, or once it parks: a workflow task still open, or an orchestration run waiting on a person or a timer, settles the node when it closes or ends. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/executions`](/docs/api/playbooks/list-playbook-case-executions) lists a case's executions, newest first.
 

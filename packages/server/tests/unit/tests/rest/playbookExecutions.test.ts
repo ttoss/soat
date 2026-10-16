@@ -508,7 +508,7 @@ describe('Playbook executions', () => {
       await write(caseId, [{ node: 'pricing', name: 'amount', value: 7 }]);
       const [parked] = await executionsOf(caseId);
       expect(parked.run_id).toMatch(/^task_/);
-      expect((await nodeOf(caseId, 'pricing')).state).toBe('running');
+      expect((await nodeOf(caseId, 'pricing')).state).toBe('waiting');
 
       await closeTask(parked.run_id);
 
@@ -634,7 +634,7 @@ describe('Playbook executions', () => {
       expect(blocked.body.error.code).toBe('PLAYBOOK_NODE_NOT_RUNNABLE');
       expect(blocked.body.error.meta).toMatchObject({
         state: 'blocked',
-        waiting: ['revenue'],
+        blocked_by: ['revenue'],
       });
 
       await write(caseId, [{ node: 'revenue', name: 'amount', value: 1 }]);
@@ -643,7 +643,7 @@ describe('Playbook executions', () => {
       expect(done.body.error.meta.state).toBe('done');
     });
 
-    test('returns 409 for a confirm node and for a running one', async () => {
+    test('returns 409 for a confirm node and for one waiting on its task', async () => {
       const caseId = await newCase({
         definition: {
           nodes: [
@@ -658,9 +658,9 @@ describe('Playbook executions', () => {
       expect(confirm.status).toBe(409);
       expect(confirm.body.error.code).toBe('PLAYBOOK_NODE_NOT_RUNNABLE');
 
-      const running = await run(caseId, 'pricing');
-      expect(running.status).toBe(409);
-      expect(running.body.error.meta.state).toBe('running');
+      const waiting = await run(caseId, 'pricing');
+      expect(waiting.status).toBe(409);
+      expect(waiting.body.error.meta.state).toBe('waiting');
     });
 
     test('returns 409 while the case is paused', async () => {
@@ -828,11 +828,24 @@ describe('Playbook executions', () => {
       expect(waiting.body.automation_status).toBe('waiting');
       const [parked] = await executionsOf(caseId);
       expect(parked).toMatchObject({ status: 'running' });
+      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
+        state: 'waiting',
+        run: {
+          type: 'task',
+          id: parked.run_id,
+          state: 'open',
+          automation_status: null,
+        },
+      });
 
       await closeTask(parked.run_id);
       await settled(caseId, parked.id);
       const closed = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
       expect(closed.body.automation_status).toBe('idle');
+      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
+        state: 'done',
+        run: null,
+      });
     });
 
     test('returns 400 for an unknown status', async () => {
@@ -841,6 +854,90 @@ describe('Playbook executions', () => {
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('GET /api/v1/playbook-cases/{case_id}, a node waiting on a run it started', () => {
+    test('names the orchestration run and its status', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({
+          type: 'orchestration',
+          id: humanOrchestrationId,
+        }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      const [parked] = await executionsOf(caseId);
+      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
+        state: 'waiting',
+        run: {
+          type: 'orchestration_run',
+          id: parked.run_id,
+          status: 'awaiting_input',
+        },
+      });
+    });
+
+    test('reads null fields for a task that no longer exists', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'workflow', id: workflowId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      const [parked] = await executionsOf(caseId);
+
+      const deleted = await asAdmin().delete(`/api/v1/tasks/${parked.run_id}`);
+      expect(deleted.status).toBe(204);
+
+      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
+        state: 'waiting',
+        run: {
+          type: 'task',
+          id: parked.run_id,
+          state: null,
+          automation_status: null,
+        },
+      });
+    });
+
+    test('shows a task whose automation failed', async () => {
+      const failingWorkflowId = await create('/api/v1/workflows', {
+        name: `exec-failing-review-${seq}`,
+        states: [
+          {
+            name: 'call',
+            initial: true,
+            on_enter: {
+              dispatch: { kind: 'tool', tool_id: failingToolId },
+              on_complete: [{ when: true, transition: 'finish' }],
+            },
+          },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['call'], to: 'done' }],
+      });
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'workflow', id: failingWorkflowId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+
+      const [parked] = await executionsOf(caseId);
+      const node = await pollUntil({
+        read: () => {
+          return nodeOf(caseId, 'pricing');
+        },
+        done: (current) => {
+          return current.run?.automation_status === 'failed';
+        },
+      });
+      expect(node).toMatchObject({
+        state: 'waiting',
+        run: {
+          type: 'task',
+          id: parked.run_id,
+          state: 'call',
+          automation_status: 'failed',
+        },
+      });
     });
   });
 

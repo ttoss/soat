@@ -677,7 +677,7 @@ export const ERROR_CODES = {
   PLAYBOOK_NODE_NOT_RUNNABLE: {
     httpStatus: 409,
     description:
-      'The node cannot run now: it is a `confirm` node, a required input is unset or reads a node that is not `done`, it is already `running`, or its output is current (`done`). `meta` carries the `state`, `missing` and `waiting`.',
+      'The node cannot run now: it is a `confirm` node, a required input is unset or reads a node that is not `done`, it is already `running` or `waiting` on the task or run it started, or its output is current (`done`). `meta` carries the `state`, `missing` and `blocked_by`.',
   },
   PLAYBOOK_EXECUTION_INTERRUPTED: {
     httpStatus: 500,
@@ -701,7 +701,7 @@ export const ERROR_CODES = {
   PLAYBOOK_NODE_NOT_CONFIRMABLE: {
     httpStatus: 409,
     description:
-      'The node cannot be confirmed: it is not a `confirm` node, or a required input is unset or reads a node that is not `done`. `meta` carries the `state`, `missing` and `waiting`.',
+      'The node cannot be confirmed: it is not a `confirm` node, or a required input is unset or reads a node that is not `done`. `meta` carries the `state`, `missing` and `blocked_by`.',
   },
   PLAYBOOK_NODE_NOT_EXPORTABLE: {
     httpStatus: 409,

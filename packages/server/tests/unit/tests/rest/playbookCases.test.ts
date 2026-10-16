@@ -143,7 +143,7 @@ describe('Playbook cases', () => {
       expect(nodeOf(res.body, 'revenue').state).toBe('blocked');
       expect(nodeOf(res.body, 'revenue').missing).toEqual(['annual_revenue']);
       expect(nodeOf(res.body, 'pricing').state).toBe('blocked');
-      expect(nodeOf(res.body, 'pricing').waiting).toEqual(['revenue']);
+      expect(nodeOf(res.body, 'pricing').blocked_by).toEqual(['revenue']);
     });
 
     test('returns 401 without a token', async () => {

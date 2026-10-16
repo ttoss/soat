@@ -221,7 +221,7 @@ describe('Playbook confirmations', () => {
         state: 'ready',
         output: null,
       });
-      expect((await nodeOf(caseId, 'pricing')).waiting).toEqual(['approve']);
+      expect((await nodeOf(caseId, 'pricing')).blocked_by).toEqual(['approve']);
 
       const res = await confirm(caseId, { decision: 'approve' });
 
@@ -277,7 +277,7 @@ describe('Playbook confirmations', () => {
       await writeAmount(caseId, 7);
 
       expect((await nodeOf(caseId, 'approve')).state).toBe('stale');
-      expect((await nodeOf(caseId, 'pricing')).waiting).toEqual(['approve']);
+      expect((await nodeOf(caseId, 'pricing')).blocked_by).toEqual(['approve']);
     });
 
     test('returns 409 when an input moved since it was read', async () => {
@@ -307,7 +307,7 @@ describe('Playbook confirmations', () => {
       const blocked = await confirm(caseId, { decision: 'approve' });
       expect(blocked.status).toBe(409);
       expect(blocked.body.error.code).toBe('PLAYBOOK_NODE_NOT_CONFIRMABLE');
-      expect(blocked.body.error.meta.waiting).toEqual(['revenue']);
+      expect(blocked.body.error.meta.blocked_by).toEqual(['revenue']);
 
       const collect = await authenticatedTestClient(userToken)
         .post(`/api/v1/playbook-cases/${caseId}/nodes/revenue/confirmation`)
