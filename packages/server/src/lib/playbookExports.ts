@@ -64,7 +64,7 @@ const mapPlaybookExport = (args: {
   return {
     id: row.publicId,
     case_id: args.casePublicId,
-    node: row.node,
+    node_id: row.node,
     revision: row.revision,
     playbook_version: row.playbookVersion,
     transformation: row.transformation,
@@ -97,8 +97,8 @@ const selectTransformations = (args: {
   if (declared.length === 0) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `Node '${args.node.key}' declares no transformations.`,
-      { node: args.node.key }
+      `Node '${args.node.id}' declares no transformations.`,
+      { node_id: args.node.id }
     );
   }
   if (args.names === undefined) return declared;
@@ -114,7 +114,7 @@ const selectTransformations = (args: {
   if (selected.length === 0 || unknown.length > 0) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `transformations must name one or more of node '${args.node.key}''s transformations.`,
+      `transformations must name one or more of node '${args.node.id}''s transformations.`,
       {
         unknown,
         declared: declared.map((transformation) => {
@@ -141,12 +141,12 @@ const resolveRevision = async (args: {
       definition: args.definition,
       transaction,
     });
-    const latest = currentRevisions(states).get(node.key);
+    const latest = currentRevisions(states).get(node.id);
     if (latest === undefined) {
       throw new DomainError(
         'PLAYBOOK_NODE_NOT_EXPORTABLE',
-        `Node '${node.key}' has no current output to export.`,
-        { node: node.key, state: states.views.get(node.key)!.state }
+        `Node '${node.id}' has no current output to export.`,
+        { node_id: node.id, state: states.views.get(node.id)!.state }
       );
     }
     return latest;
@@ -155,7 +155,7 @@ const resolveRevision = async (args: {
     ? await db.PlaybookEntry.findOne({
         where: {
           caseId: row.id as number,
-          node: node.key,
+          node: node.id,
           revision: args.revision as number,
           kind: ['output', 'confirmation'],
         },
@@ -166,8 +166,8 @@ const resolveRevision = async (args: {
   if (!entry) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `revision must name an output of node '${node.key}'.`,
-      { node: node.key, revision: args.revision }
+      `revision must name an output of node '${node.id}'.`,
+      { node_id: node.id, revision: args.revision }
     );
   }
   return entry.revision;
@@ -206,7 +206,7 @@ const recordExports = (args: {
           await db.PlaybookExport.create(
             {
               caseId: row.id as number,
-              node: node.key,
+              node: node.id,
               revision,
               playbookVersion: row.playbookVersion,
               transformation: transformation.name,
@@ -281,7 +281,7 @@ export const exportPlaybookCaseNode = async (args: {
   await assertProjectAcceptsWork({ projectId: row.projectId });
   const runAs = await resolveRunAs({
     row,
-    node: node.key,
+    node: node.id,
     executors: transformations.map((transformation) => {
       return { type: 'tool', id: transformation.tool };
     }),

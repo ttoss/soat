@@ -3351,7 +3351,7 @@ describe('MCP tools - happy path', () => {
     const definition = {
       nodes: [
         {
-          key: 'revenue',
+          id: 'revenue',
           title: 'Annual revenue',
           kind: 'collect',
           inputs: [
@@ -3364,7 +3364,7 @@ describe('MCP tools - happy path', () => {
           ],
         },
         {
-          key: 'pricing',
+          id: 'pricing',
           title: 'Pricing',
           kind: 'collect',
           final: true,
@@ -3373,7 +3373,7 @@ describe('MCP tools - happy path', () => {
               name: 'revenue',
               schema: { type: 'number' },
               required: true,
-              source: { node: 'revenue', field: 'output.amount' },
+              source: { node_id: 'revenue', field: 'output.amount' },
             },
             {
               name: 'margin',
@@ -3418,7 +3418,7 @@ describe('MCP tools - happy path', () => {
         definition: {
           nodes: [
             {
-              key: 'a',
+              id: 'a',
               title: 'A',
               kind: 'collect',
               inputs: [
@@ -3426,7 +3426,7 @@ describe('MCP tools - happy path', () => {
                   name: 'x',
                   schema: {},
                   required: true,
-                  source: { node: 'nope', field: 'output' },
+                  source: { node_id: 'nope', field: 'output' },
                 },
               ],
             },
@@ -3457,7 +3457,7 @@ describe('MCP tools - happy path', () => {
         definition: {
           nodes: [
             {
-              key: 'pricing',
+              id: 'pricing',
               title: 'Pricing',
               kind: 'execute',
               inputs: [
@@ -3482,7 +3482,7 @@ describe('MCP tools - happy path', () => {
         case_id: runCaseId,
         inputs: [
           {
-            node: 'pricing',
+            node_id: 'pricing',
             name: 'amount',
             value: 5,
             expected_revision: null,
@@ -3522,7 +3522,7 @@ describe('MCP tools - happy path', () => {
         definition: {
           nodes: [
             {
-              key: 'pricing',
+              id: 'pricing',
               title: 'Pricing',
               kind: 'collect',
               final: true,
@@ -3554,7 +3554,7 @@ describe('MCP tools - happy path', () => {
         case_id: exportCaseId,
         inputs: [
           {
-            node: 'pricing',
+            node_id: 'pricing',
             name: 'amount',
             value: 5,
             expected_revision: null,
@@ -3589,7 +3589,7 @@ describe('MCP tools - happy path', () => {
 
     test('upgrade-playbook-case moves a case and list-playbook-case-upgrades reads it', async () => {
       const node = (key: string) => {
-        return { key, title: key, kind: 'collect', inputs: [] };
+        return { id: key, title: key, kind: 'collect', inputs: [] };
       };
       const upgradePlaybook = await mcpCall('create-playbook', {
         project_id: projectId,
@@ -3632,7 +3632,7 @@ describe('MCP tools - happy path', () => {
           nodes: [
             definition.nodes[0],
             {
-              key: 'approve',
+              id: 'approve',
               title: 'Approve',
               kind: 'confirm',
               inputs: [
@@ -3640,7 +3640,7 @@ describe('MCP tools - happy path', () => {
                   name: 'amount',
                   schema: { type: 'number' },
                   required: true,
-                  source: { node: 'revenue', field: 'output.amount' },
+                  source: { node_id: 'revenue', field: 'output.amount' },
                 },
               ],
             },
@@ -3656,7 +3656,7 @@ describe('MCP tools - happy path', () => {
         case_id: confirmCaseId,
         inputs: [
           {
-            node: 'revenue',
+            node_id: 'revenue',
             name: 'amount',
             value: 8,
             expected_revision: null,
@@ -3673,8 +3673,8 @@ describe('MCP tools - happy path', () => {
       });
 
       expect(res.status).toBe(200);
-      const approve = parseResult(res).nodes.find((node: { key: string }) => {
-        return node.key === 'approve';
+      const approve = parseResult(res).nodes.find((node: { id: string }) => {
+        return node.id === 'approve';
       });
       expect(approve).toMatchObject({
         state: 'done',
@@ -3685,13 +3685,13 @@ describe('MCP tools - happy path', () => {
     test('get-playbook-case-missing names what to ask, by wave', async () => {
       const res = await mcpCall('get-playbook-case-missing', {
         case_id: caseId,
-        node: 'pricing',
+        node_id: 'pricing',
       });
 
       expect(res.status).toBe(200);
       expect(parseResult(res).waves).toEqual([
-        [{ node: 'revenue', input: 'amount', schema: { type: 'number' } }],
-        [{ node: 'pricing', input: 'margin', schema: { type: 'number' } }],
+        [{ node_id: 'revenue', input: 'amount', schema: { type: 'number' } }],
+        [{ node_id: 'pricing', input: 'margin', schema: { type: 'number' } }],
       ]);
     });
 
@@ -3700,7 +3700,7 @@ describe('MCP tools - happy path', () => {
         case_id: caseId,
         inputs: [
           {
-            node: 'revenue',
+            node_id: 'revenue',
             name: 'amount',
             value: 100,
             expected_revision: null,
@@ -3713,7 +3713,7 @@ describe('MCP tools - happy path', () => {
 
       const entries = await mcpCall('list-playbook-case-entries', {
         case_id: caseId,
-        node: 'revenue',
+        node_id: 'revenue',
       });
       expect(
         parseResult(entries).data.map(

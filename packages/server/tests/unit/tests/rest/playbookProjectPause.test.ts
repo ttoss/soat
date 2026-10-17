@@ -4,11 +4,11 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-/** One final collect node: written, it settles on its own input. */
+/** One final collect node_id: written, it settles on its own input. */
 const DEFINITION = {
   nodes: [
     {
-      key: 'answer',
+      id: 'answer',
       title: 'Answer',
       kind: 'collect',
       final: true,
@@ -63,7 +63,7 @@ describe('Playbook cases under a project pause', () => {
       .post(`/api/v1/playbook-cases/${caseId}/inputs`)
       .send({
         inputs: [
-          { node: 'answer', name: 'value', value, expected_revision: null },
+          { node_id: 'answer', name: 'value', value, expected_revision: null },
         ],
       });
     expect(res.status).toBe(200);

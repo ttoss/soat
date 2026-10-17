@@ -20,7 +20,7 @@ export type UsageReceiptComponent = {
 };
 
 export type UsageReceiptLine = {
-  event_id: string;
+  id: string;
   meter_type: string;
   provider: string;
   model: string;
@@ -46,7 +46,6 @@ export type UsageReceipt = {
   // Present on a per-run receipt (summed across the run's meters); absent on a
   // per-generation receipt.
   orchestration_run_id?: string;
-  currency: string;
   line_items: UsageReceiptLine[];
   by_meter_type: UsageReceiptMeterTypeTotal[];
   totals: UsageTotals;
@@ -140,7 +139,7 @@ const loadLineItems = async (
       };
     });
     return {
-      event_id: event.publicId,
+      id: event.publicId,
       meter_type: event.meterType,
       provider: event.provider,
       model: event.model,
@@ -166,7 +165,6 @@ const assembleReceipt = (
   const uncached = sumQuantity(lineItems, 'input_tokens');
   return {
     ...identity,
-    currency: 'USD',
     line_items: lineItems,
     by_meter_type: groupByMeterType(lineItems),
     totals: {

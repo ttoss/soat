@@ -527,7 +527,7 @@ describe('Conversations', () => {
       expect(response.body.metadata).toEqual(metadata);
     });
 
-    test('returns null metadata when metadata is not provided', async () => {
+    test('leaves metadata out when it is not provided', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
         .send({
@@ -537,7 +537,7 @@ describe('Conversations', () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.metadata).toBeNull();
+      expect(response.body.metadata).toBeUndefined();
     });
 
     test('metadata is persisted and returned in message list', async () => {
@@ -1536,7 +1536,7 @@ describe('Conversations', () => {
         return m.role === 'assistant';
       });
       expect(assistantMsg).toBeDefined();
-      expect(assistantMsg.metadata).toBeNull();
+      expect(assistantMsg.metadata).toBeUndefined();
     });
   });
 });

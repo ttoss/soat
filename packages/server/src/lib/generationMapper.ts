@@ -45,7 +45,7 @@ export type PersistedGeneration = {
   tool_surface: Record<string, unknown> | null;
   retrieval: KnowledgeRetrieval;
   idempotency_key: string | null;
-  metadata: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
   content_redacted_at: Date | null;
   content_redacted_by_principal_type: string | null;
   content_redacted_by_principal_id: string | null;
@@ -123,7 +123,7 @@ export const mapGeneration = (
     retrieval: gen.retrieval as KnowledgeRetrieval,
     idempotency_key: gen.idempotencyKey,
     // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
-    metadata: gen.metadata,
+    metadata: gen.metadata ?? undefined,
     content_redacted_at: gen.contentRedactedAt,
     content_redacted_by_principal_type: gen.contentRedactedByPrincipalType,
     content_redacted_by_principal_id: gen.contentRedactedByPrincipalId,

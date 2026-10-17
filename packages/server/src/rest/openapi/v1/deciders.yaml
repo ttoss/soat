@@ -961,7 +961,7 @@ components:
           example: gen_V1StGXR8Z5jdHi6B
         metadata:
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         created_at:
           type: string
           format: date-time

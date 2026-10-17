@@ -61,7 +61,7 @@ const renderFile = async (args: {
   const context: Record<string, unknown> = {
     case_id: exportCase.publicId,
     subject: exportCase.subject,
-    node: exported.node,
+    node_id: exported.node,
     revision: exported.revision,
     output: entry!.value,
   };

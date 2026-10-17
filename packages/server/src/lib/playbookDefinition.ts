@@ -9,7 +9,7 @@ export type PlaybookExecutorType =
 export type JsonSchema = { [key: string]: JsonValue };
 
 /** `field` is `output[.path]` or `input.<name>[.path]` of the node named. */
-export type PlaybookInputSource = 'manual' | { node: string; field: string };
+export type PlaybookInputSource = 'manual' | { node_id: string; field: string };
 
 export type PlaybookInput = {
   name: string;
@@ -58,8 +58,8 @@ export type PlaybookTransformation = {
 };
 
 export type PlaybookNode = {
-  /** Stable across versions: a case's values carry over by key. */
-  key: string;
+  /** Stable across versions: a case's values carry over by id. */
+  id: string;
   title: string;
   description?: string;
   kind: PlaybookNodeKind;

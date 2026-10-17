@@ -31,33 +31,33 @@ export const reads = (
     name,
     schema: {},
     required: true,
-    source: { node, field },
+    source: { node_id: node, field },
     ...overrides,
   };
 };
 
-export const collect = (key: string, inputs: PlaybookInput[]): PlaybookNode => {
-  return { key, title: key, kind: 'collect', final: false, inputs };
+export const collect = (id: string, inputs: PlaybookInput[]): PlaybookNode => {
+  return { id, title: id, kind: 'collect', final: false, inputs };
 };
 
 export const execute = (
-  key: string,
+  id: string,
   inputs: PlaybookInput[],
   overrides: Partial<PlaybookNode> = {}
 ): PlaybookNode => {
   return {
-    key,
-    title: key,
+    id,
+    title: id,
     kind: 'execute',
     final: false,
     inputs,
-    executor: { type: 'agent', id: `agt_${key}`, input: {} },
+    executor: { type: 'agent', id: `agt_${id}`, input: {} },
     ...overrides,
   };
 };
 
-export const confirm = (key: string, inputs: PlaybookInput[]): PlaybookNode => {
-  return { key, title: key, kind: 'confirm', final: false, inputs };
+export const confirm = (id: string, inputs: PlaybookInput[]): PlaybookNode => {
+  return { id, title: id, kind: 'confirm', final: false, inputs };
 };
 
 /**

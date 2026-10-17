@@ -61,7 +61,7 @@ playbookExportsRouter.get(
     ctx.body = await listPlaybookCaseExports({
       projectIds,
       caseId: ctx.params.case_id,
-      node: parseString(ctx.query.node),
+      node: parseString(ctx.query.node_id),
       transformation: parseString(ctx.query.transformation),
       ...parsePagination(ctx),
     });

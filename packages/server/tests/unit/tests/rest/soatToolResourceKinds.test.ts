@@ -157,9 +157,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       project_id: projectId,
       name: 'kinds-playbook',
       definition: {
-        nodes: [
-          { key: 'intake', title: 'Intake', kind: 'collect', inputs: [] },
-        ],
+        nodes: [{ id: 'intake', title: 'Intake', kind: 'collect', inputs: [] }],
       },
     });
     const playbookCaseId = await create(

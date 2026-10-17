@@ -305,10 +305,10 @@ describe('Tasks', () => {
         expect(moved.body.metadata).toEqual({ tenant_account_id: '42' });
       });
 
-      test('a task created without metadata reports null', async () => {
+      test('a task created without metadata leaves the bag out', async () => {
         const res = await createTask({ topic: 'spring' });
         expect(res.status).toBe(201);
-        expect(res.body.metadata).toBeNull();
+        expect(res.body.metadata).toBeUndefined();
       });
 
       test('a non-object metadata is rejected with 400 and creates no task', async () => {

@@ -1,5 +1,8 @@
 import { DomainError } from '../errors';
+import { isStringRecord, readStringBag } from './stringBag';
 import { applyFilterWhere, containment } from './structuredFilter';
+
+export { isStringRecord };
 
 /**
  * The attribute every tagged model spells its bag as, so one containment
@@ -126,22 +129,6 @@ export const hasTagFilter = (
 };
 
 /**
- * Whether a value is a flat bag of string values — the shape every tagged
- * resource stores. Rejects arrays so a legacy `["a","b"]` body fails loudly
- * rather than being read as an object with numeric keys.
- */
-export const isStringRecord = (
-  value: unknown
-): value is Record<string, string> => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false;
-  }
-  return Object.values(value).every((item) => {
-    return typeof item === 'string';
-  });
-};
-
-/**
  * Parses `key:value` query-string pairs into a tag bag, the query-string
  * spelling of the same object a JSON body carries. Splits on the FIRST colon
  * only, so a value may itself contain colons. Returns null for a malformed
@@ -182,22 +169,14 @@ export const buildResourceTagContext = (args: {
 };
 
 /**
- * Reads a `tags` value from a request body. Anything that is not a flat bag
- * of string values — an array, a nested object, a number — is a client error,
- * never something to coerce: `String(["a","b"])` is `"a,b"`, and a policy
- * condition would then match a tag nobody wrote.
+ * Reads a `tags` value from a request body: a flat bag of string values
+ * (`readStringBag`) within the tag bounds.
  */
 export const readTagBag = (
   value: unknown
 ): Record<string, string> | undefined => {
   if (value === undefined) return undefined;
-  if (!isStringRecord(value)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'tags must be an object of string values'
-    );
-  }
-  return assertTagBagLimits(value);
+  return assertTagBagLimits(readStringBag({ field: 'tags', value }));
 };
 
 /** `readTagBag` for update bodies where `null` means "clear the bag". */

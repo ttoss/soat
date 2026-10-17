@@ -61,7 +61,7 @@ export const mapMessage = async (message: ConversationMessageRow) => {
     agent_id: message.agent?.publicId ?? null,
     position: message.position,
     content: await readStoredFileContent(message.document?.file),
-    metadata: message.metadata ?? null,
+    metadata: message.metadata ?? undefined,
   };
 };
 

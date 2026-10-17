@@ -96,7 +96,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
-| `metadata` | object \| null | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
+| `metadata` | object | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
 | `created_at` | string | ISO 8601 creation timestamp |
 

@@ -26,7 +26,7 @@ describe('validatePlaybookDefinition', () => {
     });
 
     expect(problems).toEqual([
-      { code: 'missing_node', node: 'price', input: 'regime' },
+      { code: 'missing_node', node_id: 'price', input: 'regime' },
     ]);
   });
 
@@ -66,7 +66,7 @@ describe('validatePlaybookDefinition', () => {
     ).toEqual([{ code: 'cycle', nodes: ['a'] }]);
   });
 
-  test('a key or an input name used twice is refused', () => {
+  test('a node id or an input name used twice is refused', () => {
     expect(
       validate({
         nodes: [
@@ -75,8 +75,8 @@ describe('validatePlaybookDefinition', () => {
         ],
       })
     ).toEqual([
-      { code: 'duplicate_node', node: 'a' },
-      { code: 'duplicate_input', node: 'a', input: 'x' },
+      { code: 'duplicate_node', node_id: 'a' },
+      { code: 'duplicate_input', node_id: 'a', input: 'x' },
     ]);
   });
 
@@ -93,7 +93,7 @@ describe('validatePlaybookDefinition', () => {
           execute('b', [reads('x', 'a', field)]),
         ],
       })
-    ).toEqual([{ code: 'unknown_field', node: 'b', input: 'x' }]);
+    ).toEqual([{ code: 'unknown_field', node_id: 'b', input: 'x' }]);
   });
 
   test('an execute output may be read at any path', () => {
@@ -116,8 +116,8 @@ describe('validatePlaybookDefinition', () => {
         ],
       })
     ).toEqual([
-      { code: 'executor_forbidden', node: 'a' },
-      { code: 'executor_required', node: 'b' },
+      { code: 'executor_forbidden', node_id: 'a' },
+      { code: 'executor_required', node_id: 'b' },
     ]);
   });
 
@@ -130,7 +130,7 @@ describe('validatePlaybookDefinition', () => {
           }),
         ],
       })
-    ).toEqual([{ code: 'transformations_not_final', node: 'a' }]);
+    ).toEqual([{ code: 'transformations_not_final', node_id: 'a' }]);
   });
 });
 

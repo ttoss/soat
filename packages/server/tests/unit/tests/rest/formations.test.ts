@@ -493,6 +493,7 @@ resources:
       expect(res.body.resources[0].status).toBe('created');
       expect(res.body.resources[0].physical_resource_id).toBeDefined();
       expect(res.body.outputs).toBeDefined();
+      expect(res.body).not.toHaveProperty('metadata');
 
       formationId = res.body.id;
     });

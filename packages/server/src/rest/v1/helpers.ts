@@ -92,21 +92,28 @@ export const assertCredentialProjectScope = (args: {
  * Intersect it into the resource shape a permission helper accepts.
  */
 /**
- * A `tool_context` bag off a request body. Values are stringified rather than
- * rejected — the leniency every `tool_context` entry point has — but the keys
- * are left exactly as the caller wrote them, for the key check in
- * `toolContext.ts` to accept or reject (`.claude/rules/case-convention.md`: a
- * bag's keys are never rewritten).
+ * A `tool_context` bag off a request body, where `null` clears a stored bag: a
+ * non-string value is `400` (`toStoredToolContext`), and the keys are left
+ * exactly as the caller wrote them, for the key check in `toolContext.ts` to
+ * accept or reject (`.claude/rules/case-convention.md`: a bag's keys are never
+ * rewritten).
  *
- * Shared rather than per-route: two entry points that disagree about what a
- * malformed bag means is how one of them ends up failing open.
+ * Every route reads the field through this or {@link parseToolContextBody}
+ * (`toolContextBodyContract.test.ts`), so a malformed bag is refused before any
+ * work is queued: two entry points that disagree about what a malformed bag
+ * means is how one of them ends up failing open.
  */
+export const parseNullableToolContextBody = (
+  raw: unknown
+): Record<string, string> | null | undefined => {
+  return toStoredToolContext(raw);
+};
+
+/** {@link parseNullableToolContextBody} where `null` means no bag. */
 export const parseToolContextBody = (
   raw: unknown
 ): Record<string, string> | undefined => {
-  // A route's own call site distinguishes `null` (explicit clear) from
-  // `undefined` (absent) before reaching here; both collapse to `undefined`.
-  return toStoredToolContext(raw) ?? undefined;
+  return parseNullableToolContextBody(raw) ?? undefined;
 };
 
 export type ProjectOwned = { project_id: string | undefined };

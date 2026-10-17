@@ -67,7 +67,7 @@ export const executeClaimed = async (args: {
     caseDbId: row.id as number,
     definition,
   });
-  const view = views.get(node.key)!;
+  const view = views.get(node.id)!;
 
   if (
     !samePlaybookBasis({
@@ -99,7 +99,7 @@ export const executeClaimed = async (args: {
         title: `${row.subject} · ${node.title}`,
         runAs: await resolveRunAs({
           row,
-          node: node.key,
+          node: node.id,
           executors: [executor],
         }),
       });

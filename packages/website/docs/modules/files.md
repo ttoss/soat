@@ -31,7 +31,7 @@ Files belong to a project and are persisted through the configured backend (loca
 | `path`         | string \| null           | **Read-only.** Full key = `prefix` + `/` + `filename` (e.g. `/assets/logo.png`). Unique per project; the file's identity and the resource ID segment in path-based SRNs. |
 | `content_type` | string                   | MIME type                                                                                                           |
 | `size`         | number                   | File size in bytes                                                                                                  |
-| `metadata`     | object \| null           | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata) |
+| `metadata`     | object           | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `project_id`   | string                   | ID of the owning project                                                                                            |
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |

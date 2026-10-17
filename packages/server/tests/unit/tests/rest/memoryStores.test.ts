@@ -569,7 +569,7 @@ describe('MemoryStores', () => {
         });
       });
 
-      test('entry created without tags/metadata returns null for both', async () => {
+      test('entry created without tags/metadata leaves both out', async () => {
         const freshMemoryStoreId = await createTestMemoryStore();
         const response = await authenticatedTestClient(userToken)
           .post('/api/v1/memories')
@@ -579,8 +579,8 @@ describe('MemoryStores', () => {
           });
 
         expect(response.status).toBe(201);
-        expect(response.body.tags).toBeNull();
-        expect(response.body.metadata).toBeNull();
+        expect(response.body.tags).toBeUndefined();
+        expect(response.body.metadata).toBeUndefined();
       });
 
       test('returns 400 when tags is not an object of strings', async () => {
@@ -751,8 +751,8 @@ describe('MemoryStores', () => {
           .put(`/api/v1/memories/${id}`)
           .send({ tags: null, metadata: null });
         expect(cleared.status).toBe(200);
-        expect(cleared.body.tags).toBeNull();
-        expect(cleared.body.metadata).toBeNull();
+        expect(cleared.body.tags).toBeUndefined();
+        expect(cleared.body.metadata).toBeUndefined();
       });
 
       test('returns 400 when tags is invalid', async () => {

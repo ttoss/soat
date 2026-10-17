@@ -161,7 +161,7 @@ playbookCasesRouter.get(
     ctx.body = await getPlaybookCaseMissing({
       projectIds,
       id: ctx.params.case_id,
-      node: ctx.query.node,
+      node: ctx.query.node_id,
     });
   }
 );
@@ -182,7 +182,7 @@ playbookCasesRouter.get(
     ctx.body = await listPlaybookCaseEntries({
       projectIds,
       id: ctx.params.case_id,
-      node: parseString(ctx.query.node),
+      node: parseString(ctx.query.node_id),
       ...parsePagination(ctx),
     });
   }
@@ -232,7 +232,7 @@ playbookCasesRouter.get(
     ctx.body = await listPlaybookCaseExecutions({
       projectIds,
       caseId: ctx.params.case_id,
-      node: parseString(ctx.query.node),
+      node: parseString(ctx.query.node_id),
       ...parsePagination(ctx),
     });
   }

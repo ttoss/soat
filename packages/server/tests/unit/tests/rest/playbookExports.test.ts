@@ -24,12 +24,12 @@ const EXPORT_ACTIONS = [
 
 type Transformation = { name: string; format: string; tool: string };
 
-/** One final `collect` node: its output is its manual `amount`. */
+/** One final `collect` node_id: its output is its manual `amount`. */
 const finalNode = (transformations: Transformation[]) => {
   return {
     nodes: [
       {
-        key: 'pricing',
+        id: 'pricing',
         title: 'Pricing',
         kind: 'collect',
         final: true,
@@ -98,7 +98,7 @@ describe('Playbook exports', () => {
       .send({
         inputs: [
           {
-            node: 'pricing',
+            node_id: 'pricing',
             name: 'amount',
             value,
             expected_revision: current.body.nodes[0].inputs[0].revision,
@@ -205,7 +205,7 @@ describe('Playbook exports', () => {
       expect(proposal).toMatchObject({
         id: expect.stringMatching(/^pbk_exp_/),
         case_id: caseId,
-        node: 'pricing',
+        node_id: 'pricing',
         revision,
         playbook_version: 1,
         transformation: 'proposal',
@@ -253,7 +253,7 @@ describe('Playbook exports', () => {
       expect(stub.routeRequests[before].body).toEqual({
         case_id: caseId,
         subject: expect.stringMatching(/^client-/),
-        node: 'pricing',
+        node_id: 'pricing',
         revision,
         output: { amount: 11 },
       });
@@ -385,7 +385,7 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PLAYBOOK_NODE_NOT_EXPORTABLE');
       expect(res.body.error.meta).toMatchObject({
-        node: 'pricing',
+        node_id: 'pricing',
         state: 'blocked',
       });
     });
@@ -500,7 +500,7 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
       expect(res.body.error.meta).toEqual({
-        node: 'pricing',
+        node_id: 'pricing',
         action: 'tools:CallTool',
       });
     });
@@ -554,7 +554,7 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
       expect(res.body.error.meta).toEqual({
-        node: 'pricing',
+        node_id: 'pricing',
         action: 'tools:CallTool',
       });
     });
@@ -587,7 +587,7 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(200);
       expect(res.body.problems).toContainEqual({
         code: 'duplicate_transformation',
-        node: 'pricing',
+        node_id: 'pricing',
         transformation: 'proposal',
       });
     });
@@ -602,7 +602,7 @@ describe('Playbook exports', () => {
       await exportNode(caseId, { wait: true, transformations: ['sheet'] });
 
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${caseId}/exports?node=pricing`
+        `/api/v1/playbook-cases/${caseId}/exports?node_id=pricing`
       );
 
       expect(res.status).toBe(200);

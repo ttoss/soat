@@ -71,20 +71,26 @@ type FormationRow = InstanceType<(typeof db)['Formation']> & {
   formationResources?: InstanceType<(typeof db)['FormationResource']>[];
 };
 
+const mapFormationResources = (
+  instance: FormationRow
+): MappedFormationResource[] => {
+  return (instance.formationResources ?? []).map((r) => {
+    return {
+      id: r.publicId,
+      logical_id: r.logicalId,
+      resource_type: r.resourceType,
+      physical_resource_id: r.physicalResourceId,
+      status: r.status,
+    };
+  });
+};
+
 const mapFormation = (
   instance: FormationRow,
   includeResources = false
 ): MappedFormation => {
-  const resources: MappedFormationResource[] | undefined = includeResources
-    ? (instance.formationResources ?? []).map((r) => {
-        return {
-          id: r.publicId,
-          logical_id: r.logicalId,
-          resource_type: r.resourceType,
-          physical_resource_id: r.physicalResourceId,
-          status: r.status,
-        };
-      })
+  const resources = includeResources
+    ? mapFormationResources(instance)
     : undefined;
 
   const template = instance.template as FormationTemplate | null;
@@ -101,7 +107,7 @@ const mapFormation = (
       ? redactSensitiveOutputs({ template, outputs: instance.outputs })
       : instance.outputs,
     status: instance.status,
-    metadata: instance.metadata,
+    metadata: instance.metadata ?? undefined,
     resolved_metadata: instance.resolvedMetadata,
     resolved_parameters: instance.resolvedParameters,
     error: (instance.error as FormationError | null) ?? null,

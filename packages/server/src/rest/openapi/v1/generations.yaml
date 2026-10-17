@@ -782,7 +782,7 @@ components:
             team: payments
             ticket_id: OPS-4821
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         content_redacted_at:
           type: string
           format: date-time

@@ -35,7 +35,7 @@ export const mapPlaybookExecution = (args: {
   return {
     id: row.publicId,
     case_id: args.casePublicId,
-    node: row.node,
+    node_id: row.node,
     playbook_version: row.playbookVersion,
     executor: row.executorType
       ? { type: row.executorType, id: row.executorId }
@@ -76,10 +76,10 @@ const assertRunnable = (args: {
   throw new DomainError(
     'PLAYBOOK_NODE_NOT_RUNNABLE',
     node.kind === 'confirm'
-      ? `Node '${node.key}' is settled by a confirmation, not a run.`
-      : `Node '${node.key}' is ${view.state} and cannot run now.`,
+      ? `Node '${node.id}' is settled by a confirmation, not a run.`
+      : `Node '${node.id}' is ${view.state} and cannot run now.`,
     {
-      node: node.key,
+      node_id: node.id,
       state: view.state,
       missing: view.missing,
       blocked_by: view.blockedBy,
@@ -100,7 +100,7 @@ export const readCaseNode = (args: {
     throw new DomainError(
       'VALIDATION_FAILED',
       `node must name a node of the case's playbook version.`,
-      { node: args.node }
+      { node_id: args.node }
     );
   }
   return found;
@@ -167,7 +167,7 @@ export const runPlaybookNode = async (args: {
   const node = readCaseNode({ definition, node: args.node });
   await assertProjectAcceptsWork({ projectId: row.projectId });
   if (node.executor) {
-    await resolveRunAs({ row, node: node.key, executors: [node.executor] });
+    await resolveRunAs({ row, node: node.id, executors: [node.executor] });
   }
 
   const execution = await withLockedCase({
@@ -180,13 +180,13 @@ export const runPlaybookNode = async (args: {
           definition,
           transaction,
         })
-      ).views.get(node.key)!;
+      ).views.get(node.id)!;
       assertRunnable({ node, view });
       // Recorded as claimed by this process, so the drain never runs it too.
       return db.PlaybookExecution.create(
         {
           caseId: row.id as number,
-          node: node.key,
+          node: node.id,
           playbookVersion: row.playbookVersion,
           executorType: node.executor?.type ?? null,
           executorId: node.executor?.id ?? null,

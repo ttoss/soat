@@ -22,6 +22,7 @@ import { checkConversationAccess } from './conversationHelpers';
 import {
   type AuthenticatedContext,
   parsePagination,
+  parseToolContextBody,
   requireAuth,
 } from './helpers';
 import { assertNotSystemRole } from './systemMessageGuard';
@@ -206,7 +207,7 @@ conversationSubResourcesRouter.post(
       agent_id: string;
       model?: string;
       stream?: boolean;
-      tool_context?: Record<string, string>;
+      tool_context?: unknown;
     };
 
     if (body.stream) {
@@ -246,7 +247,7 @@ conversationSubResourcesRouter.post(
         conversationId: ctx.params.conversation_id,
         agentId: body.agent_id,
         model: body.model,
-        toolContext: body.tool_context,
+        toolContext: parseToolContextBody(body.tool_context),
       }).catch(() => {
         // Fire-and-forget: the reply lands as a conversation message, and
         // failures surface on the generation record the caller polls.
@@ -264,7 +265,7 @@ conversationSubResourcesRouter.post(
       conversationId: ctx.params.conversation_id,
       agentId: body.agent_id,
       model: body.model,
-      toolContext: body.tool_context,
+      toolContext: parseToolContextBody(body.tool_context),
     });
 
     ctx.status = 200;

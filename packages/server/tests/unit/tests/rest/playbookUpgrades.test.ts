@@ -21,9 +21,9 @@ const amount = (schema: object = { type: 'number' }) => {
 /** `revenue` collects an amount; `pricing` reads it. */
 const V1 = {
   nodes: [
-    { key: 'revenue', title: 'Revenue', kind: 'collect', inputs: [amount()] },
+    { id: 'revenue', title: 'Revenue', kind: 'collect', inputs: [amount()] },
     {
-      key: 'pricing',
+      id: 'pricing',
       title: 'Pricing',
       kind: 'collect',
       final: true,
@@ -32,7 +32,7 @@ const V1 = {
           name: 'revenue',
           schema: { type: 'number' },
           required: true,
-          source: { node: 'revenue', field: 'output.amount' },
+          source: { node_id: 'revenue', field: 'output.amount' },
         },
       ],
     },
@@ -82,7 +82,12 @@ describe('Playbook case upgrades', () => {
       .post(`/api/v1/playbook-cases/${caseId}/inputs`)
       .send({
         inputs: [
-          { node: 'revenue', name: 'amount', value, expected_revision: null },
+          {
+            node_id: 'revenue',
+            name: 'amount',
+            value,
+            expected_revision: null,
+          },
         ],
       });
     expect(res.status).toBe(200);
@@ -99,9 +104,9 @@ describe('Playbook case upgrades', () => {
       .send(body);
   };
 
-  const nodeOf = (body: { nodes: Array<{ key: string }> }, key: string) => {
+  const nodeOf = (body: { nodes: Array<{ id: string }> }, key: string) => {
     return body.nodes.find((node) => {
-      return node.key === key;
+      return node.id === key;
     }) as Record<string, unknown> | undefined;
   };
 
@@ -150,7 +155,7 @@ describe('Playbook case upgrades', () => {
         nodes: [
           ...V1.nodes,
           {
-            key: 'contact',
+            id: 'contact',
             title: 'Contact',
             kind: 'collect',
             inputs: [
@@ -205,7 +210,7 @@ describe('Playbook case upgrades', () => {
                 name: 'revenue',
                 schema: { type: 'number' },
                 required: true,
-                source: { node: 'revenue', field: 'input.amount' },
+                source: { node_id: 'revenue', field: 'input.amount' },
               },
             ],
           },
@@ -219,7 +224,7 @@ describe('Playbook case upgrades', () => {
       const executions = await executionsOf(caseId);
       expect(executions).toHaveLength(before + 1);
       expect(executions[0]).toMatchObject({
-        node: 'pricing',
+        node_id: 'pricing',
         status: 'succeeded',
         playbook_version: 2,
       });
@@ -228,7 +233,7 @@ describe('Playbook case upgrades', () => {
       );
       expect(upgrades.body.data[0].diff.changed).toEqual([
         {
-          node: 'pricing',
+          node_id: 'pricing',
           executor: false,
           inputs: [{ name: 'revenue', change: 'source' }],
         },
@@ -249,7 +254,7 @@ describe('Playbook case upgrades', () => {
                 name: 'revenue',
                 schema: { type: 'number' },
                 required: true,
-                source: { node: 'revenue', field: 'input.amount' },
+                source: { node_id: 'revenue', field: 'input.amount' },
               },
             ],
           },
@@ -298,7 +303,7 @@ describe('Playbook case upgrades', () => {
 
       expect(nodeOf(res.body, 'pricing')).toBeUndefined();
       const entries = await asAdmin().get(
-        `/api/v1/playbook-cases/${caseId}/entries?node=pricing`
+        `/api/v1/playbook-cases/${caseId}/entries?node_id=pricing`
       );
       expect(entries.body.total).toBeGreaterThan(0);
     });
@@ -362,7 +367,7 @@ describe('Playbook case upgrades', () => {
       const playbookId = await newPlaybook({
         nodes: [
           {
-            key: 'review',
+            id: 'review',
             title: 'Review',
             kind: 'execute',
             inputs: [amount()],
@@ -376,7 +381,7 @@ describe('Playbook case upgrades', () => {
         .send({
           inputs: [
             {
-              node: 'review',
+              node_id: 'review',
               name: 'amount',
               value: 1,
               expected_revision: null,
@@ -391,7 +396,7 @@ describe('Playbook case upgrades', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_BUSY');
       expect(res.body.error.meta.executions).toEqual([
-        expect.objectContaining({ node: 'review' }),
+        expect.objectContaining({ node_id: 'review' }),
       ]);
     });
 
@@ -409,7 +414,7 @@ describe('Playbook case upgrades', () => {
       expect(nodeOf(res.body, 'pricing')).toMatchObject({ state: 'ready' });
       expect(
         (await executionsOf(caseId)).filter((each) => {
-          return each.node === 'pricing';
+          return each.node_id === 'pricing';
         })
       ).toEqual([]);
     });

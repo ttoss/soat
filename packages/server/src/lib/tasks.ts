@@ -69,7 +69,7 @@ export const mapTask = (instance: TaskInstance) => {
     state: instance.state,
     status: instance.status,
     payload: instance.payload,
-    metadata: instance.metadata ?? null,
+    metadata: instance.metadata ?? undefined,
     last_result: instance.lastResult ?? null,
     assignee: instance.assignee,
     active_dispatch: instance.activeDispatch,

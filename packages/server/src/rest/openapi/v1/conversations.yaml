@@ -841,7 +841,7 @@ components:
             phone: '5511999998888'
             channel: 'whatsapp'
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         content:
           type: string
           nullable: true

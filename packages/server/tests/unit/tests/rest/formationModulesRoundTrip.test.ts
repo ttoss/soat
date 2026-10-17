@@ -542,7 +542,7 @@ const CASES: RoundTripCase[] = [
       const definition = {
         nodes: [
           {
-            key: 'lookup',
+            id: 'lookup',
             title: 'Lookup',
             kind: 'execute',
             inputs: [

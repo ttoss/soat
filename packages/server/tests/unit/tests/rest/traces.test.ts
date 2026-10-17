@@ -652,7 +652,7 @@ describe('Traces REST API', () => {
       expect(gen.status).toBe(200);
       expect(gen.body.content_redacted_at).not.toBeNull();
       // Content is gone...
-      expect(gen.body.metadata).toBeNull();
+      expect(gen.body.metadata).toBeUndefined();
       expect(gen.body.error).toBeNull();
       expect(gen.body.extraction).toBeNull();
       // ...while the usage/audit skeleton is untouched.

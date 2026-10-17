@@ -99,6 +99,7 @@ describe('IngestionRules', () => {
       expect(res.body.tool_id).toBe(httpToolId);
       expect(res.body.agent_id).toBeNull();
       expect(res.body.project_id).toBe(projectId);
+      expect(res.body).not.toHaveProperty('metadata');
     });
 
     test('creates a rule with an agent converter', async () => {

@@ -23,7 +23,7 @@ const PLAYBOOK_ACTIONS = [
 const DEFINITION = {
   nodes: [
     {
-      key: 'revenue',
+      id: 'revenue',
       title: 'Annual revenue',
       kind: 'collect',
       inputs: [
@@ -37,7 +37,7 @@ const DEFINITION = {
       ],
     },
     {
-      key: 'tax_regime',
+      id: 'tax_regime',
       title: 'Tax regime',
       kind: 'execute',
       inputs: [
@@ -45,7 +45,7 @@ const DEFINITION = {
           name: 'annual_revenue',
           schema: { type: 'number' },
           required: true,
-          source: { node: 'revenue', field: 'output.annual_revenue' },
+          source: { node_id: 'revenue', field: 'output.annual_revenue' },
         },
         {
           name: 'cnae',
@@ -57,7 +57,7 @@ const DEFINITION = {
       executor: { type: 'decider', id: 'dcd_V1StGXR8Z5jdHi6B' },
     },
     {
-      key: 'pricing',
+      id: 'pricing',
       title: 'Pricing',
       kind: 'execute',
       final: true,
@@ -66,7 +66,7 @@ const DEFINITION = {
           name: 'regime',
           schema: { type: 'string' },
           required: true,
-          source: { node: 'tax_regime', field: 'output' },
+          source: { node_id: 'tax_regime', field: 'output' },
         },
         {
           name: 'margin',
@@ -163,7 +163,7 @@ describe('Playbooks', () => {
         definition: {
           nodes: [
             {
-              key: 'a',
+              id: 'a',
               title: 'A',
               kind: 'execute',
               inputs: [
@@ -171,12 +171,12 @@ describe('Playbooks', () => {
                   name: 'x',
                   schema: {},
                   required: true,
-                  source: { node: 'b', field: 'output' },
+                  source: { node_id: 'b', field: 'output' },
                 },
               ],
             },
             {
-              key: 'b',
+              id: 'b',
               title: 'B',
               kind: 'collect',
               inputs: [
@@ -184,7 +184,7 @@ describe('Playbooks', () => {
                   name: 'y',
                   schema: {},
                   required: true,
-                  source: { node: 'a', field: 'output' },
+                  source: { node_id: 'a', field: 'output' },
                 },
               ],
               executor: { type: 'tool', id: 'tool_x' },
@@ -209,10 +209,10 @@ describe('Playbooks', () => {
       );
     });
 
-    test('returns 400 for a node key holding a dot', async () => {
+    test('returns 400 for a node id holding a dot', async () => {
       const res = await createPlaybook(adminToken, {
         definition: {
-          nodes: [{ key: 'a.b', title: 'A', kind: 'collect', inputs: [] }],
+          nodes: [{ id: 'a.b', title: 'A', kind: 'collect', inputs: [] }],
         },
       });
       expect(res.status).toBe(400);
@@ -244,7 +244,7 @@ describe('Playbooks', () => {
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
       expect(res.body.error.meta).toEqual({
-        node: 'tax_regime',
+        node_id: 'tax_regime',
         action: 'deciders:CreateDecision',
       });
     });
@@ -272,7 +272,7 @@ describe('Playbooks', () => {
           definition: {
             nodes: [
               {
-                key: 'a',
+                id: 'a',
                 title: 'A',
                 kind: 'collect',
                 inputs: [
@@ -280,7 +280,7 @@ describe('Playbooks', () => {
                     name: 'x',
                     schema: {},
                     required: true,
-                    source: { node: 'missing', field: 'output' },
+                    source: { node_id: 'missing', field: 'output' },
                   },
                 ],
               },
@@ -290,7 +290,7 @@ describe('Playbooks', () => {
       expect(res.status).toBe(200);
       expect(res.body.valid).toBe(false);
       expect(res.body.problems).toEqual([
-        { code: 'missing_node', node: 'a', input: 'x' },
+        { code: 'missing_node', node_id: 'a', input: 'x' },
       ]);
     });
 
@@ -302,7 +302,7 @@ describe('Playbooks', () => {
     });
 
     const node = (fields: Record<string, unknown> = {}) => {
-      return { key: 'a', title: 'A', kind: 'collect', inputs: [], ...fields };
+      return { id: 'a', title: 'A', kind: 'collect', inputs: [], ...fields };
     };
     const input = (fields: Record<string, unknown> = {}) => {
       return node({
@@ -447,9 +447,7 @@ describe('Playbooks', () => {
         .patch(`/api/v1/playbooks/${playbook.id}`)
         .send({
           definition: {
-            nodes: [
-              { key: 'only', title: 'Only', kind: 'collect', inputs: [] },
-            ],
+            nodes: [{ id: 'only', title: 'Only', kind: 'collect', inputs: [] }],
           },
         });
       expect(changed.status).toBe(200);
@@ -484,9 +482,7 @@ describe('Playbooks', () => {
         .send({
           expected_version: 7,
           definition: {
-            nodes: [
-              { key: 'only', title: 'Only', kind: 'collect', inputs: [] },
-            ],
+            nodes: [{ id: 'only', title: 'Only', kind: 'collect', inputs: [] }],
           },
         });
       expect(res.status).toBe(409);
@@ -509,9 +505,7 @@ describe('Playbooks', () => {
         .patch(`/api/v1/playbooks/${playbook.id}`)
         .send({
           definition: {
-            nodes: [
-              { key: 'only', title: 'Only', kind: 'collect', inputs: [] },
-            ],
+            nodes: [{ id: 'only', title: 'Only', kind: 'collect', inputs: [] }],
           },
         });
 

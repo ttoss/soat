@@ -868,6 +868,20 @@ describe('PUT /api/v1/formations/:formation_id — write-only and side-effecting
       expect(await stored(physicalIdOf(created))).toEqual({ tenant: 'acme' });
     });
 
+    test('refuses a non-string value', async () => {
+      const result = await validate(
+        one(type, declare(`Context ${seed()}`, { tenant: 42 }))
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toEqual([
+        {
+          path: 'resources.Res.properties.tool_context.tenant',
+          message: expect.any(String),
+        },
+      ]);
+    });
+
     test('is cleared by an explicit null', async () => {
       const name = `Context ${seed()}`;
       const created = await deployWithContext(name);

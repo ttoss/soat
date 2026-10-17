@@ -1551,12 +1551,13 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.generation_id).toBe(genRes.body.id);
-      expect(res.body.currency).toBe('USD');
+      expect(res.body.currency).toBeUndefined();
       expect(Array.isArray(res.body.line_items)).toBe(true);
       expect(res.body.line_items).toHaveLength(1);
 
       const line = res.body.line_items[0];
-      expect(line.event_id).toMatch(/^ue_/);
+      expect(line.id).toMatch(/^ue_/);
+      expect(line.event_id).toBeUndefined();
       expect(line.meter_type).toBe('llm_tokens');
       expect(line.provider).toBe('ollama');
       expect(line.model).toBe('stub-model');
@@ -3187,7 +3188,7 @@ describe('Usage', () => {
       expect(res.status).toBe(200);
       expect(res.body.orchestration_run_id).toBe(orchestrationRunId);
       expect(res.body.generation_id).toBeUndefined();
-      expect(res.body.currency).toBe('USD');
+      expect(res.body.currency).toBeUndefined();
       expect(res.body.line_items.length).toBeGreaterThanOrEqual(1);
       // Deterministic stub token counts, reconstructed from the components.
       expect(res.body.totals.input_tokens).toBe(10);

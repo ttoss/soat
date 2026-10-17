@@ -2350,7 +2350,7 @@ echo "Run usage roll-up: OK"
 # Uses the default admin CLI (the usage:GetReceipt permission lives with the
 # admin, not the orchestration-scoped API key).
 ORCH_RUN_RECEIPT=$($SOAT_CLI get-usage-receipt --orchestration-run-id "$ORCH_RUN_ID")
-if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.orchestration_run_id == $id) and (.currency == "USD") and ((.line_items | type) == "array") and ((.totals.input_tokens | type) == "number")' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.orchestration_run_id == $id) and ((.line_items | type) == "array") and ((.totals.input_tokens | type) == "number")' >/dev/null 2>&1; then
   echo "get-usage-receipt --orchestration-run-id did not return a well-formed run receipt"
   printf '%s\n' "$ORCH_RUN_RECEIPT"
   exit 1
@@ -4449,7 +4449,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   USAGE_GEN_ID=$($SOAT_CLI list-usage-events --generation-id "$GEN_ID" | sanitize_json | jq -r '.data[0].generation_id // empty')
   if [ -n "$USAGE_GEN_ID" ]; then
     RECEIPT_RESP=$($SOAT_CLI get-usage-receipt --generation-id "$USAGE_GEN_ID" | sanitize_json)
-    RECEIPT_OK=$(printf '%s\n' "$RECEIPT_RESP" | jq -r '((.generation_id | length > 0) and (.currency == "USD") and (.line_items | type == "array") and (.totals.input_tokens | type == "number"))')
+    RECEIPT_OK=$(printf '%s\n' "$RECEIPT_RESP" | jq -r '((.generation_id | length > 0) and (.line_items | type == "array") and (.totals.input_tokens | type == "number"))')
     if [ "$RECEIPT_OK" != "true" ]; then
       echo "ERROR: get-usage-receipt did not return a well-formed receipt" >&2
       echo "$RECEIPT_RESP" >&2
@@ -8087,7 +8087,7 @@ echo "--- Creating a playbook and a case ---"
 PLAYBOOK_RESP=$($SOAT_CLI create-playbook \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-pricing" \
-  --definition '{"nodes":[{"key":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]}]}')
+  --definition '{"nodes":[{"id":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"id":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node_id":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]}]}')
 PLAYBOOK_ID=$(printf '%s\n' "$PLAYBOOK_RESP" | jq -r '.id')
 if ! printf '%s\n' "$PLAYBOOK_RESP" | jq -e '(.id | startswith("pbk_")) and .version == 1' >/dev/null 2>&1; then
   echo "ERROR: create-playbook did not return a playbook at version 1" >&2
@@ -8098,7 +8098,7 @@ CASE_RESP=$($SOAT_CLI create-playbook-case --playbook_id "$PLAYBOOK_ID" --subjec
 CASE_ID=$(printf '%s\n' "$CASE_RESP" | jq -r '.id')
 
 echo "--- Asking what the final node needs, then writing it ---"
-MISSING_RESP=$($SOAT_CLI get-playbook-case-missing --case_id "$CASE_ID" --node pricing)
+MISSING_RESP=$($SOAT_CLI get-playbook-case-missing --case_id "$CASE_ID" --node_id pricing)
 if ! printf '%s\n' "$MISSING_RESP" | jq -e '.waves | length == 2' >/dev/null 2>&1; then
   echo "ERROR: get-playbook-case-missing did not answer two waves" >&2
   printf '%s\n' "$MISSING_RESP" >&2
@@ -8106,7 +8106,7 @@ if ! printf '%s\n' "$MISSING_RESP" | jq -e '.waves | length == 2' >/dev/null 2>&
 fi
 WRITE_RESP=$($SOAT_CLI write-playbook-case-inputs \
   --case_id "$CASE_ID" \
-  --inputs '[{"node":"revenue","name":"amount","value":100,"expected_revision":null}]')
+  --inputs '[{"node_id":"revenue","name":"amount","value":100,"expected_revision":null}]')
 if [ "$(printf '%s\n' "$WRITE_RESP" | jq -r '.revision')" != "1" ]; then
   echo "ERROR: write-playbook-case-inputs did not advance the case to revision 1" >&2
   printf '%s\n' "$WRITE_RESP" >&2
@@ -8121,7 +8121,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   [ "$EXECUTION_STATUS" = "succeeded" ] && break
   sleep 1
 done
-if ! printf '%s\n' "$EXECUTIONS_RESP" | jq -e '.data[0].node == "revenue" and .data[0].output.amount == 100 and .data[0].output_revision == 2' >/dev/null 2>&1; then
+if ! printf '%s\n' "$EXECUTIONS_RESP" | jq -e '.data[0].node_id == "revenue" and .data[0].output.amount == 100 and .data[0].output_revision == 2' >/dev/null 2>&1; then
   echo "ERROR: the cascade did not run the collect node" >&2
   printf '%s\n' "$EXECUTIONS_RESP" >&2
   exit 1
@@ -8145,15 +8145,15 @@ echo "--- Approving a confirm node once its input is collected ---"
 CONFIRM_PLAYBOOK_RESP=$($SOAT_CLI create-playbook \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-confirmed" \
-  --definition '{"nodes":[{"key":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"approve","title":"Approve","kind":"confirm","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":{"node":"revenue","field":"output.amount"}}]}]}')
+  --definition '{"nodes":[{"id":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"id":"approve","title":"Approve","kind":"confirm","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":{"node_id":"revenue","field":"output.amount"}}]}]}')
 CONFIRM_PLAYBOOK_ID=$(printf '%s\n' "$CONFIRM_PLAYBOOK_RESP" | jq -r '.id')
 CONFIRM_CASE_ID=$($SOAT_CLI create-playbook-case --playbook_id "$CONFIRM_PLAYBOOK_ID" --subject "smoke confirm" | jq -r '.id')
 $SOAT_CLI write-playbook-case-inputs \
   --case_id "$CONFIRM_CASE_ID" \
-  --inputs '[{"node":"revenue","name":"amount","value":7,"expected_revision":null}]' >/dev/null
+  --inputs '[{"node_id":"revenue","name":"amount","value":7,"expected_revision":null}]' >/dev/null
 APPROVE_STATE=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  APPROVE_STATE=$($SOAT_CLI get-playbook-case --case_id "$CONFIRM_CASE_ID" | jq -r '.nodes[] | select(.key == "approve") | .state')
+  APPROVE_STATE=$($SOAT_CLI get-playbook-case --case_id "$CONFIRM_CASE_ID" | jq -r '.nodes[] | select(.id == "approve") | .state')
   [ "$APPROVE_STATE" = "ready" ] && break
   sleep 1
 done
@@ -8162,7 +8162,7 @@ CONFIRM_RESP=$($SOAT_CLI confirm-playbook-case-node \
   --node approve \
   --decision approve \
   --expected_revisions '{"amount":2}')
-if ! printf '%s\n' "$CONFIRM_RESP" | jq -e '.nodes[] | select(.key == "approve") | .state == "done" and .output.value.amount == 7' >/dev/null 2>&1; then
+if ! printf '%s\n' "$CONFIRM_RESP" | jq -e '.nodes[] | select(.id == "approve") | .state == "done" and .output.value.amount == 7' >/dev/null 2>&1; then
   echo "ERROR: confirm-playbook-case-node did not approve the node" >&2
   printf '%s\n' "$CONFIRM_RESP" >&2
   exit 1
@@ -8179,11 +8179,11 @@ EXPORT_TOOL_ID=$($SOAT_CLI create-tool \
 EXPORT_PLAYBOOK_ID=$($SOAT_CLI create-playbook \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-exported" \
-  --definition "{\"nodes\":[{\"key\":\"pricing\",\"title\":\"Pricing\",\"kind\":\"collect\",\"final\":true,\"inputs\":[{\"name\":\"amount\",\"schema\":{\"type\":\"number\"},\"required\":true,\"source\":\"manual\"}],\"transformations\":[{\"name\":\"summary\",\"format\":\"json\",\"tool\":\"$EXPORT_TOOL_ID\"}]}]}" | jq -r '.id')
+  --definition "{\"nodes\":[{\"id\":\"pricing\",\"title\":\"Pricing\",\"kind\":\"collect\",\"final\":true,\"inputs\":[{\"name\":\"amount\",\"schema\":{\"type\":\"number\"},\"required\":true,\"source\":\"manual\"}],\"transformations\":[{\"name\":\"summary\",\"format\":\"json\",\"tool\":\"$EXPORT_TOOL_ID\"}]}]}" | jq -r '.id')
 EXPORT_CASE_ID=$($SOAT_CLI create-playbook-case --playbook_id "$EXPORT_PLAYBOOK_ID" --subject "smoke export" | jq -r '.id')
 $SOAT_CLI write-playbook-case-inputs \
   --case_id "$EXPORT_CASE_ID" \
-  --inputs '[{"node":"pricing","name":"amount","value":3,"expected_revision":null}]' >/dev/null
+  --inputs '[{"node_id":"pricing","name":"amount","value":3,"expected_revision":null}]' >/dev/null
 PRICING_STATE=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   PRICING_STATE=$($SOAT_CLI get-playbook-case --case_id "$EXPORT_CASE_ID" | jq -r '.nodes[0].state')
@@ -8211,9 +8211,9 @@ $SOAT_CLI delete-tool --tool-id "$EXPORT_TOOL_ID" >/dev/null
 echo "--- Upgrading the case to a new version of its playbook ---"
 $SOAT_CLI update-playbook \
   --playbook_id "$PLAYBOOK_ID" \
-  --definition '{"nodes":[{"key":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]},{"key":"contact","title":"Contact","kind":"collect","inputs":[{"name":"email","schema":{"type":"string"},"required":true,"source":"manual"}]}]}' >/dev/null
+  --definition '{"nodes":[{"id":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"id":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node_id":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]},{"id":"contact","title":"Contact","kind":"collect","inputs":[{"name":"email","schema":{"type":"string"},"required":true,"source":"manual"}]}]}' >/dev/null
 UPGRADE_RESP=$($SOAT_CLI upgrade-playbook-case --case_id "$CASE_ID")
-if ! printf '%s\n' "$UPGRADE_RESP" | jq -e '.playbook_version == 2 and any(.nodes[]; .key == "contact")' >/dev/null 2>&1; then
+if ! printf '%s\n' "$UPGRADE_RESP" | jq -e '.playbook_version == 2 and any(.nodes[]; .id == "contact")' >/dev/null 2>&1; then
   echo "ERROR: upgrade-playbook-case did not move the case to version 2" >&2
   printf '%s\n' "$UPGRADE_RESP" >&2
   exit 1

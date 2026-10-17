@@ -23,6 +23,7 @@ import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 
 import {
   parseEnumListQuery,
+  parseNullableToolContextBody,
   parsePagination,
   requireAuth,
   resolveReadProjectIds,
@@ -134,7 +135,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     payload?: Record<string, unknown> | null;
     assignee?: string | null;
     state?: string | null;
-    tool_context?: Record<string, string> | null;
+    tool_context?: unknown;
     metadata?: unknown;
   };
 
@@ -151,7 +152,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     payload: body.payload,
     assignee: body.assignee,
     state: body.state,
-    toolContext: body.tool_context,
+    toolContext: parseNullableToolContextBody(body.tool_context),
     // Rejected before the task row exists, like every other metadata bag.
     metadata: parseMetadataBag(body.metadata),
     principal: principalFromCtx(ctx),
@@ -212,7 +213,7 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
   const body = ctx.request.body as {
     transition: string;
     note?: string | null;
-    tool_context?: Record<string, string> | null;
+    tool_context?: unknown;
   };
 
   ctx.body = await transitionTask({
@@ -221,7 +222,7 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     note: body.note,
     // Passed straight through, `undefined` included: omitting the field keeps
     // the task's stored bag, which is not the same as sending `{}`.
-    toolContext: body.tool_context,
+    toolContext: parseNullableToolContextBody(body.tool_context),
     principal: principalFromCtx(ctx),
     // A run-as token names a user or key like any other credential, so the
     // principal above cannot distinguish a dispatch continuing its own chain

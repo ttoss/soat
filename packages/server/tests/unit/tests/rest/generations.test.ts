@@ -683,7 +683,7 @@ describe('Generations', () => {
       expect(response.body.content_redacted_by_principal_type).toBe('user');
 
       // Content fields are cleared.
-      expect(response.body.metadata).toBeNull();
+      expect(response.body.metadata).toBeUndefined();
       expect(response.body.error).toBeNull();
       expect(response.body.extraction).toBeNull();
 

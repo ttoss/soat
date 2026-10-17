@@ -10,7 +10,7 @@ export type PlaybookInputChange =
   'added' | 'removed' | 'source' | 'schema' | 'required';
 
 export type PlaybookNodeChange = {
-  node: string;
+  node_id: string;
   executor: boolean;
   inputs: { name: string; change: PlaybookInputChange }[];
 };
@@ -29,7 +29,7 @@ const sameSource = (args: {
 
   if (left === 'manual' || right === 'manual') return left === right;
 
-  return left.node === right.node && left.field === right.field;
+  return left.node_id === right.node_id && left.field === right.field;
 };
 
 const sameExecutor = (args: {
@@ -40,7 +40,7 @@ const sameExecutor = (args: {
 };
 
 /**
- * What an upgrade from one version to another changes, by node key. Titles,
+ * What an upgrade from one version to another changes, by node id. Titles,
  * descriptions and transformations change no value, so they are not listed.
  */
 export const playbookUpgradeDiff = (args: {
@@ -97,7 +97,7 @@ export const playbookUpgradeDiff = (args: {
     });
 
     if (executor || inputs.length > 0) {
-      changed.push({ node: key, executor, inputs });
+      changed.push({ node_id: key, executor, inputs });
     }
   }
 

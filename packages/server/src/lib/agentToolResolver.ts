@@ -41,7 +41,7 @@ import {
   parseHttpToolAuthConfig,
 } from './toolAuth';
 import {
-  assertValidToolContextKeys,
+  assertValidToolContext,
   buildContextHeaderName,
   buildContextHeaders,
   pinCallingProject,
@@ -136,11 +136,7 @@ export const resolveBodyParamInterpolations = (args: {
 // The mechanism lives in `toolContext.ts` so the session/generation write paths
 // can validate caller-supplied keys without importing this module. Re-exported
 // here because this is where tool callers reach for it.
-export {
-  assertValidToolContextKeys,
-  buildContextHeaderName,
-  buildContextHeaders,
-};
+export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
 
 // ── IAM Boundary Check ────────────────────────────────────────────────────
 

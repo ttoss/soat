@@ -2475,10 +2475,10 @@ describe('Orchestrations', () => {
         expect(getRunRes.body.metadata).toEqual({ tenant_account_id: '42' });
       });
 
-      test('a run started without metadata reports null', async () => {
+      test('a run started without metadata leaves the bag out', async () => {
         const runRes = await createRun('Run Metadata Absent', { wait: true });
         expect(runRes.status).toBe(201);
-        expect(runRes.body.metadata).toBeNull();
+        expect(runRes.body.metadata).toBeUndefined();
       });
 
       test('a non-object metadata returns 400 and creates no run', async () => {

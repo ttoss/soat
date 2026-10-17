@@ -1340,9 +1340,6 @@ components:
             events); absent on a per-generation receipt.
           x-soat-ref: orchestration-runs
           type: string
-        currency:
-          type: string
-          example: USD
         line_items:
           type: array
           description: >
@@ -1352,8 +1349,10 @@ components:
           items:
             type: object
             properties:
-              event_id:
+              id:
                 type: string
+                description: The usage event's ID
+                example: ue_V1StGXR8Z5jdHi6B
               meter_type:
                 type: string
               provider:

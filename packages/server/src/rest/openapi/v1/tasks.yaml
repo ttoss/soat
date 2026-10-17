@@ -464,7 +464,7 @@ components:
         metadata:
           description: >-
             The caller-owned key/value metadata supplied when the task was
-            created, returned verbatim. Null when the task was created without
+            created, returned verbatim. Absent when the task was created without
             any. Unlike `payload` it is invisible to guards and to
             `payload_writes`, so it is the place for an attribution label rather
             than task data.
@@ -472,7 +472,7 @@ components:
             tenant_account_id: '42'
             source: zendesk
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         last_result:
           description: >-
             Server-owned. The result of the current state's last completed

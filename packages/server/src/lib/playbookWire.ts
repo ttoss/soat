@@ -17,7 +17,7 @@ import {
 import { validatePlaybookDefinition } from './playbookValidation';
 
 /**
- * A node key and an input name are JSON Logic `var` path segments and the
+ * A node id and an input name are JSON Logic `var` path segments and the
  * segments of a source `field`, so neither may hold a dot.
  */
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -76,14 +76,14 @@ const readSource = (args: {
   if (source === 'manual') return source;
   if (
     !isPlainObject(source) ||
-    !isNonEmptyString(source.node) ||
+    !isNonEmptyString(source.node_id) ||
     !isNonEmptyString(source.field)
   ) {
     throw invalid(
-      `${path} must be 'manual' or an object naming a node and a field.`
+      `${path} must be 'manual' or an object naming a node_id and a field.`
     );
   }
-  return { node: source.node, field: source.field };
+  return { node_id: source.node_id, field: source.field };
 };
 
 const readInput = (args: { path: string; input: unknown }): PlaybookInput => {
@@ -208,7 +208,7 @@ const readNode = (args: { path: string; node: unknown }): PlaybookNode => {
     transformations: node.transformations,
   });
   return {
-    key: readIdentifier({ path: `${path}.key`, value: node.key }),
+    id: readIdentifier({ path: `${path}.id`, value: node.id }),
     title: node.title,
     ...(description !== undefined && { description }),
     kind: node.kind as PlaybookNodeKind,

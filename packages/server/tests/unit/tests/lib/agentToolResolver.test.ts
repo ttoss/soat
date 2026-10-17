@@ -10,7 +10,7 @@ import { buildSoatRequestBody } from 'src/lib/agentToolResolverSoatBody';
 import { withCallTimeout } from 'src/lib/inProcessApi';
 import { soatTools } from 'src/lib/soatTools';
 import {
-  assertValidToolContextKeys,
+  assertValidToolContext,
   buildContextHeaders,
 } from 'src/lib/toolContext';
 
@@ -221,25 +221,25 @@ describe('buildContextHeaders', () => {
   });
 });
 
-describe('assertValidToolContextKeys', () => {
+describe('assertValidToolContext', () => {
   test('accepts undefined and null', () => {
     expect(() => {
-      return assertValidToolContextKeys(undefined);
+      return assertValidToolContext(undefined);
     }).not.toThrow();
     expect(() => {
-      return assertValidToolContextKeys(null);
+      return assertValidToolContext(null);
     }).not.toThrow();
   });
 
   test('accepts an empty object', () => {
     expect(() => {
-      return assertValidToolContextKeys({});
+      return assertValidToolContext({});
     }).not.toThrow();
   });
 
   test('accepts the keys the session path auto-populates', () => {
     expect(() => {
-      return assertValidToolContextKeys({
+      return assertValidToolContext({
         session_id: 'ses_01',
         actor_id: 'actor_01',
         actor_external_id: '+5511999999999',
@@ -252,7 +252,7 @@ describe('assertValidToolContextKeys', () => {
   // what callers can already send.
   test('accepts snake_case, kebab-case and dotted keys', () => {
     expect(() => {
-      return assertValidToolContextKeys({
+      return assertValidToolContext({
         tenant_external_id: 'a',
         'tenant-external-id': 'b',
         'actor.external.id': 'c',
@@ -263,7 +263,7 @@ describe('assertValidToolContextKeys', () => {
 
   test('rejects a key containing a space', () => {
     expect(() => {
-      return assertValidToolContextKeys({ 'bad key': 'x' });
+      return assertValidToolContext({ 'bad key': 'x' });
     }).toThrow(
       expect.objectContaining({
         code: 'INVALID_TOOL_CONTEXT_KEY',
@@ -280,14 +280,14 @@ describe('assertValidToolContextKeys', () => {
     ['empty', ''],
   ])('rejects a key containing %s', (_label, key) => {
     expect(() => {
-      return assertValidToolContextKeys({ [key]: 'x' });
+      return assertValidToolContext({ [key]: 'x' });
     }).toThrow(expect.objectContaining({ code: 'INVALID_TOOL_CONTEXT_KEY' }));
   });
 
   test('reports every offending key in the error meta', () => {
     try {
-      assertValidToolContextKeys({ 'bad key': '1', 'worse:key': '2', ok: '3' });
-      throw new Error('expected assertValidToolContextKeys to throw');
+      assertValidToolContext({ 'bad key': '1', 'worse:key': '2', ok: '3' });
+      throw new Error('expected assertValidToolContext to throw');
     } catch (error) {
       const meta = (error as { meta?: { keys?: string[] } }).meta;
       expect(meta?.keys).toEqual(['bad key', 'worse:key']);
@@ -299,7 +299,7 @@ describe('assertValidToolContextKeys', () => {
   // one silently wins. Reject instead of dropping a value.
   test('rejects two keys that collide into the same header name', () => {
     expect(() => {
-      return assertValidToolContextKeys({ userId: '1', userID: '2' });
+      return assertValidToolContext({ userId: '1', userID: '2' });
     }).toThrow(
       expect.objectContaining({
         code: 'INVALID_TOOL_CONTEXT_KEY',
@@ -313,14 +313,14 @@ describe('assertValidToolContextKeys', () => {
   // still real and must still be rejected rather than dropping a value.
   test('rejects two keys differing only in the first character casing', () => {
     expect(() => {
-      return assertValidToolContextKeys({ userId: '1', UserId: '2' });
+      return assertValidToolContext({ userId: '1', UserId: '2' });
     }).toThrow(expect.objectContaining({ code: 'INVALID_TOOL_CONTEXT_KEY' }));
   });
 
   test('names the colliding header in the collision error', () => {
     try {
-      assertValidToolContextKeys({ tenantId: '1', TenantId: '2' });
-      throw new Error('expected assertValidToolContextKeys to throw');
+      assertValidToolContext({ tenantId: '1', TenantId: '2' });
+      throw new Error('expected assertValidToolContext to throw');
     } catch (error) {
       const err = error as { message?: string; meta?: Record<string, unknown> };
       expect(err.message).toMatch(/X-Soat-Context-TenantId/);
@@ -338,7 +338,7 @@ describe('assertValidToolContextKeys', () => {
       'tenant-external-id': 'b',
       'actor.external.id': 'c',
     };
-    assertValidToolContextKeys(context);
+    assertValidToolContext(context);
     expect(() => {
       return new Headers(buildContextHeaders({ toolContext: context }));
     }).not.toThrow();

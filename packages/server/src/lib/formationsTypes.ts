@@ -506,7 +506,7 @@ export type MappedFormation = {
   template: FormationTemplate | null;
   outputs: Record<string, string> | null;
   status: string;
-  metadata: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
   resolved_metadata: Record<string, unknown> | null;
   resolved_parameters: Record<string, string> | null;
   /**

@@ -35,7 +35,7 @@ const readsAmount = (executor: Record<string, unknown>) => {
   return {
     nodes: [
       {
-        key: 'revenue',
+        id: 'revenue',
         title: 'Revenue',
         kind: 'collect',
         inputs: [
@@ -48,7 +48,7 @@ const readsAmount = (executor: Record<string, unknown>) => {
         ],
       },
       {
-        key: 'pricing',
+        id: 'pricing',
         title: 'Pricing',
         kind: 'execute',
         final: true,
@@ -57,7 +57,7 @@ const readsAmount = (executor: Record<string, unknown>) => {
             name: 'amount',
             schema: { type: 'number' },
             required: true,
-            source: { node: 'revenue', field: 'output.amount' },
+            source: { node_id: 'revenue', field: 'output.amount' },
           },
         ],
         executor,
@@ -71,7 +71,7 @@ const runsOnAmount = (executor: Record<string, unknown>) => {
   return {
     nodes: [
       {
-        key: 'pricing',
+        id: 'pricing',
         title: 'Pricing',
         kind: 'execute',
         inputs: [
@@ -143,12 +143,12 @@ describe('Playbook executions', () => {
 
   const write = async (
     caseId: string,
-    inputs: Array<{ node: string; name: string; value: unknown }>
+    inputs: Array<{ node_id: string; name: string; value: unknown }>
   ) => {
     const current = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
     const revisionOf = (node: string, name: string) => {
-      const found = current.body.nodes.find((each: { key: string }) => {
-        return each.key === node;
+      const found = current.body.nodes.find((each: { id: string }) => {
+        return each.id === node;
       });
       return found.inputs.find((each: { name: string }) => {
         return each.name === name;
@@ -160,7 +160,7 @@ describe('Playbook executions', () => {
         inputs: inputs.map((input) => {
           return {
             ...input,
-            expected_revision: revisionOf(input.node, input.name),
+            expected_revision: revisionOf(input.node_id, input.name),
           };
         }),
       });
@@ -203,8 +203,8 @@ describe('Playbook executions', () => {
 
   const nodeOf = async (caseId: string, key: string) => {
     const res = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
-    return res.body.nodes.find((node: { key: string }) => {
-      return node.key === key;
+    return res.body.nodes.find((node: { id: string }) => {
+      return node.id === key;
     });
   };
 
@@ -341,7 +341,7 @@ describe('Playbook executions', () => {
         }),
       });
 
-      await write(caseId, [{ node: 'revenue', name: 'amount', value: 21 }]);
+      await write(caseId, [{ node_id: 'revenue', name: 'amount', value: 21 }]);
 
       expect(await nodeOf(caseId, 'revenue')).toMatchObject({
         state: 'done',
@@ -353,14 +353,14 @@ describe('Playbook executions', () => {
       });
       const [tool, collect] = await executionsOf(caseId);
       expect(collect).toMatchObject({
-        node: 'revenue',
+        node_id: 'revenue',
         executor: null,
         status: 'succeeded',
         result: 'current',
         created_by: null,
       });
       expect(tool).toMatchObject({
-        node: 'pricing',
+        node_id: 'pricing',
         executor: { type: 'tool', id: doubleToolId },
         input: { value: 21 },
         output: { doubled: 42 },
@@ -371,9 +371,9 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: constantToolId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 2 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 2 }]);
 
       const [second, first] = await executionsOf(caseId);
       expect(first.output_revision).toBe(2);
@@ -391,7 +391,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: failingToolId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await nodeOf(caseId, 'pricing')).state).toBe('failed');
       const [failed] = await executionsOf(caseId);
@@ -410,7 +410,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'agent', id: agentId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0]).toMatchObject({
         status: 'succeeded',
@@ -424,7 +424,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'agent', id: clientToolAgentId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0]).toMatchObject({
         status: 'failed',
@@ -436,7 +436,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'decider', id: deciderId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const [execution] = await executionsOf(caseId);
       expect(execution.status).toBe('succeeded');
@@ -448,7 +448,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'decider', id: misdeciderId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await nodeOf(caseId, 'pricing')).state).toBe('failed');
     });
@@ -460,7 +460,7 @@ describe('Playbook executions', () => {
           id: orchestrationId,
         }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0].status).toBe('succeeded');
       expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
@@ -473,7 +473,7 @@ describe('Playbook executions', () => {
           id: failingOrchestrationId,
         }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0]).toMatchObject({
         status: 'failed',
@@ -488,7 +488,7 @@ describe('Playbook executions', () => {
           id: humanOrchestrationId,
         }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
       const [parked] = await executionsOf(caseId);
       expect(parked.status).toBe('running');
 
@@ -505,7 +505,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 7 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 7 }]);
       const [parked] = await executionsOf(caseId);
       expect(parked.run_id).toMatch(/^task_/);
       expect((await nodeOf(caseId, 'pricing')).state).toBe('waiting');
@@ -524,9 +524,9 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 7 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 7 }]);
       const [first] = await executionsOf(caseId);
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 8 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 8 }]);
       expect(await executionsOf(caseId)).toHaveLength(1);
 
       await closeTask(first.run_id);
@@ -566,11 +566,11 @@ describe('Playbook executions', () => {
         .put(`/api/v1/users/${me.body.id}/policies`)
         .send({ policy_ids: [] });
 
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0].error).toMatchObject({
         code: 'PLAYBOOK_EXECUTOR_FORBIDDEN',
-        meta: { node: 'pricing', action: 'tools:CallTool' },
+        meta: { node_id: 'pricing', action: 'tools:CallTool' },
       });
       const res = await run(caseId, 'pricing', { wait: true }, adminToken);
       expect(res.status).toBe(403);
@@ -594,7 +594,7 @@ describe('Playbook executions', () => {
         (await asAdmin().delete(`/api/v1/users/${me.body.id}`)).status
       ).toBe(204);
 
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0].error.code).toBe(
         'PLAYBOOK_AUTHOR_UNAVAILABLE'
@@ -611,7 +611,12 @@ describe('Playbook executions', () => {
         .post(`/api/v1/playbook-cases/${caseId}/inputs`)
         .send({
           inputs: [
-            { node: 'revenue', name: 'amount', value, expected_revision: null },
+            {
+              node_id: 'revenue',
+              name: 'amount',
+              value,
+              expected_revision: null,
+            },
           ],
           wait: true,
         });
@@ -630,8 +635,8 @@ describe('Playbook executions', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.automation_status).toBe('idle');
-      const pricing = res.body.nodes.find((node: { key: string }) => {
-        return node.key === 'pricing';
+      const pricing = res.body.nodes.find((node: { id: string }) => {
+        return node.id === 'pricing';
       });
       expect(pricing).toMatchObject({
         state: 'done',
@@ -668,7 +673,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: failingToolId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const res = await run(caseId, 'pricing', {});
 
@@ -700,7 +705,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: constantToolId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
       const before = await nodeOf(caseId, 'pricing');
       expect(before.state).toBe('done');
 
@@ -723,11 +728,11 @@ describe('Playbook executions', () => {
         definition: {
           nodes: [
             ...runsOnAmount({ type: 'workflow', id: workflowId }).nodes,
-            { key: 'approve', title: 'Approve', kind: 'confirm', inputs: [] },
+            { id: 'approve', title: 'Approve', kind: 'confirm', inputs: [] },
           ],
         },
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const confirm = await run(caseId, 'approve');
       expect(confirm.status).toBe(409);
@@ -742,7 +747,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: failingToolId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
       await pause(caseId);
 
       const res = await run(caseId, 'pricing');
@@ -791,7 +796,7 @@ describe('Playbook executions', () => {
         automation_status: 'paused',
         pause_requested_at: expect.any(String),
       });
-      await write(caseId, [{ node: 'revenue', name: 'amount', value: 2 }]);
+      await write(caseId, [{ node_id: 'revenue', name: 'amount', value: 2 }]);
       expect(await executionsOf(caseId)).toEqual([]);
       expect((await pause(caseId)).pause_requested_at).toBe(
         paused.pause_requested_at
@@ -842,14 +847,14 @@ describe('Playbook executions', () => {
       const onTask = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
-      await write(onTask, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(onTask, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
       const onRun = await newCase({
         definition: runsOnAmount({
           type: 'orchestration',
           id: humanOrchestrationId,
         }),
       });
-      await write(onRun, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(onRun, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
       const paused = await newCase({
         definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
       });
@@ -877,7 +882,9 @@ describe('Playbook executions', () => {
       // With the worker off the write only queues the execution.
       process.env.PLAYBOOK_WORKER_DISABLED = 'true';
       try {
-        await write(running, [{ node: 'pricing', name: 'amount', value: 1 }]);
+        await write(running, [
+          { node_id: 'pricing', name: 'amount', value: 1 },
+        ]);
         const runningIds = await idsIn('running');
         expect(runningIds).toContain(running);
         expect(runningIds).not.toContain(onTask);
@@ -897,7 +904,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const waiting = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
       expect(waiting.body.automation_status).toBe('waiting');
@@ -940,7 +947,7 @@ describe('Playbook executions', () => {
           id: humanOrchestrationId,
         }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const [parked] = await executionsOf(caseId);
       expect(await nodeOf(caseId, 'pricing')).toMatchObject({
@@ -957,7 +964,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: workflowId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
       const [parked] = await executionsOf(caseId);
 
       const deleted = await asAdmin().delete(`/api/v1/tasks/${parked.run_id}`);
@@ -993,7 +1000,7 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'workflow', id: failingWorkflowId }),
       });
-      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const [parked] = await executionsOf(caseId);
       const node = await pollUntil({
@@ -1021,14 +1028,14 @@ describe('Playbook executions', () => {
       const caseId = await newCase({
         definition: readsAmount({ type: 'tool', id: doubleToolId }),
       });
-      await write(caseId, [{ node: 'revenue', name: 'amount', value: 3 }]);
+      await write(caseId, [{ node_id: 'revenue', name: 'amount', value: 3 }]);
 
       const one = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${caseId}/executions?node=revenue`
+        `/api/v1/playbook-cases/${caseId}/executions?node_id=revenue`
       );
       expect(one.status).toBe(200);
       expect(one.body.data).toHaveLength(1);
-      expect(one.body.data[0].node).toBe('revenue');
+      expect(one.body.data[0].node_id).toBe('revenue');
     });
 
     test('returns 404 to a caller without permission', async () => {

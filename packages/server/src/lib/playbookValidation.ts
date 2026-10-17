@@ -7,14 +7,18 @@ import {
 import { nodesByKey, topologicalWaves } from './playbookGraph';
 
 export type PlaybookDefinitionProblem =
-  | { code: 'duplicate_node'; node: string }
-  | { code: 'duplicate_input'; node: string; input: string }
-  | { code: 'missing_node'; node: string; input: string }
-  | { code: 'unknown_field'; node: string; input: string }
-  | { code: 'executor_required'; node: string }
-  | { code: 'executor_forbidden'; node: string }
-  | { code: 'transformations_not_final'; node: string }
-  | { code: 'duplicate_transformation'; node: string; transformation: string }
+  | { code: 'duplicate_node'; node_id: string }
+  | { code: 'duplicate_input'; node_id: string; input: string }
+  | { code: 'missing_node'; node_id: string; input: string }
+  | { code: 'unknown_field'; node_id: string; input: string }
+  | { code: 'executor_required'; node_id: string }
+  | { code: 'executor_forbidden'; node_id: string }
+  | { code: 'transformations_not_final'; node_id: string }
+  | {
+      code: 'duplicate_transformation';
+      node_id: string;
+      transformation: string;
+    }
   | { code: 'cycle'; nodes: string[] };
 
 /** A collect or confirm node's output is its inputs, so its fields are known. */
@@ -45,14 +49,14 @@ const fieldExists = (args: {
 const transformationProblems = (args: {
   node: PlaybookNode;
 }): PlaybookDefinitionProblem[] => {
-  const { key, transformations } = args.node;
+  const { id, transformations } = args.node;
   const problems: PlaybookDefinitionProblem[] = [];
   const names = new Set<string>();
   for (const { name } of transformations ?? []) {
     if (names.has(name)) {
       problems.push({
         code: 'duplicate_transformation',
-        node: key,
+        node_id: id,
         transformation: name,
       });
     }
@@ -65,20 +69,20 @@ const transformationProblems = (args: {
 const nodeProblems = (args: {
   node: PlaybookNode;
 }): PlaybookDefinitionProblem[] => {
-  const { key, kind, executor, transformations, final } = args.node;
+  const { id, kind, executor, transformations, final } = args.node;
 
   const problems: PlaybookDefinitionProblem[] = [];
 
   if (kind === 'execute' && !executor) {
-    problems.push({ code: 'executor_required', node: key });
+    problems.push({ code: 'executor_required', node_id: id });
   }
 
   if (kind !== 'execute' && executor) {
-    problems.push({ code: 'executor_forbidden', node: key });
+    problems.push({ code: 'executor_forbidden', node_id: id });
   }
 
   if (transformations?.length && !final) {
-    problems.push({ code: 'transformations_not_final', node: key });
+    problems.push({ code: 'transformations_not_final', node_id: id });
   }
 
   problems.push(...transformationProblems({ node: args.node }));
@@ -96,7 +100,7 @@ const inputProblems = (args: {
   const seen = new Set<string>();
 
   for (const input of node.inputs) {
-    const at = { node: node.key, input: input.name };
+    const at = { node_id: node.id, input: input.name };
 
     if (seen.has(input.name)) {
       problems.push({ code: 'duplicate_input', ...at });
@@ -106,7 +110,7 @@ const inputProblems = (args: {
 
     if (input.source === 'manual') continue;
 
-    const source = byKey.get(input.source.node);
+    const source = byKey.get(input.source.node_id);
     const field = parseField({ field: input.source.field });
 
     if (!source) {
@@ -133,11 +137,11 @@ export const validatePlaybookDefinition = (args: {
   const keys = new Set<string>();
 
   for (const node of definition.nodes) {
-    if (keys.has(node.key)) {
-      problems.push({ code: 'duplicate_node', node: node.key });
+    if (keys.has(node.id)) {
+      problems.push({ code: 'duplicate_node', node_id: node.id });
     }
 
-    keys.add(node.key);
+    keys.add(node.id);
   }
 
   for (const node of definition.nodes) {

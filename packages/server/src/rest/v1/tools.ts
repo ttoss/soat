@@ -392,15 +392,12 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     (await toolAccess.authorizeWrite({ ctx, action: 'tools:CallTool' }))
       .projectIds[0];
 
-  const {
-    action,
-    input,
-    tool_context: rawToolContext,
-  } = ctx.request.body as {
+  const body = ctx.request.body as {
     action?: unknown;
     input?: unknown;
     tool_context?: unknown;
   };
+  const { action, input } = body;
 
   const parsedInput =
     input !== undefined &&
@@ -424,7 +421,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     // key — the sanitize is what keeps a caller off the `X-Soat-Context-*`
     // headers a tool trusts.
     toolContext: sanitizeCallerToolContext(
-      parseToolContextBody(rawToolContext)
+      parseToolContextBody(body.tool_context)
     ),
     attribution: {},
   });
