@@ -340,7 +340,7 @@ components:
           type: integer
           nullable: true
         metadata:
-          $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+          $ref: './metadata.yaml#/components/schemas/MetadataBag'
         created_at:
           type: string
           format: date-time

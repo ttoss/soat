@@ -170,6 +170,19 @@ describe('Sessions', () => {
       expect(stored?.toolContext).toEqual({ user_id: 'u1', env: 'test' });
     });
 
+    test.each([
+      ['a number value', { user_id: 42 }],
+      ['a nested object value', { user: { id: 'u1' } }],
+      ['an array body', ['u1']],
+    ])('refuses %s in tool_context with 400', async (_label, toolContext) => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, tool_context: toolContext });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     // Its keys are HTTP header names, not SOAT field names, so every shape is
     // stored as sent and the outbound header is predictable from the request
     // body alone.
@@ -1997,7 +2010,7 @@ describe('Sessions', () => {
       // response_messages is server-owned state stored on its own column, not
       // in the caller-owned metadata bag — metadata stays
       // untouched by this write.
-      expect(assistantMsg.metadata).toBeNull();
+      expect(assistantMsg.metadata).toBeUndefined();
     });
 
     test('returns requires_action result when more tool outputs are needed', async () => {

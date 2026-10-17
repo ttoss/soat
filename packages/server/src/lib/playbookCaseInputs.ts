@@ -43,7 +43,7 @@ const invalidInput = (args: {
   name: string;
 }): DomainError => {
   return new DomainError('PLAYBOOK_INPUT_INVALID', args.message, {
-    node: args.node,
+    node_id: args.node,
     input: args.name,
   });
 };
@@ -64,13 +64,13 @@ export const parseInputWrites = (raw: unknown): PlaybookInputWrite[] => {
     const at = `inputs[${index}]`;
     if (
       !isPlainObject(item) ||
-      typeof item.node !== 'string' ||
+      typeof item.node_id !== 'string' ||
       typeof item.name !== 'string' ||
       !('value' in item)
     ) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        `${at} must name a node, an input and a value.`
+        `${at} must name a node_id, an input and a value.`
       );
     }
     const expected = item.expected_revision;
@@ -84,7 +84,7 @@ export const parseInputWrites = (raw: unknown): PlaybookInputWrite[] => {
       );
     }
     return {
-      node: item.node,
+      node: item.node_id,
       name: item.name,
       value: item.value,
       expectedRevision: expected,
@@ -110,7 +110,7 @@ const manualInput = (args: {
   }
   if (input.source !== 'manual') {
     throw invalidInput({
-      message: `Input '${name}' on node '${node}' reads node '${input.source.node}'; only a manual input is written.`,
+      message: `Input '${name}' on node '${node}' reads node '${input.source.node_id}'; only a manual input is written.`,
       node,
       name,
     });
@@ -138,7 +138,7 @@ const conflictsOf = (args: {
       ? []
       : [
           {
-            node: write.node,
+            node_id: write.node,
             input: write.name,
             expected_revision: write.expectedRevision,
             current_revision: current,

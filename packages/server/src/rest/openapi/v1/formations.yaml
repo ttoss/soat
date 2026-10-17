@@ -1731,11 +1731,13 @@ components:
             the agent.
         tool_context:
           type: object
-          additionalProperties: true
+          additionalProperties:
+            type: string
           nullable: true
           description: >-
-            Optional context object passed to tool calls. Write-only: no read
-            of a session returns it.
+            Optional context passed to tool calls, a bag of string values; a
+            non-string value is refused. Write-only: no read of a session
+            returns it.
 
     IngestionRuleResourceProperties:
       description: >-
@@ -2317,7 +2319,7 @@ components:
             expressions are rejected. Use the template's top-level `metadata`
             block for deploy-time substitution (see `resolved_metadata`).
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         resolved_metadata:
           type: object
           additionalProperties: true

@@ -36,6 +36,7 @@ import { conversationMessageIdempotencyDigest } from './2026-10-12-conversationM
 import { eventNames } from './2026-10-17-eventNames';
 import { failureReasonsStoredError } from './2026-10-17-failureReasonsStoredError';
 import { onBehalfOf } from './2026-10-17-onBehalfOf';
+import { playbookNodeIds } from './2026-10-17-playbookNodeIds';
 import { principalPairs } from './2026-10-17-principalPairs';
 import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
 
@@ -97,4 +98,5 @@ export const MIGRATIONS: Migration[] = [
   principalPairs,
   failureReasonsStoredError,
   eventNames,
+  playbookNodeIds,
 ];

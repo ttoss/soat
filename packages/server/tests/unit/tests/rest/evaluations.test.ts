@@ -468,13 +468,13 @@ describe('Evaluations', () => {
       expect(res.status).toBe(404);
     });
 
-    test('an item with no reference answer or metadata stores nulls', async () => {
+    test('an item with no reference answer or metadata leaves the bag out', async () => {
       const item = await addItem(datasetId, {
         input: [{ role: 'user', content: 'bare' }],
       });
 
       expect(item.expected_output).toBeNull();
-      expect(item.metadata).toBeNull();
+      expect(item.metadata).toBeUndefined();
     });
 
     test('rejects non-object metadata with 400', async () => {
@@ -499,7 +499,7 @@ describe('Evaluations', () => {
         .send({ metadata: null });
 
       expect(res.status).toBe(200);
-      expect(res.body.metadata).toBeNull();
+      expect(res.body.metadata).toBeUndefined();
     });
   });
 
@@ -911,12 +911,12 @@ describe('Evaluations', () => {
         expect(listed.metadata).toEqual(metadata);
       });
 
-      test('a run started without metadata reports null', async () => {
+      test('a run started without metadata leaves the bag out', async () => {
         const res = await asUser()
           .post(`/api/v1/evals/${evalId}/runs`)
           .send({});
         expect(res.status).toBe(201);
-        expect(res.body.metadata).toBeNull();
+        expect(res.body.metadata).toBeUndefined();
       });
 
       test('a non-object metadata is rejected with 400', async () => {

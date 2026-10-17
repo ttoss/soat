@@ -44,7 +44,7 @@ export type PlaybookNodeRecord = {
   };
 };
 
-/** A case's entries and executions, by node key. */
+/** A case's entries and executions, by node id. */
 export type PlaybookCaseSnapshot = Record<string, PlaybookNodeRecord>;
 
 export type PlaybookNodeState =
@@ -165,13 +165,13 @@ const readField = (args: {
 
 const readSourced = (args: {
   input: PlaybookInput;
-  source: { node: string; field: string };
+  source: { node_id: string; field: string };
   snapshot: PlaybookCaseSnapshot;
   views: Map<string, PlaybookNodeView>;
 }): Read => {
   const { input, source, snapshot, views } = args;
 
-  const view = views.get(source.node);
+  const view = views.get(source.node_id);
 
   // A required input waits for its node. An optional one waits only for a
   // node about to produce a value; one waiting on a person reads as unset.
@@ -182,7 +182,7 @@ const readSourced = (args: {
   const field = parseField({ field: source.field });
 
   return field
-    ? readField({ field, view, output: snapshot[source.node]?.output })
+    ? readField({ field, view, output: snapshot[source.node_id]?.output })
     : UNSET;
 };
 
@@ -195,7 +195,7 @@ const readInput = (args: {
   const { node, input, snapshot, views } = args;
 
   return input.source === 'manual'
-    ? readManual({ field: snapshot[node.key]?.inputs?.[input.name] })
+    ? readManual({ field: snapshot[node.id]?.inputs?.[input.name] })
     : readSourced({ input, source: input.source, snapshot, views });
 };
 
@@ -272,7 +272,7 @@ const readInputs = (args: {
     const read = readInput({ ...args, input });
 
     if (read.held) {
-      if (input.source !== 'manual') reads.blockedBy.add(input.source.node);
+      if (input.source !== 'manual') reads.blockedBy.add(input.source.node_id);
       continue;
     }
 
@@ -280,7 +280,7 @@ const readInputs = (args: {
       from:
         input.source === 'manual'
           ? 'manual'
-          : `${input.source.node}.${input.source.field}`,
+          : `${input.source.node_id}.${input.source.field}`,
       revision: read.revision,
     };
 
@@ -326,7 +326,7 @@ const viewOf = (args: {
   const reads = readInputs(args);
   const blocked = reads.blockedBy.size > 0 || reads.missing.length > 0;
   const state = stateOf({
-    record: snapshot[node.key] ?? {},
+    record: snapshot[node.id] ?? {},
     basis: reads.basis,
     blocked,
   });
@@ -368,7 +368,7 @@ export const playbookNodeStates = (args: {
 
   return new Map(
     [...byKey.values()].map((node) => {
-      const view = views.get(node.key) ?? {
+      const view = views.get(node.id) ?? {
         state: 'blocked',
         runnable: false,
         basis: {},
@@ -378,7 +378,7 @@ export const playbookNodeStates = (args: {
         settling: false,
       };
 
-      return [node.key, view];
+      return [node.id, view];
     })
   );
 };

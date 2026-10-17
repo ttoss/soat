@@ -15,7 +15,10 @@ import {
   validateTriggerShape,
 } from '../triggers';
 import { defineFormationModule } from './defineFormationModule';
-import { isFormationExpression } from './formationSpecLoader';
+import {
+  isFormationExpression,
+  pushStringBagValueErrors,
+} from './formationSpecLoader';
 
 /** Narrows an untyped template value to a plain input object, else undefined. */
 const toInputObject = (value: unknown): Record<string, unknown> | undefined => {
@@ -99,7 +102,10 @@ export const triggersFormationModule = defineFormationModule({
     delete: 'triggers:DeleteTrigger',
   },
 
-  extraChecks: pushShapeRuleErrors,
+  extraChecks: (args) => {
+    pushShapeRuleErrors(args);
+    pushStringBagValueErrors({ ...args, field: 'tool_context' });
+  },
 
   create: async ({ properties, projectId, actor }) => {
     // `createdByUserId` is the run-as identity a firing mints a token for, not

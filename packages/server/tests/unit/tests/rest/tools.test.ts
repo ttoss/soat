@@ -3171,6 +3171,17 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
     });
 
+    test('refuses a non-string value rather than stringifying it', async () => {
+      const id = await createContextTool('call-ctx-number-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({ input: {}, tool_context: { ocaToken: 123 } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     // The allowlist bounds egress wherever the bag comes from, so this entry
     // point is narrowed by it exactly like a generation-driven call.
     test("honors the tool's context_keys allowlist", async () => {
@@ -3221,7 +3232,7 @@ describe('Tools', () => {
       });
     });
 
-    test('a non-object tool_context is ignored rather than rejected', async () => {
+    test('a non-object tool_context is refused', async () => {
       const id = await createContextTool('call-ctx-nonobject-tool');
 
       const res = await authenticatedTestClient(adminToken)
@@ -3229,7 +3240,7 @@ describe('Tools', () => {
         .send({ input: {}, tool_context: 'nope' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('MISSING_TOOL_CONTEXT_KEY');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 });

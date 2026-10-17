@@ -24,6 +24,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   parseEnumListQuery,
+  parseNullableToolContextBody,
   parsePagination,
   requireAuth,
   requireProjectAccess,
@@ -115,7 +116,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     tags?: unknown;
     actor_id?: string;
     auto_generate?: boolean;
-    tool_context?: Record<string, string> | null;
+    tool_context?: unknown;
     inactivity_ttl_seconds?: number;
     message_delay_seconds?: number | null;
     max_context_messages?: number | null;
@@ -140,7 +141,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     actorId: body.actor_id,
     autoGenerate: body.auto_generate,
-    toolContext: body.tool_context,
+    toolContext: parseNullableToolContextBody(body.tool_context),
     inactivityTtlSeconds: body.inactivity_ttl_seconds,
     messageDelaySeconds: body.message_delay_seconds,
     maxContextMessages: readMaxContextMessages(body.max_context_messages),
@@ -223,7 +224,7 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
     name?: string | null;
     status?: string;
     auto_generate?: boolean;
-    tool_context?: Record<string, string> | null;
+    tool_context?: unknown;
     inactivity_ttl_seconds?: number;
     message_delay_seconds?: number | null;
     max_context_messages?: number | null;
@@ -235,7 +236,7 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
     name: body.name,
     status: body.status,
     autoGenerate: body.auto_generate,
-    toolContext: body.tool_context,
+    toolContext: parseNullableToolContextBody(body.tool_context),
     inactivityTtlSeconds: body.inactivity_ttl_seconds,
     messageDelaySeconds: body.message_delay_seconds,
     maxContextMessages: readMaxContextMessages(body.max_context_messages),

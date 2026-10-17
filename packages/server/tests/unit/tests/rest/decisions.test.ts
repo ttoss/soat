@@ -303,6 +303,7 @@ describe('Decisions', () => {
         name: 'needs_human',
         probability: 1,
       });
+      expect(res.body).not.toHaveProperty('metadata');
     });
 
     test('the model is shown the questions and the input, under the agent’s instructions', async () => {

@@ -567,12 +567,16 @@ describe('missingFor', () => {
       missingFor({ definition: pricing(), snapshot: {}, node: 'price' })
     ).toEqual([
       [
-        { node: 'client', input: 'cnpj', schema: { type: 'string' } },
-        { node: 'client', input: 'annual_revenue', schema: { type: 'number' } },
+        { node_id: 'client', input: 'cnpj', schema: { type: 'string' } },
+        {
+          node_id: 'client',
+          input: 'annual_revenue',
+          schema: { type: 'number' },
+        },
       ],
       [
         {
-          node: 'tax_regime',
+          node_id: 'tax_regime',
           input: 'cnae',
           schema: { type: 'string', pattern: '^\\d{7}$' },
         },
@@ -609,7 +613,7 @@ describe('missingFor', () => {
     ).toEqual([
       [
         {
-          node: 'contact',
+          node_id: 'contact',
           input: 'email',
           schema: { type: 'string' },
           description: 'Who signs',
@@ -617,7 +621,7 @@ describe('missingFor', () => {
       ],
       [
         {
-          node: 'tax_regime',
+          node_id: 'tax_regime',
           input: 'cnae',
           schema: { type: 'string', pattern: '^\\d{7}$' },
         },

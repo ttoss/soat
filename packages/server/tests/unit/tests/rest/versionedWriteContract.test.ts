@@ -192,7 +192,7 @@ describe('versioned write contract', () => {
           name: unique('contract-playbook'),
           definition: {
             nodes: [
-              { key: 'intake', title: 'Intake', kind: 'collect', inputs: [] },
+              { id: 'intake', title: 'Intake', kind: 'collect', inputs: [] },
             ],
           },
         });
@@ -207,7 +207,7 @@ describe('versioned write contract', () => {
                 definition: {
                   nodes: [
                     {
-                      key: 'intake',
+                      id: 'intake',
                       title: 'Intake v2',
                       kind: 'collect',
                       inputs: [],

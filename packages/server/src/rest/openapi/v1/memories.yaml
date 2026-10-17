@@ -616,12 +616,12 @@ components:
             Per-memory key-value tags, matched at memory granularity by
             knowledge search.
           allOf:
-            - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+            - $ref: './tags.yaml#/components/schemas/TagBag'
         metadata:
           description: Arbitrary structured metadata attached to the memory
           example: { evidence: high }
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         invalidated_at:
           type: string
           format: date-time

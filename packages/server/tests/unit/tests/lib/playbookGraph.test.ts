@@ -36,7 +36,7 @@ describe('validatePlaybookDefinition', () => {
     expect(problems).toEqual([
       problem(
         'MISSING_NODE',
-        'definition.nodes[0].inputs[0].source.node',
+        'definition.nodes[0].inputs[0].source.node_id',
         "'tax_regime'"
       ),
     ]);
@@ -80,7 +80,7 @@ describe('validatePlaybookDefinition', () => {
     ).toEqual([problem('CYCLE', 'definition.nodes', "'a'")]);
   });
 
-  test('a key or an input name used twice is refused', () => {
+  test('a node id or an input name used twice is refused', () => {
     expect(
       validate({
         nodes: [
@@ -89,7 +89,7 @@ describe('validatePlaybookDefinition', () => {
         ],
       })
     ).toEqual([
-      problem('DUPLICATE_NODE', 'definition.nodes[1].key'),
+      problem('DUPLICATE_NODE', 'definition.nodes[1].id'),
       problem('DUPLICATE_INPUT', 'definition.nodes[0].inputs[1].name'),
     ]);
   });

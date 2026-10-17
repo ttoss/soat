@@ -217,6 +217,8 @@ A call to another project's tool through a [share](../modules/shares.md#using-a-
 
 ## Validation
 
+Every value is a string. A number, boolean, array or object value, or a `tool_context` that is not an object, is rejected with **`400 VALIDATION_FAILED`** on every entry point and in a formation template, the same rule a [tag](../modules/iam.md#tags) follows; nothing is converted to a string for you.
+
 A key becomes an HTTP header name, so it must be a valid one. A `tool_context` violating either rule is rejected with **`400 INVALID_TOOL_CONTEXT_KEY`** at write time (`create-session`, `update-session`) or before the provider call (generation endpoints):
 
 1. **Character set** — a key may contain only letters, digits and ``!#$%&'*+-.^_`|~``. A space, colon, parenthesis, newline or non-ASCII character is rejected. (`meta.keys` lists the offending keys.)

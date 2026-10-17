@@ -42,7 +42,7 @@ const transformationProblems = (args: {
   node: PlaybookNode;
   path: string;
 }): PlaybookDefinitionProblem[] => {
-  const { key, transformations } = args.node;
+  const { id, transformations } = args.node;
   const problems: PlaybookDefinitionProblem[] = [];
   const names = new Set<string>();
   for (const [index, { name }] of (transformations ?? []).entries()) {
@@ -50,7 +50,7 @@ const transformationProblems = (args: {
       problems.push({
         code: 'DUPLICATE_TRANSFORMATION',
         path: `${args.path}.transformations[${index}].name`,
-        message: `Node '${key}' declares transformation '${name}' more than once.`,
+        message: `Node '${id}' declares transformation '${name}' more than once.`,
       });
     }
     names.add(name);
@@ -63,7 +63,7 @@ const nodeProblems = (args: {
   node: PlaybookNode;
   path: string;
 }): PlaybookDefinitionProblem[] => {
-  const { key, kind, executor, transformations, final } = args.node;
+  const { id, kind, executor, transformations, final } = args.node;
 
   const problems: PlaybookDefinitionProblem[] = [];
 
@@ -71,7 +71,7 @@ const nodeProblems = (args: {
     problems.push({
       code: 'EXECUTOR_REQUIRED',
       path: `${args.path}.executor`,
-      message: `Execute node '${key}' needs an executor.`,
+      message: `Execute node '${id}' needs an executor.`,
     });
   }
 
@@ -79,7 +79,7 @@ const nodeProblems = (args: {
     problems.push({
       code: 'EXECUTOR_FORBIDDEN',
       path: `${args.path}.executor`,
-      message: `${kind} node '${key}' cannot have an executor; only an execute node runs one.`,
+      message: `${kind} node '${id}' cannot have an executor; only an execute node runs one.`,
     });
   }
 
@@ -87,7 +87,7 @@ const nodeProblems = (args: {
     problems.push({
       code: 'TRANSFORMATIONS_NOT_FINAL',
       path: `${args.path}.transformations`,
-      message: `Node '${key}' declares transformations but is not final.`,
+      message: `Node '${id}' declares transformations but is not final.`,
     });
   }
 
@@ -108,7 +108,7 @@ const inputProblems = (args: {
 
   for (const [index, input] of node.inputs.entries()) {
     const path = `${args.path}.inputs[${index}]`;
-    const named = `Input '${input.name}' of node '${node.key}'`;
+    const named = `Input '${input.name}' of node '${node.id}'`;
 
     if (seen.has(input.name)) {
       problems.push({
@@ -122,20 +122,20 @@ const inputProblems = (args: {
 
     if (input.source === 'manual') continue;
 
-    const source = byKey.get(input.source.node);
+    const source = byKey.get(input.source.node_id);
     const field = parseField({ field: input.source.field });
 
     if (!source) {
       problems.push({
         code: 'MISSING_NODE',
-        path: `${path}.source.node`,
-        message: `${named} reads node '${input.source.node}', which the definition does not declare.`,
+        path: `${path}.source.node_id`,
+        message: `${named} reads node '${input.source.node_id}', which the definition does not declare.`,
       });
     } else if (!field || !fieldExists({ source, field })) {
       problems.push({
         code: 'UNKNOWN_FIELD',
         path: `${path}.source.field`,
-        message: `${named} reads '${input.source.field}', which node '${source.key}' does not produce.`,
+        message: `${named} reads '${input.source.field}', which node '${source.id}' does not produce.`,
       });
     }
   }
@@ -157,15 +157,15 @@ export const validatePlaybookDefinition = (args: {
   const keys = new Set<string>();
 
   for (const [index, node] of definition.nodes.entries()) {
-    if (keys.has(node.key)) {
+    if (keys.has(node.id)) {
       problems.push({
         code: 'DUPLICATE_NODE',
-        path: `${nodePath(index)}.key`,
-        message: `Node key '${node.key}' is used by more than one node.`,
+        path: `${nodePath(index)}.id`,
+        message: `Node id '${node.id}' is used by more than one node.`,
       });
     }
 
-    keys.add(node.key);
+    keys.add(node.id);
   }
 
   for (const [index, node] of definition.nodes.entries()) {

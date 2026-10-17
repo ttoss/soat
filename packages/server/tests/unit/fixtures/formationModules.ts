@@ -92,6 +92,8 @@ export type RoundTripCase = {
     /** A full declaration replacing `create`; omit for an immutable type. */
     update?: Record<string, unknown>;
     expectAfterUpdate?: Record<string, unknown>;
+    /** Fields the update clears, so the read leaves them out. */
+    absentAfterUpdate?: string[];
   };
 };
 
@@ -196,6 +198,9 @@ export const runRoundTrip = async (args: {
     expect(afterUpdate.diff.current).toMatchObject(
       spec.expectAfterUpdate ?? {}
     );
+    for (const field of spec.absentAfterUpdate ?? []) {
+      expect(afterUpdate.diff.current).not.toHaveProperty(field);
+    }
   }
 
   const deleted = await client.delete(`/api/v1/formations/${created.body.id}`);

@@ -143,12 +143,12 @@ export const advancePlaybookCase = async (args: {
 
     let count = 0;
     for (const node of definition.nodes) {
-      const view = views.get(node.key)!;
+      const view = views.get(node.id)!;
       if (!view.runnable) continue;
       await db.PlaybookExecution.create(
         {
           caseId: args.caseDbId,
-          node: node.key,
+          node: node.id,
           playbookVersion: row.playbookVersion,
           executorType: node.executor?.type ?? null,
           executorId: node.executor?.id ?? null,

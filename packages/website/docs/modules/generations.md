@@ -43,7 +43,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
 | `stop_reason`               | string \| null | Why the generation stopped — see [Stop Reason](./agents.md#stop-reason)                              |
 | `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
-| `metadata`                  | object \| null | Caller-owned annotations (see [Metadata](#metadata) and [Tags and metadata](iam.md#tags-and-metadata))                    |
+| `metadata`                  | object | Caller-owned annotations (see [Metadata](#metadata) and [Tags and metadata](iam.md#tags-and-metadata))                    |
 | `action_id`                 | string \| null | Logical action label supplied on the generate request                                                |
 | `trigger_id`                | string \| null | Trigger that initiated the generation                                                                |
 | `orchestration_run_id`      | string \| null | Orchestration run that dispatched the generation                                                     |

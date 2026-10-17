@@ -61,7 +61,7 @@ const readTargetVersion = async (args: {
 
 /**
  * Moves a case to another version of its playbook, its current one unless one
- * is named, and records what moved. Values carry over by node key and the node
+ * is named, and records what moved. Values carry over by node id and the node
  * states are read against the new version. Refused while an execution runs: it
  * would settle against nodes the new version may not have. An execution queued
  * but not started settles `superseded`, and the cascade then queues what the
@@ -107,7 +107,7 @@ export const upgradePlaybookCase = async (args: {
           `Case '${row.publicId}' has ${running.length} execution(s) running.`,
           {
             executions: running.map((execution) => {
-              return { id: execution.publicId, node: execution.node };
+              return { id: execution.publicId, node_id: execution.node };
             }),
           }
         );

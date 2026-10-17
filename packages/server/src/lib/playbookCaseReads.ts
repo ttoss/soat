@@ -28,8 +28,8 @@ export const getPlaybookCaseMissing = async (args: {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `node must name a node of the case's playbook version.`,
-      { node: args.node }
+      `node_id must name a node of the case's playbook version.`,
+      { node_id: args.node }
     );
   }
 
@@ -39,14 +39,14 @@ export const getPlaybookCaseMissing = async (args: {
   });
   const waves = playbookMissingInputs({ definition, views, node: args.node });
 
-  return { case_id: row.publicId, node: args.node, waves };
+  return { case_id: row.publicId, node_id: args.node, waves };
 };
 
 const mapEntry = (row: InstanceType<(typeof db)['PlaybookEntry']>) => {
   return {
     id: row.publicId,
     revision: row.revision,
-    node: row.node,
+    node_id: row.node,
     kind: row.kind,
     input: row.field,
     value: row.value,

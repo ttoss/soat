@@ -544,7 +544,7 @@ paths:
       summary: List what a node still needs
       description: >-
         Returns the manual inputs still unset, or refused by their schema,
-        before `node` can be reached, grouped in waves: nothing in a later wave
+        before `node_id` can be reached, grouped in waves: nothing in a later wave
         can run before the earlier ones are filled.
       operationId: getPlaybookCaseMissing
       x-soat-resource:
@@ -552,10 +552,10 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - name: node
+        - name: node_id
           in: query
           required: true
-          description: The key of the node to reach, usually a final node
+          description: The ID of the node to reach, usually a final node
           schema:
             type: string
             example: pricing
@@ -567,7 +567,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PlaybookCaseMissing'
         '400':
-          description: Bad request — node names no node of the case's version
+          description: Bad request — node_id names no node of the case's version
         '401':
           description: Unauthorized
         '404':
@@ -587,7 +587,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - name: node
+        - name: node_id
           in: query
           description: Only the entries of this node
           schema:
@@ -700,7 +700,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - name: node
+        - name: node_id
           in: query
           description: Only the executions of this node
           schema:
@@ -769,7 +769,7 @@ paths:
       description: >-
         Renders one revision of a final node as files, one export per
         transformation: each transformation's tool is called with the case's
-        `case_id` and `subject`, the `node`, the `revision` and that revision's
+        `case_id` and `subject`, the `node_id`, the `revision` and that revision's
         `output`, and must answer a file (`execute.response_mode: base64`) of
         its `format`'s content type. The file is kept in the project's files
         under `/.system/playbooks/`. An export never feeds a node.
@@ -842,7 +842,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - name: node
+        - name: node_id
           in: query
           description: Only the exports of this node
           schema:
@@ -917,7 +917,7 @@ paths:
       description: >-
         Moves a case to another version of its playbook: the playbook's
         current version, or the `version` named, an earlier one included.
-        Values carry over by node key, and every node's state is read against
+        Values carry over by node ID, and every node's state is read against
         the new version: a node added is open, a node removed leaves the
         structure while its entries stay, a node whose input reads another
         field is `stale`, and a value its input's new schema refuses is
@@ -1146,7 +1146,7 @@ components:
       name: node
       in: path
       required: true
-      description: The key of a node of the case's playbook version
+      description: The ID of a node of the case's playbook version
       schema:
         type: string
         example: revenue
@@ -1187,11 +1187,12 @@ components:
         - type: object
           additionalProperties: false
           required:
-            - node
+            - node_id
             - field
           properties:
-            node:
+            node_id:
               type: string
+              description: The ID of the node it reads
               example: revenue
             field:
               type: string
@@ -1289,15 +1290,15 @@ components:
       type: object
       additionalProperties: false
       required:
-        - key
+        - id
         - title
         - kind
         - inputs
       properties:
-        key:
+        id:
           type: string
           description: >-
-            Stable across versions: a case's values carry over by key. Letters,
+            Stable across versions: a case's values carry over by ID. Letters,
             digits and underscores, starting with a letter or underscore.
           example: regime
         title:
@@ -1567,7 +1568,7 @@ components:
     PlaybookCaseNode:
       type: object
       properties:
-        key:
+        id:
           type: string
           example: regime
         state:
@@ -1674,12 +1675,12 @@ components:
       type: object
       additionalProperties: false
       required:
-        - node
+        - node_id
         - name
         - value
         - expected_revision
       properties:
-        node:
+        node_id:
           type: string
           example: revenue
         name:
@@ -1717,7 +1718,7 @@ components:
     PlaybookMissingInput:
       type: object
       properties:
-        node:
+        node_id:
           type: string
         input:
           type: string
@@ -1732,7 +1733,7 @@ components:
         case_id:
           type: string
           example: pbk_case_V1StGXR8Z5jdHi6B
-        node:
+        node_id:
           type: string
           example: pricing
         waves:
@@ -1750,7 +1751,7 @@ components:
           example: pbk_ent_V1StGXR8Z5jdHi6B
         revision:
           type: integer
-        node:
+        node_id:
           type: string
         kind:
           type: string
@@ -1808,9 +1809,9 @@ components:
         case_id:
           type: string
           example: pbk_case_V1StGXR8Z5jdHi6B
-        node:
+        node_id:
           type: string
-          description: The key of the node that ran
+          description: The ID of the node that ran
           example: revenue
         playbook_version:
           type: integer
@@ -1926,9 +1927,9 @@ components:
         case_id:
           type: string
           example: pbk_case_V1StGXR8Z5jdHi6B
-        node:
+        node_id:
           type: string
-          description: The key of the final node rendered
+          description: The ID of the final node rendered
           example: pricing
         revision:
           type: integer
@@ -2021,7 +2022,7 @@ components:
           description: The version the case moved to
         diff:
           type: object
-          description: What moved between the two versions, by node key
+          description: What moved between the two versions, by node ID
           properties:
             added:
               type: array
@@ -2041,7 +2042,7 @@ components:
               items:
                 type: object
                 properties:
-                  node:
+                  node_id:
                     type: string
                   executor:
                     type: boolean

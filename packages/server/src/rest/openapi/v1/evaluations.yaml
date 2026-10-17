@@ -1496,7 +1496,7 @@ components:
           type: string
           nullable: true
         metadata:
-          $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+          $ref: './metadata.yaml#/components/schemas/MetadataBag'
         source_generation_id:
           type: string
           nullable: true
@@ -1806,14 +1806,14 @@ components:
         metadata:
           description: >-
             The caller-owned key/value metadata supplied when the run was
-            started, returned verbatim. Null when the run was started without
+            started, returned verbatim. Absent when the run was started without
             any (a trigger-started run included — see `trigger_id` for that
             provenance). The server writes nothing here.
           example:
             commit_sha: 9f2c1ab
             ci_job: nightly-evals
           allOf:
-            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         started_at:
           type: string
           format: date-time

@@ -1,5 +1,5 @@
 import {
-  assertValidToolContextKeys,
+  assertValidToolContext,
   buildContextHeaderName,
   buildContextHeaders,
   pinServerIdentityToolContext,
@@ -169,7 +169,7 @@ describe('SOAT_HEADER_PREFIX — context headers', () => {
   test('key validation still catches a header collision under a custom prefix', () => {
     process.env.SOAT_HEADER_PREFIX = 'X-Naturali-';
     expect(() => {
-      return assertValidToolContextKeys({ userId: 'a', userID: 'b' });
+      return assertValidToolContext({ userId: 'a', userID: 'b' });
     }).toThrow(/both map to the header X-Naturali-Context-/);
   });
 });

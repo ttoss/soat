@@ -1,5 +1,6 @@
 import { DomainError } from '../errors';
 import { HEADER_TOKEN_CHARS, soatHeader } from './headerPrefix';
+import { readStringBag } from './stringBag';
 
 /**
  * `tool_context` — the key/value map a caller injects so `http`, `mcp` and
@@ -51,9 +52,10 @@ export const buildContextHeaderName = (key: string): string => {
 };
 
 /**
- * Throws `INVALID_TOOL_CONTEXT_KEY` (400) when a `tool_context` key cannot
- * survive the trip to an outbound header. Two failure modes, both silent
- * without this guard:
+ * Throws `VALIDATION_FAILED` (400) when a `tool_context` value is not a
+ * string, the rule a tag bag follows (`readStringBag`), and
+ * `INVALID_TOOL_CONTEXT_KEY` (400) when a key cannot survive the trip to an
+ * outbound header. Two key failure modes, both silent without this guard:
  *
  * - a key outside the header-name grammar only fails inside `fetch`, so the
  *   caller sees a failed tool call rather than a rejected write;
@@ -64,12 +66,16 @@ export const buildContextHeaderName = (key: string): string => {
  * Accepts every key shape that already works — snake_case, kebab-case and
  * dotted keys are all valid header names and keep their current behavior.
  */
-export const assertValidToolContextKeys = (
-  toolContext?: Record<string, string> | null
+export const assertValidToolContext = (
+  // `unknown` values because a generation body reaches here untyped; the
+  // value check below is what establishes them as strings.
+  toolContext?: Record<string, unknown> | null
 ): void => {
   if (!toolContext) return;
 
-  const keys = Object.keys(toolContext);
+  const keys = Object.keys(
+    readStringBag({ field: 'tool_context', value: toolContext })
+  );
 
   const invalid = keys.filter((key) => {
     return !HEADER_TOKEN_RE.test(key);
@@ -253,7 +259,7 @@ export const sanitizeCallerToolContext = (
   toolContext?: Record<string, string> | null
 ): Record<string, string> | undefined => {
   if (!toolContext) return undefined;
-  assertValidToolContextKeys(toolContext);
+  assertValidToolContext(toolContext);
   const stripped = pinServerIdentityToolContext({
     toolContext,
     identity: null,
@@ -266,26 +272,19 @@ export const sanitizeCallerToolContext = (
  * Narrows an arbitrary `tool_context` value — a request body field or a
  * formation template property, neither typed by its source — to the shape
  * every carrier accepts: `null` clears the stored bag, `undefined` means "no
- * value given, leave it as is", and a plain object is stringified entry by
- * entry rather than rejected, the same leniency every `tool_context` entry
- * point already gives a non-string value.
+ * value given, leave it as is", and anything else must be a bag of string
+ * values (`readStringBag`), refused with `400` otherwise.
  *
  * One implementation because a caller-supplied bag and a template-declared one
  * answer "what does null mean" and "what does a number value become"
  * independently otherwise, and a formation module that gets either question
- * wrong turns an explicit clear into a silent no-op, or a stringifiable value
- * into one `sanitizeCallerToolContext` rejects for not being a string.
+ * wrong turns an explicit clear into a silent no-op.
  */
 export const toStoredToolContext = (
   value: unknown
 ): Record<string, string> | null | undefined => {
-  if (value === null) return null;
-  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, item]) => {
-      return [key, String(item)];
-    })
-  );
+  if (value === null || value === undefined) return value;
+  return readStringBag({ field: 'tool_context', value });
 };
 
 /**
@@ -295,7 +294,7 @@ export const toStoredToolContext = (
  * keys.
  *
  * Matching is case-insensitive because an entry names an outbound header (RFC
- * 9110 §5.1) — `assertValidToolContextKeys` refuses two keys differing only in
+ * 9110 §5.1) — `assertValidToolContext` refuses two keys differing only in
  * case for the same reason — so a header cannot be allowed or denied depending
  * on how the entry was typed.
  *

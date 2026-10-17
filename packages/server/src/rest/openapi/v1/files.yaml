@@ -818,7 +818,7 @@ components:
           description: File size in bytes
           example: 1024
         metadata:
-          $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+          $ref: './metadata.yaml#/components/schemas/MetadataBag'
         tags:
           $ref: './tags.yaml#/components/schemas/TagBag'
         created_at:

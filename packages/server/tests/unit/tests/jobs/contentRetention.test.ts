@@ -196,7 +196,7 @@ describe('Trace content retention sweep', () => {
 
       const res = await asAdmin().get(`/api/v1/generations/${generationId}`);
       expect(res.status).toBe(200);
-      expect(res.body.metadata).toBeNull();
+      expect(res.body.metadata).toBeUndefined();
       expect(res.body.content_redacted_at).not.toBeNull();
       expect(res.body.status).toBe('completed');
       expect(res.body.started_at).not.toBeNull();

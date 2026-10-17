@@ -22,7 +22,7 @@ import { authenticatedTestClient } from '../../testClient';
 const COLLECT = {
   nodes: [
     {
-      key: 'revenue',
+      id: 'revenue',
       title: 'Revenue',
       kind: 'collect',
       inputs: [
@@ -62,7 +62,12 @@ const writeAmount = async (caseId: string) => {
     .post(`/api/v1/playbook-cases/${caseId}/inputs`)
     .send({
       inputs: [
-        { node: 'revenue', name: 'amount', value: 3, expected_revision: null },
+        {
+          node_id: 'revenue',
+          name: 'amount',
+          value: 3,
+          expected_revision: null,
+        },
       ],
     });
   expect(res.status).toBe(200);
@@ -132,7 +137,7 @@ describe('drainPlaybookExecutions', () => {
       .send({
         inputs: [
           {
-            node: 'revenue',
+            node_id: 'revenue',
             name: 'amount',
             value: 4,
             expected_revision: current.body.nodes[0].inputs[0].revision,

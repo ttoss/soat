@@ -369,6 +369,10 @@ components:
         content:
           type: string
           description: Text content of the memory
+        tags:
+          description: The memory's tags; absent when it has none
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/TagBag'
         score:
           type: number
           description: >-

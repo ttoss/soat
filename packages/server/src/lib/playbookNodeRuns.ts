@@ -33,7 +33,7 @@ const idsOf = (args: {
     });
 };
 
-/** The run each waiting node waits on, by node key. */
+/** The run each waiting node waits on, by node id. */
 export const playbookNodeRuns = async (args: {
   snapshot: PlaybookCaseSnapshot;
 }): Promise<Map<string, PlaybookNodeRun>> => {

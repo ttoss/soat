@@ -280,3 +280,26 @@ export const pushFieldTypeErrors = (args: {
 
   return flagged;
 };
+
+/**
+ * Refuses a declared bag value that is not a string, the rule
+ * `readStringBag` applies to a request body, reported at validate time with
+ * its path instead of failing the apply. An expression passes: it resolves to
+ * a string at deploy.
+ */
+export const pushStringBagValueErrors = (args: {
+  field: string;
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  const bag = args.properties[args.field];
+  if (!isObjectRecord(bag) || isFormationExpression(bag)) return;
+  for (const [key, value] of Object.entries(bag)) {
+    if (typeof value === 'string' || isFormationExpression(value)) continue;
+    args.errors.push({
+      path: `${args.basePath}.${args.field}.${key}`,
+      message: `\`${args.field}\` values must be strings`,
+    });
+  }
+};
