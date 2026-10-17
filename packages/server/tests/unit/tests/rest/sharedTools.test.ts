@@ -533,7 +533,7 @@ describe('Shared tools', () => {
       const status = await authenticatedTestClient(adminToken).get(
         `/api/v1/documents/${ingest.body.id}/status`
       );
-      expect(status.body.error).toBe('CONVERTER_FAILED');
+      expect(status.body.error.code).toBe('CONVERTER_FAILED');
     });
 
     test("an agent's binding drops, the turn is told, and the feed records why", async () => {
