@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { signatureHeader } from 'src/lib/hmacSignature';
 import { findWebhookTriggerForDelivery } from 'src/lib/triggers';
 
 const hooksRouter = new Router<Context>();
@@ -63,7 +64,7 @@ hooksRouter.post('/hooks/triggers/:trigger_id', async (ctx: Context) => {
   const signatureOk = verifySignature({
     secret: trigger.secret,
     rawBody,
-    header: ctx.headers['x-soat-signature'] as string | undefined,
+    header: ctx.get(signatureHeader()) || undefined,
   });
   if (!signatureOk) {
     throw new DomainError('UNAUTHORIZED', 'Invalid or missing signature.');

@@ -6,11 +6,10 @@
  * name inside a `call` — otherwise an allowlist matches nothing and a denylist
  * is bypassed by calling the denied tool through `call`.
  */
-import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
 import { parseJsonRpcBody, readMcpCallResult } from './mcpProtocol';
 import type { McpToolListing } from './mcpToolListing';
+import { type McpTransport, postMcp } from './mcpTransport';
 import { isPlainObject } from './plainObject';
-import { fetchWithEgressGuard } from './toolEgress';
 
 /** The listed tools a deferred server reaches its catalogue through. */
 export type DeferredProxy = { callName: string; describeName: string };
@@ -56,16 +55,13 @@ export const innerToolName = (callArgs: unknown): string | undefined => {
  * nothing — reported like any listing that leaves nothing to attach.
  */
 export const describeDeferredTools = async (args: {
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
   proxy: DeferredProxy;
   names: string[];
 }): Promise<McpToolListing[]> => {
   if (args.names.length === 0) return [];
-  const response = await fetchWithEgressGuard(args.mcpUrl, {
-    method: 'POST',
-    headers: args.mcpHeaders,
-    signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
+  const response = await postMcp({
+    transport: args.transport,
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 3,
@@ -81,7 +77,7 @@ export const describeDeferredTools = async (args: {
     described = readMcpCallResult({
       body: await parseJsonRpcBody(response),
       toolName: args.proxy.describeName,
-      url: args.mcpUrl,
+      url: args.transport.url,
     });
   } catch {
     // `describe` answers an error when it knows none of the names.

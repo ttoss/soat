@@ -27,6 +27,7 @@ import { requestIdMiddleware } from './middleware/requestId';
 import { oauthAuthorizationServer } from './oauth/server';
 import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
+import { toolAssertionKeysRouter } from './rest/toolAssertionKeys';
 
 const app = new App();
 
@@ -76,6 +77,9 @@ app.use(oauthAuthorizationServer.routes());
 // Public inbound hook receiver — outside /api/v1: HMAC-authenticated, no case
 // transform, excluded from the generated SDK/CLI/MCP surface.
 app.use(hooksRouter.routes());
+
+// Public key set tool servers verify tool assertions against.
+app.use(toolAssertionKeysRouter.routes());
 
 app.use(restRouter.routes());
 app.use(restRouter.allowedMethods());

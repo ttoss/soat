@@ -68,7 +68,7 @@ Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Aut
 
 ### Context Headers (`X-Soat-Context-*`)
 
-Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
+Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
 
 ### Tool ID vs Tool Name
 
@@ -429,6 +429,31 @@ The resolved address is checked on the first request and every redirect hop; cre
 
 The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), deployment-wide, not per project. For SOAT's own API use a [`builtin` tool](#builtin): in-process, under the caller's permissions.
 
+### Tool Assertions
+
+When the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration), every request an `mcp` tool sends (`tools/list`, a deferred server's `describe`, `tools/call`) carries a JWT in `X-Soat-Tool-Assertion` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)), so the server can tell which tool of which project called it without holding a secret of SOAT's. A header the tool defines under that name, in any casing, is replaced, and a [redirect to another origin](#where-a-tool-may-reach-egress) drops it like `Authorization`.
+
+The JWT is signed with EdDSA (Ed25519). The public key is published, unauthenticated, at `GET /.well-known/tool-assertion-jwks.json` under the header's `kid` (the key's RFC 7638 thumbprint); with no key configured the set is empty and no header is sent.
+
+{/* single-client: the key set is a public well-known document, not an API operation */}
+```bash
+curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
+```
+
+| Claim | Value |
+| --- | --- |
+| `iss` | The deployment's `SOAT_BASE_URL` |
+| `aud` | The target URL's origin and path; the query string is left out |
+| `iat`, `exp` | Issue time and expiry, 60 seconds apart |
+| `jti` | Unique per request |
+| `tool_id` | The tool's ID; absent for an inline definition |
+| `project_id` | The tool's own project |
+| `calling_project_id` | The caller's project, on a call through a [share](./shares.md) |
+| `session_id`, `actor_id`, `actor_external_id` | The [server-derived identity](../advanced/tool-context.md#auto-populated-keys-sessions), when the call runs in a session |
+| `body_sha256` | Base64url SHA-256 of the request body |
+
+A receiver checks the signature against the key set, `aud` against its own URL, `exp`, and `body_sha256` against the bytes it read. The identity claims are the [reserved context keys](../advanced/tool-context.md#auto-populated-keys-sessions), which no caller can set; a caller-supplied value never reaches a claim.
+
 ### Calling a Tool Directly
 
 [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
@@ -484,6 +509,7 @@ Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-t
 | Environment Variable      | Required | Description |
 | ------------------------- | -------- | ----------- |
 | `TOOL_RESPONSE_MAX_BYTES` | No       | Ceiling on an http tool's `response_mode: base64` body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger body is `502 TOOL_RESPONSE_TOO_LARGE`. |
+| `TOOL_ASSERTION_PRIVATE_KEY` | No | PEM (PKCS #8) Ed25519 private key that signs [tool assertions](#tool-assertions); `\n` escapes are accepted. Unset sends none. Any other key type fails the call before it is sent. |
 
 ## Examples
 

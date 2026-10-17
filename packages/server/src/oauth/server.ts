@@ -23,12 +23,11 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { ISSUER } from '../lib/serverIssuer';
 import { JWT_SECRET } from '../middleware/auth';
 
 const log = createDebug('soat:oauth');
 
-const PORT = process.env.PORT ?? '5047';
-export const ISSUER = process.env.SOAT_BASE_URL ?? `http://localhost:${PORT}`;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60; // 1h
 const CONSENT_SESSION_TTL_MS = 10 * 60 * 1000; // 10min
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days

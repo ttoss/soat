@@ -76,7 +76,7 @@ Every event is listed in the [Webhook Events Reference](../webhook-events.md), g
 
 ### Delivery
 
-A matching event is delivered as an HTTP POST with these headers:
+A matching event is delivered as an HTTP POST with these headers ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
 
 | Header                | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |

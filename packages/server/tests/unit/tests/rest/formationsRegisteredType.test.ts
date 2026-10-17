@@ -172,6 +172,32 @@ describe('POST /api/v1/formations — operator-registered type', () => {
     expect(digest).toBe(expected);
   });
 
+  test('SOAT_HEADER_PREFIX names the signature and idempotency headers', async () => {
+    const saved = process.env.SOAT_HEADER_PREFIX;
+    process.env.SOAT_HEADER_PREFIX = 'X-Acme-';
+    try {
+      handler.replies.create = {
+        status: 200,
+        body: { physical_resource_id: 'chn_prefixed' },
+      };
+
+      const res = await createFormation(
+        channelTemplate({ name: 'Prefixed', kind: 'whatsapp' })
+      );
+
+      expect(res.status).toBe(201);
+      const [request] = handler.recorded;
+      expect(String(request.headers['x-acme-signature'])).toMatch(
+        /^t=\d+,v1=[0-9a-f]+$/
+      );
+      expect(typeof request.headers['x-acme-idempotency-key']).toBe('string');
+      expect(request.headers['x-soat-signature']).toBeUndefined();
+    } finally {
+      if (saved === undefined) delete process.env.SOAT_HEADER_PREFIX;
+      else process.env.SOAT_HEADER_PREFIX = saved;
+    }
+  });
+
   test('the idempotency key is distinct per resource', async () => {
     handler.replies.create = (request) => {
       return {

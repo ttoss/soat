@@ -210,6 +210,36 @@ describe('Webhook delivery', () => {
       expect(Math.abs(Date.now() / 1000 - Number(timestamp))).toBeLessThan(120);
     });
 
+    test('SOAT_HEADER_PREFIX renames every header the delivery sends', async () => {
+      const saved = process.env.SOAT_HEADER_PREFIX;
+      process.env.SOAT_HEADER_PREFIX = 'X-Acme-';
+      try {
+        const url = 'https://example.com/delivery-prefixed';
+        const webhook = await createWebhook({ url, events: ['files.created'] });
+
+        const fileId = await createFile();
+        const delivery = await waitForDelivery({
+          webhookId: webhook.id,
+          fileId,
+          done: (d) => {
+            return d.status === 'success';
+          },
+        });
+
+        const [init] = callsTo(url);
+        expect(header(init, 'X-Acme-Event')).toBe('files.created');
+        expect(header(init, 'X-Acme-Delivery')).toBe(delivery.id);
+        expect(header(init, 'X-Acme-Signature')).toMatch(
+          /^t=\d+,v1=[0-9a-f]{64}$/
+        );
+        expect(header(init, 'X-Soat-Event')).toBeNull();
+        expect(header(init, 'X-Soat-Signature')).toBeNull();
+      } finally {
+        if (saved === undefined) delete process.env.SOAT_HEADER_PREFIX;
+        else process.env.SOAT_HEADER_PREFIX = saved;
+      }
+    });
+
     test('matches exact, prefix and `*` patterns and skips the rest', async () => {
       const urls = {
         star: 'https://example.com/delivery-star',

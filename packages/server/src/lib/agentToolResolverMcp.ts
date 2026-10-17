@@ -10,10 +10,7 @@ import type { JSONSchema7, JSONValue, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 
 import { DomainError } from '../errors';
-import {
-  type LogToolCallingError,
-  SOAT_TOOL_CALL_TIMEOUT_MS,
-} from './externalToolCall';
+import type { LogToolCallingError } from './externalToolCall';
 import { toToolUnreachableError } from './httpToolError';
 import {
   type DeferredProxy,
@@ -23,7 +20,7 @@ import {
 } from './mcpDeferredProxy';
 import { parseJsonRpcBody, readMcpCallResult } from './mcpProtocol';
 import { fetchMcpToolListing, type McpToolListing } from './mcpToolListing';
-import { fetchWithEgressGuard } from './toolEgress';
+import { type McpTransport, postMcp } from './mcpTransport';
 import {
   mergePresetParameters,
   stripPresetKeysFromSchema,
@@ -54,8 +51,7 @@ const toolsCallBody = (args: {
 };
 
 export const buildMcpToolExecute = (args: {
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
   mcpToolName: string;
   meter: ToolExecutionMeter;
   presetParameters?: object | null;
@@ -96,31 +92,24 @@ export const buildMcpToolExecute = (args: {
       return await meterToolExecution({
         meter: args.meter,
         send: async (markSent) => {
-          const callResponse = await fetchWithEgressGuard(
-            args.mcpUrl,
-            {
-              method: 'POST',
-              headers: args.mcpHeaders,
-              signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
-              body: toolsCallBody({
-                viaCall: args.viaCall,
-                toolName: args.mcpToolName,
-                callArgs,
-              }),
+          const callResponse = await postMcp({
+            transport: args.transport,
+            body: toolsCallBody({
+              viaCall: args.viaCall,
+              toolName: args.mcpToolName,
+              callArgs,
+            }),
+            onRequest: () => {
+              markSent({
+                input: callArgs,
+                action: args.proxyCall ? inner : args.mcpToolName,
+              });
             },
-            {
-              onRequest: () => {
-                markSent({
-                  input: callArgs,
-                  action: args.proxyCall ? inner : args.mcpToolName,
-                });
-              },
-            }
-          );
+          });
           return readMcpCallResult({
             body: await parseJsonRpcBody(callResponse),
             toolName: args.mcpToolName,
-            url: args.mcpUrl,
+            url: args.transport.url,
           });
         },
       });
@@ -128,13 +117,16 @@ export const buildMcpToolExecute = (args: {
       args.logToolCallingError({
         toolName: args.mcpToolName,
         toolType: 'mcp',
-        url: args.mcpUrl,
+        url: args.transport.url,
         method: 'POST',
         error,
       });
       throw (
-        toToolUnreachableError({ error, url: args.mcpUrl, method: 'POST' }) ??
-        error
+        toToolUnreachableError({
+          error,
+          url: args.transport.url,
+          method: 'POST',
+        }) ?? error
       );
     }
   };
@@ -160,8 +152,7 @@ const toolMetadata = (
 /** One listed MCP tool, as the model sees it and as it dispatches. */
 const buildMcpToolEntry = (args: {
   mcpTool: McpToolListing;
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
   meter: ToolExecutionMeter;
   presetParameters?: object | null;
   toolContext?: Record<string, string>;
@@ -185,8 +176,7 @@ const buildMcpToolEntry = (args: {
       )
     ),
     execute: buildMcpToolExecute({
-      mcpUrl: args.mcpUrl,
-      mcpHeaders: args.mcpHeaders,
+      transport: args.transport,
       mcpToolName: mcpTool.name,
       meter: args.meter,
       presetParameters: args.presetParameters,
@@ -235,8 +225,7 @@ const boundTools = async (args: {
   proxy: DeferredProxy | null;
   actions?: string[] | null;
   isBound: (name: string) => boolean;
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
 }): Promise<McpToolListing[]> => {
   const listed = args.listing.filter((mcpTool) => {
     return args.isBound(mcpTool.name);
@@ -249,8 +238,7 @@ const boundTools = async (args: {
     })
   );
   const behindProxy = await describeDeferredTools({
-    mcpUrl: args.mcpUrl,
-    mcpHeaders: args.mcpHeaders,
+    transport: args.transport,
     proxy: args.proxy,
     names: args.actions.filter((name) => {
       return !listedNames.has(name);
@@ -268,8 +256,8 @@ const boundTools = async (args: {
 };
 
 export const resolveMcpTools = async (args: {
+  transport: McpTransport;
   typedTool: {
-    mcp: { url: string; headers?: Record<string, string> };
     // Absent exposes the whole MCP surface. A set is the capability-level
     // primitive that makes a read-only scope over a read+write server
     // enforceable, not just a prompt-level suggestion.
@@ -278,9 +266,6 @@ export const resolveMcpTools = async (args: {
     // way to scope a read+write server read-only: deny the write tools instead
     // of enumerating every read tool.
     deniedActions?: string[] | null;
-    // Per-tool allowlist of `tool_context` keys that may be forwarded as
-    // prefixed context headers. `null`/`undefined` forwards all.
-    contextKeys?: string[] | null;
     // Fixed values the operator pinned on the binding. They apply to every tool
     // the MCP server exposes through it — the same reach `builtin` presets have
     // over every action a binding lists.
@@ -288,10 +273,6 @@ export const resolveMcpTools = async (args: {
   };
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
-  buildContextHeaders: (args: {
-    toolContext?: Record<string, string>;
-    contextKeys?: string[] | null;
-  }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
   /**
    * Called when the binding contributed no tool to the turn — the listing could
@@ -304,28 +285,17 @@ export const resolveMcpTools = async (args: {
 }): Promise<Record<string, Tool>> => {
   const result: Record<string, Tool> = {};
   const isBound = buildActionFilter(args.typedTool);
-  const mcpUrl = args.typedTool.mcp.url;
-  const mcpHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream',
-    ...args.typedTool.mcp.headers,
-    ...args.buildContextHeaders({
-      toolContext: args.toolContext,
-      contextKeys: args.typedTool.contextKeys,
-    }),
-  };
+  const { transport } = args;
 
   const listing = await fetchMcpToolListing({
-    mcpUrl,
-    mcpHeaders,
+    transport,
     logToolCallingError: args.logToolCallingError,
     reportResolutionFailure: args.reportResolutionFailure,
   });
   if (!listing) return result;
 
   const shared = {
-    mcpUrl,
-    mcpHeaders,
+    transport,
     meter: args.meter,
     presetParameters: args.typedTool.presetParameters,
     toolContext: args.toolContext,
@@ -337,8 +307,7 @@ export const resolveMcpTools = async (args: {
     proxy,
     actions: args.typedTool.actions,
     isBound,
-    mcpUrl,
-    mcpHeaders,
+    transport,
   })) {
     result[mcpTool.name] = buildMcpToolEntry({
       ...shared,

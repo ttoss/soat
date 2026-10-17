@@ -9,9 +9,10 @@ import {
 
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
+import { ISSUER } from '../lib/serverIssuer';
 import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
 import { verifyApiKeyToken } from '../middleware/auth';
-import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
+import { verifyOauthAccessToken } from '../oauth/server';
 import { dispatchMcpApiRequest } from './dispatchApi';
 import { toMcpText } from './toMcpText';
 
