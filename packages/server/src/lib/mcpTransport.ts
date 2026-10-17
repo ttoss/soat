@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
+import { withRequestIdHeader } from './requestCorrelation';
 import { resolveSecretRefsInString } from './secrets';
 import {
   isToolAssertionConfigured,
@@ -67,7 +68,7 @@ export const openMcpTransport = async (args: {
     projectId,
     toolContext: args.toolContext,
   });
-  const headers = {
+  const headers = withRequestIdHeader({
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
     ...(resolved ?? {}),
@@ -75,7 +76,7 @@ export const openMcpTransport = async (args: {
       toolContext: args.toolContext,
       contextKeys: args.contextKeys,
     }),
-  };
+  });
   if (!isToolAssertionConfigured()) {
     return { url, headers, identity: null };
   }

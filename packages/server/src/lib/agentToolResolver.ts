@@ -30,6 +30,7 @@ import {
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
+import { withRequestIdHeader } from './requestCorrelation';
 import { toolReferences } from './resourceReferences';
 import { resolveSecretRefsInString } from './secrets';
 import { admitEachSharedCall } from './shareCaps';
@@ -502,7 +503,7 @@ const buildHttpRequestInit = (args: {
   extraHeaders?: Record<string, string>;
 }): RequestInit => {
   const isMultipart = args.hasBody && args.bodyMode === 'multipart';
-  const headers: Record<string, string> = {
+  const headers = withRequestIdHeader({
     ...(args.hasBody && !isMultipart
       ? { 'Content-Type': 'application/json' }
       : {}),
@@ -514,7 +515,7 @@ const buildHttpRequestInit = (args: {
       contextKeys: args.contextKeys,
     }),
     ...(args.extraHeaders ?? {}),
-  };
+  });
   const init: RequestInit = { method: args.method, headers };
   if (args.hasBody) {
     init.body = isMultipart
