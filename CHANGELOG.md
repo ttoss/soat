@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.81.0](https://github.com/ttoss/soat/compare/v0.80.1...v0.81.0) (2026-10-17)
+
+### Features
+
+* **server:** sign mcp tool requests with an Ed25519 assertion; one SOAT_HEADER_PREFIX for every header ([#1607](https://github.com/ttoss/soat/issues/1607)) ([79c3a45](https://github.com/ttoss/soat/commit/79c3a45e39d0d2db79ee89dccdf5ab5a222809a6))
+
+### BREAKING CHANGES
+
+* **server:** TOOL_CONTEXT_HEADER_PREFIX and TOOL_ASSERTION_HEADER are
+  removed. A deployment that set TOOL_CONTEXT_HEADER_PREFIX=X-Acme-Context-
+  sets SOAT_HEADER_PREFIX=X-Acme- instead, which also renames its webhook,
+  formation-handler and inbound-hook headers.
+
 ## [0.80.1](https://github.com/ttoss/soat/compare/v0.80.0...v0.80.1) (2026-10-16)
 
 * feat(server)!: refuse literal credentials in tool definitions and mask stored ones everywhere (#1604) ([aabb230](https://github.com/ttoss/soat/commit/aabb2304c602690afcc06249219a38a9680d518e)), closes [#1604](https://github.com/ttoss/soat/issues/1604)
