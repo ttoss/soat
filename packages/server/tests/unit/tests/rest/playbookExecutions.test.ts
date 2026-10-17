@@ -636,11 +636,28 @@ describe('Playbook executions', () => {
         state: 'blocked',
         blocked_by: ['revenue'],
       });
+    });
 
-      await write(caseId, [{ node: 'revenue', name: 'amount', value: 1 }]);
-      const done = await run(caseId, 'revenue');
-      expect(done.status).toBe(409);
-      expect(done.body.error.meta.state).toBe('done');
+    test('runs a done node again, and an equal output writes no revision', async () => {
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
+      });
+      await write(caseId, [{ node: 'pricing', name: 'amount', value: 1 }]);
+      const before = await nodeOf(caseId, 'pricing');
+      expect(before.state).toBe('done');
+
+      const res = await run(caseId, 'pricing');
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        status: 'succeeded',
+        output: { ok: true },
+        output_revision: null,
+      });
+      expect(await nodeOf(caseId, 'pricing')).toMatchObject({
+        state: 'done',
+        output: { revision: before.output.revision },
+      });
     });
 
     test('returns 409 for a confirm node and for one waiting on its task', async () => {

@@ -52,13 +52,16 @@ export const mapPlaybookExecution = (args: {
   };
 };
 
+// `done` runs on request only: the cascade never reruns a current output, and
+// an equal output writes no revision, so nothing downstream reruns either.
 const RUNNABLE_STATES: ReadonlySet<string> = new Set([
   'ready',
   'stale',
   'failed',
+  'done',
 ]);
 
-/** A node runs when its inputs are set and its output is not current. */
+/** A node runs when its inputs are set and nothing of it is in flight. */
 const assertRunnable = (args: {
   node: PlaybookNode;
   view: PlaybookNodeView;

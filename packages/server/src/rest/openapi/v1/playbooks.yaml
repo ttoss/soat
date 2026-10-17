@@ -621,15 +621,17 @@ paths:
       description: >-
         Runs one node now. The cascade already runs every node whose inputs
         are set once a write, a settle or a resume makes it runnable, and never
-        reruns a `failed` one: this is how a failed node is retried. A `collect`
+        reruns a `failed` or `done` one: this is how a failed node is retried,
+        and how a `done` node is recomputed after an upgrade changed its
+        executor. A `collect`
         node takes its own input values as its output, any other node starts
         its executor with the node's input values mapped through the
         executor's `input`. The executor runs as the
         author of the case's playbook version, whose permission to start it is
         checked again here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`); an author that
         no longer exists is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`. Only a `ready`,
-        `stale` or `failed` node with every required input set runs; anything
-        else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
+        `stale`, `failed` or `done` node with every required input set runs;
+        anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
         PROJECT_PAUSED`.
 
