@@ -32,7 +32,7 @@ export const claimPausedGeneration = async (args: {
   publicId: string;
 }): Promise<boolean> => {
   const [claimed] = await db.Generation.update(
-    { status: 'in_progress', lastActivityAt: new Date() },
+    { status: 'running', lastActivityAt: new Date() },
     { where: { publicId: args.publicId, status: 'requires_action' } }
   );
   return claimed > 0;

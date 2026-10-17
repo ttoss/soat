@@ -5,8 +5,8 @@ import { StatusBadge } from '@/engine/statusBadge';
 
 describe('StatusBadge', () => {
   test('renders the humanized status label inside a badge', () => {
-    render(<StatusBadge status="in_progress" />);
-    const badge = screen.getByText('In Progress');
+    render(<StatusBadge status="requires_action" />);
+    const badge = screen.getByText('Requires Action');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveClass('rounded-full');
   });

@@ -68,7 +68,7 @@ describe('eventBus', () => {
       const seen: string[] = [];
 
       onEvent({
-        types: ['orchestration_runs.succeeded'],
+        types: ['orchestration_runs.completed'],
         handler: (event) => {
           seen.push(event.type);
         },
@@ -76,9 +76,9 @@ describe('eventBus', () => {
 
       try {
         eventBus.emit('soat:event', envelope('order.shipped'));
-        eventBus.emit('soat:event', envelope('orchestration_runs.succeeded'));
+        eventBus.emit('soat:event', envelope('orchestration_runs.completed'));
         await drain();
-        expect(seen).toEqual(['orchestration_runs.succeeded']);
+        expect(seen).toEqual(['orchestration_runs.completed']);
       } finally {
         eventBus.removeAllListeners('soat:event');
       }

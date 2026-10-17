@@ -1743,7 +1743,7 @@ describe('Agent Generation Routes', () => {
     /**
      * `onEnd` never fires on the error path, so nothing else writes this
      * generation's terminal state: without the failure record it sat
-     * `in_progress` forever while the caller had already been told the run
+     * `running` forever while the caller had already been told the run
      * ended.
      */
     test('the failure is persisted on the generation record', async () => {

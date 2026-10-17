@@ -571,7 +571,7 @@ soat submit-human-input \
   --output '{"choice":"proceed"}' | jq '{status}'
 
 # → retry 120
-soat get-orchestration-run --orchestration-run-id "$RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$RUN_ID" | jq -e '.status == "completed"'
 
 soat list-orchestration-run-node-executions --orchestration-run-id "$RUN_ID" \
   | jq '[.data[] | {node_id, node_type, status}]'
@@ -593,8 +593,8 @@ do {
   ({ data: finished } = await adminSoat.orchestrations.getOrchestrationRun({
     path: { orchestration_run_id: RUN_ID },
   }));
-} while (!['succeeded', 'failed'].includes(finished.status));
-console.log(finished.status); // "succeeded"
+} while (!['completed', 'failed'].includes(finished.status));
+console.log(finished.status); // "completed"
 
 const { data: executions } =
   await adminSoat.orchestrations.listOrchestrationRunNodeExecutions({

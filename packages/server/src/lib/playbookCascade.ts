@@ -22,7 +22,7 @@ const log = createDebug('soat:playbookCascade');
 
 type ExecutionRow = InstanceType<(typeof db)['PlaybookExecution']>;
 
-/** Claims a pending execution: a conditional update, so one worker wins. */
+/** Claims a queued execution: a conditional update, so one worker wins. */
 const claimPending = async (args: {
   execution: ExecutionRow;
   now: Date;
@@ -32,7 +32,7 @@ const claimPending = async (args: {
       status: 'running',
       leaseExpiresAt: new Date(args.now.getTime() + EXECUTION_LEASE_MS),
     },
-    { where: { id: args.execution.id as number, status: 'pending' } }
+    { where: { id: args.execution.id as number, status: 'queued' } }
   );
   return claimed === 1;
 };
@@ -40,7 +40,7 @@ const claimPending = async (args: {
 /** Pending executions whose case and project accept work. */
 const findPending = (args: { limit: number }) => {
   return db.PlaybookExecution.findAll({
-    where: { status: 'pending' },
+    where: { status: 'queued' },
     include: [
       {
         model: db.PlaybookCase,
@@ -64,7 +64,7 @@ const findPending = (args: { limit: number }) => {
   });
 };
 
-/** Runs one batch of pending executions to completion. */
+/** Runs one batch of queued executions to completion. */
 const drainPendingOnce = async (): Promise<number> => {
   const now = new Date();
   const claimed: ExecutionRow[] = [];
@@ -100,7 +100,7 @@ const drainLoop = async (): Promise<void> => {
 };
 
 /**
- * Starts draining pending executions in this process, or asks the drain
+ * Starts draining queued executions in this process, or asks the drain
  * already running for one more pass. A settle inside the drain queues the
  * next wave, so one kick carries a cascade to rest.
  */
@@ -152,7 +152,7 @@ export const advancePlaybookCase = async (args: {
           playbookVersion: row.playbookVersion,
           executorType: node.executor?.type ?? null,
           executorId: node.executor?.id ?? null,
-          status: 'pending',
+          status: 'queued',
           basis: view.basis,
           input: executorInput({
             executor: node.executor,

@@ -360,7 +360,7 @@ describe('a poll node', () => {
   test('completes on the attempt whose response meets the exit condition', async () => {
     const run = await runToRest(await pollOrchestration({}));
 
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect((await executionsOf(run, 'watch'))[0].output).toEqual({
       result: { ok: true },
       attempts: 1,
@@ -377,7 +377,7 @@ describe('a poll node', () => {
       })
     );
 
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect((await executionsOf(run, 'watch'))[0].output).toEqual({
       result: { ok: true },
       attempts: 1,
@@ -499,7 +499,7 @@ describe('an agent node', () => {
 
     const run = await runToRest(orchestrationId);
 
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect((await executionsOf(run, 'ask'))[0].output).toEqual(artifact);
   });
 });
@@ -540,7 +540,7 @@ describe('a tool node', () => {
 
     const run = await runToRest(orchestrationId);
 
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect((await executionsOf(run, 'call'))[0].output).toEqual({
       result: 'done',
     });
@@ -552,7 +552,7 @@ describe('a tool node', () => {
     });
 
     const run = await runToRest(orchestrationId);
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
 
     // The entry is written fire-and-forget after the call returns.
     let entry: Record<string, unknown> | undefined;

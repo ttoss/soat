@@ -1260,8 +1260,8 @@ soat list-formation-events --formation_id "$FORMATION_ID" | jq '.data[] | {opera
 Expected output — one entry per deployment operation:
 
 ```json
-{ "operation_type": "create", "status": "succeeded" }
-{ "operation_type": "update", "status": "succeeded" }
+{ "operation_type": "create", "status": "completed" }
+{ "operation_type": "update", "status": "completed" }
 ```
 
 </TabItem>

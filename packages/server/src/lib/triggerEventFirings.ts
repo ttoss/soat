@@ -93,7 +93,7 @@ export const reserveEventFiring = async (args: {
       triggerId: args.triggerDbId,
       projectId: args.projectId,
       source: 'event',
-      status: 'pending',
+      status: 'queued',
       input: args.input,
       result: null,
       error: null,
@@ -141,7 +141,7 @@ export const reserveEventFiring = async (args: {
 const duePredicate = (args: { now: Date }) => {
   return {
     source: 'event',
-    status: ['pending', 'running'],
+    status: ['queued', 'running'],
     attempts: { [Op.lt]: MAX_EVENT_FIRING_ATTEMPTS },
     leaseExpiresAt: { [Op.lt]: args.now },
   };
@@ -212,7 +212,7 @@ export const sweepDueEventFirings = createSweep<FiringRow>({
 });
 
 /**
- * Closes a firing the sweep has given up on, so it does not sit `pending`
+ * Closes a firing the sweep has given up on, so it does not sit `queued`
  * forever with nothing coming for it.
  *
  * Separate from the sweep because it is the opposite decision: the sweep finds
@@ -227,7 +227,7 @@ export const failExhaustedEventFirings = createSweep<FiringRow>({
     return db.TriggerFiring.findAll({
       where: {
         source: 'event',
-        status: ['pending', 'running'],
+        status: ['queued', 'running'],
         attempts: { [Op.gte]: MAX_EVENT_FIRING_ATTEMPTS },
         leaseExpiresAt: { [Op.lt]: now },
       },
@@ -252,7 +252,7 @@ export const failExhaustedEventFirings = createSweep<FiringRow>({
       {
         where: {
           id: row.id as number,
-          status: ['pending', 'running'],
+          status: ['queued', 'running'],
           attempts: { [Op.gte]: MAX_EVENT_FIRING_ATTEMPTS },
           leaseExpiresAt: { [Op.lt]: now },
         },

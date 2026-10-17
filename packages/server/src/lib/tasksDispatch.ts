@@ -40,7 +40,7 @@ const pollIntervalMs = (): number => {
 
 /**
  * Awaits a task-dispatched orchestration run's eventual resting point
- * (`succeeded`/`failed`/`cancelled`/`expired`/`awaiting_input`) without ever
+ * (`completed`/`failed`/`cancelled`/`expired`/`awaiting_input`) without ever
  * blocking in-process for the wait itself. The run is started in durable,
  * scheduler-driven mode (`startOrchestrationRun` without `wait`), so a
  * `poll`/`delay` node's actual wait is offloaded to

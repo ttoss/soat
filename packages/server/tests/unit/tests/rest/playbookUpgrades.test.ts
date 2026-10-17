@@ -221,7 +221,7 @@ describe('Playbook case upgrades', () => {
       expect(executions).toHaveLength(before + 1);
       expect(executions[0]).toMatchObject({
         node: 'pricing',
-        status: 'succeeded',
+        status: 'completed',
         playbook_version: 2,
       });
       const upgrades = await asAdmin().get(
@@ -338,7 +338,7 @@ describe('Playbook case upgrades', () => {
         await writeAmount(caseId, 5);
         await redefine(playbookId, { nodes: [V1.nodes[0]] });
         const [queued] = await executionsOf(caseId);
-        expect(queued.status).toBe('pending');
+        expect(queued.status).toBe('queued');
 
         const res = await upgrade(caseId);
 
@@ -350,7 +350,7 @@ describe('Playbook case upgrades', () => {
           })
         ).toMatchObject({ result: 'superseded', output: null });
         expect(executions[0]).toMatchObject({
-          status: 'pending',
+          status: 'queued',
           playbook_version: 2,
         });
       } finally {

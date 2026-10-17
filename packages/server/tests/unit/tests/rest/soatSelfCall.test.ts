@@ -328,7 +328,7 @@ describe('SOAT self-call', () => {
       // Before the run carried a principal the worker drove it with no auth
       // header at all, so the self-call came back 401 and the node failed.
       expect(run.error).toBeNull();
-      expect(run.status).toBe('succeeded');
+      expect(run.status).toBe('completed');
 
       // The node artifact is the real listing, which only an authenticated,
       // project-scoped call can return.
@@ -634,7 +634,7 @@ describe('SOAT self-call', () => {
         token: rawKey,
         orchestrationId: readOrchestrationId,
       });
-      expect(readRun.status).toBe('succeeded');
+      expect(readRun.status).toBe('completed');
 
       const writeOrchestrationId = await createSoatToolNodeOrchestration({
         token: rawKey,

@@ -113,7 +113,7 @@ describe('Streamed agent generations', () => {
         .query({ agent_id: agentId });
       expect(res.status).toBe(200);
       const [generation] = res.body.data as Generation[];
-      if (generation && generation.status !== 'in_progress') return generation;
+      if (generation && generation.status !== 'running') return generation;
       await new Promise((resolve) => {
         return setTimeout(resolve, 25);
       });

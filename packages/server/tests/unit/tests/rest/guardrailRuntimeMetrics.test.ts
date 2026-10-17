@@ -267,7 +267,7 @@ describe('guardrail runtime metrics', () => {
           input: { question: 'hello' },
         });
       expect(run.status).toBe(201);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
       return { calls: turn.target.bodiesAt(`/${tool.name}`) };
     };
 

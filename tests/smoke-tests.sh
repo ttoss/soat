@@ -2092,7 +2092,7 @@ ORCH_RUN_ID=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.id')
 ORCH_RUN_STATUS=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.status')
 ORCH_RUN_TITLE=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.state.title')
 ORCH_RUN_VERSION=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.orchestration_version')
-if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestration sonnet" ]; then
+if [ "$ORCH_RUN_STATUS" != "completed" ] || [ "$ORCH_RUN_TITLE" != "orchestration sonnet" ]; then
   echo "start-orchestration-run did not complete as expected"
   printf '%s\n' "$ORCH_RUN_RESP"
   exit 1
@@ -2128,7 +2128,7 @@ echo "Idempotent run start: OK"
 
 # Worker-fleet coverage: the API tier runs with ORCHESTRATION_WORKER_DISABLED,
 # so nothing drains the queue except the standalone `worker` compose service.
-# An async run (no --wait) therefore only reaches `succeeded` if that separate
+# An async run (no --wait) therefore only reaches `completed` if that separate
 # process claimed the task and drove the run.
 echo "--- Async run drained by the standalone worker fleet ---"
 # `--tool-context` and `--metadata` ride along here rather than in their own run:
@@ -2159,7 +2159,7 @@ if [ -z "$ORCH_ASYNC_ID" ] || [ "$ORCH_ASYNC_ID" = "null" ]; then
   exit 1
 fi
 # No node executes inside the request: the run comes back parked in the queue.
-if [ "$ORCH_ASYNC_STATUS" = "succeeded" ]; then
+if [ "$ORCH_ASYNC_STATUS" = "completed" ]; then
   echo "ERROR: async run completed inside the request (expected it to be queued)" >&2
   printf '%s\n' "$ORCH_ASYNC_RESP" >&2
   exit 1
@@ -2170,12 +2170,12 @@ ORCH_ASYNC_FINAL=""
 while [ $i -lt 60 ]; do
   ORCH_ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --orchestration-run-id "$ORCH_ASYNC_ID")
   ORCH_ASYNC_FINAL=$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.status')
-  [ "$ORCH_ASYNC_FINAL" = "succeeded" ] && break
+  [ "$ORCH_ASYNC_FINAL" = "completed" ] && break
   [ "$ORCH_ASYNC_FINAL" = "failed" ] && break
   i=$((i + 1))
   sleep 1
 done
-if [ "$ORCH_ASYNC_FINAL" != "succeeded" ]; then
+if [ "$ORCH_ASYNC_FINAL" != "completed" ]; then
   echo "ERROR: standalone worker did not drain the queued run (status: $ORCH_ASYNC_FINAL)" >&2
   printf '%s\n' "$ORCH_ASYNC_GET" >&2
   exit 1
@@ -2310,7 +2310,7 @@ ORCH_INPUT_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestrati
   --orchestration-id "$ORCH_INPUT_ID" \
   --input '{"cycle_task":"summarize the funnel"}' \
   --wait true)
-if ! printf '%s\n' "$ORCH_INPUT_RUN_RESP" | jq -e '.status == "succeeded" and .state.echoed == "summarize the funnel"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_INPUT_RUN_RESP" | jq -e '.status == "completed" and .state.echoed == "summarize the funnel"' >/dev/null 2>&1; then
   echo "run input was not visible to node logic through the input namespace"
   printf '%s\n' "$ORCH_INPUT_RUN_RESP"
   exit 1
@@ -2320,7 +2320,7 @@ echo "Run input namespace: OK"
 echo "--- Getting run ---"
 ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-run-id "$ORCH_RUN_ID")
-if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "succeeded"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "completed"' >/dev/null 2>&1; then
   echo "get-orchestration-run returned unexpected response"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1
@@ -2483,9 +2483,9 @@ if ! printf '%s\n' "$LIVE_RUNS" | jq -e 'all(.data[]; .status | IN("queued","run
   printf '%s\n' "$LIVE_RUNS"
   exit 1
 fi
-SETTLED_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --status succeeded --limit 100)
-if ! printf '%s\n' "$SETTLED_RUNS" | jq -e --arg id "$ORCH_RUN_ID" '(.data | map(.id) | index($id)) != null and all(.data[]; .status == "succeeded")' >/dev/null 2>&1; then
-  echo "status=succeeded did not return exactly the settled runs"
+SETTLED_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --status completed --limit 100)
+if ! printf '%s\n' "$SETTLED_RUNS" | jq -e --arg id "$ORCH_RUN_ID" '(.data | map(.id) | index($id)) != null and all(.data[]; .status == "completed")' >/dev/null 2>&1; then
+  echo "status=completed did not return exactly the settled runs"
   printf '%s\n' "$SETTLED_RUNS"
   exit 1
 fi
@@ -2542,7 +2542,7 @@ HUMAN_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
   --orchestration-run-id "$HUMAN_RUN_ID" \
   --node-id "$HUMAN_NODE_ID" \
   --output '{"choice":"approve"}')
-if ! printf '%s\n' "$HUMAN_INPUT_RESP" | jq -e '.status == "succeeded" and .output.finalize.result == "approve"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$HUMAN_INPUT_RESP" | jq -e '.status == "completed" and .output.finalize.result == "approve"' >/dev/null 2>&1; then
   echo "submit-human-input returned unexpected response"
   printf '%s\n' "$HUMAN_INPUT_RESP"
   exit 1
@@ -2614,7 +2614,7 @@ PAUSE_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
   --orchestration-run-id "$PAUSE_RUN_ID" \
   --node-id approval \
   --output '{"choice":"approve"}')
-if ! printf '%s\n' "$PAUSE_INPUT_RESP" | jq -e '.status == "succeeded"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$PAUSE_INPUT_RESP" | jq -e '.status == "completed"' >/dev/null 2>&1; then
   echo "submit-human-input did not succeed after the pause was lifted"
   printf '%s\n' "$PAUSE_INPUT_RESP"
   exit 1
@@ -2658,7 +2658,7 @@ COND_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run
   --orchestration-id "$COND_ORCH_ID" \
   --input '{"score":0.9}' \
   --wait true)
-if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "succeeded"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "completed"' >/dev/null 2>&1; then
   echo "Condition-skip run did not complete"
   printf '%s\n' "$COND_RUN_RESP"
   exit 1
@@ -2706,7 +2706,7 @@ i=0
 while [ "$i" -lt 30 ]; do
   ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --orchestration-run-id "$ASYNC_RUN_ID")
   ASYNC_STATUS=$(printf '%s\n' "$ASYNC_GET" | jq -r '.status')
-  if [ "$ASYNC_STATUS" = "succeeded" ]; then
+  if [ "$ASYNC_STATUS" = "completed" ]; then
     ASYNC_DONE=1
     break
   fi
@@ -2746,7 +2746,7 @@ i=0
 while [ "$i" -lt 30 ]; do
   DELAY_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --orchestration-run-id "$DELAY_RUN_ID")
   DELAY_STATUS=$(printf '%s\n' "$DELAY_GET" | jq -r '.status')
-  if [ "$DELAY_STATUS" = "succeeded" ]; then
+  if [ "$DELAY_STATUS" = "completed" ]; then
     DELAY_DONE=1
     break
   fi
@@ -5216,13 +5216,13 @@ echo "User message added (document_id: $USER_MSG_DOC_ID)"
 # 48. Generate a conversation message with the agent-backed actor
 # (poll with a retry loop — generate may be slow with Ollama)
 echo "--- Generating conversation message ---"
-CONVO_GEN_STATUS="in_progress"
+CONVO_GEN_STATUS="running"
 CONVO_GEN_ATTEMPTS=0
-while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
+while [ "$CONVO_GEN_STATUS" = "running" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
   CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --wait true --conversation-id "$NAMED_CONVO_ID" --agent_id "$CONVO_GEN_AGENT_ID" | sanitize_json)
   CONVO_GEN_STATUS=$(printf '%s\n' "$CONVO_GEN_RESP" | jq -r '.status')
   CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
-  if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then
+  if [ "$CONVO_GEN_STATUS" = "running" ]; then
     sleep 2
   fi
 done
@@ -5506,8 +5506,8 @@ fi
 
 REDELIVER_RESP=$($SOAT_CLI redeliver-webhook-delivery --delivery-id "$REDELIVER_SOURCE_ID")
 if ! printf '%s\n' "$REDELIVER_RESP" | jq -e --arg id "$REDELIVER_SOURCE_ID" \
-  '.id != $id and .status == "pending" and .attempts == 0' >/dev/null 2>&1; then
-  echo "ERROR: redeliver did not return a new pending delivery" >&2
+  '.id != $id and .status == "queued" and .attempts == 0' >/dev/null 2>&1; then
+  echo "ERROR: redeliver did not return a new queued delivery" >&2
   echo "$REDELIVER_RESP" >&2
   exit 1
 fi
@@ -5599,7 +5599,7 @@ if [ -z "$FIRING_ID" ] || [ "$FIRING_ID" = "null" ]; then
   exit 1
 fi
 FIRING_STATUS=$(printf '%s\n' "$TRIGGER_FIRE_RESP" | jq -r '.status')
-if [ "$FIRING_STATUS" != "succeeded" ] && [ "$FIRING_STATUS" != "failed" ]; then
+if [ "$FIRING_STATUS" != "completed" ] && [ "$FIRING_STATUS" != "failed" ]; then
   echo "ERROR: firing did not reach a terminal status (got '$FIRING_STATUS')" >&2
   printf '%s\n' "$TRIGGER_FIRE_RESP" >&2
   exit 1
@@ -7483,7 +7483,7 @@ while [ "$i" -lt 60 ]; do
   EVAL_ASYNC_GET=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID")
   EVAL_ASYNC_STATUS=$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.status')
   case "$EVAL_ASYNC_STATUS" in
-    completed|failed|canceled) break ;;
+    completed|failed|cancelled) break ;;
   esac
   i=$((i + 1))
   sleep 2
@@ -7549,7 +7549,7 @@ EVAL_CANCELLED=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$
 # landed, so accept either terminal state — what must hold is that the run is
 # terminal and, when cancelled, publishes no partial aggregate.
 if ! printf '%s\n' "$EVAL_CANCELLED" | jq -e \
-  '(.status == "canceled" and .aggregate_scores == null) or .status == "completed"' \
+  '(.status == "cancelled" and .aggregate_scores == null) or .status == "completed"' \
   >/dev/null 2>&1; then
   echo "ERROR: cancel left the run in an unexpected state" >&2
   printf '%s\n' "$EVAL_CANCELLED" >&2
@@ -7819,7 +7819,7 @@ fi
 
 EVAL_FIRING_RESP=$($SOAT_CLI fire-trigger --trigger-id "$EVAL_TRIGGER_ID")
 if ! printf '%s\n' "$EVAL_FIRING_RESP" | jq -e \
-  '.status == "succeeded" and .result.target_type == "eval" and .result.status == "queued"' \
+  '.status == "completed" and .result.target_type == "eval" and .result.status == "queued"' \
   >/dev/null 2>&1; then
   echo "ERROR: firing the eval trigger did not queue a run" >&2
   printf '%s\n' "$EVAL_FIRING_RESP" >&2
@@ -8120,7 +8120,7 @@ EXECUTION_STATUS=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   EXECUTIONS_RESP=$($SOAT_CLI list-playbook-case-executions --case_id "$CASE_ID")
   EXECUTION_STATUS=$(printf '%s\n' "$EXECUTIONS_RESP" | jq -r '.data[0].status // empty')
-  [ "$EXECUTION_STATUS" = "succeeded" ] && break
+  [ "$EXECUTION_STATUS" = "completed" ] && break
   sleep 1
 done
 if ! printf '%s\n' "$EXECUTIONS_RESP" | jq -e '.data[0].node == "revenue" and .data[0].output.amount == 100 and .data[0].output_revision == 2' >/dev/null 2>&1; then
@@ -8196,7 +8196,7 @@ EXPORT_RESP=$($SOAT_CLI export-playbook-case-node \
   --case_id "$EXPORT_CASE_ID" \
   --node pricing \
   --wait true)
-if ! printf '%s\n' "$EXPORT_RESP" | jq -e '.data[0].status == "succeeded" and .data[0].stale == false and (.data[0].file_id | startswith("file_"))' >/dev/null 2>&1; then
+if ! printf '%s\n' "$EXPORT_RESP" | jq -e '.data[0].status == "completed" and .data[0].stale == false and (.data[0].file_id | startswith("file_"))' >/dev/null 2>&1; then
   echo "ERROR: export-playbook-case-node did not render the file" >&2
   printf '%s\n' "$EXPORT_RESP" >&2
   exit 1

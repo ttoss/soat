@@ -114,7 +114,7 @@ One agent execution; its steps are on its [trace](./traces.md).
 
 | Status            | Description                                       |
 | ----------------- | ------------------------------------------------- |
-| `in_progress`     | The generation is actively running                |
+| `running`         | The generation is actively running                |
 | `requires_action` | Paused waiting for client tool outputs            |
 | `completed`       | The generation finished                           |
 | `failed`          | The generation encountered an unrecoverable error |

@@ -252,7 +252,7 @@ export const redeliverWebhookDelivery = async (args: { id: string }) => {
     webhookId: original.webhookId,
     eventType: original.eventType,
     payload: original.payload,
-    status: 'pending',
+    status: 'queued',
     attempts: 0,
     nextAttemptAt: new Date(),
     leaseExpiresAt: null,

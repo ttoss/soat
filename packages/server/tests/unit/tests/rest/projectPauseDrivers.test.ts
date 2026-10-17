@@ -274,7 +274,7 @@ describe('Project pause — work in motion', () => {
           .send({ orchestration_id: orch.body.id, input: {} });
         runId = started.body.id as string;
 
-        const settled = await pollRun({ runId, status: 'succeeded' });
+        const settled = await pollRun({ runId, status: 'completed' });
         expect(settled.pause_requested_at).toBeNull();
       } finally {
         server.close();

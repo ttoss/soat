@@ -140,7 +140,7 @@ export const renderPlaybookExport = async (args: {
   await db.PlaybookExport.update(
     {
       ...settlement,
-      status: 'fileId' in settlement ? 'succeeded' : 'failed',
+      status: 'fileId' in settlement ? 'completed' : 'failed',
       leaseExpiresAt: null,
       finishedAt: new Date(),
     },

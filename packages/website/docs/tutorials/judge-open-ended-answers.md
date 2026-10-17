@@ -498,7 +498,7 @@ An empty dataset is rejected in both modes; a `wait: true` run over 25 items is 
 
 ## Step 7 — Cancel a run mid-flight
 
-Cancelling drops the run's outstanding tasks and settles it `canceled` ([Evaluations — Canceling a run](/docs/modules/evaluations#canceling-a-run)).
+Cancelling drops the run's outstanding tasks and settles it `cancelled` ([Evaluations — Canceling a run](/docs/modules/evaluations#canceling-a-run)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -519,11 +519,11 @@ const { data: doomed } = await adminSoat.evaluations.startEvalRun({
   body: { wait: false },
 });
 
-const { data: canceled } = await adminSoat.evaluations.cancelEvalRun({
+const { data: cancelled } = await adminSoat.evaluations.cancelEvalRun({
   path: { eval_id: evaluation.id, eval_run_id: doomed.id },
 });
-console.log(canceled.status); // 'canceled'
-console.log(canceled.aggregate_scores); // null — deliberately
+console.log(cancelled.status); // 'cancelled'
+console.log(cancelled.aggregate_scores); // null — deliberately
 ```
 
 </TabItem>
@@ -545,7 +545,7 @@ Expected shape:
 
 ```json
 {
-  "status": "canceled",
+  "status": "cancelled",
   "item_count": 2,
   "completed_count": 0,
   "errored_count": 0,
@@ -554,7 +554,7 @@ Expected shape:
 }
 ```
 
-Written results are kept; `completed_count` / `errored_count` report what ran; `aggregate_scores` stays `null`. A canceled run fires no lifecycle event; cancelling a finished run is a `400`.
+Written results are kept; `completed_count` / `errored_count` report what ran; `aggregate_scores` stays `null`. A cancelled run fires no lifecycle event; cancelling a finished run is a `400`.
 
 ---
 

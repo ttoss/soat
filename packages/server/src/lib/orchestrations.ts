@@ -174,7 +174,7 @@ export const ORCHESTRATION_RUN_STATUSES = [
   'running',
   'sleeping',
   'awaiting_input',
-  'succeeded',
+  'completed',
   'failed',
   'cancelled',
   'expired',

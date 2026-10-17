@@ -80,7 +80,7 @@ export class TriggerFiring extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare source: string;
 
-  // pending | running | succeeded | failed.
+  // queued | running | completed | failed.
   @Column({ type: DataType.STRING, allowNull: false })
   declare status: string;
 

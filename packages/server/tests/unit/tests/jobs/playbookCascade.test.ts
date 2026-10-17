@@ -113,12 +113,12 @@ describe('drainPlaybookExecutions', () => {
   test('runs what the cascade queued', async () => {
     const caseId = await newCase(COLLECT);
     await writeAmount(caseId);
-    expect((await executionsOf(caseId))[0].status).toBe('pending');
+    expect((await executionsOf(caseId))[0].status).toBe('queued');
 
     await withWorker(drainPlaybookExecutions);
 
     expect((await executionsOf(caseId))[0]).toMatchObject({
-      status: 'succeeded',
+      status: 'completed',
       output: { amount: 3 },
     });
   });
@@ -150,7 +150,7 @@ describe('drainPlaybookExecutions', () => {
       output_revision: null,
     });
     expect(rerun).toMatchObject({
-      status: 'succeeded',
+      status: 'completed',
       result: 'current',
       output: { amount: 4 },
     });
@@ -162,12 +162,12 @@ describe('drainPlaybookExecutions', () => {
     await asAdmin().post(`/api/v1/playbook-cases/${caseId}/pause`);
 
     await withWorker(drainPlaybookExecutions);
-    expect((await executionsOf(caseId))[0].status).toBe('pending');
+    expect((await executionsOf(caseId))[0].status).toBe('queued');
 
     await withWorker(() => {
       return asAdmin().post(`/api/v1/playbook-cases/${caseId}/resume`);
     });
-    expect((await executionsOf(caseId))[0].status).toBe('succeeded');
+    expect((await executionsOf(caseId))[0].status).toBe('completed');
   });
 });
 

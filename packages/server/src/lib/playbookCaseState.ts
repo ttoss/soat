@@ -95,7 +95,7 @@ export const snapshotFromRecords = (args: {
     };
     if (
       record.output &&
-      execution.status === 'succeeded' &&
+      execution.status === 'completed' &&
       execution.result === 'current'
     ) {
       record.output.basis = basis;

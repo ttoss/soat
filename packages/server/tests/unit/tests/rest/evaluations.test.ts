@@ -1571,10 +1571,10 @@ describe('Evaluations', () => {
         expect(runRow!.toolContext).toBeNull();
       });
 
-      test('is cleared when a run is canceled before it settles', async () => {
+      test('is cleared when a run is cancelled before it settles', async () => {
         const res = await asUser()
           .post(`/api/v1/evals/${evalId}/runs`)
-          .send({ wait: false, tool_context: { ocaToken: 'tok_canceled' } });
+          .send({ wait: false, tool_context: { ocaToken: 'tok_cancelled' } });
         expect(res.status).toBe(201);
 
         const cancelRes = await asUser().post(
@@ -1585,7 +1585,7 @@ describe('Evaluations', () => {
         const runRow = await db.EvalRun.findOne({
           where: { publicId: res.body.id },
         });
-        expect(runRow!.status).toBe('canceled');
+        expect(runRow!.status).toBe('cancelled');
         expect(runRow!.toolContext).toBeNull();
       });
     });
@@ -1758,7 +1758,7 @@ describe('Evaluations', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('canceled');
+      expect(res.body.status).toBe('cancelled');
       expect(res.body.finished_at).not.toBeNull();
 
       const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
@@ -1769,7 +1769,7 @@ describe('Evaluations', () => {
       ).toBe(0);
     });
 
-    test('a canceled run stops spending: the worker runs none of its items', async () => {
+    test('a cancelled run stops spending: the worker runs none of its items', async () => {
       const run = await startQueued();
       await asUser().post(`/api/v1/evals/${evalId}/runs/${run.id}/cancel`);
 
@@ -1805,7 +1805,7 @@ describe('Evaluations', () => {
 
     // A worker past its liveness check keeps writing results after the cancel
     // settles the run, so counters frozen at that instant under-report what ran
-    // — and on a canceled run they are the only signal of what was paid for.
+    // — and on a cancelled run they are the only signal of what was paid for.
     test('counters reconcile with results written after the cancel', async () => {
       const run = await startQueued();
       const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
@@ -1847,7 +1847,7 @@ describe('Evaluations', () => {
       const after = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${run.id}`
       );
-      expect(after.body.status).toBe('canceled');
+      expect(after.body.status).toBe('cancelled');
       // Still no verdict — a partial roll-up must not read as a whole-dataset one.
       expect(after.body.aggregate_scores).toBeNull();
       // But the counts must describe what actually ran.
@@ -1855,7 +1855,7 @@ describe('Evaluations', () => {
       expect(after.body.errored_count).toBe(0);
     });
 
-    test('a finished run cannot be canceled', async () => {
+    test('a finished run cannot be cancelled', async () => {
       mockCreateGeneration
         .mockResolvedValueOnce(completedGeneration('gen_c2', 'x'))
         .mockResolvedValueOnce(completedGeneration('gen_c3', 'x'));
@@ -2165,7 +2165,7 @@ describe('Evaluations', () => {
       });
     });
 
-    test('a canceled run fires no lifecycle event — it produced no verdict', async () => {
+    test('a cancelled run fires no lifecycle event — it produced no verdict', async () => {
       const events = await withCapture({
         action: async () => {
           const run = await asUser()

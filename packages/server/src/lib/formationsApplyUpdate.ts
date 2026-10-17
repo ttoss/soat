@@ -141,7 +141,7 @@ export const runPendingCleanups = async (args: {
         logicalId,
         resourceType,
         action: 'replace-retained',
-        status: 'succeeded',
+        status: 'completed',
         physicalResourceId,
       });
       continue;
@@ -190,7 +190,7 @@ export const runPendingCleanups = async (args: {
       logicalId,
       resourceType,
       action: 'replace-cleanup',
-      status: 'succeeded',
+      status: 'completed',
       physicalResourceId,
     });
   }
@@ -222,7 +222,7 @@ const recordAppliedUpdate = async (args: {
     logicalId,
     resourceType,
     action: replaced ? 'replace' : 'update',
-    status: 'succeeded',
+    status: 'completed',
     physicalResourceId: args.physicalResourceId,
   });
 };
@@ -314,7 +314,7 @@ export const applyUpdateChange = async (args: {
       logicalId,
       resourceType,
       action: 'no-op',
-      status: 'succeeded',
+      status: 'completed',
       physicalResourceId: previousPhysicalResourceId,
     });
   }
