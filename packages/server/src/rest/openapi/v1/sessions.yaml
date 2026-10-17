@@ -388,7 +388,9 @@ paths:
       description: >
         Submits client tool outputs for a generation that returned
         requires_action. The agent continues its loop and returns the
-        final or next requires_action result.
+        final or next requires_action result. A generation that did not
+        run in the session's conversation is 404 (GENERATION_NOT_FOUND)
+        and receives no outputs.
       operationId: submitSessionToolOutputs
       x-soat-resource:
         kind: session

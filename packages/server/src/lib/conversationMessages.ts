@@ -1,11 +1,11 @@
 import { db } from '../db';
 import { claimMessageKey } from './conversationMessageIdempotency';
+import { insertMessage } from './conversationMessageWrites';
 import { conversationEmbedsTurns } from './conversationRetrieval';
 import {
   conversationMessageTags,
   ownerActorPublicId,
 } from './conversationSystemTags';
-import { type Transaction } from './dbTransaction';
 import { createDocument, deleteDocument } from './documents';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
@@ -123,82 +123,6 @@ const resolveParticipantDbIds = async (args: {
     actorDbId: actor ? actor.id : null,
     agentDbId: agent ? agent.id : null,
   };
-};
-
-const resolveMessagePosition = async (args: {
-  conversationId: number;
-  position?: number;
-  transaction: Transaction;
-}): Promise<number> => {
-  if (args.position === undefined) {
-    const maxMessage = await db.ConversationMessage.findOne({
-      where: { conversationId: args.conversationId },
-      order: [['position', 'DESC']],
-      transaction: args.transaction,
-    });
-    return maxMessage ? maxMessage.position + 1 : 0;
-  }
-
-  const collision = await db.ConversationMessage.findOne({
-    where: { conversationId: args.conversationId, position: args.position },
-    transaction: args.transaction,
-  });
-  if (collision) {
-    const toShift = await db.ConversationMessage.findAll({
-      where: { conversationId: args.conversationId },
-      order: [['position', 'DESC']],
-      transaction: args.transaction,
-    });
-    for (const m of toShift) {
-      if (m.position >= args.position) {
-        await m.update(
-          { position: m.position + 1 },
-          { transaction: args.transaction }
-        );
-      }
-    }
-  }
-
-  return args.position;
-};
-
-const insertMessage = async (args: {
-  conversationId: number;
-  documentId: number;
-  role: string;
-  actorId?: number | null;
-  agentId?: number | null;
-  position?: number;
-  metadata?: Record<string, unknown>;
-  responseMessages?: unknown[];
-  idempotencyKey: string | null;
-  idempotencyDigest?: string | null;
-}) => {
-  return db.sequelize.transaction(async (t) => {
-    const position = await resolveMessagePosition({
-      conversationId: args.conversationId,
-      position: args.position,
-      transaction: t,
-    });
-
-    return db.ConversationMessage.create(
-      {
-        conversationId: args.conversationId,
-        documentId: args.documentId,
-        role: args.role,
-        actorId: args.actorId ?? null,
-        agentId: args.agentId ?? null,
-        position,
-        metadata: args.metadata ?? null,
-        responseMessages: args.responseMessages ?? null,
-        idempotencyKey: args.idempotencyKey,
-        idempotencyDigest: args.idempotencyKey
-          ? (args.idempotencyDigest ?? null)
-          : null,
-      },
-      { transaction: t }
-    );
-  });
 };
 
 const replayOf = async (message: ConversationMessageRow) => {

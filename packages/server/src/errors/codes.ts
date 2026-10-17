@@ -825,6 +825,11 @@ export const ERROR_CODES = {
     description:
       'The write named a version other than the one the resource currently holds, or a concurrent write took that version first. `meta.current_version` is the version in force, and `meta.expected_version` the one the request named. Nothing was written: re-read the resource, rebase the change on what it now holds, and retry against the version `meta.current_version` names.',
   },
+  CONVERSATION_POSITION_CONFLICT: {
+    httpStatus: 409,
+    description:
+      "Another write took the message's `position` in the conversation at the same time. Nothing was written: retry the write.",
+  },
   TASK_GUARD_REJECTED: {
     httpStatus: 400,
     description: 'The transition guard evaluated to false for this task.',

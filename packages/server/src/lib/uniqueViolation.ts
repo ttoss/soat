@@ -17,6 +17,30 @@ export const isUniqueViolation = (error: unknown): boolean => {
 };
 
 /**
+ * `true` when `error` is a unique-constraint violation on the index `index`.
+ * Postgres names the violated unique index in `constraint`, which Sequelize
+ * carries on `parent`.
+ */
+export const isUniqueViolationOf = (args: {
+  error: unknown;
+  index: string;
+}): boolean => {
+  if (!isUniqueViolation(args.error)) return false;
+  const parent =
+    typeof args.error === 'object' &&
+    args.error !== null &&
+    'parent' in args.error
+      ? args.error.parent
+      : undefined;
+  return (
+    typeof parent === 'object' &&
+    parent !== null &&
+    'constraint' in parent &&
+    parent.constraint === args.index
+  );
+};
+
+/**
  * Rethrows a unique-constraint violation as a `NAME_CONFLICT` `DomainError`
  * carrying `message`, and rethrows anything else untouched.
  *

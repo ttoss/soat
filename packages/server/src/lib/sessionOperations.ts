@@ -2,14 +2,15 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { submitToolOutputs } from './agentGeneration';
-import { generateConversationMessage } from './conversationGeneration';
+import {
+  assertGenerationAnswersConversation,
+  generateConversationMessage,
+  storeResumedConversationTurn,
+} from './conversationGeneration';
 import { mapGeneratedTurn } from './generatedTurn';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
-import {
-  emitGenerationStarted,
-  processToolOutputResult,
-} from './sessionGenerationHelpers';
+import { emitGenerationStarted } from './sessionGenerationHelpers';
 import {
   addResolvedSessionUserMessage,
   assertSessionMessageInput,
@@ -367,12 +368,15 @@ export const submitSessionToolOutputs = async (args: {
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
 }) => {
-  // fetchSessionAndConversation always either throws (session not found) or
-  // resolves to a populated object — it never returns a falsy value — so no
-  // additional null guard is needed here.
-  const sessionData = await fetchSessionAndConversation({
+  const { conversation } = await fetchSessionAndConversation({
     agentId: args.agentId,
     sessionId: args.sessionId,
+  });
+
+  // Before any output is submitted, so a refused generation stays paused.
+  await assertGenerationAnswersConversation({
+    generationId: args.generationId,
+    conversationId: conversation.id,
   });
 
   const result = await submitToolOutputs({
@@ -381,11 +385,14 @@ export const submitSessionToolOutputs = async (args: {
     toolOutputs: args.toolOutputs,
   });
 
-  return processToolOutputResult({
+  const turn = await storeResumedConversationTurn({
     result,
-    conversation: sessionData.conversation,
-    agentPublicId: args.agentPublicId,
+    agentId: args.agentPublicId,
   });
+  if (!turn) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
+  }
+  return mapGeneratedTurn(turn);
 };
 
 export { getSessionTags, updateSessionTags } from './sessionTags';

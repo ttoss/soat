@@ -3,7 +3,6 @@ import { join } from 'node:path';
 
 import { load } from 'js-yaml';
 
-import * as agentGenerationModule from '../../../../src/lib/agentGeneration';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
@@ -199,97 +198,6 @@ describe('Session reply', () => {
     });
   });
 
-  describe('POST /api/v1/sessions/{session_id}/tool-outputs', () => {
-    let submitToolOutputs: jest.SpiedFunction<
-      typeof agentGenerationModule.submitToolOutputs
-    >;
-
-    // The pause a submission resumes lives in the LLM loop, so the boundary
-    // stands in for it.
-    beforeEach(() => {
-      submitToolOutputs = jest.spyOn(
-        agentGenerationModule,
-        'submitToolOutputs'
-      );
-    });
-
-    afterEach(() => {
-      submitToolOutputs.mockRestore();
-    });
-
-    const submit = (args: { sessionId: string; generationId: string }) => {
-      return authenticatedTestClient(token)
-        .post(`/api/v1/sessions/${args.sessionId}/tool-outputs`)
-        .send({
-          generation_id: args.generationId,
-          tool_outputs: [{ tool_call_id: 'call_1', output: { temp: 18 } }],
-        });
-    };
-
-    test('the completed reply carries the stored record', async () => {
-      const session = await createSession();
-      submitToolOutputs.mockResolvedValueOnce(
-        completedGeneration({ id: 'gen_reply_tools', content: '18C' })
-      );
-
-      const res = await submit({
-        sessionId: session.id,
-        generationId: 'gen_reply_tools',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.message).toEqual(
-        await storedRecord({
-          conversationId: session.conversationId,
-          documentId: res.body.message.document_id,
-        })
-      );
-      expect(res.body).toMatchObject({
-        status: 'completed',
-        content: '18C',
-        model: 'test-model',
-      });
-    });
-
-    test('a completed reply with no text is stored and answered like any other', async () => {
-      const session = await createSession();
-      submitToolOutputs.mockResolvedValueOnce(
-        completedGeneration({ id: 'gen_reply_empty', content: '' })
-      );
-
-      const res = await submit({
-        sessionId: session.id,
-        generationId: 'gen_reply_empty',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.content).toBe('');
-      expect(res.body.message).toEqual(
-        await storedRecord({
-          conversationId: session.conversationId,
-          documentId: res.body.message.document_id,
-        })
-      );
-    });
-
-    test('a further pause answers no message', async () => {
-      const session = await createSession();
-      submitToolOutputs.mockResolvedValueOnce(
-        requiresActionGeneration('gen_reply_again')
-      );
-
-      const res = await submit({
-        sessionId: session.id,
-        generationId: 'gen_reply_again',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('requires_action');
-      expect(res.body).not.toHaveProperty('message');
-      expect(await storedMessages(session.conversationId)).toHaveLength(0);
-    });
-  });
-
   describe('a turn paused on a client tool and completed through tool-outputs', () => {
     let stub: ChatCompletionsStub;
     let pausingAgentId: string;
@@ -376,6 +284,120 @@ describe('Session reply', () => {
         [1, 'It is 18C.'],
         [2, 'Still there?'],
       ]);
+    });
+
+    test('the completed reply carries the stored record', async () => {
+      const session = await pausedSession();
+
+      const res = await complete({
+        sessionId: session.id,
+        generationId: session.generationId,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toEqual(
+        await storedRecord({
+          conversationId: session.conversationId,
+          documentId: res.body.message.document_id,
+        })
+      );
+      expect(res.body).toMatchObject({
+        status: 'completed',
+        content: 'It is 18C.',
+        generation_id: session.generationId,
+      });
+      expect(res.body.model).toBe('stub-model');
+      // The tool-call chain is server-owned state, never the caller's bag.
+      expect(res.body.message.metadata).toBeUndefined();
+    });
+
+    test('a completed reply with no text is stored and answered like any other', async () => {
+      const session = await pausedSession();
+      stub.reply(textCompletion(''));
+
+      const res = await complete({
+        sessionId: session.id,
+        generationId: session.generationId,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe('');
+      expect(res.body.message).toEqual(
+        await storedRecord({
+          conversationId: session.conversationId,
+          documentId: res.body.message.document_id,
+        })
+      );
+    });
+
+    test('a further pause answers no message', async () => {
+      const session = await pausedSession();
+      stub.reply(
+        toolCallCompletion([{ id: 'call_thermo_2', name: 'read_thermometer' }])
+      );
+
+      const res = await complete({
+        sessionId: session.id,
+        generationId: session.generationId,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('requires_action');
+      expect(res.body).not.toHaveProperty('message');
+      expect(await storedMessages(session.conversationId)).toHaveLength(1);
+    });
+
+    test("a generation that does not answer the session's conversation is 404, runs nothing and stores nothing", async () => {
+      const session = await pausedSession();
+      stub.reply(
+        toolCallCompletion([{ id: 'call_thermo', name: 'read_thermometer' }]),
+        textCompletion('Bare reply.')
+      );
+      const bare = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${pausingAgentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'How warm is it?' }] });
+      expect(bare.status).toBe(200);
+      expect(bare.body.status).toBe('requires_action');
+      const completionsBefore = stub.completions.length;
+
+      const res = await complete({
+        sessionId: session.id,
+        generationId: bare.body.id,
+      });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('GENERATION_NOT_FOUND');
+      expect(stub.completions).toHaveLength(completionsBefore);
+      expect(
+        (await storedMessages(session.conversationId)).map((message) => {
+          return message.content;
+        })
+      ).toEqual(['How warm is it?']);
+      const generation = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${bare.body.id}`
+      );
+      expect(generation.status).toBe(200);
+      expect(generation.body.status).toBe('requires_action');
+    });
+
+    test("a generation of another session's conversation is 404 there and completes in its own", async () => {
+      const own = await pausedSession();
+      const other = await createSession({ agent_id: pausingAgentId });
+
+      const refused = await complete({
+        sessionId: other.id,
+        generationId: own.generationId,
+      });
+      const completed = await complete({
+        sessionId: own.id,
+        generationId: own.generationId,
+      });
+
+      expect(refused.status).toBe(404);
+      expect(refused.body.error.code).toBe('GENERATION_NOT_FOUND');
+      expect(await storedMessages(other.conversationId)).toEqual([]);
+      expect(completed.status).toBe(200);
+      expect(completed.body.message.position).toBe(1);
     });
 
     test("completed through the agent's tool-outputs, is stored once in the session's conversation", async () => {

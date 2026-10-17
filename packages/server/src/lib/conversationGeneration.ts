@@ -1,3 +1,5 @@
+import createDebug from 'debug';
+
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
@@ -6,6 +8,8 @@ import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { agentReferences } from './resourceReferences';
+
+const log = createDebug('soat:generation');
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -280,7 +284,7 @@ export type GenerateConversationMessageResult =
 /**
  * Stores a completed turn and announces it as
  * `conversation_messages.generated`. Every route that completes a conversation
- * turn — generate, and a session's tool-outputs after a client-tool pause —
+ * turn — generate, and either tool-outputs route after a client-tool pause —
  * stores it here, so a turn lands and is announced the same way whichever
  * route finished it.
  *
@@ -289,7 +293,7 @@ export type GenerateConversationMessageResult =
  * `memory_rules` subscriber on the event, so a conversation turn feeds a store
  * through the store's policy, not this agent's.
  */
-export const storeGeneratedTurn = async (args: {
+const storeGeneratedTurn = async (args: {
   conversation: InstanceType<(typeof db)['Conversation']>;
   agentId: string;
   // `null` when the generation recorded no snapshot: the reply is appended.
@@ -343,47 +347,70 @@ export const storeGeneratedTurn = async (args: {
 };
 
 /**
- * The snapshot a paused turn recorded in `conversation`, or `null` when the
- * generation recorded none there.
+ * Refuses a generation that did not run in `conversation`, so a conversation's
+ * own route never resumes, or stores the reply of, a turn that answers another
+ * conversation or none.
  */
-export const pausedTurnSnapshotPosition = async (args: {
+export const assertGenerationAnswersConversation = async (args: {
   generationId: string;
-  conversation: InstanceType<(typeof db)['Conversation']>;
-}): Promise<number | null> => {
+  conversationId: number;
+}): Promise<void> => {
+  log(
+    'assertGenerationAnswersConversation: generationId=%s conversationId=%d',
+    args.generationId,
+    args.conversationId
+  );
   const generation = await db.Generation.findOne({
     where: {
       publicId: args.generationId,
-      conversationId: args.conversation.id,
+      conversationId: args.conversationId,
     },
-    attributes: ['conversationSnapshotPosition'],
+    attributes: ['id'],
   });
-  return generation?.conversationSnapshotPosition ?? null;
+  if (generation) return;
+  throw new DomainError(
+    'GENERATION_NOT_FOUND',
+    `Generation '${args.generationId}' not found in this conversation.`
+  );
 };
 
 /**
- * Stores a turn completed through the agent route's tool-outputs when its
- * generation answers a conversation, in that conversation after the snapshot
- * it recorded. A generation that answers none stores nothing.
+ * The turn a tool-outputs submission resumed, with a completed one stored in
+ * the conversation its generation answers, after the snapshot it recorded.
+ * `null` when the generation answers no conversation: nothing is stored.
  */
 export const storeResumedConversationTurn = async (args: {
   result: GenerationResult;
   agentId: string;
-}): Promise<void> => {
-  if (args.result.status !== 'completed') return;
+}): Promise<GenerateConversationMessageResult | null> => {
+  const { result } = args;
+  log(
+    'storeResumedConversationTurn: generationId=%s status=%s',
+    result.id,
+    result.status
+  );
+  if (result.status === 'requires_action') {
+    return {
+      status: 'requires_action',
+      generationId: result.id,
+      traceId: result.traceId,
+      requiredAction: result.requiredAction!,
+    };
+  }
   const generation = await db.Generation.findOne({
-    where: { publicId: args.result.id },
+    where: { publicId: result.id },
     attributes: ['conversationSnapshotPosition'],
     include: [{ model: db.Conversation, as: 'conversation' }],
   });
-  if (!generation?.conversation) return;
+  if (!generation?.conversation) return null;
 
-  await storeGeneratedTurn({
+  return storeGeneratedTurn({
     conversation: generation.conversation,
     agentId: args.agentId,
     snapshotPosition: generation.conversationSnapshotPosition,
-    generationId: args.result.id,
-    traceId: args.result.traceId,
-    output: args.result.output,
+    generationId: result.id,
+    traceId: result.traceId,
+    output: result.output,
   });
 };
 
