@@ -425,7 +425,7 @@ describe('Webhooks', () => {
         webhookId: webhook!.id as number,
         eventType: 'files.created',
         payload: { hello: 'world' },
-        status: 'success',
+        status: 'completed',
         statusCode: 200,
         attempts: 1,
       });
@@ -442,7 +442,7 @@ describe('Webhooks', () => {
         webhook_id: webhookId,
         event_type: 'files.created',
         payload: { hello: 'world' },
-        status: 'success',
+        status: 'completed',
         status_code: 200,
         attempts: 1,
       });
@@ -474,7 +474,7 @@ describe('Webhooks', () => {
         webhookId: webhook!.id as number,
         eventType: 'files.created',
         payload: {},
-        status: 'success',
+        status: 'completed',
         statusCode: 200,
         attempts: 1,
       });
@@ -547,7 +547,7 @@ describe('Webhooks', () => {
       expect(response.body.id).toBeDefined();
       expect(response.body.id).not.toBe(delivery.publicId);
       expect(response.body.webhook_id).toBe(webhookPublicId);
-      expect(response.body.status).toBe('pending');
+      expect(response.body.status).toBe('queued');
       expect(response.body.attempts).toBe(0);
       expect(response.body.event_type).toBe('files.created');
       expect(response.body.payload).toEqual({
@@ -753,7 +753,7 @@ describe('Webhooks', () => {
         webhookId: webhook!.id as number,
         eventType: 'files.created',
         payload: {},
-        status: 'success',
+        status: 'completed',
         statusCode: 200,
         attempts: 1,
       });

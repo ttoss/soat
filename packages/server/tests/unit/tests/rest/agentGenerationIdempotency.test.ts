@@ -154,8 +154,8 @@ describe('POST /api/v1/agents/:agent_id/generate with an idempotency_key', () =>
   };
 
   const settle = async (generationId: string) => {
-    let status = 'in_progress';
-    for (let i = 0; i < 100 && status === 'in_progress'; i += 1) {
+    let status = 'running';
+    for (let i = 0; i < 100 && status === 'running'; i += 1) {
       const poll = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${generationId}`
       );

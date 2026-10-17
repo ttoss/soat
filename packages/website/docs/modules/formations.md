@@ -98,7 +98,7 @@ One record per deploy (create, update, delete); [`GET /api/v1/formations/{format
 | ---------------- | ------ | ----------------------------------------------------- |
 | `id`             | string | Public ID (`form_op_` prefix)                             |
 | `operation_type` | string | `create` \| `update` \| `delete`                      |
-| `status`         | string | `pending` \| `running` \| `succeeded` \| `failed`     |
+| `status`         | string | `queued` \| `running` \| `completed` \| `failed`     |
 | `plan`           | object | Planned changes computed before execution             |
 | `events`         | array  | Per-resource event log with timestamp, action, status; a `failed` event carries its `error` as `{ code, message, meta? }` |
 | `error`          | object | Why this operation failed, as `{ code, message, meta }` — the same bag the formation carries while that failure is its current state. Null otherwise |
@@ -473,7 +473,7 @@ Left alone:
 - An **updated** resource keeps its new state (no pre-update snapshot is taken).
 - A `deletion_policy: retain` resource survives; its record keeps pointing at it, so the next deploy adopts it rather than provisioning a duplicate.
 
-Each unwind is an entry in the operation's `events` after the triggering failure: `rollback` (`succeeded` or `failed`) for a walked-back resource, `rollback-skipped` for a retained one. A failed `rollback` is reported, never thrown; the original error stays in the operation's `error`, and the record keeps pointing at the physical resource for manual cleanup.
+Each unwind is an entry in the operation's `events` after the triggering failure: `rollback` (`completed` or `failed`) for a walked-back resource, `rollback-skipped` for a retained one. A failed `rollback` is reported, never thrown; the original error stays in the operation's `error`, and the record keeps pointing at the physical resource for manual cleanup.
 
 Stack statuses:
 
@@ -647,7 +647,7 @@ Cleanup is **deferred to the end of the operation**, after every other change an
 A disposal that still fails never fails the deploy (the desired state is realised). It is reported twice and retried:
 
 - a failed `replace-cleanup` event on the operation, and
-- `error.code: "FORMATION_REPLACE_CLEANUP_FAILED"` on the formation itself while the resource is still live, with `error.meta.failures` naming each `{ logical_id, resource_type, physical_resource_id, error }`. The formation stays `active` and the operation stays `succeeded`.
+- `error.code: "FORMATION_REPLACE_CLEANUP_FAILED"` on the formation itself while the resource is still live, with `error.meta.failures` naming each `{ logical_id, resource_type, physical_resource_id, error }`. The formation stays `active` and the operation stays `completed`.
 
 The un-deleted id stays on the record as pending cleanup; the next deploy and the teardown retry it and clear the error once it succeeds. A pending cleanup failing during teardown is recorded but never leaves the formation `delete_failed`.
 

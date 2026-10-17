@@ -779,7 +779,7 @@ Expected status output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "trace_id": "trace_ypo8g0yO3563AfuC"
 }
 ```

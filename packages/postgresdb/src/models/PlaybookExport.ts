@@ -84,7 +84,7 @@ export class PlaybookExport extends Model {
   @Column({ type: DataType.STRING(64), allowNull: false })
   declare toolId: string;
 
-  /** `running` | `succeeded` | `failed`. */
+  /** `running` | `completed` | `failed`. */
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare status: string;
 

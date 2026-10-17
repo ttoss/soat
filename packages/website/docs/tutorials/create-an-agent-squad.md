@@ -670,7 +670,7 @@ Expected output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "state": {
     "research": "...",
     "draft": "...",

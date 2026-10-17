@@ -43,7 +43,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `edges`        | array          | Directed connections between nodes               |
 | `state_schema` | object         | Optional JSON Schema describing the run state    |
 | `input_schema` | object         | Optional JSON Schema describing the run input    |
-| `output_mapping` | object \| null | Optional shape of a succeeded run's `output`, JSON Logic over the final state (see [Run output](#run-output)) |
+| `output_mapping` | object \| null | Optional shape of a completed run's `output`, JSON Logic over the final state (see [Run output](#run-output)) |
 | `created_at`   | string         | ISO 8601 creation timestamp                      |
 | `updated_at`   | string         | ISO 8601 last-updated timestamp                  |
 
@@ -55,7 +55,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `orchestration_id` | string         | Parent orchestration                                              |
 | `orchestration_version` | integer \| null | The orchestration version this run executes, fixed when the run started (see [Versioning](#versioning)). `null` for runs created before pinning existed, which execute the live graph |
 | `project_id`       | string         | Owning project                                                    |
-| `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `succeeded` \| `failed` \| `cancelled` \| `expired` |
+| `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `completed` \| `failed` \| `cancelled` \| `expired` |
 | `state`            | object         | Current mutable execution state                                   |
 | `active_nodes`     | array          | Node IDs awaiting input or a scheduled wake (populated when `awaiting_input`, or `sleeping` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
@@ -69,12 +69,12 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `input`            | object \| null | Initial input provided at run creation                            |
 | `metadata`         | object \| null | Caller-owned annotations supplied at run creation; never merged into `state` (see [Run Metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `idempotency_key`  | string \| null | Deduplication key supplied at run creation, unique within the project (see [Starting a run at most once](#starting-a-run-at-most-once)) |
-| `output`           | object \| null | What a `succeeded` run returns: the `output_mapping` result, else the terminal node artifacts keyed by node id (see [Run output](#run-output)); `null` otherwise |
+| `output`           | object \| null | What a `completed` run returns: the `output_mapping` result, else the terminal node artifacts keyed by node id (see [Run output](#run-output)); `null` otherwise |
 | `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |
 | `parent_node_id`   | string \| null | The node within `parent_orchestration_run_id` that started this run |
 | `orchestration_run_depth`        | integer        | `loop` / `sub_orchestration` edges between this run and the one a caller started: `0` for a caller-started run, one more than its parent's for a child (see [Nesting depth](#nesting-depth)) |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
-| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
+| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`completed`/`failed`/`cancelled`/`expired`) |
 | `created_at`       | string         | ISO 8601 creation timestamp                                       |
 | `updated_at`       | string         | ISO 8601 last-updated timestamp                                   |
 
@@ -296,9 +296,9 @@ A worker holds the lease for as long as its drive takes, re-arming it every thir
 
 **Crash recovery.** A `running` run holds a **lease** (`lease_expires_at`), refreshed after every completed round. A reaper reclaims expired leases and enqueues a `continue` task; completed nodes are skipped and only the unfinished frontier re-executes.
 
-**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`succeeded`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
+**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`completed`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
 
-**Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.succeeded`, `orchestration_runs.failed`.
+**Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.completed`, `orchestration_runs.failed`.
 
 #### Starting a run at most once
 
@@ -411,7 +411,7 @@ Run **state** = the run input ([Run input](#run-input)) + every upstream `state_
 
 #### Run output
 
-A succeeded run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
+A completed run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
 
 ```json
 {
@@ -726,7 +726,7 @@ Each generation carries its own `trace_id` for the full [trace](./traces.md) of 
 
 `start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair becomes one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes, so a per-user credential reaches the tools without living in the graph.
 
-The bag is **write-only**: it is accepted at run start and never returned on a run read, because what it carries is a credential and a run is a record every principal who may read runs can read. It does not outlive the work either — the bag is cleared once the run reaches a terminal state (`succeeded`, `failed`, `cancelled` or `expired`), the same way an [eval run's](evaluations.md#run-tool-context) is.
+The bag is **write-only**: it is accepted at run start and never returned on a run read, because what it carries is a credential and a run is a record every principal who may read runs can read. It does not outlive the work either — the bag is cleared once the run reaches a terminal state (`completed`, `failed`, `cancelled` or `expired`), the same way an [eval run's](evaluations.md#run-tool-context) is.
 
 It is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
 

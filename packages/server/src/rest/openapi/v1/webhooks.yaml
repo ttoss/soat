@@ -463,8 +463,8 @@ components:
         status:
           type: string
           enum:
-            - pending
-            - success
+            - queued
+            - completed
             - failed
         status_code:
           type: integer
@@ -481,8 +481,8 @@ components:
           nullable: true
           description: |
             When the delivery becomes eligible for its next attempt. Set while
-            the delivery is pending and a retry is still owed; null once it has
-            succeeded or exhausted its attempts.
+            the delivery is queued and a retry is still owed; null once it has
+            completed or exhausted its attempts.
         response_body:
           type: string
           nullable: true

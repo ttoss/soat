@@ -467,7 +467,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     const res = await transcript(inProgressId);
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('in_progress');
+    expect(res.body.status).toBe('running');
     expect(res.body.steps).toEqual([]);
     expect(res.body.output).toBeNull();
     // Not erased — the run simply has not produced steps yet.

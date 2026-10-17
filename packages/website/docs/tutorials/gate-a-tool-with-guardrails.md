@@ -460,7 +460,7 @@ soat get-orchestration-run --orchestration-run-id "$RUN1_ID" | jq '{outcome: .st
 Expected output:
 
 ```json
-{ "status": "succeeded", "required_action": null }
+{ "status": "completed", "required_action": null }
 { "outcome": "Budget updated." }
 ```
 
@@ -475,7 +475,7 @@ const { data: run1 } = await adminSoat.orchestrations.startOrchestrationRun({
     wait: true,
   },
 });
-console.log(run1.status); // succeeded
+console.log(run1.status); // completed
 console.log(run1.state.outcome); // Budget updated.
 ```
 
@@ -553,7 +553,7 @@ soat get-orchestration-run --orchestration-run-id "$RUN2_ID" | jq '{status, outc
 ```
 
 ```json
-{ "status": "succeeded", "outcome": "Budget updated." }
+{ "status": "completed", "outcome": "Budget updated." }
 ```
 
 </TabItem>
@@ -583,7 +583,7 @@ await adminSoat.approvals.approveApproval({
 const { data: resumed } = await adminSoat.orchestrations.getOrchestrationRun({
   path: { orchestration_run_id: run2.id },
 });
-console.log(resumed.status, resumed.state.outcome); // succeeded Budget updated.
+console.log(resumed.status, resumed.state.outcome); // completed Budget updated.
 ```
 
 </TabItem>
@@ -634,7 +634,7 @@ Expected output (the run succeeds down the `tripwire` edge):
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "outcome": "Stopped by a guardrail.",
   "refusal": {
     "status": "tripwire",

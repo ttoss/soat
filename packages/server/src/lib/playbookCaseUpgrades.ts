@@ -113,9 +113,9 @@ export const upgradePlaybookCase = async (args: {
         );
       }
       await db.PlaybookExecution.update(
-        { status: 'succeeded', result: 'superseded', finishedAt: new Date() },
+        { status: 'completed', result: 'superseded', finishedAt: new Date() },
         {
-          where: { caseId: locked.id as number, status: 'pending' },
+          where: { caseId: locked.id as number, status: 'queued' },
           transaction,
         }
       );

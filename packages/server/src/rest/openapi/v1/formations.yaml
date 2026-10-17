@@ -1915,7 +1915,7 @@ components:
           nullable: true
           additionalProperties: true
           description: >-
-            Optional shape of a succeeded run's `output`: each key an output
+            Optional shape of a completed run's `output`: each key an output
             field, each value JSON Logic over `{ "state": <final run state> }`.
             Omitted keys `output` by terminal node id.
 
@@ -2486,7 +2486,7 @@ components:
         status:
           type: string
           enum:
-            - succeeded
+            - completed
             - failed
         physical_resource_id:
           type: string
@@ -2514,9 +2514,9 @@ components:
         status:
           type: string
           enum:
-            - pending
+            - queued
             - running
-            - succeeded
+            - completed
             - failed
         events:
           type: array
@@ -2532,7 +2532,7 @@ components:
             - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: >-
-            Why this operation failed. Null for a succeeded or running
+            Why this operation failed. Null for a completed or running
             operation. The same bag the formation itself carries while that
             failure is its current state.
         created_at:

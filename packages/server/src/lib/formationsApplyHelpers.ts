@@ -63,7 +63,7 @@ export const markResourceDeleted = async (args: {
     logicalId: resource.logicalId,
     resourceType: resource.resourceType,
     action: 'delete',
-    status: 'succeeded',
+    status: 'completed',
     physicalResourceId: resource.physicalResourceId ?? undefined,
   });
 };
@@ -121,7 +121,7 @@ export const applyCreateChange = async (args: {
     logicalId,
     resourceType,
     action: 'create',
-    status: 'succeeded',
+    status: 'completed',
     physicalResourceId: physicalId,
   });
 };
@@ -156,7 +156,7 @@ export const rollbackCreatedResources = async (args: {
         logicalId: resource.logicalId,
         resourceType: resource.resourceType,
         action: 'rollback-skipped',
-        status: 'succeeded',
+        status: 'completed',
         physicalResourceId,
       });
       continue;
@@ -201,7 +201,7 @@ export const rollbackCreatedResources = async (args: {
       logicalId: resource.logicalId,
       resourceType: resource.resourceType,
       action: 'rollback',
-      status: 'succeeded',
+      status: 'completed',
       physicalResourceId,
     });
   }

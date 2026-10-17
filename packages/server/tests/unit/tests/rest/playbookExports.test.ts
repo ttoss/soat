@@ -211,7 +211,7 @@ describe('Playbook exports', () => {
         transformation: 'proposal',
         format: 'pdf',
         tool_id: pdfToolId,
-        status: 'succeeded',
+        status: 'completed',
         stale: false,
         file_id: expect.stringMatching(/^file_/),
         error: null,
@@ -291,7 +291,7 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(201);
       expect(res.body.data[0]).toMatchObject({
         revision: first,
-        status: 'succeeded',
+        status: 'completed',
         stale: true,
       });
       expect(stub.routeRequests[before].body.output).toEqual({ amount: 2 });
@@ -321,7 +321,7 @@ describe('Playbook exports', () => {
         },
       });
       expect(settled).toMatchObject({
-        status: 'succeeded',
+        status: 'completed',
         file_id: expect.stringMatching(/^file_/),
       });
     });

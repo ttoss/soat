@@ -53,7 +53,7 @@ export class FormationOperation extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare operationType: string;
 
-  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'pending' })
+  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'queued' })
   declare status: string;
 
   @Column({ type: DataType.JSONB, allowNull: true })

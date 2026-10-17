@@ -148,7 +148,7 @@ export const orchestrationOutcome = (
       error: run.error,
     });
   }
-  if (run.status !== 'succeeded') return { kind: 'pending', runId: run.id };
+  if (run.status !== 'completed') return { kind: 'pending', runId: run.id };
   return {
     kind: 'settled',
     output: run.output as JsonValue,

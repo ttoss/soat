@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >
     Generation records track individual LLM generation runs started by agents.
-    Each record carries the lifecycle status ('in_progress', 'requires_action',
+    Each record carries the lifecycle status ('running', 'requires_action',
     'completed', or 'failed'), the stop reason, and — when the generation
     failed — a structured error payload for post-mortem debugging. Generations
     for a trace can be listed via GET /api/v1/generations?trace_id=.
@@ -117,7 +117,7 @@ paths:
           description: Filter by lifecycle status
           schema:
             type: string
-            enum: [in_progress, requires_action, completed, failed]
+            enum: [running, requires_action, completed, failed]
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -529,7 +529,7 @@ components:
         status:
           type: string
           description: Lifecycle status of the generation
-          enum: [in_progress, requires_action, completed, failed]
+          enum: [running, requires_action, completed, failed]
           example: failed
         started_at:
           type: string
@@ -1025,7 +1025,7 @@ components:
           description: >
             Lifecycle status of the generation. Disambiguates an empty `steps`
             caused by a run still in flight from one caused by erased content.
-          enum: [in_progress, requires_action, completed, failed]
+          enum: [running, requires_action, completed, failed]
           example: completed
         stop_reason:
           type: string

@@ -321,7 +321,7 @@ describe('tool_execution usage', () => {
           orchestration_id: orchestration.body.id,
           input: {},
         });
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
 
       const res = await authenticatedTestClient(adminToken).get(
         `/api/v1/usage/events?meter_type=tool_execution&orchestration_run_id=${run.body.id}`

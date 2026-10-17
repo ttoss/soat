@@ -290,7 +290,7 @@ describe('PUT /api/v1/formations/:formation_id — a resource the template drops
         expect.objectContaining({
           logical_id: 'Kept',
           action: 'delete',
-          status: 'succeeded',
+          status: 'completed',
         }),
       ])
     );
@@ -331,7 +331,7 @@ describe('PUT /api/v1/formations/:formation_id — a resource the template drops
         expect.objectContaining({
           logical_id: 'Chat',
           action: 'delete',
-          status: 'succeeded',
+          status: 'completed',
           physical_resource_id: chatId,
         }),
       ])
@@ -480,7 +480,7 @@ describe('POST /api/v1/formations — a deploy that fails partway', () => {
         expect.objectContaining({
           logical_id: 'Store',
           action: 'rollback-skipped',
-          status: 'succeeded',
+          status: 'completed',
           physical_resource_id: storeId,
         }),
       ])
@@ -506,7 +506,7 @@ describe('POST /api/v1/formations — a deploy that fails partway', () => {
         expect.objectContaining({
           logical_id: 'Store',
           action: 'rollback',
-          status: 'succeeded',
+          status: 'completed',
         }),
       ])
     );

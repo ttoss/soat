@@ -2012,7 +2012,7 @@ describe('MCP tools - happy path', () => {
       const result = parseResult(res);
       expect(result.id).toMatch(/^trg_fire_/);
       expect(result.source).toBe('manual');
-      expect(['succeeded', 'failed']).toContain(result.status);
+      expect(['completed', 'failed']).toContain(result.status);
     });
 
     test('list-trigger-firings returns results', async () => {
@@ -2634,7 +2634,7 @@ describe('MCP tools - happy path', () => {
       const run = await authenticatedTestClient(adminToken)
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: orchestration.body.id });
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
 
       const res = await mcpCall('list-orchestration-run-node-executions', {
         orchestration_run_id: run.body.id,
@@ -3092,7 +3092,7 @@ describe('MCP tools - happy path', () => {
       });
 
       expect(res.status).toBe(200);
-      expect(parseResult(res).status).toBe('canceled');
+      expect(parseResult(res).status).toBe('cancelled');
     });
 
     test('delete-eval and delete-dataset remove them', async () => {

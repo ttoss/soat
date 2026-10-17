@@ -35,6 +35,7 @@ import { decisionsOpenaiShape } from './2026-10-07-decisionsOpenaiShape';
 import { conversationMessageIdempotencyDigest } from './2026-10-12-conversationMessageIdempotencyDigest';
 import { failureReasonsStoredError } from './2026-10-17-failureReasonsStoredError';
 import { onBehalfOf } from './2026-10-17-onBehalfOf';
+import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -90,5 +91,6 @@ export const MIGRATIONS: Migration[] = [
   decisionsOpenaiShape,
   conversationMessageIdempotencyDigest,
   onBehalfOf,
+  runStatusVocabulary,
   failureReasonsStoredError,
 ];
