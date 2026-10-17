@@ -726,7 +726,9 @@ components:
             Fixed parameters pinned on every call this tool makes, whatever its
             type. Keys matching fields in the input schema are removed from the
             schema shown to the model, and a pinned value wins over one the
-            model or a direct caller supplies for the same key.
+            model or a direct caller supplies for the same key. On an `mcp`
+            tool a preset reaches each action whose input schema declares it;
+            an action whose schema declares no properties receives every one.
 
 
             Values accept `{{context:<key>}}` references, resolved per call from
@@ -749,7 +751,8 @@ components:
             the same shape as `CreateToolRequest` minus `project_id` —
             executed directly without a Tool row, but never both. An inline
             step `tool` cannot itself be of type `pipeline`. An optional
-            `output` maps the final result. A literal credential in an inline
+            `output` maps the final result; `steps` may be empty when
+            `output` is set, which computes `output` over the input alone. A literal credential in an inline
             step `tool` is refused, exactly as in `execute`.
         output_mapping:
           type: object
@@ -852,7 +855,9 @@ components:
             Fixed parameters pinned on every call this tool makes, whatever its
             type. Keys matching fields in the input schema are removed from the
             schema shown to the model, and a pinned value wins over one the
-            model or a direct caller supplies for the same key.
+            model or a direct caller supplies for the same key. On an `mcp`
+            tool a preset reaches each action whose input schema declares it;
+            an action whose schema declares no properties receives every one.
 
 
             Values accept `{{context:<key>}}` references, resolved per call from
@@ -948,7 +953,9 @@ components:
             Fixed parameters pinned on every call this tool makes, whatever its
             type. Keys matching fields in the input schema are removed from the
             schema shown to the model, and a pinned value wins over one the
-            model or a direct caller supplies for the same key.
+            model or a direct caller supplies for the same key. On an `mcp`
+            tool a preset reaches each action whose input schema declares it;
+            an action whose schema declares no properties receives every one.
 
 
             Values accept `{{context:<key>}}` references, resolved per call from

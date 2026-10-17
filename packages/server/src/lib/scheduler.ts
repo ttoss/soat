@@ -1,3 +1,5 @@
+import { runAsJob } from './requestCorrelation';
+
 const BATCH_LIMIT = 20;
 
 type Logger = (formatter: string, ...args: unknown[]) => void;
@@ -57,8 +59,9 @@ export const createSweep = <M>(config: SweepConfig<M>): Sweep => {
 
       config.inFlight.add(id);
       claimedCount += 1;
-      void config
-        .handle({ row })
+      void runAsJob(() => {
+        return config.handle({ row });
+      })
         .catch((error: unknown) => {
           config.log('%s: handle failed id=%s %o', config.name, id, error);
         })
@@ -103,7 +106,7 @@ export const createScheduler = (
    */
   const runSweeps = (): void => {
     for (const sweep of config.sweeps) {
-      void sweep().catch((error: unknown) => {
+      void runAsJob(sweep).catch((error: unknown) => {
         config.log('sweep failed %o', error);
       });
     }

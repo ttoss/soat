@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
+import type { OnBehalfOf } from './onBehalfOf';
 import { isPlainObject } from './plainObject';
 import { advancePlaybookCase } from './playbookCascade';
 import {
@@ -9,10 +10,10 @@ import {
   caseDefinition,
   caseSnapshot,
   type MappedPlaybookCase,
-  mapPlaybookCase,
   playbookCases,
   withLockedCase,
 } from './playbookCases';
+import { answerPlaybookCase } from './playbookCaseWait';
 import type {
   JsonValue,
   PlaybookDefinition,
@@ -175,7 +176,9 @@ export const writePlaybookCaseInputs = async (args: {
   id: string;
   writes: PlaybookInputWrite[];
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
+  wait?: boolean;
 }): Promise<MappedPlaybookCase> => {
   log('writePlaybookCaseInputs: id=%s count=%d', args.id, args.writes.length);
   const found = await playbookCases.getByPublicId(args);
@@ -223,6 +226,7 @@ export const writePlaybookCaseInputs = async (args: {
               basis: null,
               playbookVersion: locked.playbookVersion,
               createdByUserId: args.createdByUserId,
+              onBehalfOf: args.onBehalfOf,
             };
           }),
       });
@@ -230,5 +234,5 @@ export const writePlaybookCaseInputs = async (args: {
   });
 
   await advancePlaybookCase({ caseDbId: found.id as number });
-  return mapPlaybookCase(await playbookCases.reload(found));
+  return answerPlaybookCase({ row: found, wait: args.wait === true });
 };

@@ -4431,11 +4431,13 @@ fi
 USAGE_TOTAL=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.total // 0')
 echo "List usage meters endpoint: OK (total: $USAGE_TOTAL)"
 
-# When at least one generation has completed, the event must carry token
-# components (values depend on the live provider, so only their shape is
-# checked).
+# When at least one generation has completed, its token event must carry
+# token components (values depend on the live provider, so only their shape is
+# checked). Read by generation and meter type: the newest row of the whole list
+# can be an `api_request` row the request flush writes on its own schedule.
 if [ "$USAGE_TOTAL" -ge 1 ]; then
-  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '(.data[0] | (.id | startswith("ue_")) and (.provider | length > 0) and (.meter_type == "llm_tokens") and (.components | type == "array") and ([.components[] | select(.component == "input_tokens")] | length >= 1))')
+  USAGE_EVENTS_RESP=$($SOAT_CLI list-usage-events --generation-id "$GEN_ID" | sanitize_json)
+  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens")][0] // {} | (.id // "" | startswith("ue_")) and (.provider // "" | length > 0) and (.meter_type == "llm_tokens") and (.components | type == "array") and ([(.components // [])[] | select(.component == "input_tokens")] | length >= 1))')
   if [ "$USAGE_ROW_OK" != "true" ]; then
     echo "ERROR: usage event missing expected token components" >&2
     echo "$USAGE_EVENTS_RESP" >&2

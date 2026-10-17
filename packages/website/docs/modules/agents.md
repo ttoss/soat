@@ -1026,7 +1026,32 @@ Dispatched to project [webhooks](./webhooks.md) over a generation's lifecycle; f
 | `agents.generation.requires_action` | The turn paused on a client tool call awaiting outputs      |
 | `agents.deleted`                    | An agent was deleted                                        |
 
-Every generation event carries the generation `id` and `trace_id`; `agents.generation.failed` also carries the record's structured `error` (`error.code`, `error.message`). Subscribe to the family with `agents.generation.*`. Session events are namespaced separately: [Sessions → Webhook Events](./sessions.md#webhook-events).
+A generation event names the generation (`resource_type: generation`, `resource_id` its id), and its `data` is the generation record exactly as [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) returns it at that moment: `status`, `trace_id`, `usage`, the structured `error` on `agents.generation.failed`, and the rest of the [record](./generations.md). A `requires_action` event adds the pending `required_action` (`type`, `tool_calls[]` with `id`, `tool_name`, `args`), which the record does not hold. The reply text is not on the record; read it from the [transcript](/docs/api/generations/get-generation-transcript) or the conversation. Subscribe to the family with `agents.generation.*`. Session turns emit the same shape under their own names: [Sessions → Webhook Events](./sessions.md#webhook-events).
+
+```json
+{
+  "event": "agents.generation.completed",
+  "project_id": "proj_V1StGXR8Z5jdHi6B",
+  "resource_type": "generation",
+  "resource_id": "gen_V1StGXR8Z5jdHi6B",
+  "data": {
+    "id": "gen_V1StGXR8Z5jdHi6B",
+    "project_id": "proj_V1StGXR8Z5jdHi6B",
+    "agent_id": "agent_V1StGXR8Z5jdHi6B",
+    "trace_id": "trace_V1StGXR8Z5jdHi6B",
+    "session_id": null,
+    "conversation_id": null,
+    "status": "completed",
+    "stop_reason": "stop",
+    "error": null,
+    "usage": { "input_tokens": 4, "output_tokens": 2, "cost_usd": 0.00001 },
+    "created_at": "2026-07-01T12:00:00.000Z"
+  },
+  "timestamp": "2026-07-01T12:00:01.000Z"
+}
+```
+
+`data` above is abridged; it holds every field of the record.
 
 ### Approval Expiry
 

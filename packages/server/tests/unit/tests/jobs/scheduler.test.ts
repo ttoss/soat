@@ -1,4 +1,5 @@
-import { createScheduler, type Sweep } from 'src/lib/scheduler';
+import { currentRequestId } from 'src/lib/requestCorrelation';
+import { createScheduler, createSweep, type Sweep } from 'src/lib/scheduler';
 
 /**
  * The timer scaffolding every background poller shares. Driven directly with
@@ -187,5 +188,72 @@ describe('createScheduler', () => {
     expect(log).toHaveBeenCalledWith('sweep failed %o', failure);
 
     scheduler.stop();
+  });
+});
+
+/**
+ * Work no request started still names itself to the servers its tools call:
+ * each sweep, and each row a sweep claims, runs under a request id of its own.
+ */
+describe('request ids for background work', () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+  test('each sweep runs under its own id', () => {
+    const seen: Array<string | undefined> = [];
+    const sweep = (): Promise<number> => {
+      seen.push(currentRequestId());
+      return Promise.resolve(0);
+    };
+    const scheduler = createScheduler({
+      log: jest.fn(),
+      defaultIntervalMs: 60_000,
+      sweeps: [sweep, sweep],
+    });
+
+    scheduler.start();
+    scheduler.stop();
+
+    expect(seen).toEqual([
+      expect.stringMatching(UUID),
+      expect.stringMatching(UUID),
+    ]);
+    expect(seen[0]).not.toBe(seen[1]);
+  });
+
+  test('each claimed row runs under its own id', async () => {
+    const seen: Array<string | undefined> = [];
+    let settle: () => void = () => {
+      return undefined;
+    };
+    const handled = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const sweep = createSweep<{ id: number }>({
+      log: jest.fn(),
+      name: 'rows',
+      inFlight: new Set(),
+      findDue: async () => {
+        return [{ id: 1 }, { id: 2 }];
+      },
+      idOf: (row) => {
+        return row.id;
+      },
+      claim: async () => {
+        return true;
+      },
+      handle: async () => {
+        seen.push(currentRequestId());
+        if (seen.length === 2) settle();
+      },
+    });
+
+    expect(await sweep()).toBe(2);
+    await handled;
+
+    expect(seen).toEqual([
+      expect.stringMatching(UUID),
+      expect.stringMatching(UUID),
+    ]);
+    expect(seen[0]).not.toBe(seen[1]);
   });
 });

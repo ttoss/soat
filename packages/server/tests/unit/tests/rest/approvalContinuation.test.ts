@@ -622,15 +622,15 @@ describe('Tool-call approval continuation', () => {
       const released: ReleasedCall[] = [];
       const handler = (event: SoatEvent) => {
         if (event.type !== 'agents.generation.requires_action') return;
-        const requiredAction = event.data.requiredAction as {
-          toolCalls: Array<{
+        const requiredAction = event.data.required_action as {
+          tool_calls: Array<{
             id: string;
-            toolName: string;
+            tool_name: string;
             args: Record<string, unknown>;
           }>;
         };
-        for (const call of requiredAction.toolCalls) {
-          if (call.toolName !== CLIENT_TOOL) continue;
+        for (const call of requiredAction.tool_calls) {
+          if (call.tool_name !== CLIENT_TOOL) continue;
           released.push({
             generationId: event.resourceId,
             toolCallId: call.id,

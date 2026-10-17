@@ -172,6 +172,7 @@ const writeErrorLog = (args: {
     method: args.ctx.method,
     path: args.ctx.path,
     status: args.status,
+    requestId: args.ctx.state?.requestId,
     userAgent: args.ctx.get('user-agent') || undefined,
     error: toErrorText({ error: args.error }),
     ...toApiCallErrorDetails(args.error),

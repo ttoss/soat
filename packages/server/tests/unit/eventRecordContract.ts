@@ -22,21 +22,6 @@ const IDENTITY_KEY: Partial<Record<SoatResourceType, string>> = {
   conversation_message: 'document_id',
 };
 
-/**
- * Events whose emitters (`agentGenerationHelpers.ts`,
- * `sessionGenerationHelpers.ts`, `usageThresholds.ts`) carry a payload of their
- * own rather than the record. An entry leaves this set when its emitter
- * carries the record; the check then holds it like every other event.
- */
-const OUTSIDE_CONTRACT = new Set<string>([
-  'agents.generation.requires_action',
-  'agents.generation.completed',
-  'sessions.generation.started',
-  'sessions.generation.requires_action',
-  'sessions.generation.completed',
-  'usage.threshold_crossed',
-]);
-
 const isCamelCase = (key: string): boolean => {
   return /[a-z][A-Z]/.test(key);
 };
@@ -45,7 +30,6 @@ const isCamelCase = (key: string): boolean => {
 export const eventRecordFindings = (event: SoatEvent): string[] => {
   // A user-authored `emit_event` name carries whatever its template wrote.
   if (!isSoatEventType(event.type)) return [];
-  if (OUTSIDE_CONTRACT.has(event.type)) return [];
 
   const where = `${event.type} (${event.resourceId})`;
   const { data } = event;

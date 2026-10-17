@@ -117,6 +117,14 @@ export class PlaybookExport extends Model {
   })
   declare createdBy: User | null;
 
+  /**
+   * The tool call the write was made on behalf of (`tool_id`, `agent_id`,
+   * `generation_id`, `session_id`, `actor_id`), verified from the request's
+   * `On-Behalf-Of` assertion; null for a write made as the credential alone.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare onBehalfOf: Record<string, string | null> | null;
+
   /** Until when a `running` export is known alive; a sweep fails it once past. */
   @Column({ type: DataType.DATE, allowNull: true })
   declare leaseExpiresAt: Date | null;

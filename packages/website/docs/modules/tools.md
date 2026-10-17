@@ -66,6 +66,10 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 
 Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Authorization` stays `Authorization`).
 
+### Request correlation (`X-Request-Id`)
+
+Every request an `http` or `mcp` tool sends carries the [`X-Request-Id`](./audit-log.md#request-correlation-x-request-id) of the API request it runs for, so the server's log and the runtime's name the same request. Work no request started — a scheduled trigger, a queued orchestration or evaluation step — runs under a fresh id per job. A header of that name in `execute.headers` or `mcp.headers` is kept.
+
 ### Context Headers (`X-Soat-Context-*`)
 
 Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
@@ -357,6 +361,8 @@ A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`co
   - A value is an expression only when it is a single-key object whose key is a real JSON Logic operator; `preserve` returns its argument unevaluated for a literal that looks like one: `{ "preserve": { "var": "some.var" } }`.
 - **`output`** (optional) — a JSON Logic expression building the return value (default: the last step's raw output); may be a bare scalar (`{ "var": "steps.<id>.<path>" }`) or an object with nested expressions.
 
+`steps` may be empty when `output` is set: the pipeline then computes `output` over `{ input, steps: {} }` and calls nothing, so a deterministic calculation (a price from cost and margin) is a tool with no outbound call. `round`, `floor`, `ceil` and `let` ([Operators](../advanced/expressions-and-templating.md#operators-beyond-the-standard-set)) keep such a formula short. Empty `steps` with no `output` is `400 PIPELINE_INVALID_STEP`.
+
 Each step's output is captured under `steps.<id>`; a step may reference only earlier steps (forward references rejected at create). The first failing step aborts with `PIPELINE_STEP_FAILED`. Nested `pipeline` targets are bounded by a maximum depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools.
 
 > **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). A step's `input` keys are preserved verbatim as the sub-tool's arguments; author them, and `var` paths, in the casing of the data.
@@ -384,7 +390,7 @@ Without `output_mapping` the raw result is returned unchanged.
 
 ### Preset Parameters
 
-`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }`, one with `{ "id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
+`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. On an `mcp` tool, a preset reaches only the actions whose input schema declares it, so one tool can pin `folder` for its `search` action and still call `fetch`; an action that publishes no `properties` receives every preset. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }`, one with `{ "id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
 
 **A preset is a pin, not a default: it wins.** A value the call supplies for a pinned key (a model naming the hidden field, or an `input` to [`POST /tools/{id}/call`](/docs/api/tools/call-tool)) is replaced by the preset; unpinned keys come from the call. No tool schema sets `additionalProperties: false`, so a hidden key is not rejected; merge order is the guarantee.
 
@@ -448,11 +454,18 @@ curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 | `jti` | Unique per request |
 | `tool_id` | The tool's ID; absent for an inline definition |
 | `project_id` | The tool's own project |
+| `agent_id`, `generation_id` | The agent and generation whose turn made the call, when one did |
 | `calling_project_id` | The caller's project, on a call through a [share](./shares.md) |
 | `session_id`, `actor_id`, `actor_external_id` | The [server-derived identity](../advanced/tool-context.md#auto-populated-keys-sessions), when the call runs in a session |
 | `body_sha256` | Base64url SHA-256 of the request body |
 
 A receiver checks the signature against the key set, `aud` against its own URL, `exp`, and `body_sha256` against the bytes it read. The identity claims are the [reserved context keys](../advanced/tool-context.md#auto-populated-keys-sessions), which no caller can set; a caller-supplied value never reaches a claim.
+
+### Writing on behalf of a tool call
+
+A tool server that writes back into SOAT with its project's API key can send the assertion of the call it is serving, unchanged, in `X-Soat-On-Behalf-Of` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)). The write then records the call beside `created_by` as `on_behalf_of` (`tool_id`, `agent_id`, `generation_id`, `session_id`, `actor_id`): on [playbook](./playbooks.md) entries, executions, exports and upgrades, and on every [audit log](./audit-log.md) entry of the request. It is attribution only: `created_by` and every permission checked stay the key's.
+
+SOAT verifies the assertion against its own key, `iss` and `exp`, and requires an API key scoped to the project the assertion names. Anything else is `400 ON_BEHALF_OF_INVALID`, `meta.reason` `unverified` or `project`, and nothing is written. A deployment that configures no [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration) signs nothing, so it verifies nothing.
 
 ### Calling a Tool Directly
 

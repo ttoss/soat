@@ -62,6 +62,7 @@ export const mapMessage = async (message: ConversationMessageRow) => {
     position: message.position,
     content: await readStoredFileContent(message.document?.file),
     metadata: message.metadata ?? null,
+    idempotency_key: message.idempotencyKey,
   };
 };
 

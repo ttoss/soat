@@ -2,54 +2,12 @@ import type { db } from '../db';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
-import { emitResourceEvent } from './eventBus';
+import { emitSessionEvent } from './sessionEvents';
 
 export const emitGenerationStarted = (
   session: InstanceType<(typeof db)['Session']>
 ) => {
-  emitResourceEvent({
-    type: 'sessions.generation.started',
-    projectId: session.projectId,
-    resourceType: 'session',
-    resourceId: session.publicId,
-    data: { sessionId: session.publicId },
-  });
-};
-
-export const emitGenerationRequiresAction = (args: {
-  session: InstanceType<(typeof db)['Session']>;
-  generationId: string;
-  traceId: string;
-}) => {
-  emitResourceEvent({
-    type: 'sessions.generation.requires_action',
-    projectId: args.session.projectId,
-    resourceType: 'session',
-    resourceId: args.session.publicId,
-    data: {
-      sessionId: args.session.publicId,
-      generationId: args.generationId,
-      traceId: args.traceId,
-    },
-  });
-};
-
-export const emitGenerationCompleted = (args: {
-  session: InstanceType<(typeof db)['Session']>;
-  generationId: string;
-  traceId: string;
-}) => {
-  emitResourceEvent({
-    type: 'sessions.generation.completed',
-    projectId: args.session.projectId,
-    resourceType: 'session',
-    resourceId: args.session.publicId,
-    data: {
-      sessionId: args.session.publicId,
-      generationId: args.generationId,
-      traceId: args.traceId,
-    },
-  });
+  void emitSessionEvent({ type: 'sessions.generation.started', session });
 };
 
 export const processToolOutputResult = async (args: {

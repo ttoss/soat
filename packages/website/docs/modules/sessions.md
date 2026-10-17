@@ -243,6 +243,8 @@ Channels like WhatsApp use at-least-once webhook delivery, so the same inbound m
 
 The key is scoped to the session and applies to both the `message` and the `document_id` variant. `message`, `document_id` and `tool_context` are the request a key names: reusing a key with any of them changed is `409 IDEMPOTENCY_KEY_REUSED` and saves nothing. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
 
+The saved message carries the key as `idempotency_key` in the session's [conversation messages](./conversations.md#conversation-message), so the transcript row for a provider message is found by its provider id.
+
 ### Inactivity TTL
 
 `inactivity_ttl_seconds` expires a session after a period of inactivity:
@@ -307,7 +309,7 @@ Dispatched to project webhooks as sessions change state. `sessions.created`, `se
 | `sessions.generation.requires_action` | LLM returned a client-tool call requiring tool outputs |
 | `sessions.generation.started`         | LLM generation has started for a session               |
 
-All events include `session_id`; generation events also include `generation_id` and `trace_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
+`sessions.generation.completed` and `sessions.generation.requires_action` are generation events, shaped like the [agent generation events](./agents.md#webhook-events): `resource_type` is `generation`, `resource_id` the generation id, and `data` the generation record, whose `session_id` names the session. The other session events name the session in `resource_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
 
 ### Who may fork a session
 

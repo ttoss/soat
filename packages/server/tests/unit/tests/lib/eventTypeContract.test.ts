@@ -57,6 +57,19 @@ describe('event type contract', () => {
     expect(offenders).toEqual([]);
   });
 
+  // Each carries the generation record as its GET answers it; a second emit
+  // site would decide that shape a second time.
+  test('only generationEvents.ts emits a generation lifecycle event', () => {
+    const lifecycle =
+      /'(agents\.generation\.(completed|failed|requires_action)|sessions\.generation\.(completed|requires_action))'/;
+    const offenders = collectSourceFiles(SRC_DIR).filter((relative) => {
+      const source = readFileSync(join(SRC_DIR, relative), 'utf-8');
+      return source.includes('emitResourceEvent(') && lifecycle.test(source);
+    });
+
+    expect(offenders).toEqual(['lib/generationEvents.ts']);
+  });
+
   test('every registered resource type carries at least one event', () => {
     const empty = Object.entries(SOAT_EVENTS)
       .filter(([, events]) => {
