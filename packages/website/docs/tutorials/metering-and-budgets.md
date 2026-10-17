@@ -464,22 +464,25 @@ uses the standard signed envelope with this `data`:
 
 ```json
 {
-  "threshold_id": "uthr_V1StGXR8Z5jdHi6B",
+  "id": "uthr_V1StGXR8Z5jdHi6B",
   "project_id": "proj_V1StGXR8Z5jdHi6B",
   "metric": "tokens",
   "window": "rolling_24h",
-  "window_key": null,
   "threshold": 1,
+  "last_fired_at": "2026-07-14T09:30:00.000Z",
+  "fired_window_key": null,
+  "created_at": "2026-07-14T09:00:00.000Z",
   "observed_value": 62
 }
 ```
 
-Re-fire hysteresis:
+`data` is the threshold record as the thresholds listing returns it, plus
+`observed_value`. Re-fire hysteresis:
 
-- **`calendar_month`** fires at most once per `YYYY-MM` window (`window_key`);
-  re-arms at the month boundary.
+- **`calendar_month`** fires at most once per `YYYY-MM` window
+  (`fired_window_key`); re-arms at the month boundary.
 - **`rolling_24h`** re-arms once the windowed value drops below 90% of the
-  threshold (`window_key` is `null`).
+  threshold (`fired_window_key` is `null`).
 
 Thresholds are immutable: delete and recreate to change one, which resets its
 fire state.
