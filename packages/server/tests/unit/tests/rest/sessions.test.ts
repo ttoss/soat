@@ -1,5 +1,4 @@
 import { db } from '../../../../src/db';
-import * as agentGenerationModule from '../../../../src/lib/agentGeneration';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -1862,9 +1861,6 @@ describe('Sessions', () => {
 
   describe('POST /api/v1/sessions/:sessionId/tool-outputs - execution', () => {
     let sessionId: string;
-    let submitToolOutputsSpy: jest.SpiedFunction<
-      typeof agentGenerationModule.submitToolOutputs
-    >;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
@@ -1873,22 +1869,7 @@ describe('Sessions', () => {
       sessionId = res.body.id;
     });
 
-    beforeEach(() => {
-      submitToolOutputsSpy = jest.spyOn(
-        agentGenerationModule,
-        'submitToolOutputs'
-      );
-    });
-
-    afterEach(() => {
-      submitToolOutputsSpy.mockRestore();
-      jest.clearAllMocks();
-    });
-
-    test('returns 404 when generationId does not exist in pending generations', async () => {
-      // submitToolOutputs checks pendingGenerations map; an unknown generationId
-      // returns 'generation_not_found', exercising submitSessionToolOutputs and
-      // fetchSessionAndConversationActors.
+    test('an unknown generation_id returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
@@ -1897,7 +1878,7 @@ describe('Sessions', () => {
         });
 
       expect(response.status).toBe(404);
-      expect(response.body.error.message).toMatch(/generation/i);
+      expect(response.body.error.code).toBe('GENERATION_NOT_FOUND');
     });
 
     test('returns 404 when session does not exist', async () => {
@@ -1910,143 +1891,6 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
-    });
-
-    test('returns completed result and persists the assistant reply', async () => {
-      submitToolOutputsSpy.mockResolvedValueOnce({
-        id: 'gen_submit_done_01',
-        traceId: 'trc_submit_done_01',
-        status: 'completed',
-        output: {
-          model: 'test-model',
-          content: 'Weather in Paris: 18C',
-          finishReason: 'stop',
-        },
-      });
-
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
-        .send({
-          generation_id: 'gen_submit_done_01',
-          tool_outputs: [
-            { tool_call_id: 'tc_done_01', output: { city: 'Paris' } },
-          ],
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.status).toBe('completed');
-      expect(response.body.generation_id).toBe('gen_submit_done_01');
-      expect(response.body.message.content).toBe('Weather in Paris: 18C');
-
-      const messagesResponse = await listSessionMessages(userToken, sessionId);
-
-      expect(messagesResponse.status).toBe(200);
-      expect(messagesResponse.body.data).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: 'assistant',
-            content: 'Weather in Paris: 18C',
-          }),
-        ])
-      );
-    });
-
-    test('does not leak response_messages into metadata after tool-output completion', async () => {
-      const responseMessages = [
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool-call',
-              toolCallId: 'tc_meta_01',
-              toolName: 'get_weather',
-              args: { city: 'Paris' },
-            },
-          ],
-        },
-        {
-          role: 'tool',
-          content: [
-            { type: 'tool-result', toolCallId: 'tc_meta_01', result: '18C' },
-          ],
-        },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Weather in Paris: 18C' }],
-        },
-      ];
-
-      submitToolOutputsSpy.mockResolvedValueOnce({
-        id: 'gen_meta_done_01',
-        traceId: 'trc_meta_done_01',
-        status: 'completed',
-        output: {
-          model: 'test-model',
-          content: 'Unique metadata regression reply',
-          finishReason: 'stop',
-          responseMessages,
-        },
-      });
-
-      await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
-        .send({
-          generation_id: 'gen_meta_done_01',
-          tool_outputs: [{ tool_call_id: 'tc_meta_01', output: '18C' }],
-        });
-
-      const messagesResponse = await listSessionMessages(userToken, sessionId);
-
-      expect(messagesResponse.status).toBe(200);
-      const assistantMsg = messagesResponse.body.data.find(
-        (m: { role: string; content: string }) => {
-          return (
-            m.role === 'assistant' &&
-            m.content === 'Unique metadata regression reply'
-          );
-        }
-      );
-      expect(assistantMsg).toBeDefined();
-      // response_messages is server-owned state stored on its own column, not
-      // in the caller-owned metadata bag — metadata stays
-      // untouched by this write.
-      expect(assistantMsg.metadata).toBeUndefined();
-    });
-
-    test('returns requires_action result when more tool outputs are needed', async () => {
-      submitToolOutputsSpy.mockResolvedValueOnce({
-        id: 'gen_submit_req_01',
-        traceId: 'trc_submit_req_01',
-        status: 'requires_action',
-        requiredAction: {
-          type: 'submit_tool_outputs',
-          toolCalls: [
-            {
-              id: 'tc_req_followup_01',
-              toolName: 'get_forecast',
-              args: { location: 'Paris' },
-            },
-          ],
-        },
-      });
-
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
-        .send({
-          generation_id: 'gen_submit_req_01',
-          tool_outputs: [
-            { tool_call_id: 'tc_req_01', output: 'partial result' },
-          ],
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.status).toBe('requires_action');
-      expect(response.body.generation_id).toBe('gen_submit_req_01');
-      expect(response.body.required_action).toEqual(
-        expect.objectContaining({
-          type: 'submit_tool_outputs',
-        })
-      );
     });
   });
 

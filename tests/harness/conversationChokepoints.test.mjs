@@ -34,8 +34,10 @@ const filesMatching = (pattern) => {
 };
 
 /**
- * `insertMessage` takes a message's position under the conversation's lock, so
- * concurrent writes to one conversation queue instead of racing on one slot.
+ * Where a message lands in a conversation is answered once per question:
+ * `insertMessage` takes a position under the conversation's lock, so writes
+ * never race on one, and `storeResumedConversationTurn` places a turn resumed
+ * through tool outputs, whichever route resumed it.
  */
 describe('conversation chokepoints', () => {
   test('a message row is written only by insertMessage', () => {
@@ -48,6 +50,12 @@ describe('conversation chokepoints', () => {
         'lib/sessionFork.ts',
       ]
     );
+  });
+
+  test('a generated turn is stored only inside conversationGeneration', () => {
+    assert.deepEqual(filesMatching(/\bstoreGeneratedTurn\b/), [
+      'lib/conversationGeneration.ts',
+    ]);
   });
 });
 

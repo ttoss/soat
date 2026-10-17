@@ -64,6 +64,8 @@ What [`POST /api/v1/sessions/{session_id}/generate`](/docs/api/sessions/generate
 
 A completed turn is stored right after the last message it read, so a message sent while it ran or waited on `tool-outputs` stays after it, and it emits `conversation_messages.generated` whichever of the three routes, or the agent's [`POST /api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), completed it.
 
+`tool-outputs` takes only a `generation_id` that ran in the session's conversation. Any other, such as a bare agent generation or another session's, is `404 GENERATION_NOT_FOUND` before any output is submitted, so that generation stays paused.
+
 | Field             | Type   | Description                                                                                                                                                                 |
 | ----------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `status`          | string | `completed` or `requires_action`                                                                                                                                            |
