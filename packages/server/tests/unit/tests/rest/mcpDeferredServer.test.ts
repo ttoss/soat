@@ -23,6 +23,11 @@ import { authenticatedTestClient } from '../../testClient';
 
 const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
 
+const MCP_HEADERS = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json, text/event-stream',
+};
+
 describe('MCP bindings over a deferred server', () => {
   let server: http.Server;
   let mcpUrl: string;
@@ -158,10 +163,8 @@ describe('MCP bindings over a deferred server', () => {
     }) => {
       return resolveMcpTools({
         meter: UNMETERED,
-        typedTool: { mcp: { url: mcpUrl }, ...lists },
-        buildContextHeaders: () => {
-          return {};
-        },
+        transport: { url: mcpUrl, headers: MCP_HEADERS, identity: null },
+        typedTool: lists,
         logToolCallingError: jest.fn(),
       });
     };

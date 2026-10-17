@@ -28,6 +28,7 @@ import {
   type ResponseMode,
 } from './httpToolResponse';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { resolveSecretRefsInString } from './secrets';
@@ -846,30 +847,21 @@ const resolveMcpToolEntry = async (args: {
   const { typedTool, toolContext, activity, unavailable } = args;
   if (!typedTool.mcp?.url) return {};
   try {
-    // Resolve {{secret:...}} tokens right before connecting to the MCP
-    // server — the stored config keeps the reference.
-    const mcp = {
-      url: await resolveSecretRefsInString({
-        value: typedTool.mcp.url,
-        projectId: typedTool.projectId,
-      }),
-      headers: await resolveToolHeaderTemplates({
-        record: typedTool.mcp.headers,
-        projectId: typedTool.projectId,
-        toolContext,
-      }),
-    };
+    const transport = await openMcpTransport({
+      mcp: typedTool.mcp,
+      meter: args.meter,
+      toolContext,
+      contextKeys: typedTool.contextKeys,
+    });
     return await resolveMcpTools({
+      transport,
       typedTool: {
-        mcp,
         actions: typedTool.actions,
         deniedActions: typedTool.deniedActions,
-        contextKeys: typedTool.contextKeys,
         presetParameters: typedTool.presetParameters,
       },
       meter: args.meter,
       toolContext,
-      buildContextHeaders,
       logToolCallingError,
       reportResolutionFailure: ({ reason }) => {
         reportBindingUnavailable({ typedTool, reason, activity, unavailable });

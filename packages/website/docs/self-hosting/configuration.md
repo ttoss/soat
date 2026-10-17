@@ -278,8 +278,12 @@ Mount a persistent volume here in Docker.
 | ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
 | `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000`          | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
 | `TOOL_CONTEXT_HEADER_PREFIX` | `X-Soat-Context-` | Prefix prepended to every `tool_context` key to form the outbound request header name           |
+| `TOOL_ASSERTION_PRIVATE_KEY` | — | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
+| `TOOL_ASSERTION_HEADER` | `X-Soat-Tool-Assertion` | Header the tool assertion is sent in |
 
 A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation.
+
+`TOOL_ASSERTION_PRIVATE_KEY` turns on [tool assertions](../modules/tools.md#tool-assertions); its public half is served at `/.well-known/tool-assertion-jwks.json`. Generate one with `openssl genpkey -algorithm ed25519`. To rotate, replace the key: a verifier that refetches the key set on an unknown `kid` picks up the new one, and assertions signed with the old key expire within 60 seconds.
 
 `TOOL_CONTEXT_HEADER_PREFIX` renames the [context headers](../advanced/tool-context.md#configuring-the-header-prefix) a deployment emits (e.g. to hide the SOAT name from third-party tool providers). Prepended verbatim, so include the trailing `-` (`X-Acme-Context-` + `userId` → `X-Acme-Context-userId`). Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the tool call with an error naming the variable. Empty or unset keeps the default; the prefix cannot be removed, since an unprefixed key could land on `Authorization`. Changing it breaks every tool endpoint already reading these headers: set it before wiring up tools, or update both sides together.
 

@@ -300,10 +300,12 @@ const nextRequest = (args: {
   method: string;
   body: RequestInit['body'];
   headers: Headers;
+  credentialHeaders?: readonly string[];
 }): { method: string; body: RequestInit['body']; headers: Headers } => {
   const headers = new Headers(args.headers);
   if (args.from.origin !== args.to.origin) {
     for (const header of CREDENTIAL_HEADERS) headers.delete(header);
+    for (const header of args.credentialHeaders ?? []) headers.delete(header);
   }
   // 307/308 preserve the method and body; 301/302/303 degrade to GET, which is
   // what every HTTP client does and what a tool's target will expect.
@@ -346,6 +348,9 @@ export const fetchWithEgressGuard = async (
     noun?: string;
     // Called right before each hop goes on the wire, after its check passed.
     onRequest?: () => void;
+    // Headers of the caller's own that carry a credential, dropped with
+    // `CREDENTIAL_HEADERS` on a redirect to another origin.
+    credentialHeaders?: readonly string[];
   } = {}
 ): Promise<Response> => {
   const allowlist = options.allowlist ?? getEgressAllowlist();
@@ -390,6 +395,7 @@ export const fetchWithEgressGuard = async (
       method,
       body,
       headers,
+      credentialHeaders: options.credentialHeaders,
     });
     method = next.method;
     body = next.body;

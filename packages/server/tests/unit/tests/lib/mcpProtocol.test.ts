@@ -15,6 +15,14 @@ const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
  */
 describe('MCP protocol fidelity', () => {
   const MCP_URL = 'http://localhost:19999/mcp';
+  const TRANSPORT = {
+    url: MCP_URL,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    },
+    identity: null,
+  };
 
   const jsonResponse = (body: unknown) => {
     return new Response(JSON.stringify(body), { status: 200 });
@@ -48,10 +56,8 @@ describe('MCP protocol fidelity', () => {
   const resolve = async () => {
     return resolveMcpTools({
       meter: UNMETERED,
-      typedTool: { mcp: { url: MCP_URL } },
-      buildContextHeaders: () => {
-        return {};
-      },
+      transport: TRANSPORT,
+      typedTool: {},
       logToolCallingError: jest.fn(),
     });
   };
@@ -116,10 +122,8 @@ describe('MCP protocol fidelity', () => {
 
       const result = await resolveMcpTools({
         meter: UNMETERED,
-        typedTool: { mcp: { url: MCP_URL } },
-        buildContextHeaders: () => {
-          return {};
-        },
+        transport: TRANSPORT,
+        typedTool: {},
         logToolCallingError: jest.fn(),
         reportResolutionFailure,
       });
@@ -216,10 +220,8 @@ describe('MCP protocol fidelity', () => {
 
       const tools = await resolveMcpTools({
         meter: UNMETERED,
-        typedTool: { mcp: { url: MCP_URL } },
-        buildContextHeaders: () => {
-          return {};
-        },
+        transport: TRANSPORT,
+        typedTool: {},
         logToolCallingError,
       });
       await expect(executeOnly(tools)).rejects.toThrow(McpToolError);

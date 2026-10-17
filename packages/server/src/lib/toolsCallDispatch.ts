@@ -14,11 +14,10 @@ import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
 import { McpToolError } from './mcpProtocol';
 import { fetchMcpToolListing } from './mcpToolListing';
-import { resolveSecretRefsInString } from './secrets';
+import { type McpTransport, openMcpTransport } from './mcpTransport';
 import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
 import type { CallableToolDefinition } from './toolsCall';
-import { resolveToolHeaderTemplates } from './toolTemplates';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
 const noopLogToolCallingError = () => {};
@@ -162,12 +161,10 @@ const deferredRoute = async (args: {
   tool: CallableToolDefinition;
   action: string;
   input: Record<string, unknown>;
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
 }): Promise<{ viaCall?: string; proxyCall?: boolean }> => {
   const listing = await fetchMcpToolListing({
-    mcpUrl: args.mcpUrl,
-    mcpHeaders: args.mcpHeaders,
+    transport: args.transport,
     logToolCallingError: noopLogToolCallingError,
   });
   const proxy = listing ? findDeferredProxy(listing) : null;
@@ -193,7 +190,6 @@ export const callMcpTool = async (
   meter: ToolExecutionMeter,
   toolContext?: Record<string, string>
 ): Promise<unknown> => {
-  const { projectId } = meter;
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -211,35 +207,23 @@ export const callMcpTool = async (
       'MCP tool has an invalid mcp configuration.'
     );
   }
-  // Resolved at the point of use, so the stored config keeps the reference. A
-  // caller with no `tool_context` fails with `MISSING_TOOL_CONTEXT_KEY` naming
-  // the key, rather than putting the literal token on the wire as a credential
-  // and failing as an opaque upstream 401.
-  const mcpUrl = await resolveSecretRefsInString({
-    value: mcpConfig.url,
-    projectId,
-  });
-  const mcpHeaders = await resolveToolHeaderTemplates({
-    record: mcpConfig.headers,
-    projectId,
+  // A caller with no `tool_context` fails with `MISSING_TOOL_CONTEXT_KEY`
+  // naming the key, rather than putting the literal token on the wire as a
+  // credential and failing as an opaque upstream 401.
+  const transport = await openMcpTransport({
+    mcp: mcpConfig,
+    meter,
     toolContext,
+    contextKeys: tool.contextKeys,
   });
-  const headers = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream',
-    ...(mcpHeaders ?? {}),
-    ...buildContextHeaders({ toolContext, contextKeys: tool.contextKeys }),
-  };
   const route = await deferredRoute({
     tool,
     action,
     input: mergedInput,
-    mcpUrl,
-    mcpHeaders: headers,
+    transport,
   });
   return buildMcpToolExecute({
-    mcpUrl,
-    mcpHeaders: headers,
+    transport,
     mcpToolName: action,
     ...route,
     meter,

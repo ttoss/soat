@@ -7,10 +7,9 @@
  */
 import type { JSONValue } from 'ai';
 
-import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
 import { jsonRpcErrorReason, parseJsonRpcBody } from './mcpProtocol';
+import { type McpTransport, postMcp } from './mcpTransport';
 import { isPlainObject } from './plainObject';
-import { fetchWithEgressGuard } from './toolEgress';
 
 /**
  * One tool as `tools/list` describes it. Every field the protocol defines is
@@ -58,15 +57,12 @@ const readListingPage = (body: unknown): ListingPage | { failure: string } => {
 };
 
 const requestListingPage = async (args: {
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
   cursor: string | null;
   id: number;
 }): Promise<ListingPage | { failure: string }> => {
-  const response = await fetchWithEgressGuard(args.mcpUrl, {
-    method: 'POST',
-    headers: args.mcpHeaders,
-    signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
+  const response = await postMcp({
+    transport: args.transport,
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: args.id,
@@ -91,8 +87,7 @@ const requestListingPage = async (args: {
  * the outcome that must never be silent.
  */
 export const fetchMcpToolListing = async (args: {
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
+  transport: McpTransport;
   logToolCallingError: (args: {
     toolName: string;
     toolType: 'mcp';
@@ -110,8 +105,7 @@ export const fetchMcpToolListing = async (args: {
     for (let page = 0; page < MAX_LISTING_PAGES; page += 1) {
       const listing: ListingPage | { failure: string } =
         await requestListingPage({
-          mcpUrl: args.mcpUrl,
-          mcpHeaders: args.mcpHeaders,
+          transport: args.transport,
           cursor,
           id: page + 1,
         });
@@ -133,9 +127,9 @@ export const fetchMcpToolListing = async (args: {
     return null;
   } catch (error) {
     args.logToolCallingError({
-      toolName: args.mcpUrl,
+      toolName: args.transport.url,
       toolType: 'mcp',
-      url: args.mcpUrl,
+      url: args.transport.url,
       method: 'POST',
       error,
     });
