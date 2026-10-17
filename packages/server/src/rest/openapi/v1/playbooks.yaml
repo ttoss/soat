@@ -401,9 +401,17 @@ paths:
             example: pbk_V1StGXR8Z5jdHi6B
         - name: automation_status
           in: query
-          description: Only the cases in this automation status
+          required: false
+          description: >-
+            Only the cases in these automation statuses. Repeat the parameter to
+            OR values. A value outside the enum, empty string included, is a
+            `400`.
           schema:
-            $ref: '#/components/schemas/PlaybookAutomationStatus'
+            type: array
+            items:
+              $ref: '#/components/schemas/PlaybookAutomationStatus'
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:

@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { APPROVAL_STATUSES } from 'src/lib/approvalFilters';
 import {
   approveApproval,
   getApproval,
@@ -16,6 +17,8 @@ import { soatTools } from 'src/lib/soatTools';
 
 import type { ProjectOwned } from './helpers';
 import {
+  parseDateQuery,
+  parseEnumListQuery,
   parsePagination,
   parseToolContextBody,
   requireAuth,
@@ -139,6 +142,14 @@ const assertMayEditProposedAction = async (args: {
   if (!mayAct) refuse();
 };
 
+const parseApprovalStatuses = (ctx: Context) => {
+  return parseEnumListQuery({
+    ctx,
+    name: 'status',
+    allowed: APPROVAL_STATUSES,
+  });
+};
+
 approvalsRouter.get('/approvals', async (ctx: Context) => {
   requireAuth(ctx);
 
@@ -151,13 +162,12 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     resourceType: 'approval',
   });
 
-  const expiresBeforeRaw = ctx.query.expires_before as string | undefined;
-
   ctx.body = await listApprovals({
     projectIds: projectIds ?? [],
-    status: ctx.query.status as string | undefined,
+    statuses: parseApprovalStatuses(ctx),
     origin: ctx.query.origin as string | undefined,
-    expiresBefore: expiresBeforeRaw ? new Date(expiresBeforeRaw) : undefined,
+    expiresFrom: parseDateQuery({ ctx, name: 'expires_from' }),
+    expiresTo: parseDateQuery({ ctx, name: 'expires_to' }),
     ...parsePagination(ctx),
   });
 });
@@ -182,7 +192,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
 
   ctx.body = await listApprovalRecurrences({
     projectIds: projectIds ?? [],
-    status: ctx.query.status as string | undefined,
+    statuses: parseApprovalStatuses(ctx),
     minCount: Number.isFinite(minCount) ? minCount : undefined,
     ...parsePagination(ctx),
   });

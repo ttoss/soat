@@ -42,10 +42,17 @@ paths:
             example: proj_V1StGXR8Z5jdHi6B
         - name: status
           in: query
-          description: Filter by triage status
+          required: false
+          description: >-
+            Filter by triage status. Repeat the parameter to OR values. A value
+            outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [open, acknowledged, resolved]
+            type: array
+            items:
+              type: string
+              enum: [open, acknowledged, resolved]
+          style: form
+          explode: true
         - name: severity
           in: query
           description: Filter by severity

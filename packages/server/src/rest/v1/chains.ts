@@ -1,8 +1,18 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { chains, getChain, listChains } from 'src/lib/generationChains';
+import {
+  CHAIN_STATUSES,
+  chains,
+  getChain,
+  listChains,
+} from 'src/lib/generationChains';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parseEnumListQuery,
+  parsePagination,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const chainsRouter = new Router<Context>();
@@ -35,7 +45,11 @@ chainsRouter.get('/chains', async (ctx: Context) => {
 
   ctx.body = await listChains({
     projectIds: projectIds ?? [],
-    status: ctx.query.status as string | undefined,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: CHAIN_STATUSES,
+    }),
     agentId: ctx.query.agent_id as string | undefined,
     ...parsePagination(ctx),
   });

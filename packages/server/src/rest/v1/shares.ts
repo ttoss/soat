@@ -308,15 +308,13 @@ sharesRouter.get('/shares/:share_id/acceptances', async (ctx: Context) => {
     ctx,
     action: 'shares:ListShares',
   });
-  const [status] =
-    parseEnumListQuery({
+  ctx.body = await listShareAcceptances({
+    shareId: ctx.params.share_id,
+    statuses: parseEnumListQuery({
       ctx,
       name: 'status',
       allowed: ['active', 'revoked'],
-    }) ?? [];
-  ctx.body = await listShareAcceptances({
-    shareId: ctx.params.share_id,
-    status: status === 'active' || status === 'revoked' ? status : undefined,
+    }),
     ...parsePagination(ctx),
   });
 });

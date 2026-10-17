@@ -1229,7 +1229,7 @@ const { data: parked } = await adminSoat.tasks.transitionTask({
 console.log('Parked on:', parked.pending_transition);
 
 const { data: pending } = await adminSoat.approvals.listApprovals({
-  query: { project_id: PROJECT_ID, status: 'pending' },
+  query: { project_id: PROJECT_ID, status: ['pending'] },
 });
 const CLOSE_APPROVAL_ID = pending.data[0].id;
 

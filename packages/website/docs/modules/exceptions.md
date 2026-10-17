@@ -99,7 +99,7 @@ soat resolve-exception --exception-id exc_01 --note "Root cause fixed; reran the
 
 ```ts
 const { data: exceptions } = await client.GET('/api/v1/exceptions', {
-  params: { query: { project_id: 'proj_01', status: 'open' } },
+  params: { query: { project_id: 'proj_01', status: ['open'] } },
 });
 
 await client.POST('/api/v1/exceptions/{exception_id}/resolve', {

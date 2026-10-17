@@ -876,6 +876,22 @@ describe('Shares', () => {
       expect(revoked.body.total).toBe(0);
     });
 
+    test('a repeated status filter ORs its values', async () => {
+      const { shareId } = await createToolShare('either-acceptances-tool');
+      const accepted = await accept(shareId);
+
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/shares/${shareId}/acceptances?status=revoked&status=active`
+      );
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((acceptance: { id: string }) => {
+          return acceptance.id;
+        })
+      ).toEqual([accepted.body.id]);
+    });
+
     test('an acceptance of another share is 404', async () => {
       const first = await createToolShare('acceptance-mismatch-a');
       const second = await createToolShare('acceptance-mismatch-b');
