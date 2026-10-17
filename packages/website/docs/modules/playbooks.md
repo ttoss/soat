@@ -178,7 +178,7 @@ A `waiting` node names what it waits on in `run`, read live on every case read a
 
 ### What a node still needs
 
-[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one is filled. Each carries its `schema` and `description`, which is what an agent asks for.
+[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one's required inputs are filled. Each carries its `schema` and `description`, which is what an agent asks for, and `required`: an optional input is listed so the agent asks for it too, but it never blocks a node.
 
 ### The cascade
 

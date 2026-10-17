@@ -544,8 +544,9 @@ paths:
       summary: List what a node still needs
       description: >-
         Returns the manual inputs still unset, or refused by their schema,
-        before `node_id` can be reached, grouped in waves: nothing in a later wave
-        can run before the earlier ones are filled.
+        upstream of `node_id`, grouped in waves: nothing in a later wave can run
+        before the earlier ones' required inputs are filled. Optional inputs are
+        listed with `required: false`; they never block a node.
       operationId: getPlaybookCaseMissing
       x-soat-resource:
         kind: playbook_case
@@ -1727,6 +1728,11 @@ components:
           description: The JSON Schema a value must satisfy
         description:
           type: string
+        required:
+          type: boolean
+          description: >-
+            Whether the node waits for this input; an optional one never blocks
+            it
     PlaybookCaseMissing:
       type: object
       properties:

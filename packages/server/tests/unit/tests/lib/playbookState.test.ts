@@ -567,11 +567,17 @@ describe('missingFor', () => {
       missingFor({ definition: pricing(), snapshot: {}, node: 'price' })
     ).toEqual([
       [
-        { node_id: 'client', input: 'cnpj', schema: { type: 'string' } },
+        {
+          node_id: 'client',
+          input: 'cnpj',
+          schema: { type: 'string' },
+          required: true,
+        },
         {
           node_id: 'client',
           input: 'annual_revenue',
           schema: { type: 'number' },
+          required: true,
         },
       ],
       [
@@ -579,6 +585,7 @@ describe('missingFor', () => {
           node_id: 'tax_regime',
           input: 'cnae',
           schema: { type: 'string', pattern: '^\\d{7}$' },
+          required: true,
         },
       ],
     ]);
@@ -617,6 +624,7 @@ describe('missingFor', () => {
           input: 'email',
           schema: { type: 'string' },
           description: 'Who signs',
+          required: true,
         },
       ],
       [
@@ -624,6 +632,55 @@ describe('missingFor', () => {
           node_id: 'tax_regime',
           input: 'cnae',
           schema: { type: 'string', pattern: '^\\d{7}$' },
+          required: true,
+        },
+      ],
+    ]);
+  });
+
+  test('lists an optional input unset or refused, marked not required', () => {
+    const definition = {
+      nodes: [
+        collect('costs', [
+          manual('own_cost', { required: false }),
+          manual('competitor_price', { required: false }),
+          manual('note', { required: false }),
+        ]),
+      ],
+    };
+
+    expect(
+      playbookMissingInputs({
+        definition,
+        node: 'costs',
+        views: playbookNodeStates({
+          definition,
+          snapshot: {
+            costs: {
+              inputs: {
+                own_cost: { revision: 1, value: 'refused' },
+                note: { revision: 2, value: 'kept' },
+              },
+            },
+          },
+          conforms: ({ value }) => {
+            return value !== 'refused';
+          },
+        }),
+      })
+    ).toEqual([
+      [
+        {
+          node_id: 'costs',
+          input: 'own_cost',
+          schema: { type: 'string' },
+          required: false,
+        },
+        {
+          node_id: 'costs',
+          input: 'competitor_price',
+          schema: { type: 'string' },
+          required: false,
         },
       ],
     ]);
