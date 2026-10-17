@@ -378,6 +378,30 @@ describe('Session reply', () => {
       ]);
     });
 
+    test("completed through the agent's tool-outputs, is stored once in the session's conversation", async () => {
+      const session = await pausedSession();
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(
+          `/api/v1/agents/${pausingAgentId}/generate/${session.generationId}/tool-outputs`
+        )
+        .send({
+          tool_outputs: [{ tool_call_id: 'call_thermo', output: '18C' }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      const stored = await storedMessages(session.conversationId);
+      expect(
+        stored.map((message) => {
+          return [message.position, message.content];
+        })
+      ).toEqual([
+        [0, 'How warm is it?'],
+        [1, 'It is 18C.'],
+      ]);
+    });
+
     test('announces the stored reply as conversation_messages.generated', async () => {
       const session = await pausedSession();
       let res: Awaited<ReturnType<typeof complete>> | undefined;
