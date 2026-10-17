@@ -19,8 +19,9 @@ components:
         The tool call the write was made on behalf of, verified from the
         request's `On-Behalf-Of` header (a tool assertion this deployment
         signed, sent back with an API key scoped to its project); null for a
-        write made as the credential alone. Attribution only: `created_by`
-        and the permissions checked are the credential's.
+        write made as the credential alone. Attribution only: the
+        `created_by_principal_*` pair and the permissions checked are the
+        credential's.
       properties:
         tool_id:
           type: string

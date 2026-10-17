@@ -7,8 +7,9 @@ import { verifyOwnToolAssertion } from './toolAssertion';
 const log = createDebug('soat:onBehalfOf');
 
 /**
- * The tool call a request writes on behalf of, as recorded beside
- * `created_by`. Attribution only: it never widens what the credential may do.
+ * The tool call a request writes on behalf of, as recorded beside the
+ * `createdBy` principal. Attribution only: it never widens what the credential
+ * may do.
  */
 export type OnBehalfOf = {
   tool_id: string | null;
