@@ -57,7 +57,7 @@ const pollTask = async (args: {
 };
 
 type HistoryRow = {
-  principal_kind: string;
+  principal_type: string;
   transition: string | null;
   note: string | null;
 };
@@ -225,7 +225,7 @@ describe('Tasks', () => {
       expect(history.body.data).toHaveLength(1);
       expect(history.body.data[0].from_state).toBeNull();
       expect(history.body.data[0].to_state).toBe('triage');
-      expect(history.body.data[0].principal_kind).toBe('user');
+      expect(history.body.data[0].principal_type).toBe('user');
       expect(history.body.data[0].principal_id).toBe(userId);
       // The wire names the principal, never an `actor_*` alias.
       expect(history.body.data[0].actor_kind).toBeUndefined();
@@ -379,7 +379,7 @@ describe('Tasks', () => {
           `/api/v1/tasks/${created.body.id}/history`
         )
       ).body.data;
-      expect(history[0].principal_kind).toBe('api_key');
+      expect(history[0].principal_type).toBe('api_key');
       // The forensic value: the specific key, distinguishable from the owner.
       expect(history[0].principal_id).toBe(keyPublicId);
     });
@@ -411,7 +411,7 @@ describe('Tasks', () => {
       expect(history[0].from_state).toBeNull();
       expect(history[0].to_state).toBe('draft');
       expect(history[0].transition).toBeNull();
-      expect(history[0].principal_kind).toBe('user');
+      expect(history[0].principal_type).toBe('user');
     });
 
     test('creating directly in a terminal state closes the task', async () => {
@@ -1618,7 +1618,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(routed.principal_id).toBeNull();
       expect(routed.generation_id).toBe('gen_test1');
     });
@@ -2306,7 +2306,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       // The causing (failed) generation is linked so a reader can jump to its trace.
       expect(routed.generation_id).toBe('gen_failed607');
       // The cause is not a principal: it is carried by `generation_id` alone,
@@ -2362,7 +2362,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
       // An orchestration run is a cause, not a principal — it is never copied
       // into `principal_id`.
@@ -2415,7 +2415,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
       expect(routed.principal_id).toBeNull();
     });
@@ -2750,7 +2750,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(routed.orchestration_run_id).toBe(run.body.id);
     });
 
@@ -3449,7 +3449,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(routed.tool_id).toBe(toolId);
       expect(routed.generation_id).toBeNull();
       expect(routed.orchestration_run_id).toBeNull();
@@ -3831,7 +3831,7 @@ describe('Tasks', () => {
       const move = history.find((h: { transition: string }) => {
         return h.transition === 'publish';
       });
-      expect(move.principal_kind).toBe('approval');
+      expect(move.principal_type).toBe('approval');
       expect(move.to_state).toBe('published');
     });
 
@@ -3859,7 +3859,7 @@ describe('Tasks', () => {
         )
       ).body.data;
       const note = history[history.length - 1];
-      expect(note.principal_kind).toBe('approval');
+      expect(note.principal_type).toBe('approval');
       expect(note.transition).toBeNull();
       expect(note.note).toMatch(/rejected/i);
     });
@@ -3894,7 +3894,7 @@ describe('Tasks', () => {
         predicate: (h) => {
           return h.some((r) => {
             return (
-              r.principal_kind === 'approval' && /expired/i.test(r.note ?? '')
+              r.principal_type === 'approval' && /expired/i.test(r.note ?? '')
             );
           });
         },

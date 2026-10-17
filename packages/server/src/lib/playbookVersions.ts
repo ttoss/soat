@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { PlaybookAuthor } from './playbookAuthor';
 import { type MappedPlaybook, playbooks, updatePlaybook } from './playbooks';
 import { playbookVersionStore } from './playbookVersionSnapshot';
+import type { RequestPrincipal } from './principals';
 import {
   type ArchivedVersionRow,
   makeVersionArchive,
@@ -42,7 +43,7 @@ const playbookVersionArchive = (author?: PlaybookAuthor) => {
         id: args.id,
         definition: args.config.definition,
         versionLabel: args.label,
-        createdByUserId: args.createdByUserId,
+        createdBy: args.createdBy,
         author: author!,
       });
     },
@@ -83,7 +84,7 @@ export const restorePlaybookVersion = async (args: {
   playbookId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   author: PlaybookAuthor;
 }): Promise<MappedPlaybook> => {
   log(
@@ -96,6 +97,6 @@ export const restorePlaybookVersion = async (args: {
     resourceId: args.playbookId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };

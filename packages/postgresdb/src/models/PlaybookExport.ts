@@ -10,7 +10,6 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { File } from './File';
 import { PlaybookCase } from './PlaybookCase';
-import { User } from './User';
 
 /**
  * One file rendered from one revision of a final node by one of its
@@ -106,16 +105,11 @@ export class PlaybookExport extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: object | null;
 
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   /**
    * The tool call the write was made on behalf of (`tool_id`, `agent_id`,

@@ -15,6 +15,7 @@ import {
   resolvePagination,
   totalListOrder,
 } from './pagination';
+import type { PrincipalType } from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
 import { timeRangeWhere } from './timeRange';
 
@@ -28,7 +29,7 @@ const log = createDebug('soat:audit');
  */
 const AUDIT_ENTRY_CREATED_EVENT = 'audit.entry_created';
 
-export type AuditPrincipalType = 'user' | 'api_key';
+export type AuditPrincipalType = Extract<PrincipalType, 'user' | 'api_key'>;
 
 /** One authorization decision recorded during a request. */
 export type AuditCheck = {

@@ -169,7 +169,7 @@ export const createWorkflow = async (args: CreateWorkflowArgs) => {
     version: 1,
     config: buildWorkflowConfigSnapshot(mapped),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   return mapped;
@@ -247,7 +247,7 @@ export const updateWorkflow = async (args: UpdateWorkflowArgs) => {
     expectedVersion: args.expectedVersion,
     before: beforeConfig,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await workflow.save({ transaction });
       return {

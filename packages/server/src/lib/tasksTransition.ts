@@ -331,7 +331,7 @@ const performTransitionTxn = async (args: {
         fromState,
         toState: transition.to,
         transition: transition.name,
-        principalKind: a.principal.kind,
+        principalType: a.principal.kind,
         principalId: a.principal.id,
         ...dispatchProvenance(a),
         note: a.note ?? null,

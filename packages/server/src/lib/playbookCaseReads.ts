@@ -42,11 +42,7 @@ export const getPlaybookCaseMissing = async (args: {
   return { case_id: row.publicId, node: args.node, waves };
 };
 
-type EntryRow = InstanceType<(typeof db)['PlaybookEntry']> & {
-  createdBy: { publicId: string } | null;
-};
-
-const mapEntry = (row: EntryRow) => {
+const mapEntry = (row: InstanceType<(typeof db)['PlaybookEntry']>) => {
   return {
     id: row.publicId,
     revision: row.revision,
@@ -56,7 +52,8 @@ const mapEntry = (row: EntryRow) => {
     value: row.value,
     basis: row.basis,
     playbook_version: row.playbookVersion,
-    created_by: row.createdBy?.publicId ?? null,
+    created_by_principal_type: row.createdByPrincipalType,
+    created_by_principal_id: row.createdByPrincipalId,
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };
@@ -82,15 +79,13 @@ export const listPlaybookCaseEntries = async (args: {
     query: ({ limit, offset, order }) => {
       return db.PlaybookEntry.findAndCountAll({
         where,
-        include: [{ model: db.User, as: 'createdBy' }],
-        distinct: true,
         order,
         limit,
         offset,
       });
     },
     map: (entry) => {
-      return mapEntry(entry as EntryRow);
+      return mapEntry(entry);
     },
   });
 };

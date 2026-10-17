@@ -2,6 +2,7 @@ import type { Model } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { paginatedList, type PaginatedResult } from './pagination';
+import type { RequestPrincipal } from './principals';
 import type { VersionStore } from './resourceVersionStore';
 
 const log = createDebug('soat:versions');
@@ -49,7 +50,8 @@ export type ArchivedVersionRow = Model & {
   version: number;
   config: object;
   label: string | null;
-  createdBy: { publicId: string } | null;
+  createdByPrincipalType: string | null;
+  createdByPrincipalId: string | null;
   createdAt: Date;
 };
 
@@ -152,7 +154,8 @@ export const mapArchivedVersionFields = (row: {
   version: number;
   config: object;
   label: string | null;
-  createdBy: { publicId: string } | null;
+  createdByPrincipalType: string | null;
+  createdByPrincipalId: string | null;
   createdAt: Date;
 }) => {
   return {
@@ -160,7 +163,8 @@ export const mapArchivedVersionFields = (row: {
     version: row.version,
     config: row.config,
     label: row.label,
-    created_by: row.createdBy?.publicId ?? null,
+    created_by_principal_type: row.createdByPrincipalType,
+    created_by_principal_id: row.createdByPrincipalId,
     created_at: row.createdAt,
   };
 };
@@ -195,7 +199,7 @@ type ArchiveAdapter<TMappedVersion, TMappedResource> = {
     version: number;
     config: ConfigSnapshot;
     label: string | null;
-    createdByUserId: number | null;
+    createdBy: RequestPrincipal | null;
   }) => Promise<TMappedResource>;
 };
 
@@ -214,7 +218,7 @@ type GetVersionArgs = {
 
 type RestoreVersionArgs = GetVersionArgs & {
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 };
 
 /** The archive's read side: list and fetch, no writes. */
@@ -291,7 +295,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
    * and a config identical to the live one is recognised as a no-op.
    */
   const applyArchivedVersion = async (
-    a: GetVersionArgs & { label: string; createdByUserId: number | null }
+    a: GetVersionArgs & { label: string; createdBy: RequestPrincipal | null }
   ): Promise<TMappedResource> => {
     const resource = await args.loadResource({
       projectIds: a.projectIds,
@@ -305,7 +309,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
       version: a.version,
       config: store.readArchivedConfig(row),
       label: a.label,
-      createdByUserId: a.createdByUserId,
+      createdBy: a.createdBy,
     });
   };
 
@@ -320,7 +324,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
       resourceId: a.resourceId,
       version: a.version,
       label: a.label ?? `restored from v${a.version}`,
-      createdByUserId: a.createdByUserId,
+      createdBy: a.createdBy,
     });
   };
 

@@ -10,7 +10,6 @@ import {
   getMemory,
   updateMemory,
 } from '../memories';
-import { resolveFormationPrincipal } from '../memoryAssertionPrincipal';
 import {
   toNullableStringRecord,
   toOptionalString,
@@ -49,12 +48,9 @@ export const memoriesFormationModule = defineFormationModule({
       metadata: isObjectRecord(properties.metadata)
         ? properties.metadata
         : null,
-      // The apply is the asserter here, under the identity that ran it: a
+      // The apply is the asserter here, under the credential that ran it: a
       // formation write has no generation and no agent behind it.
-      assertion: {
-        mechanism: 'formation',
-        ...(await resolveFormationPrincipal({ actingUserId: actor.userId })),
-      },
+      assertion: { mechanism: 'formation', ...actor.author },
     });
   },
 

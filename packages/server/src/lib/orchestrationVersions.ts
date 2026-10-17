@@ -6,6 +6,7 @@ import {
 } from './orchestrations';
 import { orchestrationVersionStore } from './orchestrationVersionSnapshot';
 import { isPlainObject } from './plainObject';
+import type { RequestPrincipal } from './principals';
 import {
   type ArchivedVersionRow,
   configObject,
@@ -97,7 +98,7 @@ const orchestrationVersionArchive = makeVersionArchive({
         ? args.config.output_mapping
         : null,
       versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
+      createdBy: args.createdBy,
     });
   },
 });
@@ -135,7 +136,7 @@ export const restoreOrchestrationVersion = async (args: {
   orchestrationId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedOrchestration> => {
   // Appends rather than rewinding the counter, so a run pinned to any version
   // in between still resolves the graph it started on. A restore is an ordinary
@@ -145,6 +146,6 @@ export const restoreOrchestrationVersion = async (args: {
     resourceId: args.orchestrationId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };

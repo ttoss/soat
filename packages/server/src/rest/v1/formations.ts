@@ -24,6 +24,7 @@ import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -73,7 +74,11 @@ const formationAuthorizer = (args: {
 const formationActorOf = (
   ctx: Context & { authUser: AuthUser }
 ): FormationActor => {
-  return { userId: ctx.authUser.id, ...playbookAuthorOf(ctx) };
+  return {
+    userId: ctx.authUser.id,
+    author: requestPrincipalFromCtx(ctx),
+    ...playbookAuthorOf(ctx),
+  };
 };
 
 const missingParamsToErrors = (

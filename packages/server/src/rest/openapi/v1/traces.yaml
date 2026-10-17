@@ -301,16 +301,21 @@ components:
             count). A purged trace still reads back as a skeleton with this
             marker set rather than as a 404, so the erasure is provable.
         content_redacted_by_principal_type:
-          type: string
           nullable: true
-          description: Principal kind that purged the content ('user' or 'api_key')
-          example: user
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who purged the content: `user` or `api_key` for a purge request,
+            `system` for the retention sweep and for content never stored under
+            zero retention.
         content_redacted_by_principal_id:
           type: string
           nullable: true
-          description: >
-            Public ID of the principal that purged the content — the API key's
-            own id for key auth, so the record names which key acted.
+          description: >-
+            Public id of that principal — the API key's own id for key auth, so
+            the record names which key acted. `retention_sweep` or
+            `zero_retention` for `system`.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -361,16 +366,21 @@ components:
             count). A purged trace still reads back as a skeleton with this
             marker set rather than as a 404, so the erasure is provable.
         content_redacted_by_principal_type:
-          type: string
           nullable: true
-          description: Principal kind that purged the content ('user' or 'api_key')
-          example: user
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who purged the content: `user` or `api_key` for a purge request,
+            `system` for the retention sweep and for content never stored under
+            zero retention.
         content_redacted_by_principal_id:
           type: string
           nullable: true
-          description: >
-            Public ID of the principal that purged the content — the API key's
-            own id for key auth, so the record names which key acted.
+          description: >-
+            Public id of that principal — the API key's own id for key auth, so
+            the record names which key acted. `retention_sweep` or
+            `zero_retention` for `system`.
+          example: user_V1StGXR8Z5jdHi6B
         children:
           type: array
           description: Child traces triggered by sub-agent calls from this trace

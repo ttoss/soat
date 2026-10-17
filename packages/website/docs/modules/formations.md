@@ -538,7 +538,7 @@ The check runs over the whole template **before anything is applied**: no format
 
 - A `policy` resource needs the `admin` role rather than an action, as the policies routes do.
 - An `api_key` resource is minted **under the deploying caller**, as [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key) mints under the requesting user; the owner's permissions are its ceiling, so declaring one needs only `api-keys:CreateApiKey`.
-- A `trigger` resource's `created_by` is the [run-as identity](./triggers.md#run-as-identity) a firing mints a token for: the deploying caller, so a firing never exceeds who declared it.
+- A `trigger` resource's creator is the [run-as identity](./triggers.md#run-as-identity) a firing mints a token for: the deploying caller, so a firing never exceeds who declared it.
 - A [custom resource type](#custom-resource-types) has no SOAT action, so it is gated on the request's `formations:*` action alone.
 
 ### Ids a Template Names Are Resolved Within Its Own Project

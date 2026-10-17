@@ -16,6 +16,7 @@ import type { PlaybookNode } from './playbookDefinition';
 import { readCaseNode } from './playbookExecutions';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import type { PlaybookNodeView } from './playbookState';
+import type { RequestPrincipal } from './principals';
 
 const log = createDebug('soat:playbookCases');
 
@@ -106,7 +107,7 @@ export const confirmPlaybookCaseNode = async (args: {
   id: string;
   node: string;
   confirmation: Confirmation;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
   wait?: boolean;
@@ -163,7 +164,7 @@ export const confirmPlaybookCaseNode = async (args: {
                 : { reason: confirmation.reason },
             basis: view.basis,
             playbookVersion: row.playbookVersion,
-            createdByUserId: args.createdByUserId,
+            createdBy: args.createdBy,
             onBehalfOf: args.onBehalfOf,
           },
         ],

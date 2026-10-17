@@ -18,8 +18,10 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
+import type { RequestPrincipal } from './helpers';
 import {
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
@@ -158,12 +160,12 @@ const parseModelBinding = (body: CreateAgentBody) => {
 const buildCreateAgentArgs = (args: {
   projectId: number;
   body: CreateAgentBody;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Parameters<typeof createAgent>[0] => {
-  const { projectId, body, createdByUserId } = args;
+  const { projectId, body, createdBy } = args;
   return {
     projectId,
-    createdByUserId,
+    createdBy,
     versionLabel: parseNullableString(body.version_label),
     ...parseModelBinding(body),
     name: typeof body.name === 'string' ? body.name : undefined,
@@ -229,7 +231,7 @@ const runAgentUpdate = async (args: {
     ...parsed,
     expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 };
 
@@ -253,7 +255,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     buildCreateAgentArgs({
       projectId: targetProjectId,
       body: reqBody,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     })
   );
 

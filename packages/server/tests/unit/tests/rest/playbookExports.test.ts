@@ -215,7 +215,8 @@ describe('Playbook exports', () => {
         stale: false,
         file_id: expect.stringMatching(/^file_/),
         error: null,
-        created_by: expect.any(String),
+        created_by_principal_type: 'user',
+        created_by_principal_id: expect.stringMatching(/^user_/),
         finished_at: expect.any(String),
       });
       expect(sheet).toMatchObject({ transformation: 'sheet', format: 'xlsx' });

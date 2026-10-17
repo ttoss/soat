@@ -81,7 +81,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `value`            | any            | The value written                                                              |
 | `basis`            | object \| null | The revision of each input an output, confirmation or rejection was decided on |
 | `playbook_version` | integer        | The version the case was on when it was written                                |
-| `created_by`       | string \| null | The user who wrote it                                                          |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who wrote it: `user` or `api_key` and its id; null for an output the case wrote |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ### Execution
@@ -100,7 +100,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `output`           | any             | What the executor answered; null until it succeeds                                   |
 | `output_revision`  | integer \| null | The revision of the output entry it wrote; null when it wrote none                   |
 | `error`            | object \| null  | Why it failed                                                                        |
-| `created_by`       | string \| null  | Who asked for the run                                                                |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the run; null when the case started it |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`      | string \| null  | ISO 8601 settle timestamp                                                            |
 
@@ -120,7 +120,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `stale`            | boolean        | `revision` is no longer the node's current output, or the node is no longer `done` |
 | `file_id`          | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted       |
 | `error`            | object \| null | Why it failed                                                                      |
-| `created_by`       | string \| null | Who asked for the export                                                           |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the export |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`      | string \| null | ISO 8601 settle timestamp                                                          |
 
@@ -133,7 +133,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `from_version` | integer        | The version the case was on                                                                                                                                                                      |
 | `to_version`   | integer        | The version it moved to                                                                                                                                                                          |
 | `diff`         | object         | `{ added, removed, changed }`: node keys added and removed, and each node whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
-| `created_by`   | string \| null | Who upgraded the case                                                                                                                                                                            |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ## Key Concepts

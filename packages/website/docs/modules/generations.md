@@ -35,7 +35,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `chain_id`                  | string \| null | [Continuation chain](./chains.md) this generation belongs to — set on every member including the root; `null` when it is not part of one |
 | `session_id`                | string \| null | [Session](./sessions.md) this generation was dispatched through; `null` when it was started outside one |
 | `actor_id`                  | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none |
-| `started_by_principal_type` | string \| null | Principal kind that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
+| `started_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
 | `started_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` |
 | `status`                    | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                         |
 | `started_at`                | string         | When the generation started                                                                          |
@@ -56,7 +56,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `retrieval`                 | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served)) |
 | `extraction`                | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))  |
 | `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |
-| `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)                                |
+| `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system` |
 | `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth                               |
 | `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |

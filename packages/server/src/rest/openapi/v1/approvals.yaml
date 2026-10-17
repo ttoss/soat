@@ -459,10 +459,19 @@ components:
             Prior item's ID when this proposal was re-filed after an earlier
             matching item (same dedup_key) had been rejected
           example: apr_V1StGXR8Z5jdHi6B
-        resolved_by:
+        resolved_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who resolved the item; null while pending and on expiry.
+        resolved_by_principal_id:
           type: string
           nullable: true
-          description: Resolving user's public ID; null on expiry
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         resolution_reason:
           type: string
           nullable: true

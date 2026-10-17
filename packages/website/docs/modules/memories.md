@@ -77,7 +77,7 @@ One row per write attempt, append-only, whatever the write resolved to.
 | `mechanism`  | `string` | Which door the write came through: `tool`, `rule`, `api` or `formation` — see [Mechanism](#mechanism) |
 | `rule_id`    | `string \| null` | The [memory rule](#memory-rules) whose firing wrote this (`mrule_` prefix); set only for `rule`. `null` once that rule is deleted |
 | `generation_id` | `string \| null` | The turn that asserted the fact; `null` on the `api` and `formation` doors |
-| `principal_type` | `string` | Who claimed it, in the vocabulary a [generation](./generations.md) records its starter with, plus `agent` |
+| `principal_type` | `string` | [Principal](./audit-log.md#principals) that claimed it: `user` or `api_key` on the `api` and `formation` doors, `agent` on the agent doors |
 | `principal_id` | `string` | The principal's public ID                             |
 | `outcome`    | `string` | `created`, `superseded`, `skipped` or `retracted`        |
 | `similarity` | `number \| null` | The cosine the outcome was decided against — the top match's, or the declared target's when `declared` is true; `null` when there was nothing to compare against, and on a retraction, which compares nothing |

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { deciders, type MappedDecider, updateDecider } from './deciders';
 import { deciderVersionStore } from './deciderVersionSnapshot';
+import type { RequestPrincipal } from './principals';
 import {
   type ArchivedVersionRow,
   makeVersionArchive,
@@ -39,7 +40,7 @@ const deciderVersionArchive = makeVersionArchive({
       id: args.id,
       questions: args.config.questions,
       versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
+      createdBy: args.createdBy,
     });
   },
 });
@@ -78,7 +79,7 @@ export const restoreDeciderVersion = async (args: {
   deciderId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedDecider> => {
   log('restoreDeciderVersion: id=%s version=%d', args.deciderId, args.version);
   return deciderVersionArchive.restoreVersion({
@@ -86,6 +87,6 @@ export const restoreDeciderVersion = async (args: {
     resourceId: args.deciderId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };

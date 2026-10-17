@@ -36,6 +36,7 @@ import {
 import {
   parseEnumListQuery,
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
 } from './helpers';
@@ -147,7 +148,7 @@ playbookCasesRouter.post(
       projectIds,
       id: ctx.params.case_id,
       writes: parseInputWrites(body.inputs),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
       wait: body.wait === true,
@@ -220,7 +221,7 @@ playbookCasesRouter.post(
       caseId: ctx.params.case_id,
       node: ctx.params.node,
       wait: body.wait === true,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
     });
   }
@@ -324,7 +325,7 @@ playbookCasesRouter.post(
       id: ctx.params.case_id,
       node: ctx.params.node,
       confirmation: parseConfirmation(body),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
       wait: body.wait === true,
@@ -352,7 +353,7 @@ playbookCasesRouter.post(
       projectIds,
       id: ctx.params.case_id,
       version: body.version,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
       wait: body.wait === true,

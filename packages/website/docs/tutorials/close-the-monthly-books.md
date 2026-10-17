@@ -1201,7 +1201,7 @@ CLOSE_APPROVAL_ID=$(soat list-approvals --project-id "$PROJECT_ID" --status pend
   | jq -r '.data[0].id')
 echo "CLOSE_APPROVAL_ID: $CLOSE_APPROVAL_ID"
 
-soat approve-approval --approval-id "$CLOSE_APPROVAL_ID" | jq '{status, resolved_by}'
+soat approve-approval --approval-id "$CLOSE_APPROVAL_ID" | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 
 soat get-task --task-id "$TASK_ID" | jq '{state, status}'
 ```
@@ -1259,7 +1259,7 @@ CLOSE_APPROVAL_ID=$(curl -s "$SOAT_BASE_URL/api/v1/approvals?project_id=$PROJECT
 curl -s -X POST "$SOAT_BASE_URL/api/v1/approvals/$CLOSE_APPROVAL_ID/approve" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq '{status, resolved_by}'
+  -d '{}' | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 
 curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{state, status}'
@@ -1280,7 +1280,7 @@ attributed to the `approval` principal rather than to whoever typed the command.
 
 ```bash
 soat get-task-history --task-id "$TASK_ID" \
-  | jq '[.data[] | {transition, from_state, to_state, principal_kind}]'
+  | jq '[.data[] | {transition, from_state, to_state, principal_type}]'
 ```
 
 You should see `start_reconciliation`, `submit_for_review`, `request_rework`,
@@ -1300,7 +1300,7 @@ console.log(
     h.transition,
     h.from_state,
     h.to_state,
-    h.principal_kind,
+    h.principal_type,
   ])
 );
 ```
@@ -1311,7 +1311,7 @@ console.log(
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.data[] | {transition, from_state, to_state, principal_kind}]'
+  | jq '[.data[] | {transition, from_state, to_state, principal_type}]'
 ```
 
 </TabItem>

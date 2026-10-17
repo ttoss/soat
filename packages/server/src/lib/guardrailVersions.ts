@@ -5,6 +5,7 @@ import {
   updateGuardrail,
 } from './guardrails';
 import { guardrailVersionStore } from './guardrailVersionSnapshot';
+import type { RequestPrincipal } from './principals';
 import {
   type ArchivedVersionRow,
   configObject,
@@ -67,7 +68,7 @@ const guardrailVersionArchive = makeVersionArchive({
       id: args.id,
       document,
       versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
+      createdBy: args.createdBy,
     });
   },
 });
@@ -105,7 +106,7 @@ export const restoreGuardrailVersion = async (args: {
   guardrailId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedGuardrail> => {
   // Appends a new version rather than rewinding the counter, so an evaluation
   // record citing any version in between still resolves.
@@ -114,6 +115,6 @@ export const restoreGuardrailVersion = async (args: {
     resourceId: args.guardrailId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };

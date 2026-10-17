@@ -93,7 +93,10 @@ describe('Orchestration versions', () => {
       expect(res.body.config.nodes).toEqual(NODES_V1);
       expect(res.body.config.edges).toEqual(EDGES_V1);
       expect(res.body.label).toBe('initial');
-      expect(res.body.created_by).toBe(userId);
+      expect(res.body).toMatchObject({
+        created_by_principal_type: 'user',
+        created_by_principal_id: userId,
+      });
       expect(res.body.created_at).toBeDefined();
     });
 
@@ -344,7 +347,10 @@ describe('Orchestration versions', () => {
       );
       expect(v3.body.config.nodes).toEqual(NODES_V1);
       expect(v3.body.label).toBe('restored from v1');
-      expect(v3.body.created_by).toBe(userId);
+      expect(v3.body).toMatchObject({
+        created_by_principal_type: 'user',
+        created_by_principal_id: userId,
+      });
     });
 
     test('an explicit label annotates the version the restore creates', async () => {

@@ -251,7 +251,7 @@ const createTextMessage = async (
     content: args.message,
     system: { module: 'conversations', dir: args.conversationId },
     // The turn's author is an actor or agent, recorded in its tags.
-    createdByUserId: null,
+    createdBy: null,
     tags: conversationMessageTags({
       conversationPublicId: args.conversationId,
       ownerActorPublicId: ownerActorPublicId(conversation),
