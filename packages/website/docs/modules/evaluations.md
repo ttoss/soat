@@ -843,8 +843,8 @@ Two [webhook](./webhooks.md) events carry a run's outcome:
 | `eval_run.completed` | A run reached a terminal status with its items scored |
 | `eval_run.failed` | A run could not be executed to completion |
 
-Both carry `{ eval_id, eval_run_id, passed, aggregate_scores }` inline, so a promotion
-gate needs no second call. Exactly one event fires per terminal run.
+Both carry the [eval run](#eval-run) in `data`, `passed` and `aggregate_scores` included,
+so a promotion gate needs no second call. Exactly one event fires per terminal run.
 
 ### Eval spend is separable from production spend
 

@@ -42,7 +42,8 @@ export type EventDropStage =
   | 'exception_file'
   | 'memory_rule_dispatch'
   | 'playbook_execution_settle'
-  | 'generation_lookup';
+  | 'generation_lookup'
+  | 'record_lookup';
 
 const droppedEvents = new Map<EventDropStage, number>();
 

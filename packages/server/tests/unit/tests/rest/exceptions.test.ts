@@ -455,12 +455,10 @@ describe('Exceptions', () => {
 
     test('approvals.expired with full data files an approval_expired exception', async () => {
       emit('approvals.expired', 'approval', 'apr_full_1', {
-        approval: {
-          id: 'apr_full_1',
-          proposed_action: { tool_id: 'tool_x' },
-          orchestration_run_id: 'run_exp_1',
-          agent_id: 'agent_exp_1',
-        },
+        id: 'apr_full_1',
+        proposed_action: { tool_id: 'tool_x' },
+        orchestration_run_id: 'run_exp_1',
+        agent_id: 'agent_exp_1',
       });
       const match = await pollException((e) => {
         return (
@@ -473,22 +471,10 @@ describe('Exceptions', () => {
       expect(match!.agent_id).toBe('agent_exp_1');
     });
 
-    test('approvals.expired with an empty approval falls back to (unknown) with no dedup key', async () => {
-      emit('approvals.expired', 'approval', 'apr_empty_1', { approval: {} });
-      const match = await pollException((e) => {
-        return (
-          e.kind === 'approval_expired' &&
-          typeof e.title === 'string' &&
-          e.title.includes('(unknown)')
-        );
-      });
-      expect(match).not.toBeNull();
-      expect(match!.orchestration_run_id).toBeNull();
-      expect(match!.agent_id).toBeNull();
-    });
-
     test('orchestration_runs.failed with no error detail files a run_failed exception', async () => {
-      emit('orchestration_runs.failed', 'orchestration_run', 'run_noerr_1', {});
+      emit('orchestration_runs.failed', 'orchestration_run', 'run_noerr_1', {
+        id: 'run_noerr_1',
+      });
       const match = await pollException((e) => {
         return (
           e.kind === 'run_failed' && e.orchestration_run_id === 'run_noerr_1'
@@ -498,10 +484,13 @@ describe('Exceptions', () => {
       expect(match!.detail).toBeNull();
     });
 
-    test('guardrail.tripwire with a generation (no run) falls back to the resource id for the tool name', async () => {
-      emit('guardrail.tripwire', 'guardrail', 'tool_gen_1', {
-        generationId: 'gen_trip_1',
-        agentId: 'agent_trip_1',
+    test('guardrail.tripwire with a generation (no run) files on the agent', async () => {
+      emit('guardrail.tripwire', 'guardrail', 'grd_gen_1', {
+        id: 'grd_gen_1',
+        guardrail_version: 1,
+        tool_name: 'tool_gen_1',
+        generation_id: 'gen_trip_1',
+        agent_id: 'agent_trip_1',
       });
       const match = await pollException((e) => {
         return (
@@ -511,16 +500,19 @@ describe('Exceptions', () => {
         );
       });
       expect(match).not.toBeNull();
-      // No orchestrationRunId on the event → the non-run path; toolName fell back to the
-      // event resourceId (there was no toolName in the data).
+      // No orchestration_run_id on the event → the non-run path.
       expect(match!.orchestration_run_id).toBeNull();
+      expect(match!.guardrail_version).toBe('grd_gen_1@1');
       expect(match!.agent_id).toBe('agent_trip_1');
     });
 
     test('guardrail.tripwire with no run folds repeated trips of the same agent/tool call site into one item, ignoring the (always-fresh) generation id', async () => {
-      emit('guardrail.tripwire', 'guardrail', 'tool_loop_1', {
-        generationId: 'gen_loop_1',
-        agentId: 'agent_loop_1',
+      emit('guardrail.tripwire', 'guardrail', 'grd_loop_1', {
+        id: 'grd_loop_1',
+        guardrail_version: 1,
+        tool_name: 'tool_loop_1',
+        generation_id: 'gen_loop_1',
+        agent_id: 'agent_loop_1',
       });
       const first = await pollException((e) => {
         return (
@@ -533,11 +525,14 @@ describe('Exceptions', () => {
       expect(first).not.toBeNull();
       expect(first!.occurrence_count).toBe(1);
 
-      // Same agent/tool call site, but a brand-new generationId (as every real
+      // Same agent/tool call site, but a brand-new generation_id (as every real
       // agent generation gets) — must fold into the same open item.
-      emit('guardrail.tripwire', 'guardrail', 'tool_loop_1', {
-        generationId: 'gen_loop_2',
-        agentId: 'agent_loop_1',
+      emit('guardrail.tripwire', 'guardrail', 'grd_loop_1', {
+        id: 'grd_loop_1',
+        guardrail_version: 1,
+        tool_name: 'tool_loop_1',
+        generation_id: 'gen_loop_2',
+        agent_id: 'agent_loop_1',
       });
       const folded = await pollException((e) => {
         return e.id === first!.id && e.occurrence_count === 2;
@@ -595,7 +590,7 @@ describe('Exceptions', () => {
           projectPublicId: 'proj_does_not_exist',
           resourceType: 'orchestration_run',
           resourceId: 'run_fk_reject_1',
-          data: {},
+          data: { id: 'run_fk_reject_1' },
           timestamp: new Date().toISOString(),
         });
         // The filer's DB insert rejects asynchronously; give it a bounded

@@ -281,7 +281,10 @@ const applyApprovedTransition = async (args: {
           type: 'tasks.approval_failed',
           projectId: refreshed.projectId as number,
           task: mapTask(refreshed),
-          extra: { transition: item.task_transition, errorCode: error.code },
+          facts: {
+            transition: item.task_transition,
+            error_code: error.code,
+          },
         });
       }
       return;

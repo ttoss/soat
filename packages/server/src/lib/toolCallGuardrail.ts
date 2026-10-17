@@ -6,10 +6,7 @@ import type {
   GuardrailClassification,
   ResolverGuardrailContext,
 } from './agentToolGuardrail';
-import {
-  classifyGuardrailCall,
-  governingGuardrailVersion,
-} from './agentToolGuardrail';
+import { classifyGuardrailCall, governingResult } from './agentToolGuardrail';
 import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
@@ -68,14 +65,16 @@ const enactDirectDecision = (args: {
     };
   }
 
-  if (decision === 'tripwire') {
-    emitGuardrailTripwireEvent({
+  const tripped =
+    decision === 'tripwire' ? governingResult(evaluated, decision) : undefined;
+  if (tripped) {
+    void emitGuardrailTripwireEvent({
       projectId: args.projectId,
       projectPublicId: args.projectPublicId,
+      guardrail: tripped,
       toolId: args.toolId,
       toolName: args.toolName,
       action: args.action,
-      guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
       orchestrationRunId: null,
       nodeId: null,
     });

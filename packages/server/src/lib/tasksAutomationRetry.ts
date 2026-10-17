@@ -131,7 +131,7 @@ const recordRetriedAttempt = async (args: {
     type: 'tasks.automation_retrying',
     projectId: args.projectId,
     task: mapTask(task),
-    extra: {
+    facts: {
       attempt: args.attempt,
       max_attempts: args.maxAttempts,
       error:

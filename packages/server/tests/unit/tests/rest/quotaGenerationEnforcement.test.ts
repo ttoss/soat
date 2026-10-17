@@ -214,7 +214,7 @@ describe('POST /api/v1/agents/:agent_id/generate — token and cost quotas', () 
       expect(captured).toHaveLength(1);
       expect(captured[0].resourceType).toBe('quota');
       expect(captured[0].data).toMatchObject({
-        quota_id: quotaId,
+        id: quotaId,
         mode: 'monitor',
         metric: 'cost_usd',
       });
@@ -617,7 +617,7 @@ describe('POST /api/v1/agents/:agent_id/generate — token and cost quotas', () 
 
       expect(captured).toHaveLength(1);
       expect(captured[0].data).toMatchObject({
-        quota_id: quotaId,
+        id: quotaId,
         meter_type: 'storage',
       });
     });

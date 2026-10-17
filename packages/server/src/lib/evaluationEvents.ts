@@ -3,15 +3,15 @@
  *
  * This event plus the verdict it carries **is** the promotion gate consumed by
  * the agents module's eval-gated promotion: a deploy pipeline subscribes, reads
- * `passed`, and promotes or aborts. That is why the payload carries the verdict
- * and the aggregates inline rather than only an id to fetch — a gate that has to
- * make a second call to learn its answer is a gate that can fail open when the
- * second call does.
+ * `passed`, and promotes or aborts. That is why the payload is the run record,
+ * verdict and aggregates included, rather than only an id to fetch — a gate
+ * that has to make a second call to learn its answer is a gate that can fail
+ * open when the second call does.
  */
 import createDebug from 'debug';
 
-import type { AggregateScores } from './evaluationScorerAggregation';
-import { emitResourceEvent } from './eventBus';
+import { mapEvalRun, reloadEvalRun } from './evaluationRunReads';
+import { emitLoadedRecordEvent } from './recordEvents';
 
 const log = createDebug('soat:evaluations');
 
@@ -22,41 +22,28 @@ export const EVAL_RUN_COMPLETED_EVENT = 'eval_run.completed';
 export const EVAL_RUN_FAILED_EVENT = 'eval_run.failed';
 
 /**
- * Fires one eval run lifecycle event.
+ * Fires one eval run lifecycle event, carrying the run as `GET` answers it.
  *
- * Best-effort by construction: `emitResourceEvent` dispatches fire-and-forget
- * and owns the project-lookup rejection handler, so a subscriber being
- * down — or a transient DB blip in the lookup — never changes the run's recorded
- * outcome. Called from the single finalize path, which both the synchronous and
- * the queued run funnel through, so a run cannot fire twice or (worse, for a
- * gate) not at all.
+ * Best-effort by construction: `emitLoadedRecordEvent` never throws, so a
+ * subscriber being down — or a transient DB blip in the read — never changes
+ * the run's recorded outcome. Called from the single finalize path, which both
+ * the synchronous and the queued run funnel through, so a run cannot fire
+ * twice or (worse, for a gate) not at all.
  */
-export const emitEvalRunEvent = (args: {
+export const emitEvalRunEvent = async (args: {
   event: typeof EVAL_RUN_COMPLETED_EVENT | typeof EVAL_RUN_FAILED_EVENT;
   projectId: number;
-  evalPublicId: string;
-  runPublicId: string;
-  passed: boolean | null;
-  aggregateScores: AggregateScores | null;
-}): void => {
-  log(
-    'emitEvalRunEvent: event=%s run=%s passed=%s',
-    args.event,
-    args.runPublicId,
-    args.passed
-  );
+  run: { id?: unknown; publicId: string };
+}): Promise<void> => {
+  log('emitEvalRunEvent: event=%s run=%s', args.event, args.run.publicId);
 
-  emitResourceEvent({
+  await emitLoadedRecordEvent({
     type: args.event,
     projectId: args.projectId,
     resourceType: 'eval_run',
-    resourceId: args.runPublicId,
-    // snake_case data keys to match the documented webhook contract.
-    data: {
-      eval_id: args.evalPublicId,
-      eval_run_id: args.runPublicId,
-      passed: args.passed,
-      aggregate_scores: args.aggregateScores,
+    resourceId: args.run.publicId,
+    load: async () => {
+      return mapEvalRun(await reloadEvalRun(args.run));
     },
   });
 };

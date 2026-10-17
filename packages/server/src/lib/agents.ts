@@ -50,7 +50,7 @@ export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 
 // ── Map Functions ────────────────────────────────────────────────────────
 
-const mapAgent = (agent: AgentRow): MappedAgent => {
+export const mapAgent = (agent: AgentRow): MappedAgent => {
   const toolBindings = readAgentToolBindings(agent);
 
   return {
