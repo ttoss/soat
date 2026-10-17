@@ -228,6 +228,8 @@ A builtin action is dispatched in-process against the proposer's credential, so 
 
 ### List pending approvals
 
+`status` repeats (values ORed); `expires_from` / `expires_to` bound `expires_at`, both inclusive.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -243,7 +245,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.approvals.listApprovals({
-  query: { project_id: 'proj_ABC', status: 'pending' },
+  query: { project_id: 'proj_ABC', status: ['pending'] },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```

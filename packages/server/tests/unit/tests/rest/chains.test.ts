@@ -126,6 +126,28 @@ describe('Chains', () => {
       expect(res.body.data[0].last_generation_at).toBeDefined();
     });
 
+    test('a repeated status filter ORs its values', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/chains?project_id=${projectId}&status=budget_exhausted&status=expired`
+      );
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((chain: { id: string }) => {
+          return chain.id;
+        })
+      ).toEqual([exhaustedChainId]);
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/chains?project_id=${projectId}&status=active&status=done`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('filters by agent_id', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/chains?project_id=${projectId}&agent_id=agent_chainsactive00000`

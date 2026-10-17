@@ -174,6 +174,38 @@ describe('jsonLogicMapping', () => {
       ).toBe(11);
     });
 
+    test('a binding reads one declared after it', () => {
+      expect(
+        evaluateLogic(
+          {
+            let: [
+              { b: { '+': [{ var: 'a' }, 1] }, a: { '*': [{ var: 'x' }, 2] } },
+              { var: 'b' },
+            ],
+          },
+          { x: 5 }
+        )
+      ).toBe(11);
+    });
+
+    test('a binding reading itself reads the context', () => {
+      expect(
+        evaluateLogic(
+          { let: [{ x: { '+': [{ var: 'x' }, 1] } }, { var: 'x' }] },
+          { x: 2 }
+        )
+      ).toBe(3);
+    });
+
+    test('bindings that read each other in a cycle fail', () => {
+      expect(() => {
+        return evaluateLogic(
+          { let: [{ a: { var: 'b' }, b: { var: 'a.c' } }, 1] },
+          {}
+        );
+      }).toThrow(/cycle/);
+    });
+
     test('a binding shadows a context key of the same name', () => {
       expect(evaluateLogic({ let: [{ x: 1 }, { var: 'x' }] }, { x: 2 })).toBe(
         1

@@ -176,6 +176,14 @@ describe('On-Behalf-Of', () => {
     return res.body.data as Array<Record<string, unknown>>;
   };
 
+  // The node run the input starts writes its `output` entry on its own
+  // schedule, so the newest entry is not always the input this test wrote.
+  const inputEntryOf = async (caseId: string) => {
+    return (await entriesOf(caseId)).find((entry) => {
+      return entry.kind === 'input';
+    });
+  };
+
   describe('a write with the assertion of the tool call it serves', () => {
     test('records the tool, the agent and the generation beside the key', async () => {
       const caseId = await newCase();
@@ -187,12 +195,12 @@ describe('On-Behalf-Of', () => {
       });
 
       expect(res.status).toBe(200);
-      const [entry] = await entriesOf(caseId);
+      const entry = await inputEntryOf(caseId);
       expect(entry).toMatchObject({
         created_by_principal_type: 'api_key',
         created_by_principal_id: projectKeyId,
       });
-      expect(entry.on_behalf_of).toEqual({
+      expect(entry?.on_behalf_of).toEqual({
         tool_id: toolId,
         agent_id: agentId,
         generation_id: generationId,
@@ -229,8 +237,8 @@ describe('On-Behalf-Of', () => {
       const res = await writeAmount({ caseId, credential: projectKey });
 
       expect(res.status).toBe(200);
-      const [entry] = await entriesOf(caseId);
-      expect(entry.on_behalf_of).toBeNull();
+      const entry = await inputEntryOf(caseId);
+      expect(entry?.on_behalf_of).toBeNull();
     });
   });
 

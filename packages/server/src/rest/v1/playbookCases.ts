@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { AUTOMATION_STATUSES } from 'src/lib/playbookCaseAutomation';
 import {
   confirmPlaybookCaseNode,
   parseConfirmation,
@@ -33,6 +34,7 @@ import {
 } from 'src/lib/playbookExecutions';
 
 import {
+  parseEnumListQuery,
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
@@ -88,7 +90,11 @@ playbookCasesRouter.get('/playbook-cases', async (ctx: Context) => {
   ctx.body = await listPlaybookCases({
     projectIds,
     playbookId: parseString(ctx.query.playbook_id),
-    automationStatus: parseString(ctx.query.automation_status),
+    automationStatuses: parseEnumListQuery({
+      ctx,
+      name: 'automation_status',
+      allowed: AUTOMATION_STATUSES,
+    }),
     ...parsePagination(ctx),
   });
 });

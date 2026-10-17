@@ -337,6 +337,38 @@ describe('Sessions', () => {
       }
     });
 
+    test('a repeated status filter ORs its values', async () => {
+      const open = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+      const closed = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${closed.body.id}`)
+        .send({ status: 'closed' });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}&status=closed&status=expired&limit=100`
+      );
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((s: { id: string }) => {
+        return s.id;
+      });
+      expect(ids).toContain(closed.body.id);
+      expect(ids).not.toContain(open.body.id);
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}&status=active`
+      );
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('accepts limit and offset query params', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/sessions?agent_id=${agentId}&limit=1&offset=0`

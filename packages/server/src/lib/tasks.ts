@@ -132,7 +132,7 @@ export const listTasks = async (args: {
   projectIds: number[];
   workflowId?: string;
   state?: string;
-  status?: string;
+  statuses?: readonly ('open' | 'closed')[];
   // ORed, `null` included. `status=open` narrows a board; it does not say which
   // of those cards has an automation still dispatching.
   automationStatuses?: (TaskAutomationStatus | null)[];
@@ -141,15 +141,15 @@ export const listTasks = async (args: {
   offset?: number;
 }) => {
   log(
-    'listTasks: projectIds=%o workflowId=%s state=%s status=%s',
+    'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o',
     args.projectIds,
     args.workflowId,
     args.state,
-    args.status
+    args.statuses
   );
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.state) where.state = args.state;
-  if (args.status) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
   if (args.assignee) where.assignee = args.assignee;
 
   if (args.automationStatuses?.length) {

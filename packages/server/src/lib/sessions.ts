@@ -15,6 +15,10 @@ import {
   acceptStoredToolContextUpdate,
 } from './toolContextCarrier';
 
+export const SESSION_STATUSES = ['open', 'closed', 'expired'] as const;
+
+type SessionStatus = (typeof SESSION_STATUSES)[number];
+
 registerResourceFieldMap({
   resourceType: 'session',
   publicIdColumn: { column: 'publicId' },
@@ -157,7 +161,7 @@ const resolveSessionListFilters = async (args: {
   where: Record<string, unknown>;
   agentId?: string;
   actorId?: string;
-  status?: string;
+  statuses?: readonly SessionStatus[];
 }): Promise<boolean> => {
   if (args.agentId !== undefined) {
     const agent = await db.Agent.findOne({
@@ -175,8 +179,8 @@ const resolveSessionListFilters = async (args: {
     args.where.actorId = actor.id;
   }
 
-  if (args.status !== undefined) {
-    args.where.status = args.status;
+  if (args.statuses?.length) {
+    args.where.status = args.statuses;
   }
 
   return true;
@@ -186,7 +190,7 @@ export const listSessions = async (args: {
   projectIds?: number[];
   agentId?: string;
   actorId?: string;
-  status?: string;
+  statuses?: readonly SessionStatus[];
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
@@ -211,7 +215,7 @@ export const listSessions = async (args: {
     where,
     agentId: args.agentId,
     actorId: args.actorId,
-    status: args.status,
+    statuses: args.statuses,
   });
   if (!resolved) {
     return emptyPage(args);

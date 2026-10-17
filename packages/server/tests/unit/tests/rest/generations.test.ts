@@ -244,6 +244,46 @@ describe('Generations', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
+    test('a repeated status filter ORs its values', async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const seed = async (publicId: string, status?: string) => {
+        await createGenerationRecord({
+          publicId,
+          projectId: project!.id as number,
+          agentId,
+          traceId: `trc_${publicId}`,
+        });
+        if (status) await updateGenerationRecord({ publicId, status });
+      };
+      await seed('gen_statusor_done', 'completed');
+      await seed('gen_statusor_wait', 'requires_action');
+      await seed('gen_statusor_live');
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?agent_id=${agentId}&status=completed&status=requires_action&limit=100`
+      );
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((gen: { id: string }) => {
+        return gen.id;
+      });
+      expect(ids).toEqual(
+        expect.arrayContaining(['gen_statusor_done', 'gen_statusor_wait'])
+      );
+      expect(ids).not.toContain('gen_statusor_live');
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?agent_id=${agentId}&status=done`
+      );
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('admin without project scoping lists across all projects', async () => {
       const response = await authenticatedTestClient(adminToken).get(
         `/api/v1/generations?agent_id=${agentId}`

@@ -75,7 +75,11 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     projectIds: projectIds ?? [],
     workflowId: ctx.query.workflow_id as string | undefined,
     state: ctx.query.state as string | undefined,
-    status: ctx.query.status as string | undefined,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: ['open', 'closed'],
+    }),
     automationStatuses,
     assignee: ctx.query.assignee as string | undefined,
     ...parsePagination(ctx),

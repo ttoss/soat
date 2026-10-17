@@ -314,13 +314,13 @@ export const createPlaybookCase = async (args: {
 export const listPlaybookCases = async (args: {
   projectIds?: number[];
   playbookId?: string;
-  automationStatus?: string;
+  automationStatuses?: Parameters<typeof automationWhere>[0];
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<ReturnType<typeof mapCaseSummary>>> => {
   log('listPlaybookCases: projectIds=%o', args.projectIds);
   const where: Record<string | symbol, unknown> = automationWhere(
-    args.automationStatus
+    args.automationStatuses
   );
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
   if (args.playbookId !== undefined) {

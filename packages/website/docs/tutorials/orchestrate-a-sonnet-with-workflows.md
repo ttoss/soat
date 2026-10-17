@@ -741,7 +741,7 @@ const { data: board } = await adminSoat.tasks.listTasks({
   query: {
     project_id: PROJECT_ID,
     workflow_id: WORKFLOW_ID,
-    status: 'closed',
+    status: ['closed'],
   },
 });
 for (const card of board.data) {

@@ -128,6 +128,45 @@ describe('Exceptions', () => {
       expect(again.body.error.code).toBe('EXCEPTION_ALREADY_RESOLVED');
     });
 
+    test('a repeated status filter ORs its values', async () => {
+      const file = (title: string) => {
+        return fileException({
+          projectId: projectInternalId,
+          kind: 'manual',
+          title,
+        });
+      };
+      const open = await file('Still open');
+      const acknowledged = await file('Someone is on it');
+      const resolved = await file('Fixed');
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/exceptions/${acknowledged.id}/acknowledge`)
+        .send({});
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/exceptions/${resolved.id}/resolve`)
+        .send({});
+
+      const res = await listExceptions(
+        '&status=acknowledged&status=resolved&limit=100'
+      );
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((e: { id: string }) => {
+        return e.id;
+      });
+      expect(ids).toEqual(
+        expect.arrayContaining([acknowledged.id, resolved.id])
+      );
+      expect(ids).not.toContain(open.id);
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const res = await listExceptions('&status=closed');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('an API key acknowledging and resolving names the key', async () => {
       const key = await authenticatedTestClient(userToken)
         .post('/api/v1/api-keys')

@@ -17,6 +17,7 @@ import {
 import {
   createDecision,
   createInlineDecision,
+  DECISION_STATUSES,
   decisions,
   getDecision,
   listDecisions,
@@ -26,6 +27,7 @@ import { parseMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
+  parseEnumListQuery,
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
@@ -325,7 +327,11 @@ decidersRouter.get('/decisions', async (ctx: Context) => {
   ctx.body = await listDecisions({
     projectIds,
     deciderId: parseString(ctx.query.decider_id),
-    status: ctx.query.status,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: DECISION_STATUSES,
+    }),
     ...parsePagination(ctx),
   });
 });

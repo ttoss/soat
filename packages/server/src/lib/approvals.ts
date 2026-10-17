@@ -3,7 +3,10 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { assertValidApprovalFilters } from './approvalFilters';
+import {
+  type ApprovalStatus,
+  assertValidApprovalFilters,
+} from './approvalFilters';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import {
@@ -15,6 +18,7 @@ import { isPlainObject } from './plainObject';
 import type { RequestPrincipal } from './principals';
 import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
+import { timeRangeWhere } from './timeRange';
 import { sanitizeCallerToolContext } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -385,18 +389,23 @@ export const emitApproval = async (
 
 export const listApprovals = async (args: {
   projectIds: number[];
-  status?: string;
+  statuses?: readonly ApprovalStatus[];
   origin?: string;
-  expiresBefore?: Date;
+  expiresFrom?: Date;
+  expiresTo?: Date;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedApproval>> => {
   assertValidApprovalFilters(args);
 
   const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.status) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
   if (args.origin) where.origin = args.origin;
-  if (args.expiresBefore) where.expiresAt = { [Op.lte]: args.expiresBefore };
+  const expiresAt = timeRangeWhere({
+    from: args.expiresFrom,
+    to: args.expiresTo,
+  });
+  if (expiresAt) where.expiresAt = expiresAt;
 
   return paginatedList({
     limit: args.limit,
@@ -420,7 +429,7 @@ export const listApprovals = async (args: {
 // corrections stays out of this deliberately deterministic module.
 
 /** Default status a recurrence group is built from — recurring *rejections*. */
-const RECURRENCE_DEFAULT_STATUS = 'rejected';
+const RECURRENCE_DEFAULT_STATUSES: readonly ApprovalStatus[] = ['rejected'];
 /** A group must have at least this many items to count as a recurrence. */
 const RECURRENCE_DEFAULT_MIN_COUNT = 2;
 
@@ -491,22 +500,22 @@ const mapRecurrenceGroup = (args: {
  */
 export const listApprovalRecurrences = async (args: {
   projectIds: number[];
-  status?: string;
+  statuses?: readonly ApprovalStatus[];
   minCount?: number;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<ApprovalRecurrenceGroup>> => {
-  const status = args.status ?? RECURRENCE_DEFAULT_STATUS;
-  // Reuse the shared filter guard so an out-of-enum status is a 400, not a 500.
-  assertValidApprovalFilters({ status });
+  const statuses = args.statuses?.length
+    ? args.statuses
+    : RECURRENCE_DEFAULT_STATUSES;
 
   const minCount = normalizeMinCount(args.minCount);
   const { limit, offset } = resolvePagination(args);
 
   log(
-    'listApprovalRecurrences: projects=%d status=%s minCount=%d',
+    'listApprovalRecurrences: projects=%d statuses=%o minCount=%d',
     args.projectIds.length,
-    status,
+    statuses,
     minCount
   );
 
@@ -520,7 +529,7 @@ export const listApprovalRecurrences = async (args: {
   const items = await db.ApprovalItem.findAll({
     where: {
       projectId: args.projectIds,
-      status,
+      status: statuses,
       dedupKey: { [Op.ne]: null },
     },
     order: [['createdAt', 'ASC']],

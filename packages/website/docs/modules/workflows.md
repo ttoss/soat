@@ -222,7 +222,7 @@ Pausing is **idempotent**; a closed task answers `409 TASK_NOT_PAUSABLE`, and re
 
 ### Finding the tasks whose automation is running
 
-[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on `automation_status` beside `status`, `state`, `workflow_id` and `assignee`; `status=open` narrows to the cards in play. The parameter **repeats**; values are ORed:
+[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on `automation_status` beside `status`, `state`, `workflow_id` and `assignee`; `status=open` narrows to the cards in play. Both status filters **repeat**; values are ORed:
 
 ```
 GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
@@ -526,7 +526,7 @@ const { data: parked } = await soat.tasks.transitionTask({
 });
 
 const { data: pending } = await soat.approvals.listApprovals({
-  query: { project_id: PROJECT_ID, status: 'pending' },
+  query: { project_id: PROJECT_ID, status: ['pending'] },
 });
 const gate = pending.find((a) => a.task_id === TASK_ID)!;
 

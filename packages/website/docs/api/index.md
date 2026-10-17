@@ -141,6 +141,20 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
 
 The server enforces no per-project or per-API-key request-rate limits or throttling; every authenticated request is processed immediately, bounded only by the limits above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 
+### List Filters
+
+Every list filter takes one shape:
+
+- **Status** — a `status` (or `*_status`) filter repeats, and its values are ORed. One value is the common case; a value outside the enum, empty string included, is `400 VALIDATION_FAILED`.
+- **Time range** — `from` / `to`, ISO 8601, on the record's natural timestamp (`created_at` unless the module doc says otherwise). A range over another timestamp prefixes the field: `expires_from` / `expires_to` on [approvals](../modules/approvals.md) bound `expires_at`. Both ends are inclusive and either may be omitted; an unparseable or repeated bound is `400 VALIDATION_FAILED`.
+
+```bash
+curl 'https://your-soat-server.com/api/v1/generations?status=failed&status=requires_action' \
+  -H "Authorization: Bearer <token>"
+curl 'https://your-soat-server.com/api/v1/audit-log?project_id=proj_abc&from=2026-01-01T00:00:00Z&to=2026-01-31T23:59:59Z' \
+  -H "Authorization: Bearer <token>"
+```
+
 ### Path and Query Parameters
 
 ```bash

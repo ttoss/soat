@@ -416,6 +416,16 @@ describe('Audit Log — read API filters', () => {
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
 
+  test('a repeated ?from= is rejected with 400 rather than one bound dropped', async () => {
+    const res = await authenticatedTestClient(adminToken).get(
+      `/api/v1/audit-log?project_id=${projectId}&from=2000-01-01T00:00:00Z&from=2999-01-01T00:00:00Z`
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    expect(res.body.error.meta).toEqual({ parameter: 'from' });
+    expect(res.body.error.message).toMatch(/takes one value/);
+  });
+
   test('the export endpoint rejects an unparseable ?from= the same way', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log/export')

@@ -114,10 +114,16 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filter by lifecycle status
+          description: >-
+            Filter by lifecycle status. Repeat the parameter to OR values. A
+            value outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [running, requires_action, completed, failed]
+            type: array
+            items:
+              type: string
+              enum: [running, requires_action, completed, failed]
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
