@@ -10,7 +10,12 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 
 const exceptionsRouter = new Router<Context>();
 
@@ -81,7 +86,7 @@ exceptionsRouter.post(
 
     ctx.body = await acknowledgeException({
       id: ctx.params.exception_id,
-      userId: ctx.authUser.id,
+      acknowledgedBy: requestPrincipalFromCtx(ctx),
     });
   }
 );
@@ -106,7 +111,7 @@ exceptionsRouter.post(
 
     ctx.body = await resolveException({
       id: ctx.params.exception_id,
-      userId: ctx.authUser.id,
+      resolvedBy: requestPrincipalFromCtx(ctx),
       note: body.note ?? null,
     });
   }

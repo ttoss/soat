@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Decider } from './Decider';
-import { User } from './User';
 
 /**
  * Immutable archive of a decider's question set at a given version, so the
@@ -77,16 +76,11 @@ export class DeciderVersion extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

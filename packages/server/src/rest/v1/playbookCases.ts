@@ -32,7 +32,12 @@ import {
   runPlaybookNode,
 } from 'src/lib/playbookExecutions';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 import { playbookAccess, playbookCaseAccess } from './playbookAccess';
 
 const playbookCasesRouter = new Router<Context>();
@@ -137,7 +142,7 @@ playbookCasesRouter.post(
       projectIds,
       id: ctx.params.case_id,
       writes: parseInputWrites(body.inputs),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       runWorkPublicId: ctx.authUser.runWorkPublicId,
     });
   }
@@ -208,7 +213,7 @@ playbookCasesRouter.post(
       caseId: ctx.params.case_id,
       node: ctx.params.node,
       wait: body.wait === true,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     });
   }
 );
@@ -311,7 +316,7 @@ playbookCasesRouter.post(
       id: ctx.params.case_id,
       node: ctx.params.node,
       confirmation: parseConfirmation(body),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       runWorkPublicId: ctx.authUser.runWorkPublicId,
     });
   }
@@ -337,7 +342,7 @@ playbookCasesRouter.post(
       projectIds,
       id: ctx.params.case_id,
       version: body.version,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       runWorkPublicId: ctx.authUser.runWorkPublicId,
     });
   }

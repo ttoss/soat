@@ -88,7 +88,7 @@ export const withdrawDocument = async (
     expectedVersion: args.expectedVersion,
     before: { withdrawn: false },
     label: args.versionLabel ?? 'withdrawn',
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await doc.update({ status: WITHDRAWN_STATUS }, { transaction });
       await db.DocumentChunk.destroy({

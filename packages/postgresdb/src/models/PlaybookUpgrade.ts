@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { PlaybookCase } from './PlaybookCase';
-import { User } from './User';
 
 /** A case moved from one version of its playbook to another, and what moved. */
 @Table({
@@ -66,16 +65,11 @@ export class PlaybookUpgrade extends Model {
   @Column({ type: DataType.JSONB, allowNull: false })
   declare diff: object;
 
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

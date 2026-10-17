@@ -150,7 +150,7 @@ export const createPlaybook = async (
     version: 1,
     config: buildPlaybookConfigSnapshot(mapped),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     columns: authorColumns(args.author.principal),
   });
 
@@ -245,7 +245,7 @@ export const updatePlaybook = async (
     expectedVersion: args.expectedVersion,
     before,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     columns: authorColumns(args.author.principal),
     applyWrite: async ({ transaction }) => {
       await playbook.save({ transaction });

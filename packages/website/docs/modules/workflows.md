@@ -104,7 +104,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 | `from_state`    | string \| null  | Source state (`null` on the initial placement)                    |
 | `to_state`      | string          | Destination state                                                 |
 | `transition`    | string \| null  | Transition name fired (`null` for the initial placement)          |
-| `principal_kind`| string          | `user` \| `api_key` \| `automation` \| `approval`                 |
+| `principal_type`| string          | `user` \| `api_key` \| `automation` \| `approval`                 |
 | `principal_id`  | string \| null  | The principal that made the move. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted. `null` for `automation`, which has no principal — read `generation_id` / `orchestration_run_id` / `tool_id` for the cause |
 | `generation_id` | string \| null  | The agent generation that caused the move (set for both `on_complete` routing and `on_failure`, linking the failed generation) |
 | `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
@@ -257,7 +257,7 @@ Archive nothing: a metadata-only edit (`name`, `description`); re-writing the de
 Firing a `requires_approval: true` transition (user, API key or automation outcome) does **not** move the task: it parks a pending [ApprovalItem](./approvals.md) (`origin: task_transition`, carrying `task_id` and `task_transition`) and returns the task with `pending_transition` set. No other transition fires while the gate is open (`TASK_TRANSITION_CONFLICT`, 409); one gate per task. Resolve it through the [approvals](./approvals.md) endpoints:
 
 - **Approve** → the transition fires **as the `approval` principal** through the single transition path, guard **re-evaluated at resolution time**; if no longer valid, the gate clears and `tasks.approval_failed` fires with `transition` and `errorCode`.
-- **Reject** → the gate clears; history gets a note (`principal_kind: approval`, `transition: null`). The task never moved.
+- **Reject** → the gate clears; history gets a note (`principal_type: approval`, `transition: null`). The task never moved.
 - **Expire** → the approvals expiry sweeper clears the gate and appends an expiry note.
 
 ### Task metadata

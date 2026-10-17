@@ -20,6 +20,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
@@ -129,7 +130,7 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
     contextToolId: parseNullableString(body.context_tool_id),
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 
   ctx.status = 201;
@@ -205,7 +206,7 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 });
 
@@ -337,7 +338,7 @@ guardrailsRouter.post(
       guardrailId: ctx.params.guardrail_id,
       version: parseVersionParam(ctx.params.version),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     });
   }
 );

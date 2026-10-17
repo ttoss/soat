@@ -240,15 +240,13 @@ components:
           nullable: true
           description: Project the action targeted; null for global actions
         principal_type:
-          type: string
           nullable: true
-          enum:
-            - user
-            - api_key
-            - null
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
           description: >-
-            Principal kind; null for platform-originated entries (those are
-            identified by their `action`, e.g. `quotas:MonitorBreach`)
+            Who acted: `user` or `api_key`; null for platform-originated entries
+            (those are identified by their `action`, e.g.
+            `quotas:MonitorBreach`)
         principal_id:
           type: string
           nullable: true

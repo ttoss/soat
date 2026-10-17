@@ -88,6 +88,7 @@ The flow they follow is
 | `2026-10-01-generation-input-modalities` | `generations.input_modalities`, the part types a turn's input carried |
 | `2026-10-07-decisions-openai-shape` | decider questions and decision answers converted to the OpenAI Decisions API shape (arrays carrying `name`, `predicate` for `boolean`); `decisions.decider_id`/`decider_version` nullable and `decisions.questions` for a decision sent with its own questions |
 | `2026-10-12-conversation-message-idempotency-digest` | `conversation_messages.idempotency_digest`, the digest of the request a session message's idempotency key names |
+| `2026-10-17-principal-pairs` | every `<verb>_by_user_id` naming who acted (config versions, playbook entries, executions, exports and upgrades, approval and exception resolution) becomes a `<verb>_by_principal_type`/`_id` pair, backfilled as `user`; `task_transitions.principal_kind` becomes `principal_type` |
 
 Run them from the server package, which owns the entrypoint:
 

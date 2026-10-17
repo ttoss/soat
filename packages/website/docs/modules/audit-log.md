@@ -61,6 +61,19 @@ A route making several checks (e.g. binding a trigger checks `triggers:CreateTri
 
 Remaining checks are recorded under `detail.additional_checks` (`{ action, resource, allowed }` each).
 
+### Principals
+
+Every record that names who acted uses one shape: a `<verb>_by_principal_type` / `<verb>_by_principal_id` pair (`created_by_…` on config versions, `resolved_by_…` on [approvals](./approvals.md), `started_by_…` on [generations](./generations.md)), or a bare `principal_type` / `principal_id` on a record about the principal itself — an audit entry, a [memory assertion](./memories.md), a [task transition](./workflows.md). The type is one vocabulary everywhere:
+
+| `principal_type` | `principal_id` |
+| --- | --- |
+| `user` | The user's `user_…` |
+| `api_key` | The key's own `key_…`, never its owner, so a record names which key acted |
+| `agent` | The agent's `agent_…`, writing under its own identity |
+| `automation` | `null` — the task engine acting on a dispatch outcome |
+| `approval` | The resolver's id — an approval resolution moving a task |
+| `system` | The mechanism: `retention_sweep`, `zero_retention` |
+
 ### System-originated entries
 
 Events no principal authorized leave `principal_type` and `principal_id` **null** and are identified by `action`. There is no null-principal filter; filter by `action` (`quotas:MonitorBreach`, `guardrails:Evaluate`). Producers:

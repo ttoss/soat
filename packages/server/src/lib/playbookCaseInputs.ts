@@ -21,6 +21,7 @@ import type {
 import { nodesByKey } from './playbookGraph';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import type { PlaybookCaseSnapshot } from './playbookState';
+import type { RequestPrincipal } from './principals';
 import { stableDigest } from './stableDigest';
 
 const log = createDebug('soat:playbookCases');
@@ -174,7 +175,7 @@ export const writePlaybookCaseInputs = async (args: {
   projectIds?: number[];
   id: string;
   writes: PlaybookInputWrite[];
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   runWorkPublicId?: string;
 }): Promise<MappedPlaybookCase> => {
   log('writePlaybookCaseInputs: id=%s count=%d', args.id, args.writes.length);
@@ -222,7 +223,7 @@ export const writePlaybookCaseInputs = async (args: {
               value: write.value as JsonValue,
               basis: null,
               playbookVersion: locked.playbookVersion,
-              createdByUserId: args.createdByUserId,
+              createdBy: args.createdBy,
             };
           }),
       });

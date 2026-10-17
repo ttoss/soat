@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
-import { User } from './User';
 
 /**
  * A failure or anomaly surfaced as a first-class, triageable item rather than a
@@ -139,29 +138,17 @@ export class ExceptionItem extends Model {
   declare guardrailVersion: string | null;
 
   // ── Resolution ───────────────────────────────────────────────────────────
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare acknowledgedByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare acknowledgedByPrincipalType: string | null;
 
-  // Two associations target User (acknowledged/resolved), so each names its own
-  // foreign key to stay unambiguous.
-  @BelongsTo(() => {
-    return User;
-  }, 'acknowledgedByUserId')
-  declare acknowledgedByUser: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare acknowledgedByPrincipalId: string | null;
 
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare resolvedByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare resolvedByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  }, 'resolvedByUserId')
-  declare resolvedByUser: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare resolvedByPrincipalId: string | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare resolutionNote: string | null;

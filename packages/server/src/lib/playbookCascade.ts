@@ -158,7 +158,6 @@ export const advancePlaybookCase = async (args: {
             executor: node.executor,
             values: view.values,
           }),
-          createdByUserId: null,
         },
         { transaction }
       );

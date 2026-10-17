@@ -1,4 +1,19 @@
 /**
+ * Every kind of principal a record can name, `PrincipalType` in
+ * `principals.yaml`; `principalFieldContract.test.ts` holds the two equal.
+ */
+export const PRINCIPAL_TYPES = [
+  'user',
+  'api_key',
+  'agent',
+  'automation',
+  'approval',
+  'system',
+] as const;
+
+export type PrincipalType = (typeof PRINCIPAL_TYPES)[number];
+
+/**
  * The principal to credit for an action: `user` names the acting user, and
  * `api_key` names the key itself (`key_…`) so a record says *which* key acted.
  *
@@ -21,8 +36,8 @@ export type RequestPrincipal = {
  * rather than merely that a key did — including when the actor is a background
  * drive that re-minted the key's identity.
  *
- * One function, three call sites (the REST helper, the audit middleware, the
- * task-transition helper). Hand-synced copies, each with its own paraphrase of
+ * Every record naming who acted derives it here, never from `authUser.id`,
+ * which is a key's owner. Hand-synced copies, each with its own paraphrase of
  * the rule, drift: one goes quietly wrong while every test still passes.
  */
 export const principalFromAuthUser = (authUser: {
@@ -50,5 +65,18 @@ export const startedByPrincipalColumns = (
   return {
     startedByPrincipalType: principal?.principalType ?? null,
     startedByPrincipalId: principal?.principalId ?? null,
+  };
+};
+
+/** The `createdByPrincipal*` column pair, the same mapping as `startedBy`. */
+export const createdByColumns = (
+  principal: RequestPrincipal | null
+): {
+  createdByPrincipalType: string | null;
+  createdByPrincipalId: string | null;
+} => {
+  return {
+    createdByPrincipalType: principal?.principalType ?? null,
+    createdByPrincipalId: principal?.principalId ?? null,
   };
 };

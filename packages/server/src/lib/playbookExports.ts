@@ -22,13 +22,12 @@ import { readCaseNode } from './playbookExecutions';
 import { resolveRunAs } from './playbookExecutionWork';
 import { type ExportCase, renderPlaybookExport } from './playbookExportRender';
 import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
-import type { RequestPrincipal } from './principals';
+import { createdByColumns, type RequestPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExports');
 
 type ExportRow = InstanceType<(typeof db)['PlaybookExport']> & {
-  createdBy?: { publicId: string } | null;
   file?: { publicId: string } | null;
 };
 
@@ -73,17 +72,15 @@ const mapPlaybookExport = (args: {
     stale: args.current.get(row.node) !== row.revision,
     file_id: row.file?.publicId ?? null,
     error: row.error,
-    created_by: row.createdBy?.publicId ?? null,
+    created_by_principal_type: row.createdByPrincipalType,
+    created_by_principal_id: row.createdByPrincipalId,
     created_at: row.createdAt,
     finished_at: row.finishedAt,
   };
 };
 
 const EXPORT_INCLUDES = () => {
-  return [
-    { model: db.User, as: 'createdBy' },
-    { model: db.File, as: 'file', attributes: ['publicId'] },
-  ];
+  return [{ model: db.File, as: 'file', attributes: ['publicId'] }];
 };
 
 /** The transformations a call names, or every one the node declares. */
@@ -189,7 +186,7 @@ const recordExports = (args: {
   node: PlaybookNode;
   transformations: PlaybookTransformation[];
   revision: unknown;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }) => {
   const { row, node } = args;
   return withLockedCase({
@@ -211,7 +208,7 @@ const recordExports = (args: {
               toolId: transformation.tool,
               status: 'running',
               leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
-              createdByUserId: args.createdByUserId,
+              ...createdByColumns(args.createdBy),
             },
             { transaction }
           )
@@ -260,7 +257,7 @@ export const exportPlaybookCaseNode = async (args: {
   transformations: unknown;
   revision: unknown;
   wait: boolean;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }) => {
   log('exportPlaybookCaseNode: case=%s node=%s', args.caseId, args.node);
   const row = await playbookCases.getByPublicId({
@@ -288,7 +285,7 @@ export const exportPlaybookCaseNode = async (args: {
     node,
     transformations,
     revision: args.revision,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   const exportCase: ExportCase = {

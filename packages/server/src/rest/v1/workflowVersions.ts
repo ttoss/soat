@@ -9,7 +9,11 @@ import {
   restoreWorkflowVersion,
 } from 'src/lib/workflowVersions';
 
-import { parsePagination, requireAuth } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+} from './helpers';
 
 /**
  * Workflow state-machine version history.
@@ -117,7 +121,7 @@ workflowVersionsRouter.post(
       workflowId,
       version: parseVersionParam(ctx.params['version'] as string),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     });
   }
 );

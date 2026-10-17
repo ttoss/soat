@@ -42,7 +42,7 @@ export const documentsFormationModule = defineFormationModule({
 
     return createDocument({
       projectId,
-      createdByUserId: actor.userId,
+      createdBy: actor.author,
       content,
       path: toOptionalString(properties.path) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
@@ -65,7 +65,7 @@ export const documentsFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId, actor }) => {
     await updateDocument({
       id: physicalResourceId,
-      createdByUserId: actor.userId,
+      createdBy: actor.author,
       content: toOptionalString(properties.content) ?? undefined,
       path: toOptionalString(properties.path) ?? undefined,
       title: toOptionalString(properties.title) ?? undefined,

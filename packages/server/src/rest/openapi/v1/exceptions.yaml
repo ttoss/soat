@@ -257,14 +257,32 @@ components:
           type: string
           nullable: true
           description: '`<guardrailId>@<version>` for a guardrail_tripwire exception'
-        acknowledged_by:
+        acknowledged_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who acknowledged the exception; null until acknowledged.
+        acknowledged_by_principal_id:
           type: string
           nullable: true
-          description: Acknowledging user's public ID
-        resolved_by:
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
+        resolved_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who resolved the exception; null until resolved.
+        resolved_by_principal_id:
           type: string
           nullable: true
-          description: Resolving user's public ID
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         resolution_note:
           type: string
           nullable: true

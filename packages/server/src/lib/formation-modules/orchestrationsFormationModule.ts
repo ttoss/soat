@@ -50,7 +50,7 @@ export const orchestrationsFormationModule = defineFormationModule({
   create: ({ properties, projectId, actor }) => {
     return createOrchestration({
       projectId,
-      createdByUserId: actor.userId,
+      createdBy: actor.author,
       name: properties.name as string,
       description: toNullableString(properties.description),
       nodes: convertCollectionKeys(
@@ -70,7 +70,7 @@ export const orchestrationsFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId, actor }) => {
     await updateOrchestration({
       id: physicalResourceId,
-      createdByUserId: actor.userId,
+      createdBy: actor.author,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       // Both are required by OrchestrationResourceProperties, so a template

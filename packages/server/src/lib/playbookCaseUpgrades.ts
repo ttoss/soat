@@ -12,12 +12,11 @@ import {
 } from './playbookCases';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookUpgradeDiff } from './playbookUpgrade';
+import { createdByColumns, type RequestPrincipal } from './principals';
 
 const log = createDebug('soat:playbookCases');
 
-type UpgradeRow = InstanceType<(typeof db)['PlaybookUpgrade']> & {
-  createdBy?: { publicId: string } | null;
-};
+type UpgradeRow = InstanceType<(typeof db)['PlaybookUpgrade']>;
 
 const mapPlaybookUpgrade = (args: {
   row: UpgradeRow;
@@ -30,7 +29,8 @@ const mapPlaybookUpgrade = (args: {
     from_version: row.fromVersion,
     to_version: row.toVersion,
     diff: row.diff,
-    created_by: row.createdBy?.publicId ?? null,
+    created_by_principal_type: row.createdByPrincipalType,
+    created_by_principal_id: row.createdByPrincipalId,
     created_at: row.createdAt,
   };
 };
@@ -69,7 +69,7 @@ export const upgradePlaybookCase = async (args: {
   projectIds?: number[];
   id: string;
   version: unknown;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   runWorkPublicId?: string;
 }) => {
   log('upgradePlaybookCase: id=%s version=%s', args.id, args.version);
@@ -125,7 +125,7 @@ export const upgradePlaybookCase = async (args: {
             from: await versionDefinition({ row, version: from }),
             to,
           }),
-          createdByUserId: args.createdByUserId,
+          ...createdByColumns(args.createdBy),
         },
         { transaction }
       );
@@ -158,8 +158,6 @@ export const listPlaybookCaseUpgrades = async (args: {
     query: ({ limit, offset, order }) => {
       return db.PlaybookUpgrade.findAndCountAll({
         where: { caseId: row.id as number },
-        include: [{ model: db.User, as: 'createdBy' }],
-        distinct: true,
         order,
         limit,
         offset,

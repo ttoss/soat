@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { isPlainObject } from './plainObject';
+import type { RequestPrincipal } from './principals';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { makeResourceAccessor } from './resourceAccessor';
 import type { SoatEventTypeFor } from './soatEvents';
@@ -54,18 +55,12 @@ const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
 
 type ExceptionInstance = InstanceType<(typeof db)['ExceptionItem']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
-  acknowledgedByUser?: InstanceType<(typeof db)['User']> | null;
-  resolvedByUser?: InstanceType<(typeof db)['User']> | null;
 };
 
 // Built lazily inside each query: `db.*` models are only populated after the
 // database initializes.
 const buildIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.User, as: 'acknowledgedByUser' },
-    { model: db.User, as: 'resolvedByUser' },
-  ];
+  return [{ model: db.Project, as: 'project' }];
 };
 
 const exceptionItems = makeResourceAccessor<ExceptionInstance>({
@@ -116,8 +111,10 @@ export const mapException = (instance: ExceptionInstance) => {
     node_id: instance.nodeId,
     agent_id: instance.agentId,
     guardrail_version: instance.guardrailVersion,
-    acknowledged_by: instance.acknowledgedByUser?.publicId ?? null,
-    resolved_by: instance.resolvedByUser?.publicId ?? null,
+    acknowledged_by_principal_type: instance.acknowledgedByPrincipalType,
+    acknowledged_by_principal_id: instance.acknowledgedByPrincipalId,
+    resolved_by_principal_type: instance.resolvedByPrincipalType,
+    resolved_by_principal_id: instance.resolvedByPrincipalId,
     resolution_note: instance.resolutionNote,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
@@ -338,14 +335,15 @@ const assertNotResolved = (item: ExceptionInstance): void => {
  */
 export const acknowledgeException = async (args: {
   id: string;
-  userId: number;
+  acknowledgedBy: RequestPrincipal;
 }): Promise<MappedException> => {
   log('acknowledgeException: id=%s', args.id);
   const item = await findExceptionOrThrow(args.id);
   assertNotResolved(item);
   if (item.status !== 'acknowledged') {
     item.status = 'acknowledged';
-    item.acknowledgedByUserId = args.userId;
+    item.acknowledgedByPrincipalType = args.acknowledgedBy.principalType;
+    item.acknowledgedByPrincipalId = args.acknowledgedBy.principalId;
     await item.save();
   }
   return reload(item);
@@ -357,14 +355,15 @@ export const acknowledgeException = async (args: {
  */
 export const resolveException = async (args: {
   id: string;
-  userId: number;
+  resolvedBy: RequestPrincipal;
   note?: string | null;
 }): Promise<MappedException> => {
   log('resolveException: id=%s', args.id);
   const item = await findExceptionOrThrow(args.id);
   assertNotResolved(item);
   item.status = 'resolved';
-  item.resolvedByUserId = args.userId;
+  item.resolvedByPrincipalType = args.resolvedBy.principalType;
+  item.resolvedByPrincipalId = args.resolvedBy.principalId;
   item.resolutionNote = args.note ?? null;
   await item.save();
   return reload(item);

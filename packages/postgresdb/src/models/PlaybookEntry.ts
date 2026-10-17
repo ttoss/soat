@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { PlaybookCase } from './PlaybookCase';
-import { User } from './User';
 
 /**
  * One write to one field of a case: a manual input, a node's output, a
@@ -90,16 +89,11 @@ export class PlaybookEntry extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare playbookVersion: number;
 
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

@@ -22,6 +22,7 @@ describe('Formation version author', () => {
         'workflows:*',
         'orchestrations:*',
         'agents:*',
+        'memories:*',
         'ai-providers:GetAiProvider',
       ],
     });
@@ -102,16 +103,19 @@ describe('Formation version author', () => {
   const authorsOf = async (
     resources: { logical_id: string; physical_resource_id: string }[]
   ) => {
-    const authors: Record<string, (string | null)[]> = {};
+    const authors: Record<string, string[]> = {};
     for (const resource of resources) {
       const res = await client().get(
         `${VERSIONS_PATH[resource.logical_id]}/${resource.physical_resource_id}/versions`
       );
       expect(res.status).toBe(200);
       authors[resource.logical_id] = (
-        res.body.data as { created_by: string | null }[]
+        res.body.data as {
+          created_by_principal_type: string | null;
+          created_by_principal_id: string | null;
+        }[]
       ).map((version) => {
-        return version.created_by;
+        return `${version.created_by_principal_type}:${version.created_by_principal_id}`;
       });
     }
     return authors;
@@ -134,12 +138,95 @@ describe('Formation version author', () => {
     expect(updated.status).toBe(200);
     expect(updated.body.status).toBe('active');
 
+    const author = `user:${userId}`;
     expect(await authorsOf(updated.body.resources)).toEqual({
-      Doc: [userId, userId],
-      Guard: [userId, userId],
-      Flow: [userId, userId],
-      Orch: [userId, userId],
-      Bot: [userId, userId],
+      Doc: [author, author],
+      Guard: [author, author],
+      Flow: [author, author],
+      Orch: [author, author],
+      Bot: [author, author],
+    });
+  });
+
+  test('a deploy through an API key names the key', async () => {
+    const key = await client()
+      .post('/api/v1/api-keys')
+      .send({ name: 'formation-author-key' });
+    expect(key.status).toBe(201);
+    const keyClient = authenticatedTestClient(key.body.key);
+
+    const created = await keyClient.post('/api/v1/formations').send({
+      project_id: projectId,
+      name: 'key-author-formation',
+      template: {
+        resources: {
+          Doc: { type: 'document', properties: { content: 'Revision 1.' } },
+        },
+      },
+    });
+    expect(created.status).toBe(201);
+    const updated = await keyClient
+      .put(`/api/v1/formations/${created.body.id}`)
+      .send({
+        template: {
+          resources: {
+            Doc: { type: 'document', properties: { content: 'Revision 2.' } },
+          },
+        },
+      });
+    expect(updated.status).toBe(200);
+
+    const author = `api_key:${key.body.id}`;
+    expect(await authorsOf(updated.body.resources)).toEqual({
+      Doc: [author, author],
+    });
+  });
+
+  test('a memory a key-deployed formation writes is asserted by the key', async () => {
+    const key = await client()
+      .post('/api/v1/api-keys')
+      .send({ name: 'formation-asserter-key' });
+    expect(key.status).toBe(201);
+
+    const created = await authenticatedTestClient(key.body.key)
+      .post('/api/v1/formations')
+      .send({
+        project_id: projectId,
+        name: 'key-asserter-formation',
+        template: {
+          resources: {
+            Store: {
+              type: 'memory_store',
+              properties: { name: 'key-asserter-store' },
+            },
+            Fact: {
+              type: 'memory',
+              properties: {
+                memory_store_id: { ref: 'Store' },
+                content: 'The office is in Lisbon',
+              },
+            },
+          },
+        },
+      });
+    expect(created.status).toBe(201);
+    const fact = (
+      created.body.resources as {
+        logical_id: string;
+        physical_resource_id: string;
+      }[]
+    ).find((resource) => {
+      return resource.logical_id === 'Fact';
+    });
+
+    const assertions = await client().get(
+      `/api/v1/memories/${fact!.physical_resource_id}/assertions`
+    );
+    expect(assertions.status).toBe(200);
+    expect(assertions.body.data[0]).toMatchObject({
+      mechanism: 'formation',
+      principal_type: 'api_key',
+      principal_id: key.body.id,
     });
   });
 });

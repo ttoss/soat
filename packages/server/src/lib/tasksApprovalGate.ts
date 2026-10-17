@@ -237,7 +237,7 @@ const appendResolutionNote = async (args: {
     fromState: task.state,
     toState: task.state,
     transition: null,
-    principalKind: 'approval',
+    principalType: 'approval',
     principalId: args.resolvedBy,
     generationId: null,
     orchestrationRunId: null,
@@ -263,7 +263,7 @@ const applyApprovedTransition = async (args: {
     await transitionTask({
       id: item.task_id,
       transition: item.task_transition,
-      principal: { kind: 'approval', id: decision.resolvedBy },
+      principal: { kind: 'approval', id: decision.resolvedByPrincipalId },
       note: `Approved via approval ${item.id}.`,
     });
   } catch (error) {
@@ -311,7 +311,7 @@ export const resumeTaskTransitionApproval: ApprovalResumeHandler = async ({
   await appendResolutionNote({
     taskPublicId: item.task_id,
     decision: decision.decision,
-    resolvedBy: decision.resolvedBy,
+    resolvedBy: decision.resolvedByPrincipalId,
     reason: decision.reason,
   });
 };

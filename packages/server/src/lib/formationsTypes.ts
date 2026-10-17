@@ -90,11 +90,11 @@ export type FormationResourceContext = {
  * request, and what a formation deploy had no way to name.
  *
  * `userId` is the account it acts for (a key acts for its owner): an `api_key`
- * mints under it, so the key can never exceed whoever deployed it, a
- * `trigger`'s `created_by` is the run-as identity a firing mints a token for,
- * and a config version names it as author. `principal` and `isAllowed` are the
- * credential itself, which a `playbook` version runs as, so a deploying key's
- * own boundary bounds what the playbook may start.
+ * mints under it, so the key can never exceed whoever deployed it, and a
+ * `trigger`'s creator is the run-as identity a firing mints a token for.
+ * `author` is who a config version names: the key itself when a key deploys.
+ * `principal` and `isAllowed` are the credential a `playbook` version runs as,
+ * so a deploying key's own boundary bounds what the playbook may start.
  *
  * Carried by the three **write** operations only, and required there: every path
  * that mutates comes from an authenticated route, so a call site that cannot
@@ -103,6 +103,8 @@ export type FormationResourceContext = {
  */
 export type FormationActor = {
   userId: number;
+  /** Who a version the deploy writes names as its author. */
+  author: RequestPrincipal;
   principal: RequestPrincipal | null;
   isAllowed: IsAllowedFn;
 };

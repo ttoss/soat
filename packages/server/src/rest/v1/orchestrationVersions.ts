@@ -7,7 +7,11 @@ import {
   restoreOrchestrationVersion,
 } from 'src/lib/orchestrationVersions';
 
-import { parsePagination, requireAuth } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+} from './helpers';
 import {
   authorizeOrchestrationRead,
   authorizeOrchestrationWrite,
@@ -101,7 +105,7 @@ orchestrationVersionsRouter.post(
       orchestrationId: ctx.params['orchestration_id'] as string,
       version: parseVersionParam(ctx.params['version'] as string),
       label: typeof body.label === 'string' ? body.label : undefined,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     });
   }
 );

@@ -1482,10 +1482,20 @@ components:
           type: string
           nullable: true
           example: restored from v2
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who produced this version. Null for a write with no principal behind
+            it.
+        created_by_principal_id:
           type: string
           nullable: true
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -1761,10 +1771,20 @@ components:
           description: What an output, confirmation or rejection was decided on
         playbook_version:
           type: integer
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who recorded this entry; null for one the case's own cascade
+            recorded.
+        created_by_principal_id:
           type: string
           nullable: true
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -1847,11 +1867,19 @@ components:
           type: object
           nullable: true
           description: 'Why it failed: `{ code, message, meta? }`'
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who asked for the run; null when the case started it.
+        created_by_principal_id:
           type: string
           nullable: true
-          description: Who asked for the run
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -1934,11 +1962,19 @@ components:
           type: object
           nullable: true
           description: 'Why it failed: `{ code, message, meta? }`'
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who asked for the export.
+        created_by_principal_id:
           type: string
           nullable: true
-          description: Who asked for the export
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -2011,11 +2047,19 @@ components:
                             - source
                             - schema
                             - required
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who upgraded the case.
+        created_by_principal_id:
           type: string
           nullable: true
-          description: Who upgraded the case
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time

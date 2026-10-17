@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: SOAT Principals
+  version: 1.0.0
+  description: >-
+    Shared components for naming who did something. This file declares no
+    paths: every record that names a principal — a `<verb>_by_principal_type` /
+    `<verb>_by_principal_id` pair, or a bare `principal_type` / `principal_id`
+    on a record about the principal itself — references the one vocabulary
+    here.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    PrincipalType:
+      type: string
+      enum:
+        - user
+        - api_key
+        - agent
+        - automation
+        - approval
+        - system
+      description: >-
+        What kind of principal acted. `user` and `api_key` are authenticated
+        callers, and the id is the user's (`user_…`) or the key's own
+        (`key_…`), so a record names which key acted rather than its owner.
+        `agent` is an agent writing under its own identity (`agent_…`).
+        `automation` is the task engine acting on a dispatch outcome and
+        `approval` an approval resolution; neither carries an id. `system` is
+        the platform itself, with an id naming the mechanism
+        (`retention_sweep`, `zero_retention`).
+      example: user

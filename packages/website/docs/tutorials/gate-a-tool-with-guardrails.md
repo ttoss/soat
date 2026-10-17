@@ -548,7 +548,7 @@ soat get-approval --approval-id "$APPROVAL_ID" \
 Approve, and the node re-dispatches the tool with the frozen arguments:
 
 ```bash
-soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
+soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 soat get-orchestration-run --orchestration-run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
 ```
 

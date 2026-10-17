@@ -10,7 +10,12 @@ import {
 import { withdrawDocument } from 'src/lib/documentWithdrawal';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination, requireAuth, writePreconditionOf } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+  writePreconditionOf,
+} from './helpers';
 
 /**
  * A document's history: its archived versions, the withdrawal that takes it
@@ -78,7 +83,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
             ? body.version_label
             : undefined,
         expectedVersion: writePreconditionOf(ctx),
-        createdByUserId: ctx.authUser.id,
+        createdBy: requestPrincipalFromCtx(ctx),
       });
     }
   );
@@ -121,7 +126,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
         documentId: ctx.params.document_id,
         version: parseVersionParam(ctx.params.version),
         label: typeof body?.label === 'string' ? body.label : undefined,
-        createdByUserId: ctx.authUser.id,
+        createdBy: requestPrincipalFromCtx(ctx),
       });
     }
   );

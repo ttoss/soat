@@ -11,6 +11,7 @@ import {
   resolvePagination,
   totalListOrder,
 } from 'src/lib/pagination';
+import type { PrincipalType } from 'src/lib/principals';
 
 const log = createDebug('soat:memories');
 
@@ -30,7 +31,7 @@ export type MemoryAssertionSource = {
   ruleId?: number | null;
   /** The generation's **public** id; resolved to the row here. */
   generationId?: string | null;
-  principalType: string;
+  principalType: Extract<PrincipalType, 'user' | 'api_key' | 'agent'>;
   principalId: string;
 };
 

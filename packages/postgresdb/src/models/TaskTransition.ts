@@ -71,7 +71,7 @@ export class TaskTransition extends Model {
 
   // Named `principal*`, not `actor*`: these are never Actor public ids.
   @Column({ type: DataType.STRING, allowNull: false })
-  declare principalKind: string;
+  declare principalType: string;
 
   // Null for `automation`, whose cause is carried by `generationId` /
   // `orchestrationRunId` instead.

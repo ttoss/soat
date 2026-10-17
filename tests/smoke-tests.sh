@@ -6519,13 +6519,13 @@ echo "Transition history: OK ($HIST_COUNT rows)"
 # Every row names the principal that moved the task (never `actor_*`, which
 # would collide with the unrelated Actors module).
 HIST_PRINCIPAL_OK=$(printf '%s\n' "$TASK_HISTORY" | jq -r \
-  'all(.[]; (.principal_kind | type == "string") and (has("actor_kind") | not))')
+  'all(.[]; (.principal_type | type == "string") and (has("actor_kind") | not))')
 if [ "$HIST_PRINCIPAL_OK" != "true" ]; then
-  echo "ERROR: task history rows missing principal_kind (or still exposing actor_kind)" >&2
+  echo "ERROR: task history rows missing principal_type (or still exposing actor_kind)" >&2
   printf '%s\n' "$TASK_HISTORY" >&2
   exit 1
 fi
-echo "Transition history principal_kind: OK"
+echo "Transition history principal_type: OK"
 
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
@@ -6609,7 +6609,7 @@ fi
 # no run, so `tool_id` is the provenance an automation transition carries.
 TOOL_HIST_OK=$($SOAT_CLI get-task-history --task-id "$TOOL_TASK_ID" | jq -r \
   --arg tool "$WF_TOOL_ID" \
-  'any(.data[]; .transition == "to_done" and .principal_kind == "automation" and .tool_id == $tool)')
+  'any(.data[]; .transition == "to_done" and .principal_type == "automation" and .tool_id == $tool)')
 if [ "$TOOL_HIST_OK" != "true" ]; then
   echo "ERROR: tool dispatch transition missing tool_id provenance" >&2
   $SOAT_CLI get-task-history --task-id "$TOOL_TASK_ID" >&2
@@ -6865,7 +6865,7 @@ echo "Automation chain depth counted the hop: OK"
 # request-bound credential and says nothing about the chain.
 SELF_HISTORY=$($SOAT_CLI get-task-history --task-id "$SELF_TASK_ID" | jq '.data')
 if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
-  'map(select(.transition == "finish")) | length == 1 and (.[0].principal_kind == "user") and (.[0].principal_id == $uid)' >/dev/null 2>&1; then
+  'map(select(.transition == "finish")) | length == 1 and (.[0].principal_type == "user") and (.[0].principal_id == $uid)' >/dev/null 2>&1; then
   echo "ERROR: the automated transition was not attributed to the principal that started the chain" >&2
   printf '%s\n' "$SELF_HISTORY" >&2
   exit 1

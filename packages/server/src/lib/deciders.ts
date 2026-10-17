@@ -197,7 +197,7 @@ export const createDecider = async (
     version: 1,
     config: buildDeciderConfigSnapshot(mapped),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   log('createDecider: created id=%s', decider.publicId);
@@ -311,7 +311,7 @@ export const updateDecider = async (
     expectedVersion: args.expectedVersion,
     before,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await decider.save({ transaction });
       return {

@@ -273,7 +273,7 @@ export const createDocument = async (
       content: args.content,
     }),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   emitDocumentLifecycleEvent({
@@ -367,7 +367,7 @@ export const updateDocument = async (
     expectedVersion: args.expectedVersion,
     before,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await writeDocumentUpdate({ doc, args, chunkChange, transaction });
 

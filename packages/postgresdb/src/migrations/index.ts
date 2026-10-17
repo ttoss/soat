@@ -33,6 +33,7 @@ import { priceBookResource } from './2026-10-01-priceBookResource';
 import { shareCap } from './2026-10-01-shareCap';
 import { decisionsOpenaiShape } from './2026-10-07-decisionsOpenaiShape';
 import { conversationMessageIdempotencyDigest } from './2026-10-12-conversationMessageIdempotencyDigest';
+import { principalPairs } from './2026-10-17-principalPairs';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -87,4 +88,5 @@ export const MIGRATIONS: Migration[] = [
   generationInputModalities,
   decisionsOpenaiShape,
   conversationMessageIdempotencyDigest,
+  principalPairs,
 ];

@@ -10,7 +10,6 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Agent } from './Agent';
 import { EvalRun } from './EvalRun';
-import { User } from './User';
 
 /**
  * Immutable archive of an agent's mutable configuration at a given version. A
@@ -104,20 +103,12 @@ export class AgentVersion extends Model {
   )
   declare evalRun: EvalRun | null;
 
-  /**
-   * The user whose action produced this version. Null for writes with no
-   * request user behind them.
-   */
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  /** Who produced this version; null for a write with no principal. */
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
