@@ -5,6 +5,13 @@ import { load } from 'js-yaml';
 
 import * as agentGenerationModule from '../../../../src/lib/agentGeneration';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  type ChatCompletionsStub,
+  startChatCompletionsStub,
+  textCompletion,
+  toolCallCompletion,
+} from '../../fixtures/chatCompletionsStub';
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -39,6 +46,8 @@ const requiresActionGeneration = (id: string) => {
 
 describe('Session reply', () => {
   let token: string;
+  let adminToken: string;
+  let projectId: string;
   let agentId: string;
 
   const createSession = async (body: Record<string, unknown> = {}) => {
@@ -81,6 +90,8 @@ describe('Session reply', () => {
       createNoPermUser: false,
     });
     token = setup.userToken;
+    adminToken = setup.adminToken;
+    projectId = setup.projectId;
 
     const provider = await authenticatedTestClient(setup.adminToken)
       .post('/api/v1/ai-providers')
@@ -276,6 +287,123 @@ describe('Session reply', () => {
       expect(res.body.status).toBe('requires_action');
       expect(res.body).not.toHaveProperty('message');
       expect(await storedMessages(session.conversationId)).toHaveLength(0);
+    });
+  });
+
+  describe('a turn paused on a client tool and completed through tool-outputs', () => {
+    let stub: ChatCompletionsStub;
+    let pausingAgentId: string;
+
+    beforeAll(async () => {
+      stub = await startChatCompletionsStub();
+      const asAdmin = authenticatedTestClient(adminToken);
+      const provider = await asAdmin.post('/api/v1/ai-providers').send({
+        project_id: projectId,
+        name: 'Session Reply Stub Provider',
+        provider: 'ollama',
+        default_model: 'stub-model',
+        base_url: stub.baseUrl,
+      });
+      expect(provider.status).toBe(201);
+      const tool = await asAdmin.post('/api/v1/tools').send({
+        project_id: projectId,
+        name: 'read_thermometer',
+        type: 'client',
+        parameters: { type: 'object', properties: {} },
+      });
+      expect(tool.status).toBe(201);
+      const agent = await asAdmin.post('/api/v1/agents').send({
+        project_id: projectId,
+        ai_provider_id: provider.body.id,
+        name: 'Session Reply Pausing Agent',
+        tool_bindings: [{ tool_id: tool.body.id }],
+      });
+      expect(agent.status).toBe(201);
+      pausingAgentId = agent.body.id;
+    });
+
+    afterAll(async () => {
+      await stub.close();
+    });
+
+    /** A session whose first turn is paused on the client tool. */
+    const pausedSession = async () => {
+      const session = await createSession({ agent_id: pausingAgentId });
+      await authenticatedTestClient(token)
+        .post(`/api/v1/sessions/${session.id}/messages`)
+        .send({ message: 'How warm is it?' });
+      stub.reply(
+        toolCallCompletion([{ id: 'call_thermo', name: 'read_thermometer' }]),
+        textCompletion('It is 18C.')
+      );
+      const paused = await authenticatedTestClient(token).post(
+        `/api/v1/sessions/${session.id}/generate?wait=true`
+      );
+      expect(paused.status).toBe(200);
+      expect(paused.body.status).toBe('requires_action');
+      return { ...session, generationId: paused.body.generation_id as string };
+    };
+
+    const complete = (args: { sessionId: string; generationId: string }) => {
+      return authenticatedTestClient(token)
+        .post(`/api/v1/sessions/${args.sessionId}/tool-outputs`)
+        .send({
+          generation_id: args.generationId,
+          tool_outputs: [{ tool_call_id: 'call_thermo', output: '18C' }],
+        });
+    };
+
+    test('is stored right after the messages it read, ahead of one sent during the pause', async () => {
+      const session = await pausedSession();
+      await authenticatedTestClient(token)
+        .post(`/api/v1/sessions/${session.id}/messages`)
+        .send({ message: 'Still there?' });
+
+      const res = await complete({
+        sessionId: session.id,
+        generationId: session.generationId,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message.position).toBe(1);
+      const stored = await storedMessages(session.conversationId);
+      expect(
+        stored.map((message) => {
+          return [message.position, message.content];
+        })
+      ).toEqual([
+        [0, 'How warm is it?'],
+        [1, 'It is 18C.'],
+        [2, 'Still there?'],
+      ]);
+    });
+
+    test('announces the stored reply as conversation_messages.generated', async () => {
+      const session = await pausedSession();
+      let res: Awaited<ReturnType<typeof complete>> | undefined;
+
+      const [event] = await captureEvents({
+        type: 'conversation_messages.generated',
+        where: (candidate) => {
+          return candidate.data.conversation_id === session.conversationId;
+        },
+        action: async () => {
+          res = await complete({
+            sessionId: session.id,
+            generationId: session.generationId,
+          });
+        },
+      });
+
+      expect(res?.status).toBe(200);
+      expect(event).toBeDefined();
+      expect(event.resourceId).toBe(res?.body.message.document_id);
+      expect(asWire(event.data)).toEqual({
+        ...res?.body.message,
+        conversation_id: session.conversationId,
+        generation_id: session.generationId,
+        trace_id: res?.body.trace_id,
+      });
     });
   });
 

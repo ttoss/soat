@@ -334,7 +334,7 @@ describe('Generations', () => {
         projectId: project!.id as number,
         agentId,
         traceId: 'trc_conv_edge',
-        conversationId: conversation.body.id,
+        conversation: { id: conversation.body.id, snapshotPosition: -1 },
       });
 
       const response = await authenticatedTestClient(userToken).get(

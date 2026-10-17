@@ -1,9 +1,11 @@
 import createDebug from 'debug';
 
 import type { db } from '../db';
-import { DomainError } from '../errors';
 import type { GenerationResult } from './agentGenerationTypes';
-import { addConversationMessage } from './conversationMessages';
+import {
+  pausedTurnSnapshotPosition,
+  storeGeneratedTurn,
+} from './conversationGeneration';
 import { mapGeneratedTurn } from './generatedTurn';
 import { emitSessionEvent } from './sessionEvents';
 
@@ -37,29 +39,17 @@ export const processToolOutputResult = async (args: {
     });
   }
 
-  const content = result.output?.content ?? '';
-  const responseMessages = result.output?.responseMessages;
-  const message = await addConversationMessage({
-    conversationId: args.conversation.publicId,
-    message: content,
-    role: 'assistant',
-    agentId: args.agentPublicId,
-    responseMessages:
-      responseMessages && responseMessages.length > 0
-        ? responseMessages
-        : undefined,
-  });
-
-  if (!message) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
-  }
-
-  return mapGeneratedTurn({
-    status: 'completed',
-    content,
-    message,
-    generationId: result.id,
-    traceId: result.traceId,
-    model: result.output?.model,
-  });
+  return mapGeneratedTurn(
+    await storeGeneratedTurn({
+      conversation: args.conversation,
+      agentId: args.agentPublicId,
+      snapshotPosition: await pausedTurnSnapshotPosition({
+        generationId: result.id,
+        conversation: args.conversation,
+      }),
+      generationId: result.id,
+      traceId: result.traceId,
+      output: result.output,
+    })
+  );
 };

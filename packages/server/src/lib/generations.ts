@@ -2,9 +2,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   attributionColumns,
-  findConversationDbId,
+  conversationColumns,
   findInitiatorGeneration,
   type GenerationAttribution,
+  type GenerationConversation,
   resolveEndUserAttribution,
 } from './generationAttribution';
 import {
@@ -78,7 +79,7 @@ const commitGenerationWithTrace = async (helperArgs: {
   };
   agentDbId: number;
   initiatorDbId: number | null;
-  conversationDbId: number | null;
+  conversation: Awaited<ReturnType<typeof conversationColumns>>;
   chainId: string | null;
   endUser: { actorId: number | null; sessionId: number | null };
   contentColumns: Record<string, unknown>;
@@ -87,7 +88,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     args,
     agentDbId,
     initiatorDbId,
-    conversationDbId,
+    conversation,
     chainId,
     endUser,
     contentColumns,
@@ -116,7 +117,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         traceId: trace.id,
         initiatorGenerationId: initiatorDbId,
         rootGenerationId: args.rootGenerationId ?? null,
-        conversationId: conversationDbId,
+        ...conversation,
         chainId,
         startedByPrincipalType: args.startedByPrincipalType ?? null,
         startedByPrincipalId: args.startedByPrincipalId ?? null,
@@ -159,9 +160,9 @@ const insertGenerationRecord = async (
     initiatorGenerationId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
-    // Public id of the conversation this generation serves, when it serves one.
-    // The edge the memory assertions walk up from a generation.
-    conversationId?: string | null;
+    // The conversation this generation serves, when it serves one: the edge
+    // the memory assertions walk up from a generation.
+    conversation?: GenerationConversation;
     // Public id of the session this generation serves. The end-user actor is
     // derived from it (see resolveEndUserAttribution), never passed separately.
     sessionId?: string | null;
@@ -226,7 +227,7 @@ const insertGenerationRecord = async (
     },
     agentDbId: agent.id as number,
     initiatorDbId: initiatorGeneration?.id ?? null,
-    conversationDbId: await findConversationDbId(args.conversationId),
+    conversation: await conversationColumns(args.conversation),
     chainId,
     endUser,
     contentColumns,
