@@ -373,7 +373,7 @@ For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), whic
 
 ### Output Mapping
 
-`output_mapping` is a [JSON Logic](https://jsonlogic.com) mapping over `{ "output": <raw result>, "input": <merged input> }`, applied to every tool type's raw result: `{ "var": "output.text" }` extracts a scalar without a wrapping `pipeline`, `{ "var": "input.title" }` echoes a request field, an object reshapes:
+`output_mapping` is a [JSON Logic](https://jsonlogic.com) mapping over `{ "output": <raw result>, "input": <merged input>, "action": <action> }`, applied to every tool type's raw result: `{ "var": "output.text" }` extracts a scalar without a wrapping `pipeline`, `{ "var": "input.title" }` echoes a request field, an object reshapes:
 
 ```json
 { "transcript": { "var": "output.text" }, "language": { "var": "output.language" } }
@@ -383,6 +383,7 @@ For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), whic
 
 - **`pipeline` tools.** The top-level `output_mapping` runs after the pipeline's own `output` mapping, over its final result.
 - **`client` tools.** Applied when the submitted output is materialized back into the generation, keyed by tool name.
+- **`action`** is the `mcp` or `builtin` action that ran, `null` on every other type, so one mapping can reshape each action its own way: `{ "if": [{ "==": [{ "var": "action" }, "search"] }, { "var": "output.hits" }, { "var": "output" }] }`.
 - **`input`** is populated for a direct call ([`POST /tools/{id}/call`](/docs/api/tools/call-tool)), a pipeline step or a workflow/orchestration tool dispatch; `{}` for a tool the model calls from an agent's loop and for a `client` tool's mapping.
 - **A `var` path resolving to `null`** (commonly a missing `output.` prefix) emits a debug log entry; the result is unchanged.
 
@@ -394,7 +395,7 @@ Without `output_mapping` the raw result is returned unchanged.
 
 **A preset is a pin, not a default: it wins.** A value the call supplies for a pinned key (a model naming the hidden field, or an `input` to [`POST /tools/{id}/call`](/docs/api/tools/call-tool)) is replaced by the preset; unpinned keys come from the call. No tool schema sets `additionalProperties: false`, so a hidden key is not rejected; merge order is the guarantee.
 
-Holds on every tool type (`builtin`, `http`, `mcp`, `client`, `pipeline`) and dispatch surface (agent tool loop, direct call, pipeline step, orchestration tool node, converter invocation). A guardrail evaluates the pinned arguments (`args.*` in a guard condition, `arguments` on an approval item); a `client` tool receives them pinned at the `requires_action` boundary. On an `mcp` binding presets apply to every tool the server exposes, as to every action a `builtin` binding lists; use a separate binding for a key meant for one.
+Holds on every tool type (`builtin`, `http`, `mcp`, `client`, `pipeline`) and dispatch surface (agent tool loop, direct call, pipeline step, orchestration tool node, converter invocation). A guardrail evaluates the pinned arguments the call carries (`args.*` in a guard condition, `arguments` on an approval item) — on an `mcp` action, only the presets that action declares; a `client` tool receives them pinned at the `requires_action` boundary.
 
 #### Pinning to a per-run value (`{{context:}}`)
 

@@ -752,7 +752,7 @@ export const buildToolResultMessages = (args: {
       toolCallId: output.toolCallId,
       toolName,
       output: outputMapping
-        ? applyToolOutputMapping(outputMapping, output.output)
+        ? applyToolOutputMapping({ outputMapping, rawResult: output.output })
         : output.output,
     });
   });

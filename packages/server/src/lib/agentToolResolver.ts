@@ -13,6 +13,7 @@ import {
   recordToolActivity,
   recordToolResolutionFailure,
 } from './agentToolActivity';
+import { resolvedActionName } from './agentToolApproval';
 import {
   collectBindingGuardrails,
   gateResolvedToolsWithGuardrails,
@@ -27,7 +28,7 @@ import {
   readBase64ToolResponse,
   type ResponseMode,
 } from './httpToolResponse';
-import { applyToolOutputMapping } from './jsonLogicMapping';
+import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
 import { withRequestIdHeader } from './requestCorrelation';
@@ -920,13 +921,18 @@ type AgentToolRow = {
  * A single wrap point here covers `http`, `mcp`, `soat`, and `pipeline` — the
  * only tool types that produce an `execute` function; `client` tools have none.
  */
-const wrapExecuteWithOutputMapping = (
-  originalExecute: NonNullable<Tool['execute']>,
-  outputMapping: Record<string, unknown>
-): NonNullable<Tool['execute']> => {
+const wrapExecuteWithOutputMapping = (args: {
+  originalExecute: NonNullable<Tool['execute']>;
+  outputMapping: Record<string, unknown>;
+  action: string | null;
+}): NonNullable<Tool['execute']> => {
   return async (...executeArgs) => {
-    const rawResult = await originalExecute(...executeArgs);
-    return applyToolOutputMapping(outputMapping, rawResult);
+    const rawResult = await args.originalExecute(...executeArgs);
+    return applyToolOutputMapping({
+      outputMapping: args.outputMapping,
+      rawResult,
+      action: args.action,
+    });
   };
 };
 
@@ -955,22 +961,31 @@ const localInjectableSchema = (
   return undefined;
 };
 
-const wrapToolsWithOutputMapping = (
-  tools: Record<string, Tool>,
-  outputMapping: Record<string, unknown> | null
-): Record<string, Tool> => {
-  if (!outputMapping) return tools;
+const wrapToolsWithOutputMapping = (args: {
+  tools: Record<string, Tool>;
+  typedTool: Pick<AgentToolRow, 'type' | 'name' | 'outputMapping'>;
+}): Record<string, Tool> => {
+  const { outputMapping } = args.typedTool;
+  if (!outputMapping) return args.tools;
   const wrapped: Record<string, Tool> = {};
-  for (const [name, typedTool] of Object.entries(tools)) {
-    wrapped[name] = typedTool.execute
+  for (const [name, resolvedTool] of Object.entries(args.tools)) {
+    wrapped[name] = resolvedTool.execute
       ? {
-          ...typedTool,
-          execute: wrapExecuteWithOutputMapping(
-            typedTool.execute,
-            outputMapping
-          ),
+          ...resolvedTool,
+          execute: wrapExecuteWithOutputMapping({
+            originalExecute: resolvedTool.execute,
+            outputMapping,
+            action: actionOfType({
+              type: args.typedTool.type,
+              action: resolvedActionName({
+                type: args.typedTool.type,
+                toolName: args.typedTool.name,
+                key: name,
+              }),
+            }),
+          }),
         }
-      : typedTool;
+      : resolvedTool;
   }
   return wrapped;
 };
@@ -1209,16 +1224,16 @@ export const resolveEphemeralAgentTool = async (args: {
     ...args,
     attribution: releasedBy({ attribution: args.attribution, guardrails }),
   });
-  const mapped = wrapToolsWithOutputMapping(
-    recordToolActivity({
+  const mapped = wrapToolsWithOutputMapping({
+    tools: recordToolActivity({
       tools,
       toolId: null,
       toolType: typedTool.type,
       toolName: typedTool.name,
       activity: args.activity,
     }),
-    typedTool.outputMapping
-  );
+    typedTool,
+  });
   const rawParameters =
     typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
@@ -1352,7 +1367,7 @@ const resolveReferenceBinding = async (args: {
   const mapped =
     typedTool.type === 'pipeline'
       ? tools
-      : wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+      : wrapToolsWithOutputMapping({ tools, typedTool });
 
   // Guardrails are the single tool-call gating mechanism.
   return gateResolvedToolsWithGuardrails({

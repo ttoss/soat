@@ -17,7 +17,6 @@ import { fetchMcpToolListing } from './mcpToolListing';
 import { type McpTransport, openMcpTransport } from './mcpTransport';
 import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
-import { presetsDeclaredBy } from './toolPresetParameters';
 import type { CallableToolDefinition } from './toolsCall';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
@@ -152,35 +151,6 @@ const assertActionBound = (args: {
 };
 
 /**
- * The merged input without the presets this action's schema does not declare
- * (`presetsDeclaredBy`). Presets reach this path already merged, so the keys to
- * drop are the presets' own, never a key only the caller sent.
- */
-const withoutUndeclaredPresets = (args: {
-  input: Record<string, unknown>;
-  presetParameters?: object | null;
-  schema?: unknown;
-}): Record<string, unknown> => {
-  const declared = presetsDeclaredBy({
-    presetParameters: args.presetParameters,
-    schema: args.schema,
-  });
-  if (!args.presetParameters || declared === args.presetParameters) {
-    return args.input;
-  }
-  const dropped = new Set(
-    Object.keys(args.presetParameters).filter((key) => {
-      return !Object.hasOwn(declared ?? {}, key);
-    })
-  );
-  return Object.fromEntries(
-    Object.entries(args.input).filter(([key]) => {
-      return !dropped.has(key);
-    })
-  );
-};
-
-/**
  * On a deferred server (`mcpDeferredProxy.ts`): the proxy to send `action`
  * through when the server does not list it, or `proxyCall` on a direct call
  * of the proxy, after holding it to the binding's lists by the tool it
@@ -219,16 +189,27 @@ const deferredRoute = async (args: {
   return listed ? { schema: listed.inputSchema } : { viaCall: proxy.callName };
 };
 
-export const callMcpTool = async (args: {
+/** An `mcp` call ready to send: its transport, its route, its action's schema. */
+export type PreparedMcpCall = {
+  action: string;
+  transport: McpTransport;
+  route: { viaCall?: string; proxyCall?: boolean };
+  schema?: unknown;
+};
+
+/**
+ * Opens the call's transport and reads the action's schema, before the call
+ * is gated: the presets the gate judges and the call carries are the ones that
+ * schema declares (`presetsDeclaredBy`).
+ */
+export const prepareMcpCall = async (args: {
   tool: CallableToolDefinition;
   action: string | undefined;
-  mergedInput: Record<string, unknown>;
+  input: Record<string, unknown>;
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
-  presetParameters?: object | null;
-}): Promise<unknown> => {
-  const { tool, action, mergedInput, meter, toolContext, presetParameters } =
-    args;
+}): Promise<PreparedMcpCall> => {
+  const { tool, action } = args;
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -251,38 +232,44 @@ export const callMcpTool = async (args: {
   // credential and failing as an opaque upstream 401.
   const transport = await openMcpTransport({
     mcp: mcpConfig,
-    meter,
-    toolContext,
+    meter: args.meter,
+    toolContext: args.toolContext,
     contextKeys: tool.contextKeys,
   });
   const { schema, ...route } = await deferredRoute({
     tool,
     action,
-    input: mergedInput,
+    input: args.input,
     transport,
   });
-  const input = withoutUndeclaredPresets({
-    input: mergedInput,
-    presetParameters,
-    schema,
-  });
+  return { action, transport, route, schema };
+};
+
+/** Sends a call `prepareMcpCall` made ready. */
+export const callMcpTool = async (args: {
+  prepared: PreparedMcpCall;
+  mergedInput: Record<string, unknown>;
+  meter: ToolExecutionMeter;
+}): Promise<unknown> => {
+  const { prepared } = args;
   return buildMcpToolExecute({
-    transport,
-    mcpToolName: action,
-    ...route,
-    meter,
+    transport: prepared.transport,
+    mcpToolName: prepared.action,
+    ...prepared.route,
+    meter: args.meter,
     // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,
     // A tool the server itself reported as failed is a `502`, not the `500` an
     // unmapped throw would be: the call reached the server and it answered.
-  })(input).catch((error: unknown) => {
+  })(args.mergedInput).catch((error: unknown) => {
     throw toMcpToolDomainError(error) ?? error;
   });
 };
 
 /**
- * Dispatches a non-pipeline tool to its per-type executor. `client` tools (and
- * any unknown type) cannot run server-side.
+ * Dispatches an `http` or `builtin` tool to its executor; an `mcp` tool goes
+ * through `prepareMcpCall` and `callMcpTool`. `client` tools (and any unknown
+ * type) cannot run server-side.
  */
 export const dispatchDirectTool = async (args: {
   type: string;
@@ -293,7 +280,6 @@ export const dispatchDirectTool = async (args: {
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
-  presetParameters?: object | null;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(
@@ -311,16 +297,6 @@ export const dispatchDirectTool = async (args: {
       meter: args.meter,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
-    });
-  }
-  if (args.type === 'mcp') {
-    return callMcpTool({
-      tool: args.tool,
-      action: args.action,
-      mergedInput: args.mergedInput,
-      meter: args.meter,
-      toolContext: args.toolContext,
-      presetParameters: args.presetParameters,
     });
   }
   throw new DomainError(

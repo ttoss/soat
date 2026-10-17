@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { applyToolOutputMapping } from './jsonLogicMapping';
+import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { admitSharedCall } from './shareCaps';
@@ -9,12 +9,21 @@ import {
   type ToolCallGuardrailMode,
 } from './toolCallGuardrail';
 import { pinCallingProject } from './toolContext';
-import { mergePresetParameters } from './toolPresetParameters';
+import {
+  mergePresetParameters,
+  presetsDeclaredBy,
+} from './toolPresetParameters';
 import { callTool } from './tools';
-import { dispatchDirectTool } from './toolsCallDispatch';
+import {
+  callMcpTool,
+  dispatchDirectTool,
+  type PreparedMcpCall,
+  prepareMcpCall,
+} from './toolsCallDispatch';
 import { resolvePresetParametersForCall } from './toolTemplates';
 import {
   type ToolCallAttribution,
+  type ToolExecutionMeter,
   withReleasingGuardrails,
 } from './usageToolRecording';
 
@@ -203,19 +212,64 @@ const callPipelineStep = (args: {
   });
 };
 
+/**
+ * The presets a call is gated on and sent, resolved once so every dispatch
+ * below (and the pipeline's own merge) sees the same values — they reach
+ * `callHttpTool`/`callMcpTool` already merged, and are not resolved a second
+ * time there. An `mcp` action takes only the presets its schema declares, so
+ * its schema is read here, before the gate.
+ */
+const resolveCallPresets = async (args: {
+  call: CallResolvedToolArgs;
+  type: string;
+  meter: ToolExecutionMeter;
+}): Promise<{
+  presetParameters: Record<string, unknown> | null;
+  mcp: PreparedMcpCall | null;
+}> => {
+  const { call } = args;
+  const resolvedPresets = resolvePresetParametersForCall({
+    presetParameters: call.tool.presetParameters,
+    toolContext: call.toolContext,
+    toolName: call.tool.name,
+    schema: call.tool.parameters,
+  });
+  if (args.type !== 'mcp') {
+    return { presetParameters: resolvedPresets, mcp: null };
+  }
+  const mcp = await prepareMcpCall({
+    tool: call.tool,
+    action: call.action,
+    input: mergePresetParameters({
+      presetParameters: resolvedPresets,
+      input: call.input,
+    }),
+    meter: args.meter,
+    toolContext: call.toolContext,
+  });
+  return {
+    presetParameters: presetsDeclaredBy({
+      presetParameters: resolvedPresets,
+      schema: mcp.schema,
+    }),
+    mcp,
+  };
+};
+
 const runResolvedTool = async (
   args: CallResolvedToolArgs
 ): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
-
-  // Resolved once, here, so every dispatch below (and the pipeline's own merge)
-  // sees the same values — the presets reach `callHttpTool`/`callMcpTool`
-  // already merged, and are not resolved a second time there.
-  const presetParameters = resolvePresetParametersForCall({
-    presetParameters: args.tool.presetParameters,
-    toolContext: args.toolContext,
-    toolName: args.tool.name,
-    schema: args.tool.parameters,
+  const meter = {
+    projectId: args.toolProjectId,
+    callerProjectId: args.callerProjectId,
+    toolId: args.toolPublicId ?? null,
+    attribution: args.attribution,
+  };
+  const { presetParameters, mcp } = await resolveCallPresets({
+    call: args,
+    type,
+    meter,
   });
 
   // Before any dispatch and before the pipeline runner, so a gated pipeline is
@@ -247,35 +301,38 @@ const runResolvedTool = async (
         });
       },
     });
-    return applyToolOutputMapping(
-      (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
+    return applyToolOutputMapping({
+      outputMapping:
+        (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
       rawResult,
-      mergedInput
-    );
+      input: mergedInput,
+    });
   }
 
-  const rawResult = await dispatchDirectTool({
-    type,
-    tool: args.tool,
-    action: args.action,
-    mergedInput,
-    authHeader: args.authHeader,
-    meter: {
-      projectId: args.toolProjectId,
-      callerProjectId: args.callerProjectId,
-      toolId: args.toolPublicId ?? null,
-      attribution,
-    },
-    idempotencyKey: args.idempotencyKey,
-    toolContext: args.toolContext,
-    presetParameters,
-  });
+  const rawResult = mcp
+    ? await callMcpTool({
+        prepared: mcp,
+        mergedInput,
+        meter: { ...meter, attribution },
+      })
+    : await dispatchDirectTool({
+        type,
+        tool: args.tool,
+        action: args.action,
+        mergedInput,
+        authHeader: args.authHeader,
+        meter: { ...meter, attribution },
+        idempotencyKey: args.idempotencyKey,
+        toolContext: args.toolContext,
+      });
 
-  return applyToolOutputMapping(
-    (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
+  return applyToolOutputMapping({
+    outputMapping:
+      (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
     rawResult,
-    mergedInput
-  );
+    input: mergedInput,
+    action: actionOfType({ type, action: args.action }),
+  });
 };
 
 export const callResolvedTool = async (

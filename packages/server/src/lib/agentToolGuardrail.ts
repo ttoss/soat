@@ -36,7 +36,7 @@ import {
   persistGuardrailEvaluations,
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
-import { mergePresetParameters } from './toolPresetParameters';
+import { gatePresetsOf, mergePresetParameters } from './toolPresetParameters';
 
 const log = createDebug('soat:guardrails');
 
@@ -639,6 +639,10 @@ export const gateResolvedToolsWithGuardrails = (args: {
       toolName: args.toolName,
       key,
     });
+    const presetParameters = gatePresetsOf({
+      tool: resolvedTool,
+      bindingPresets: args.presetParameters,
+    });
     // The (optionally justification-injected) base tool, shared by both the
     // server-execute and client-handoff paths.
     const base: Tool = injectable
@@ -661,7 +665,7 @@ export const gateResolvedToolsWithGuardrails = (args: {
           toolId: args.toolId,
           toolName: args.toolName,
           action,
-          presetParameters: args.presetParameters,
+          presetParameters,
           context: args.context,
         }),
       };
@@ -677,7 +681,7 @@ export const gateResolvedToolsWithGuardrails = (args: {
         toolId: args.toolId,
         toolName: args.toolName,
         action,
-        presetParameters: args.presetParameters,
+        presetParameters,
         context: args.context,
       }),
     };
