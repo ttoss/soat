@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
-import { caseAutomation } from './playbookCaseAutomation';
+import { db } from '../db';
+import { caseHasOwnWork } from './playbookCaseAutomation';
 import {
   caseDefinition,
   caseNodeStates,
@@ -16,22 +17,30 @@ const POLL_MIN_MS = 50;
 const POLL_MAX_MS = 1000;
 
 /**
- * At rest when nothing of the case's own is in flight and nothing is left to
- * queue: a settle commits before it queues the next wave, so an `idle` case can
- * still hold a runnable node for an instant.
+ * At rest when the case is paused, or when nothing of its own is in flight and
+ * nothing is left to queue. Both are read in one snapshot: a settle commits
+ * before it queues the next wave, so two reads could see a node neither
+ * runnable nor queued.
  */
 const atRest = async (row: PlaybookCaseRow): Promise<boolean> => {
-  const { automation_status: status } = (await caseAutomation({ rows: [row] }))(
-    row
-  );
-  if (status === 'paused') return true;
-  if (status === 'running') return false;
-  const { views } = await caseNodeStates({
-    caseDbId: row.id as number,
-    definition: await caseDefinition({ row }),
-  });
-  return ![...views.values()].some((view) => {
-    return view.runnable;
+  if (row.pauseRequestedAt || row.project.pausedAt) return true;
+  const definition = await caseDefinition({ row });
+  return db.sequelize.transaction(async (transaction) => {
+    await db.sequelize.query(
+      'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY',
+      { transaction }
+    );
+    if (await caseHasOwnWork({ caseDbId: row.id as number, transaction })) {
+      return false;
+    }
+    const { views } = await caseNodeStates({
+      caseDbId: row.id as number,
+      definition,
+      transaction,
+    });
+    return ![...views.values()].some((view) => {
+      return view.runnable;
+    });
   });
 };
 
