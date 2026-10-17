@@ -375,6 +375,9 @@ describe('Share caps', () => {
         cap: { calls: 1, window: 'rolling_1m' },
       });
       jest.useFakeTimers({ advanceTimers: true });
+      // Windows are fixed calendar minutes: start one so the two calls below
+      // cannot straddle a boundary and land in different windows.
+      jest.setSystemTime(Math.ceil(Date.now() / 60_000) * 60_000 + 1_000);
       try {
         await callAsGrantee(toolId);
         expect((await callAsGrantee(toolId)).status).toBe(429);
