@@ -360,6 +360,33 @@ export const pausedTurnSnapshotPosition = async (args: {
   return generation?.conversationSnapshotPosition ?? null;
 };
 
+/**
+ * Stores a turn completed through the agent route's tool-outputs when its
+ * generation answers a conversation, in that conversation after the snapshot
+ * it recorded. A generation that answers none stores nothing.
+ */
+export const storeResumedConversationTurn = async (args: {
+  result: GenerationResult;
+  agentId: string;
+}): Promise<void> => {
+  if (args.result.status !== 'completed') return;
+  const generation = await db.Generation.findOne({
+    where: { publicId: args.result.id },
+    attributes: ['conversationSnapshotPosition'],
+    include: [{ model: db.Conversation, as: 'conversation' }],
+  });
+  if (!generation?.conversation) return;
+
+  await storeGeneratedTurn({
+    conversation: generation.conversation,
+    agentId: args.agentId,
+    snapshotPosition: generation.conversationSnapshotPosition,
+    generationId: args.result.id,
+    traceId: args.result.traceId,
+    output: args.result.output,
+  });
+};
+
 export const generateConversationMessage = async (args: {
   conversationId: string;
   agentId: string;

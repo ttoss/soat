@@ -16,6 +16,7 @@ import {
   submitToolOutputs,
 } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
+import { storeResumedConversationTurn } from 'src/lib/conversationGeneration';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 
@@ -297,6 +298,10 @@ agentGenerationRouter.post(
         };
       }),
       authHeader: (ctx.headers.authorization as string) ?? undefined,
+    });
+    await storeResumedConversationTurn({
+      result,
+      agentId: ctx.params.agent_id,
     });
 
     ctx.body = mapGenerationResult(result);

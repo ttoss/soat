@@ -779,6 +779,78 @@ describe('Memory rule dispatch', () => {
     });
   });
 
+  describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs → conversation_messages.generated', () => {
+    test('a conversation turn completed after a client-tool pause feeds the handler like any generated turn', async () => {
+      const scope = await createProject();
+      const storeId = await scope.createStore();
+      const tool = await asAdmin()
+        .post('/api/v1/tools')
+        .send({
+          project_id: scope.projectId,
+          name: 'look_up_refund',
+          type: 'client',
+          parameters: { type: 'object', properties: {} },
+        });
+      expect(tool.status).toBe(201);
+      const sourceAgentId = await scope.createAgent({
+        tool_bindings: [{ tool_id: tool.body.id }],
+      });
+      const handlerAgentId = await scope.createAgent();
+      await createRule({
+        memory_store_id: storeId,
+        on: 'conversation_messages.generated',
+        source_agent_ids: [sourceAgentId],
+        agent_id: handlerAgentId,
+      });
+      const conversation = await asAdmin()
+        .post('/api/v1/conversations')
+        .send({ project_id: scope.projectId });
+      expect(conversation.status).toBe(201);
+      await asAdmin()
+        .post(`/api/v1/conversations/${conversation.body.id}/messages`)
+        .send({ message: 'Was my refund issued?', role: 'user' });
+      // The source turn calls the client tool until it holds the tool's result.
+      stub.replies.turn = (text) => {
+        return text.includes('refund-ok')
+          ? 'Your refund was issued.'
+          : TOOL_CALL;
+      };
+      stub.replies.handler = '{"facts":[{"content":"The refund was issued"}]}';
+
+      const paused = await asAdmin()
+        .post(
+          `/api/v1/conversations/${conversation.body.id}/generate?wait=true`
+        )
+        .send({ agent_id: sourceAgentId });
+      expect(paused.body.status).toBe('requires_action');
+      const completed = await asAdmin()
+        .post(
+          `/api/v1/agents/${sourceAgentId}/generate/${paused.body.generation_id}/tool-outputs`
+        )
+        .send({
+          tool_outputs: [
+            {
+              tool_call_id: paused.body.required_action.tool_calls[0].id,
+              output: 'refund-ok',
+            },
+          ],
+        });
+      expect(completed.body.status).toBe('completed');
+
+      const memories = await waitForMemories(storeId);
+      expect(
+        memories.map((memory) => {
+          return memory.content;
+        })
+      ).toEqual(['The refund was issued']);
+      expect(memories[0].tags).toMatchObject({
+        'system.conversation': conversation.body.id,
+      });
+      const [handler] = requestsOf('handler');
+      expect(handler.text).toContain('Your refund was issued.');
+    });
+  });
+
   describe('a firing the database refuses', () => {
     test('is counted as a dropped event, and the facts already written stay', async () => {
       const scope = await createProject();

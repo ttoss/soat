@@ -208,7 +208,7 @@ Flow (with `?wait=true`):
    </TabItem>
    </Tabs>
 
-6. On `requires_action` (client tools), no message is persisted yet. Submit outputs via [`POST /agents/:id/generate/:generation_id/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs); the message is persisted on completion.
+6. On `requires_action` (client tools), no message is persisted yet. Submit outputs via [`POST /agents/:id/generate/:generation_id/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs). When the turn completes, its reply is stored right after the last message the turn read and emits `conversation_messages.generated`, as in step 5; that route answers the generation, not the stored message.
 
 #### Concurrency
 
