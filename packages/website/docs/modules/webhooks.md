@@ -51,11 +51,11 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 | `webhook_id`      | string                             | Public ID of the webhook this delivery belongs to |
 | `event_type`      | string                             | The event type that triggered the delivery |
 | `payload`         | object                             | The event payload that was sent            |
-| `status`          | `pending` \| `success` \| `failed` | Delivery outcome                           |
+| `status`          | `queued` \| `completed` \| `failed` | Delivery outcome                           |
 | `status_code`     | number \| null                     | HTTP response status code                  |
 | `attempts`        | number                             | Number of delivery attempts made           |
 | `last_attempt_at` | string \| null                     | Timestamp of the most recent attempt       |
-| `next_attempt_at` | string \| null                     | When the next attempt becomes due; null once the delivery succeeded or exhausted its attempts |
+| `next_attempt_at` | string \| null                     | When the next attempt becomes due; null once the delivery completed or exhausted its attempts |
 | `response_body`   | string \| null                     | First 1 KB of the response body returned by the receiver, or the reason a delivery was closed without an attempt |
 | `created_at`      | string                             | ISO 8601 creation timestamp                |
 | `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
@@ -98,7 +98,7 @@ Such a delivery is closed as `failed` without a retry, `attempts` still `0`, the
 
 A delivery row (payload and next due time) is written **before** the first HTTP request; every later attempt is claimed from that row by a background sweep.
 
-- **A restart does not lose a delivery.** A row left `pending` by a killed process is picked up once its lease expires (about a minute).
+- **A restart does not lose a delivery.** A row left `queued` by a killed process is picked up once its lease expires (about a minute).
 - **Retries are spaced.** Exponential backoff with jitter (roughly 1s, then 2s); `next_attempt_at` says when the next is due.
 
 After three failed attempts the delivery is marked `failed` and is not retried automatically. Use [redelivery](#redelivery) to send it again.
@@ -316,7 +316,7 @@ const { data, error } = await soat.webhooks.redeliverWebhookDelivery({
   path: { delivery_id: 'wh_deliv_ABC' },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data is a new pending delivery — poll it to see the outcome
+// data is a new queued delivery — poll it to see the outcome
 ```
 
 </TabItem>

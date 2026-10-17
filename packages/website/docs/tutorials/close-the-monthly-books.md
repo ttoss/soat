@@ -574,7 +574,7 @@ CLEAN_RUN_ID=$(soat start-orchestration-run \
 echo "CLEAN_RUN_ID: $CLEAN_RUN_ID"
 
 # → retry 60
-soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" \
   | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
@@ -587,7 +587,7 @@ Expected output once the run settles:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "total_variance": 0,
   "close_note": "Period 2026-07 tied out within tolerance."
 }
@@ -623,7 +623,7 @@ const waitForRun = async (runId: string) => {
     const { data: run } = await adminSoat.orchestrations.getOrchestrationRun({
       path: { orchestration_run_id: runId },
     });
-    if (['succeeded', 'failed', 'cancelled', 'expired'].includes(run.status)) {
+    if (['completed', 'failed', 'cancelled', 'expired'].includes(run.status)) {
       return run;
     }
     await new Promise((resolve) => {
@@ -656,7 +656,7 @@ CLEAN_RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 CLEAN_RUN_ID=$(printf '%s\n' "$CLEAN_RUN" | jq -r '.id')
 
 until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "succeeded"' > /dev/null; do sleep 1; done
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "completed"' > /dev/null; do sleep 1; done
 
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -696,7 +696,7 @@ echo "EXCEPTION_RUN_ID: $EXCEPTION_RUN_ID"
 
 # This path calls the model, so it settles more slowly than the clean run.
 # → retry 120
-soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" \
   | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
@@ -713,7 +713,7 @@ Expected output once the run settles:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "bank_variance": 1250,
   "total_variance": 1250
 }
@@ -759,7 +759,7 @@ EXCEPTION_RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 EXCEPTION_RUN_ID=$(printf '%s\n' "$EXCEPTION_RUN" | jq -r '.id')
 
 until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "succeeded"' > /dev/null; do sleep 1; done
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "completed"' > /dev/null; do sleep 1; done
 
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \

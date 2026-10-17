@@ -158,7 +158,7 @@ describe('Webhook delivery', () => {
   });
 
   describe('POST /api/v1/files → a subscribed webhook', () => {
-    test('receives one signed, snake_case envelope, recorded as a success', async () => {
+    test('receives one signed, snake_case envelope, recorded as completed', async () => {
       const url = 'https://example.com/delivery-envelope';
       const webhook = await createWebhook({ url, events: ['files.created'] });
 
@@ -167,7 +167,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -222,7 +222,7 @@ describe('Webhook delivery', () => {
           webhookId: webhook.id,
           fileId,
           done: (d) => {
-            return d.status === 'success';
+            return d.status === 'completed';
           },
         });
 
@@ -263,7 +263,7 @@ describe('Webhook delivery', () => {
 
       const fileId = await createFile();
       const settled = (d: Delivery) => {
-        return d.status === 'success';
+        return d.status === 'completed';
       };
       await waitForDelivery({ webhookId: star.id, fileId, done: settled });
       await waitForDelivery({ webhookId: prefix.id, fileId, done: settled });
@@ -304,7 +304,7 @@ describe('Webhook delivery', () => {
       const first = await createFile();
       const second = await createFile();
       const settled = (d: Delivery) => {
-        return d.status === 'success';
+        return d.status === 'completed';
       };
       await waitForDelivery({
         webhookId: allowed.id,
@@ -371,7 +371,7 @@ describe('Webhook delivery', () => {
       });
 
       // The retry lives on the row, not in a loop in the emitting process.
-      expect(first.status).toBe('pending');
+      expect(first.status).toBe('queued');
       expect(first.status_code).toBeNull();
       expect(first.response_body).toBe('unreachable');
       expect(
@@ -444,7 +444,7 @@ describe('Webhook delivery', () => {
         },
       });
 
-      expect(delivery.status).toBe('pending');
+      expect(delivery.status).toBe('queued');
       expect(delivery.status_code).toBe(502);
       // Tenant-written URL, body readable back: the row keeps the first KB.
       expect(delivery.response_body).toHaveLength(1024);
@@ -471,7 +471,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -512,7 +512,7 @@ describe('Webhook delivery', () => {
         },
       });
 
-      expect(delivery.status).toBe('pending');
+      expect(delivery.status).toBe('queued');
       expect(delivery.response_body).toBe('This operation was aborted');
     });
   });
@@ -553,7 +553,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
       expect(delivery.attempts).toBe(1);
@@ -570,7 +570,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -587,7 +587,7 @@ describe('Webhook delivery', () => {
           `/api/v1/webhook-deliveries/${redeliver.body.id}`
         );
         expect(copy.status).toBe(200);
-        if (copy.body.status === 'success') break;
+        if (copy.body.status === 'completed') break;
         await new Promise((resolve) => {
           return setTimeout(resolve, 25);
         });
@@ -595,7 +595,7 @@ describe('Webhook delivery', () => {
       const copy = await asUser().get(
         `/api/v1/webhook-deliveries/${redeliver.body.id}`
       );
-      expect(copy.body.status).toBe('success');
+      expect(copy.body.status).toBe('completed');
       expect(copy.body.attempts).toBe(1);
       expect(callsTo(url)).toHaveLength(2);
     });

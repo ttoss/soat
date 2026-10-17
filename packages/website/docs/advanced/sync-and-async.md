@@ -105,7 +105,7 @@ Backgrounding defers the slow part, never the checks. Everything that can reject
 - **Input validation** — a malformed body is `400 VALIDATION_FAILED`.
 - **Resource resolution** — an unknown agent, session, or conversation is `404`.
 - **Admission control** — a breached [quota](../modules/quotas.md) is `429`, and the agent-to-agent [call-depth guard](../modules/agents.md#nested-agent-calls) still fires.
-- **The record write** — the generation record exists before the response is written, so the `generation_id` is immediately readable. It reports `in_progress` until the run reaches `completed` or `failed`.
+- **The record write** — the generation record exists before the response is written, so the `generation_id` is immediately readable. It reports `running` until the run reaches `completed` or `failed`.
 
 An accepted response means _admitted_; the only failures discovered by polling are those of the model call itself.
 

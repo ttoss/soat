@@ -77,7 +77,7 @@ export class EvalRun extends Model {
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare deciderVersions: Record<string, number> | null;
 
-  /** `queued` | `running` | `completed` | `failed` | `canceled`. */
+  /** `queued` | `running` | `completed` | `failed` | `cancelled`. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare status: string;
 

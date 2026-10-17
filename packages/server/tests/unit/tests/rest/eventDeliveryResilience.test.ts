@@ -84,7 +84,7 @@ describe('Event delivery resilience', () => {
     let found: Delivery | undefined;
     await until(async () => {
       [found] = await deliveriesFor(fileId);
-      return found?.status === 'success';
+      return found?.status === 'completed';
     });
     return found as Delivery;
   };

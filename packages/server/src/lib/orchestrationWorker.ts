@@ -82,7 +82,7 @@ export const effectiveClaimLimit = (args: {
 // A run in one of these states has nothing to drive: the task is a no-op left
 // over from a cancel or a completed drive, so the worker just acks it.
 const TERMINAL_STATUSES = new Set([
-  'succeeded',
+  'completed',
   'failed',
   'cancelled',
   'expired',

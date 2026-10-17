@@ -9,8 +9,8 @@ import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
   createFiringRecord,
+  finalizeFiringCompleted,
   finalizeFiringFailed,
-  finalizeFiringSucceeded,
   mapTriggerFiring,
   reloadFiring,
 } from './triggerFirings';
@@ -182,7 +182,7 @@ export type PreparedFiring = {
 };
 
 /**
- * Runs the synchronous pre-flight for a firing and creates a `pending` firing
+ * Runs the synchronous pre-flight for a firing and creates a `queued` firing
  * record. Throws `DomainError` — surfaced as an HTTP error for a manual fire,
  * or returned before a webhook fire's `202`: inactive trigger, unavailable
  * creator, revoked target-start permission, invalid input. The returned handle
@@ -335,8 +335,8 @@ export const runFiringDispatch = async (
       authHeader,
       triggerId: trigger.publicId as string,
     });
-    await finalizeFiringSucceeded({ firing, result });
-    log('runFiringDispatch: firing=%s succeeded', firing.publicId);
+    await finalizeFiringCompleted({ firing, result });
+    log('runFiringDispatch: firing=%s completed', firing.publicId);
   } catch (error) {
     await finalizeFiringFailed({
       firing,

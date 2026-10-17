@@ -161,7 +161,7 @@ const settleOnce = async (args: {
     );
     await execution.update(
       {
-        status: 'succeeded',
+        status: 'completed',
         result,
         output: settlement.output,
         outputRevision: revision,

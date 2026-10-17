@@ -89,7 +89,7 @@ export class OrchestrationRun extends Model {
       'running',
       'sleeping',
       'awaiting_input',
-      'succeeded',
+      'completed',
       'failed',
       'cancelled',
       'expired'
@@ -102,7 +102,7 @@ export class OrchestrationRun extends Model {
     | 'running'
     | 'sleeping'
     | 'awaiting_input'
-    | 'succeeded'
+    | 'completed'
     | 'failed'
     | 'cancelled'
     | 'expired';

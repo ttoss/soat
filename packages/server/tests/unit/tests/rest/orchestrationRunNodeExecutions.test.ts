@@ -43,7 +43,7 @@ describe('GET /api/v1/orchestration-runs/:orchestration_run_id/node-executions',
       .post('/api/v1/orchestration-runs')
       .send({ wait: true, orchestration_id: orchestration.body.id, input: {} });
     expect(run.status).toBe(201);
-    expect(run.body.status).toBe('succeeded');
+    expect(run.body.status).toBe('completed');
     runId = run.body.id;
   });
 

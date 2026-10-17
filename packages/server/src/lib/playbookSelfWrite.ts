@@ -20,7 +20,7 @@ export const assertNotOwnWork = async (args: {
     (await db.PlaybookExecution.count({
       where: {
         caseId: args.caseDbId,
-        status: ['pending', 'running'],
+        status: ['queued', 'running'],
         [Op.or]: [{ publicId: work }, { runId: work }],
       },
     })) > 0;

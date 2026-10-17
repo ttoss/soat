@@ -642,7 +642,7 @@ The `soat listen` terminal logs:
 
 ## Step 11 - Verify delivery and final assistant message
 
-Wait for the delivery, then fetch session messages again. Delivery records are queryable via [Webhooks](/docs/modules/webhooks#examples); `status` is `pending`, `success`, or `failed`.
+Wait for the delivery, then fetch session messages again. Delivery records are queryable via [Webhooks](/docs/modules/webhooks#examples); `status` is `queued`, `completed`, or `failed`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -650,7 +650,7 @@ Wait for the delivery, then fetch session messages again. Delivery records are q
 ```bash
 # → retry 30
 soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" \
-  | jq -e '[.data[] | select(.status == "success")] | length > 0'
+  | jq -e '[.data[] | select(.status == "completed")] | length > 0'
 
 soat list-webhook-deliveries \
   --webhook-id "$WEBHOOK_ID" | jq '.data[] | {event_type, status, status_code}'

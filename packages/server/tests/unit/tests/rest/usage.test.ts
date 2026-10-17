@@ -2884,7 +2884,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: parentOrch.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       parentRunId = runRes.body.id;
 
       const children = await authenticatedTestClient(userToken).get(
@@ -2965,7 +2965,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       return runRes.body.id as string;
     };
 
@@ -3244,7 +3244,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
 
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/receipt?orchestration_run_id=${runRes.body.id}`
@@ -3422,7 +3422,7 @@ describe('Usage', () => {
         wait: true,
         triggerId: triggerPublicId,
       });
-      expect(run.status).toBe('succeeded');
+      expect(run.status).toBe('completed');
 
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/events?trigger_id=${triggerPublicId}`
@@ -3463,7 +3463,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       return runRes.body.id as string;
     };
 

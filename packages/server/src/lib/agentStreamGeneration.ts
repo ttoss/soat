@@ -162,7 +162,7 @@ const fireStreamEndSideEffects = (args: {
  * to fail the stream with.
  *
  * A run that fails before any step completes never reaches `onEnd`, so nothing
- * else writes its terminal state and the record sat `in_progress` forever.
+ * else writes its terminal state and the record sat `running` forever.
  * Errors are mapped as `callGenerateText` maps them, and awaited before the
  * stream fails so the record is truthful when the caller reads the error frame.
  */

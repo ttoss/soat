@@ -219,7 +219,7 @@ export class Generation extends Model {
   @Column({
     type: DataType.STRING(32),
     allowNull: false,
-    defaultValue: 'in_progress',
+    defaultValue: 'running',
   })
   declare status: string;
 

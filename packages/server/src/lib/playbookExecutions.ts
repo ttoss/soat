@@ -252,7 +252,7 @@ export const listPlaybookCaseExecutions = async (args: {
 /** The executor each completion event can settle. */
 const EXECUTOR_OF_EVENT: Record<string, string> = {
   'tasks.closed': 'workflow',
-  'orchestration_runs.succeeded': 'orchestration',
+  'orchestration_runs.completed': 'orchestration',
   'orchestration_runs.failed': 'orchestration',
 };
 
@@ -274,7 +274,7 @@ export const initializePlaybookExecutionListener = (): void => {
   onEvent({
     types: [
       'tasks.closed',
-      'orchestration_runs.succeeded',
+      'orchestration_runs.completed',
       'orchestration_runs.failed',
     ],
     handler: (event) => {

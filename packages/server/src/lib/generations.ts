@@ -122,7 +122,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         startedByPrincipalId: args.startedByPrincipalId ?? null,
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
-        status: 'in_progress',
+        status: 'running',
         startedAt: new Date(),
         completedAt: null,
         lastActivityAt: null,

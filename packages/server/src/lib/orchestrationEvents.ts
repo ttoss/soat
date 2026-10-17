@@ -14,7 +14,7 @@ const log = createDebug('soat:orchestrations');
 export const RUN_EVENT_TYPES = {
   started: 'orchestration_runs.started',
   awaitingInput: 'orchestration_runs.awaiting_input',
-  succeeded: 'orchestration_runs.succeeded',
+  completed: 'orchestration_runs.completed',
   failed: 'orchestration_runs.failed',
 } as const;
 
@@ -24,7 +24,7 @@ const LIFECYCLE_EVENT_FOR_STATUS: Partial<
   Record<MappedOrchestrationRun['status'], RunLifecycleEvent>
 > = {
   awaiting_input: 'awaitingInput',
-  succeeded: 'succeeded',
+  completed: 'completed',
   failed: 'failed',
 };
 

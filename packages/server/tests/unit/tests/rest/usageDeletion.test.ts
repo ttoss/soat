@@ -245,7 +245,7 @@ describe('usage reads across deletions', () => {
       orchestration_id: orchestration.id,
       input: {},
     });
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
 
     const tool = await post('/api/v1/tools', {
       project_id: projectId,
@@ -290,7 +290,7 @@ describe('usage reads across deletions', () => {
       orchestration_id: sharedOrchestration.id,
       input: {},
     });
-    expect(sharedRun.status).toBe('succeeded');
+    expect(sharedRun.status).toBe('completed');
 
     // Embedding a document's chunks and a memory's content attributes the
     // document and the memory store.

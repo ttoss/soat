@@ -101,7 +101,7 @@ export const SOAT_EVENTS = {
     'orchestration_runs.started': 'An orchestration run started.',
     'orchestration_runs.awaiting_input':
       'An orchestration run paused waiting for input.',
-    'orchestration_runs.succeeded': 'An orchestration run succeeded.',
+    'orchestration_runs.completed': 'An orchestration run completed.',
     'orchestration_runs.failed': 'An orchestration run failed.',
   },
   project: {

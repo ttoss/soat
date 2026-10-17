@@ -150,7 +150,7 @@ export const countPendingEvalItemTasks = async (args: {
 };
 
 /**
- * Drops every outstanding task for a run. Used by cancel: a canceled run must
+ * Drops every outstanding task for a run. Used by cancel: a cancelled run must
  * stop consuming provider budget on the next tick, and its already-written
  * results stay exactly as they are.
  */

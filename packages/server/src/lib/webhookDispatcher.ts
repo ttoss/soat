@@ -63,14 +63,14 @@ const backoffMs = (args: { attempts: number }) => {
 };
 
 /**
- * A delivery is due when it is still pending, its backoff has elapsed, and no
+ * A delivery is due when it is still queued, its backoff has elapsed, and no
  * live lease is held on it. `nextAttemptAt: null` counts as due so rows written
- * before the outbox existed — stranded `pending` rows from a pre-upgrade
+ * before the outbox existed — stranded `queued` rows from a pre-upgrade
  * restart — are picked up by the first sweep after the deploy.
  */
 const duePredicate = (args: { now: Date }) => {
   return {
-    status: 'pending',
+    status: 'queued',
     [Op.and]: [
       {
         [Op.or]: [
@@ -89,7 +89,7 @@ const duePredicate = (args: { now: Date }) => {
 };
 
 type DeliveryOutcome = {
-  status?: 'pending' | 'success' | 'failed';
+  status?: 'queued' | 'completed' | 'failed';
   attempts?: number;
   lastAttemptAt?: Date;
   statusCode?: number | null;
@@ -137,7 +137,7 @@ const recordFailedAttempt = async (args: {
       lastAttemptAt: new Date(),
       statusCode: args.statusCode,
       responseBody: args.responseBody,
-      status: exhausted ? 'failed' : 'pending',
+      status: exhausted ? 'failed' : 'queued',
       nextAttemptAt: exhausted
         ? null
         : new Date(Date.now() + backoffMs({ attempts: args.attempt })),
@@ -271,7 +271,7 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
       await writeOutcome({
         delivery,
         values: {
-          status: 'success',
+          status: 'completed',
           attempts: attempt,
           lastAttemptAt: new Date(),
           statusCode: response.status,
@@ -281,7 +281,7 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
         },
       });
       log(
-        'attemptDelivery: delivery=%s succeeded attempt=%d',
+        'attemptDelivery: delivery=%s completed attempt=%d',
         delivery.publicId,
         attempt
       );
@@ -342,7 +342,7 @@ const enqueueDelivery = async (args: {
       data: args.event.data,
       timestamp: args.event.timestamp,
     },
-    status: 'pending',
+    status: 'queued',
     attempts: 0,
     nextAttemptAt: now,
     leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
@@ -424,7 +424,7 @@ const handleEvent = async (event: SoatEvent) => {
  * Claims due deliveries and drives one attempt each.
  *
  * This is what makes delivery durable: a row whose attempt was interrupted by a
- * restart keeps its `pending` status and its lease, and is reclaimed here once
+ * restart keeps its `queued` status and its lease, and is reclaimed here once
  * that lease expires. A row waiting out a backoff is picked up when its
  * `nextAttemptAt` arrives. Neither depends on the process that emitted the
  * event still being alive.

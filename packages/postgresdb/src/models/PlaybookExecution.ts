@@ -86,7 +86,7 @@ export class PlaybookExecution extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare runId: string | null;
 
-  /** `pending` | `running` | `succeeded` | `failed`. */
+  /** `queued` | `running` | `completed` | `failed`. */
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare status: string;
 

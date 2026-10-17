@@ -1089,7 +1089,7 @@ paths:
       summary: Cancel an eval run
       description: >-
         Cancels a queued or running run: its outstanding item tasks are dropped
-        so it stops consuming provider budget, and the run settles as `canceled`.
+        so it stops consuming provider budget, and the run settles as `cancelled`.
 
 
         Results already written are kept — they are real measurements of
@@ -1121,7 +1121,7 @@ paths:
             example: evrun_V1StGXR8Z5jdHi6B
       responses:
         '200':
-          description: Eval run canceled
+          description: Eval run cancelled
           content:
             application/json:
               schema:
@@ -1776,7 +1776,7 @@ components:
             review: 2
         status:
           type: string
-          enum: [queued, running, completed, failed, canceled]
+          enum: [queued, running, completed, failed, cancelled]
         baseline_run_id:
           type: string
           nullable: true
