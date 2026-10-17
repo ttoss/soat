@@ -64,9 +64,7 @@ const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
  */
 const resolveAssistantContent = async (event: SoatEvent): Promise<string> => {
   if (event.type === 'agents.generation.completed') {
-    const output = event.data.output;
-    const content = isPlainObject(output) ? output.content : undefined;
-    return typeof content === 'string' ? content : '';
+    return event.assistantContent ?? '';
   }
   const content = await readGeneratedMessageContent({
     documentPublicId: event.resourceId,

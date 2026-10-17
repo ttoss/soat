@@ -50,6 +50,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
 | `metadata`    | object \| null | Caller-owned annotations on the message (e.g. `phone`, `channel`), stored as sent. Never read by the platform and never part of the model's input — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `content`     | string         | Full text content of the message (read from the underlying document)                                                       |
+| `idempotency_key` | string \| null | The idempotency key the message was posted with ([session messages](./sessions.md) take one); `null` when none was sent. A channel that posts each inbound message under its provider's message id finds that message's row by this key |
 
 The pair `(conversation_id, position)` is uniquely indexed. See [Message ordering](#message-ordering) for insertion semantics.
 
@@ -65,7 +66,7 @@ Messages are ordered Document references with a `role` and optional `actor_id`. 
 
 `role: "system"` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`: stored history feeds [agent generations](./agents.md#instructions), so a system entry would let conversation data rewrite the agent's prompt. System content belongs in the agent's `instructions` or the [actor persona](./actors.md).
 
-Listed messages carry the document's full `content`, `role`, `actor_id`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
+Listed messages carry the document's full `content`, `role`, `actor_id`, `idempotency_key`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
 Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds.
 
@@ -164,7 +165,7 @@ Flow (with `?wait=true`):
 4. Dispatch to the Agents module, including agent tools and the `requires_action` client-tool flow.
 5. On `completed`, a new Document is attached as the next message with `role: 'assistant'`. The response includes:
    - **`content`** — the generated text (always a `string`).
-   - `message` — the persisted `ConversationMessageRecord` (`document_id`, `role`, `actor_id`, `agent_id`, `position`, `content`); `agent_id` is the generating agent.
+   - `message` — the persisted `ConversationMessageRecord` (`document_id`, `role`, `actor_id`, `agent_id`, `position`, `content`, `idempotency_key`); `agent_id` is the generating agent.
    - `generation_id` and `trace_id`.
    - `model` — the model used.
 

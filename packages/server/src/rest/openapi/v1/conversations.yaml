@@ -846,6 +846,15 @@ components:
           type: string
           nullable: true
           description: Full text content of the message
+        idempotency_key:
+          type: string
+          nullable: true
+          description: >-
+            The idempotency key the message was posted with, null when none
+            was sent. A channel that posts each inbound message under its
+            provider's message id finds the transcript row for that message by
+            this key.
+          example: wamid.HBgLNTUxMTk4...
     GenerateConversationMessageCompleted:
       type: object
       required: [status, content, message, generation_id, trace_id]

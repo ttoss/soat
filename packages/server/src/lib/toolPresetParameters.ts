@@ -28,6 +28,32 @@ export const mergePresetParameters = (args: {
 };
 
 /**
+ * The presets one `mcp` action takes: a binding's presets reach every action
+ * its server lists, and a server that validates its arguments refuses a key
+ * the action does not declare. A schema with no `properties` is not read, so
+ * every preset reaches it.
+ */
+export const presetsDeclaredBy = (args: {
+  presetParameters?: object | null;
+  schema?: unknown;
+}): object | null | undefined => {
+  const properties =
+    args.schema &&
+    typeof args.schema === 'object' &&
+    'properties' in args.schema
+      ? args.schema.properties
+      : undefined;
+  if (!args.presetParameters || !properties || typeof properties !== 'object') {
+    return args.presetParameters;
+  }
+  return Object.fromEntries(
+    Object.entries(args.presetParameters).filter(([key]) => {
+      return Object.hasOwn(properties, key);
+    })
+  );
+};
+
+/**
  * The model-visible schema with every pinned key removed from `properties` and
  * from `required` — a pinned parameter the model can no longer omit by mistake,
  * and no longer waste a guess on.

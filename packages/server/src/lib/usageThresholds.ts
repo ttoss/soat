@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
@@ -312,13 +312,13 @@ const windowedValue = (args: {
 type ThresholdInstance = InstanceType<(typeof db)['UsageThreshold']>;
 
 // Applies the hysteresis state machine to one threshold, mutating its fire
-// state. Returns the window key when it fires this round, else null.
+// state. Returns whether it fires this round.
 const applyFireDecision = async (args: {
   threshold: ThresholdInstance;
   value: number;
   windowKey: string | null;
   now: Date;
-}): Promise<{ fired: boolean; windowKey: string | null }> => {
+}): Promise<boolean> => {
   const { threshold, value, windowKey, now } = args;
   const limit = Number(threshold.threshold);
 
@@ -327,9 +327,9 @@ const applyFireDecision = async (args: {
     const alreadyFired = threshold.firedWindowKey === windowKey;
     if (!alreadyFired && value >= limit) {
       await threshold.update({ lastFiredAt: now, firedWindowKey: windowKey });
-      return { fired: true, windowKey };
+      return true;
     }
-    return { fired: false, windowKey: null };
+    return false;
   }
 
   // rolling_24h — the windowed value can fall, so a fired threshold re-arms only
@@ -339,41 +339,31 @@ const applyFireDecision = async (args: {
     if (value < REARM_FRACTION * limit) {
       await threshold.update({ lastFiredAt: null });
     }
-    return { fired: false, windowKey: null };
+    return false;
   }
   if (value >= limit) {
     await threshold.update({ lastFiredAt: now });
-    return { fired: true, windowKey: null };
+    return true;
   }
-  return { fired: false, windowKey: null };
+  return false;
 };
 
-// Emits the `usage.threshold_crossed` webhook event. The payload data uses
-// snake_case keys to match the documented webhook contract.
+// Emits the `usage.threshold_crossed` webhook event: the threshold record as
+// it now reads, fire state included, plus the value that crossed it.
 const emitThresholdCrossed = (args: {
-  threshold: ThresholdInstance;
+  threshold: UsageThresholdRow;
   projectId: number;
-  projectPublicId: string;
-  windowKey: string | null;
   observedValue: number;
   now: Date;
 }): void => {
-  const { threshold } = args;
+  const record = mapThreshold(args.threshold);
   emitResourceEvent({
     type: USAGE_THRESHOLD_CROSSED_EVENT,
     projectId: args.projectId,
-    projectPublicId: args.projectPublicId,
+    projectPublicId: record.project_id,
     resourceType: 'usage_threshold',
-    resourceId: threshold.publicId,
-    data: {
-      threshold_id: threshold.publicId,
-      project_id: args.projectPublicId,
-      metric: threshold.metric,
-      window: threshold.window,
-      window_key: args.windowKey,
-      threshold: Number(threshold.threshold),
-      observed_value: args.observedValue,
-    },
+    resourceId: record.id,
+    data: { ...record, observed_value: args.observedValue },
     timestamp: args.now.toISOString(),
   });
 };
@@ -389,14 +379,14 @@ export const evaluateProjectThresholds = async (args: {
   projectId: number;
 }): Promise<void> => {
   try {
-    const thresholds = await db.UsageThreshold.findAll({
+    const thresholds: UsageThresholdRow[] = await db.UsageThreshold.findAll({
       where: { projectId: args.projectId },
+      include: thresholdIncludes(),
       order: [['id', 'ASC']],
     });
     if (thresholds.length === 0) return;
 
     const now = new Date();
-    let projectPublicId: string | null = null;
 
     for (const threshold of thresholds) {
       const window = threshold.window as UsageThresholdWindow;
@@ -407,20 +397,14 @@ export const evaluateProjectThresholds = async (args: {
         start,
       });
 
-      const decision = await applyFireDecision({
+      const fired = await applyFireDecision({
         threshold,
         value,
         windowKey: key,
         now,
       });
 
-      if (!decision.fired) continue;
-
-      if (projectPublicId === null) {
-        projectPublicId = await resolveProjectPublicId({
-          projectId: args.projectId,
-        });
-      }
+      if (!fired) continue;
 
       log(
         'evaluateProjectThresholds: fired id=%s metric=%s window=%s value=%d',
@@ -433,8 +417,6 @@ export const evaluateProjectThresholds = async (args: {
       emitThresholdCrossed({
         threshold,
         projectId: args.projectId,
-        projectPublicId,
-        windowKey: decision.windowKey,
         observedValue: value,
         now,
       });
