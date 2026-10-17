@@ -56,7 +56,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 | `filename`    | `string`       | Original filename                                        |
 | `size`        | `number`       | File size in bytes                                       |
 | `title`       | `string\|null` | Document title (if set)                                  |
-| `metadata`    | `object\|null` | The document's annotation bag, returned with keys in the exact casing they were written with — not converted between `snake_case` and `camelCase` like other fields. See [Tags and metadata](iam.md#tags-and-metadata) |
+| `metadata`    | `object` | The document's annotation bag, returned with keys in the exact casing they were written with — not converted between `snake_case` and `camelCase` like other fields. See [Tags and metadata](iam.md#tags-and-metadata) |
 | `tags`        | `object`       | Key-value tags associated with the document              |
 
 #### Memory result (`source_type: "memory"`)
@@ -66,6 +66,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 | `memory_id`         | `string` | Public memory ID (`mem_` prefix)                            |
 | `memory_store_id`   | `string` | Public ID of the parent memory store (`mstore_` prefix)     |
 | `memory_store_name` | `string` | Human-readable name of the parent memory store              |
+| `tags`              | `object` | The memory's tags; absent when it has none                  |
 
 ## Key Concepts
 

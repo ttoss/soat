@@ -29,7 +29,7 @@ import { startedByPrincipalColumns } from './principals';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { admitSharedCall } from './shareCaps';
-import { assertValidToolContextKeys } from './toolContext';
+import { assertValidToolContext } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:generation');
@@ -265,7 +265,7 @@ const prepareGeneration = async (
 ): Promise<GenerationPrep> => {
   // Rejects a key that could not become a header before any provider call or
   // metering happens, covering every path but the session's own write-time check.
-  assertValidToolContextKeys(args.toolContext);
+  assertValidToolContext(args.toolContext);
 
   // A run node's, an eval item's or a decision's turn was admitted with its
   // run or decision; the pause was checked there, before the record existed.

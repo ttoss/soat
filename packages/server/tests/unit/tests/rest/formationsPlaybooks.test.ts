@@ -29,7 +29,7 @@ const definitionCalling = (tool: unknown) => {
   return {
     nodes: [
       {
-        key: 'pricing',
+        id: 'pricing',
         title: 'Pricing',
         kind: 'execute',
         inputs: [
@@ -185,7 +185,7 @@ describe('Formations — playbook resources', () => {
         .send({
           inputs: [
             {
-              node: 'pricing',
+              node_id: 'pricing',
               name: 'amount',
               value: 10,
               expected_revision: null,
@@ -198,8 +198,8 @@ describe('Formations — playbook resources', () => {
       const read = await authenticatedTestClient(userToken).get(
         `/api/v1/playbook-cases/${created.body.id}`
       );
-      const node = read.body.nodes.find((each: { key: string }) => {
-        return each.key === 'pricing';
+      const node = read.body.nodes.find((each: { id: string }) => {
+        return each.id === 'pricing';
       });
       expect(node.state).toBe('done');
       expect(node.output.value).toEqual({ price: 42 });

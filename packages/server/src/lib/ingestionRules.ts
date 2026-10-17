@@ -34,7 +34,7 @@ export type MappedIngestionRule = {
   chunk_strategy: string | null;
   chunk_size: number | null;
   chunk_overlap: number | null;
-  metadata: object | null;
+  metadata?: object;
   created_at: Date;
   updated_at: Date;
 };
@@ -77,7 +77,7 @@ const mapIngestionRule = (rule: IngestionRuleRow): MappedIngestionRule => {
     chunk_strategy: rule.chunkStrategy,
     chunk_size: rule.chunkSize,
     chunk_overlap: rule.chunkOverlap,
-    metadata: rule.metadata,
+    metadata: rule.metadata ?? undefined,
     created_at: rule.createdAt,
     updated_at: rule.updatedAt,
   };

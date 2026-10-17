@@ -48,7 +48,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
 | `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
-| `metadata`    | object \| null | Caller-owned annotations on the message (e.g. `phone`, `channel`), stored as sent. Never read by the platform and never part of the model's input — see [Tags and metadata](iam.md#tags-and-metadata) |
+| `metadata`    | object | Caller-owned annotations on the message (e.g. `phone`, `channel`), stored as sent. Never read by the platform and never part of the model's input — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `content`     | string         | Full text content of the message (read from the underlying document)                                                       |
 | `idempotency_key` | string \| null | The idempotency key the message was posted with ([session messages](./sessions.md) take one); `null` when none was sent. A channel that posts each inbound message under its provider's message id finds that message's row by this key |
 

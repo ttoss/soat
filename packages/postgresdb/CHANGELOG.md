@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.85.0](https://github.com/ttoss/soat/compare/v0.84.0...v0.85.0) (2026-10-17)
+
+* fix(server)!: wire cosmetics — empty bags, tool_context values, receipt ids, playbook node ids (#1641) ([2fb9222](https://github.com/ttoss/soat/commit/2fb922207a59915606fa2cad55f25316ee1d3f41)), closes [#1641](https://github.com/ttoss/soat/issues/1641) [#1626](https://github.com/ttoss/soat/issues/1626)
+* fix(events)!: event names are the resource type plural and a verb (#1645) ([072b779](https://github.com/ttoss/soat/commit/072b77909828d1de09f0d24585f56ad66bc825b5)), closes [#1645](https://github.com/ttoss/soat/issues/1645) [#1624](https://github.com/ttoss/soat/issues/1624)
+
+### BREAKING CHANGES
+
+* event names are renamed — `agents.generation.*` and `sessions.generation.*` become `generations.*`, `sessions.generation.started` becomes `sessions.generation_started`, `eval_run.*` → `eval_runs.*`, `quota.exceeded` → `quotas.exceeded`, `guardrail.tripwire` → `guardrails.tripwire`, `audit.entry_created` → `audit_entries.created`, `conversations.message.*` → `conversation_messages.*`, `usage.threshold_crossed` → `usage_thresholds.crossed`. A stored `agents.*` pattern no longer matches generation events.
+* response `tags`/`metadata` are omitted instead of `null` when unset; a non-string `tool_context` value or a non-object `tool_context` answers `400 VALIDATION_FAILED`; receipt `line_items[].event_id` is `id` and receipt `currency` is removed; `PlaybookNode.key`/`PlaybookCaseNode.key` are `id`, and every playbook node reference (`node`, `?node=`, problem and error `meta`) is `node_id`. A stored formation template whose playbook nodes still say `key` is refused on its next deploy.
+
 # [0.84.0](https://github.com/ttoss/soat/compare/v0.83.1...v0.84.0) (2026-10-17)
 
 * fix(server)!: every failure reason is { code, message, meta } (#1637), closes [#1637](https://github.com/ttoss/soat/issues/1637) [#1623](https://github.com/ttoss/soat/issues/1623)

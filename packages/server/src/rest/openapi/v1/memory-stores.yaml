@@ -567,7 +567,7 @@ components:
           description: >-
             Key-value tags for filtering in knowledge search.
           allOf:
-            - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+            - $ref: './tags.yaml#/components/schemas/TagBag'
         duplicate_threshold:
           type: number
           nullable: true

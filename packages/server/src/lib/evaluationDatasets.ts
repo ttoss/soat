@@ -56,7 +56,7 @@ export const mapDatasetItem = (item: DatasetItemRow) => {
     dataset_id: item.dataset?.publicId,
     input: item.input,
     expected_output: item.expectedOutput,
-    metadata: item.metadata,
+    metadata: item.metadata ?? undefined,
     // Set by the `from-generation` curation route; null for a hand-authored
     // item, and null again if the source generation is later deleted (the FK is
     // `SET NULL` on purpose — the fixture outlives its provenance).

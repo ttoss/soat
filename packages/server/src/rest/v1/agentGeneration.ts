@@ -20,6 +20,7 @@ import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import { authorizeAgentWrite } from './agentAccess';
+import { parseToolContextBody } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
@@ -121,7 +122,7 @@ type GenerateRequestBody = {
   parent_trace_id?: string;
   root_trace_id?: string;
   max_call_depth?: unknown;
-  tool_context?: Record<string, string>;
+  tool_context?: unknown;
   knowledge_config?: object;
   action_id?: string;
   metadata?: unknown;
@@ -151,7 +152,7 @@ const buildGenerationArgs = (args: {
       typeof body.max_call_depth === 'number' ? body.max_call_depth : undefined,
     authHeader: (ctx.headers.authorization as string) ?? '',
     authUser: ctx.authUser,
-    toolContext: body.tool_context,
+    toolContext: parseToolContextBody(body.tool_context),
     knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
     actionId: typeof body.action_id === 'string' ? body.action_id : undefined,
     metadata: isRecord(body.metadata) ? body.metadata : undefined,

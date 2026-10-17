@@ -36,7 +36,7 @@ export type MemoryKnowledgeResult = {
   memory_store_id: string;
   memory_store_name: string;
   content: string;
-  tags: Record<string, string> | null;
+  tags?: Record<string, string>;
   /**
    * Fused relevance ranking — higher is better. The ordering it produces is the
    * contract; the absolute value is not, and the formula behind it may change.
@@ -102,7 +102,7 @@ const mapEntry = (
     memory_store_id: memoryStore.publicId,
     memory_store_name: memoryStore.name,
     content: entry.content.content,
-    tags: entry.tags ?? null,
+    tags: entry.tags ?? undefined,
     ...(similarityScore === undefined
       ? {}
       : { similarity_score: similarityScore }),

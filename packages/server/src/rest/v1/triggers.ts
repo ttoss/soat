@@ -18,6 +18,7 @@ import {
 } from 'src/lib/triggers';
 
 import {
+  parseNullableToolContextBody,
   parsePagination,
   parseToolContextBody,
   requireAuth,
@@ -232,10 +233,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     targetId: body.target_id,
     action: body.action,
     input: body.input,
-    toolContext:
-      body.tool_context === null
-        ? null
-        : parseToolContextBody(body.tool_context),
+    toolContext: parseNullableToolContextBody(body.tool_context),
     cron: body.cron,
     eventPattern: body.event_pattern,
     active: body.active,

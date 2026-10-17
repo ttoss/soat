@@ -212,14 +212,14 @@ const mapNodes = (args: {
 
   return args.definition.nodes.map((node, index) => {
     const view = views[index];
-    const output = args.snapshot[node.key]?.output;
+    const output = args.snapshot[node.id]?.output;
 
     return {
-      key: node.key,
+      id: node.id,
       state: view.state,
       missing: view.missing,
       blocked_by: view.blockedBy,
-      run: args.runs.get(node.key) ?? null,
+      run: args.runs.get(node.id) ?? null,
       inputs: node.inputs.map((input) => {
         return {
           name: input.name,

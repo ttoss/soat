@@ -64,9 +64,9 @@ const assertConfirmable = (args: {
   if (node.kind === 'confirm' && !blocked) return;
   throw new DomainError(
     'PLAYBOOK_NODE_NOT_CONFIRMABLE',
-    `Node '${node.key}' cannot be confirmed now.`,
+    `Node '${node.id}' cannot be confirmed now.`,
     {
-      node: node.key,
+      node_id: node.id,
       state: view.state,
       missing: view.missing,
       blocked_by: view.blockedBy,
@@ -87,7 +87,7 @@ const conflictsOf = (args: {
       ? []
       : [
           {
-            node: args.node.key,
+            node_id: args.node.id,
             input: input.name,
             expected_revision: expected ?? null,
             current_revision: current,
@@ -131,7 +131,7 @@ export const confirmPlaybookCaseNode = async (args: {
         definition,
         transaction,
       });
-      const view = views.get(node.key)!;
+      const view = views.get(node.id)!;
       assertConfirmable({ node, view });
 
       const conflicts = conflictsOf({
@@ -152,7 +152,7 @@ export const confirmPlaybookCaseNode = async (args: {
         transaction,
         entries: [
           {
-            node: node.key,
+            node: node.id,
             kind:
               confirmation.decision === 'approve'
                 ? 'confirmation'

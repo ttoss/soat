@@ -11,7 +11,12 @@ import {
 } from 'src/lib/sessions';
 import { assertNoSystemTagKeys } from 'src/lib/tags';
 
-import { type AuthenticatedContext, parsePagination } from './helpers';
+import {
+  type AuthenticatedContext,
+  parseNullableToolContextBody,
+  parsePagination,
+  parseToolContextBody,
+} from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { checkSessionAccess } from './sessions';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -55,7 +60,7 @@ sessionSubResourcesRouter.post(
     const body = ctx.request.body as {
       message?: string;
       document_id?: string;
-      tool_context?: Record<string, string>;
+      tool_context?: unknown;
     };
 
     validateAddMessageBody(body);
@@ -65,7 +70,7 @@ sessionSubResourcesRouter.post(
       sessionId: ctx.params.session_id,
       message: body.message,
       documentId: body.document_id,
-      toolContext: body.tool_context,
+      toolContext: parseToolContextBody(body.tool_context),
       authUser: ctx.authUser,
       idempotencyKey: idempotencyKeyOf(ctx),
     });
@@ -93,7 +98,7 @@ sessionSubResourcesRouter.post(
     const body =
       (ctx.request.body as {
         model?: string;
-        tool_context?: Record<string, string>;
+        tool_context?: unknown;
       }) ?? {};
     // Background by default; ?wait=true blocks until the generation settles.
     const wait = ctx.query['wait'] === 'true';
@@ -103,7 +108,7 @@ sessionSubResourcesRouter.post(
         agentId,
         sessionId: ctx.params.session_id,
         model: body.model,
-        toolContext: body.tool_context,
+        toolContext: parseToolContextBody(body.tool_context),
       }).catch(() => {
         // Fire-and-forget: errors are emitted via event bus
       });
@@ -116,7 +121,7 @@ sessionSubResourcesRouter.post(
       agentId,
       sessionId: ctx.params.session_id,
       model: body.model,
-      toolContext: body.tool_context,
+      toolContext: parseToolContextBody(body.tool_context),
     });
 
     ctx.body = result;
@@ -192,7 +197,7 @@ sessionSubResourcesRouter.post(
       agent_id?: string;
       name?: string;
       tags?: Record<string, string>;
-      tool_context?: Record<string, string> | null;
+      tool_context?: unknown;
     };
 
     ctx.status = 201;
@@ -203,7 +208,7 @@ sessionSubResourcesRouter.post(
       agentPublicId: body.agent_id,
       name: body.name,
       tags: assertNoSystemTagKeys(body.tags),
-      toolContext: body.tool_context,
+      toolContext: parseNullableToolContextBody(body.tool_context),
     });
   }
 );

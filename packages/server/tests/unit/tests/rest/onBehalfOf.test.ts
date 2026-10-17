@@ -70,7 +70,12 @@ describe('On-Behalf-Of', () => {
     if (args.onBehalfOf) request.set(HEADER, args.onBehalfOf);
     return request.send({
       inputs: [
-        { node: 'revenue', name: 'amount', value: 1, expected_revision: null },
+        {
+          node_id: 'revenue',
+          name: 'amount',
+          value: 1,
+          expected_revision: null,
+        },
       ],
     });
   };
@@ -145,7 +150,7 @@ describe('On-Behalf-Of', () => {
         definition: {
           nodes: [
             {
-              key: 'revenue',
+              id: 'revenue',
               title: 'Revenue',
               kind: 'collect',
               inputs: [

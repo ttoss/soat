@@ -25,11 +25,11 @@ describe('upgradeDiff', () => {
     expect(upgradeDiff({ from: pricing(), to }).changed).toEqual([]);
   });
 
-  test('names added and removed nodes by key', () => {
+  test('names added and removed nodes by id', () => {
     const to = {
       nodes: [
         ...pricing().nodes.filter((node) => {
-          return node.key !== 'review';
+          return node.id !== 'review';
         }),
         collect('contact', [manual('email')]),
       ],
@@ -59,7 +59,7 @@ describe('upgradeDiff', () => {
 
     expect(upgradeDiff({ from: pricing(), to }).changed).toEqual([
       {
-        node: 'tax_regime',
+        node_id: 'tax_regime',
         executor: false,
         inputs: [
           { name: 'annual_revenue', change: 'source' },
@@ -68,7 +68,7 @@ describe('upgradeDiff', () => {
         ],
       },
       {
-        node: 'price',
+        node_id: 'price',
         executor: false,
         inputs: [{ name: 'cnpj', change: 'removed' }],
       },
@@ -85,7 +85,7 @@ describe('upgradeDiff', () => {
 
     expect(upgradeDiff({ from: pricing(), to }).changed).toEqual([
       {
-        node: 'price',
+        node_id: 'price',
         executor: false,
         inputs: [{ name: 'regime', change: 'required' }],
       },
@@ -101,7 +101,7 @@ describe('upgradeDiff', () => {
     };
 
     expect(upgradeDiff({ from: pricing(), to }).changed).toEqual([
-      { node: 'price', executor: true, inputs: [] },
+      { node_id: 'price', executor: true, inputs: [] },
     ]);
   });
 });

@@ -76,7 +76,7 @@ export const mapDecision = (row: DecisionRow) => {
     answers_by_name: answersByName(row.answers),
     error: row.error,
     generation_id: row.generationId,
-    metadata: row.metadata,
+    metadata: row.metadata ?? undefined,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

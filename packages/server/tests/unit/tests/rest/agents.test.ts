@@ -1689,6 +1689,18 @@ describe('Agents', () => {
       expect([200, 502]).toContain(response.status);
     });
 
+    test('a non-string tool_context value is 400 before anything is queued', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          tool_context: { user_id: 7 },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('background by default: returns 202 with a pollable generation handle', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate`)

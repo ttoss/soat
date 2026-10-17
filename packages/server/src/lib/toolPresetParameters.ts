@@ -36,21 +36,44 @@ export const mergePresetParameters = (args: {
 export const presetsDeclaredBy = (args: {
   presetParameters?: object | null;
   schema?: unknown;
-}): object | null | undefined => {
+}): Record<string, unknown> | null => {
+  if (!args.presetParameters) return null;
   const properties =
     args.schema &&
     typeof args.schema === 'object' &&
     'properties' in args.schema
       ? args.schema.properties
       : undefined;
-  if (!args.presetParameters || !properties || typeof properties !== 'object') {
-    return args.presetParameters;
+  const entries = Object.entries(args.presetParameters);
+  if (!properties || typeof properties !== 'object') {
+    return Object.fromEntries(entries);
   }
   return Object.fromEntries(
-    Object.entries(args.presetParameters).filter(([key]) => {
+    entries.filter(([key]) => {
       return Object.hasOwn(properties, key);
     })
   );
+};
+
+/**
+ * The presets a resolved tool's guardrail gate judges, where they differ per
+ * tool of one binding: an `mcp` action is sent only the presets it declares,
+ * and a gate judging the others would refuse a call that never carries them.
+ */
+export const GATE_PRESETS: unique symbol = Symbol('soat.gatePresets');
+
+export type ToolWithGatePresets = Tool & {
+  [GATE_PRESETS]?: Record<string, unknown> | null;
+};
+
+/** The presets the gate judges `tool` by: its own, else its binding's. */
+export const gatePresetsOf = (args: {
+  tool: ToolWithGatePresets;
+  bindingPresets?: Record<string, unknown> | null;
+}): Record<string, unknown> | null | undefined => {
+  return Object.hasOwn(args.tool, GATE_PRESETS)
+    ? args.tool[GATE_PRESETS]
+    : args.bindingPresets;
 };
 
 /**

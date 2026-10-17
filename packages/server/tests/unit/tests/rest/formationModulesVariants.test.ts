@@ -301,8 +301,8 @@ const CASES: RoundTripCase[] = [
         expectAfterUpdate: {
           input: [{ role: 'user', content: 'capital of Italy?' }],
           expected_output: 'Paris',
-          metadata: null,
         },
+        absentAfterUpdate: ['metadata'],
       };
     },
   },

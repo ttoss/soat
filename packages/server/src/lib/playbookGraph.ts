@@ -8,7 +8,7 @@ import type { PlaybookDefinition, PlaybookNode } from './playbookDefinition';
 /** Sources define the edges: a node depends on every node an input reads. */
 export const sourcesOf = (args: { node: PlaybookNode }): string[] => {
   const sources = args.node.inputs.flatMap((input) => {
-    return input.source === 'manual' ? [] : [input.source.node];
+    return input.source === 'manual' ? [] : [input.source.node_id];
   });
 
   return [...new Set(sources)];
@@ -21,7 +21,7 @@ export const nodesByKey = (args: {
   const byKey = new Map<string, PlaybookNode>();
 
   for (const node of args.definition.nodes) {
-    if (!byKey.has(node.key)) byKey.set(node.key, node);
+    if (!byKey.has(node.id)) byKey.set(node.id, node);
   }
 
   return byKey;

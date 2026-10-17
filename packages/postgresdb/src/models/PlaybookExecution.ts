@@ -67,7 +67,7 @@ export class PlaybookExecution extends Model {
   )
   declare case: PlaybookCase;
 
-  /** The node key, stable across playbook versions. */
+  /** The node's id, stable across playbook versions. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare node: string;
 

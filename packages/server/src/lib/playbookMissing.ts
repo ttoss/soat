@@ -3,7 +3,7 @@ import { nodesByKey, topologicalWaves, upstreamOf } from './playbookGraph';
 import type { PlaybookNodeView } from './playbookState';
 
 export type PlaybookMissingInput = {
-  node: string;
+  node_id: string;
   input: string;
   schema: JsonSchema;
   description?: string;
@@ -38,7 +38,7 @@ export const playbookMissingInputs = (args: {
             })
             .map((input) => {
               return {
-                node: key,
+                node_id: key,
                 input: input.name,
                 schema: input.schema,
                 ...(input.description !== undefined && {

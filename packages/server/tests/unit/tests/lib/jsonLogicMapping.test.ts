@@ -376,72 +376,76 @@ describe('jsonLogicMapping', () => {
   describe('applyToolOutputMapping', () => {
     test('returns the raw result unchanged when outputMapping is undefined', () => {
       const rawResult = { text: 'Hi!', language: 'en' };
-      expect(applyToolOutputMapping(undefined, rawResult)).toBe(rawResult);
+      expect(
+        applyToolOutputMapping({ outputMapping: undefined, rawResult })
+      ).toBe(rawResult);
     });
 
     test('returns the raw result unchanged when outputMapping is null', () => {
       const rawResult = { text: 'Hi!' };
-      expect(applyToolOutputMapping(null, rawResult)).toBe(rawResult);
+      expect(applyToolOutputMapping({ outputMapping: null, rawResult })).toBe(
+        rawResult
+      );
     });
 
     test('extracts a bare scalar field from the raw result via a var expression', () => {
-      const result = applyToolOutputMapping(
-        { var: 'output.text' },
-        { text: 'Hi!', language: 'en' }
-      );
+      const result = applyToolOutputMapping({
+        outputMapping: { var: 'output.text' },
+        rawResult: { text: 'Hi!', language: 'en' },
+      });
       expect(result).toBe('Hi!');
     });
 
     test('reshapes the raw result into an object mapping', () => {
-      const result = applyToolOutputMapping(
-        {
+      const result = applyToolOutputMapping({
+        outputMapping: {
           transcript: { var: 'output.text' },
           lang: { var: 'output.language' },
         },
-        { text: 'Hi!', language: 'en' }
-      );
+        rawResult: { text: 'Hi!', language: 'en' },
+      });
       expect(result).toEqual({ transcript: 'Hi!', lang: 'en' });
     });
 
     test('still returns null for a var that resolves to nothing (logged, not thrown)', () => {
-      const result = applyToolOutputMapping(
-        { document_id: { var: 'output.data.id' } },
-        { data: {} }
-      );
+      const result = applyToolOutputMapping({
+        outputMapping: { document_id: { var: 'output.data.id' } },
+        rawResult: { data: {} },
+      });
       expect(result).toEqual({ document_id: null });
     });
 
     // The mapping context also carries the request's merged input,
     // so a mapping can echo a field the target endpoint never returns.
-    test('resolves input.* against the merged input passed as the third argument', () => {
-      const result = applyToolOutputMapping(
-        {
+    test('resolves input.* against the merged input', () => {
+      const result = applyToolOutputMapping({
+        outputMapping: {
           document_id: { var: 'output.data.id' },
           title: { var: 'input.title' },
         },
-        { data: { id: 'doc_1' } },
-        { title: 'my title' }
-      );
+        rawResult: { data: { id: 'doc_1' } },
+        input: { title: 'my title' },
+      });
       expect(result).toEqual({ document_id: 'doc_1', title: 'my title' });
     });
 
-    test('input.* resolves to null when no mergedInput is passed', () => {
-      const result = applyToolOutputMapping(
-        { title: { var: 'input.title' } },
-        { data: {} }
-      );
+    test('input.* resolves to null when no input is passed', () => {
+      const result = applyToolOutputMapping({
+        outputMapping: { title: { var: 'input.title' } },
+        rawResult: { data: {} },
+      });
       expect(result).toEqual({ title: null });
     });
 
     test('output.* and input.* can be combined in the same mapping', () => {
-      const result = applyToolOutputMapping(
-        {
+      const result = applyToolOutputMapping({
+        outputMapping: {
           text: { var: 'output.text' },
           echoed_query: { var: 'input.query' },
         },
-        { text: 'Hi!' },
-        { query: 'hello', unrelatedPreset: 'ignored' }
-      );
+        rawResult: { text: 'Hi!' },
+        input: { query: 'hello', unrelatedPreset: 'ignored' },
+      });
       expect(result).toEqual({ text: 'Hi!', echoed_query: 'hello' });
     });
   });

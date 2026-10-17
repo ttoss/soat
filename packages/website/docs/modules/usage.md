@@ -335,7 +335,7 @@ The single exception is [`POST /chat/completions`](/docs/api/chats/create-chat-c
 
 ### Receipts and reconciliation
 
-[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`input_tokens` is uncached input + cached), and a grand total. Every component carries its price-book version and frozen cost, so receipts are reproducible and reconcile against the provider's invoice within a small tolerance (target ±2%).
+[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event (its `id` is the event's), a `by_meter_type` cost split, reconstructed token totals (`input_tokens` is uncached input + cached), and a grand total. Every component carries its price-book version and frozen cost, so receipts are reproducible and reconcile against the provider's invoice within a small tolerance (target ±2%).
 
 [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an [orchestration](./orchestrations.md) run, summed across every node; the roll-up is also the `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
 

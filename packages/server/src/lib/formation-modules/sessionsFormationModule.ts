@@ -14,6 +14,7 @@ import {
 } from '../sessions';
 import { toStoredToolContext } from '../toolContext';
 import { defineFormationModule } from './defineFormationModule';
+import { pushStringBagValueErrors } from './formationSpecLoader';
 
 const getSessionAgentInternalId = async (
   sessionPublicId: string
@@ -47,6 +48,10 @@ export const sessionsFormationModule = defineFormationModule({
     create: 'agents:CreateSession',
     update: 'agents:UpdateSession',
     delete: 'agents:DeleteSession',
+  },
+
+  extraChecks: (args) => {
+    pushStringBagValueErrors({ ...args, field: 'tool_context' });
   },
 
   create: async ({ properties, projectId }) => {

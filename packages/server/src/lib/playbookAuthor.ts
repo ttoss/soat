@@ -32,7 +32,7 @@ export const assertExecutorStartable = async (args: {
     throw new DomainError(
       'PLAYBOOK_EXECUTOR_FORBIDDEN',
       `The playbook's author may not start the ${args.executor.type} on node '${args.node}'.`,
-      { node: args.node, action: START_ACTIONS[args.executor.type].action }
+      { node_id: args.node, action: START_ACTIONS[args.executor.type].action }
     );
   }
 };
@@ -59,7 +59,7 @@ export const assertExecutorsStartable = async (args: {
 }): Promise<void> => {
   for (const node of args.definition.nodes) {
     for (const executor of executorsOf(node)) {
-      await assertExecutorStartable({ ...args, node: node.key, executor });
+      await assertExecutorStartable({ ...args, node: node.id, executor });
     }
   }
 };

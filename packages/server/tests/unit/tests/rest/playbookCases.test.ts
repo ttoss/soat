@@ -15,7 +15,7 @@ const CASE_ACTIONS = [
 const DEFINITION = {
   nodes: [
     {
-      key: 'revenue',
+      id: 'revenue',
       title: 'Annual revenue',
       kind: 'collect',
       inputs: [
@@ -29,7 +29,7 @@ const DEFINITION = {
       ],
     },
     {
-      key: 'activity',
+      id: 'activity',
       title: 'Activity',
       kind: 'collect',
       inputs: [
@@ -42,7 +42,7 @@ const DEFINITION = {
       ],
     },
     {
-      key: 'pricing',
+      id: 'pricing',
       title: 'Pricing',
       kind: 'execute',
       final: true,
@@ -51,7 +51,7 @@ const DEFINITION = {
           name: 'revenue',
           schema: { type: 'number' },
           required: true,
-          source: { node: 'revenue', field: 'output.annual_revenue' },
+          source: { node_id: 'revenue', field: 'output.annual_revenue' },
         },
         {
           name: 'margin',
@@ -92,9 +92,9 @@ describe('Playbook cases', () => {
       .send({ inputs });
   };
 
-  const nodeOf = (body: { nodes: { key: string }[] }, key: string) => {
+  const nodeOf = (body: { nodes: { id: string }[] }, key: string) => {
     return body.nodes.find((node) => {
-      return node.key === key;
+      return node.id === key;
     }) as Record<string, unknown>;
   };
 
@@ -181,13 +181,13 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       const res = await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 4_000_000,
           expected_revision: null,
         },
         {
-          node: 'activity',
+          node_id: 'activity',
           name: 'cnae',
           value: '6201501',
           expected_revision: null,
@@ -207,7 +207,7 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 1,
           expected_revision: null,
@@ -216,13 +216,13 @@ describe('Playbook cases', () => {
 
       const res = await writeInputs(playbookCase.id, [
         {
-          node: 'activity',
+          node_id: 'activity',
           name: 'cnae',
           value: '6201501',
           expected_revision: null,
         },
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 2,
           expected_revision: null,
@@ -233,7 +233,7 @@ describe('Playbook cases', () => {
       expect(res.body.error.code).toBe('PLAYBOOK_INPUT_CONFLICT');
       expect(res.body.error.meta.conflicts).toEqual([
         {
-          node: 'revenue',
+          node_id: 'revenue',
           input: 'annual_revenue',
           expected_revision: null,
           current_revision: 1,
@@ -252,7 +252,7 @@ describe('Playbook cases', () => {
       const write = (expected: number | null) => {
         return writeInputs(playbookCase.id, [
           {
-            node: 'revenue',
+            node_id: 'revenue',
             name: 'annual_revenue',
             value: 10,
             expected_revision: expected,
@@ -269,7 +269,7 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       const res = await writeInputs(playbookCase.id, [
         {
-          node: 'activity',
+          node_id: 'activity',
           name: 'cnae',
           value: '62-01',
           expected_revision: null,
@@ -277,13 +277,21 @@ describe('Playbook cases', () => {
       ]);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_INPUT_INVALID');
-      expect(res.body.error.meta).toEqual({ node: 'activity', input: 'cnae' });
+      expect(res.body.error.meta).toEqual({
+        node_id: 'activity',
+        input: 'cnae',
+      });
     });
 
     test('returns 400 for an input that reads another node', async () => {
       const playbookCase = await newCase();
       const res = await writeInputs(playbookCase.id, [
-        { node: 'pricing', name: 'revenue', value: 1, expected_revision: null },
+        {
+          node_id: 'pricing',
+          name: 'revenue',
+          value: 1,
+          expected_revision: null,
+        },
       ]);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_INPUT_INVALID');
@@ -294,15 +302,18 @@ describe('Playbook cases', () => {
       [
         'more than 100 writes',
         Array.from({ length: 101 }, () => {
-          return { node: 'revenue', name: 'annual_revenue', value: 1 };
+          return { node_id: 'revenue', name: 'annual_revenue', value: 1 };
         }),
       ],
-      ['a write with no value', [{ node: 'revenue', name: 'annual_revenue' }]],
+      [
+        'a write with no value',
+        [{ node_id: 'revenue', name: 'annual_revenue' }],
+      ],
       [
         'a fractional expected_revision',
         [
           {
-            node: 'revenue',
+            node_id: 'revenue',
             name: 'annual_revenue',
             value: 1,
             expected_revision: 1.5,
@@ -319,7 +330,7 @@ describe('Playbook cases', () => {
     test('returns 400 for a field written twice in one call', async () => {
       const playbookCase = await newCase();
       const write = {
-        node: 'revenue',
+        node_id: 'revenue',
         name: 'annual_revenue',
         value: 1,
         expected_revision: null,
@@ -332,7 +343,7 @@ describe('Playbook cases', () => {
     test('returns 400 for an input the version does not declare', async () => {
       const playbookCase = await newCase();
       const res = await writeInputs(playbookCase.id, [
-        { node: 'revenue', name: 'nope', value: 1, expected_revision: null },
+        { node_id: 'revenue', name: 'nope', value: 1, expected_revision: null },
       ]);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_INPUT_INVALID');
@@ -352,7 +363,7 @@ describe('Playbook cases', () => {
         playbookCase.id,
         [
           {
-            node: 'revenue',
+            node_id: 'revenue',
             name: 'annual_revenue',
             value: 1,
             expected_revision: null,
@@ -369,7 +380,7 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 1,
           expected_revision: null,
@@ -377,20 +388,20 @@ describe('Playbook cases', () => {
       ]);
 
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${playbookCase.id}/missing?node=pricing`
+        `/api/v1/playbook-cases/${playbookCase.id}/missing?node_id=pricing`
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.node).toBe('pricing');
+      expect(res.body.node_id).toBe('pricing');
       expect(res.body.waves).toEqual([
-        [{ node: 'pricing', input: 'margin', schema: { type: 'number' } }],
+        [{ node_id: 'pricing', input: 'margin', schema: { type: 'number' } }],
       ]);
     });
 
     test('returns 400 for a node the version does not declare', async () => {
       const playbookCase = await newCase();
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${playbookCase.id}/missing?node=nope`
+        `/api/v1/playbook-cases/${playbookCase.id}/missing?node_id=nope`
       );
       expect(res.status).toBe(400);
     });
@@ -398,7 +409,7 @@ describe('Playbook cases', () => {
     test('returns 404 to a caller without permission', async () => {
       const playbookCase = await newCase();
       const res = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/playbook-cases/${playbookCase.id}/missing?node=pricing`
+        `/api/v1/playbook-cases/${playbookCase.id}/missing?node_id=pricing`
       );
       expect(res.status).toBe(404);
     });
@@ -409,7 +420,7 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 1,
           expected_revision: null,
@@ -417,7 +428,7 @@ describe('Playbook cases', () => {
       ]);
       await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 2,
           expected_revision: 1,
@@ -425,7 +436,7 @@ describe('Playbook cases', () => {
       ]);
 
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${playbookCase.id}/entries?node=revenue`
+        `/api/v1/playbook-cases/${playbookCase.id}/entries?node_id=revenue`
       );
       expect(res.status).toBe(200);
       expect(
@@ -445,13 +456,13 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 1,
           expected_revision: null,
         },
         {
-          node: 'activity',
+          node_id: 'activity',
           name: 'cnae',
           value: '6201501',
           expected_revision: null,
@@ -463,8 +474,8 @@ describe('Playbook cases', () => {
       );
       expect(res.status).toBe(200);
       expect(
-        res.body.data.map((entry: { node: string; value: unknown }) => {
-          return [entry.node, entry.value];
+        res.body.data.map((entry: { node_id: string; value: unknown }) => {
+          return [entry.node_id, entry.value];
         })
       ).toEqual([
         ['activity', '6201501'],
@@ -530,7 +541,7 @@ describe('Playbook cases', () => {
           definition: {
             nodes: [
               ...DEFINITION.nodes,
-              { key: 'extra', title: 'Extra', kind: 'collect', inputs: [] },
+              { id: 'extra', title: 'Extra', kind: 'collect', inputs: [] },
             ],
           },
         });
@@ -556,7 +567,7 @@ describe('Playbook cases', () => {
       const playbookCase = await newCase();
       await writeInputs(playbookCase.id, [
         {
-          node: 'revenue',
+          node_id: 'revenue',
           name: 'annual_revenue',
           value: 1,
           expected_revision: null,

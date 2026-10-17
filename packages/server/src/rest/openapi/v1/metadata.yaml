@@ -33,9 +33,9 @@ components:
       type: object
       nullable: true
       description: >-
-        A `MetadataBag` on a field where `null` is meaningful — a
-        full-replacement update that clears the bag, or a record whose bag was
-        never set.
+        A `MetadataBag` on a request field where `null` is meaningful: a
+        full-replacement update that clears the bag. A record whose bag is
+        unset leaves the field out.
       example: { author: 'John', revision: 2 }
     MetadataBagText:
       type: string

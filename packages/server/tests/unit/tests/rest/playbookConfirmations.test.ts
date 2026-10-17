@@ -21,7 +21,7 @@ const definitionWith = (doubleToolId: string) => {
   return {
     nodes: [
       {
-        key: 'revenue',
+        id: 'revenue',
         title: 'Revenue',
         kind: 'collect',
         inputs: [
@@ -34,7 +34,7 @@ const definitionWith = (doubleToolId: string) => {
         ],
       },
       {
-        key: 'approve',
+        id: 'approve',
         title: 'Approve the revenue',
         kind: 'confirm',
         inputs: [
@@ -42,12 +42,12 @@ const definitionWith = (doubleToolId: string) => {
             name: 'amount',
             schema: { type: 'number' },
             required: true,
-            source: { node: 'revenue', field: 'output.amount' },
+            source: { node_id: 'revenue', field: 'output.amount' },
           },
         ],
       },
       {
-        key: 'pricing',
+        id: 'pricing',
         title: 'Pricing',
         kind: 'execute',
         final: true,
@@ -56,7 +56,7 @@ const definitionWith = (doubleToolId: string) => {
             name: 'amount',
             schema: { type: 'number' },
             required: true,
-            source: { node: 'approve', field: 'output.amount' },
+            source: { node_id: 'approve', field: 'output.amount' },
           },
         ],
         executor: {
@@ -99,7 +99,7 @@ describe('Playbook confirmations', () => {
       .send({
         inputs: [
           {
-            node: current.body.nodes[0].key,
+            node_id: current.body.nodes[0].id,
             name: 'amount',
             value,
             expected_revision: current.body.nodes[0].inputs[0].revision,
@@ -112,8 +112,8 @@ describe('Playbook confirmations', () => {
 
   const nodeOf = async (caseId: string, key: string) => {
     const res = await asAdmin().get(`/api/v1/playbook-cases/${caseId}`);
-    return res.body.nodes.find((node: { key: string }) => {
-      return node.key === key;
+    return res.body.nodes.find((node: { id: string }) => {
+      return node.id === key;
     });
   };
 
@@ -190,7 +190,7 @@ describe('Playbook confirmations', () => {
         definition: {
           nodes: [
             {
-              key: 'review',
+              id: 'review',
               title: 'Review',
               kind: 'execute',
               inputs: [
@@ -250,8 +250,8 @@ describe('Playbook confirmations', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.automation_status).toBe('idle');
-      const pricing = res.body.nodes.find((node: { key: string }) => {
-        return node.key === 'pricing';
+      const pricing = res.body.nodes.find((node: { id: string }) => {
+        return node.id === 'pricing';
       });
       expect(pricing).toMatchObject({
         state: 'done',
@@ -272,7 +272,7 @@ describe('Playbook confirmations', () => {
       expect((await nodeOf(caseId, 'approve')).state).toBe('rejected');
       expect((await nodeOf(caseId, 'pricing')).state).toBe('blocked');
       const entries = await authenticatedTestClient(userToken).get(
-        `/api/v1/playbook-cases/${caseId}/entries?node=approve`
+        `/api/v1/playbook-cases/${caseId}/entries?node_id=approve`
       );
       expect(entries.body.data[0]).toMatchObject({
         kind: 'rejection',
@@ -317,7 +317,7 @@ describe('Playbook confirmations', () => {
       expect(res.body.error.code).toBe('PLAYBOOK_INPUT_CONFLICT');
       expect(res.body.error.meta.conflicts).toEqual([
         {
-          node: 'approve',
+          node_id: 'approve',
           input: 'amount',
           expected_revision: 1,
           current_revision: 2,
@@ -398,7 +398,12 @@ describe('Playbook confirmations', () => {
         .post(`/api/v1/playbook-cases/${caseId}/inputs`)
         .send({
           inputs: [
-            { node: 'review', name: 'amount', value: 9, expected_revision: 1 },
+            {
+              node_id: 'review',
+              name: 'amount',
+              value: 9,
+              expected_revision: 1,
+            },
           ],
         });
     };

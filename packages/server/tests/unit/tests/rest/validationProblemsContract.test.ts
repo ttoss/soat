@@ -151,7 +151,7 @@ describe('validation problems contract', () => {
           definition: {
             nodes: [
               {
-                key: 'a',
+                id: 'a',
                 title: 'A',
                 kind: 'execute',
                 inputs: [
@@ -159,7 +159,7 @@ describe('validation problems contract', () => {
                     name: 'x',
                     schema: {},
                     required: true,
-                    source: { node: 'missing', field: 'output' },
+                    source: { node_id: 'missing', field: 'output' },
                   },
                 ],
               },
@@ -178,7 +178,7 @@ describe('validation problems contract', () => {
         }),
         expect.objectContaining({
           code: 'MISSING_NODE',
-          path: 'definition.nodes[0].inputs[0].source.node',
+          path: 'definition.nodes[0].inputs[0].source.node_id',
         }),
       ]);
     });
@@ -192,7 +192,7 @@ describe('validation problems contract', () => {
           definition: {
             nodes: [
               {
-                key: 'a',
+                id: 'a',
                 title: 'A',
                 kind: 'execute',
                 inputs: [],

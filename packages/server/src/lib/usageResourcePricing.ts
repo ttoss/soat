@@ -3,7 +3,11 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { emitActivityEntry } from './activity';
-import { applyToolOutputMapping, evaluateLogic } from './jsonLogicMapping';
+import {
+  actionOfType,
+  applyToolOutputMapping,
+  evaluateLogic,
+} from './jsonLogicMapping';
 import { RESOURCE_PROVIDER } from './priceBookResource';
 import { computeComponentCostUsd } from './priceCompute';
 import { toolReferences } from './resourceReferences';
@@ -96,11 +100,16 @@ const buildToolContext = async (args: {
   const input = args.call.input ?? {};
   const response =
     args.call.outcome === 'ok'
-      ? applyToolOutputMapping(
-          (tool?.outputMapping as Record<string, unknown> | null) ?? null,
-          args.call.response,
-          input as Record<string, unknown>
-        )
+      ? applyToolOutputMapping({
+          outputMapping:
+            (tool?.outputMapping as Record<string, unknown> | null) ?? null,
+          rawResult: args.call.response,
+          input: input as Record<string, unknown>,
+          action: actionOfType({
+            type: tool?.type ?? 'http',
+            action: args.call.action,
+          }),
+        })
       : null;
   return {
     input,

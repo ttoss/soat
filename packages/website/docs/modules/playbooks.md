@@ -36,7 +36,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 | Field             | Type    | Description                                                                                                                                                                                                                              |
 | ----------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`             | string  | Stable across versions. Letters, digits and underscores, starting with a letter or underscore                                                                                                                                            |
+| `id`              | string  | Stable across versions. Letters, digits and underscores, starting with a letter or underscore                                                                                                                                            |
 | `title`           | string  | Human-readable label                                                                                                                                                                                                                     |
 | `description`     | string  | Optional                                                                                                                                                                                                                                 |
 | `kind`            | string  | `collect` (its output is its inputs), `execute` (its executor produces the output), `confirm` (a person confirms its inputs)                                                                                                             |
@@ -49,11 +49,11 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 | Field         | Type             | Description                                                                                             |
 | ------------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`        | string           | Unique in its node; same character rules as `key`                                                       |
+| `name`        | string           | Unique in its node; same character rules as `id`                                                        |
 | `schema`      | object           | The JSON Schema a value must satisfy                                                                    |
 | `required`    | boolean          | The node cannot be reached while a required input is unset                                              |
 | `description` | string           | What to ask for; returned with the input when it is [missing](#what-a-node-still-needs)                 |
-| `source`      | string \| object | `manual`, or `{ node, field }` with `field` `output[.path]` or `input.<name>[.path]` of an earlier node |
+| `source`      | string \| object | `manual`, or `{ node_id, field }` with `field` `output[.path]` or `input.<name>[.path]` of an earlier node |
 
 ### Case
 
@@ -67,7 +67,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `revision`           | integer        | The case's counter; every entry takes the next value                                                                                                                                                                                                             |
 | `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) of the case or of its [project](./projects.md) stands, else `running` while an execution is queued or runs its executor, else `waiting` while every execution in flight waits on a task or run it started, else `idle` |
 | `pause_requested_at` | string \| null | When the case was paused                                                                                                                                                                                                                                         |
-| `nodes`              | array          | On a single-case read: every node's `state`, `missing`, `blocked_by`, `run`, `inputs` and `output`                                                                                                                                                               |
+| `nodes`              | array          | On a single-case read: every node's `id`, `state`, `missing`, `blocked_by`, `run`, `inputs` and `output`                                                                                                                                                               |
 
 ### Entry
 
@@ -75,7 +75,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | ------------------ | -------------- | ------------------------------------------------------------------------------ |
 | `id`               | string         | Public identifier (`pbk_ent_…`)                                                |
 | `revision`         | integer        | The case revision it took                                                      |
-| `node`             | string         | The node key                                                                   |
+| `node_id`          | string         | The node's ID                                                                  |
 | `kind`             | string         | `input`, `output`, `confirmation` or `rejection`                               |
 | `input`            | string \| null | The input written, on an `input` entry                                         |
 | `value`            | any            | The value written                                                              |
@@ -90,7 +90,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | ------------------ | --------------- | ------------------------------------------------------------------------------------ |
 | `id`               | string          | Public identifier (`pbk_exe_…`)                                                      |
 | `case_id`          | string          | The case                                                                             |
-| `node`             | string          | The node that ran                                                                    |
+| `node_id`          | string          | The node that ran                                                                    |
 | `playbook_version` | integer         | The version the case runs on                                                         |
 | `executor`         | object \| null  | `{ type, id }`; null for a `collect` node                                            |
 | `status`           | string          | `queued` until a worker claims it, `running`, then `completed` or `failed`           |
@@ -110,7 +110,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | ------------------ | -------------- | ---------------------------------------------------------------------------------- |
 | `id`               | string         | Public identifier (`pbk_exp_…`)                                                    |
 | `case_id`          | string         | The case                                                                           |
-| `node`             | string         | The final node rendered                                                            |
+| `node_id`          | string         | The final node rendered                                                            |
 | `revision`         | integer        | The output or confirmation entry rendered                                          |
 | `playbook_version` | integer        | The version whose transformation rendered it                                       |
 | `transformation`   | string         | The transformation's `name`                                                        |
@@ -132,7 +132,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `case_id`      | string         | The case                                                                                                                                                                                         |
 | `from_version` | integer        | The version the case was on                                                                                                                                                                      |
 | `to_version`   | integer        | The version it moved to                                                                                                                                                                          |
-| `diff`         | object         | `{ added, removed, changed }`: node keys added and removed, and each node whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
+| `diff`         | object         | `{ added, removed, changed }`: node IDs added and removed, and each node, by `node_id`, whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
@@ -140,7 +140,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 ### Definition checks
 
-A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one as a [validation problem](/docs/api#validation-problems) `{ code, path, message }`: `DUPLICATE_NODE`, `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`, `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`, `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`, with `path` naming the node, input or transformation (`definition.nodes[0].inputs[1].source.node`). A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
+A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one as a [validation problem](/docs/api#validation-problems) `{ code, path, message }`: `DUPLICATE_NODE`, `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`, `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`, `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`, with `path` naming the node, input or transformation (`definition.nodes[0].inputs[1].source.node_id`). A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
 
 ### Versions
 
@@ -178,7 +178,7 @@ A `waiting` node names what it waits on in `run`, read live on every case read a
 
 ### What a node still needs
 
-[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a node key and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one is filled. Each carries its `schema` and `description`, which is what an agent asks for.
+[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one is filled. Each carries its `schema` and `description`, which is what an agent asks for.
 
 ### The cascade
 
@@ -240,7 +240,7 @@ A playbook declared in a [formation](./formations.md) (`type: playbook`, [proper
 
 ### Exports
 
-[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`](/docs/api/playbooks/export-playbook-case-node) renders one revision of a final node as files, one [export](#export) per transformation it names in `transformations` (every one when omitted). Each transformation's tool is called with `case_id`, `subject`, `node`, `revision` and that revision's `output`, and must answer a file — an http tool with `execute.response_mode: base64` (see [Tools](./tools.md)) — whose content type is its `format`'s:
+[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`](/docs/api/playbooks/export-playbook-case-node) renders one revision of a final node as files, one [export](#export) per transformation it names in `transformations` (every one when omitted). Each transformation's tool is called with `case_id`, `subject`, `node_id`, `revision` and that revision's `output`, and must answer a file — an http tool with `execute.response_mode: base64` (see [Tools](./tools.md)) — whose content type is its `format`'s:
 
 | `format` | Content type                                                                |
 | -------- | --------------------------------------------------------------------------- |
@@ -263,11 +263,11 @@ The file is kept in the project's [files](./files.md) under `/.system/playbooks/
 - A node without transformations, or a name it does not declare, is `400 VALIDATION_FAILED`. A paused case is `409 PLAYBOOK_CASE_PAUSED`.
 - A tool that fails or answers no file fails the export with `PLAYBOOK_EXPORT_FAILED`; a file of another content type with `PLAYBOOK_EXPORT_FORMAT_MISMATCH`. An export whose server stopped while rendering it fails as `PLAYBOOK_EXPORT_INTERRUPTED` and is not rendered again on its own.
 
-Without `wait` the request answers `201` with every export `running`; poll [`GET /api/v1/playbook-cases/{case_id}/exports/{export_id}`](/docs/api/playbooks/get-playbook-case-export). With `wait: true` it answers once each has its `file_id` or its `error`; a tool call always waits. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/exports`](/docs/api/playbooks/list-playbook-case-exports) lists a case's exports, newest first, optionally for one `node` or `transformation`.
+Without `wait` the request answers `201` with every export `running`; poll [`GET /api/v1/playbook-cases/{case_id}/exports/{export_id}`](/docs/api/playbooks/get-playbook-case-export). With `wait: true` it answers once each has its `file_id` or its `error`; a tool call always waits. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/exports`](/docs/api/playbooks/list-playbook-case-exports) lists a case's exports, newest first, optionally for one `node_id` or `transformation`.
 
 ### Upgrading a case
 
-[`POST /api/v1/playbook-cases/{case_id}/upgrade`](/docs/api/playbooks/upgrade-playbook-case) moves a case to the playbook's current version, or to the `version` named, an earlier one included. Values carry over by node key, and every node is read against the new version:
+[`POST /api/v1/playbook-cases/{case_id}/upgrade`](/docs/api/playbooks/upgrade-playbook-case) moves a case to the playbook's current version, or to the `version` named, an earlier one included. Values carry over by node ID, and every node is read against the new version:
 
 | Change in the new version        | Effect on the case                                    |
 | -------------------------------- | ----------------------------------------------------- |
@@ -281,7 +281,7 @@ The cascade then runs what became runnable, unless the case is [paused](#pausing
 
 ### Entries
 
-[`GET /api/v1/playbook-cases/{case_id}/entries`](/docs/api/playbooks/list-playbook-case-entries) lists every value written to a case, newest first, optionally for one `node`. Entries are never rewritten; deleting the case deletes them.
+[`GET /api/v1/playbook-cases/{case_id}/entries`](/docs/api/playbooks/list-playbook-case-entries) lists every value written to a case, newest first, optionally for one `node_id`. Entries are never rewritten; deleting the case deletes them.
 
 ## Examples
 
@@ -296,13 +296,13 @@ soat create-playbook \
   --name client-pricing \
   --definition '{
     "nodes": [
-      { "key": "revenue", "title": "Annual revenue", "kind": "collect",
+      { "id": "revenue", "title": "Annual revenue", "kind": "collect",
         "inputs": [{ "name": "amount", "schema": { "type": "number" },
                      "required": true, "source": "manual" }] },
-      { "key": "pricing", "title": "Pricing", "kind": "collect", "final": true,
+      { "id": "pricing", "title": "Pricing", "kind": "collect", "final": true,
         "inputs": [
           { "name": "revenue", "schema": { "type": "number" }, "required": true,
-            "source": { "node": "revenue", "field": "output.amount" } },
+            "source": { "node_id": "revenue", "field": "output.amount" } },
           { "name": "margin", "schema": { "type": "number" }, "required": true,
             "source": "manual" }
         ] }
@@ -321,7 +321,7 @@ const { data, error } = await soat.playbooks.createPlaybook({
     definition: {
       nodes: [
         {
-          key: 'revenue',
+          id: 'revenue',
           title: 'Annual revenue',
           kind: 'collect',
           inputs: [
@@ -334,7 +334,7 @@ const { data, error } = await soat.playbooks.createPlaybook({
           ],
         },
         {
-          key: 'pricing',
+          id: 'pricing',
           title: 'Pricing',
           kind: 'collect',
           final: true,
@@ -343,7 +343,7 @@ const { data, error } = await soat.playbooks.createPlaybook({
               name: 'revenue',
               schema: { type: 'number' },
               required: true,
-              source: { node: 'revenue', field: 'output.amount' },
+              source: { node_id: 'revenue', field: 'output.amount' },
             },
             {
               name: 'margin',
@@ -372,13 +372,13 @@ curl -X POST https://api.example.com/api/v1/playbooks \
     "name": "client-pricing",
     "definition": {
       "nodes": [
-        { "key": "revenue", "title": "Annual revenue", "kind": "collect",
+        { "id": "revenue", "title": "Annual revenue", "kind": "collect",
           "inputs": [{ "name": "amount", "schema": { "type": "number" },
                        "required": true, "source": "manual" }] },
-        { "key": "pricing", "title": "Pricing", "kind": "collect", "final": true,
+        { "id": "pricing", "title": "Pricing", "kind": "collect", "final": true,
           "inputs": [
             { "name": "revenue", "schema": { "type": "number" }, "required": true,
-              "source": { "node": "revenue", "field": "output.amount" } },
+              "source": { "node_id": "revenue", "field": "output.amount" } },
             { "name": "margin", "schema": { "type": "number" }, "required": true,
               "source": "manual" }
           ] }
@@ -429,7 +429,7 @@ curl -X POST https://api.example.com/api/v1/playbooks/pbk_…/cases \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-playbook-case-missing --case-id pbk_case_… --node pricing
+soat get-playbook-case-missing --case-id pbk_case_… --node-id pricing
 ```
 
 </TabItem>
@@ -438,7 +438,7 @@ soat get-playbook-case-missing --case-id pbk_case_… --node pricing
 ```ts
 const { data, error } = await soat.playbooks.getPlaybookCaseMissing({
   path: { case_id: 'pbk_case_…' },
-  query: { node: 'pricing' },
+  query: { node_id: 'pricing' },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -447,7 +447,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl "https://api.example.com/api/v1/playbook-cases/pbk_case_…/missing?node=pricing" \
+curl "https://api.example.com/api/v1/playbook-cases/pbk_case_…/missing?node_id=pricing" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -457,10 +457,10 @@ curl "https://api.example.com/api/v1/playbook-cases/pbk_case_…/missing?node=pr
 ```json
 {
   "case_id": "pbk_case_…",
-  "node": "pricing",
+  "node_id": "pricing",
   "waves": [
-    [{ "node": "revenue", "input": "amount", "schema": { "type": "number" } }],
-    [{ "node": "pricing", "input": "margin", "schema": { "type": "number" } }]
+    [{ "node_id": "revenue", "input": "amount", "schema": { "type": "number" } }],
+    [{ "node_id": "pricing", "input": "margin", "schema": { "type": "number" } }]
   ]
 }
 ```
@@ -474,8 +474,8 @@ curl "https://api.example.com/api/v1/playbook-cases/pbk_case_…/missing?node=pr
 soat write-playbook-case-inputs \
   --case-id pbk_case_… \
   --inputs '[
-    { "node": "revenue", "name": "amount", "value": 4000000, "expected_revision": null },
-    { "node": "pricing", "name": "margin", "value": 0.3, "expected_revision": null }
+    { "node_id": "revenue", "name": "amount", "value": 4000000, "expected_revision": null },
+    { "node_id": "pricing", "name": "margin", "value": 0.3, "expected_revision": null }
   ]'
 ```
 
@@ -488,12 +488,12 @@ const { data, error } = await soat.playbooks.writePlaybookCaseInputs({
   body: {
     inputs: [
       {
-        node: 'revenue',
+        node_id: 'revenue',
         name: 'amount',
         value: 4000000,
         expected_revision: null,
       },
-      { node: 'pricing', name: 'margin', value: 0.3, expected_revision: null },
+      { node_id: 'pricing', name: 'margin', value: 0.3, expected_revision: null },
     ],
   },
 });
@@ -509,8 +509,8 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/inputs \
   -H "Content-Type: application/json" \
   -d '{
     "inputs": [
-      { "node": "revenue", "name": "amount", "value": 4000000, "expected_revision": null },
-      { "node": "pricing", "name": "margin", "value": 0.3, "expected_revision": null }
+      { "node_id": "revenue", "name": "amount", "value": 4000000, "expected_revision": null },
+      { "node_id": "pricing", "name": "margin", "value": 0.3, "expected_revision": null }
     ]
   }'
 ```
@@ -592,7 +592,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
 {
   "id": "pbk_exe_…",
   "case_id": "pbk_case_…",
-  "node": "pricing",
+  "node_id": "pricing",
   "executor": { "type": "tool", "id": "tool_…" },
   "status": "completed",
   "result": "current",
@@ -644,7 +644,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
     {
       "id": "pbk_exp_…",
       "case_id": "pbk_case_…",
-      "node": "pricing",
+      "node_id": "pricing",
       "revision": 5,
       "transformation": "proposal",
       "format": "pdf",
@@ -730,7 +730,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 
 | Code                              | Status | When                                                                                                                                                                                                                           |
 | --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VALIDATION_FAILED`               | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node` on `missing` or a run; on an export, a node without transformations, an undeclared transformation or a revision that is no output of the node |
+| `VALIDATION_FAILED`               | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node_id` on `missing` or `node` on a run; on an export, a node without transformations, an undeclared transformation or a revision that is no output of the node |
 | `PLAYBOOK_VALIDATION_FAILED`      | 400    | The definition has graph problems; `meta.problems` lists them                                                                                                                                                                  |
 | `PLAYBOOK_INPUT_INVALID`          | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                                                                                                                                          |
 | `NAME_CONFLICT`                   | 409    | Another playbook in the project has the name                                                                                                                                                                                   |
