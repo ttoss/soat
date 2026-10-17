@@ -294,7 +294,7 @@ echo "SESSION_ID: $SESSION_ID"
 
 ## Step 6 — Send messages and receive replies
 
-With `auto_generate`, `add-session-message` generates immediately and returns the reply inline; the model sees all previous messages. See [Sessions](/docs/modules/sessions#examples).
+With `auto_generate`, `add-session-message` generates immediately and returns the reply inline, `message` being the stored assistant message; the model sees all previous messages. See [Sessions](/docs/modules/sessions#generated-turn).
 
 ### 7a — First message
 
@@ -312,13 +312,20 @@ Example output:
 ```json
 {
   "status": "completed",
+  "content": "The capital of France is Paris.",
   "message": {
     "role": "assistant",
+    "document_id": "doc_Qm4RtX8vLp2nZs7K",
+    "actor_id": null,
+    "agent_id": "agent_KO5nAMmsSOVBWLlN",
+    "position": 1,
     "content": "The capital of France is Paris.",
-    "model": "qwen2.5:0.5b"
+    "metadata": null,
+    "idempotency_key": null
   },
   "generation_id": "gen_mznGfHSV4YAGiBXy",
-  "trace_id": "trace_8rcvif0n29WE37NL"
+  "trace_id": "trace_8rcvif0n29WE37NL",
+  "model": "qwen2.5:0.5b"
 }
 ```
 

@@ -49,12 +49,7 @@ Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./a
 
 ### Message (within a session)
 
-| Field        | Type   | Description                       |
-| ------------ | ------ | --------------------------------- |
-| `role`       | string | `user` or `assistant`             |
-| `content`    | string | Message text                      |
-| `model`      | string | Model used for assistant messages |
-| `created_at` | string | ISO 8601 timestamp                |
+A session's messages are its conversation's [Conversation Messages](./conversations.md#conversation-message), listed by [`GET /api/v1/conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages).
 
 When creating a session message (`POST .../messages`), send exactly one of:
 
@@ -62,6 +57,20 @@ When creating a session message (`POST .../messages`), send exactly one of:
 - `document_id`: public ID of an existing document (its content is used as the message text)
 
 An optional `idempotency_key` string can accompany either variant — see [Idempotency](#idempotency).
+
+### Generated turn
+
+What [`POST /api/v1/sessions/{session_id}/generate`](/docs/api/sessions/generate-session-response) with `?wait=true`, an auto-generating [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and [`POST /api/v1/sessions/{session_id}/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs) answer. It is the body [conversation generate](./conversations.md#generating-the-next-message) answers.
+
+| Field             | Type   | Description                                                                                                                                                                 |
+| ----------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`          | string | `completed` or `requires_action`                                                                                                                                            |
+| `content`         | string | The generated text. `completed` only                                                                                                                                        |
+| `message`         | object | The stored assistant [Conversation Message](./conversations.md#conversation-message), as the conversation lists it; its `document_id` addresses the reply. `completed` only |
+| `model`           | string | Model used. `completed` only                                                                                                                                                |
+| `generation_id`   | string | The generation that produced the turn                                                                                                                                       |
+| `trace_id`        | string | The generation's trace                                                                                                                                                      |
+| `required_action` | object | Client tool calls to resolve through `tool-outputs`. `requires_action` only: nothing is stored yet, so there is no `message`                                                |
 
 ## Key Concepts
 
@@ -209,9 +218,9 @@ Forking requires both `agents:GetSession` and `agents:CreateSession`.
 
 ### Auto-Generate
 
-When `auto_generate` is `true`, `POST .../messages` saves the user message **and** triggers LLM generation in the same request; the response body carries the assistant reply instead of just the saved user message. `auto_generate` defaults to `false` and can be set at creation or toggled via [`PATCH /sessions/{session_id}`](/docs/api/sessions/update-session).
+When `auto_generate` is `true`, `POST .../messages` saves the user message **and** triggers LLM generation in the same request; the response body is the [generated turn](#generated-turn) instead of the saved user message. `auto_generate` defaults to `false` and can be set at creation or toggled via [`PATCH /sessions/{session_id}`](/docs/api/sessions/update-session).
 
-The explicit `POST .../generate` endpoint works regardless of this setting. With `auto_generate` enabled, `POST .../messages` returns as soon as the message is saved and the triggered generation runs in the background.
+The explicit `POST .../generate` endpoint works regardless of this setting.
 
 ### Message Delay (Debounce)
 
@@ -278,7 +287,7 @@ These three keys are always taken from the session and actor: a caller-provided 
 
 ### Background Generation
 
-`POST .../generate` runs in the background by default and returns `202 Accepted` immediately. Pass `?wait=true` to block until the generation settles and receive the assistant reply. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
+`POST .../generate` runs in the background by default and returns `202 Accepted` immediately. Pass `?wait=true` to block until the generation settles and receive the [generated turn](#generated-turn). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
 
 ```json
 { "status": "accepted", "session_id": "sess_..." }

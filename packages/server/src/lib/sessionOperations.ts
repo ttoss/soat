@@ -2,8 +2,8 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { submitToolOutputs } from './agentGeneration';
-import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import { generateConversationMessage } from './conversationGeneration';
+import { mapGeneratedTurn } from './generatedTurn';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import {
@@ -77,24 +77,7 @@ const checkConcurrency = (args: {
 const buildGenerationResult = (
   result: Awaited<ReturnType<typeof generateConversationMessage>>
 ) => {
-  if (result.status === 'requires_action') {
-    return {
-      status: 'requires_action' as const,
-      generation_id: result.generationId,
-      trace_id: result.traceId,
-      required_action: mapGenerationRequiredAction(result.requiredAction),
-    };
-  }
-  return {
-    status: 'completed' as const,
-    message: {
-      role: 'assistant' as const,
-      content: result.content,
-      model: result.model,
-    },
-    generation_id: result.generationId,
-    trace_id: result.traceId,
-  };
+  return mapGeneratedTurn(result);
 };
 
 const checkSessionExpiry = async (

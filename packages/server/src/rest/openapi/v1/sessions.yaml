@@ -234,10 +234,11 @@ paths:
         - Sessions
       summary: Add a user message
       description: >
-        Saves a user message to the session. When autoGenerate is enabled on the
-        session and no generation is currently in progress, generation is triggered
-        automatically and the response mirrors GenerateSessionResponse. Otherwise
-        returns the saved user message.
+        Saves a user message to the session. When `auto_generate` is enabled on
+        the session and no generation is currently in progress, generation is
+        triggered automatically and the response is the generated turn, the
+        same body `?wait=true` generate answers. Otherwise returns the saved
+        user message.
       operationId: addSessionMessage
       x-soat-resource:
         kind: session
@@ -328,7 +329,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenerateSessionResponse'
+                $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
         '202':
           description: Generation accepted and running in the background (default, when `wait` is omitted or `false`)
           content:
@@ -406,7 +407,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SendSessionMessageResponse'
+                $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -996,12 +997,12 @@ components:
           type: string
           nullable: true
     AddSessionMessageResponse:
-      # anyOf, not oneOf: without a discriminator the two shapes are not
-      # mutually exclusive (a saved-message body can also satisfy the looser
-      # generation schema), and `oneOf` rejects a body that matches both.
+      # anyOf, not oneOf: the saved-message schema requires no field, so a
+      # generated turn satisfies it too, and `oneOf` rejects a body that
+      # matches both.
       anyOf:
         - $ref: '#/components/schemas/AddSessionMessageSaved'
-        - $ref: '#/components/schemas/GenerateSessionResponse'
+        - $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
 
     GenerateSessionRequest:
       type: object
@@ -1024,80 +1025,6 @@ components:
             Keys are never case-converted — they round-trip exactly as sent.
             An invalid or colliding key is rejected with
             `400 INVALID_TOOL_CONTEXT_KEY`.
-
-    GenerateSessionResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [completed, requires_action]
-        message:
-          type: object
-          properties:
-            role:
-              type: string
-            content:
-              type: string
-            model:
-              type: string
-        generation_id:
-          x-soat-ref: generations
-          type: string
-        trace_id:
-          x-soat-ref: traces
-          type: string
-        required_action:
-          type: object
-          description: Present when status is requires_action
-          properties:
-            tool_calls:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  tool_name:
-                    type: string
-                  args:
-                    type: object
-
-    SendSessionMessageResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [completed, requires_action]
-        message:
-          type: object
-          properties:
-            role:
-              type: string
-            content:
-              type: string
-            model:
-              type: string
-        generation_id:
-          x-soat-ref: generations
-          type: string
-        trace_id:
-          x-soat-ref: traces
-          type: string
-        required_action:
-          type: object
-          description: Present when status is requires_action
-          properties:
-            tool_calls:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  tool_name:
-                    type: string
-                  args:
-                    type: object
 
     SubmitSessionToolOutputsRequest:
       type: object
