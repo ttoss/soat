@@ -708,7 +708,7 @@ describe('Playbook executions', () => {
 
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({
-        status: 'succeeded',
+        status: 'completed',
         output: { ok: true },
         output_revision: null,
       });
