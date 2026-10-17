@@ -2058,7 +2058,7 @@ describe('Evaluations', () => {
     }): Promise<SoatEvent[]> => {
       const captured: SoatEvent[] = [];
       const handler = (event: SoatEvent) => {
-        if (event.type.startsWith('eval_run.')) captured.push(event);
+        if (event.type.startsWith('eval_runs.')) captured.push(event);
       };
       eventBus.on('soat:event', handler);
       try {
@@ -2077,7 +2077,7 @@ describe('Evaluations', () => {
       return captured;
     };
 
-    test('a completed run fires eval_run.completed exactly once, with the verdict', async () => {
+    test('a completed run fires eval_runs.completed exactly once, with the verdict', async () => {
       let runId = '';
       const events = await withCapture({
         until: (captured) => {
@@ -2096,7 +2096,7 @@ describe('Evaluations', () => {
 
       expect(events).toHaveLength(1);
       const [event] = events;
-      expect(event.type).toBe('eval_run.completed');
+      expect(event.type).toBe('eval_runs.completed');
       expect(event.resourceType).toBe('eval_run');
       expect(event.resourceId).toBe(runId);
       // The payload is the promotion gate's input: a consumer must be able to
@@ -2130,11 +2130,11 @@ describe('Evaluations', () => {
       });
 
       expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('eval_run.completed');
+      expect(events[0].type).toBe('eval_runs.completed');
       expect(events[0].data.passed).toBe(false);
     });
 
-    test('an abandoned run fires eval_run.failed, so a gate stops waiting', async () => {
+    test('an abandoned run fires eval_runs.failed, so a gate stops waiting', async () => {
       const evaluation = await db.Eval.findOne({ where: { publicId: evalId } });
       const abandoned = await db.EvalRun.create({
         evalId: evaluation!.id as number,
@@ -2162,7 +2162,7 @@ describe('Evaluations', () => {
       const failure = events.find((event) => {
         return event.resourceId === abandoned.publicId;
       });
-      expect(failure?.type).toBe('eval_run.failed');
+      expect(failure?.type).toBe('eval_runs.failed');
       expect(failure?.data).toMatchObject({
         id: abandoned.publicId,
         eval_id: evalId,

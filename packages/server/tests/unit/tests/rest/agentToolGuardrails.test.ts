@@ -195,7 +195,7 @@ describe('POST /api/v1/agents/:agent_id/generate — tool guardrail gate', () =>
 
       let results: Array<Record<string, unknown>> = [];
       const [tripwire] = await captureEvents({
-        type: 'guardrail.tripwire',
+        type: 'guardrails.tripwire',
         where: (event) => {
           return event.resourceId === tool.guardrailIds[0];
         },

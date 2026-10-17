@@ -116,7 +116,7 @@ export const recordGenerationFailure = async (args: {
   // Without this, the only way to learn a background generation died is to poll
   // the record. After the writes above, so the event carries the failed record.
   await emitGenerationEvent({
-    type: 'agents.generation.failed',
+    type: 'generations.failed',
     projectId: args.projectId,
     generationId: args.generationId,
   });
@@ -289,7 +289,7 @@ const runCompletionSideEffects = async (
   ]);
 
   await emitGenerationEvent({
-    type: 'agents.generation.completed',
+    type: 'generations.completed',
     projectId: args.pending.projectId,
     generationId: args.generationId,
     assistantContent: args.result.text,

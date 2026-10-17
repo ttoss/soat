@@ -32,13 +32,13 @@ const findEventError = (shape: MemoryRuleShape): string | null => {
   if (!MEMORY_RULE_EVENTS.includes(shape.on as MemoryRuleEvent)) {
     return `'on' must be one of: ${MEMORY_RULE_EVENTS.join(', ')}`;
   }
-  // The built-in extractor reads a whole turn. `conversations.message.generated`
+  // The built-in extractor reads a whole turn. `conversation_messages.generated`
   // fires once per persisted assistant reply, which is a conversation-backed
   // subset — a bare `POST /agents/:id/generate` would never extract, silently.
   // A custom handler may bind there because it decides for itself what a
   // message is worth.
-  if (shape.on === 'conversations.message.generated' && !hasHandler(shape)) {
-    return "the built-in extractor only runs on 'agents.generation.completed'; set agent_id or tool_id to handle 'conversations.message.generated'";
+  if (shape.on === 'conversation_messages.generated' && !hasHandler(shape)) {
+    return "the built-in extractor only runs on 'generations.completed'; set agent_id or tool_id to handle 'conversation_messages.generated'";
   }
   return null;
 };

@@ -7,7 +7,7 @@ import { emitSessionEvent } from './sessionEvents';
 export const emitGenerationStarted = (
   session: InstanceType<(typeof db)['Session']>
 ) => {
-  void emitSessionEvent({ type: 'sessions.generation.started', session });
+  void emitSessionEvent({ type: 'sessions.generation_started', session });
 };
 
 export const processToolOutputResult = async (args: {

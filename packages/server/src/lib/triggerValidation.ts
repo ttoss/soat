@@ -140,7 +140,7 @@ export const validateCronExpression = (cron: string): void => {
 
 /**
  * The first segment of every registered platform event name (`documents`,
- * `agents`, `quota`, …). A pattern whose namespace is one of these is claiming
+ * `agents`, `quotas`, …). A pattern whose namespace is one of these is claiming
  * to subscribe to a platform event, and is therefore checkable.
  */
 const REGISTERED_NAMESPACES = new Set(

@@ -873,13 +873,13 @@ describe('Audit Log — read auditing flag (audit-log P3)', () => {
   });
 });
 
-describe('Audit Log — audit.entry_created webhook (audit-log P3)', () => {
+describe('Audit Log — audit_entries.created webhook (audit-log P3)', () => {
   const captureEvents = async (
     act: () => Promise<void>
   ): Promise<SoatEvent[]> => {
     const captured: SoatEvent[] = [];
     const handler = (event: SoatEvent) => {
-      if (event.type === 'audit.entry_created') captured.push(event);
+      if (event.type === 'audit_entries.created') captured.push(event);
     };
     eventBus.on('soat:event', handler);
     try {
@@ -892,7 +892,7 @@ describe('Audit Log — audit.entry_created webhook (audit-log P3)', () => {
     return captured;
   };
 
-  test('a project-scoped entry emits audit.entry_created with the entry payload', async () => {
+  test('a project-scoped entry emits audit_entries.created with the entry payload', async () => {
     let secretId = '';
     const events = await captureEvents(async () => {
       const res = await authenticatedTestClient(userToken)

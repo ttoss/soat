@@ -135,7 +135,7 @@ export interface SoatEvent {
    */
   causationChain?: readonly string[];
   /**
-   * The turn's assistant text, on `agents.generation.completed` only, for the
+   * The turn's assistant text, on `generations.completed` only, for the
    * memory rule dispatcher. In-process: no subscriber serializes it, and a
    * zero-retention turn stores no reply anywhere else.
    */

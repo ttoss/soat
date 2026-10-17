@@ -136,12 +136,12 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
   describe('a failed turn', () => {
     // A caller that got a `202` and went away learns of a dead background
     // generation only from the event, so it names the turn and the cause.
-    test('announces agents.generation.failed with the turn and its error', async () => {
+    test('announces generations.failed with the turn and its error', async () => {
       const agentId = await createAgent('Failure Event Agent');
       stub.reply(providerFailure(400));
       const captured: SoatEvent[] = [];
       const handler = (event: SoatEvent) => {
-        if (event.type === 'agents.generation.failed') captured.push(event);
+        if (event.type === 'generations.failed') captured.push(event);
       };
       eventBus.on('soat:event', handler);
 

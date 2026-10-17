@@ -27,7 +27,7 @@ const log = createDebug('soat:audit');
  * Only project-scoped entries emit it — webhooks are project-scoped, so a
  * global entry (`projectId` null) has no possible subscriber.
  */
-const AUDIT_ENTRY_CREATED_EVENT = 'audit.entry_created';
+const AUDIT_ENTRY_CREATED_EVENT = 'audit_entries.created';
 
 export type AuditPrincipalType = Extract<PrincipalType, 'user' | 'api_key'>;
 
@@ -146,7 +146,7 @@ const resolveAuditProject = async (
 };
 
 /** The snake_case projection of an entry — the read contract, shared by the
- * export stream and the `audit.entry_created` webhook payload so all three
+ * export stream and the `audit_entries.created` webhook payload so all three
  * surfaces (these two, plus the plain list/get REST routes which return
  * `mapAuditEntry`'s result directly) expose the same field names.
  *

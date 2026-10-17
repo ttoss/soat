@@ -328,15 +328,15 @@ components:
     MemoryRuleEvent:
       type: string
       enum:
-        - agents.generation.completed
-        - conversations.message.generated
+        - generations.completed
+        - conversation_messages.generated
       description: >-
-        The event a firing reads. `agents.generation.completed` fires once per
+        The event a firing reads. `generations.completed` fires once per
         completed turn whatever the transport, and is the only event the
-        built-in extractor may bind to. `conversations.message.generated` fires
+        built-in extractor may bind to. `conversation_messages.generated` fires
         per persisted assistant reply and is conversation-backed, so it is for
         custom handlers.
-      example: agents.generation.completed
+      example: generations.completed
     MemoryRule:
       type: object
       properties:

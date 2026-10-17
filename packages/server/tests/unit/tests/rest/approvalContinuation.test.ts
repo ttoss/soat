@@ -612,7 +612,7 @@ describe('Tool-call approval continuation', () => {
 
     /**
      * Approves a client-tool item and answers the call the platform releases
-     * back to the client, read off `agents.generation.requires_action` — the
+     * back to the client, read off `generations.requires_action` — the
      * event a client is told through.
      */
     const approveAndCaptureRelease = async (args: {
@@ -621,7 +621,7 @@ describe('Tool-call approval continuation', () => {
     }): Promise<ReleasedCall> => {
       const released: ReleasedCall[] = [];
       const handler = (event: SoatEvent) => {
-        if (event.type !== 'agents.generation.requires_action') return;
+        if (event.type !== 'generations.requires_action') return;
         const requiredAction = event.data.required_action as {
           tool_calls: Array<{
             id: string;

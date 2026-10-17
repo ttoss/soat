@@ -137,7 +137,7 @@ const buildBreach = (args: {
   };
 };
 
-// Increments one request quota's window counter, fires `quota.exceeded` on the
+// Increments one request quota's window counter, fires `quotas.exceeded` on the
 // first breach per window (both modes), and returns the breach only when it is
 // an `enforce` quota (so a `monitor` breach fires the webhook but never blocks).
 const evaluateRequestQuota = async (args: {
@@ -164,7 +164,7 @@ const evaluateRequestQuota = async (args: {
 /**
  * Every request reaching the middleware increments the counter of every
  * matching quota, including requests that will be rejected. Both modes are
- * evaluated: a breach fires the `quota.exceeded` webhook once per window
+ * evaluated: a breach fires the `quotas.exceeded` webhook once per window
  * either way, but only `enforce` breaches are returned (and block with 429).
  * Returns the most specific `enforce` breach, or `null`.
  *
@@ -388,7 +388,7 @@ const blackoutBreach = (args: {
   });
 };
 
-// Fires `quota.exceeded` once per window in both modes, but returns the breach
+// Fires `quotas.exceeded` once per window in both modes, but returns the breach
 // only for `enforce` — a `monitor` breach webhooks without blocking.
 const evaluateGenerationQuota = async (args: {
   quota: QuotaInstance;
@@ -448,7 +448,7 @@ const evaluateGenerationQuota = async (args: {
 /**
  * The pre-generation token/cost check: the current window aggregate for every
  * matching `tokens`/`cost_usd` quota against its limit. A breach fires the
- * `quota.exceeded` webhook once per window regardless of mode, but only
+ * `quotas.exceeded` webhook once per window regardless of mode, but only
  * `enforce` breaches block the new generation with `QUOTA_EXCEEDED`. In-flight
  * generations are never inspected — their tokens are already spent — so a
  * budget may overshoot by at most one generation.

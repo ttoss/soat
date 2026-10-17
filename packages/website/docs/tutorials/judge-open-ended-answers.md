@@ -490,7 +490,7 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$QUEUED_RUN_ID" \
 </TabItem>
 </Tabs>
 
-Each item is one queued task; the worker draining the last task settles the run and fires the `eval_run.completed` [webhook](/docs/modules/webhooks) once. Poll the `evrun_…` id or subscribe to the webhook ([Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval)).
+Each item is one queued task; the worker draining the last task settles the run and fires the `eval_runs.completed` [webhook](/docs/modules/webhooks) once. Poll the `evrun_…` id or subscribe to the webhook ([Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval)).
 
 An empty dataset is rejected in both modes; a `wait: true` run over 25 items is rejected naming the cap.
 

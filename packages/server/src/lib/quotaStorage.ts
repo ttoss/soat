@@ -6,7 +6,7 @@
  * `resets_at`, and no `Retry-After` — the aggregate *is* the footprint, and
  * only deleting content clears a breach. What is shared is the two things a
  * caller and an operator read: `quotaBreachError` builds the response body, and
- * `fireQuotaExceeded` fires the one `quota.exceeded` webhook (plus, in
+ * `fireQuotaExceeded` fires the one `quotas.exceeded` webhook (plus, in
  * `monitor` mode, the audit entry that is the whole point of a dry run).
  *
  * **Where the cap acts, and what it deliberately does not reach.** The guard
@@ -71,7 +71,7 @@ const measuredFootprint = async (args: {
   };
 };
 
-// Fires `quota.exceeded` once per measurement in both modes, and returns the
+// Fires `quotas.exceeded` once per measurement in both modes, and returns the
 // breach only for `enforce` — a `monitor` breach webhooks and audits without
 // blocking, here as everywhere.
 const evaluateStorageQuota = async (args: {

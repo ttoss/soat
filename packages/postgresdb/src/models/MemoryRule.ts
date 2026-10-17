@@ -16,15 +16,15 @@ import { Tool } from './Tool';
 /**
  * The events a rule may bind to, and the only ones.
  *
- * `conversations.message.created` is deliberately absent: it fires per message,
+ * `conversation_messages.created` is deliberately absent: it fires per message,
  * including the user's and before the reply, so a rule bound there would read
- * half a turn. `agents.generation.completed` fires once per completed turn
+ * half a turn. `generations.completed` fires once per completed turn
  * whatever the transport — conversation or bare, streaming or not — which is
  * why it is the only event the built-in extractor may bind to.
  */
 export const MEMORY_RULE_EVENTS = [
-  'agents.generation.completed',
-  'conversations.message.generated',
+  'generations.completed',
+  'conversation_messages.generated',
 ] as const;
 export type MemoryRuleEvent = (typeof MEMORY_RULE_EVENTS)[number];
 

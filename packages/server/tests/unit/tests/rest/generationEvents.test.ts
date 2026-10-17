@@ -12,7 +12,7 @@ import {
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Every `*.generation.*` lifecycle event names the generation and carries its
+ * Every generation lifecycle event names the generation and carries its
  * record exactly as `GET /api/v1/generations/{generation_id}` answers it, so a
  * subscriber reads one shape whichever transport ran the turn.
  */
@@ -150,13 +150,13 @@ describe('generation lifecycle events', () => {
     await stub.close();
   });
 
-  describe('agents.generation.completed', () => {
+  describe('generations.completed', () => {
     test('carries the generation record its GET returns', async () => {
       const agentId = await createAgent({ name: 'Completed Event Agent' });
       stub.reply(textCompletion('done'));
 
       const { generationId, events } = await captureEvents({
-        type: 'agents.generation.completed',
+        type: 'generations.completed',
         action: async () => {
           const res = await generate(agentId);
           expect(res.status).toBe(200);
@@ -188,7 +188,7 @@ describe('generation lifecycle events', () => {
       expect(paused.body.status).toBe('requires_action');
 
       const { generationId, events } = await captureEvents({
-        type: 'agents.generation.completed',
+        type: 'generations.completed',
         action: async () => {
           const res = await asAdmin()
             .post(
@@ -229,7 +229,7 @@ describe('generation lifecycle events', () => {
     });
   });
 
-  describe('agents.generation.requires_action', () => {
+  describe('generations.requires_action', () => {
     test('carries the record plus the pending required_action', async () => {
       const agentId = await createAgent({
         name: 'Requires Action Event Agent',
@@ -242,7 +242,7 @@ describe('generation lifecycle events', () => {
       );
 
       const { generationId, events } = await captureEvents({
-        type: 'agents.generation.requires_action',
+        type: 'generations.requires_action',
         action: async () => {
           const res = await generate(agentId);
           expect(res.status).toBe(200);
@@ -266,13 +266,13 @@ describe('generation lifecycle events', () => {
     });
   });
 
-  describe('agents.generation.failed', () => {
+  describe('generations.failed', () => {
     test('carries the failed record its GET returns', async () => {
       const agentId = await createAgent({ name: 'Failed Event Agent' });
       stub.reply(providerFailure(400));
 
       const { generationId, events } = await captureEvents({
-        type: 'agents.generation.failed',
+        type: 'generations.failed',
         action: async () => {
           const res = await generate(agentId);
           expect(res.status).toBe(502);
@@ -291,14 +291,14 @@ describe('generation lifecycle events', () => {
     });
   });
 
-  describe('sessions.generation.completed', () => {
-    test('names the generation and carries its record, session_id included', async () => {
+  describe('generations.completed from a session turn', () => {
+    test('is emitted once, naming the generation, session_id included', async () => {
       const agentId = await createAgent({ name: 'Session Completed Agent' });
       const sessionId = await createSession(agentId);
       stub.reply(textCompletion('session reply'));
 
       const { generationId, events } = await captureEvents({
-        type: 'sessions.generation.completed',
+        type: 'generations.completed',
         action: async () => {
           const res = await generateInSession(sessionId);
           expect(res.status).toBe(200);
@@ -316,7 +316,7 @@ describe('generation lifecycle events', () => {
     });
   });
 
-  describe('sessions.generation.requires_action', () => {
+  describe('generations.requires_action from a session turn', () => {
     test('carries the record plus the pending required_action', async () => {
       const agentId = await createAgent({
         name: 'Session Requires Action Agent',
@@ -326,7 +326,7 @@ describe('generation lifecycle events', () => {
       stub.reply(toolCallCompletion([{ id: 'call_session', name: 'lookup' }]));
 
       const { generationId, events } = await captureEvents({
-        type: 'sessions.generation.requires_action',
+        type: 'generations.requires_action',
         action: async () => {
           const res = await generateInSession(sessionId);
           expect(res.status).toBe(200);

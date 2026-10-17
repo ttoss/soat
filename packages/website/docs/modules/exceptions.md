@@ -72,7 +72,7 @@ Filed as `open`. **Acknowledge** (`acknowledged`) signals someone is on it; **re
 
 ### Producers
 
-Producers subscribe to platform events: `run_failed` rides `orchestration_runs.failed`, `approval_expired` rides `approvals.expired`, `guardrail_tripwire` rides `guardrail.tripwire` from the guardrail dispatch path. Filing is fire-and-forget.
+Producers subscribe to platform events: `run_failed` rides `orchestration_runs.failed`, `approval_expired` rides `approvals.expired`, `guardrail_tripwire` rides `guardrails.tripwire` from the guardrail dispatch path. Filing is fire-and-forget.
 
 `event_trigger_loop` is filed by the [event-trigger](./triggers.md#loops-and-cost) dispatcher when a trigger refuses to extend the causal chain that reached it (the chain already names it, or is past the depth cap). Deduped on trigger and reason, so `occurrence_count` is how often it was refused; `detail` carries the chain and event name, the only place that wiring is visible (events are not persisted).
 

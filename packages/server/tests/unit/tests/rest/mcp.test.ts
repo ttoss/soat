@@ -989,7 +989,7 @@ describe('MCP tools - happy path', () => {
     const rule = parseResult(
       await mcpCall('create-memory-rule', {
         memory_store_id: store.id,
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         prompt: 'Only deployment facts',
       })
     );
@@ -1039,11 +1039,11 @@ describe('MCP tools - happy path', () => {
 
     const res = await mcpCall('create-memory-rule', {
       memory_store_id: store.id,
-      on: 'conversations.message.generated',
+      on: 'conversation_messages.generated',
     });
     expect(res.body.result.isError).toBe(true);
     expect(res.body.result.content[0].text).toContain(
-      "the built-in extractor only runs on 'agents.generation.completed'"
+      "the built-in extractor only runs on 'generations.completed'"
     );
   });
 

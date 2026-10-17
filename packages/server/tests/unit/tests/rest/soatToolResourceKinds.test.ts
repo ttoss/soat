@@ -218,7 +218,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
     });
     const ruleId = await create('/api/v1/memory-rules', {
       memory_store_id: storeId,
-      on: 'agents.generation.completed',
+      on: 'generations.completed',
     });
     const actorId = await create('/api/v1/actors', {
       project_id: projectId,

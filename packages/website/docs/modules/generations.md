@@ -132,13 +132,13 @@ Internal recovery state (used to resume a `requires_action` generation after a s
 
 #### `extraction` — memory-rule summary
 
-Every [memory rule](./memories.md#memory-rules) bound to `agents.generation.completed` that fired for this turn records what it wrote, keyed by the rule's id:
+Every [memory rule](./memories.md#memory-rules) bound to `generations.completed` that fired for this turn records what it wrote, keyed by the rule's id:
 
 ```json
 { "mrule_V1StGXR8Z5jdHi6B": { "candidates": 3, "created": 2, "superseded": 1, "skipped": 0 } }
 ```
 
-A store can have several rules, so one flat pair of counts could not say which produced them. Absent when no rule fired. Rules bound to `conversations.message.generated` are visible only in [`GET /api/v1/generations/{generation_id}/memory-assertions`](/docs/api/generations/list-generation-memory-assertions), which lists the rows behind every count either way.
+A store can have several rules, so one flat pair of counts could not say which produced them. Absent when no rule fired. Rules bound to `conversation_messages.generated` are visible only in [`GET /api/v1/generations/{generation_id}/memory-assertions`](/docs/api/generations/list-generation-memory-assertions), which lists the rows behind every count either way.
 
 ### Recorded input
 
