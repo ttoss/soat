@@ -216,8 +216,8 @@ const parseStep = (
 
 /**
  * Validates and normalizes a pipeline tool's `pipeline` config. Enforces the
- * invariants that make a pipeline a deterministic linear sequence: a non-empty
- * list of steps, unique step ids, a tool reference per step, and a forward-
+ * invariants that make a pipeline a deterministic linear sequence: a list of
+ * steps (empty only beside an `output`), unique step ids, a tool reference per step, and a forward-
  * reference ban (a step may only read `steps.<id>` of an earlier step).
  * Throws `PIPELINE_INVALID_STEP` on any violation.
  */
@@ -229,10 +229,16 @@ export const validatePipelineConfig = (pipeline: unknown): PipelineConfig => {
     );
   }
   const rawSteps = pipeline['steps'];
-  if (!Array.isArray(rawSteps) || rawSteps.length === 0) {
+  if (!Array.isArray(rawSteps)) {
     throw new DomainError(
       'PIPELINE_INVALID_STEP',
-      'Pipeline `steps` must be a non-empty array.'
+      'Pipeline `steps` must be an array.'
+    );
+  }
+  if (rawSteps.length === 0 && pipeline['output'] === undefined) {
+    throw new DomainError(
+      'PIPELINE_INVALID_STEP',
+      'A pipeline with no `steps` needs an `output`.'
     );
   }
 

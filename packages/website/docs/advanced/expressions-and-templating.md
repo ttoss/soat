@@ -8,15 +8,15 @@ Every place SOAT maps, transforms, or interpolates values uses one of six patter
 
 ## Quick Reference
 
-| Pattern | Syntax | Where it is valid | Resolves at |
-| ------- | ------ | ----------------- | ----------- |
-| [JSON Logic](#json-logic) | `{"var": "input.x"}`, `{"cat": [...]}`, `{"if": [...]}`, … | Orchestration `input_mapping`, `state_mapping`, `expression`, `exit_condition`; pipeline step `input` and pipeline `output`; tool `output_mapping` | Run / call time |
-| [Dotted paths](#dotted-paths) | `state.a.b`, `text`, `MySecret.value` | Orchestration `state_mapping` keys, loop `collection`, and the `nodes.<id>` namespace; `output_path` on `tool_output` message content; formation `ref_attr` | Run / call / apply time |
-| [`{param}`](#single-curly-param) | `/users/{user_id}` | `execute.url` of `http` tools | Call time |
-| [`{{secret:...}}`](#secret-references-secret) | `{{secret:sec_01HXYZ}}` | `execute.url`, `execute.headers`, `mcp.url`, `mcp.headers` | Call time |
-| [`{{context:...}}`](#context-references-context) | `{{context:ocaToken}}` | `execute.headers`, `mcp.headers`, `preset_parameters` | Call time |
-| [`${...}`](#dollar-curly-formations-and-body-params) | `${ParamName}`, `${LogicalId}`, `${body.field}` | Formation `sub` expressions; `execute.url` | Apply time (`${Name}`) / call time (`${body.x}`) |
-| [Formation objects](#formation-object-expressions) | `{"ref": ...}`, `{"param": ...}`, `{"sub": ...}` | Formation template resource properties | Apply time |
+| Pattern                                              | Syntax                                                     | Where it is valid                                                                                                                                           | Resolves at                                      |
+| ---------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| [JSON Logic](#json-logic)                            | `{"var": "input.x"}`, `{"cat": [...]}`, `{"if": [...]}`, … | Orchestration `input_mapping`, `state_mapping`, `expression`, `exit_condition`; pipeline step `input` and pipeline `output`; tool `output_mapping`          | Run / call time                                  |
+| [Dotted paths](#dotted-paths)                        | `state.a.b`, `text`, `MySecret.value`                      | Orchestration `state_mapping` keys, loop `collection`, and the `nodes.<id>` namespace; `output_path` on `tool_output` message content; formation `ref_attr` | Run / call / apply time                          |
+| [`{param}`](#single-curly-param)                     | `/users/{user_id}`                                         | `execute.url` of `http` tools                                                                                                                               | Call time                                        |
+| [`{{secret:...}}`](#secret-references-secret)        | `{{secret:sec_01HXYZ}}`                                    | `execute.url`, `execute.headers`, `mcp.url`, `mcp.headers`                                                                                                  | Call time                                        |
+| [`{{context:...}}`](#context-references-context)     | `{{context:ocaToken}}`                                     | `execute.headers`, `mcp.headers`, `preset_parameters`                                                                                                       | Call time                                        |
+| [`${...}`](#dollar-curly-formations-and-body-params) | `${ParamName}`, `${LogicalId}`, `${body.field}`            | Formation `sub` expressions; `execute.url`                                                                                                                  | Apply time (`${Name}`) / call time (`${body.x}`) |
+| [Formation objects](#formation-object-expressions)   | `{"ref": ...}`, `{"param": ...}`, `{"sub": ...}`           | Formation template resource properties                                                                                                                      | Apply time                                       |
 
 ## JSON Logic
 
@@ -32,19 +32,65 @@ An expression is a **single-key object whose key is a registered operator** (`va
 }
 ```
 
+### Operators beyond the standard set
+
+| Operator         | Form                                       | Result                                                                    |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------- |
+| `round`          | `{"round": [x, digits]}` or `{"round": x}` | `x` rounded to `digits` decimal places (default `0`), half away from zero |
+| `floor` / `ceil` | same as `round`                            | `x` rounded down / up to `digits` places                                  |
+| `let`            | `{"let": [{"<name>": <expr>, …}, <body>]}` | `body` evaluated with each name readable as `{"var": "<name>"}`           |
+
+`digits` is an integer from `-15` to `15`; a negative one rounds to tens, hundreds, …. `x` is a number or a numeric string; anything else fails with `EXPRESSION_FAILED`.
+
+`let` evaluates its bindings in order, each over the context plus the bindings before it, so a value is named once and read anywhere after. A binding shadows a context key of the same name. Names are letters, digits and `_`.
+
+```json
+{
+  "let": [
+    {
+      "rate": {
+        "if": [{ "==": [{ "var": "input.regime" }, "simples"] }, 6, 15]
+      },
+      "price": {
+        "round": [
+          {
+            "/": [
+              { "var": "input.cost" },
+              {
+                "-": [
+                  1,
+                  {
+                    "/": [
+                      { "+": [{ "var": "input.margin" }, { "var": "rate" }] },
+                      100
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          2
+        ]
+      }
+    },
+    { "price": { "var": "price" }, "rate": { "var": "rate" } }
+  ]
+}
+```
+
 ### Where each surface points `var`
 
 Only the **context root** differs:
 
-| Surface | Field | `var` reads from |
-| ------- | ----- | ---------------- |
-| Orchestration node | `input_mapping` | Run state. Run input is seeded under the `input` namespace only — read it with `{"var": "input.key"}` (a flat `{"var": "key"}` is never satisfied by run input). Every upstream node's raw artifact is also available under `nodes.<nodeId>` (see [Dotted paths](#dotted-paths)). |
-| Orchestration `transform` / `condition` | `expression` | Run state (same as above) |
-| Orchestration `poll` | `exit_condition` | Run state plus `response` (latest tool result) and `attempt` |
-| Orchestration node | `state_mapping` | `{ "output": <the node's own artifact>, "state": <run state> }` — a different context root from every other orchestration surface |
-| Pipeline tool step | `input` | `input.*` (tool call arguments) and `steps.<id>.*` (earlier step results) |
-| Pipeline tool | `output` | Same as pipeline step `input` |
-| Any tool (`http`, `mcp`, `pipeline`) | `output_mapping` | `output.*` (the tool's raw result) |
+| Surface                                 | Field            | `var` reads from                                                                                                                                                                                                                                                                  |
+| --------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orchestration node                      | `input_mapping`  | Run state. Run input is seeded under the `input` namespace only — read it with `{"var": "input.key"}` (a flat `{"var": "key"}` is never satisfied by run input). Every upstream node's raw artifact is also available under `nodes.<nodeId>` (see [Dotted paths](#dotted-paths)). |
+| Orchestration `transform` / `condition` | `expression`     | Run state (same as above)                                                                                                                                                                                                                                                         |
+| Orchestration `poll`                    | `exit_condition` | Run state plus `response` (latest tool result) and `attempt`                                                                                                                                                                                                                      |
+| Orchestration node                      | `state_mapping`  | `{ "output": <the node's own artifact>, "state": <run state> }` — a different context root from every other orchestration surface                                                                                                                                                 |
+| Pipeline tool step                      | `input`          | `input.*` (tool call arguments) and `steps.<id>.*` (earlier step results)                                                                                                                                                                                                         |
+| Pipeline tool                           | `output`         | Same as pipeline step `input`                                                                                                                                                                                                                                                     |
+| Any tool (`http`, `mcp`, `pipeline`)    | `output_mapping` | `output.*` (the tool's raw result)                                                                                                                                                                                                                                                |
 
 ### Passing logic-shaped data as a literal
 
@@ -81,7 +127,12 @@ Dotted paths also appear inside JSON Logic `var` strings (`{"var": "steps.call.t
 `execute.url` on `http` tools supports `{paramName}` placeholders, replaced at call time with the URL-encoded tool argument of the same name. Matched arguments are removed from the query/body; the rest pass through normally.
 
 ```json
-{ "execute": { "url": "https://api.example.com/users/{user_id}/posts/{post_id}", "method": "DELETE" } }
+{
+  "execute": {
+    "url": "https://api.example.com/users/{user_id}/posts/{post_id}",
+    "method": "DELETE"
+  }
+}
 ```
 
 This matches OpenAPI path templating.
@@ -95,7 +146,9 @@ This matches OpenAPI path templating.
 A `{{secret:sec_...}}` token embeds a [Secret](../modules/secrets.md) by public ID inside `execute.url`, `execute.headers`, `mcp.url`, or `mcp.headers`:
 
 ```json
-{ "execute": { "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" } } }
+{
+  "execute": { "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" } }
+}
 ```
 
 The secret must exist in the same project (validated at tool create/update; `400 SECRET_NOT_FOUND` otherwise). The stored tool and every `GET`/`LIST` response keep the token; the decrypted value is substituted server-side only in the outbound request and never echoed back.
@@ -145,11 +198,11 @@ Prefer `{param}` when defining tools directly via the API or CLI; use `${body.x}
 
 Formation resource properties support three single-key object forms, mirroring CloudFormation:
 
-| Form | Meaning |
-| ---- | ------- |
-| `{"ref": "LogicalId"}` | The physical ID of another resource in the template |
-| `{"param": "Name"}` | A template parameter value |
-| `{"sub": "...${Name}..."}` | String interpolation of parameters and logical IDs |
+| Form                       | Meaning                                             |
+| -------------------------- | --------------------------------------------------- |
+| `{"ref": "LogicalId"}`     | The physical ID of another resource in the template |
+| `{"param": "Name"}`        | A template parameter value                          |
+| `{"sub": "...${Name}..."}` | String interpolation of parameters and logical IDs  |
 
 See [Formations](../modules/formations.md).
 
@@ -176,5 +229,5 @@ No `tool_context` value is interpolated into a URL, a body, or a JSON Logic expr
 - **A `{{context:...}}` token outside `headers` or `preset_parameters`** — in a URL or an `execute.auth` block it is rejected with `400 INVALID_TEMPLATE_TOKEN`. Context always arrives as `X-Soat-Context-*` headers regardless. See [Tool Context](./tool-context.md).
 - **camelCase `var` paths for run input** — run-input keys round-trip verbatim: an input sent as `cycle_task` is read as `{"var": "input.cycle_task"}`, not `cycleTask`.
 - **Bare string as a state read** — in an `input_mapping`, a bare string is a literal. `"state.key"` does not read state; use `{"var": "key"}`.
-- **Forward references** — a pipeline step may only read `steps.<id>` of an *earlier* step; formations reject circular `ref`/`sub` dependencies.
+- **Forward references** — a pipeline step may only read `steps.<id>` of an _earlier_ step; formations reject circular `ref`/`sub` dependencies.
 - **Expecting `{ var: ... }` to survive as data** — wrap logic-shaped literals in `preserve`.

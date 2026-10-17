@@ -112,6 +112,104 @@ describe('jsonLogicMapping', () => {
     });
   });
 
+  describe('round, floor and ceil', () => {
+    test.each([
+      [{ round: [2.345, 2] }, 2.35],
+      [{ round: [1.005, 2] }, 1.01],
+      [{ round: [-2.5] }, -3],
+      [{ round: 2.5 }, 3],
+      [{ floor: [2.349, 2] }, 2.34],
+      [{ floor: -1.5 }, -2],
+      [{ ceil: [2.341, 2] }, 2.35],
+      [{ ceil: [1234, -2] }, 1300],
+    ])('%j is %d', (expression, expected) => {
+      expect(evaluateLogic(expression, {})).toBe(expected);
+    });
+
+    test('rounds a computed value', () => {
+      expect(
+        evaluateLogic({ round: [{ '/': [{ var: 'a' }, 3] }, 2] }, { a: 10 })
+      ).toBe(3.33);
+    });
+
+    test('fails on a value that is not a number', () => {
+      expect(() => {
+        return evaluateLogic({ round: [{ var: 'missing' }, 2] }, {});
+      }).toThrow(/round/);
+    });
+
+    test('fails on digits that are not an integer', () => {
+      expect(() => {
+        return evaluateLogic({ round: [1.5, 0.5] }, {});
+      }).toThrow(/digits/);
+    });
+  });
+
+  describe('let', () => {
+    test('names values once and reads them in the body', () => {
+      expect(
+        evaluateLogic(
+          {
+            let: [
+              { rate: { if: [{ var: 'simples' }, 6, 15] } },
+              { total: { '+': [{ var: 'rate' }, { var: 'margin' }] } },
+            ],
+          },
+          { simples: true, margin: 30 }
+        )
+      ).toEqual({ total: 36 });
+    });
+
+    test('a binding reads the bindings declared before it', () => {
+      expect(
+        evaluateLogic(
+          {
+            let: [
+              { a: { '*': [{ var: 'x' }, 2] }, b: { '+': [{ var: 'a' }, 1] } },
+              { var: 'b' },
+            ],
+          },
+          { x: 5 }
+        )
+      ).toBe(11);
+    });
+
+    test('a binding shadows a context key of the same name', () => {
+      expect(evaluateLogic({ let: [{ x: 1 }, { var: 'x' }] }, { x: 2 })).toBe(
+        1
+      );
+    });
+
+    test('binds over a context that is not an object', () => {
+      expect(evaluateLogic({ let: [{ x: 1 }, { var: 'x' }] }, null)).toBe(1);
+    });
+
+    test('nests inside another expression', () => {
+      expect(
+        evaluateLogic(
+          {
+            cat: [
+              'R$ ',
+              { let: [{ v: { round: [{ var: 'p' }, 2] } }, { var: 'v' }] },
+            ],
+          },
+          { p: 9.999 }
+        )
+      ).toBe('R$ 10');
+    });
+
+    test.each([
+      [{ let: { x: 1 } }],
+      [{ let: [{ x: 1 }] }],
+      [{ let: [[1], { var: 'x' }] }],
+      [{ let: [{ 'a.b': 1 }, { var: 'a' }] }],
+    ])('fails on a malformed %j', (expression) => {
+      expect(() => {
+        return evaluateLogic(expression, {});
+      }).toThrow(/let/);
+    });
+  });
+
   describe('applyInputMapping', () => {
     test('returns empty object when inputMapping is undefined', () => {
       expect(applyInputMapping(undefined, {})).toEqual({});

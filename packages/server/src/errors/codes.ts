@@ -461,7 +461,7 @@ export const ERROR_CODES = {
   PIPELINE_INVALID_STEP: {
     httpStatus: 400,
     description:
-      'The pipeline tool configuration is invalid (e.g. no steps, a duplicate or malformed step id, a missing tool reference, a forward reference to a later step, or a step that targets a client tool).',
+      'The pipeline tool configuration is invalid (e.g. no steps and no `output`, a duplicate or malformed step id, a missing tool reference, a forward reference to a later step, or a step that targets a client tool).',
   },
   PIPELINE_STEP_FAILED: {
     httpStatus: 422,
