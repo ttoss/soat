@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.85.0](https://github.com/ttoss/soat/compare/v0.84.0...v0.85.0) (2026-10-17)
+
+* fix(events)!: event names are the resource type plural and a verb (#1645) ([072b779](https://github.com/ttoss/soat/commit/072b77909828d1de09f0d24585f56ad66bc825b5)), closes [#1645](https://github.com/ttoss/soat/issues/1645) [#1624](https://github.com/ttoss/soat/issues/1624)
+
+### BREAKING CHANGES
+
+* event names are renamed — `agents.generation.*` and `sessions.generation.*` become `generations.*`, `sessions.generation.started` becomes `sessions.generation_started`, `eval_run.*` → `eval_runs.*`, `quota.exceeded` → `quotas.exceeded`, `guardrail.tripwire` → `guardrails.tripwire`, `audit.entry_created` → `audit_entries.created`, `conversations.message.*` → `conversation_messages.*`, `usage.threshold_crossed` → `usage_thresholds.crossed`. A stored `agents.*` pattern no longer matches generation events.
+
 # [0.84.0](https://github.com/ttoss/soat/compare/v0.83.1...v0.84.0) (2026-10-17)
 
 **Note:** Version bump only for package @soat/cli
