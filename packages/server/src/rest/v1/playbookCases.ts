@@ -139,6 +139,7 @@ playbookCasesRouter.post(
       writes: parseInputWrites(body.inputs),
       createdByUserId: ctx.authUser.id,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
+      wait: body.wait === true,
     });
   }
 );
@@ -313,6 +314,7 @@ playbookCasesRouter.post(
       confirmation: parseConfirmation(body),
       createdByUserId: ctx.authUser.id,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
+      wait: body.wait === true,
     });
   }
 );
@@ -339,6 +341,7 @@ playbookCasesRouter.post(
       version: body.version,
       createdByUserId: ctx.authUser.id,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
+      wait: body.wait === true,
     });
   }
 );

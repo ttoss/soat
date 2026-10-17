@@ -494,7 +494,9 @@ paths:
         or a value its schema refuses is `400 PLAYBOOK_INPUT_INVALID`. A value
         equal to the field's current one writes no revision. Once written, every
         node the write makes runnable is queued to run, unless the case is
-        paused. A write made with a credential the case's own work runs as — the
+        paused. With `wait: true` it answers once
+        every execution queued, and every one those queue, has settled or
+        parked. A write made with a credential the case's own work runs as — the
         case, one of its executions in flight, or the task or run one started —
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
@@ -911,7 +913,9 @@ paths:
         the new version: a node added is open, a node removed leaves the
         structure while its entries stay, a node whose input reads another
         field is `stale`, and a value its input's new schema refuses is
-        missing again. The cascade then runs what became runnable. Each
+        missing again. The cascade then runs what became runnable. With `wait: true` it answers once
+        every execution queued, and every one those queue, has settled or
+        parked. Each
         upgrade is recorded with what moved; the version the case is already
         on records nothing.
 
@@ -1068,7 +1072,9 @@ paths:
 
         An approval writes a `confirmation` entry whose value is the node's
         input values: it is the node's output, and the nodes reading it run
-        next. A rejection writes a `rejection` entry with the `reason`: the node
+        next. With `wait: true` it answers once
+        every execution queued, and every one those queue, has settled or
+        parked. A rejection writes a `rejection` entry with the `reason`: the node
         is `rejected`, and every node reading it is blocked, until its inputs
         change or it is approved. Another node, or a `confirm` node with a
         required input unset or reading a node that is not `done`, is `409
@@ -1706,6 +1712,12 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/PlaybookInputWrite'
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once every execution the write queued, and every one those
+            queue in turn, has settled or parked, instead of right away
     PlaybookMissingInput:
       type: object
       properties:
@@ -1956,6 +1968,12 @@ components:
           type: integer
           description: The version to move the case to; the playbook's current one when omitted
           example: 2
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once every execution the write queued, and every one those
+            queue in turn, has settled or parked, instead of right away
     PlaybookUpgrade:
       type: object
       properties:
@@ -2048,3 +2066,9 @@ components:
             nullable: true
           example:
             revenue: 3
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once every execution the write queued, and every one those
+            queue in turn, has settled or parked, instead of right away

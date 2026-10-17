@@ -5,11 +5,11 @@ import { DomainError } from '../errors';
 import { paginatedList } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import {
-  mapPlaybookCase,
   playbookCases,
   versionDefinition,
   withLockedCase,
 } from './playbookCases';
+import { answerPlaybookCase } from './playbookCaseWait';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookUpgradeDiff } from './playbookUpgrade';
 
@@ -71,6 +71,7 @@ export const upgradePlaybookCase = async (args: {
   version: unknown;
   createdByUserId: number | null;
   runWorkPublicId?: string;
+  wait?: boolean;
 }) => {
   log('upgradePlaybookCase: id=%s version=%s', args.id, args.version);
   const row = await playbookCases.getByPublicId(args);
@@ -136,7 +137,7 @@ export const upgradePlaybookCase = async (args: {
   });
 
   if (upgraded) await advancePlaybookCase({ caseDbId: row.id as number });
-  return mapPlaybookCase(await playbookCases.reload(row));
+  return answerPlaybookCase({ row, wait: args.wait === true });
 };
 
 export const listPlaybookCaseUpgrades = async (args: {

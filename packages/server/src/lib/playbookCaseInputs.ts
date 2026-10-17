@@ -9,10 +9,10 @@ import {
   caseDefinition,
   caseSnapshot,
   type MappedPlaybookCase,
-  mapPlaybookCase,
   playbookCases,
   withLockedCase,
 } from './playbookCases';
+import { answerPlaybookCase } from './playbookCaseWait';
 import type {
   JsonValue,
   PlaybookDefinition,
@@ -176,6 +176,7 @@ export const writePlaybookCaseInputs = async (args: {
   writes: PlaybookInputWrite[];
   createdByUserId: number | null;
   runWorkPublicId?: string;
+  wait?: boolean;
 }): Promise<MappedPlaybookCase> => {
   log('writePlaybookCaseInputs: id=%s count=%d', args.id, args.writes.length);
   const found = await playbookCases.getByPublicId(args);
@@ -230,5 +231,5 @@ export const writePlaybookCaseInputs = async (args: {
   });
 
   await advancePlaybookCase({ caseDbId: found.id as number });
-  return mapPlaybookCase(await playbookCases.reload(found));
+  return answerPlaybookCase({ row: found, wait: args.wait === true });
 };

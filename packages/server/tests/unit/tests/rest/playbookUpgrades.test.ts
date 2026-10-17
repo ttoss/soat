@@ -234,6 +234,37 @@ describe('Playbook case upgrades', () => {
       ]);
     });
 
+    test('with wait it answers once the nodes it makes runnable settle', async () => {
+      const playbookId = await newPlaybook();
+      const caseId = await newCase(playbookId);
+      await writeAmount(caseId, 5);
+      await redefine(playbookId, {
+        nodes: [
+          V1.nodes[0],
+          {
+            ...V1.nodes[1],
+            inputs: [
+              {
+                name: 'revenue',
+                schema: { type: 'number' },
+                required: true,
+                source: { node: 'revenue', field: 'input.amount' },
+              },
+            ],
+          },
+        ],
+      });
+
+      const res = await upgrade(caseId, { wait: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.automation_status).toBe('idle');
+      expect(nodeOf(res.body, 'pricing')).toMatchObject({
+        state: 'done',
+        output: { value: { revenue: 5 } },
+      });
+    });
+
     test('asks again for a value the new schema refuses', async () => {
       const playbookId = await newPlaybook();
       const caseId = await newCase(playbookId);

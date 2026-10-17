@@ -7,10 +7,10 @@ import {
   appendEntries,
   caseDefinition,
   caseNodeStates,
-  mapPlaybookCase,
   playbookCases,
   withLockedCase,
 } from './playbookCases';
+import { answerPlaybookCase } from './playbookCaseWait';
 import type { PlaybookNode } from './playbookDefinition';
 import { readCaseNode } from './playbookExecutions';
 import { assertNotOwnWork } from './playbookSelfWrite';
@@ -107,6 +107,7 @@ export const confirmPlaybookCaseNode = async (args: {
   confirmation: Confirmation;
   createdByUserId: number | null;
   runWorkPublicId?: string;
+  wait?: boolean;
 }) => {
   log('confirmPlaybookCaseNode: id=%s node=%s', args.id, args.node);
   const row = await playbookCases.getByPublicId(args);
@@ -168,5 +169,5 @@ export const confirmPlaybookCaseNode = async (args: {
   });
 
   await advancePlaybookCase({ caseDbId: row.id as number });
-  return mapPlaybookCase(await playbookCases.reload(row));
+  return answerPlaybookCase({ row, wait: args.wait === true });
 };

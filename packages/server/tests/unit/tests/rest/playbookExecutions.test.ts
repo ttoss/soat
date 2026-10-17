@@ -605,6 +605,64 @@ describe('Playbook executions', () => {
     });
   });
 
+  describe('POST /api/v1/playbook-cases/{case_id}/inputs with wait', () => {
+    const writeAndWait = async (caseId: string, value: number) => {
+      return asAdmin()
+        .post(`/api/v1/playbook-cases/${caseId}/inputs`)
+        .send({
+          inputs: [
+            { node: 'revenue', name: 'amount', value, expected_revision: null },
+          ],
+          wait: true,
+        });
+    };
+
+    test('answers once every node the write reaches has settled', async () => {
+      const caseId = await newCase({
+        definition: readsAmount({
+          type: 'tool',
+          id: doubleToolId,
+          input: { value: { var: 'amount' } },
+        }),
+      });
+
+      const res = await writeAndWait(caseId, 21);
+
+      expect(res.status).toBe(200);
+      expect(res.body.automation_status).toBe('idle');
+      const pricing = res.body.nodes.find((node: { key: string }) => {
+        return node.key === 'pricing';
+      });
+      expect(pricing).toMatchObject({
+        state: 'done',
+        output: { value: { doubled: 42 } },
+      });
+    });
+
+    test('answers once a node parks on the task it started', async () => {
+      const caseId = await newCase({
+        definition: readsAmount({ type: 'workflow', id: workflowId }),
+      });
+
+      const res = await writeAndWait(caseId, 1);
+
+      expect(res.status).toBe(200);
+      expect(res.body.automation_status).toBe('waiting');
+    });
+
+    test('answers at once on a paused case', async () => {
+      const caseId = await newCase({
+        definition: readsAmount({ type: 'tool', id: doubleToolId }),
+      });
+      await pause(caseId);
+
+      const res = await writeAndWait(caseId, 1);
+
+      expect(res.status).toBe(200);
+      expect(res.body.automation_status).toBe('paused');
+    });
+  });
+
   describe('POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run', () => {
     test('without wait it answers running and settles in the background', async () => {
       const caseId = await newCase({
