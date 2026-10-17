@@ -3,6 +3,7 @@ import { App, Router } from '@ttoss/http-server';
 import { APICallError } from 'ai';
 import { docsUrlFor, DomainError, resolutionFor } from 'src/errors';
 import { errorLoggerMiddleware } from 'src/middleware/errorLogger';
+import { requestIdMiddleware } from 'src/middleware/requestId';
 import request from 'supertest';
 
 describe('errorLogger middleware', () => {
@@ -138,6 +139,37 @@ describe('errorLogger middleware', () => {
         docs_url: docsUrlFor({ code: 'INTERNAL_ERROR' }),
       },
     });
+  });
+
+  test('names the request id the response echoes', async () => {
+    delete process.env.SOAT_ERROR_LOGS_ENABLED;
+    const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+    const app = new App();
+    const router = new Router();
+
+    app.use(errorLoggerMiddleware);
+    app.use(requestIdMiddleware);
+
+    router.get('/boom', async () => {
+      throw new Error('boom');
+    });
+
+    app.use(router.routes());
+
+    const response = await request(app.callback())
+      .get('/boom')
+      .set('X-Request-Id', 'req-log-1');
+
+    expect(response.headers['x-request-id']).toBe('req-log-1');
+    const logged = consoleError.mock.calls
+      .map((parts) => {
+        return parts.map(String).join(' ');
+      })
+      .join('\n');
+    expect(logged).toContain('Request failed');
+    expect(logged).toContain("requestId: 'req-log-1'");
+    consoleError.mockRestore();
   });
 });
 

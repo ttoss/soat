@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { Transaction } from './dbTransaction';
 
 export const AUTOMATION_STATUSES = [
   'idle',
@@ -32,6 +33,22 @@ const casesWhere = (condition: string) => {
   return db.sequelize.literal(
     `(SELECT case_id FROM playbook_executions WHERE ${condition})`
   );
+};
+
+/** Whether the case has work of its own in flight, read in `transaction`. */
+export const caseHasOwnWork = async (args: {
+  caseDbId: number;
+  transaction: Transaction;
+}): Promise<boolean> => {
+  const found = await db.PlaybookExecution.findOne({
+    where: {
+      caseId: args.caseDbId,
+      [Op.and]: [db.sequelize.literal(`(${OWN_WORK})`)],
+    },
+    attributes: ['id'],
+    transaction: args.transaction,
+  });
+  return found !== null;
 };
 
 /**

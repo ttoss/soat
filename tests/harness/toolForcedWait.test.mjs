@@ -29,6 +29,12 @@ const TOOL_CHOOSES_WAIT = {
   startEvalRun: 'a run scores a whole dataset',
   RunPlaybookCaseNodeRequest:
     'a node runs as long as its executor, which may be a task left open',
+  WritePlaybookCaseInputsRequest:
+    'the cascade runs as long as the executors of every node it reaches',
+  ConfirmPlaybookCaseNodeRequest:
+    'the cascade runs as long as the executors of every node it reaches',
+  UpgradePlaybookCaseRequest:
+    'the cascade runs as long as the executors of every node it reaches',
 };
 
 /** The `wait` fields declared directly on `node`. */

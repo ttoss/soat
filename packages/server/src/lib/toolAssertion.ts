@@ -108,6 +108,9 @@ export type ToolAssertionIdentity = {
   toolId: string | null;
   /** Public id of the tool's own project. */
   projectId: string;
+  /** Public ids of the agent and generation whose turn made the call. */
+  agentId?: string | null;
+  generationId?: string | null;
   context?: Record<string, string>;
 };
 
@@ -159,6 +162,10 @@ export const toolAssertionHeaders = (args: {
     jti: crypto.randomUUID(),
     ...(args.identity.toolId ? { tool_id: args.identity.toolId } : {}),
     project_id: args.identity.projectId,
+    ...(args.identity.agentId ? { agent_id: args.identity.agentId } : {}),
+    ...(args.identity.generationId
+      ? { generation_id: args.identity.generationId }
+      : {}),
     ...identityClaims(args.identity.context),
     body_sha256: crypto
       .createHash('sha256')
@@ -169,4 +176,56 @@ export const toolAssertionHeaders = (args: {
     .sign(null, Buffer.from(signingInput), key.privateKey)
     .toString('base64url');
   return { [name]: `${signingInput}.${signature}` };
+};
+
+const decodeSegment = (segment: string): unknown => {
+  try {
+    return JSON.parse(Buffer.from(segment, 'base64url').toString('utf-8'));
+  } catch {
+    return null;
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+/** The token's segments when its header names this deployment's key. */
+const ownSegments = (args: { token: string; kid: string }) => {
+  const [header, payload, signature, ...rest] = args.token.split('.');
+  if (!header || !payload || !signature || rest.length > 0) return null;
+  const protectedHeader = decodeSegment(header);
+  if (
+    !isRecord(protectedHeader) ||
+    protectedHeader.alg !== 'EdDSA' ||
+    protectedHeader.kid !== args.kid
+  ) {
+    return null;
+  }
+  return { header, payload, signature };
+};
+
+/**
+ * The claims of an assertion this deployment signed and that has not expired,
+ * or `null`. Only the current key verifies: a rotated-out key's assertions
+ * are at most one TTL old anyway.
+ */
+export const verifyOwnToolAssertion = (
+  token: string
+): Record<string, unknown> | null => {
+  const key = signingKey();
+  if (!key) return null;
+  const segments = ownSegments({ token, kid: key.published.kid });
+  if (!segments) return null;
+  const valid = crypto.verify(
+    null,
+    Buffer.from(`${segments.header}.${segments.payload}`),
+    crypto.createPublicKey(key.privateKey),
+    Buffer.from(segments.signature, 'base64url')
+  );
+  const claims = decodeSegment(segments.payload);
+  if (!valid || !isRecord(claims) || claims.iss !== ISSUER) return null;
+  const unexpired =
+    typeof claims.exp === 'number' && claims.exp * 1000 >= Date.now();
+  return unexpired ? claims : null;
 };

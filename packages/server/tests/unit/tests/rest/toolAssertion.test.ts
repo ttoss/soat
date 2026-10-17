@@ -397,7 +397,10 @@ describe('Tool assertions', () => {
         tool_bindings: [{ tool_id: tool.id }],
       });
 
-      await turn.generate({ agentId, calls: [{ name: 'echo', args: {} }] });
+      const generation = await turn.generate({
+        agentId,
+        calls: [{ name: 'echo', args: {} }],
+      });
 
       const requests = turn.target.requestsAt(tool.path);
       expect(
@@ -414,6 +417,8 @@ describe('Tool assertions', () => {
         expect(valid).toBe(true);
         expect(claims.tool_id).toBe(tool.id);
         expect(claims.project_id).toBe(turn.projectId);
+        expect(claims.agent_id).toBe(agentId);
+        expect(claims.generation_id).toBe(generation.id);
       }
     });
 

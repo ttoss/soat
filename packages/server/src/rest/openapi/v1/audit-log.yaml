@@ -253,6 +253,8 @@ components:
           type: string
           nullable: true
           description: Public id of the principal (`user_…` or `key_…`); null for platform-originated entries
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         action:
           type: string
           description: The permission-action string that authorized the request

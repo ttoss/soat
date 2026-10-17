@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: SOAT On-Behalf-Of
+  version: 1.0.0
+  description: >-
+    Shared components for the tool call a write was made on behalf of. This
+    file declares no paths: it exists so the shape is defined once for every
+    record that carries it.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    OnBehalfOf:
+      type: object
+      nullable: true
+      description: >-
+        The tool call the write was made on behalf of, verified from the
+        request's `On-Behalf-Of` header (a tool assertion this deployment
+        signed, sent back with an API key scoped to its project); null for a
+        write made as the credential alone. Attribution only: `created_by`
+        and the permissions checked are the credential's.
+      properties:
+        tool_id:
+          type: string
+          nullable: true
+          example: tool_V1StGXR8Z5jdHi6B
+        agent_id:
+          type: string
+          nullable: true
+          description: The agent whose turn called the tool
+          example: agent_V1StGXR8Z5jdHi6B
+        generation_id:
+          type: string
+          nullable: true
+          description: The generation that called the tool
+          example: gen_V1StGXR8Z5jdHi6B
+        session_id:
+          type: string
+          nullable: true
+          example: sess_V1StGXR8Z5jdHi6B
+        actor_id:
+          type: string
+          nullable: true
+          example: actor_V1StGXR8Z5jdHi6B

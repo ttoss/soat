@@ -494,7 +494,9 @@ paths:
         or a value its schema refuses is `400 PLAYBOOK_INPUT_INVALID`. A value
         equal to the field's current one writes no revision. Once written, every
         node the write makes runnable is queued to run, unless the case is
-        paused. A write made with a credential the case's own work runs as — the
+        paused. With `wait: true` it answers once
+        every execution queued, and every one those queue, has settled or
+        parked. A write made with a credential the case's own work runs as — the
         case, one of its executions in flight, or the task or run one started —
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
@@ -621,15 +623,17 @@ paths:
       description: >-
         Runs one node now. The cascade already runs every node whose inputs
         are set once a write, a settle or a resume makes it runnable, and never
-        reruns a `failed` one: this is how a failed node is retried. A `collect`
+        reruns a `failed` or `done` one: this is how a failed node is retried,
+        and how a `done` node is recomputed after an upgrade changed its
+        executor. A `collect`
         node takes its own input values as its output, any other node starts
         its executor with the node's input values mapped through the
         executor's `input`. The executor runs as the
         author of the case's playbook version, whose permission to start it is
         checked again here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`); an author that
         no longer exists is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`. Only a `ready`,
-        `stale` or `failed` node with every required input set runs; anything
-        else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
+        `stale`, `failed` or `done` node with every required input set runs;
+        anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
         PROJECT_PAUSED`.
 
@@ -909,7 +913,9 @@ paths:
         the new version: a node added is open, a node removed leaves the
         structure while its entries stay, a node whose input reads another
         field is `stale`, and a value its input's new schema refuses is
-        missing again. The cascade then runs what became runnable. Each
+        missing again. The cascade then runs what became runnable. With `wait: true` it answers once
+        every execution queued, and every one those queue, has settled or
+        parked. Each
         upgrade is recorded with what moved; the version the case is already
         on records nothing.
 
@@ -1066,7 +1072,9 @@ paths:
 
         An approval writes a `confirmation` entry whose value is the node's
         input values: it is the node's output, and the nodes reading it run
-        next. A rejection writes a `rejection` entry with the `reason`: the node
+        next. With `wait: true` it answers once
+        every execution queued, and every one those queue, has settled or
+        parked. A rejection writes a `rejection` entry with the `reason`: the node
         is `rejected`, and every node reading it is blocked, until its inputs
         change or it is approved. Another node, or a `confirm` node with a
         required input unset or reading a node that is not `done`, is `409
@@ -1704,6 +1712,12 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/PlaybookInputWrite'
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once every execution the write queued, and every one those
+            queue in turn, has settled or parked, instead of right away
     PlaybookMissingInput:
       type: object
       properties:
@@ -1765,6 +1779,8 @@ components:
           x-soat-ref: users
           type: string
           nullable: true
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -1852,6 +1868,8 @@ components:
           type: string
           nullable: true
           description: Who asked for the run
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -1939,6 +1957,8 @@ components:
           type: string
           nullable: true
           description: Who asked for the export
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -1954,6 +1974,12 @@ components:
           type: integer
           description: The version to move the case to; the playbook's current one when omitted
           example: 2
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once every execution the write queued, and every one those
+            queue in turn, has settled or parked, instead of right away
     PlaybookUpgrade:
       type: object
       properties:
@@ -2016,6 +2042,8 @@ components:
           type: string
           nullable: true
           description: Who upgraded the case
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -2046,3 +2074,9 @@ components:
             nullable: true
           example:
             revenue: 3
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            Answer once every execution the write queued, and every one those
+            queue in turn, has settled or parked, instead of right away

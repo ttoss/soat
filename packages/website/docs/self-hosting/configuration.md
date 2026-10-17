@@ -142,6 +142,7 @@ Every header SOAT names is `<SOAT_HEADER_PREFIX><name>` (e.g. to hide the SOAT n
 | [Tool assertion](../modules/tools.md#tool-assertions) `Tool-Assertion` | `mcp` tools | `X-Acme-Tool-Assertion` |
 | [Webhook](../modules/webhooks.md) `Event`, `Delivery`, `Signature` | webhook subscribers | `X-Acme-Signature` |
 | [Formation handler](../modules/formations.md) `Signature`, `Idempotency-Key` | registered resource-type handlers | `X-Acme-Idempotency-Key` |
+| [On-behalf-of](../modules/tools.md#writing-on-behalf-of-a-tool-call) `On-Behalf-Of` | read from a tool server writing back with its project's key | `X-Acme-On-Behalf-Of` |
 | [Inbound trigger hook](../modules/triggers.md) `Signature` | read from the caller of `/hooks/triggers/{trigger_id}` | `X-Acme-Signature` |
 
 Prepended verbatim, so include the trailing `-`. Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the request with an error naming the variable. Empty or unset keeps the default. Changing it breaks every receiver and sender already using these names: set it before wiring anything up, or update both sides together.

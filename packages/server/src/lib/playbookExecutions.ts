@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { onEvent, retryOrRecordDrop, type SoatEvent } from './eventBus';
+import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import {
   assertCaseAcceptsWork,
@@ -47,18 +48,22 @@ export const mapPlaybookExecution = (args: {
     output_revision: row.outputRevision,
     error: row.error,
     created_by: row.createdBy?.publicId ?? null,
+    on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
     finished_at: row.finishedAt,
   };
 };
 
+// `done` runs on request only: the cascade never reruns a current output, and
+// an equal output writes no revision, so nothing downstream reruns either.
 const RUNNABLE_STATES: ReadonlySet<string> = new Set([
   'ready',
   'stale',
   'failed',
+  'done',
 ]);
 
-/** A node runs when its inputs are set and its output is not current. */
+/** A node runs when its inputs are set and nothing of it is in flight. */
 const assertRunnable = (args: {
   node: PlaybookNode;
   view: PlaybookNodeView;
@@ -151,6 +156,7 @@ export const runPlaybookNode = async (args: {
   node: unknown;
   wait: boolean;
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
 }) => {
   log('runPlaybookNode: case=%s node=%s', args.caseId, args.node);
   const row = await playbookCases.getByPublicId({
@@ -192,6 +198,7 @@ export const runPlaybookNode = async (args: {
             values: view.values,
           }),
           createdByUserId: args.createdByUserId,
+          onBehalfOf: args.onBehalfOf,
         },
         { transaction }
       );
