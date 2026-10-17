@@ -93,7 +93,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `node`             | string          | The node that ran                                                                    |
 | `playbook_version` | integer         | The version the case runs on                                                         |
 | `executor`         | object \| null  | `{ type, id }`; null for a `collect` node                                            |
-| `status`           | string          | `pending` until a worker claims it, `running`, then `succeeded` or `failed`          |
+| `status`           | string          | `queued` until a worker claims it, `running`, then `completed` or `failed`           |
 | `result`           | string \| null  | Once settled: `current`, or `superseded` when the node's inputs changed while it ran |
 | `run_id`           | string \| null  | The generation, decision, task or orchestration run it started                       |
 | `input`            | any             | What the executor was given                                                          |
@@ -116,7 +116,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `transformation`   | string         | The transformation's `name`                                                        |
 | `format`           | string         | The transformation's `format`                                                      |
 | `tool_id`          | string         | The tool called                                                                    |
-| `status`           | string         | `running`, then `succeeded` or `failed`                                            |
+| `status`           | string         | `running`, then `completed` or `failed`                                            |
 | `stale`            | boolean        | `revision` is no longer the node's current output, or the node is no longer `done` |
 | `file_id`          | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted       |
 | `error`            | object \| null | Why it failed                                                                      |
@@ -594,7 +594,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
   "case_id": "pbk_case_…",
   "node": "pricing",
   "executor": { "type": "tool", "id": "tool_…" },
-  "status": "succeeded",
+  "status": "completed",
   "result": "current",
   "output": { "price": 12000 },
   "output_revision": 5
@@ -648,7 +648,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
       "revision": 5,
       "transformation": "proposal",
       "format": "pdf",
-      "status": "succeeded",
+      "status": "completed",
       "stale": false,
       "file_id": "file_…"
     }

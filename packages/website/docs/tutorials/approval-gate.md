@@ -401,7 +401,7 @@ Expected output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "outcome": "Refund issued."
 }
 ```
@@ -466,7 +466,7 @@ Expected output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "outcome": "Refund declined."
 }
 ```

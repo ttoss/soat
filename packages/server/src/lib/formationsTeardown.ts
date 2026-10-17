@@ -332,7 +332,7 @@ export const deleteFormation = async (args: {
     throw failure;
   }
 
-  await operation.update({ status: 'succeeded', events });
+  await operation.update({ status: 'completed', events });
   await formation.update({
     status: 'deleted',
     name: `${formation.name}__deleted__${formation.publicId}`,

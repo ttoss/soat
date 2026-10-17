@@ -264,15 +264,14 @@ const runResourceChanges = async (args: {
 };
 
 /**
- * The error a succeeded deploy still carries, when a replaced resource could not
+ * The error a completed deploy still carries, when a replaced resource could not
  * be disposed of.
  *
- * The desired state is realised, so the operation is not a failure — but a
- * `succeeded` with a null `error` was the only signal a caller had, and it hid a
- * resource that is still live, still billable, and no longer reachable through
- * the formation. Naming the un-deleted ids here puts it in the one place a
- * caller already reads after a deploy, rather than in the events list nothing
- * prompts them to open.
+ * The desired state is realised, so the operation is not a failure — but
+ * `completed` with a null `error` would hide a resource that is still live,
+ * still billable, and no longer reachable through the formation. Naming the
+ * un-deleted ids here puts it in the one place a caller already reads after a
+ * deploy, rather than in the events list nothing prompts them to open.
  */
 const buildCleanupFailureError = (failures: CleanupFailure[]) => {
   const named = failures
@@ -319,7 +318,7 @@ const finalizeSucceededFormation = async (args: {
     cleanupFailures.length > 0
       ? buildCleanupFailureError(cleanupFailures)
       : null;
-  await operation.update({ status: 'succeeded', events, error });
+  await operation.update({ status: 'completed', events, error });
   await formation.update({
     status: 'active',
     // A deploy that succeeds retires the previous failure: `error` describes

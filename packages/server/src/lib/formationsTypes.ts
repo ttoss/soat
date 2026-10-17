@@ -370,7 +370,7 @@ export type FormationEvent = {
   logicalId: string;
   resourceType: string;
   action: string;
-  status: 'succeeded' | 'failed';
+  status: 'completed' | 'failed';
   physicalResourceId?: string;
   error?: string;
 };
@@ -440,7 +440,7 @@ export type FormationEventWire = {
   logical_id: string;
   resource_type: string;
   action: string;
-  status: 'succeeded' | 'failed';
+  status: 'completed' | 'failed';
   physical_resource_id?: string;
   error?: string;
 };
@@ -511,7 +511,7 @@ export type MappedFormation = {
   resolved_parameters: Record<string, string> | null;
   /**
    * Why the formation is `failed` / `delete_failed`, or — while the formation is
-   * `active` — a replaced resource a succeeded deploy could not delete.
+   * `active` — a replaced resource a completed deploy could not delete.
    * Null otherwise; a successful apply with nothing outstanding clears it.
    */
   error: FormationError | null;

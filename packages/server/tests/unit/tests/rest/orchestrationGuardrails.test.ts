@@ -115,7 +115,7 @@ describe('Orchestration tool-node guardrails', () => {
     expect(runRes.status).toBe(201);
     // The guardrail short-circuits dispatch: the tool is never called.
     expect(callToolSpy).not.toHaveBeenCalled();
-    expect(runRes.body.status).toBe('succeeded');
+    expect(runRes.body.status).toBe('completed');
 
     const executions = await nodeExecutionsOf({
       token: userToken,
@@ -200,7 +200,7 @@ describe('Orchestration tool-node guardrails', () => {
 
     const runRes = await startRun(createRes.body.id);
     expect(runRes.status).toBe(201);
-    expect(runRes.body.status).toBe('succeeded');
+    expect(runRes.body.status).toBe('completed');
     expect(callToolSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -232,7 +232,7 @@ describe('Orchestration tool-node guardrails', () => {
 
     const runRes = await startRun(createRes.body.id);
     expect(runRes.status).toBe(201);
-    expect(runRes.body.status).toBe('succeeded');
+    expect(runRes.body.status).toBe('completed');
     expect(callToolSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -330,7 +330,7 @@ describe('Orchestration tool-node guardrails', () => {
       const getRes = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs/${runRes.body.id}`
       );
-      expect(getRes.body.status).toBe('succeeded');
+      expect(getRes.body.status).toBe('completed');
       expect(getRes.body.state.after).toBe('continued');
     });
 

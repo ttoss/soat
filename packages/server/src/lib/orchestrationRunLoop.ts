@@ -284,7 +284,7 @@ export type RunLoopResult = {
 
 /**
  * The status a settled segment carries. A segment that fell out of the loop
- * still `running` has exhausted its frontier and succeeded — unless it stopped
+ * still `running` has exhausted its frontier and completed — unless it stopped
  * on a scheduled wait or an operator pause, both of which the caller persists
  * as their own resting point.
  */
@@ -295,12 +295,12 @@ const settledRunStatus = (args: {
 }): MappedOrchestrationRun['status'] => {
   if (args.runStatus !== 'running') return args.runStatus;
   if (args.scheduledWait || args.pause) return args.runStatus;
-  return 'succeeded';
+  return 'completed';
 };
 
 /**
  * Runs one segment of a run: executes activated nodes round by round until the
- * graph settles (succeeded), a node pauses it on a human node (awaiting_input),
+ * graph settles (completed), a node pauses it on a human node (awaiting_input),
  * or a node parks it on a scheduled wait (delay/poll → sleeping). Mutates
  * `state`/`artifacts` in place and writes a checkpoint per round; the caller
  * persists the outcome.
@@ -376,7 +376,7 @@ export const executeRunLoop = async (args: {
     }
 
     runStatus = settledRunStatus({ runStatus, scheduledWait, pause });
-    if (runStatus === 'succeeded') {
+    if (runStatus === 'completed') {
       await recordSkippedNodeExecutions({ runRecord, nodes });
     }
   } catch (error: unknown) {

@@ -90,7 +90,7 @@ describe('Approval node (orchestration producer)', () => {
   // so poll the observable side effect — the run reaching a terminal state — with
   // a bounded loop rather than reading once and racing the resume (which
   // transitions through a transient `running` state before it settles).
-  const TERMINAL = ['succeeded', 'failed', 'cancelled', 'expired'];
+  const TERMINAL = ['completed', 'failed', 'cancelled', 'expired'];
   const waitForRunSettled = async (orchestrationRunId: string) => {
     for (let i = 0; i < 100; i += 1) {
       const run = await getRun(orchestrationRunId);
@@ -167,7 +167,7 @@ describe('Approval node (orchestration producer)', () => {
     expect(approveRes.body.status).toBe('approved');
 
     const run = await getRun(orchestrationRunId);
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect(run.state.result).toBe('approved!');
   });
 
@@ -181,7 +181,7 @@ describe('Approval node (orchestration producer)', () => {
     expect(rejectRes.body.status).toBe('rejected');
 
     const run = await getRun(orchestrationRunId);
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect(run.state.result).toBe('rejected!');
   });
 
@@ -198,7 +198,7 @@ describe('Approval node (orchestration producer)', () => {
     expect(claimed).toBeGreaterThanOrEqual(1);
 
     const run = await waitForRunSettled(orchestrationRunId);
-    expect(run.status).toBe('succeeded');
+    expect(run.status).toBe('completed');
     expect(run.state.result).toBe('expired!');
   });
 

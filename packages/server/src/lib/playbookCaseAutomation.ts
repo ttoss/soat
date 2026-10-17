@@ -15,8 +15,7 @@ type AutomationStatus = (typeof AUTOMATION_STATUSES)[number];
 // The case's own work: an execution queued, or running its executor itself.
 // One running with a `run_id` is parked on the task or run it started, which
 // is what spends and may wait on a person for as long as it takes.
-const OWN_WORK =
-  "status = 'pending' OR (status = 'running' AND run_id IS NULL)";
+const OWN_WORK = "status = 'queued' OR (status = 'running' AND run_id IS NULL)";
 const PARKED = "status = 'running' AND run_id IS NOT NULL";
 
 const PAUSED_PROJECTS = () => {

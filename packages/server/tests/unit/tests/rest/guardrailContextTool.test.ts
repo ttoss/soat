@@ -209,7 +209,7 @@ describe('guardrail context tool', () => {
         });
 
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       expect(contextRequests).toEqual([refundCall({ amount: 3 })]);
     });
   });

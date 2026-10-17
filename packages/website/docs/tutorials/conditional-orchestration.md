@@ -258,7 +258,7 @@ Expected output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "result": null
 }
 [

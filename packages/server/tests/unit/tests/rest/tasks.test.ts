@@ -2668,7 +2668,7 @@ describe('Tasks', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestrationId, input: {}, wait: true });
       expect(run.status).toBe(201);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
 
       // The post-restart row, which no API call can produce: a `running`
       // dispatch pointing at a settled run. `entered_state_at` is aged past the
@@ -3028,7 +3028,7 @@ describe('Tasks', () => {
       const run = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestrationId, input: {}, wait: true });
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
 
       // Same shape as the orphan above, but entered *now* — inside the grace
       // window, so the awaiter that would route it may still be alive.
@@ -4709,7 +4709,7 @@ describe('Tasks', () => {
 
     test('an orchestration dispatch inherits the task bag', async () => {
       // The dispatched orchestration has only a `transform` node, so it
-      // settles `succeeded` synchronously with the dispatch — too fast to
+      // settles `completed` synchronously with the dispatch — too fast to
       // catch the inherited bag on the run row before its own terminal clear
       // wipes it. `startOrchestrationRun` is where the task's bag becomes the
       // run's, so that call is where inheritance is provable instead.
@@ -4753,7 +4753,7 @@ describe('Tasks', () => {
         `/api/v1/orchestration-runs/${routed.orchestration_run_id}`
       );
       expect(run.status).toBe(200);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
       // Neither hands a credential back on a read, and a run clears its own
       // bag once it settles the same way the dispatching task already did.
       expect(run.body.tool_context).toBeUndefined();

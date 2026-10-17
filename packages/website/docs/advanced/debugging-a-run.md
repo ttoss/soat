@@ -14,7 +14,7 @@ For the field-level contrast between activity, the audit log and traces, see [Ac
 | Symptom | Surface | Open it with |
 | --- | --- | --- |
 | The call came back an error | the error body, then the [generation](../modules/generations.md) | A failed `wait=true` run answers `GENERATION_FAILED`, whose `meta` carries `generation_id` and `trace_id` |
-| It answered `202` and nothing came back | the [generation](../modules/generations.md)'s `status` | [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) — `in_progress`, `requires_action`, `completed` or `failed` |
+| It answered `202` and nothing came back | the [generation](../modules/generations.md)'s `status` | [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) — `running`, `requires_action`, `completed` or `failed` |
 | It finished, but the answer was wrong | the [transcript](../modules/generations.md#transcript) | [`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript) — the turn read back step by step |
 | It stopped early, or mid-sentence | `stop_reason` on the generation | The [Stop Reason](../modules/agents.md#stop-reason) table — `max_steps`, `depth_guard`, `chain_limit` and `length` are four different bugs |
 | A multi-agent run broke, and you don't know where | the [trace](../modules/traces.md) tree | [`GET /traces/{trace_id}/tree`](/docs/api/traces/get-trace-tree) from any trace in the run — the node carrying an `error` is the one that failed |
@@ -62,7 +62,7 @@ An empty answer has four different meanings:
 
 | What you see | What it means |
 | --- | --- |
-| `steps: []`, `status: in_progress` | The turn has not finished. Poll it. |
+| `steps: []`, `status: running` | The turn has not finished. Poll it. |
 | `steps: []`, `status: failed` | The turn **threw**. A step is recorded when it finishes, and an aborted turn finishes none. The `error` on the generation is the whole story, and the [trace carries the same payload](../modules/traces.md#generation-failures). |
 | `steps: []` with `content_redacted_at` set | The content is gone, or was never written. `content_redacted_by_principal_id` is `zero_retention` when it was never stored, and the erasing principal's id when a [purge](../modules/traces.md#content-purge) or the [retention sweep](../modules/traces.md#retention-policy) removed it. |
 | An empty [exceptions](../modules/exceptions.md) queue | Possibly the wrong surface — see below. |

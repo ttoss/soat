@@ -89,7 +89,7 @@ describe('Event trigger dispatch', () => {
       .post('/api/v1/orchestration-runs')
       .send({ wait: true, orchestration_id: args.orchestrationId, input: {} });
     expect(res.status).toBe(201);
-    expect(res.body.status).toBe('succeeded');
+    expect(res.body.status).toBe('completed');
   };
 
   /**
@@ -133,7 +133,7 @@ describe('Event trigger dispatch', () => {
   }): Promise<Firing[]> => {
     for (let attempt = 0; attempt < 400; attempt += 1) {
       const settled = (await listFirings(args)).filter((firing) => {
-        return firing.status === 'succeeded' || firing.status === 'failed';
+        return firing.status === 'completed' || firing.status === 'failed';
       });
       if (settled.length >= args.count) return settled;
       await new Promise((resolve) => {
@@ -206,7 +206,7 @@ describe('Event trigger dispatch', () => {
       await emitter.emit();
 
       const [firing] = await waitForFirings({ triggerId, count: 1 });
-      expect(firing.status).toBe('succeeded');
+      expect(firing.status).toBe('completed');
       expect(firing.source).toBe('event');
       expect(firing.attempts).toBe(1);
       // `<event id>:<trigger id>`: what a redelivery of the same event dedupes
@@ -228,7 +228,7 @@ describe('Event trigger dispatch', () => {
       );
       expect(firing.result).toMatchObject({
         target_type: 'orchestration',
-        status: 'succeeded',
+        status: 'completed',
       });
     }, 60_000);
 
@@ -287,7 +287,7 @@ describe('Event trigger dispatch', () => {
       await emitter.emit();
 
       const [firing] = await waitForFirings({ triggerId: allowed, count: 1 });
-      expect(firing.status).toBe('succeeded');
+      expect(firing.status).toBe('completed');
       expect(await listFirings({ triggerId: blocked })).toHaveLength(0);
     }, 60_000);
 
@@ -321,7 +321,7 @@ describe('Event trigger dispatch', () => {
       await emitter.emit();
 
       const [firing] = await waitForFirings({ triggerId: healthy, count: 1 });
-      expect(firing.status).toBe('succeeded');
+      expect(firing.status).toBe('completed');
       expect(await listFirings({ triggerId: broken })).toHaveLength(0);
     }, 60_000);
   });
@@ -342,7 +342,7 @@ describe('Event trigger dispatch', () => {
         firings.map((firing) => {
           return firing.status;
         })
-      ).toEqual(['succeeded', 'failed']);
+      ).toEqual(['completed', 'failed']);
       expect(firings[1].error).toMatchObject({
         code: 'TRIGGER_CAUSATION_LIMIT',
         meta: { reason: 'repeat', causation_chain: [triggerId] },
@@ -394,7 +394,7 @@ describe('Event trigger dispatch', () => {
           triggerId: triggerIds[i],
           count: 1,
         });
-        expect(firing.status).toBe('succeeded');
+        expect(firing.status).toBe('completed');
       }
 
       const refusedId = triggerIds[MAX_EVENT_CAUSATION_DEPTH];
@@ -467,7 +467,7 @@ describe('Event trigger dispatch', () => {
         count: 1,
         token: adminToken,
       });
-      expect(first.status).toBe('succeeded');
+      expect(first.status).toBe('completed');
 
       await run({ orchestrationId: emitter, token: adminToken });
       const both = await waitForFirings({
@@ -498,7 +498,7 @@ describe('Event trigger dispatch', () => {
         await emitter.emit();
 
         const [firing] = await waitForFirings({ triggerId, count: 1 });
-        expect(firing.status).toBe('succeeded');
+        expect(firing.status).toBe('completed');
         expect(spy).toHaveBeenCalled();
       } finally {
         spy.mockRestore();

@@ -9,7 +9,7 @@ const log = createDebug('soat:playbookCases');
 
 /**
  * Stops the case starting anything: the cascade queues nothing and the worker
- * claims none of its pending executions. Executions already running settle.
+ * claims none of its queued executions. Executions already running settle.
  * Pausing a paused case keeps the first pause.
  */
 export const pausePlaybookCase = async (args: {
@@ -40,7 +40,7 @@ export const resumePlaybookCase = async (args: {
   await assertProjectAcceptsWork({ projectId: row.projectId });
   await row.update({ pauseRequestedAt: null });
   await advancePlaybookCase({ caseDbId: row.id as number });
-  // Executions queued before the pause are pending still.
+  // Executions queued before the pause stay queued.
   kickPlaybookWorker();
   return mapPlaybookCase(await playbookCases.reload(row));
 };

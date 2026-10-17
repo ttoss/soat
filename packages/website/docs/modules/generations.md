@@ -37,7 +37,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `actor_id`                  | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none |
 | `started_by_principal_type` | string \| null | Principal kind that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
 | `started_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` |
-| `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
+| `status`                    | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                         |
 | `started_at`                | string         | When the generation started                                                                          |
 | `completed_at`              | string \| null | When the generation reached a terminal state                                                         |
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
@@ -85,7 +85,7 @@ principal would let a later re-mint act with the whole of the owning user's acce
 
 ### Lifecycle
 
-A generation starts as `in_progress`. It transitions to:
+A generation starts as `running`. It transitions to:
 
 - `requires_action` when a client tool call pauses the run and the caller must submit tool outputs.
 - `completed` when the model finishes (the `stop_reason` carries the finish reason).
@@ -234,7 +234,7 @@ distinguish "no content" from "no such generation":
 
 | State | `status` | `input` / `output` | `steps` | `content_redacted_at` |
 |---|---|---|---|---|
-| Still running | `in_progress` | `null` | `[]` | `null` |
+| Still running | `running` | `null` | `[]` | `null` |
 | Never stored (zero-retention) | terminal | `null` | `[]` | set, principal `zero_retention` |
 | Erased by a purge or sweep | terminal | `null` | `[]` | set, purging principal |
 
@@ -476,7 +476,7 @@ const { data, error } = await soat.generations.getGeneration({
   path: { generation_id: 'gen_abc123' },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data.status is "in_progress", "requires_action", "completed", or "failed"
+// data.status is "running", "requires_action", "completed", or "failed"
 ```
 
 </TabItem>
