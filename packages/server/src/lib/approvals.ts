@@ -202,7 +202,7 @@ const emitApprovalEvent = async (args: {
     projectPublicId,
     resourceType: 'approval',
     resourceId: args.item.id,
-    data: { approval: args.item },
+    data: args.item,
   });
 };
 

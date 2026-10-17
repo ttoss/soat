@@ -298,7 +298,7 @@ See [Traces](./traces.md#debugging-joins-trace-generation-session) for the full 
 
 ### Webhook Events
 
-Dispatched to project webhooks as sessions change state:
+Dispatched to project webhooks as sessions change state. `sessions.created`, `sessions.updated` and `sessions.deleted` carry the session as [`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) answers it, `usage` included; a deletion carries it as it stood. A [tag](#tags) write is a `sessions.updated`.
 
 | Event type                            | Trigger                                                |
 | ------------------------------------- | ------------------------------------------------------ |

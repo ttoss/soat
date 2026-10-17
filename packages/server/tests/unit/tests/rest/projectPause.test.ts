@@ -157,7 +157,8 @@ describe('Project pause', () => {
       expect(events[0].resourceId).toBe(projectId);
       expect(events[0].projectPublicId).toBe(projectId);
       expect(events[0].data).toMatchObject({
-        project: { id: projectId, pause_reason: 'evented' },
+        id: projectId,
+        pause_reason: 'evented',
       });
     });
 

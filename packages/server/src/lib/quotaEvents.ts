@@ -3,8 +3,10 @@ import createDebug from 'debug';
 import type { db } from '../db';
 import { enqueueAuditWrite } from './auditQueue';
 import type { PricingCoverage } from './costEnforceability';
-import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import { resolveProjectPublicId } from './eventBus';
 import { fileException } from './exceptions';
+import { getQuota } from './quotas';
+import { emitLoadedRecordEvent } from './recordEvents';
 
 const log = createDebug('soat:quotas');
 
@@ -111,28 +113,16 @@ export const fireQuotaExceeded = async (args: {
     args.observedValue
   );
 
-  emitResourceEvent({
+  await emitLoadedRecordEvent({
     type: QUOTA_EXCEEDED_EVENT,
     projectId: quota.projectId,
     projectPublicId,
     resourceType: 'quota',
     resourceId: quota.publicId,
-    // snake_case data keys to match the documented webhook contract.
-    data: {
-      quota_id: quota.publicId,
-      project_id: projectPublicId,
-      scope: quota.scope,
-      scope_ref: quota.scopeRef,
-      metric: quota.metric,
-      // Restated with the rest of the identity: with two caps over one
-      // scope/metric/window, this is what says which budget breached.
-      meter_type: quota.meterType,
-      window: quota.window,
-      window_key: args.windowKey,
-      limit: Number(quota.limit),
-      observed_value: args.observedValue,
-      mode: quota.mode,
+    load: () => {
+      return getQuota({ id: quota.publicId });
     },
+    facts: { window_key: args.windowKey, observed_value: args.observedValue },
     timestamp: args.now.toISOString(),
   });
 

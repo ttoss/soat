@@ -16,6 +16,7 @@ import {
 } from 'src/lib/tasksScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -515,6 +516,29 @@ describe('Tasks', () => {
   });
 
   describe('POST /api/v1/tasks/:id/transitions', () => {
+    test('emits tasks.transitioned with the task as GET answers it and the move beside it', async () => {
+      const task = (await createTask()).body;
+
+      const [event] = await captureEvents({
+        type: 'tasks.transitioned',
+        where: (event) => {
+          return event.resourceId === task.id;
+        },
+        action: () => {
+          return transition(task.id, 'to_review');
+        },
+      });
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${task.id}`
+      );
+      expect(asWire(event.data)).toEqual({
+        ...read.body,
+        transition: 'to_review',
+        from_state: 'triage',
+      });
+    });
+
     test('a backward move (review → draft → review) works and is fully audited', async () => {
       const task = (await createTask()).body;
       expect((await transition(task.id, 'to_review')).body.state).toBe(
@@ -3878,7 +3902,8 @@ describe('Tasks', () => {
         });
         expect(failed).toBeDefined();
         expect(failed!.data.transition).toBe('publish_guarded');
-        expect(failed!.data.errorCode).toBe('TASK_GUARD_REJECTED');
+        expect(failed!.data.error_code).toBe('TASK_GUARD_REJECTED');
+        expect(failed!.data.id).toBe(failed!.resourceId);
       } finally {
         eventBus.off('soat:event', handler);
       }
@@ -4157,7 +4182,7 @@ describe('Tasks', () => {
         });
         expect(rejection).toBeDefined();
         expect(rejection!.data.transition).toBe('respin');
-        expect(rejection!.data.errorCode).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
+        expect(rejection!.data.error_code).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
 
         // Exactly `LIMIT` automated hops ran — the loop was cut, not merely
         // slowed. One entry for creation plus one per accepted `respin`.

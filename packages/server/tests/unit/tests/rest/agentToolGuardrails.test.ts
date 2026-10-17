@@ -6,6 +6,7 @@ import {
   pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { assertGuardrailEvaluationDetail } from '../../fixtures/guardrailEvaluationDetail';
 import { offeredProperties } from '../../fixtures/scriptedModel';
 
@@ -192,9 +193,34 @@ describe('POST /api/v1/agents/:agent_id/generate — tool guardrail gate', () =>
         ],
       });
 
-      const { results } = await turn.generate({
-        agentId: tool.agentId,
-        calls: [{ name: tool.name, args: { amount: 999 } }],
+      let results: Array<Record<string, unknown>> = [];
+      const [tripwire] = await captureEvents({
+        type: 'guardrail.tripwire',
+        where: (event) => {
+          return event.resourceId === tool.guardrailIds[0];
+        },
+        action: async () => {
+          ({ results } = await turn.generate({
+            agentId: tool.agentId,
+            calls: [{ name: tool.name, args: { amount: 999 } }],
+          }));
+        },
+      });
+
+      // The guardrail that tripped, as `GET` answers it, with the call beside it.
+      const guardrail = await turn
+        .api()
+        .get(`/api/v1/guardrails/${tool.guardrailIds[0]}`);
+      expect(asWire(tripwire.data)).toEqual({
+        ...guardrail.body,
+        guardrail_version: 1,
+        tool_id: tool.id,
+        tool_name: tool.name,
+        action: tool.name,
+        orchestration_run_id: null,
+        node_id: null,
+        agent_id: tool.agentId,
+        generation_id: expect.any(String),
       });
 
       expect(results).toEqual([
