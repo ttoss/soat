@@ -4623,7 +4623,19 @@ fi
 
 $SOAT_CLI add-session-message \
   --session-id "$EUA_SESSION_ID" --message "hello from the smoke end user" >/dev/null
-$SOAT_CLI generate-session-response --wait true --session-id "$EUA_SESSION_ID" >/dev/null
+EUA_TURN=$($SOAT_CLI generate-session-response --wait true --session-id "$EUA_SESSION_ID" | sanitize_json)
+
+# The reply's message is the stored record the session's conversation lists.
+EUA_CONV_ID=$(printf '%s\n' "$EUA_SESSION_RESP" | jq -r '.conversation_id')
+EUA_LISTED=$($SOAT_CLI list-conversation-messages --conversation_id "$EUA_CONV_ID" | sanitize_json)
+EUA_REPLY_OK=$(jq -n --argjson turn "$EUA_TURN" --argjson listed "$EUA_LISTED" \
+  '$turn.status == "completed" and ($turn.message.document_id | startswith("doc_")) and ([$listed.data[] | select(. == $turn.message)] | length == 1)')
+if [ "$EUA_REPLY_OK" != "true" ]; then
+  echo "ERROR: session reply message is not the record the conversation lists" >&2
+  printf '%s\n%s\n' "$EUA_TURN" "$EUA_LISTED" >&2
+  exit 1
+fi
+echo "Session reply carries its message record: OK"
 
 # Filter the raw meters by actor: every returned row must carry that actor, and
 # the session-driven event must carry the session too.
