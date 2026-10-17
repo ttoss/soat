@@ -66,6 +66,10 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 
 Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Authorization` stays `Authorization`).
 
+### Request correlation (`X-Request-Id`)
+
+Every request an `mcp` tool sends carries the [`X-Request-Id`](./audit-log.md#request-correlation-x-request-id) of the API request it runs for, so the server's log and the runtime's name the same request. A header of that name in `mcp.headers` is kept.
+
 ### Context Headers (`X-Soat-Context-*`)
 
 Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
