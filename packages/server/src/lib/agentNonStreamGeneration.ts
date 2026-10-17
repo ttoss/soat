@@ -597,7 +597,6 @@ const completeContinuation = async (args: {
     generationId: args.generationId,
     pending: args.pending,
     result: args.result,
-    completedResult,
   });
 
   return completedResult;

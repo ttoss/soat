@@ -799,6 +799,29 @@ describe('Sessions', () => {
         expect(response.body.error.code).toBe('VALIDATION_FAILED');
       });
 
+      test('the transcript carries the key each message was posted with', async () => {
+        const key = 'idem-key-transcript-' + Date.now();
+        const keyed = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ message: 'Keyed transcript message', idempotency_key: key });
+        expect(keyed.status).toBe(201);
+        const unkeyed = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ message: 'Unkeyed transcript message' });
+        expect(unkeyed.status).toBe(201);
+
+        const list = await listSessionMessages(userToken, sessionId);
+
+        expect(list.status).toBe(200);
+        const byDocument = (documentId: string) => {
+          return list.body.data.find((m: { document_id: string }) => {
+            return m.document_id === documentId;
+          });
+        };
+        expect(byDocument(keyed.body.document_id).idempotency_key).toBe(key);
+        expect(byDocument(unkeyed.body.document_id).idempotency_key).toBeNull();
+      });
+
       test('same idempotency_key in different sessions is allowed', async () => {
         const key = 'idem-key-cross-session-' + Date.now();
 

@@ -411,6 +411,7 @@ describe('Conversations', () => {
       expect(response.body.agent_id).toBeNull();
       expect(typeof response.body.position).toBe('number');
       expect(response.body.content).toBe('Hello world');
+      expect(response.body.idempotency_key).toBeNull();
       addedDocumentId = response.body.document_id;
     });
 
@@ -420,11 +421,11 @@ describe('Conversations', () => {
       );
 
       expect(listRes.status).toBe(200);
-      expect(
-        listRes.body.data.some((m: { document_id: string }) => {
-          return m.document_id === addedDocumentId;
-        })
-      ).toBe(true);
+      const added = listRes.body.data.find((m: { document_id: string }) => {
+        return m.document_id === addedDocumentId;
+      });
+      expect(added).toBeDefined();
+      expect(added.idempotency_key).toBeNull();
     });
 
     test('unauthenticated request returns 401', async () => {
