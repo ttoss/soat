@@ -414,6 +414,39 @@ components:
         secret:
           type: string
 
+    EventEnvelope:
+      type: object
+      description: |
+        The body of a webhook delivery, and the input of an `event` trigger
+        firing. Every delivery and redelivery of one event carries the same
+        `id`, also sent as the `X-Soat-Event-Id` header, so a subscriber
+        dedupes on it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The event's identity, shared by every delivery of it
+        event:
+          type: string
+          description: Event type, e.g. `files.created`
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Public ID of the project the event belongs to
+        resource_type:
+          type: string
+          description: Type of the resource that changed, e.g. `file`
+        resource_id:
+          type: string
+          description: Public ID of the resource that changed
+        data:
+          type: object
+          description: The resource, in the shape the REST API returns it
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred
+
     Delivery:
       type: object
       properties:
@@ -426,7 +459,7 @@ components:
         event_type:
           type: string
         payload:
-          type: object
+          $ref: '#/components/schemas/EventEnvelope'
         status:
           type: string
           enum:
