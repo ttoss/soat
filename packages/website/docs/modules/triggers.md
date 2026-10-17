@@ -59,11 +59,11 @@ firing record holds the outcome.
 | `trigger_id`   | string                                              | Public ID of the trigger that fired                                   |
 | `project_id`   | string                                              | ID of the owning project                                              |
 | `source`       | `manual` \| `webhook` \| `schedule` \| `event`      | How _this_ firing started (manually firing a webhook trigger records `manual`) |
-| `status`       | `pending` \| `running` \| `succeeded` \| `failed`   | Firing lifecycle status                                               |
+| `status`       | `queued` \| `running` \| `completed` \| `failed`   | Firing lifecycle status                                               |
 | `input`        | object \| null                                      | Effective (post-merge) input snapshot                                 |
 | `result`       | object \| null                                      | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated |
 | `error`        | object \| null                                      | `{ code, message, meta }` when the firing failed                      |
-| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing, null otherwise — one firing per pair |
+| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing (`event_id` is the `id` in `input`), null otherwise — one firing per pair |
 | `attempts`     | number                                              | Dispatch starts. Above 1 means an interrupted start was redelivered ([Delivery Guarantees](#delivery-guarantees)) |
 | `started_at`   | string \| null                                      | ISO 8601 timestamp when execution began                               |
 | `completed_at` | string \| null                                      | ISO 8601 timestamp when the firing reached a terminal status          |
@@ -110,8 +110,8 @@ A caller can only bind or fire a trigger to a target it could start itself:
 
 ### Firing Status Semantics
 
-`succeeded` means the target invocation completed **without throwing**; a
-paused orchestration run or a `requires_action` generation is still a succeeded
+`completed` means the target invocation returned **without throwing**; a
+paused orchestration run or a `requires_action` generation is still a completed
 firing, with the target's own status in `result.status`. `failed` records the
 error, including a `failed` orchestration run.
 
@@ -210,11 +210,12 @@ A pattern whose first segment is a **platform namespace** must resolve to a
 (`orders.shipped`) is accepted as written, since an orchestration
 [`emit_event` node](./orchestrations.md) emits names SOAT does not own.
 
-**The event payload is the firing input**, the same envelope a webhook
-subscriber receives:
+**The event payload is the firing input**, the same
+[envelope](./webhooks.md#event-payload) a webhook subscriber receives:
 
 ```json
 {
+  "id": "0b8e7a52-5c1e-4f0e-9a43-3f6f2b8d9c11",
   "event": "documents.ingested",
   "project_id": "proj_ABC",
   "resource_type": "document",
@@ -252,7 +253,7 @@ apply; the firing arrives on no API key, and an `api_key`-scope cap is a cap on 
 
 #### Delivery Guarantees
 
-A matched event is written as a `pending` firing before the trigger's
+A matched event is written as a `queued` firing before the trigger's
 credentials are resolved and before its target is touched. From that point the
 firing belongs to the database, so a process that dies mid-dispatch leaves a
 row another process redelivers.
@@ -262,7 +263,9 @@ row another process redelivers.
   started runs that target again, so an event target must be idempotent.
 - **Deduplicated per (event, trigger).** Each event firing carries an
   `idempotency_key` of `<event_id>:<trigger_id>`, so the same event reaching
-  the same trigger twice produces one firing.
+  the same trigger twice produces one firing. A target that must not act twice
+  deduplicates on the envelope's `id`, which a webhook subscribed to the same
+  event receives too.
 - **Unordered.** Sequential events may fire in either order; triggers on the
   same event fire independently.
 
@@ -271,7 +274,7 @@ work is different: that firing is `failed` with the reason in `error`, and is
 never retried.
 
 A firing interrupted three times without reaching a result is closed `failed`
-with `error.code = TRIGGER_FIRING_ABANDONED`, so it does not sit `pending` with
+with `error.code = TRIGGER_FIRING_ABANDONED`, so it does not sit `queued` with
 nothing coming for it.
 
 ### Schedules and Misfire Coalescing
@@ -307,7 +310,7 @@ Inbound webhook endpoint errors: see the [table above](#inbound-webhook-endpoint
 
 **A `schedule` trigger never fires:** confirm `active` is `true`, `next_fire_at` is set, and the server was not started with `SOAT_TRIGGER_SCHEDULER_DISABLED=true`.
 
-**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings are fire-and-forget; poll [`GET /trigger-firings/{id}`](/docs/api/triggers/get-trigger-firing). Only `event` firings are redelivered ([Delivery Guarantees](#delivery-guarantees)); for the others, inspect `error.code`/`error.message` and re-fire manually.
+**A firing's `status` never leaves `queued`/`running`:** webhook and schedule firings are fire-and-forget; poll [`GET /trigger-firings/{id}`](/docs/api/triggers/get-trigger-firing). Only `event` firings are redelivered ([Delivery Guarantees](#delivery-guarantees)); for the others, inspect `error.code`/`error.message` and re-fire manually.
 
 ### Formation Support
 
@@ -514,7 +517,7 @@ const { data, error } = await soat.triggers.fireTrigger({
   body: { input: { reason: 'manual run' } },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data is the terminal firing: data.status is 'succeeded' or 'failed'
+// data is the terminal firing: data.status is 'completed' or 'failed'
 // data.result.result_id references the run / generation that was started
 ```
 
@@ -541,7 +544,7 @@ curl -X POST https://api.example.com/hooks/triggers/trg_ABC \
   -H "Content-Type: application/json" \
   -H "X-Soat-Signature: $SIG" \
   -d "$BODY"
-# → 202 { "firing_id": "trg_fire_...", "trigger_id": "trg_ABC", "status": "pending" }
+# → 202 { "firing_id": "trg_fire_...", "trigger_id": "trg_ABC", "status": "queued" }
 ```
 
 ### List a trigger's firings

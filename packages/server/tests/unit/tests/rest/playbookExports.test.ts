@@ -211,11 +211,12 @@ describe('Playbook exports', () => {
         transformation: 'proposal',
         format: 'pdf',
         tool_id: pdfToolId,
-        status: 'succeeded',
+        status: 'completed',
         stale: false,
         file_id: expect.stringMatching(/^file_/),
         error: null,
-        created_by: expect.any(String),
+        created_by_principal_type: 'user',
+        created_by_principal_id: expect.stringMatching(/^user_/),
         finished_at: expect.any(String),
       });
       expect(sheet).toMatchObject({ transformation: 'sheet', format: 'xlsx' });
@@ -291,7 +292,7 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(201);
       expect(res.body.data[0]).toMatchObject({
         revision: first,
-        status: 'succeeded',
+        status: 'completed',
         stale: true,
       });
       expect(stub.routeRequests[before].body.output).toEqual({ amount: 2 });
@@ -321,7 +322,7 @@ describe('Playbook exports', () => {
         },
       });
       expect(settled).toMatchObject({
-        status: 'succeeded',
+        status: 'completed',
         file_id: expect.stringMatching(/^file_/),
       });
     });
@@ -586,9 +587,9 @@ describe('Playbook exports', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.problems).toContainEqual({
-        code: 'duplicate_transformation',
-        node_id: 'pricing',
-        transformation: 'proposal',
+        code: 'DUPLICATE_TRANSFORMATION',
+        path: expect.stringMatching(/\.transformations\[1\]\.name$/),
+        message: expect.stringContaining("'proposal'"),
       });
     });
   });

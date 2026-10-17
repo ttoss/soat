@@ -401,9 +401,17 @@ paths:
             example: pbk_V1StGXR8Z5jdHi6B
         - name: automation_status
           in: query
-          description: Only the cases in this automation status
+          required: false
+          description: >-
+            Only the cases in these automation statuses. Repeat the parameter to
+            OR values. A value outside the enum, empty string included, is a
+            `400`.
           schema:
-            $ref: '#/components/schemas/PlaybookAutomationStatus'
+            type: array
+            items:
+              $ref: '#/components/schemas/PlaybookAutomationStatus'
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -1426,34 +1434,6 @@ components:
           description: The definition to check
           allOf:
             - $ref: '#/components/schemas/PlaybookDefinition'
-    PlaybookDefinitionProblem:
-      type: object
-      description: >-
-        One reason a definition cannot be stored. `node_id` and `input` name
-        where it is; a `cycle` names every node on it in `nodes`.
-      properties:
-        code:
-          type: string
-          enum:
-            - duplicate_node
-            - duplicate_input
-            - missing_node
-            - unknown_field
-            - executor_required
-            - executor_forbidden
-            - transformations_not_final
-            - duplicate_transformation
-            - cycle
-        node_id:
-          type: string
-        input:
-          type: string
-        transformation:
-          type: string
-        nodes:
-          type: array
-          items:
-            type: string
     PlaybookValidationResult:
       type: object
       required:
@@ -1464,8 +1444,14 @@ components:
           type: boolean
         problems:
           type: array
+          description: >-
+            Every reason the definition cannot be stored: `DUPLICATE_NODE`,
+            `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`,
+            `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`,
+            `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`.
+            The same items a refused write lists under `meta.problems`.
           items:
-            $ref: '#/components/schemas/PlaybookDefinitionProblem'
+            $ref: './errors.yaml#/components/schemas/ValidationProblem'
     PlaybookVersion:
       type: object
       description: An immutable archive of a playbook's definition at one version.
@@ -1491,10 +1477,20 @@ components:
           type: string
           nullable: true
           example: restored from v2
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who produced this version. Null for a write with no principal behind
+            it.
+        created_by_principal_id:
           type: string
           nullable: true
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -1776,10 +1772,20 @@ components:
           description: What an output, confirmation or rejection was decided on
         playbook_version:
           type: integer
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who recorded this entry; null for one the case's own cascade
+            recorded.
+        created_by_principal_id:
           type: string
           nullable: true
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
@@ -1830,13 +1836,13 @@ components:
         status:
           type: string
           description: >-
-            `pending` until a worker claims it, `running` while its executor
-            runs or a task or run it started is open, then `succeeded` or
+            `queued` until a worker claims it, `running` while its executor
+            runs or a task or run it started is open, then `completed` or
             `failed`
           enum:
-            - pending
+            - queued
             - running
-            - succeeded
+            - completed
             - failed
         result:
           type: string
@@ -1861,14 +1867,23 @@ components:
           nullable: true
           description: The revision of the output entry it wrote; null when it wrote none
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: 'Why it failed: `{ code, message, meta? }`'
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who asked for the run; null when the case started it.
+        created_by_principal_id:
           type: string
           nullable: true
-          description: Who asked for the run
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
@@ -1933,10 +1948,10 @@ components:
           example: tool_V1StGXR8Z5jdHi6B
         status:
           type: string
-          description: '`running` while its tool runs, then `succeeded` or `failed`'
+          description: '`running` while its tool runs, then `completed` or `failed`'
           enum:
             - running
-            - succeeded
+            - completed
             - failed
         stale:
           type: boolean
@@ -1950,14 +1965,23 @@ components:
           description: The file rendered; null until it succeeds, and once the file is deleted
           example: file_V1StGXR8Z5jdHi6B
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: 'Why it failed: `{ code, message, meta? }`'
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who asked for the export.
+        created_by_principal_id:
           type: string
           nullable: true
-          description: Who asked for the export
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
@@ -2038,11 +2062,19 @@ components:
                             - source
                             - schema
                             - required
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who upgraded the case.
+        created_by_principal_id:
           type: string
           nullable: true
-          description: Who upgraded the case
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:

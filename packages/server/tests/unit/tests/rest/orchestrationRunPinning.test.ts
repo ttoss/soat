@@ -178,7 +178,7 @@ describe('a run woken from `sleeping`', () => {
       },
     });
 
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state.answer).toBe('v1');
     expect(settled.orchestration_version).toBe(1);
   });
@@ -192,7 +192,7 @@ describe('a run woken from `sleeping`', () => {
       },
     });
 
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state.answer).toBe('v1');
   });
 
@@ -214,7 +214,7 @@ describe('a run woken from `sleeping`', () => {
       },
     });
 
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state.answer).toBe('v2');
   });
 
@@ -235,7 +235,7 @@ describe('a run woken from `sleeping`', () => {
       },
     });
 
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state.answer).toBe('v2');
   });
 });
@@ -273,7 +273,7 @@ describe('a run redriven after its lease expired', () => {
     await drainOnceEnqueued(run.publicId as string);
 
     const settled = await getRun(run.publicId as string);
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state.answer).toBe('v1');
   });
 });
@@ -299,7 +299,7 @@ describe('a run resumed from `awaiting_input`', () => {
       .send({ node_id: 'human', output: { answer: 'yes' } });
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('succeeded');
+    expect(res.body.status).toBe('completed');
     expect(res.body.state.answer).toBe('v1');
     expect(res.body.orchestration_version).toBe(1);
   });
@@ -328,7 +328,7 @@ describe('a run resumed from `awaiting_input`', () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('succeeded');
+    expect(res.body.status).toBe('completed');
     expect(res.body.state.answer).toBe('v1');
 
     // The task the start enqueued is still there; draining it re-drives
@@ -357,7 +357,7 @@ describe('a queued run driven for the first time', () => {
     expect(await drainQueueOnce()).toBe(1);
 
     const settled = await getRun(run.id);
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state.answer).toBe('v1');
   });
 });

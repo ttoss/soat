@@ -1282,7 +1282,11 @@ describe('Evaluations', () => {
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
       const errored = results.body.data[1];
-      expect(errored.error).toMatch(/requires_action/);
+      expect(errored.error).toEqual({
+        code: 'GENERATION_NOT_COMPLETED',
+        message: expect.stringMatching(/requires_action/),
+        meta: { generation_id: expect.any(String), status: 'requires_action' },
+      });
       expect(errored.scores).toEqual([]);
       expect(errored.output).toBeNull();
     });
@@ -1304,7 +1308,10 @@ describe('Evaluations', () => {
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
-      expect(results.body.data[0].error).toBe('provider exploded');
+      expect(results.body.data[0].error).toEqual({
+        code: 'GENERATION_FAILED',
+        message: 'provider exploded',
+      });
     });
 
     // Rows written in one millisecond tie on `created_at`, and Postgres returns
@@ -1571,10 +1578,10 @@ describe('Evaluations', () => {
         expect(runRow!.toolContext).toBeNull();
       });
 
-      test('is cleared when a run is canceled before it settles', async () => {
+      test('is cleared when a run is cancelled before it settles', async () => {
         const res = await asUser()
           .post(`/api/v1/evals/${evalId}/runs`)
-          .send({ wait: false, tool_context: { ocaToken: 'tok_canceled' } });
+          .send({ wait: false, tool_context: { ocaToken: 'tok_cancelled' } });
         expect(res.status).toBe(201);
 
         const cancelRes = await asUser().post(
@@ -1585,7 +1592,7 @@ describe('Evaluations', () => {
         const runRow = await db.EvalRun.findOne({
           where: { publicId: res.body.id },
         });
-        expect(runRow!.status).toBe('canceled');
+        expect(runRow!.status).toBe('cancelled');
         expect(runRow!.toolContext).toBeNull();
       });
     });
@@ -1758,7 +1765,7 @@ describe('Evaluations', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('canceled');
+      expect(res.body.status).toBe('cancelled');
       expect(res.body.finished_at).not.toBeNull();
 
       const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
@@ -1769,7 +1776,7 @@ describe('Evaluations', () => {
       ).toBe(0);
     });
 
-    test('a canceled run stops spending: the worker runs none of its items', async () => {
+    test('a cancelled run stops spending: the worker runs none of its items', async () => {
       const run = await startQueued();
       await asUser().post(`/api/v1/evals/${evalId}/runs/${run.id}/cancel`);
 
@@ -1805,7 +1812,7 @@ describe('Evaluations', () => {
 
     // A worker past its liveness check keeps writing results after the cancel
     // settles the run, so counters frozen at that instant under-report what ran
-    // — and on a canceled run they are the only signal of what was paid for.
+    // — and on a cancelled run they are the only signal of what was paid for.
     test('counters reconcile with results written after the cancel', async () => {
       const run = await startQueued();
       const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
@@ -1847,7 +1854,7 @@ describe('Evaluations', () => {
       const after = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${run.id}`
       );
-      expect(after.body.status).toBe('canceled');
+      expect(after.body.status).toBe('cancelled');
       // Still no verdict — a partial roll-up must not read as a whole-dataset one.
       expect(after.body.aggregate_scores).toBeNull();
       // But the counts must describe what actually ran.
@@ -1855,7 +1862,7 @@ describe('Evaluations', () => {
       expect(after.body.errored_count).toBe(0);
     });
 
-    test('a finished run cannot be canceled', async () => {
+    test('a finished run cannot be cancelled', async () => {
       mockCreateGeneration
         .mockResolvedValueOnce(completedGeneration('gen_c2', 'x'))
         .mockResolvedValueOnce(completedGeneration('gen_c3', 'x'));
@@ -2094,9 +2101,13 @@ describe('Evaluations', () => {
       expect(event.resourceId).toBe(runId);
       // The payload is the promotion gate's input: a consumer must be able to
       // decide from the event alone, without a second call that could fail open.
-      expect(event.data).toEqual({
+      // It is the run exactly as `GET` answers it.
+      const read = await asUser().get(`/api/v1/evals/${evalId}/runs/${runId}`);
+      expect(JSON.parse(JSON.stringify(event.data))).toEqual(read.body);
+      expect(event.data).toMatchObject({
+        id: runId,
         eval_id: evalId,
-        eval_run_id: runId,
+        status: 'completed',
         passed: true,
         aggregate_scores: expect.objectContaining({ pass_rate: 1 }),
       });
@@ -2152,15 +2163,16 @@ describe('Evaluations', () => {
         return event.resourceId === abandoned.publicId;
       });
       expect(failure?.type).toBe('eval_run.failed');
-      expect(failure?.data).toEqual({
+      expect(failure?.data).toMatchObject({
+        id: abandoned.publicId,
         eval_id: evalId,
-        eval_run_id: abandoned.publicId,
+        status: 'failed',
         passed: null,
         aggregate_scores: null,
       });
     });
 
-    test('a canceled run fires no lifecycle event — it produced no verdict', async () => {
+    test('a cancelled run fires no lifecycle event — it produced no verdict', async () => {
       const events = await withCapture({
         action: async () => {
           const run = await asUser()
@@ -2537,7 +2549,7 @@ describe('Evaluations', () => {
       expect(run.status).toBe('completed');
       expect(run.errored_count).toBe(1);
       expect(run.completed_count).toBe(0);
-      expect(result.error).toMatch(/did not answer with a JSON object/);
+      expect(result.error.message).toMatch(/did not answer with a JSON object/);
       expect(result.scores).toEqual([]);
       // Excluded from the aggregates rather than depressing them.
       expect(run.aggregate_scores.scored_item_count).toBe(0);
@@ -2558,7 +2570,7 @@ describe('Evaluations', () => {
       const { run, result } = await runJudged(judged.id);
 
       expect(run.errored_count).toBe(1);
-      expect(result.error).toMatch(/outside the 0–1 range/);
+      expect(result.error.message).toMatch(/outside the 0–1 range/);
     });
   });
 
@@ -3336,7 +3348,7 @@ describe('Evaluations', () => {
           `/api/v1/evals/${evaluation.id}/runs/${res.body.id}/results`
         );
         const [result] = results.body.data;
-        expect(result.error).toMatch(/tone/);
+        expect(result.error.message).toMatch(/tone/);
         // The generation was good; the output it was graded on is kept.
         expect(result.output).toBe('Sure.');
       });

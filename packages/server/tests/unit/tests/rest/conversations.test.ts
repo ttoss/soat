@@ -1,3 +1,4 @@
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -411,6 +412,7 @@ describe('Conversations', () => {
       expect(response.body.agent_id).toBeNull();
       expect(typeof response.body.position).toBe('number');
       expect(response.body.content).toBe('Hello world');
+      expect(response.body.idempotency_key).toBeNull();
       addedDocumentId = response.body.document_id;
     });
 
@@ -420,11 +422,11 @@ describe('Conversations', () => {
       );
 
       expect(listRes.status).toBe(200);
-      expect(
-        listRes.body.data.some((m: { document_id: string }) => {
-          return m.document_id === addedDocumentId;
-        })
-      ).toBe(true);
+      const added = listRes.body.data.find((m: { document_id: string }) => {
+        return m.document_id === addedDocumentId;
+      });
+      expect(added).toBeDefined();
+      expect(added.idempotency_key).toBeNull();
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -597,6 +599,61 @@ describe('Conversations', () => {
           return m.document_id === secondDocumentId;
         })
       ).toBe(false);
+    });
+
+    test('emits conversations.message.created with the message and its conversation_id', async () => {
+      const [event] = await captureEvents({
+        type: 'conversations.message.created',
+        where: (event) => {
+          return event.data.conversation_id === conversationId;
+        },
+        action: () => {
+          return authenticatedTestClient(userToken)
+            .post(`/api/v1/conversations/${conversationId}/messages`)
+            .send({ message: 'Announce me', role: 'user', actor_id: actorId });
+        },
+      });
+
+      const listed = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+      const message = listed.body.data.find((m: { document_id: string }) => {
+        return m.document_id === event.resourceId;
+      });
+      expect(asWire(event.data)).toEqual({
+        ...message,
+        conversation_id: conversationId,
+      });
+    });
+
+    test('emits conversations.message.deleted with the message as it stood', async () => {
+      const added = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Delete me', role: 'user', actor_id: actorId });
+      const documentId = added.body.document_id as string;
+      const listed = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+      const message = listed.body.data.find((m: { document_id: string }) => {
+        return m.document_id === documentId;
+      });
+
+      const [event] = await captureEvents({
+        type: 'conversations.message.deleted',
+        where: (event) => {
+          return event.resourceId === documentId;
+        },
+        action: () => {
+          return authenticatedTestClient(userToken).delete(
+            `/api/v1/conversations/${conversationId}/messages/${documentId}`
+          );
+        },
+      });
+
+      expect(asWire(event.data)).toEqual({
+        ...message,
+        conversation_id: conversationId,
+      });
     });
 
     test('unauthenticated request returns 401', async () => {

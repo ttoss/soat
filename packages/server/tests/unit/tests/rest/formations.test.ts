@@ -744,9 +744,9 @@ resources:
       );
       // The original failure stays ahead of the unwind it triggered.
       expect(actions).toEqual([
-        ['RollbackMemoryStore', 'create', 'succeeded'],
+        ['RollbackMemoryStore', 'create', 'completed'],
         ['RollbackProvider', 'create', 'failed'],
-        ['RollbackMemoryStore', 'rollback', 'succeeded'],
+        ['RollbackMemoryStore', 'rollback', 'completed'],
       ]);
     });
 
@@ -858,7 +858,7 @@ resources:
         }
       );
       expect(skipped.logical_id).toBe('RetainedMemoryStore');
-      expect(skipped.status).toBe('succeeded');
+      expect(skipped.status).toBe('completed');
     });
 
     test('creates a formation with metadata', async () => {
@@ -1381,7 +1381,10 @@ resources:
         expect.objectContaining({
           logical_id: 'CorruptedResource',
           resource_type: 'unsupported_resource_type',
-          error: expect.any(String),
+          error: expect.objectContaining({
+            code: 'FORMATION_RESOURCE_TYPE_UNREGISTERED',
+            message: expect.any(String),
+          }),
         }),
       ]);
 
@@ -1480,7 +1483,10 @@ resources:
         expect.objectContaining({
           logical_id: 'HistoricAgent',
           resource_type: 'agent',
-          error: expect.stringContaining('trace'),
+          error: expect.objectContaining({
+            code: 'AGENT_HAS_DEPENDENTS',
+            message: expect.stringContaining('trace'),
+          }),
         }),
       ]);
 
@@ -4518,7 +4524,7 @@ resources:
       });
       expect(removeEvent).toBeDefined();
       expect(removeEvent.action).toBe('delete');
-      expect(removeEvent.status).toBe('succeeded');
+      expect(removeEvent.status).toBe('completed');
     });
 
     test('a no-op reconcile plan no longer mentions the already-deleted resource', async () => {

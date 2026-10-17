@@ -15,6 +15,7 @@ import {
   agentVersionStore,
   configToolBindings,
 } from './agentVersionSnapshot';
+import type { RequestPrincipal } from './principals';
 import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
 import {
   type ArchivedVersionRow,
@@ -167,7 +168,7 @@ const agentVersionArchive = makeVersionArchive({
       id: args.id,
       ...archivedConfigToUpdateArgs(args.config),
       versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
+      createdBy: args.createdBy,
     });
   },
 });
@@ -205,14 +206,14 @@ export const restoreAgentVersion = async (args: {
   agentId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedAgent> => {
   return agentVersionArchive.restoreVersion({
     projectIds: args.projectIds,
     resourceId: args.agentId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };
 
@@ -345,7 +346,7 @@ const settleRelease = async (args: {
   agentId: string;
   version: number;
   label: string;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   evalRunDbId?: number | null;
 }): Promise<MappedAgent> => {
   await agentVersionArchive.applyArchivedVersion({
@@ -353,7 +354,7 @@ const settleRelease = async (args: {
     resourceId: args.agentId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   // Re-read after the write: `applyArchivedVersion` goes through `updateAgent`,
@@ -378,7 +379,7 @@ const settleRelease = async (args: {
 export const promoteAgentRelease = async (args: {
   projectIds?: number[];
   agentId: string;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedAgent> => {
   const agent = await findAgentInstance({
     projectIds: args.projectIds,
@@ -408,7 +409,7 @@ export const promoteAgentRelease = async (args: {
     agentId: args.agentId,
     version: release.canary_version,
     label: `promoted v${release.canary_version}`,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     evalRunDbId,
   });
 };
@@ -416,7 +417,7 @@ export const promoteAgentRelease = async (args: {
 export const abortAgentRelease = async (args: {
   projectIds?: number[];
   agentId: string;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedAgent> => {
   const agent = await findAgentInstance({
     projectIds: args.projectIds,
@@ -435,6 +436,6 @@ export const abortAgentRelease = async (args: {
     agentId: args.agentId,
     version: release.stable_version,
     label: `aborted to v${release.stable_version}`,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };

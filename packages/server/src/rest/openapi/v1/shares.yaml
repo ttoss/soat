@@ -617,10 +617,17 @@ paths:
         - $ref: '#/components/parameters/share_id'
         - name: status
           in: query
-          description: Only acceptances in this status
+          required: false
+          description: >-
+            Only acceptances in these statuses. Repeat the parameter to OR
+            values. A value outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [active, revoked]
+            type: array
+            items:
+              type: string
+              enum: [active, revoked]
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:

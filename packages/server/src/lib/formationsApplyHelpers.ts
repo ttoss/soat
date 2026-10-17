@@ -63,7 +63,7 @@ export const markResourceDeleted = async (args: {
     logicalId: resource.logicalId,
     resourceType: resource.resourceType,
     action: 'delete',
-    status: 'succeeded',
+    status: 'completed',
     physicalResourceId: resource.physicalResourceId ?? undefined,
   });
 };
@@ -121,7 +121,7 @@ export const applyCreateChange = async (args: {
     logicalId,
     resourceType,
     action: 'create',
-    status: 'succeeded',
+    status: 'completed',
     physicalResourceId: physicalId,
   });
 };
@@ -156,7 +156,7 @@ export const rollbackCreatedResources = async (args: {
         logicalId: resource.logicalId,
         resourceType: resource.resourceType,
         action: 'rollback-skipped',
-        status: 'succeeded',
+        status: 'completed',
         physicalResourceId,
       });
       continue;
@@ -174,11 +174,11 @@ export const rollbackCreatedResources = async (args: {
       if (!isResourceAlreadyGone(error)) {
         // Reported, never thrown: the original failure is the one the operator
         // needs to see, and re-throwing here would bury it.
-        const errorMsg = formationFailure(error).message;
+        const failure = formationFailure(error);
         log(
           'rollbackCreatedResources: failed logicalId=%s error=%s',
           resource.logicalId,
-          errorMsg
+          failure.message
         );
         events.push({
           timestamp: new Date().toISOString(),
@@ -187,7 +187,7 @@ export const rollbackCreatedResources = async (args: {
           action: 'rollback',
           status: 'failed',
           physicalResourceId,
-          error: errorMsg,
+          error: failure,
         });
         continue;
       }
@@ -201,7 +201,7 @@ export const rollbackCreatedResources = async (args: {
       logicalId: resource.logicalId,
       resourceType: resource.resourceType,
       action: 'rollback',
-      status: 'succeeded',
+      status: 'completed',
       physicalResourceId,
     });
   }
@@ -233,7 +233,7 @@ export const failFormationOperation = async (args: {
     resourceType: args.resourceType,
     action: args.action,
     status: 'failed',
-    error: args.failure.message,
+    error: args.failure,
   });
   args.events.push(...args.rollbackEvents);
   // The same bag on both records: the operation is the history, the formation

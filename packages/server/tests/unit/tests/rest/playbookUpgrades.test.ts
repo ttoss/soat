@@ -188,7 +188,8 @@ describe('Playbook case upgrades', () => {
           from_version: 1,
           to_version: version,
           diff: { added: ['contact'], removed: [], changed: [] },
-          created_by: expect.any(String),
+          created_by_principal_type: 'user',
+          created_by_principal_id: expect.stringMatching(/^user_/),
           on_behalf_of: null,
           created_at: expect.any(String),
         },
@@ -225,7 +226,7 @@ describe('Playbook case upgrades', () => {
       expect(executions).toHaveLength(before + 1);
       expect(executions[0]).toMatchObject({
         node_id: 'pricing',
-        status: 'succeeded',
+        status: 'completed',
         playbook_version: 2,
       });
       const upgrades = await asAdmin().get(
@@ -342,7 +343,7 @@ describe('Playbook case upgrades', () => {
         await writeAmount(caseId, 5);
         await redefine(playbookId, { nodes: [V1.nodes[0]] });
         const [queued] = await executionsOf(caseId);
-        expect(queued.status).toBe('pending');
+        expect(queued.status).toBe('queued');
 
         const res = await upgrade(caseId);
 
@@ -354,7 +355,7 @@ describe('Playbook case upgrades', () => {
           })
         ).toMatchObject({ result: 'superseded', output: null });
         expect(executions[0]).toMatchObject({
-          status: 'pending',
+          status: 'queued',
           playbook_version: 2,
         });
       } finally {

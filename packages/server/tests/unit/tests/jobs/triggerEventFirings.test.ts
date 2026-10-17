@@ -75,7 +75,7 @@ describe('Durable event firings', () => {
       triggerId: args.trigger.id as number,
       projectId: args.trigger.projectId as number,
       source: args.source ?? 'event',
-      status: args.status ?? 'pending',
+      status: args.status ?? 'queued',
       input: { event: EVENT_NAME },
       result: null,
       error: null,
@@ -101,7 +101,7 @@ describe('Durable event firings', () => {
   const waitForTerminal = async (firingId: string): Promise<Firing> => {
     for (let attempt = 0; attempt < 400; attempt += 1) {
       const firing = await getFiring(firingId);
-      if (firing.status === 'succeeded' || firing.status === 'failed') {
+      if (firing.status === 'completed' || firing.status === 'failed') {
         return firing;
       }
       await new Promise((resolve) => {
@@ -166,7 +166,7 @@ describe('Durable event firings', () => {
       const waitForSettled = async (count: number) => {
         for (let attempt = 0; attempt < 400; attempt += 1) {
           const settled = (await listFirings()).filter((firing) => {
-            return firing.status === 'succeeded';
+            return firing.status === 'completed';
           });
           if (settled.length >= count) return;
           await new Promise((resolve) => {
@@ -199,7 +199,7 @@ describe('Durable event firings', () => {
       await sweepDueEventFirings();
 
       const settled = await waitForTerminal(firingId);
-      expect(settled.status).toBe('succeeded');
+      expect(settled.status).toBe('completed');
       expect(settled.attempts).toBe(2);
     }, 60_000);
 
@@ -211,7 +211,7 @@ describe('Durable event firings', () => {
 
       await sweepDueEventFirings();
 
-      expect((await waitForTerminal(firingId)).status).toBe('succeeded');
+      expect((await waitForTerminal(firingId)).status).toBe('completed');
     }, 60_000);
 
     test('overlapping ticks redeliver it once', async () => {
@@ -233,7 +233,7 @@ describe('Durable event firings', () => {
 
       await sweepDueEventFirings();
 
-      expect((await waitForTerminal(firingId)).status).toBe('succeeded');
+      expect((await waitForTerminal(firingId)).status).toBe('completed');
     }, 60_000);
 
     test('a live lease, a result, or another source is left alone', async () => {
@@ -253,7 +253,7 @@ describe('Durable event firings', () => {
       for (const [firingId, status] of [
         [leased, 'running'],
         [finished, 'failed'],
-        [scheduled, 'pending'],
+        [scheduled, 'queued'],
       ]) {
         const firing = await getFiring(firingId);
         expect(firing.status).toBe(status);
@@ -270,7 +270,7 @@ describe('Durable event firings', () => {
       });
 
       await sweepDueEventFirings();
-      expect((await getFiring(firingId)).status).toBe('pending');
+      expect((await getFiring(firingId)).status).toBe('queued');
 
       await failExhaustedEventFirings();
 

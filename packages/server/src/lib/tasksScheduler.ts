@@ -58,13 +58,12 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
     return claimed > 0;
   },
   handle: async ({ row: task }) => {
-    // The event carries the stalled state and the full task; a consumer that
-    // needs the threshold reads `stalled_after` from the workflow definition.
+    // A consumer that needs the threshold reads `stalled_after` from the
+    // workflow definition.
     await emitTaskEvent({
       type: 'tasks.stalled',
       projectId: task.projectId as number,
       task: mapTask(task),
-      extra: { state: task.state },
     });
     log('sweepStalledTasks: emitted tasks.stalled task=%s', task.publicId);
   },

@@ -2,7 +2,6 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import {
   answersByName,
   type DeciderQuestions,
@@ -38,6 +37,8 @@ export const DECISION_STATUSES = [
   'completed',
   'failed',
 ] as const;
+
+type DecisionStatus = (typeof DECISION_STATUSES)[number];
 
 const UNSETTLED_STATUSES = ['queued', 'running'];
 
@@ -321,26 +322,10 @@ export const createInlineDecision = async (args: {
   });
 };
 
-const readStatusFilter = (status: unknown): string | undefined => {
-  if (status === undefined) return undefined;
-  if (
-    typeof status !== 'string' ||
-    !DECISION_STATUSES.some((known) => {
-      return known === status;
-    })
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `status must be one of ${DECISION_STATUSES.join(', ')}.`
-    );
-  }
-  return status;
-};
-
 export const listDecisions = async (args: {
   projectIds?: number[];
   deciderId?: string;
-  status?: unknown;
+  statuses?: readonly DecisionStatus[];
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedDecision>> => {
@@ -348,8 +333,7 @@ export const listDecisions = async (args: {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
   if (args.deciderId !== undefined) where.deciderId = args.deciderId;
-  const status = readStatusFilter(args.status);
-  if (status !== undefined) where.status = status;
+  if (args.statuses?.length) where.status = args.statuses;
 
   return paginatedList({
     limit: args.limit,

@@ -62,7 +62,7 @@ describe('resource version store', () => {
     onWrite?: () => Promise<void>;
   }) => {
     return guardrailVersionStore.commitConfigChange({
-      createdByUserId: null,
+      createdBy: null,
       resource: toResourceRef(args.row),
       before: { document: args.before },
       applyWrite: async ({ transaction }) => {

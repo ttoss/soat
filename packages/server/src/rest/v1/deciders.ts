@@ -17,6 +17,7 @@ import {
 import {
   createDecision,
   createInlineDecision,
+  DECISION_STATUSES,
   decisions,
   getDecision,
   listDecisions,
@@ -26,7 +27,9 @@ import { parseMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
+  parseEnumListQuery,
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -94,7 +97,7 @@ decidersRouter.post('/deciders', async (ctx: Context) => {
     toolId: body.tool_id,
     questions: body.questions,
     versionLabel: parseString(body.version_label),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 });
 
@@ -154,7 +157,7 @@ decidersRouter.patch('/deciders/:decider_id', async (ctx: Context) => {
     questions: body.questions,
     versionLabel: parseString(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 });
 
@@ -245,7 +248,7 @@ decidersRouter.post(
       deciderId: ctx.params.decider_id,
       version: parseVersionParam(ctx.params.version),
       label: parseString(body.label),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     });
   }
 );
@@ -324,7 +327,11 @@ decidersRouter.get('/decisions', async (ctx: Context) => {
   ctx.body = await listDecisions({
     projectIds,
     deciderId: parseString(ctx.query.decider_id),
-    status: ctx.query.status,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: DECISION_STATUSES,
+    }),
     ...parsePagination(ctx),
   });
 });

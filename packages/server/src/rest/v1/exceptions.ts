@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   acknowledgeException,
+  EXCEPTION_STATUSES,
   getException,
   listExceptions,
   resolveException,
@@ -10,7 +11,13 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parseEnumListQuery,
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 
 const exceptionsRouter = new Router<Context>();
 
@@ -39,7 +46,11 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
 
   ctx.body = await listExceptions({
     projectIds: projectIds ?? [],
-    status: ctx.query.status as string | undefined,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: EXCEPTION_STATUSES,
+    }),
     severity: ctx.query.severity as string | undefined,
     kind: ctx.query.kind as string | undefined,
     ...parsePagination(ctx),
@@ -81,7 +92,7 @@ exceptionsRouter.post(
 
     ctx.body = await acknowledgeException({
       id: ctx.params.exception_id,
-      userId: ctx.authUser.id,
+      acknowledgedBy: requestPrincipalFromCtx(ctx),
     });
   }
 );
@@ -106,7 +117,7 @@ exceptionsRouter.post(
 
     ctx.body = await resolveException({
       id: ctx.params.exception_id,
-      userId: ctx.authUser.id,
+      resolvedBy: requestPrincipalFromCtx(ctx),
       note: body.note ?? null,
     });
   }

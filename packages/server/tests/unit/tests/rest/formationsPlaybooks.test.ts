@@ -310,7 +310,11 @@ describe('Formations — playbook resources', () => {
         expect.objectContaining({
           logical_id: 'Pricing',
           resource_type: 'playbook',
-          error: `Playbook '${playbookId}' has 1 case(s) and cannot be deleted.`,
+          error: {
+            code: 'PLAYBOOK_HAS_CASES',
+            message: `Playbook '${playbookId}' has 1 case(s) and cannot be deleted.`,
+            meta: { cases: 1 },
+          },
         }),
       ]);
       const tool = await authenticatedTestClient(userToken).get(

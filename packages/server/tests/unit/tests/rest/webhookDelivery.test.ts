@@ -158,7 +158,7 @@ describe('Webhook delivery', () => {
   });
 
   describe('POST /api/v1/files → a subscribed webhook', () => {
-    test('receives one signed, snake_case envelope, recorded as a success', async () => {
+    test('receives one signed, snake_case envelope, recorded as completed', async () => {
       const url = 'https://example.com/delivery-envelope';
       const webhook = await createWebhook({ url, events: ['files.created'] });
 
@@ -167,7 +167,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -184,6 +184,7 @@ describe('Webhook delivery', () => {
 
       const body = JSON.parse(init.body as string);
       expect(body).toEqual({
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         event: 'files.created',
         project_id: projectId,
         resource_type: 'file',
@@ -191,6 +192,7 @@ describe('Webhook delivery', () => {
         data: expect.objectContaining({ id: fileId }),
         timestamp: expect.any(String),
       });
+      expect(header(init, 'X-Soat-Event-Id')).toBe(body.id);
 
       // One scheme under one header: a second header offers a subscriber a
       // name to guess wrong, and a bare-body scheme has no replay bound.
@@ -222,13 +224,14 @@ describe('Webhook delivery', () => {
           webhookId: webhook.id,
           fileId,
           done: (d) => {
-            return d.status === 'success';
+            return d.status === 'completed';
           },
         });
 
         const [init] = callsTo(url);
         expect(header(init, 'X-Acme-Event')).toBe('files.created');
         expect(header(init, 'X-Acme-Delivery')).toBe(delivery.id);
+        expect(header(init, 'X-Acme-Event-Id')).toBe(delivery.payload.id);
         expect(header(init, 'X-Acme-Signature')).toMatch(
           /^t=\d+,v1=[0-9a-f]{64}$/
         );
@@ -263,7 +266,7 @@ describe('Webhook delivery', () => {
 
       const fileId = await createFile();
       const settled = (d: Delivery) => {
-        return d.status === 'success';
+        return d.status === 'completed';
       };
       await waitForDelivery({ webhookId: star.id, fileId, done: settled });
       await waitForDelivery({ webhookId: prefix.id, fileId, done: settled });
@@ -304,7 +307,7 @@ describe('Webhook delivery', () => {
       const first = await createFile();
       const second = await createFile();
       const settled = (d: Delivery) => {
-        return d.status === 'success';
+        return d.status === 'completed';
       };
       await waitForDelivery({
         webhookId: allowed.id,
@@ -371,7 +374,7 @@ describe('Webhook delivery', () => {
       });
 
       // The retry lives on the row, not in a loop in the emitting process.
-      expect(first.status).toBe('pending');
+      expect(first.status).toBe('queued');
       expect(first.status_code).toBeNull();
       expect(first.response_body).toBe('unreachable');
       expect(
@@ -444,7 +447,7 @@ describe('Webhook delivery', () => {
         },
       });
 
-      expect(delivery.status).toBe('pending');
+      expect(delivery.status).toBe('queued');
       expect(delivery.status_code).toBe(502);
       // Tenant-written URL, body readable back: the row keeps the first KB.
       expect(delivery.response_body).toHaveLength(1024);
@@ -471,7 +474,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -512,7 +515,7 @@ describe('Webhook delivery', () => {
         },
       });
 
-      expect(delivery.status).toBe('pending');
+      expect(delivery.status).toBe('queued');
       expect(delivery.response_body).toBe('This operation was aborted');
     });
   });
@@ -553,7 +556,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
       expect(delivery.attempts).toBe(1);
@@ -570,7 +573,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -587,7 +590,7 @@ describe('Webhook delivery', () => {
           `/api/v1/webhook-deliveries/${redeliver.body.id}`
         );
         expect(copy.status).toBe(200);
-        if (copy.body.status === 'success') break;
+        if (copy.body.status === 'completed') break;
         await new Promise((resolve) => {
           return setTimeout(resolve, 25);
         });
@@ -595,9 +598,78 @@ describe('Webhook delivery', () => {
       const copy = await asUser().get(
         `/api/v1/webhook-deliveries/${redeliver.body.id}`
       );
-      expect(copy.body.status).toBe('success');
+      expect(copy.body.status).toBe('completed');
       expect(copy.body.attempts).toBe(1);
       expect(callsTo(url)).toHaveLength(2);
+    });
+
+    test('carries the original event id in the body and X-Soat-Event-Id', async () => {
+      const url = 'https://example.com/delivery-redeliver-event-id';
+      const webhook = await createWebhook({ url, events: ['files.created'] });
+      const fileId = await createFile();
+      const original = await waitForDelivery({
+        webhookId: webhook.id,
+        fileId,
+        done: (d) => {
+          return d.status === 'completed';
+        },
+      });
+
+      const redeliver = await asUser().post(
+        `/api/v1/webhook-deliveries/${original.id}/redeliver`
+      );
+      expect(redeliver.status).toBe(202);
+      await sweepDueWebhookDeliveries({ now: new Date() });
+      for (let i = 0; i < 200 && callsTo(url).length < 2; i += 1) {
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 25);
+        });
+      }
+
+      const [first, second] = callsTo(url);
+      const eventId = JSON.parse(first.body as string).id;
+      expect(eventId).toEqual(expect.any(String));
+      expect(JSON.parse(second.body as string).id).toBe(eventId);
+      expect(header(first, 'X-Soat-Event-Id')).toBe(eventId);
+      expect(header(second, 'X-Soat-Event-Id')).toBe(eventId);
+      expect(header(second, 'X-Soat-Delivery')).toBe(redeliver.body.id);
+      expect(header(second, 'X-Soat-Delivery')).not.toBe(
+        header(first, 'X-Soat-Delivery')
+      );
+    });
+
+    test('a stored payload carrying no id is sent without X-Soat-Event-Id', async () => {
+      const url = 'https://example.com/delivery-redeliver-no-event-id';
+      const webhook = await createWebhook({ url, events: ['files.created'] });
+      const fileId = await createFile();
+      const original = await waitForDelivery({
+        webhookId: webhook.id,
+        fileId,
+        done: (d) => {
+          return d.status === 'completed';
+        },
+      });
+      // A row whose payload predates the envelope carrying `id`.
+      const { id: _eventId, ...withoutId } = original.payload;
+      await db.WebhookDelivery.update(
+        { payload: withoutId },
+        { where: { publicId: original.id } }
+      );
+
+      const redeliver = await asUser().post(
+        `/api/v1/webhook-deliveries/${original.id}/redeliver`
+      );
+      expect(redeliver.status).toBe(202);
+      await sweepDueWebhookDeliveries({ now: new Date() });
+      for (let i = 0; i < 200 && callsTo(url).length < 2; i += 1) {
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 25);
+        });
+      }
+
+      const [, second] = callsTo(url);
+      expect(JSON.parse(second.body as string)).toEqual(withoutId);
+      expect(header(second, 'X-Soat-Event-Id')).toBeNull();
     });
   });
 

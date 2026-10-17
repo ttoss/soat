@@ -168,7 +168,7 @@ Field semantics (they change with `status`):
 | `total_chunks` | Planned total number of chunks, known once chunking begins (`null` until then). The denominator for `progress`. |
 | `total_pages` | Source pages extracted. `null` until extraction has run (i.e. until `ready`/`failed`); `null` is not the same as zero pages. |
 | `progress` | Percentage `chunk_count / total_chunks`. `0` while `pending`, climbs while `processing` (capped at `99`), `100` when `ready`, `null` when `failed` or not yet computable. |
-| `error` | The `failure_reason` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`). Only set when `status` is `failed`; otherwise `null`. |
+| `error` | Why the ingestion failed, as a [recorded failure](/docs/api#recorded-failures) `{ code, message, meta? }` — `code` is for example `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT` or `INGESTION_FAILED`. Only set when `status` is `failed`; otherwise `null`. |
 
 ### Ingestion Events
 
@@ -179,7 +179,7 @@ sweeper) emits a terminal event on the project event bus, deliverable through a
 | Event | Emitted when | Extra `data` field |
 | --- | --- | --- |
 | `documents.ingested` | The document reached `status: ready` and its chunks are queryable | `chunk_count` — the final number of chunks indexed |
-| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same reason [`GET /documents/:id/status`](/docs/api/documents/get-document-status) reports |
+| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same object [`GET /documents/:id/status`](/docs/api/documents/get-document-status) reports |
 
 Both carry the document in `data` in REST shape. A re-ingest emits a fresh event
 each time it settles; a document stuck in `processing` emits nothing until the
@@ -187,7 +187,7 @@ stall sweeper fails it (see [Stuck Ingestion Recovery](#stuck-ingestion-recovery
 
 ### Stuck Ingestion Recovery
 
-A document left in `processing` (or `pending`) by a dead worker is **self-recovered**: when read via [`GET /documents/:id`](/docs/api/documents/get-document) or [`GET /documents/:id/status`](/docs/api/documents/get-document-status) after no progress for `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it transitions to `failed` with `error = INGESTION_TIMEOUT`. Re-process it with the re-ingest endpoint below.
+A document left in `processing` (or `pending`) by a dead worker is **self-recovered**: when read via [`GET /documents/:id`](/docs/api/documents/get-document) or [`GET /documents/:id/status`](/docs/api/documents/get-document-status) after no progress for `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it transitions to `failed` with `error.code` `INGESTION_TIMEOUT`. Re-process it with the re-ingest endpoint below.
 
 ### Re-ingesting a Document
 
@@ -203,7 +203,7 @@ A document left in `processing` (or `pending`) by a dead worker is **self-recove
 | `failed`     | Processing encountered an error. The `error` field on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) describes it |
 | `withdrawn`  | Taken out of listings and knowledge search, with its chunks dropped — see [Withdrawal](#withdrawal) |
 
-`error` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)); with an [Ingestion Rule](./ingestion-rules.md), also `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT`.
+`error.code` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)), `INGESTION_FAILED` (any other failure, its message kept); with an [Ingestion Rule](./ingestion-rules.md), also `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT`.
 
 Embedding concurrency is bounded (default 5 simultaneous requests).
 

@@ -1,5 +1,5 @@
-import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
+import type { ValidationProblem } from './validationProblems';
 
 /**
  * Optional retry policy on a state's `on_enter`, covering the dispatch's
@@ -37,27 +37,28 @@ const isNumberInRange = (args: {
   );
 };
 
-const fail = (message: string, stateName: string): never => {
-  throw new DomainError('WORKFLOW_VALIDATION_FAILED', message, {
-    state: stateName,
-  });
-};
-
 /**
- * Validates a state's `on_enter.retry` block. Error messages name the wire
- * (snake_case) field so an author reads back the key they wrote. Throws
- * `WORKFLOW_VALIDATION_FAILED`; a null/absent policy is valid.
+ * Every problem with a state's `on_enter.retry` block; a null/absent policy
+ * has none. Messages name the wire (snake_case) field so an author reads back
+ * the key they wrote.
  */
-export const assertRetryPolicyValid = (args: {
+export const retryPolicyProblems = (args: {
   stateName: string;
+  path: string;
   retry: RetryPolicy | null | undefined;
-}): void => {
-  const { retry, stateName } = args;
-  if (retry == null) return;
+}): ValidationProblem[] => {
+  const { retry, stateName, path } = args;
+  if (retry == null) return [];
   if (!isPlainObject(retry)) {
-    fail(`State '${stateName}' on_enter retry must be an object.`, stateName);
-    return;
+    return [
+      {
+        code: 'INVALID_TYPE',
+        path,
+        message: `State '${stateName}' on_enter retry must be an object.`,
+      },
+    ];
   }
+  const problems: ValidationProblem[] = [];
   if (
     !Number.isInteger(retry.maxAttempts) ||
     !isNumberInRange({
@@ -66,10 +67,11 @@ export const assertRetryPolicyValid = (args: {
       max: MAX_RETRY_ATTEMPTS,
     })
   ) {
-    fail(
-      `State '${stateName}' retry max_attempts must be an integer between 1 and ${MAX_RETRY_ATTEMPTS}.`,
-      stateName
-    );
+    problems.push({
+      code: 'INVALID_VALUE',
+      path: `${path}.max_attempts`,
+      message: `State '${stateName}' retry max_attempts must be an integer between 1 and ${MAX_RETRY_ATTEMPTS}.`,
+    });
   }
   if (
     retry.backoffSeconds != null &&
@@ -79,10 +81,11 @@ export const assertRetryPolicyValid = (args: {
       max: MAX_BACKOFF_SECONDS,
     })
   ) {
-    fail(
-      `State '${stateName}' retry backoff_seconds must be a number between 0 and ${MAX_BACKOFF_SECONDS}.`,
-      stateName
-    );
+    problems.push({
+      code: 'INVALID_VALUE',
+      path: `${path}.backoff_seconds`,
+      message: `State '${stateName}' retry backoff_seconds must be a number between 0 and ${MAX_BACKOFF_SECONDS}.`,
+    });
   }
   if (
     retry.backoffMultiplier != null &&
@@ -92,9 +95,11 @@ export const assertRetryPolicyValid = (args: {
       max: MAX_BACKOFF_MULTIPLIER,
     })
   ) {
-    fail(
-      `State '${stateName}' retry backoff_multiplier must be a number between 1 and ${MAX_BACKOFF_MULTIPLIER}.`,
-      stateName
-    );
+    problems.push({
+      code: 'INVALID_VALUE',
+      path: `${path}.backoff_multiplier`,
+      message: `State '${stateName}' retry backoff_multiplier must be a number between 1 and ${MAX_BACKOFF_MULTIPLIER}.`,
+    });
   }
+  return problems;
 };

@@ -29,7 +29,7 @@ export const playbooksFormationModule = defineFormationModule({
       name: properties.name,
       description: toNullableString(properties.description),
       definition: properties.definition,
-      createdByUserId: actor.userId,
+      createdBy: actor.author,
       author: actor,
     });
   },
@@ -40,7 +40,7 @@ export const playbooksFormationModule = defineFormationModule({
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       definition: properties.definition,
-      createdByUserId: actor.userId,
+      createdBy: actor.author,
       author: actor,
     });
   },

@@ -104,12 +104,12 @@ const surfaceUnrouted = async (args: {
       : 'tasks.automation_unrouted',
     projectId: args.projectId,
     task: mapTask(task),
-    extra: {
+    facts: {
       result: args.result,
       ...(args.rejected
         ? {
             transition: args.rejected.transition,
-            errorCode: args.rejected.code,
+            error_code: args.rejected.code,
           }
         : {}),
     },

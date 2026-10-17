@@ -7,6 +7,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import type { ResourceIncludes } from './modelIncludes';
+import { createdByColumns, type RequestPrincipal } from './principals';
 import type {
   ArchivedVersionRow,
   ConfigSnapshot,
@@ -35,19 +36,9 @@ const isSameConfig = (
 };
 // ── The store: writing and reading raw archive rows ───────────────────────
 
-/**
- * Loaded with `createdBy` so a version response can name its author, plus
- * whatever associations the resource's own version table adds.
- */
+/** Whatever associations the resource's own version table adds. */
 const versionInclude = (extra?: () => ResourceIncludes): ResourceIncludes => {
-  const base = [{ model: db.User, as: 'createdBy' }];
-
-  // `ResourceIncludes` admits a single includeable as well as a list, so the
-  // extras are normalized rather than spread blindly.
-  const additional = extra?.();
-  if (additional === undefined) return base;
-
-  return [...base, ...(Array.isArray(additional) ? additional : [additional])];
+  return extra?.() ?? [];
 };
 
 type FindVersionRowArgs = {
@@ -61,7 +52,7 @@ type WriteVersionArgs = {
   config: ConfigSnapshot;
   label?: string | null;
   /** Required so a write path states its author; `null` is a platform write. */
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   /** Columns only this resource's version table carries. */
   columns?: Record<string, unknown>;
   transaction?: Transaction;
@@ -97,7 +88,7 @@ type CommitConfigChangeArgs = {
   }>;
   label?: string | null;
   /** Required so a write path states its author; `null` is a platform write. */
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   /** Columns only this resource's version table carries. */
   columns?: Record<string, unknown>;
 };
@@ -156,7 +147,7 @@ type VersionTable = {
   /** Column on the version table pointing at the parent, e.g. `agentId`. */
   foreignKey: string;
   /**
-   * Associations this resource's version rows carry beyond `createdBy` — the
+   * Associations this resource's version rows carry — the
    * engine loads them but never reads them, so the resource's own mapper is
    * free to expose a field the archive itself has no concept of (an agent
    * version's `eval_run_id`, say). A thunk for the same reason
@@ -292,7 +283,7 @@ const makeWriteVersion = (args: VersionTable) => {
         version: a.version,
         config: a.config,
         label: a.label ?? null,
-        createdByUserId: a.createdByUserId ?? null,
+        ...createdByColumns(a.createdBy),
         ...a.columns,
       },
       { transaction: a.transaction }
@@ -446,7 +437,7 @@ const makeCommitConfigChange = (args: {
         version: nextVersion,
         config: after,
         label: a.label,
-        createdByUserId: a.createdByUserId,
+        createdBy: a.createdBy,
         columns: a.columns,
         transaction,
       });

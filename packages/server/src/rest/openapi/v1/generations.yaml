@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >
     Generation records track individual LLM generation runs started by agents.
-    Each record carries the lifecycle status ('in_progress', 'requires_action',
+    Each record carries the lifecycle status ('running', 'requires_action',
     'completed', or 'failed'), the stop reason, and — when the generation
     failed — a structured error payload for post-mortem debugging. Generations
     for a trace can be listed via GET /api/v1/generations?trace_id=.
@@ -114,10 +114,16 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filter by lifecycle status
+          description: >-
+            Filter by lifecycle status. Repeat the parameter to OR values. A
+            value outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [in_progress, requires_action, completed, failed]
+            type: array
+            items:
+              type: string
+              enum: [running, requires_action, completed, failed]
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -519,17 +525,21 @@ components:
             null when none was. Copied onto the generation's usage event, so it
             is the same dimension `group_by=actor` buckets on.
         started_by_principal_type:
-          type: string
           nullable: true
-          description: Type of the principal that started the generation
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who started the generation
         started_by_principal_id:
           type: string
           nullable: true
-          description: ID of the principal that started the generation
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         status:
           type: string
           description: Lifecycle status of the generation
-          enum: [in_progress, requires_action, completed, failed]
+          enum: [running, requires_action, completed, failed]
           example: failed
         started_at:
           type: string
@@ -555,21 +565,13 @@ components:
             generation budget, or 'error' when the turn failed.
           example: error
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: >
-            Structured error payload recorded when the generation failed.
-            Contains at least `message`; `code` is set for mapped errors
-            (e.g. AI_PROVIDER_ERROR for upstream provider failures).
-          properties:
-            code:
-              type: string
-              example: AI_PROVIDER_ERROR
-            message:
-              type: string
-              example: 'Provider returned 402: insufficient credits'
-            meta:
-              type: object
+          description: >-
+            Why the generation failed: `AI_PROVIDER_ERROR` for an upstream
+            provider failure, `GENERATION_FAILED` for any other failure of the
+            turn.
         action_id:
           type: string
           nullable: true
@@ -793,16 +795,21 @@ components:
             cleared, while the usage/audit skeleton — ids, timestamps, status,
             stop reason and the attribution fields — is preserved.
         content_redacted_by_principal_type:
-          type: string
           nullable: true
-          description: Principal kind that purged the content ('user' or 'api_key')
-          example: user
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who purged the content: `user` or `api_key` for a purge request,
+            `system` for the retention sweep and for content never stored under
+            zero retention.
         content_redacted_by_principal_id:
           type: string
           nullable: true
-          description: >
-            Public ID of the principal that purged the content — the API key's
-            own id for key auth, so the record names which key acted.
+          description: >-
+            Public id of that principal — the API key's own id for key auth, so
+            the record names which key acted. `retention_sweep` or
+            `zero_retention` for `system`.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -949,7 +956,14 @@ components:
           example:
             tempC: 18
         error:
-          description: The tool's failure, when the step recorded one.
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
+          nullable: true
+          description: >-
+            The tool's failure, when the step recorded one. A failure the tool
+            raised with a code keeps it; any other is `TOOL_CALL_FAILED`, with
+            the fields the thrown error carried (`name`, `status`, …) in
+            `meta`.
           example: null
 
     TranscriptStep:
@@ -1026,7 +1040,7 @@ components:
           description: >
             Lifecycle status of the generation. Disambiguates an empty `steps`
             caused by a run still in flight from one caused by erased content.
-          enum: [in_progress, requires_action, completed, failed]
+          enum: [running, requires_action, completed, failed]
           example: completed
         stop_reason:
           type: string
@@ -1089,9 +1103,10 @@ components:
               description: The finish reason of the actual last step.
               example: stop
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: Structured error payload when the generation failed.
+          description: Why the generation failed.
         content_redacted_at:
           type: string
           format: date-time
@@ -1099,13 +1114,13 @@ components:
           description: >
             When the generation's content was erased; null while it is intact.
         content_redacted_by_principal_type:
-          type: string
           nullable: true
-          description: Principal kind that erased the content.
-          example: system
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who erased the content.
         content_redacted_by_principal_id:
           type: string
           nullable: true
           description: >
-            Public ID of that principal. `zero_retention` when the content was
+            Public id of that principal. `zero_retention` when the content was
             never stored, distinguishing it from content erased later.

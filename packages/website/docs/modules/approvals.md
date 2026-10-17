@@ -59,7 +59,8 @@ create endpoint. Producers:
 | `task_transition`    | string \| null  | Transition fired on approval (`task_transition` producer)          |
 | `policy_version`     | string \| null  | Guardrail policy version that routed here                          |
 | `previous_item_id`   | string \| null  | Prior item's ID when this proposal was re-filed after an earlier matching item (same `dedup_key`) was rejected |
-| `resolved_by`        | string \| null  | Resolving user's public ID; `null` on expiry                       |
+| `resolved_by_principal_type` | string \| null | Who resolved the item: `user` or `api_key`; `null` while pending and on expiry |
+| `resolved_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key resolved it |
 | `resolution_reason`  | string \| null  | Required on rejection                                              |
 | `edited_arguments`   | object \| null  | Set on edit-then-approve; the original stays in `proposed_action`  |
 | `created_at`         | string          | ISO 8601 creation timestamp                                        |
@@ -191,17 +192,18 @@ continuation as the tool result. Same shape:
 ```json
 {
   "decision": "approved",
-  "approval_id": "apr_x1y2z3a4b5c6d7e8",
-  "resolved_by": "user_a1b2c3d4e5f6g7h8",
-  "edited_args": { "amount": 450 },
+  "approvalId": "apr_x1y2z3a4b5c6d7e8",
+  "resolvedByPrincipalType": "user",
+  "resolvedByPrincipalId": "user_a1b2c3d4e5f6g7h8",
+  "editedArgs": { "amount": 450 },
   "reason": null,
   "result": null
 }
 ```
 
 - `decision` — `approved` \| `rejected` \| `expired`
-- `resolved_by` — resolving user's public ID; `null` on expiry
-- `edited_args` — `null` unless edit-then-approve
+- `resolvedByPrincipalType` / `resolvedByPrincipalId` — who resolved it; `null` on expiry
+- `editedArgs` — `null` unless edit-then-approve
 - `reason` — required (non-null) on rejection
 - `result` — the executed tool output on approval for `tool_call` items;
   `null` for `node` items (execution belongs to the downstream `tool` node)
@@ -226,6 +228,8 @@ A builtin action is dispatched in-process against the proposer's credential, so 
 
 ### List pending approvals
 
+`status` repeats (values ORed); `expires_from` / `expires_to` bound `expires_at`, both inclusive.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -241,7 +245,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.approvals.listApprovals({
-  query: { project_id: 'proj_ABC', status: 'pending' },
+  query: { project_id: 'proj_ABC', status: ['pending'] },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```

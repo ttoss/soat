@@ -84,7 +84,7 @@ describe('Event delivery resilience', () => {
     let found: Delivery | undefined;
     await until(async () => {
       [found] = await deliveriesFor(fileId);
-      return found?.status === 'success';
+      return found?.status === 'completed';
     });
     return found as Delivery;
   };
@@ -101,6 +101,8 @@ describe('Event delivery resilience', () => {
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'exceptions:ListExceptions',
+        'conversations:CreateConversation',
+        'conversations:DeleteConversation',
       ],
       createNoPermUser: false,
     });
@@ -167,6 +169,39 @@ describe('Event delivery resilience', () => {
         before
       );
       expect(await deliveriesFor(fileId)).toHaveLength(0);
+    });
+  });
+
+  // A delete names its project by internal id only, so the bus resolves the
+  // public id itself rather than the emit site.
+  describe('DELETE /api/v1/conversations/{id} → the bus project lookup', () => {
+    test('a failure outliving the retries is counted and printed', async () => {
+      const created = await asUser()
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      expect(created.status).toBe(201);
+      const conversationId: string = created.body.id;
+
+      const before = droppedEventCount({ stage: 'project_lookup' });
+      const down = jest
+        .spyOn(db.Project, 'findByPk')
+        .mockRejectedValue(new Error('database is down'));
+
+      const removed = await asUser().delete(
+        `/api/v1/conversations/${conversationId}`
+      );
+      expect(removed.status).toBe(204);
+      await until(() => {
+        return printedDrop({
+          stage: 'project_lookup',
+          text: `conversations.deleted (${conversationId})`,
+        });
+      });
+      down.mockRestore();
+
+      expect(droppedEventCount({ stage: 'project_lookup' })).toBeGreaterThan(
+        before
+      );
     });
   });
 

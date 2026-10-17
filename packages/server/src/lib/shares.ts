@@ -401,13 +401,13 @@ export const listReceivedShares = async (args: {
 
 export const listShareAcceptances = async (args: {
   shareId: string;
-  status?: 'active' | 'revoked';
+  statuses?: readonly ('active' | 'revoked')[];
   limit?: number;
   offset?: number;
 }) => {
   const share = await shares.getByPublicId({ id: args.shareId });
   const where: Record<string, unknown> = { shareId: share.id };
-  if (args.status) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
   return paginatedList({
     limit: args.limit,
     offset: args.offset,

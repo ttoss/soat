@@ -5,21 +5,13 @@ import {
   type PlaybookNode,
 } from './playbookDefinition';
 import { nodesByKey, topologicalWaves } from './playbookGraph';
+import type { ValidationProblem } from './validationProblems';
 
-export type PlaybookDefinitionProblem =
-  | { code: 'duplicate_node'; node_id: string }
-  | { code: 'duplicate_input'; node_id: string; input: string }
-  | { code: 'missing_node'; node_id: string; input: string }
-  | { code: 'unknown_field'; node_id: string; input: string }
-  | { code: 'executor_required'; node_id: string }
-  | { code: 'executor_forbidden'; node_id: string }
-  | { code: 'transformations_not_final'; node_id: string }
-  | {
-      code: 'duplicate_transformation';
-      node_id: string;
-      transformation: string;
-    }
-  | { code: 'cycle'; nodes: string[] };
+export type PlaybookDefinitionProblem = ValidationProblem;
+
+const nodePath = (index: number): string => {
+  return `definition.nodes[${index}]`;
+};
 
 /** A collect or confirm node's output is its inputs, so its fields are known. */
 const fieldExists = (args: {
@@ -48,16 +40,17 @@ const fieldExists = (args: {
 /** A transformation's name is how an export selects it, so it is unique per node. */
 const transformationProblems = (args: {
   node: PlaybookNode;
+  path: string;
 }): PlaybookDefinitionProblem[] => {
   const { id, transformations } = args.node;
   const problems: PlaybookDefinitionProblem[] = [];
   const names = new Set<string>();
-  for (const { name } of transformations ?? []) {
+  for (const [index, { name }] of (transformations ?? []).entries()) {
     if (names.has(name)) {
       problems.push({
-        code: 'duplicate_transformation',
-        node_id: id,
-        transformation: name,
+        code: 'DUPLICATE_TRANSFORMATION',
+        path: `${args.path}.transformations[${index}].name`,
+        message: `Node '${id}' declares transformation '${name}' more than once.`,
       });
     }
     names.add(name);
@@ -68,30 +61,44 @@ const transformationProblems = (args: {
 
 const nodeProblems = (args: {
   node: PlaybookNode;
+  path: string;
 }): PlaybookDefinitionProblem[] => {
   const { id, kind, executor, transformations, final } = args.node;
 
   const problems: PlaybookDefinitionProblem[] = [];
 
   if (kind === 'execute' && !executor) {
-    problems.push({ code: 'executor_required', node_id: id });
+    problems.push({
+      code: 'EXECUTOR_REQUIRED',
+      path: `${args.path}.executor`,
+      message: `Execute node '${id}' needs an executor.`,
+    });
   }
 
   if (kind !== 'execute' && executor) {
-    problems.push({ code: 'executor_forbidden', node_id: id });
+    problems.push({
+      code: 'EXECUTOR_FORBIDDEN',
+      path: `${args.path}.executor`,
+      message: `${kind} node '${id}' cannot have an executor; only an execute node runs one.`,
+    });
   }
 
   if (transformations?.length && !final) {
-    problems.push({ code: 'transformations_not_final', node_id: id });
+    problems.push({
+      code: 'TRANSFORMATIONS_NOT_FINAL',
+      path: `${args.path}.transformations`,
+      message: `Node '${id}' declares transformations but is not final.`,
+    });
   }
 
-  problems.push(...transformationProblems({ node: args.node }));
+  problems.push(...transformationProblems(args));
 
   return problems;
 };
 
 const inputProblems = (args: {
   node: PlaybookNode;
+  path: string;
   byKey: Map<string, PlaybookNode>;
 }): PlaybookDefinitionProblem[] => {
   const { node, byKey } = args;
@@ -99,11 +106,16 @@ const inputProblems = (args: {
   const problems: PlaybookDefinitionProblem[] = [];
   const seen = new Set<string>();
 
-  for (const input of node.inputs) {
-    const at = { node_id: node.id, input: input.name };
+  for (const [index, input] of node.inputs.entries()) {
+    const path = `${args.path}.inputs[${index}]`;
+    const named = `Input '${input.name}' of node '${node.id}'`;
 
     if (seen.has(input.name)) {
-      problems.push({ code: 'duplicate_input', ...at });
+      problems.push({
+        code: 'DUPLICATE_INPUT',
+        path: `${path}.name`,
+        message: `${named} is declared more than once.`,
+      });
     }
 
     seen.add(input.name);
@@ -114,9 +126,17 @@ const inputProblems = (args: {
     const field = parseField({ field: input.source.field });
 
     if (!source) {
-      problems.push({ code: 'missing_node', ...at });
+      problems.push({
+        code: 'MISSING_NODE',
+        path: `${path}.source.node_id`,
+        message: `${named} reads node '${input.source.node_id}', which the definition does not declare.`,
+      });
     } else if (!field || !fieldExists({ source, field })) {
-      problems.push({ code: 'unknown_field', ...at });
+      problems.push({
+        code: 'UNKNOWN_FIELD',
+        path: `${path}.source.field`,
+        message: `${named} reads '${input.source.field}', which node '${source.id}' does not produce.`,
+      });
     }
   }
 
@@ -136,20 +156,37 @@ export const validatePlaybookDefinition = (args: {
   const problems: PlaybookDefinitionProblem[] = [];
   const keys = new Set<string>();
 
-  for (const node of definition.nodes) {
+  for (const [index, node] of definition.nodes.entries()) {
     if (keys.has(node.id)) {
-      problems.push({ code: 'duplicate_node', node_id: node.id });
+      problems.push({
+        code: 'DUPLICATE_NODE',
+        path: `${nodePath(index)}.id`,
+        message: `Node id '${node.id}' is used by more than one node.`,
+      });
     }
 
     keys.add(node.id);
   }
 
-  for (const node of definition.nodes) {
-    problems.push(...nodeProblems({ node }), ...inputProblems({ node, byKey }));
+  for (const [index, node] of definition.nodes.entries()) {
+    const path = nodePath(index);
+    problems.push(
+      ...nodeProblems({ node, path }),
+      ...inputProblems({ node, path, byKey })
+    );
   }
 
   for (const nodes of topologicalWaves({ definition }).cycles) {
-    problems.push({ code: 'cycle', nodes });
+    const named = nodes
+      .map((key) => {
+        return `'${key}'`;
+      })
+      .join(', ');
+    problems.push({
+      code: 'CYCLE',
+      path: 'definition.nodes',
+      message: `Nodes ${named} read each other in a cycle.`,
+    });
   }
 
   return problems;

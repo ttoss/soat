@@ -51,11 +51,17 @@ paths:
         - name: status
           in: query
           required: false
+          description: >-
+            Filter by whether the task is open or closed. Repeat the parameter
+            to OR values. A value outside the enum, empty string included, is a
+            `400`.
           schema:
-            type: string
-            enum:
-              - open
-              - closed
+            type: array
+            items:
+              type: string
+              enum: [open, closed]
+          style: form
+          explode: true
         - name: automation_status
           in: query
           required: false
@@ -563,19 +569,15 @@ components:
         transition:
           type: string
           nullable: true
-        principal_kind:
-          type: string
+        principal_type:
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
           description: >
-            Who made the move. `user` and `api_key` are authenticated
-            principals; `automation` (the engine acting on an `on_enter`
-            dispatch outcome) and `approval` (an approval resolution) are system
-            principals. Named `principal_*`, not `actor_*`: these ids never
-            reference the Actors module.
-          enum:
-            - user
-            - api_key
-            - automation
-            - approval
+            Who made the move: `user` or `api_key` for an authenticated caller,
+            `automation` for the engine acting on an `on_enter` dispatch
+            outcome, `approval` for an approval resolution. Named
+            `principal_*`, not `actor_*`: these ids never reference the Actors
+            module.
         principal_id:
           type: string
           nullable: true

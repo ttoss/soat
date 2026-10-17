@@ -10,7 +10,9 @@ import { authenticatedTestClient } from '../../testClient';
 /**
  * A failed tool call is stored as the error the tool threw, and an `Error`
  * stringifies to `{}` — so the steps object keeps its message, name and every
- * field the tool attached, or the transcript of a failed call says nothing.
+ * field the tool attached, or the transcript of a failed call says nothing. The
+ * transcript reads it back as a failure reason: its code when it has one, else
+ * `TOOL_CALL_FAILED` with the attached fields in `meta`.
  */
 describe('GET /api/v1/generations/:generation_id/transcript — failed tool call', () => {
   let stub: ChatCompletionsStub;
@@ -135,13 +137,16 @@ describe('GET /api/v1/generations/:generation_id/transcript — failed tool call
     const error = await failedToolResult({ agentId, toolName: 'update_order' });
 
     expect(error).toMatchObject({
-      name: 'HttpToolError',
-      status: 401,
-      url: `${stub.baseUrl}/orders/1`,
-      method: 'PATCH',
+      code: 'TOOL_CALL_FAILED',
+      meta: {
+        name: 'HttpToolError',
+        status: 401,
+        url: `${stub.baseUrl}/orders/1`,
+        method: 'PATCH',
+      },
     });
     expect(error.message).toContain('401');
-    expect(error.body).toContain('Denied');
+    expect(error.meta.body).toContain('Denied');
   });
 
   test('keeps the message, name and fields of a server-side error', async () => {
@@ -150,9 +155,9 @@ describe('GET /api/v1/generations/:generation_id/transcript — failed tool call
       toolName: 'ping_warehouse',
     });
 
-    expect(error).toMatchObject({
-      name: 'DomainError',
+    expect(error).toEqual({
       code: 'MISSING_TOOL_CONTEXT_KEY',
+      message: expect.any(String),
       meta: { header: 'Authorization', key: 'warehouseToken' },
     });
     expect(error.message).toContain('{{context:warehouseToken}}');

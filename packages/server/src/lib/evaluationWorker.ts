@@ -71,7 +71,6 @@ const isLive = (status: string): boolean => {
 
 type LoadedRun = {
   run: InstanceType<(typeof db)['EvalRun']>;
-  evalPublicId: string;
   projectId: number;
   settlement: EvalSettlement;
 };
@@ -93,7 +92,6 @@ const loadRunContext = async (args: {
 
   return {
     run,
-    evalPublicId: evaluation.publicId,
     projectId: evaluation.projectId as number,
     settlement: evalSettlement({ evaluation }),
   };
@@ -157,7 +155,7 @@ const loadItemTarget = async (args: {
 /**
  * Executes one claimed item task.
  *
- * A run that is no longer live (canceled between the claim and here) drops the
+ * A run that is no longer live (cancelled between the claim and here) drops the
  * task without spending a generation on it. Everything else runs the item; a
  * per-item failure is already recorded *as* the item's result by
  * `executeAndRecordItem`, so this only rethrows on an unexpected infrastructure
@@ -225,7 +223,7 @@ const handleEvalItemTask = async (args: {
       (run.toolContext as Record<string, string> | null) ?? undefined,
   });
 
-  // The run may have been canceled while this item was in flight. A canceled
+  // The run may have been cancelled while this item was in flight. A cancelled
   // run publishes no `aggregate_scores`, so these counters are its only record
   // of the work that was really paid for.
   await run.reload();
@@ -345,7 +343,6 @@ export const reapAbandonedEvalRuns = async (args?: {
       );
       await failEvalRun({
         run: context.run,
-        evalPublicId: context.evalPublicId,
         projectId: context.projectId,
         reason: `Abandoned with ${resultCount} of ${String(run.itemCount)} items scored.`,
       });

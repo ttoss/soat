@@ -40,19 +40,32 @@ paths:
             example: proj_V1StGXR8Z5jdHi6B
         - name: status
           in: query
-          description: Filter by lifecycle status
+          required: false
+          description: >-
+            Filter by lifecycle status. Repeat the parameter to OR values. A
+            value outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [pending, approved, rejected, expired]
+            type: array
+            items:
+              type: string
+              enum: [pending, approved, rejected, expired]
+          style: form
+          explode: true
         - name: origin
           in: query
           description: Filter by producer origin
           schema:
             type: string
             enum: [node, tool_call, task_transition]
-        - name: expires_before
+        - name: expires_from
           in: query
-          description: Return only items expiring at or before this timestamp
+          description: Only items whose `expires_at` is at or after this timestamp (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: expires_to
+          in: query
+          description: Only items whose `expires_at` is at or before this timestamp (ISO 8601)
           schema:
             type: string
             format: date-time
@@ -82,7 +95,9 @@ paths:
                   offset:
                     type: integer
         '400':
-          description: Invalid `status` or `origin` filter value
+          description: >-
+            Invalid `status` or `origin` filter value, or an `expires_from` /
+            `expires_to` that is not an ISO 8601 timestamp
         '401':
           description: Unauthorized
         '403':
@@ -111,11 +126,19 @@ paths:
             example: proj_V1StGXR8Z5jdHi6B
         - name: status
           in: query
-          description: Lifecycle status the groups are built from (default `rejected`)
+          required: false
+          description: >-
+            Lifecycle statuses the groups are built from (default `rejected`).
+            Repeat the parameter to OR values. A value outside the enum, empty
+            string included, is a `400`.
           schema:
-            type: string
-            enum: [pending, approved, rejected, expired]
-            default: rejected
+            type: array
+            items:
+              type: string
+              enum: [pending, approved, rejected, expired]
+            default: [rejected]
+          style: form
+          explode: true
         - name: min_count
           in: query
           description: Minimum items in a group for it to be returned
@@ -436,10 +459,19 @@ components:
             Prior item's ID when this proposal was re-filed after an earlier
             matching item (same dedup_key) had been rejected
           example: apr_V1StGXR8Z5jdHi6B
-        resolved_by:
+        resolved_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who resolved the item; null while pending and on expiry.
+        resolved_by_principal_id:
           type: string
           nullable: true
-          description: Resolving user's public ID; null on expiry
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         resolution_reason:
           type: string
           nullable: true

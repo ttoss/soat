@@ -223,7 +223,7 @@ const refuseChain = async (args: {
   // A refusal nobody is awaiting is a refusal nobody learns about: the
   // resumption that asked for this turn is a background sweep, so the exception
   // is the only thing that reaches a human before the next bill does.
-  emitChainLimitEvent({
+  void emitChainLimitEvent({
     projectId,
     projectPublicId: chainAgent.project.publicId,
     agentId: args.agentId,

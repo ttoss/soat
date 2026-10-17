@@ -355,9 +355,10 @@ describe('Playbook executions', () => {
       expect(collect).toMatchObject({
         node_id: 'revenue',
         executor: null,
-        status: 'succeeded',
+        status: 'completed',
         result: 'current',
-        created_by: null,
+        created_by_principal_type: null,
+        created_by_principal_id: null,
       });
       expect(tool).toMatchObject({
         node_id: 'pricing',
@@ -413,7 +414,7 @@ describe('Playbook executions', () => {
       await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0]).toMatchObject({
-        status: 'succeeded',
+        status: 'completed',
         output: 'Simples Nacional',
         run_id: expect.stringMatching(/^gen_/),
       });
@@ -439,7 +440,7 @@ describe('Playbook executions', () => {
       await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       const [execution] = await executionsOf(caseId);
-      expect(execution.status).toBe('succeeded');
+      expect(execution.status).toBe('completed');
       expect(execution.output.escalate).toMatchObject({ probability: 0.9 });
       expect(execution.run_id).toMatch(/^dec/);
     });
@@ -462,7 +463,7 @@ describe('Playbook executions', () => {
       });
       await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
-      expect((await executionsOf(caseId))[0].status).toBe('succeeded');
+      expect((await executionsOf(caseId))[0].status).toBe('completed');
       expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
     });
 
@@ -495,9 +496,9 @@ describe('Playbook executions', () => {
       const answered = await asAdmin()
         .post(`/api/v1/orchestration-runs/${parked.run_id}/human-input`)
         .send({ node_id: 'ask', output: { approved: true } });
-      expect(answered.body.status).toBe('succeeded');
+      expect(answered.body.status).toBe('completed');
 
-      expect((await settled(caseId, parked.id)).status).toBe('succeeded');
+      expect((await settled(caseId, parked.id)).status).toBe('completed');
       expect((await nodeOf(caseId, 'pricing')).state).toBe('done');
     });
 
@@ -513,7 +514,7 @@ describe('Playbook executions', () => {
       await closeTask(parked.run_id);
 
       expect(await settled(caseId, parked.id)).toMatchObject({
-        status: 'succeeded',
+        status: 'completed',
         result: 'current',
         output: { amount: 7 },
       });
@@ -682,7 +683,8 @@ describe('Playbook executions', () => {
         id: expect.stringMatching(/^pbk_exe_/),
         case_id: caseId,
         status: 'running',
-        created_by: expect.any(String),
+        created_by_principal_type: 'user',
+        created_by_principal_id: expect.stringMatching(/^user_/),
       });
       expect((await settled(caseId, res.body.id)).status).toBe('failed');
     });
@@ -713,7 +715,7 @@ describe('Playbook executions', () => {
 
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({
-        status: 'succeeded',
+        status: 'completed',
         output: { ok: true },
         output_revision: null,
       });
@@ -928,6 +930,35 @@ describe('Playbook executions', () => {
         state: 'done',
         run: null,
       });
+    });
+
+    test('a repeated automation_status filter ORs its values', async () => {
+      const paused = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+      await pause(paused);
+      const idle = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+
+      const idsIn = async (query: string) => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/playbook-cases?project_id=${projectId}&${query}&limit=100`
+        );
+        expect(res.status).toBe(200);
+        return res.body.data.map((row: { id: string }) => {
+          return row.id;
+        });
+      };
+
+      expect(
+        await idsIn('automation_status=idle&automation_status=paused')
+      ).toEqual(expect.arrayContaining([paused, idle]));
+      const pausedOrRunning = await idsIn(
+        'automation_status=paused&automation_status=running'
+      );
+      expect(pausedOrRunning).toContain(paused);
+      expect(pausedOrRunning).not.toContain(idle);
     });
 
     test('returns 400 for an unknown status', async () => {

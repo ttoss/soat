@@ -19,13 +19,12 @@ import { executeClaimed, resolveRunAs } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import type { PlaybookNodeView } from './playbookState';
+import { createdByColumns, type RequestPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExecutions');
 
-type ExecutionRow = InstanceType<(typeof db)['PlaybookExecution']> & {
-  createdBy?: { publicId: string } | null;
-};
+type ExecutionRow = InstanceType<(typeof db)['PlaybookExecution']>;
 
 export const mapPlaybookExecution = (args: {
   row: ExecutionRow;
@@ -47,7 +46,8 @@ export const mapPlaybookExecution = (args: {
     output: row.output ?? null,
     output_revision: row.outputRevision,
     error: row.error,
-    created_by: row.createdBy?.publicId ?? null,
+    created_by_principal_type: row.createdByPrincipalType,
+    created_by_principal_id: row.createdByPrincipalId,
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
     finished_at: row.finishedAt,
@@ -118,7 +118,6 @@ export const getPlaybookCaseExecution = async (args: {
   });
   const execution = await db.PlaybookExecution.findOne({
     where: { publicId: args.id, caseId: row.id as number },
-    include: [{ model: db.User, as: 'createdBy' }],
   });
   if (!execution) {
     throw new DomainError(
@@ -155,7 +154,7 @@ export const runPlaybookNode = async (args: {
   caseId: string;
   node: unknown;
   wait: boolean;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   onBehalfOf: OnBehalfOf | null;
 }) => {
   log('runPlaybookNode: case=%s node=%s', args.caseId, args.node);
@@ -197,7 +196,7 @@ export const runPlaybookNode = async (args: {
             executor: node.executor,
             values: view.values,
           }),
-          createdByUserId: args.createdByUserId,
+          ...createdByColumns(args.createdBy),
           onBehalfOf: args.onBehalfOf,
         },
         { transaction }
@@ -240,8 +239,6 @@ export const listPlaybookCaseExecutions = async (args: {
     query: ({ limit, offset, order }) => {
       return db.PlaybookExecution.findAndCountAll({
         where,
-        include: [{ model: db.User, as: 'createdBy' }],
-        distinct: true,
         order,
         limit,
         offset,
@@ -259,7 +256,7 @@ export const listPlaybookCaseExecutions = async (args: {
 /** The executor each completion event can settle. */
 const EXECUTOR_OF_EVENT: Record<string, string> = {
   'tasks.closed': 'workflow',
-  'orchestration_runs.succeeded': 'orchestration',
+  'orchestration_runs.completed': 'orchestration',
   'orchestration_runs.failed': 'orchestration',
 };
 
@@ -281,7 +278,7 @@ export const initializePlaybookExecutionListener = (): void => {
   onEvent({
     types: [
       'tasks.closed',
-      'orchestration_runs.succeeded',
+      'orchestration_runs.completed',
       'orchestration_runs.failed',
     ],
     handler: (event) => {

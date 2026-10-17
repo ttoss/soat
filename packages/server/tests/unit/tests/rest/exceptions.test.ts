@@ -101,15 +101,16 @@ describe('Exceptions', () => {
       expect(get.body.id).toBe(filed.id);
       expect(get.body.project_id).toBe(projectId);
       expect(get.body.kind).toBe('manual');
-      // internal ids never leak
-      expect(get.body.resolved_by_user_id).toBeUndefined();
+      expect(get.body.acknowledged_by_principal_type).toBeNull();
+      expect(get.body.resolved_by_principal_id).toBeNull();
 
       const ack = await authenticatedTestClient(userToken)
         .post(`/api/v1/exceptions/${filed.id}/acknowledge`)
         .send({});
       expect(ack.status).toBe(200);
       expect(ack.body.status).toBe('acknowledged');
-      expect(ack.body.acknowledged_by).toBeDefined();
+      expect(ack.body.acknowledged_by_principal_type).toBe('user');
+      expect(ack.body.acknowledged_by_principal_id).toMatch(/^user_/);
 
       const resolve = await authenticatedTestClient(userToken)
         .post(`/api/v1/exceptions/${filed.id}/resolve`)
@@ -117,13 +118,81 @@ describe('Exceptions', () => {
       expect(resolve.status).toBe(200);
       expect(resolve.body.status).toBe('resolved');
       expect(resolve.body.resolution_note).toBe('Fixed the root cause.');
-      expect(resolve.body.resolved_by).toBeDefined();
+      expect(resolve.body.resolved_by_principal_type).toBe('user');
+      expect(resolve.body.resolved_by_principal_id).toMatch(/^user_/);
 
       const again = await authenticatedTestClient(userToken)
         .post(`/api/v1/exceptions/${filed.id}/resolve`)
         .send({});
       expect(again.status).toBe(409);
       expect(again.body.error.code).toBe('EXCEPTION_ALREADY_RESOLVED');
+    });
+
+    test('a repeated status filter ORs its values', async () => {
+      const file = (title: string) => {
+        return fileException({
+          projectId: projectInternalId,
+          kind: 'manual',
+          title,
+        });
+      };
+      const open = await file('Still open');
+      const acknowledged = await file('Someone is on it');
+      const resolved = await file('Fixed');
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/exceptions/${acknowledged.id}/acknowledge`)
+        .send({});
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/exceptions/${resolved.id}/resolve`)
+        .send({});
+
+      const res = await listExceptions(
+        '&status=acknowledged&status=resolved&limit=100'
+      );
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((e: { id: string }) => {
+        return e.id;
+      });
+      expect(ids).toEqual(
+        expect.arrayContaining([acknowledged.id, resolved.id])
+      );
+      expect(ids).not.toContain(open.id);
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const res = await listExceptions('&status=closed');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an API key acknowledging and resolving names the key', async () => {
+      const key = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'exception-resolver-key' });
+      expect(key.status).toBe(201);
+      const filed = await fileException({
+        projectId: projectInternalId,
+        kind: 'manual',
+        title: 'Resolved by a key',
+      });
+
+      const ack = await authenticatedTestClient(key.body.key)
+        .post(`/api/v1/exceptions/${filed.id}/acknowledge`)
+        .send({});
+      expect(ack.status).toBe(200);
+      const resolve = await authenticatedTestClient(key.body.key)
+        .post(`/api/v1/exceptions/${filed.id}/resolve`)
+        .send({});
+
+      expect(resolve.status).toBe(200);
+      expect(resolve.body).toMatchObject({
+        acknowledged_by_principal_type: 'api_key',
+        acknowledged_by_principal_id: key.body.id,
+        resolved_by_principal_type: 'api_key',
+        resolved_by_principal_id: key.body.id,
+      });
     });
 
     test('unauthenticated list is 401', async () => {
@@ -425,12 +494,10 @@ describe('Exceptions', () => {
 
     test('approvals.expired with full data files an approval_expired exception', async () => {
       emit('approvals.expired', 'approval', 'apr_full_1', {
-        approval: {
-          id: 'apr_full_1',
-          proposed_action: { tool_id: 'tool_x' },
-          orchestration_run_id: 'run_exp_1',
-          agent_id: 'agent_exp_1',
-        },
+        id: 'apr_full_1',
+        proposed_action: { tool_id: 'tool_x' },
+        orchestration_run_id: 'run_exp_1',
+        agent_id: 'agent_exp_1',
       });
       const match = await pollException((e) => {
         return (
@@ -443,22 +510,10 @@ describe('Exceptions', () => {
       expect(match!.agent_id).toBe('agent_exp_1');
     });
 
-    test('approvals.expired with an empty approval falls back to (unknown) with no dedup key', async () => {
-      emit('approvals.expired', 'approval', 'apr_empty_1', { approval: {} });
-      const match = await pollException((e) => {
-        return (
-          e.kind === 'approval_expired' &&
-          typeof e.title === 'string' &&
-          e.title.includes('(unknown)')
-        );
-      });
-      expect(match).not.toBeNull();
-      expect(match!.orchestration_run_id).toBeNull();
-      expect(match!.agent_id).toBeNull();
-    });
-
     test('orchestration_runs.failed with no error detail files a run_failed exception', async () => {
-      emit('orchestration_runs.failed', 'orchestration_run', 'run_noerr_1', {});
+      emit('orchestration_runs.failed', 'orchestration_run', 'run_noerr_1', {
+        id: 'run_noerr_1',
+      });
       const match = await pollException((e) => {
         return (
           e.kind === 'run_failed' && e.orchestration_run_id === 'run_noerr_1'
@@ -468,10 +523,13 @@ describe('Exceptions', () => {
       expect(match!.detail).toBeNull();
     });
 
-    test('guardrail.tripwire with a generation (no run) falls back to the resource id for the tool name', async () => {
-      emit('guardrail.tripwire', 'guardrail', 'tool_gen_1', {
-        generationId: 'gen_trip_1',
-        agentId: 'agent_trip_1',
+    test('guardrail.tripwire with a generation (no run) files on the agent', async () => {
+      emit('guardrail.tripwire', 'guardrail', 'grd_gen_1', {
+        id: 'grd_gen_1',
+        guardrail_version: 1,
+        tool_name: 'tool_gen_1',
+        generation_id: 'gen_trip_1',
+        agent_id: 'agent_trip_1',
       });
       const match = await pollException((e) => {
         return (
@@ -481,16 +539,19 @@ describe('Exceptions', () => {
         );
       });
       expect(match).not.toBeNull();
-      // No orchestrationRunId on the event → the non-run path; toolName fell back to the
-      // event resourceId (there was no toolName in the data).
+      // No orchestration_run_id on the event → the non-run path.
       expect(match!.orchestration_run_id).toBeNull();
+      expect(match!.guardrail_version).toBe('grd_gen_1@1');
       expect(match!.agent_id).toBe('agent_trip_1');
     });
 
     test('guardrail.tripwire with no run folds repeated trips of the same agent/tool call site into one item, ignoring the (always-fresh) generation id', async () => {
-      emit('guardrail.tripwire', 'guardrail', 'tool_loop_1', {
-        generationId: 'gen_loop_1',
-        agentId: 'agent_loop_1',
+      emit('guardrail.tripwire', 'guardrail', 'grd_loop_1', {
+        id: 'grd_loop_1',
+        guardrail_version: 1,
+        tool_name: 'tool_loop_1',
+        generation_id: 'gen_loop_1',
+        agent_id: 'agent_loop_1',
       });
       const first = await pollException((e) => {
         return (
@@ -503,11 +564,14 @@ describe('Exceptions', () => {
       expect(first).not.toBeNull();
       expect(first!.occurrence_count).toBe(1);
 
-      // Same agent/tool call site, but a brand-new generationId (as every real
+      // Same agent/tool call site, but a brand-new generation_id (as every real
       // agent generation gets) — must fold into the same open item.
-      emit('guardrail.tripwire', 'guardrail', 'tool_loop_1', {
-        generationId: 'gen_loop_2',
-        agentId: 'agent_loop_1',
+      emit('guardrail.tripwire', 'guardrail', 'grd_loop_1', {
+        id: 'grd_loop_1',
+        guardrail_version: 1,
+        tool_name: 'tool_loop_1',
+        generation_id: 'gen_loop_2',
+        agent_id: 'agent_loop_1',
       });
       const folded = await pollException((e) => {
         return e.id === first!.id && e.occurrence_count === 2;
@@ -565,7 +629,7 @@ describe('Exceptions', () => {
           projectPublicId: 'proj_does_not_exist',
           resourceType: 'orchestration_run',
           resourceId: 'run_fk_reject_1',
-          data: {},
+          data: { id: 'run_fk_reject_1' },
           timestamp: new Date().toISOString(),
         });
         // The filer's DB insert rejects asynchronously; give it a bounded

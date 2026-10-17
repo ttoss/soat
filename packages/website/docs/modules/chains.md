@@ -73,6 +73,8 @@ All three are read from *current* configuration at each hop, so lowering one sto
 
 On refusal: the chain moves to `budget_exhausted`, the refused turn is recorded on a [trace](./traces.md) with `stop_reason: "chain_limit"`, and a [`chain_limit` exception](./exceptions.md#producers) is filed against the root, naming which ceiling refused it.
 
+The exception rides a `generations.chain_limit` [webhook event](./webhooks.md) on the root generation: `data` is the root as [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) answers it, plus `chain_size`, `limit`, `limit_source`, and the refused turn's `refused_agent_id` and `refused_initiator_generation_id`.
+
 ### Who may act on a chain
 
 Every route that acts on one chain is authorized against **that chain's** SRN,
@@ -124,7 +126,7 @@ soat update-project --project-id proj_01 --max-chain-generations 25
 
 ```ts
 const { data: chains } = await client.GET('/api/v1/chains', {
-  params: { query: { project_id: 'proj_01', status: 'active' } },
+  params: { query: { project_id: 'proj_01', status: ['active'] } },
 });
 
 const { data: chain } = await client.GET('/api/v1/chains/{chain_id}', {

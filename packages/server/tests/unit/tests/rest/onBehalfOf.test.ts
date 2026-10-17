@@ -12,7 +12,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 /**
  * A tool server writing back with its project's key forwards the assertion of
  * the call it serves in `X-Soat-On-Behalf-Of`; the write then records the
- * tool, the agent and the generation beside `created_by`.
+ * tool, the agent and the generation beside the key that wrote it.
  */
 
 const HEADER = 'X-Soat-On-Behalf-Of';
@@ -36,6 +36,7 @@ describe('On-Behalf-Of', () => {
   let privateKey: crypto.KeyObject;
   let kid: string;
   let projectKey: string;
+  let projectKeyId: string;
   let otherProjectKey: string;
   let playbookId: string;
   let token: string;
@@ -132,6 +133,7 @@ describe('On-Behalf-Of', () => {
       .send({ name: 'obo key', project_id: turn.projectId });
     expect(key.status).toBe(201);
     projectKey = key.body.key;
+    projectKeyId = key.body.id;
     const other = await asAdmin()
       .post('/api/v1/projects')
       .send({ name: 'On-behalf-of other' });
@@ -179,8 +181,16 @@ describe('On-Behalf-Of', () => {
     return res.body.data as Array<Record<string, unknown>>;
   };
 
+  // The node run the input starts writes its `output` entry on its own
+  // schedule, so the newest entry is not always the input this test wrote.
+  const inputEntryOf = async (caseId: string) => {
+    return (await entriesOf(caseId)).find((entry) => {
+      return entry.kind === 'input';
+    });
+  };
+
   describe('a write with the assertion of the tool call it serves', () => {
-    test('records the tool, the agent and the generation beside created_by', async () => {
+    test('records the tool, the agent and the generation beside the key', async () => {
       const caseId = await newCase();
 
       const res = await writeAmount({
@@ -190,9 +200,12 @@ describe('On-Behalf-Of', () => {
       });
 
       expect(res.status).toBe(200);
-      const [entry] = await entriesOf(caseId);
-      expect(entry.created_by).toEqual(expect.any(String));
-      expect(entry.on_behalf_of).toEqual({
+      const entry = await inputEntryOf(caseId);
+      expect(entry).toMatchObject({
+        created_by_principal_type: 'api_key',
+        created_by_principal_id: projectKeyId,
+      });
+      expect(entry?.on_behalf_of).toEqual({
         tool_id: toolId,
         agent_id: agentId,
         generation_id: generationId,
@@ -229,8 +242,8 @@ describe('On-Behalf-Of', () => {
       const res = await writeAmount({ caseId, credential: projectKey });
 
       expect(res.status).toBe(200);
-      const [entry] = await entriesOf(caseId);
-      expect(entry.on_behalf_of).toBeNull();
+      const entry = await inputEntryOf(caseId);
+      expect(entry?.on_behalf_of).toBeNull();
     });
   });
 

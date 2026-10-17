@@ -58,7 +58,7 @@ export const getTerminalOutput = (args: {
 };
 
 /**
- * A succeeded run's `output`. With an `output_mapping`, each key is an output
+ * A completed run's `output`. With an `output_mapping`, each key is an output
  * field (dotted keys nest) and each value JSON Logic over `{ state }`, so the
  * shape is the orchestration's own; without one, the terminal artifacts.
  * Entries are evaluated one by one: a mapping whose only key names an operator
@@ -87,7 +87,7 @@ export const buildRunOutput = (args: {
 };
 
 /**
- * The status, error and `output` a run settles with. Only a succeeded run has
+ * The status, error and `output` a run settles with. Only a completed run has
  * an output, so only it reads the pinned `output_mapping`; a mapping that
  * throws (`{"throw": ...}`) fails the run rather than leaving it unsettled.
  */
@@ -105,7 +105,7 @@ export const resolveSettledOutput = async (args: {
   output: Record<string, unknown>;
 }> => {
   const { runStatus, runError } = args;
-  if (runStatus !== 'succeeded') {
+  if (runStatus !== 'completed') {
     return { runStatus, runError, output: getTerminalOutput(args) };
   }
   const outputMapping = await resolveRunOutputMapping({ run: args.runRecord });
@@ -154,7 +154,7 @@ export const updateRunRecord = async (args: {
     output,
     traceId,
   } = args;
-  const isTerminal = runStatus === 'succeeded' || runStatus === 'failed';
+  const isTerminal = runStatus === 'completed' || runStatus === 'failed';
   await runRecord.update({
     status: runStatus,
     state,
@@ -163,7 +163,7 @@ export const updateRunRecord = async (args: {
     artifacts,
     error: runError,
     requiredAction: runStatus === 'awaiting_input' ? requiredAction : null,
-    output: runStatus === 'succeeded' ? output : null,
+    output: runStatus === 'completed' ? output : null,
     // Settling into a terminal or awaiting_input state clears any pending
     // scheduled wake so the background scheduler ignores the run, and releases
     // the run lease (no worker holds it any longer) so the reaper ignores it.

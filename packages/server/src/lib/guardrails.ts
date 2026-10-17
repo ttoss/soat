@@ -231,7 +231,7 @@ export const createGuardrail = async (
     version: 1,
     config: buildGuardrailConfigSnapshot({ document: args.document }),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   log('createGuardrail: created id=%s', guardrail.publicId);
@@ -344,7 +344,7 @@ export const updateGuardrail = async (
     expectedVersion: args.expectedVersion,
     before: beforeConfig,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await guardrail.update(updates, { transaction });
       return {

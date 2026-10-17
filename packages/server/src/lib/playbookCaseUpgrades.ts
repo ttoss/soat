@@ -13,12 +13,11 @@ import {
 import { answerPlaybookCase } from './playbookCaseWait';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookUpgradeDiff } from './playbookUpgrade';
+import { createdByColumns, type RequestPrincipal } from './principals';
 
 const log = createDebug('soat:playbookCases');
 
-type UpgradeRow = InstanceType<(typeof db)['PlaybookUpgrade']> & {
-  createdBy?: { publicId: string } | null;
-};
+type UpgradeRow = InstanceType<(typeof db)['PlaybookUpgrade']>;
 
 const mapPlaybookUpgrade = (args: {
   row: UpgradeRow;
@@ -31,7 +30,8 @@ const mapPlaybookUpgrade = (args: {
     from_version: row.fromVersion,
     to_version: row.toVersion,
     diff: row.diff,
-    created_by: row.createdBy?.publicId ?? null,
+    created_by_principal_type: row.createdByPrincipalType,
+    created_by_principal_id: row.createdByPrincipalId,
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };
@@ -71,7 +71,7 @@ export const upgradePlaybookCase = async (args: {
   projectIds?: number[];
   id: string;
   version: unknown;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
   wait?: boolean;
@@ -113,9 +113,9 @@ export const upgradePlaybookCase = async (args: {
         );
       }
       await db.PlaybookExecution.update(
-        { status: 'succeeded', result: 'superseded', finishedAt: new Date() },
+        { status: 'completed', result: 'superseded', finishedAt: new Date() },
         {
-          where: { caseId: locked.id as number, status: 'pending' },
+          where: { caseId: locked.id as number, status: 'queued' },
           transaction,
         }
       );
@@ -129,7 +129,7 @@ export const upgradePlaybookCase = async (args: {
             from: await versionDefinition({ row, version: from }),
             to,
           }),
-          createdByUserId: args.createdByUserId,
+          ...createdByColumns(args.createdBy),
           onBehalfOf: args.onBehalfOf,
         },
         { transaction }
@@ -163,8 +163,6 @@ export const listPlaybookCaseUpgrades = async (args: {
     query: ({ limit, offset, order }) => {
       return db.PlaybookUpgrade.findAndCountAll({
         where: { caseId: row.id as number },
-        include: [{ model: db.User, as: 'createdBy' }],
-        distinct: true,
         order,
         limit,
         offset,

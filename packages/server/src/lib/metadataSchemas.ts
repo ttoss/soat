@@ -8,6 +8,7 @@ import { paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import { registerResourceFieldMap } from './policyCompiler';
 import { makeResourceAccessor } from './resourceAccessor';
+import type { StoredError } from './storedError';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:metadataSchemas');
@@ -416,6 +417,21 @@ const findViolation = async (
   return { declaration, detail: describeSchemaErrors(validate.errors) };
 };
 
+type Violation = NonNullable<Awaited<ReturnType<typeof findViolation>>>;
+
+/** The error a write breaking a declaration is refused with. */
+const violationError = (violation: Violation): StoredError => {
+  return {
+    code: 'VALIDATION_FAILED',
+    message: `metadata does not satisfy the schema declared for '${violation.declaration.selector}': ${violation.detail}`,
+    meta: {
+      metadata_schema_id: violation.declaration.publicId,
+      resource_type: 'document',
+      path_prefix: violation.declaration.selector,
+    },
+  };
+};
+
 /**
  * Answers what a write would be told, without writing.
  *
@@ -442,7 +458,7 @@ export const checkDocumentMetadata = async (args: {
     resource_type: 'document',
     metadata_schema_id: violation?.declaration.publicId ?? null,
     path_prefix: violation?.declaration.selector ?? null,
-    error: violation?.detail ?? null,
+    error: violation ? violationError(violation) : null,
   };
 };
 
@@ -450,15 +466,8 @@ const assertValid = async (args: DocumentMetadataCheck): Promise<void> => {
   const violation = await findViolation(args);
   if (!violation) return;
 
-  throw new DomainError(
-    'VALIDATION_FAILED',
-    `metadata does not satisfy the schema declared for '${violation.declaration.selector}': ${violation.detail}`,
-    {
-      metadata_schema_id: violation.declaration.publicId,
-      resource_type: 'document',
-      path_prefix: violation.declaration.selector,
-    }
-  );
+  const error = violationError(violation);
+  throw new DomainError(error.code, error.message, error.meta);
 };
 
 /** Judges a document create, which states its bag even by omitting it. */

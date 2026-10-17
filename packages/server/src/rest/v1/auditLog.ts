@@ -8,7 +8,12 @@ import {
   streamAuditEntriesNdjson,
 } from 'src/lib/auditLog';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parseDateQuery,
+  parsePagination,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 import { sendNdjson } from './ndjsonResponse';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
@@ -24,26 +29,6 @@ const auditEntryAccess = makeItemRouteAuthorizer({
   param: 'entry_id',
   label: 'Audit entry',
 });
-
-// Absent is not invalid: an unsupplied filter is simply not applied, but a
-// supplied unparseable one throws — it must never widen a query into "every
-// entry" without the caller knowing.
-const parseDateParam = (args: {
-  value: unknown;
-  paramName: string;
-}): Date | undefined => {
-  if (typeof args.value !== 'string' || args.value.length === 0) {
-    return undefined;
-  }
-  const date = new Date(args.value);
-  if (Number.isNaN(date.getTime())) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `'${args.paramName}' is not a valid ISO 8601 date: '${args.value}'.`
-    );
-  }
-  return date;
-};
 
 auditLogRouter.get('/audit-log', async (ctx: Context) => {
   requireAuth(ctx);
@@ -63,8 +48,8 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
     principalId: ctx.query.principal_id as string | undefined,
     resourcePublicId: ctx.query.resource_public_id as string | undefined,
     resourceSrn: ctx.query.resource_srn as string | undefined,
-    from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
-    to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
+    from: parseDateQuery({ ctx, name: 'from' }),
+    to: parseDateQuery({ ctx, name: 'to' }),
     ...parsePagination(ctx),
   });
 });
@@ -99,8 +84,8 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
       principalId: ctx.query.principal_id as string | undefined,
       resourcePublicId: ctx.query.resource_public_id as string | undefined,
       resourceSrn: ctx.query.resource_srn as string | undefined,
-      from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
-      to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
+      from: parseDateQuery({ ctx, name: 'from' }),
+      to: parseDateQuery({ ctx, name: 'to' }),
     }),
   });
 });

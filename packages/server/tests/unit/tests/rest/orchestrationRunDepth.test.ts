@@ -178,7 +178,7 @@ describe('Orchestration run depth', () => {
 
       const allowed = await startRun(parentId);
       expect(allowed.status).toBe(201);
-      expect(allowed.body.status).toBe('succeeded');
+      expect(allowed.body.status).toBe('completed');
 
       const refused = await startRun(grandparentId);
       expect(refused.status).toBe(201);
@@ -208,7 +208,7 @@ describe('Orchestration run depth', () => {
 
       const run = await startRun(currentId);
       expect(run.status).toBe(201);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
     });
   });
 
@@ -227,7 +227,7 @@ describe('Orchestration run depth', () => {
 
       const run = await startRun(parentId);
       expect(run.status).toBe(201);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
       expect(run.body.orchestration_run_depth).toBe(0);
 
       const children = await authenticatedTestClient(userToken).get(

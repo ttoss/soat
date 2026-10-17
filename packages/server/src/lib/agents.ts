@@ -50,7 +50,7 @@ export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 
 // ── Map Functions ────────────────────────────────────────────────────────
 
-const mapAgent = (agent: AgentRow): MappedAgent => {
+export const mapAgent = (agent: AgentRow): MappedAgent => {
   const toolBindings = readAgentToolBindings(agent);
 
   return {
@@ -257,7 +257,7 @@ export const createAgent = async (
     version: 1,
     config: buildAgentConfigSnapshot(mapped),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   emitResourceEvent({
@@ -421,7 +421,7 @@ export const updateAgent = async (
     expectedVersion: args.expectedVersion,
     before: beforeConfig,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await agent.update(updates, { transaction });
       // Reloaded because an update may have repointed associations the mapper

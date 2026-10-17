@@ -6,6 +6,7 @@ import type {
   FormationResourceContext,
   UpdateOutcome,
 } from './formationsTypes';
+import type { StoredError } from './storedError';
 
 // The write half of the module-dispatch seam. The pipelines already normalize
 // upstream; normalizing again here is idempotent and makes the guarantee hold
@@ -95,7 +96,7 @@ export const findResourceDeletionBlocker = async (args: {
   resourceType: string;
   physicalResourceId: string;
   alsoDeleting: ReadonlySet<string>;
-}): Promise<string | null> => {
+}): Promise<StoredError | null> => {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
   });

@@ -313,7 +313,7 @@ CLOSE_EDGES='[
 ]'
 
 soat validate-orchestration --nodes "$CLOSE_NODES" --edges "$CLOSE_EDGES" \
-  | jq '{valid, errors, warnings}'
+  | jq '{valid, problems, warnings}'
 
 CLOSE_ORCH_ID=$(soat create-orchestration \
   --project-id "$PROJECT_ID" \
@@ -329,7 +329,7 @@ Expected validation output:
 ```json
 {
   "valid": true,
-  "errors": [],
+  "problems": [],
   "warnings": []
 }
 ```
@@ -507,7 +507,7 @@ const { data: validation } =
   await adminSoat.orchestrations.validateOrchestration({
     body: { nodes: closeNodes, edges: closeEdges },
   });
-console.log('Valid:', validation.valid, validation.errors);
+console.log('Valid:', validation.valid, validation.problems);
 
 const { data: closeOrch } =
   await adminSoat.orchestrations.createOrchestration({
@@ -532,7 +532,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations/validate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"nodes":'"$CLOSE_NODES"',"edges":'"$CLOSE_EDGES"'}' \
-  | jq '{valid, errors, warnings}'
+  | jq '{valid, problems, warnings}'
 
 CLOSE_ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -574,7 +574,7 @@ CLEAN_RUN_ID=$(soat start-orchestration-run \
 echo "CLEAN_RUN_ID: $CLEAN_RUN_ID"
 
 # → retry 60
-soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" \
   | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
@@ -587,7 +587,7 @@ Expected output once the run settles:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "total_variance": 0,
   "close_note": "Period 2026-07 tied out within tolerance."
 }
@@ -623,7 +623,7 @@ const waitForRun = async (runId: string) => {
     const { data: run } = await adminSoat.orchestrations.getOrchestrationRun({
       path: { orchestration_run_id: runId },
     });
-    if (['succeeded', 'failed', 'cancelled', 'expired'].includes(run.status)) {
+    if (['completed', 'failed', 'cancelled', 'expired'].includes(run.status)) {
       return run;
     }
     await new Promise((resolve) => {
@@ -656,7 +656,7 @@ CLEAN_RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 CLEAN_RUN_ID=$(printf '%s\n' "$CLEAN_RUN" | jq -r '.id')
 
 until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "succeeded"' > /dev/null; do sleep 1; done
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "completed"' > /dev/null; do sleep 1; done
 
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -696,7 +696,7 @@ echo "EXCEPTION_RUN_ID: $EXCEPTION_RUN_ID"
 
 # This path calls the model, so it settles more slowly than the clean run.
 # → retry 120
-soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" \
   | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
@@ -713,7 +713,7 @@ Expected output once the run settles:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "bank_variance": 1250,
   "total_variance": 1250
 }
@@ -759,7 +759,7 @@ EXCEPTION_RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 EXCEPTION_RUN_ID=$(printf '%s\n' "$EXCEPTION_RUN" | jq -r '.id')
 
 until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "succeeded"' > /dev/null; do sleep 1; done
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "completed"' > /dev/null; do sleep 1; done
 
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -1201,7 +1201,7 @@ CLOSE_APPROVAL_ID=$(soat list-approvals --project-id "$PROJECT_ID" --status pend
   | jq -r '.data[0].id')
 echo "CLOSE_APPROVAL_ID: $CLOSE_APPROVAL_ID"
 
-soat approve-approval --approval-id "$CLOSE_APPROVAL_ID" | jq '{status, resolved_by}'
+soat approve-approval --approval-id "$CLOSE_APPROVAL_ID" | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 
 soat get-task --task-id "$TASK_ID" | jq '{state, status}'
 ```
@@ -1229,7 +1229,7 @@ const { data: parked } = await adminSoat.tasks.transitionTask({
 console.log('Parked on:', parked.pending_transition);
 
 const { data: pending } = await adminSoat.approvals.listApprovals({
-  query: { project_id: PROJECT_ID, status: 'pending' },
+  query: { project_id: PROJECT_ID, status: ['pending'] },
 });
 const CLOSE_APPROVAL_ID = pending.data[0].id;
 
@@ -1259,7 +1259,7 @@ CLOSE_APPROVAL_ID=$(curl -s "$SOAT_BASE_URL/api/v1/approvals?project_id=$PROJECT
 curl -s -X POST "$SOAT_BASE_URL/api/v1/approvals/$CLOSE_APPROVAL_ID/approve" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq '{status, resolved_by}'
+  -d '{}' | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 
 curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{state, status}'
@@ -1280,7 +1280,7 @@ attributed to the `approval` principal rather than to whoever typed the command.
 
 ```bash
 soat get-task-history --task-id "$TASK_ID" \
-  | jq '[.data[] | {transition, from_state, to_state, principal_kind}]'
+  | jq '[.data[] | {transition, from_state, to_state, principal_type}]'
 ```
 
 You should see `start_reconciliation`, `submit_for_review`, `request_rework`,
@@ -1300,7 +1300,7 @@ console.log(
     h.transition,
     h.from_state,
     h.to_state,
-    h.principal_kind,
+    h.principal_type,
   ])
 );
 ```
@@ -1311,7 +1311,7 @@ console.log(
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.data[] | {transition, from_state, to_state, principal_kind}]'
+  | jq '[.data[] | {transition, from_state, to_state, principal_type}]'
 ```
 
 </TabItem>

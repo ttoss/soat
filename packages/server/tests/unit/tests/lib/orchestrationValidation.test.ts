@@ -49,9 +49,9 @@ describe('validateOrchestrationGraph', () => {
         edges: [],
       });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
-          message: expect.stringContaining("missing required field 'agentId'"),
+          message: expect.stringContaining("missing required field 'agent_id'"),
         })
       );
     });
@@ -73,7 +73,7 @@ describe('validateOrchestrationGraph', () => {
       } as unknown as OrchestrationNode;
       const result = validate({ nodes: [rawNode], edges: [] });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           message: expect.stringContaining('operationId'),
         })
@@ -101,18 +101,18 @@ describe('validateOrchestrationGraph', () => {
         edges: [],
       });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
-          message: expect.stringContaining("missing required field 'toolId'"),
+          message: expect.stringContaining("missing required field 'tool_id'"),
         })
       );
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           path: 'nodes[0].exit_condition',
           message: expect.stringContaining('stop condition'),
         })
       );
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           path: 'nodes[0].interval',
           message: expect.stringContaining("'interval'"),
@@ -144,7 +144,7 @@ describe('validateOrchestrationGraph', () => {
         ],
         edges: [],
       });
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           message: expect.stringContaining("Duplicate node id 'dup'"),
         })
@@ -159,7 +159,7 @@ describe('validateOrchestrationGraph', () => {
         edges: [{ from: 'a', to: 'ghost' }],
       });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           path: 'edges[0].to',
           message: expect.stringContaining("unknown node 'ghost'"),
@@ -178,7 +178,8 @@ describe('validateOrchestrationGraph', () => {
           { from: 'b', to: 'a' },
         ],
       });
-      expect(result.errors).toContainEqual({
+      expect(result.problems).toContainEqual({
+        code: 'CYCLE',
         path: 'edges',
         message: 'Cycle detected in orchestration graph: a, b.',
       });
@@ -197,7 +198,8 @@ describe('validateOrchestrationGraph', () => {
           { from: 'c', to: 'b' },
         ],
       });
-      expect(result.errors).toContainEqual({
+      expect(result.problems).toContainEqual({
+        code: 'CYCLE',
         path: 'edges',
         message: 'Cycle detected in orchestration graph: a; b, c.',
       });
@@ -215,7 +217,7 @@ describe('validateOrchestrationGraph', () => {
         ],
       });
       expect(
-        result.errors.some((e) => {
+        result.problems.some((e) => {
           return e.message.includes('Cycle');
         })
       ).toBe(false);
@@ -241,7 +243,7 @@ describe('validateOrchestrationGraph', () => {
         },
       });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           path: 'nodes[1].input_mapping.val',
           message: expect.stringContaining(
@@ -353,7 +355,7 @@ describe('validateOrchestrationGraph', () => {
         },
       });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           path: 'nodes[0].input_mapping.val',
           // The message must steer the author to the actual fix (the input
@@ -429,7 +431,7 @@ describe('validateOrchestrationGraph', () => {
         },
       });
       expect(result.valid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.problems).toContainEqual(
         expect.objectContaining({
           path: 'nodes[1].input_mapping.val',
         })
@@ -524,12 +526,12 @@ describe('validateOrchestrationGraph', () => {
       });
       // The dangling-edge error is reported; reachability is not analysed.
       expect(
-        result.errors.some((e) => {
+        result.problems.some((e) => {
           return e.path === 'edges[0].from';
         })
       ).toBe(true);
       expect(
-        result.errors.some((e) => {
+        result.problems.some((e) => {
           return e.path === 'nodes[0].input_mapping.val';
         })
       ).toBe(false);

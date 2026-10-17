@@ -12,13 +12,11 @@
  * one but the `fileException` writer, which is why it can leave (mirrors how
  * `agentDelete.ts` split from `agents.ts`).
  */
-import {
-  emitResourceEvent,
-  onEvent,
-  retryOrRecordDrop,
-  type SoatEvent,
-} from './eventBus';
+import { onEvent, retryOrRecordDrop, type SoatEvent } from './eventBus';
 import { fileException } from './exceptions';
+import { generations, getGeneration } from './generations';
+import { guardrails, mapGuardrail } from './guardrails';
+import { emitLoadedRecordEvent } from './recordEvents';
 import { isSoatEventType, type SoatEventType } from './soatEvents';
 
 const asRecord = (value: unknown): Record<string, unknown> => {
@@ -53,19 +51,19 @@ const fileRunFailedException = async (event: SoatEvent): Promise<void> => {
 const fileApprovalExpiredException = async (
   event: SoatEvent
 ): Promise<void> => {
-  const approval = asRecord(asRecord(event.data).approval);
-  const approvalId = asStringOrNull(approval.id);
+  const approval = event.data;
+  const approvalId = event.resourceId;
   await fileException({
     projectId: event.projectId,
     kind: 'approval_expired',
-    title: `Approval ${approvalId ?? '(unknown)'} expired without a decision`,
+    title: `Approval ${approvalId} expired without a decision`,
     detail: {
       approvalId,
       toolId: asRecord(approval.proposed_action).tool_id,
     },
     orchestrationRunId: asStringOrNull(approval.orchestration_run_id),
     agentId: asStringOrNull(approval.agent_id),
-    dedupKey: approvalId ? `approval_expired:${approvalId}` : null,
+    dedupKey: `approval_expired:${approvalId}`,
   });
 };
 
@@ -73,11 +71,11 @@ const fileGuardrailTripwireException = async (
   event: SoatEvent
 ): Promise<void> => {
   const data = asRecord(event.data);
-  const orchestrationRunId = asStringOrNull(data.orchestrationRunId);
-  const nodeId = asStringOrNull(data.nodeId);
-  const agentId = asStringOrNull(data.agentId);
-  const toolName = asStringOrNull(data.toolName) ?? event.resourceId;
-  const guardrailVersion = asStringOrNull(data.guardrailVersion);
+  const orchestrationRunId = asStringOrNull(data.orchestration_run_id);
+  const nodeId = asStringOrNull(data.node_id);
+  const agentId = asStringOrNull(data.agent_id);
+  const toolName = String(data.tool_name);
+  const guardrailVersion = `${event.resourceId}@${String(data.guardrail_version)}`;
   // Folds repeated trips on the same call site into one open item. The non-run
   // path must key on `agentId:toolName`, not `generationId` — a fresh id per
   // generation would make dedup impossible for the looping case this exists for.
@@ -97,27 +95,29 @@ const fileGuardrailTripwireException = async (
     nodeId,
     agentId,
     guardrailVersion,
-    dedupKey: `guardrail_tripwire:${scope}:${guardrailVersion ?? ''}`,
+    dedupKey: `guardrail_tripwire:${scope}:${guardrailVersion}`,
   });
 };
 
 const fileChainLimitException = async (event: SoatEvent): Promise<void> => {
   const data = asRecord(event.data);
   const rootGenerationId = event.resourceId;
-  const agentId = asStringOrNull(data.agentId);
+  const agentId = asStringOrNull(data.refused_agent_id);
   await fileException({
     projectId: event.projectId,
     kind: 'chain_limit',
     title: `Continuation chain ${rootGenerationId} reached its generation budget`,
     detail: {
       rootGenerationId,
-      initiatorGenerationId: asStringOrNull(data.initiatorGenerationId),
-      chainSize: asNumberOrNull(data.chainSize),
+      initiatorGenerationId: asStringOrNull(
+        data.refused_initiator_generation_id
+      ),
+      chainSize: asNumberOrNull(data.chain_size),
       limit: asNumberOrNull(data.limit),
       // Which ceiling refused it: the agent's own `max_chain_generations`, or the
       // deployment's `MAX_CONTINUATION_CHAIN_GENERATIONS`. Without it the number
       // alone does not say which knob to turn.
-      limitSource: asStringOrNull(data.limitSource),
+      limitSource: asStringOrNull(data.limit_source),
     },
     agentId,
     // The chain's root, which is the one id every refusal in it shares — an
@@ -172,43 +172,56 @@ export const initializeExceptionsListener = (): void => {
 
 /**
  * Emits a `guardrail.tripwire` event the exceptions listener turns into a
- * `guardrail_tripwire` exception. Fire-and-forget from the guardrail dispatch
- * path — mirrors how audit records are persisted there.
+ * `guardrail_tripwire` exception: `data` is the guardrail that tripped, as
+ * `GET` answers it, with the version that governed and the aborted call beside
+ * it. Fire-and-forget from the guardrail dispatch path — mirrors how audit
+ * records are persisted there.
  */
 export const emitGuardrailTripwireEvent = (args: {
   projectId: number;
   projectPublicId: string;
+  guardrail: { guardrailId: string; version: number };
   toolId: string | null;
   toolName: string;
   action: string;
-  guardrailVersion: string | null;
   orchestrationRunId?: string | null;
   nodeId?: string | null;
   agentId?: string | null;
   generationId?: string | null;
-}): void => {
-  emitResourceEvent({
+}): Promise<void> => {
+  return emitLoadedRecordEvent({
     type: 'guardrail.tripwire',
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
     resourceType: 'guardrail',
-    resourceId: args.toolId ?? args.toolName,
-    data: {
-      toolName: args.toolName,
+    resourceId: args.guardrail.guardrailId,
+    load: async () => {
+      return mapGuardrail(
+        await guardrails.getByPublicId({
+          id: args.guardrail.guardrailId,
+          projectIds: [args.projectId],
+        })
+      );
+    },
+    facts: {
+      guardrail_version: args.guardrail.version,
+      tool_id: args.toolId,
+      tool_name: args.toolName,
       action: args.action,
-      guardrailVersion: args.guardrailVersion,
-      orchestrationRunId: args.orchestrationRunId ?? null,
-      nodeId: args.nodeId ?? null,
-      agentId: args.agentId ?? null,
-      generationId: args.generationId ?? null,
+      orchestration_run_id: args.orchestrationRunId ?? null,
+      node_id: args.nodeId ?? null,
+      agent_id: args.agentId ?? null,
+      generation_id: args.generationId ?? null,
     },
   });
 };
 
 /**
  * Emits a `generations.chain_limit` event the exceptions listener turns into a
- * `chain_limit` exception. Fire-and-forget from the chain guard, whose caller is
- * usually a background sweep with nothing left to return a refusal to.
+ * `chain_limit` exception: `data` is the chain's root generation, as `GET`
+ * answers it, with the budget and the refused continuation beside it.
+ * Fire-and-forget from the chain guard, whose caller is usually a background
+ * sweep with nothing left to return a refusal to.
  */
 export const emitChainLimitEvent = (args: {
   projectId: number;
@@ -219,19 +232,27 @@ export const emitChainLimitEvent = (args: {
   chainSize: number;
   limit: number;
   limitSource: 'agent' | 'project' | 'platform';
-}): void => {
-  emitResourceEvent({
+}): Promise<void> => {
+  return emitLoadedRecordEvent({
     type: 'generations.chain_limit',
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
     resourceType: 'generation',
     resourceId: args.rootGenerationId,
-    data: {
-      agentId: args.agentId,
-      initiatorGenerationId: args.initiatorGenerationId,
-      chainSize: args.chainSize,
+    load: async () => {
+      const root = await getGeneration({
+        publicId: args.rootGenerationId,
+        includeUsage: true,
+      });
+      if (!root) throw generations.notFound(args.rootGenerationId);
+      return root;
+    },
+    facts: {
+      chain_size: args.chainSize,
       limit: args.limit,
-      limitSource: args.limitSource,
+      limit_source: args.limitSource,
+      refused_agent_id: args.agentId,
+      refused_initiator_generation_id: args.initiatorGenerationId,
     },
   });
 };

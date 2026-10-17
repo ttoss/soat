@@ -278,7 +278,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       await postgresQueueDriver.ack({ task: redelivered });
 
       const settled = await db.OrchestrationRun.findByPk(runPk);
-      expect(settled?.status).toBe('succeeded');
+      expect(settled?.status).toBe('completed');
 
       // The side-effecting tool node ran exactly once across the redelivery.
       expect(requests).toHaveLength(1);
@@ -604,7 +604,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(claimedCount).toBeGreaterThanOrEqual(1);
 
       const settled = await db.OrchestrationRun.findByPk(runPk);
-      expect(settled?.status).toBe('succeeded');
+      expect(settled?.status).toBe('completed');
       expect((settled?.state as Record<string, unknown>).msg).toBe('done');
 
       // The task was acked (deleted) on completion.
@@ -775,7 +775,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(claimed).toBeGreaterThanOrEqual(1);
 
       const settled = await db.OrchestrationRun.findByPk(run.id as number);
-      expect(settled?.status).toBe('succeeded');
+      expect(settled?.status).toBe('completed');
       expect((settled?.state as Record<string, unknown>).after).toBe('resumed');
     });
 
@@ -804,7 +804,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       await drainQueueOnce();
 
       const settled = await db.OrchestrationRun.findByPk(run.id as number);
-      expect(settled?.status).toBe('succeeded');
+      expect(settled?.status).toBe('completed');
       expect((settled?.state as Record<string, unknown>).msg).toBe('hello');
     });
 

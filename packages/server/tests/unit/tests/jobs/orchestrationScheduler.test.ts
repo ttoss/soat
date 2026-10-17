@@ -221,7 +221,7 @@ describe('wakeDueRuns', () => {
 
     await drainOnceEnqueued(run);
     const settled = await reload(run);
-    expect(settled.status).toBe('succeeded');
+    expect(settled.status).toBe('completed');
     expect(settled.state).toMatchObject({ waited: '1s', after: 'done' });
   });
 
@@ -236,7 +236,7 @@ describe('wakeDueRuns', () => {
 
     await drainOnceEnqueued(run);
     expect(await tasksOf(run)).toBe(0);
-    expect((await reload(run)).status).toBe('succeeded');
+    expect((await reload(run)).status).toBe('completed');
   });
 
   test('a claimed run keeps its claim when its task cannot be enqueued', async () => {
@@ -345,7 +345,7 @@ describe('reapOrphanedRuns', () => {
     expect(await reapOrphanedRuns({ now: new Date() })).toBe(1);
     await drainOnceEnqueued(orphan);
 
-    expect((await reload(orphan)).status).toBe('succeeded');
+    expect((await reload(orphan)).status).toBe('completed');
     expect(await executedNodes(orphan)).toEqual(expected);
   });
 
@@ -364,7 +364,7 @@ describe('reapOrphanedRuns', () => {
     expect(await reapOrphanedRuns({ now: new Date() })).toBe(1);
     await drainOnceEnqueued(orphan);
 
-    expect((await reload(orphan)).status).toBe('succeeded');
+    expect((await reload(orphan)).status).toBe('completed');
     expect(await executedNodes(orphan)).toEqual(['y']);
   });
 });
@@ -541,15 +541,15 @@ describe('run lifecycle events', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.status).toBe('succeeded');
-      // The succeeded event resolves its project id asynchronously; each
+      expect(res.body.status).toBe('completed');
+      // The completed event resolves its project id asynchronously; each
       // database round trip yields until it lands.
       const row = await runByPublicId(res.body.id as string);
       const settled = () => {
         return events.some((event) => {
           return (
             event.resourceId === res.body.id &&
-            event.type === 'orchestration_runs.succeeded'
+            event.type === 'orchestration_runs.completed'
           );
         });
       };
@@ -563,7 +563,7 @@ describe('run lifecycle events', () => {
         .map((event) => {
           return event.type;
         });
-      expect(types).toEqual(['orchestration_runs.succeeded']);
+      expect(types).toEqual(['orchestration_runs.completed']);
     } finally {
       eventBusModule.eventBus.off('soat:event', capture);
     }

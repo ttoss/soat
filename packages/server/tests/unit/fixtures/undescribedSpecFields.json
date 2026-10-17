@@ -124,7 +124,6 @@
   "tasks.yaml query assignee @listTasks",
   "tasks.yaml query project_id @listTasks",
   "tasks.yaml query state @listTasks",
-  "tasks.yaml query status @listTasks",
   "tasks.yaml query workflow_id @listTasks",
   "tools.yaml UpdateToolRequest.description",
   "tools.yaml UpdateToolRequest.name",

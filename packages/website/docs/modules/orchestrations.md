@@ -43,7 +43,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `edges`        | array          | Directed connections between nodes               |
 | `state_schema` | object         | Optional JSON Schema describing the run state    |
 | `input_schema` | object         | Optional JSON Schema describing the run input    |
-| `output_mapping` | object \| null | Optional shape of a succeeded run's `output`, JSON Logic over the final state (see [Run output](#run-output)) |
+| `output_mapping` | object \| null | Optional shape of a completed run's `output`, JSON Logic over the final state (see [Run output](#run-output)) |
 | `created_at`   | string         | ISO 8601 creation timestamp                      |
 | `updated_at`   | string         | ISO 8601 last-updated timestamp                  |
 
@@ -55,11 +55,11 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `orchestration_id` | string         | Parent orchestration                                              |
 | `orchestration_version` | integer \| null | The orchestration version this run executes, fixed when the run started (see [Versioning](#versioning)). `null` for runs created before pinning existed, which execute the live graph |
 | `project_id`       | string         | Owning project                                                    |
-| `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `succeeded` \| `failed` \| `cancelled` \| `expired` |
+| `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `completed` \| `failed` \| `cancelled` \| `expired` |
 | `state`            | object         | Current mutable execution state                                   |
 | `active_nodes`     | array          | Node IDs awaiting input or a scheduled wake (populated when `awaiting_input`, or `sleeping` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
-| `error`            | object \| null | Error details if failed                                           |
+| `error`            | object \| null | `{ code, message, meta? }` when `status` is `failed` ([recorded failure](/docs/api#recorded-failures)) |
 | `usage`            | object         | What the run cost: token/cost roll-up (`input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, `cost_usd`) summed across this run's generations **and every run it started** through `loop` / `sub_orchestration` nodes, at any depth (see [Run usage](#run-usage)). Present only on the single-run read; omitted from run lists and every write's response, a start with `wait: true` included |
 | `usage_own`        | object         | The same roll-up restricted to **this run's own nodes**, excluding nested runs. Equal to `usage` for a run with no children. Present only on the single-run read, like `usage` |
 | `required_action`  | object \| null | Present when status is `awaiting_input` — why the run is parked (see [Human Nodes](#human-nodes) and [Pausing a run](#pausing-a-run)) |
@@ -69,12 +69,12 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `input`            | object \| null | Initial input provided at run creation                            |
 | `metadata`         | object | Caller-owned annotations supplied at run creation; never merged into `state` (see [Run Metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `idempotency_key`  | string \| null | Deduplication key supplied at run creation, unique within the project (see [Starting a run at most once](#starting-a-run-at-most-once)) |
-| `output`           | object \| null | What a `succeeded` run returns: the `output_mapping` result, else the terminal node artifacts keyed by node id (see [Run output](#run-output)); `null` otherwise |
+| `output`           | object \| null | What a `completed` run returns: the `output_mapping` result, else the terminal node artifacts keyed by node id (see [Run output](#run-output)); `null` otherwise |
 | `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |
 | `parent_node_id`   | string \| null | The node within `parent_orchestration_run_id` that started this run |
 | `orchestration_run_depth`        | integer        | `loop` / `sub_orchestration` edges between this run and the one a caller started: `0` for a caller-started run, one more than its parent's for a child (see [Nesting depth](#nesting-depth)) |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
-| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
+| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`completed`/`failed`/`cancelled`/`expired`) |
 | `created_at`       | string         | ISO 8601 creation timestamp                                       |
 | `updated_at`       | string         | ISO 8601 last-updated timestamp                                   |
 
@@ -130,7 +130,7 @@ Every completed node produces an **artifact**: what `state_mapping` reads as `ou
 | `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
 | `knowledge` | `{ results }` — the matched entries. |
 | `human`, `webhook` (`mode: "receive"`) | The payload submitted to `submit-human-input`, verbatim. |
-| `approval` | `{ decision, approvalId, resolvedBy, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
+| `approval` | `{ decision, approvalId, resolvedByPrincipalType, resolvedByPrincipalId, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
 | `loop` | `{ results, failed_count }` — one entry per item, each the sub-run's `output`. See [Loops](#loops-collection-iteration). |
 | `poll` | `{ result, attempts, conditionMet, timedOut }`. See [Polling](#polling). |
 | `delay` | `{ waited }` — the `duration` as declared. |
@@ -296,9 +296,9 @@ A worker holds the lease for as long as its drive takes, re-arming it every thir
 
 **Crash recovery.** A `running` run holds a **lease** (`lease_expires_at`), refreshed after every completed round. A reaper reclaims expired leases and enqueues a `continue` task; completed nodes are skipped and only the unfinished frontier re-executes.
 
-**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`succeeded`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
+**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`completed`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
 
-**Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.succeeded`, `orchestration_runs.failed`.
+**Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.completed`, `orchestration_runs.failed`.
 
 #### Starting a run at most once
 
@@ -411,7 +411,7 @@ Run **state** = the run input ([Run input](#run-input)) + every upstream `state_
 
 #### Run output
 
-A succeeded run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
+A completed run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
 
 ```json
 {
@@ -511,25 +511,28 @@ A `loop` / `sub_orchestration` child settling **non-success terminal** (`failed`
 
 ### Static Validation
 
-Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `errors` and `warnings` arrays. A `tool`, `poll` or `approval` node's `tool_id` and an `agent` node's `agent_id` must name a resource in the orchestration's own project (`400 TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` with `meta.missing`). A run always belongs to the orchestration's project, whichever projects the caller can reach, and its nodes resolve their references there. `validate-orchestration` runs the same checks without persisting and returns `{ valid, errors, warnings }`.
+Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `problems` and `warnings` arrays of [validation problems](/docs/api#validation-problems). A `tool`, `poll` or `approval` node's `tool_id` and an `agent` node's `agent_id` must name a resource in the orchestration's own project (`400 TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` with `meta.missing`). A run always belongs to the orchestration's project, whichever projects the caller can reach, and its nodes resolve their references there. `validate-orchestration` runs the same checks without persisting and returns `{ valid, problems, warnings }`.
 
-**Errors (block create/update):**
+**Problems (block create/update):**
 
-| Check | Example |
-| ----- | ------- |
-| Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression` |
-| Duplicate node id | two nodes share `id: "a"` |
-| Dangling edge | an edge whose `from`/`to` references a node that does not exist |
-| Cycle (no `loop` node present) | `a → b → a` |
-| Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
-| Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |
-| Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
+| `code` | Check | Example |
+| ------ | ----- | ------- |
+| `MISSING_FIELD` | Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression`, a `poll` node without `exit_condition` or `interval` |
+| `WRONG_FIELD` | A field named for another node type | a `tool` node with `action` instead of `operation_id` |
+| `INVALID_VALUE` | A field outside its accepted values | a `loop` node's `on_item_error` other than `fail` / `collect` |
+| `INVALID_TYPE` | `nodes` is not an array | |
+| `DUPLICATE_NODE_ID` | Duplicate node id | two nodes share `id: "a"` |
+| `UNKNOWN_NODE` | Dangling edge | an edge whose `from`/`to` references a node that does not exist |
+| `CYCLE` | Cycle (no `loop` node present) | `a → b → a` |
+| `UNWRITTEN_STATE_KEY` | Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
+| `NODE_NOT_UPSTREAM` | Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |
+| `RESERVED_STATE_KEY` | Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
 
 **Warnings (never block):**
 
-| Check | Example |
-| ----- | ------- |
-| Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
+| `code` | Check | Example |
+| ------ | ----- | ------- |
+| `CONDITIONAL_STATE_KEY` | Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
 
 An unwritten `input_mapping` reference is an **error** only under a declared `input_schema` (a closed input contract); without one a parallel node's `state_mapping` may write the key first, so the graph stays permissive. An unwritten `{"var": "nodes.<id>..."}` reference is always an error.
 
@@ -541,7 +544,7 @@ soat validate-orchestration \
   --nodes '[{"id":"a","type":"transform","expression":1,"state_mapping": { "state.step1": { "var": "output.result" } }},
             {"id":"b","type":"transform","expression":1,"input_mapping":{"val":{"var":"step1"}}}]' \
   --edges '[{"from":"a","to":"b"}]'
-# → { "valid": true, "errors": [], "warnings": [] }
+# → { "valid": true, "problems": [], "warnings": [] }
 ```
 
 </TabItem>
@@ -723,7 +726,7 @@ Each generation carries its own `trace_id` for the full [trace](./traces.md) of 
 
 `start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair becomes one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes, so a per-user credential reaches the tools without living in the graph.
 
-The bag is **write-only**: it is accepted at run start and never returned on a run read, because what it carries is a credential and a run is a record every principal who may read runs can read. It does not outlive the work either — the bag is cleared once the run reaches a terminal state (`succeeded`, `failed`, `cancelled` or `expired`), the same way an [eval run's](evaluations.md#run-tool-context) is.
+The bag is **write-only**: it is accepted at run start and never returned on a run read, because what it carries is a credential and a run is a record every principal who may read runs can read. It does not outlive the work either — the bag is cleared once the run reaches a terminal state (`completed`, `failed`, `cancelled` or `expired`), the same way an [eval run's](evaluations.md#run-tool-context) is.
 
 It is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
 
@@ -861,7 +864,7 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 
 | Code                              | Status | Cause                                                                                       | What to do                                                                                                 |
 | ---------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.errors`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
+| `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.problems`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
 | `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
 | `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's [node execution](#node-executions) record for the exact `error` — see [Node Executions](#node-executions) |
 | _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from its [node execution](#node-executions) record |

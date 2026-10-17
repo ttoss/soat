@@ -390,7 +390,7 @@ Without `output_mapping` the raw result is returned unchanged.
 
 ### Preset Parameters
 
-`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }`, one with `{ "id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
+`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. On an `mcp` tool, a preset reaches only the actions whose input schema declares it, so one tool can pin `folder` for its `search` action and still call `fetch`; an action that publishes no `properties` receives every preset. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }`, one with `{ "id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
 
 **A preset is a pin, not a default: it wins.** A value the call supplies for a pinned key (a model naming the hidden field, or an `input` to [`POST /tools/{id}/call`](/docs/api/tools/call-tool)) is replaced by the preset; unpinned keys come from the call. No tool schema sets `additionalProperties: false`, so a hidden key is not rejected; merge order is the guarantee.
 
@@ -463,7 +463,7 @@ A receiver checks the signature against the key set, `aud` against its own URL, 
 
 ### Writing on behalf of a tool call
 
-A tool server that writes back into SOAT with its project's API key can send the assertion of the call it is serving, unchanged, in `X-Soat-On-Behalf-Of` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)). The write then records the call beside `created_by` as `on_behalf_of` (`tool_id`, `agent_id`, `generation_id`, `session_id`, `actor_id`): on [playbook](./playbooks.md) entries, executions, exports and upgrades, and on every [audit log](./audit-log.md) entry of the request. It is attribution only: `created_by` and every permission checked stay the key's.
+A tool server that writes back into SOAT with its project's API key can send the assertion of the call it is serving, unchanged, in `X-Soat-On-Behalf-Of` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)). The write then records the call beside `created_by_principal_type` / `created_by_principal_id` as `on_behalf_of` (`tool_id`, `agent_id`, `generation_id`, `session_id`, `actor_id`): on [playbook](./playbooks.md) entries, executions, exports and upgrades, and on every [audit log](./audit-log.md) entry of the request. It is attribution only: the principal (`api_key` and the key's own id) and every permission checked stay the key's.
 
 SOAT verifies the assertion against its own key, `iss` and `exp`, and requires an API key scoped to the project the assertion names. Anything else is `400 ON_BEHALF_OF_INVALID`, `meta.reason` `unverified` or `project`, and nothing is written. A deployment that configures no [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration) signs nothing, so it verifies nothing.
 

@@ -268,6 +268,7 @@ const runResolvedTool = async (
     },
     idempotencyKey: args.idempotencyKey,
     toolContext: args.toolContext,
+    presetParameters,
   });
 
   return applyToolOutputMapping(

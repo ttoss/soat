@@ -610,27 +610,33 @@ components:
         status:
           type: string
           enum:
-            - pending
+            - queued
             - running
-            - succeeded
+            - completed
             - failed
         input:
           type: object
           nullable: true
+          description: >-
+            Effective input, after the trigger's static input is merged under
+            the fire-time input. For an `event` firing the fire-time input is
+            the event envelope a webhook delivery carries (`id`, `event`,
+            `project_id`, `resource_type`, `resource_id`, `data`, `timestamp`).
         result:
           type: object
           nullable: true
           description: '{ target_type, result_id, status, output } — output truncated'
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: '{ code, message, meta }'
+          description: Why the firing failed, when it did.
         idempotency_key:
           type: string
           nullable: true
           description: >-
-            `<event_id>:<trigger_id>` for an `event` firing, null for every
-            other source. The same event reaching the same trigger twice
+            `<event_id>:<trigger_id>` for an `event` firing, where `event_id`
+            is the `id` in `input`; null for every other source. The same event reaching the same trigger twice
             produces one firing under this key, so a consumer reading firings
             can recognise a redelivery.
         attempts:

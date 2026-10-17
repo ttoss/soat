@@ -11,6 +11,7 @@ import {
   findSessionAccess,
   getSession,
   listSessions,
+  SESSION_STATUSES,
   updateSession,
 } from 'src/lib/sessions';
 import {
@@ -22,6 +23,7 @@ import {
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
+  parseEnumListQuery,
   parseNullableToolContextBody,
   parsePagination,
   requireAuth,
@@ -158,7 +160,6 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     project_id: projectPublicId,
     agent_id: agentId,
     actor_id: actorId,
-    status,
   } = ctx.query as Record<string, string | undefined>;
   const tags = readTagQuery(ctx.query.tags);
 
@@ -191,7 +192,11 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     projectIds,
     agentId,
     actorId,
-    status,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: SESSION_STATUSES,
+    }),
     tags,
     policyWhere,
     ...parsePagination(ctx),

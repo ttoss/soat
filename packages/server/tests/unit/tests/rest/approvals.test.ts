@@ -87,8 +87,8 @@ describe('Approvals', () => {
       expect(found.expires_at).toBeDefined();
       // No run backs this approval, so the field is present but null.
       expect(found.orchestration_run_id).toBeNull();
-      // Internal columns must never leak.
-      expect(found.resolved_by_user_id).toBeUndefined();
+      expect(found.resolved_by_principal_type).toBeNull();
+      expect(found.resolved_by_principal_id).toBeNull();
     });
 
     test('exposes tool-call provenance and filters by origin', async () => {
@@ -208,6 +208,67 @@ describe('Approvals', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test('a repeated status filter ORs its values', async () => {
+      const pending = await seedApproval();
+      const rejected = await seedApproval();
+      const approved = await seedApproval();
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${rejected.id}/reject`)
+        .send({ reason: 'no' });
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approved.id}/approve`)
+        .send({});
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&status=pending&status=rejected&limit=100`
+      );
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((a: { id: string }) => {
+        return a.id;
+      });
+      expect(ids).toEqual(expect.arrayContaining([pending.id, rejected.id]));
+      expect(ids).not.toContain(approved.id);
+    });
+
+    test('expires_from and expires_to bound expires_at, both inclusive', async () => {
+      const early = await seedApproval({ expiresInSeconds: 1000 });
+      const middle = await seedApproval({ expiresInSeconds: 2000 });
+      const late = await seedApproval({ expiresInSeconds: 3000 });
+      const at = (approval: MappedApproval) => {
+        return encodeURIComponent(new Date(approval.expires_at).toISOString());
+      };
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&expires_from=${at(middle)}&expires_to=${at(middle)}&limit=100`
+      );
+      const upTo = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&expires_to=${at(middle)}&limit=100`
+      );
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((a: { id: string }) => {
+          return a.id;
+        })
+      ).toEqual([middle.id]);
+      const upToIds = upTo.body.data.map((a: { id: string }) => {
+        return a.id;
+      });
+      expect(upToIds).toEqual(expect.arrayContaining([early.id, middle.id]));
+      expect(upToIds).not.toContain(late.id);
+    });
+
+    test('an expires_to that is not a timestamp returns 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&expires_to=tomorrow`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/ISO 8601/);
+    });
+
     test('an unknown origin filter returns 400 instead of 500', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/approvals?project_id=${projectId}&origin=carrier_pigeon`
@@ -277,8 +338,25 @@ describe('Approvals', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('approved');
-      expect(res.body.resolved_by).toMatch(/^user_/);
+      expect(res.body.resolved_by_principal_type).toBe('user');
+      expect(res.body.resolved_by_principal_id).toMatch(/^user_/);
       expect(res.body.edited_arguments).toBeNull();
+    });
+
+    test('an API key resolving names the key, not its owner', async () => {
+      const key = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'approval-resolver-key' });
+      expect(key.status).toBe(201);
+      const seeded = await seedApproval();
+
+      const res = await authenticatedTestClient(key.body.key)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.resolved_by_principal_type).toBe('api_key');
+      expect(res.body.resolved_by_principal_id).toBe(key.body.id);
     });
 
     test('edit-then-approve stores the edited arguments', async () => {
@@ -548,7 +626,8 @@ describe('Approvals', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('rejected');
       expect(res.body.resolution_reason).toBe('Exceeds monthly budget');
-      expect(res.body.resolved_by).toMatch(/^user_/);
+      expect(res.body.resolved_by_principal_type).toBe('user');
+      expect(res.body.resolved_by_principal_id).toMatch(/^user_/);
     });
 
     test('missing reason returns 400', async () => {
@@ -749,6 +828,31 @@ describe('Approvals', () => {
       });
       expect(group).toBeDefined();
       expect(group.count).toBe(2);
+    });
+
+    test('a repeated status filter builds groups from every named state', async () => {
+      const rejectedKey = 'recurrences:either:rejected';
+      const approvedKey = 'recurrences:either:approved';
+      await seedRejectedChain(rejectedKey, ['no', 'still no']);
+      for (let i = 0; i < 2; i += 1) {
+        const item = await seedApproval({
+          origin: 'tool_call',
+          dedupKey: approvedKey,
+        });
+        await authenticatedTestClient(userToken)
+          .post(`/api/v1/approvals/${item.id}/approve`)
+          .send({});
+      }
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}&status=rejected&status=approved&limit=100`
+      );
+
+      expect(res.status).toBe(200);
+      const keys = res.body.data.map((g: { dedup_key: string }) => {
+        return g.dedup_key;
+      });
+      expect(keys).toEqual(expect.arrayContaining([rejectedKey, approvedKey]));
     });
 
     test('paginates groups and reports the total', async () => {

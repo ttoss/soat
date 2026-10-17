@@ -1,4 +1,5 @@
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { authenticatedTestClient } from '../../testClient';
 
 describe('SessionTags', () => {
@@ -88,6 +89,30 @@ describe('SessionTags', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('RESERVED_TAG_KEY');
+    });
+  });
+
+  describe('PUT /api/v1/sessions/:session_id/tags', () => {
+    test('emits sessions.updated with the session as GET answers it', async () => {
+      const sessionId = await createSession('Tag Event');
+
+      const [event] = await captureEvents({
+        type: 'sessions.updated',
+        where: (event) => {
+          return event.resourceId === sessionId;
+        },
+        action: () => {
+          return authenticatedTestClient(userToken)
+            .put(`/api/v1/sessions/${sessionId}/tags`)
+            .send({ team: 'support' });
+        },
+      });
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${sessionId}`
+      );
+      expect(read.body.tags).toEqual({ team: 'support' });
+      expect(asWire(event.data)).toEqual(read.body);
     });
   });
 

@@ -167,7 +167,7 @@ describe('Ingestion rules whose converter is deleted', () => {
       expect(rule.body.agent_id).toBeNull();
       expect(await ingest({ projectId: publisherId, glob })).toEqual({
         status: 'failed',
-        error: 'CONVERTER_FAILED',
+        error: expect.objectContaining({ code: 'CONVERTER_FAILED' }),
       });
     });
 

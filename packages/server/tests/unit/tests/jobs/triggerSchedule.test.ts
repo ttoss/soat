@@ -60,7 +60,7 @@ describe('Schedule trigger tick', () => {
   const waitForSettledFiring = async (triggerId: string) => {
     for (let attempt = 0; attempt < 400; attempt += 1) {
       const [firing] = await listFirings(triggerId);
-      if (firing && ['succeeded', 'failed'].includes(firing.status)) {
+      if (firing && ['completed', 'failed'].includes(firing.status)) {
         return firing;
       }
       await new Promise((resolve) => {
@@ -110,7 +110,7 @@ describe('Schedule trigger tick', () => {
       );
       const firing = await waitForSettledFiring(trigger.id);
       expect(firing.source).toBe('schedule');
-      expect(firing.status).toBe('succeeded');
+      expect(firing.status).toBe('completed');
       expect(await listFirings(trigger.id)).toHaveLength(1);
     });
 

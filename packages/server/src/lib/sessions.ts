@@ -5,6 +5,7 @@ import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { sessionIncludes, sessions } from './sessionAccessor';
 import { cancelDelayTimer } from './sessionDelayHelpers';
+import { emitSessionEvent, readSessionRecord } from './sessionEvents';
 import { mapSession } from './sessionMapper';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
@@ -13,7 +14,10 @@ import {
   acceptStoredToolContext,
   acceptStoredToolContextUpdate,
 } from './toolContextCarrier';
-import { rollUpUsageTotals } from './usageAggregate';
+
+export const SESSION_STATUSES = ['open', 'closed', 'expired'] as const;
+
+type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 registerResourceFieldMap({
   resourceType: 'session',
@@ -145,13 +149,7 @@ export const createSession = async (args: {
 
   const mapped = mapSession(await sessions.reload(session));
 
-  emitResourceEvent({
-    type: 'sessions.created',
-    projectId: args.projectId,
-    resourceType: 'session',
-    resourceId: mapped.id,
-    data: mapped,
-  });
+  void emitSessionEvent({ type: 'sessions.created', session });
 
   return mapped;
 };
@@ -163,7 +161,7 @@ const resolveSessionListFilters = async (args: {
   where: Record<string, unknown>;
   agentId?: string;
   actorId?: string;
-  status?: string;
+  statuses?: readonly SessionStatus[];
 }): Promise<boolean> => {
   if (args.agentId !== undefined) {
     const agent = await db.Agent.findOne({
@@ -181,8 +179,8 @@ const resolveSessionListFilters = async (args: {
     args.where.actorId = actor.id;
   }
 
-  if (args.status !== undefined) {
-    args.where.status = args.status;
+  if (args.statuses?.length) {
+    args.where.status = args.statuses;
   }
 
   return true;
@@ -192,7 +190,7 @@ export const listSessions = async (args: {
   projectIds?: number[];
   agentId?: string;
   actorId?: string;
-  status?: string;
+  statuses?: readonly SessionStatus[];
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
@@ -217,7 +215,7 @@ export const listSessions = async (args: {
     where,
     agentId: args.agentId,
     actorId: args.actorId,
-    status: args.status,
+    statuses: args.statuses,
   });
   if (!resolved) {
     return emptyPage(args);
@@ -305,16 +303,7 @@ export const getSession = async (args: {
 
   if (!args.includeUsage) return mapSession(session);
 
-  // Its own events only. A fork is a session of its own, so it starts at zero
-  // rather than inheriting what the history it copied cost.
-  const usage = await rollUpUsageTotals({
-    projectId: session.projectId,
-    from: null,
-    to: null,
-    sessionId: session.id,
-  });
-
-  return mapSession(session, usage);
+  return readSessionRecord(session);
 };
 
 /** The plain optional-field assignments {@link updateSession} applies verbatim. */
@@ -397,13 +386,7 @@ export const updateSession = async (args: {
 
   const mapped = mapSession(await sessions.reload(session));
 
-  emitResourceEvent({
-    type: 'sessions.updated',
-    projectId: session.projectId,
-    resourceType: 'session',
-    resourceId: mapped.id,
-    data: mapped,
-  });
+  void emitSessionEvent({ type: 'sessions.updated', session });
 
   return mapped;
 };
@@ -423,6 +406,9 @@ export const deleteSession = async (args: {
     );
   }
 
+  // Read before the delete: the event carries the session as it stood.
+  const record = await readSessionRecord(await sessions.reload(session));
+
   const sequelize = db.sequelize;
 
   await sequelize.transaction(async (t) => {
@@ -440,7 +426,7 @@ export const deleteSession = async (args: {
     projectId: session.projectId,
     resourceType: 'session',
     resourceId: session.publicId,
-    data: { id: session.publicId },
+    data: record,
   });
 };
 

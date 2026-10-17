@@ -107,10 +107,16 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filter by session status (open, closed, or expired)
+          description: >-
+            Filter by session status. Repeat the parameter to OR values. A value
+            outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [open, closed, expired]
+            type: array
+            items:
+              type: string
+              enum: [open, closed, expired]
+          style: form
+          explode: true
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'

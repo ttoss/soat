@@ -99,7 +99,10 @@ describe('Workflow versions', () => {
       expect(res.body.config.states).toEqual(STATES_V1);
       expect(res.body.config.transitions).toEqual(TRANSITIONS_V1);
       expect(res.body.label).toBe('initial');
-      expect(res.body.created_by).toBe(userId);
+      expect(res.body).toMatchObject({
+        created_by_principal_type: 'user',
+        created_by_principal_id: userId,
+      });
       expect(res.body.created_at).toBeDefined();
     });
 

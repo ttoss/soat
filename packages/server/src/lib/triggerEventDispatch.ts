@@ -9,6 +9,7 @@ import {
   MAX_EVENT_CAUSATION_DEPTH,
   runWithCausationChain,
 } from './eventCausation';
+import { buildEventEnvelope } from './eventEnvelope';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { fileException } from './exceptions';
 import { projectPausedError, readProjectPause } from './projectPause';
@@ -123,25 +124,6 @@ const recordRefusedFiring = async (args: {
 };
 
 /**
- * The event payload, as the firing input. Carried opaquely: the envelope's own
- * fields are named here, and `data` is copied as a value with nothing reading a
- * key of it (`.claude/rules/case-convention.md`). Keys are snake_case because a
- * firing's `input` is a wire-visible field, and because the shape matches the
- * webhook delivery payload a loopback subscriber receives — so a trigger reads
- * the same input either way.
- */
-const firingInputFor = (event: SoatEvent): Record<string, unknown> => {
-  return {
-    event: event.type,
-    project_id: event.projectPublicId,
-    resource_type: event.resourceType,
-    resource_id: event.resourceId,
-    data: event.data,
-    timestamp: event.timestamp,
-  };
-};
-
-/**
  * Admits one firing against the project's pause and its `requests` quotas
  * *before* dispatch, which is the only place either can act: an event trigger never passes through
  * the HTTP middleware that admits every other request, so without this a `*`
@@ -186,7 +168,7 @@ const dispatchTrigger = async (args: {
   chain: readonly string[];
 }): Promise<void> => {
   const { trigger, event, chain } = args;
-  const input = firingInputFor(event);
+  const input = buildEventEnvelope({ event });
 
   const refusal = refusalFor({ trigger, chain });
   if (refusal) {

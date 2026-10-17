@@ -90,11 +90,11 @@ export type FormationResourceContext = {
  * request, and what a formation deploy had no way to name.
  *
  * `userId` is the account it acts for (a key acts for its owner): an `api_key`
- * mints under it, so the key can never exceed whoever deployed it, a
- * `trigger`'s `created_by` is the run-as identity a firing mints a token for,
- * and a config version names it as author. `principal` and `isAllowed` are the
- * credential itself, which a `playbook` version runs as, so a deploying key's
- * own boundary bounds what the playbook may start.
+ * mints under it, so the key can never exceed whoever deployed it, and a
+ * `trigger`'s creator is the run-as identity a firing mints a token for.
+ * `author` is who a config version names: the key itself when a key deploys.
+ * `principal` and `isAllowed` are the credential a `playbook` version runs as,
+ * so a deploying key's own boundary bounds what the playbook may start.
  *
  * Carried by the three **write** operations only, and required there: every path
  * that mutates comes from an authenticated route, so a call site that cannot
@@ -103,6 +103,8 @@ export type FormationResourceContext = {
  */
 export type FormationActor = {
   userId: number;
+  /** Who a version the deploy writes names as its author. */
+  author: RequestPrincipal;
   principal: RequestPrincipal | null;
   isAllowed: IsAllowedFn;
 };
@@ -275,7 +277,7 @@ export type FormationModule = {
      * before this resource's turn, so it refuses nothing.
      */
     alsoDeleting: ReadonlySet<string>;
-  }) => Promise<string | null>;
+  }) => Promise<StoredError | null>;
   /**
    * Read the current live state of a resource and return its properties in
    * the same snake_case format used by the formation template. Returns null
@@ -370,9 +372,9 @@ export type FormationEvent = {
   logicalId: string;
   resourceType: string;
   action: string;
-  status: 'succeeded' | 'failed';
+  status: 'completed' | 'failed';
   physicalResourceId?: string;
-  error?: string;
+  error?: StoredError;
 };
 
 /**
@@ -384,11 +386,7 @@ export type FormationEvent = {
  * instead of pointing at a second call to `list-formation-events`.
  * Being a stored bag it is written snake_case, like every other wire value.
  */
-export type FormationError = {
-  code: ErrorCode;
-  message: string;
-  meta?: Record<string, unknown>;
-};
+export type FormationError = StoredError;
 
 /**
  * A failed resource as the formation records it, on its error bag and in its
@@ -440,9 +438,9 @@ export type FormationEventWire = {
   logical_id: string;
   resource_type: string;
   action: string;
-  status: 'succeeded' | 'failed';
+  status: 'completed' | 'failed';
   physical_resource_id?: string;
-  error?: string;
+  error?: StoredError;
 };
 
 /** Converts an internal `PlanChange` to its snake_case wire shape. */
@@ -511,7 +509,7 @@ export type MappedFormation = {
   resolved_parameters: Record<string, string> | null;
   /**
    * Why the formation is `failed` / `delete_failed`, or — while the formation is
-   * `active` — a replaced resource a succeeded deploy could not delete.
+   * `active` — a replaced resource a completed deploy could not delete.
    * Null otherwise; a successful apply with nothing outstanding clears it.
    */
   error: FormationError | null;

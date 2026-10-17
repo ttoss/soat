@@ -447,7 +447,7 @@ describe('Share caps', () => {
       const status = await admin().get(
         `/api/v1/documents/${ingest.body.id}/status`
       );
-      expect(status.body.error).toBe('CONVERTER_FAILED');
+      expect(status.body.error.code).toBe('CONVERTER_FAILED');
       expect(toolHits).toBe(hits);
     });
   });

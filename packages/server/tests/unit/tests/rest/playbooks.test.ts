@@ -202,9 +202,9 @@ describe('Playbooks', () => {
       );
       expect(codes).toEqual(
         expect.arrayContaining([
-          'executor_required',
-          'executor_forbidden',
-          'cycle',
+          'EXECUTOR_REQUIRED',
+          'EXECUTOR_FORBIDDEN',
+          'CYCLE',
         ])
       );
     });
@@ -290,7 +290,11 @@ describe('Playbooks', () => {
       expect(res.status).toBe(200);
       expect(res.body.valid).toBe(false);
       expect(res.body.problems).toEqual([
-        { code: 'missing_node', node_id: 'a', input: 'x' },
+        {
+          code: 'MISSING_NODE',
+          path: 'definition.nodes[0].inputs[0].source.node_id',
+          message: expect.stringContaining("'missing'"),
+        },
       ]);
     });
 

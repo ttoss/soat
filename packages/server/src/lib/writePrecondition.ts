@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import type { RequestPrincipal } from './principals';
 
 /**
  * Optimistic concurrency for every resource carrying a `version` counter.
@@ -199,7 +200,7 @@ export const assertWritePrecondition = (args: {
  */
 export type VersionedWrite = {
   /** Required so every write path states its author; `null` is a platform write. */
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   versionLabel?: string | null;
   /** `null`/absent states no precondition; see {@link readWritePrecondition}. */
   expectedVersion?: number | null;

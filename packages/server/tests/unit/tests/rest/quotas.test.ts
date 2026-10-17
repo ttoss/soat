@@ -1,12 +1,13 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
-import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { droppedEventCount, eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { isObjectRecord } from 'src/lib/openapiSchemaFields';
 import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { withDurablePublicIds } from 'src/lib/usageEventWrite';
 
 import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
+import * as quotasModule from '../../../../src/lib/quotas';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -1875,10 +1876,55 @@ describe('Quotas', () => {
       });
 
       expect(captured).toHaveLength(1);
-      expect(captured[0].data.quota_id).toBe(quotaRes.body.id);
-      expect(captured[0].data.mode).toBe('monitor');
-      expect(captured[0].data.metric).toBe('requests');
+      // The quota as `GET` answers it, with the breached window beside it.
+      expect(captured[0].data).toMatchObject({
+        id: quotaRes.body.id,
+        project_id: enfProjectId,
+        mode: 'monitor',
+        metric: 'requests',
+        limit: 1,
+        window_key: expect.any(String),
+        observed_value: 2,
+      });
       expect(captured[0].resourceType).toBe('quota');
+    });
+
+    test('a quota that cannot be read back drops its event, counted, and the request still answers', async () => {
+      const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
+        'quotas-monitor-drop'
+      );
+      await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: COUNTED_WINDOW,
+          limit: 1,
+          mode: 'monitor',
+        },
+        enfProjectId
+      );
+      const before = droppedEventCount({ stage: 'record_lookup' });
+      // Sanctioned force-failure stub: drives the drop branch of the record
+      // read behind the event; the breach itself runs on the real database.
+      const down = jest
+        .spyOn(quotasModule, 'getQuota')
+        .mockRejectedValue(new Error('database is down'));
+
+      try {
+        const captured = await withCapture(async () => {
+          for (let i = 0; i < 2; i += 1) {
+            const res = await get(rawKey, enfProjectId);
+            expect(res.status).toBe(200);
+          }
+        });
+
+        expect(captured).toHaveLength(0);
+        expect(droppedEventCount({ stage: 'record_lookup' })).toBe(before + 1);
+      } finally {
+        down.mockRestore();
+      }
     });
 
     // Fetches the quotas:MonitorBreach audit entries for a project (admin sees

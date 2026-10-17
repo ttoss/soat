@@ -7,8 +7,6 @@ const SUCCESS = new Set([
   'completed',
   'complete',
   'open',
-  'succeeded',
-  'success',
   'enabled',
   'ready',
   'done',
@@ -19,13 +17,11 @@ const DANGER = new Set([
   'failure',
   'expired',
   'cancelled',
-  'canceled',
   'rejected',
   'revoked',
 ]);
 const WARNING = new Set([
   'pending',
-  'in_progress',
   'running',
   'queued',
   'requires_action',

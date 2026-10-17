@@ -41,8 +41,8 @@ Exceptions are **auto-filed** (or filed as `manual`); there is no public create 
 | `node_id` | string \| null | Originating node id within the run's graph |
 | `agent_id` | string \| null | Associated agent |
 | `guardrail_version` | string \| null | `<guardrailId>@<version>` for a `guardrail_tripwire` item |
-| `acknowledged_by` | string \| null | Acknowledging user's public ID |
-| `resolved_by` | string \| null | Resolving user's public ID |
+| `acknowledged_by_principal_type` / `acknowledged_by_principal_id` | string \| null | Who acknowledged it: `user` (`user_…`) or `api_key` (the key's own `key_…`) |
+| `resolved_by_principal_type` / `resolved_by_principal_id` | string \| null | Who resolved it, in the same shape |
 | `resolution_note` | string \| null | Optional note recorded at resolution |
 | `created_at` / `updated_at` | string | Timestamps |
 
@@ -99,7 +99,7 @@ soat resolve-exception --exception-id exc_01 --note "Root cause fixed; reran the
 
 ```ts
 const { data: exceptions } = await client.GET('/api/v1/exceptions', {
-  params: { query: { project_id: 'proj_01', status: 'open' } },
+  params: { query: { project_id: 'proj_01', status: ['open'] } },
 });
 
 await client.POST('/api/v1/exceptions/{exception_id}/resolve', {

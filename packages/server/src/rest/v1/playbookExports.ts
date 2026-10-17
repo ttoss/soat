@@ -6,7 +6,11 @@ import {
   listPlaybookCaseExports,
 } from 'src/lib/playbookExports';
 
-import { parsePagination, requireAuth } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+} from './helpers';
 import { playbookCaseAccess } from './playbookAccess';
 
 const playbookExportsRouter = new Router<Context>();
@@ -39,7 +43,7 @@ playbookExportsRouter.post(
       transformations: body.transformations,
       revision: body.revision,
       wait: body.wait === true,
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
     });
   }

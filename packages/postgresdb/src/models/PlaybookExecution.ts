@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { PlaybookCase } from './PlaybookCase';
-import { User } from './User';
 
 /**
  * One run of one node of a case: what it read (`basis`), what it started
@@ -86,7 +85,7 @@ export class PlaybookExecution extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare runId: string | null;
 
-  /** `pending` | `running` | `succeeded` | `failed`. */
+  /** `queued` | `running` | `completed` | `failed`. */
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare status: string;
 
@@ -113,16 +112,11 @@ export class PlaybookExecution extends Model {
   declare error: object | null;
 
   /** Who asked for the run; null when the case started it. */
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   /**
    * The tool call the write was made on behalf of (`tool_id`, `agent_id`,

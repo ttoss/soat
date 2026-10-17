@@ -16,6 +16,7 @@ import {
 } from 'src/lib/tasksScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -56,7 +57,7 @@ const pollTask = async (args: {
 };
 
 type HistoryRow = {
-  principal_kind: string;
+  principal_type: string;
   transition: string | null;
   note: string | null;
 };
@@ -224,7 +225,7 @@ describe('Tasks', () => {
       expect(history.body.data).toHaveLength(1);
       expect(history.body.data[0].from_state).toBeNull();
       expect(history.body.data[0].to_state).toBe('triage');
-      expect(history.body.data[0].principal_kind).toBe('user');
+      expect(history.body.data[0].principal_type).toBe('user');
       expect(history.body.data[0].principal_id).toBe(userId);
       // The wire names the principal, never an `actor_*` alias.
       expect(history.body.data[0].actor_kind).toBeUndefined();
@@ -378,7 +379,7 @@ describe('Tasks', () => {
           `/api/v1/tasks/${created.body.id}/history`
         )
       ).body.data;
-      expect(history[0].principal_kind).toBe('api_key');
+      expect(history[0].principal_type).toBe('api_key');
       // The forensic value: the specific key, distinguishable from the owner.
       expect(history[0].principal_id).toBe(keyPublicId);
     });
@@ -410,7 +411,7 @@ describe('Tasks', () => {
       expect(history[0].from_state).toBeNull();
       expect(history[0].to_state).toBe('draft');
       expect(history[0].transition).toBeNull();
-      expect(history[0].principal_kind).toBe('user');
+      expect(history[0].principal_type).toBe('user');
     });
 
     test('creating directly in a terminal state closes the task', async () => {
@@ -515,6 +516,29 @@ describe('Tasks', () => {
   });
 
   describe('POST /api/v1/tasks/:id/transitions', () => {
+    test('emits tasks.transitioned with the task as GET answers it and the move beside it', async () => {
+      const task = (await createTask()).body;
+
+      const [event] = await captureEvents({
+        type: 'tasks.transitioned',
+        where: (event) => {
+          return event.resourceId === task.id;
+        },
+        action: () => {
+          return transition(task.id, 'to_review');
+        },
+      });
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${task.id}`
+      );
+      expect(asWire(event.data)).toEqual({
+        ...read.body,
+        transition: 'to_review',
+        from_state: 'triage',
+      });
+    });
+
     test('a backward move (review → draft → review) works and is fully audited', async () => {
       const task = (await createTask()).body;
       expect((await transition(task.id, 'to_review')).body.state).toBe(
@@ -708,6 +732,30 @@ describe('Tasks', () => {
           return t.id === task.id;
         })
       ).toBe(true);
+    });
+
+    test('a repeated status filter ORs its values', async () => {
+      const task = (await createTask()).body;
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?workflow_id=${workflowId}&status=closed&status=open&limit=100`
+      );
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((t: { id: string }) => {
+          return t.id;
+        })
+      ).toContain(task.id);
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?workflow_id=${workflowId}&status=done`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 
@@ -1570,7 +1618,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(routed.principal_id).toBeNull();
       expect(routed.generation_id).toBe('gen_test1');
     });
@@ -1993,15 +2041,48 @@ describe('Tasks', () => {
           { name: 'to_failed', from: ['writing'], to: 'failed' },
         ],
       });
-      const taskId = await startTask(wf, {});
-      const settled = await pollTask({
-        token: userToken,
-        taskId,
-        predicate: (t) => {
-          return t.state === 'failed';
-        },
-      });
+      const events: SoatEvent[] = [];
+      const handler = (e: SoatEvent) => {
+        events.push(e);
+      };
+      eventBus.on('soat:event', handler);
+      let taskId: string;
+      let settled: Record<string, unknown>;
+      try {
+        taskId = await startTask(wf, {});
+        settled = await pollTask({
+          token: userToken,
+          taskId,
+          predicate: (t) => {
+            return t.state === 'failed';
+          },
+        });
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
 
+      // Each retried attempt names its failure in the one error shape.
+      const retried = events.filter((e) => {
+        return (
+          e.type === 'tasks.automation_retrying' && e.resourceId === taskId
+        );
+      });
+      expect(
+        retried.map((e) => {
+          return e.data.error;
+        })
+      ).toEqual([
+        {
+          code: 'AI_PROVIDER_ERROR',
+          message: 'always down',
+          meta: { generation_id: 'gen_down822' },
+        },
+        {
+          code: 'AI_PROVIDER_ERROR',
+          message: 'always down',
+          meta: { generation_id: 'gen_down822' },
+        },
+      ]);
       expect(mockCreateGeneration).toHaveBeenCalledTimes(3);
       expect(settled.status).toBe('closed');
       const history = (
@@ -2225,7 +2306,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       // The causing (failed) generation is linked so a reader can jump to its trace.
       expect(routed.generation_id).toBe('gen_failed607');
       // The cause is not a principal: it is carried by `generation_id` alone,
@@ -2281,7 +2362,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
       // An orchestration run is a cause, not a principal — it is never copied
       // into `principal_id`.
@@ -2334,7 +2415,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
       expect(routed.principal_id).toBeNull();
     });
@@ -2620,7 +2701,7 @@ describe('Tasks', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestrationId, input: {}, wait: true });
       expect(run.status).toBe(201);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
 
       // The post-restart row, which no API call can produce: a `running`
       // dispatch pointing at a settled run. `entered_state_at` is aged past the
@@ -2669,7 +2750,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(routed.orchestration_run_id).toBe(run.body.id);
     });
 
@@ -2980,7 +3061,7 @@ describe('Tasks', () => {
       const run = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestrationId, input: {}, wait: true });
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
 
       // Same shape as the orphan above, but entered *now* — inside the grace
       // window, so the awaiter that would route it may still be alive.
@@ -3368,7 +3449,7 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string | null }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_type).toBe('automation');
       expect(routed.tool_id).toBe(toolId);
       expect(routed.generation_id).toBeNull();
       expect(routed.orchestration_run_id).toBeNull();
@@ -3750,7 +3831,7 @@ describe('Tasks', () => {
       const move = history.find((h: { transition: string }) => {
         return h.transition === 'publish';
       });
-      expect(move.principal_kind).toBe('approval');
+      expect(move.principal_type).toBe('approval');
       expect(move.to_state).toBe('published');
     });
 
@@ -3778,7 +3859,7 @@ describe('Tasks', () => {
         )
       ).body.data;
       const note = history[history.length - 1];
-      expect(note.principal_kind).toBe('approval');
+      expect(note.principal_type).toBe('approval');
       expect(note.transition).toBeNull();
       expect(note.note).toMatch(/rejected/i);
     });
@@ -3813,7 +3894,7 @@ describe('Tasks', () => {
         predicate: (h) => {
           return h.some((r) => {
             return (
-              r.principal_kind === 'approval' && /expired/i.test(r.note ?? '')
+              r.principal_type === 'approval' && /expired/i.test(r.note ?? '')
             );
           });
         },
@@ -3854,7 +3935,8 @@ describe('Tasks', () => {
         });
         expect(failed).toBeDefined();
         expect(failed!.data.transition).toBe('publish_guarded');
-        expect(failed!.data.errorCode).toBe('TASK_GUARD_REJECTED');
+        expect(failed!.data.error_code).toBe('TASK_GUARD_REJECTED');
+        expect(failed!.data.id).toBe(failed!.resourceId);
       } finally {
         eventBus.off('soat:event', handler);
       }
@@ -4133,7 +4215,7 @@ describe('Tasks', () => {
         });
         expect(rejection).toBeDefined();
         expect(rejection!.data.transition).toBe('respin');
-        expect(rejection!.data.errorCode).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
+        expect(rejection!.data.error_code).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
 
         // Exactly `LIMIT` automated hops ran — the loop was cut, not merely
         // slowed. One entry for creation plus one per accepted `respin`.
@@ -4660,7 +4742,7 @@ describe('Tasks', () => {
 
     test('an orchestration dispatch inherits the task bag', async () => {
       // The dispatched orchestration has only a `transform` node, so it
-      // settles `succeeded` synchronously with the dispatch — too fast to
+      // settles `completed` synchronously with the dispatch — too fast to
       // catch the inherited bag on the run row before its own terminal clear
       // wipes it. `startOrchestrationRun` is where the task's bag becomes the
       // run's, so that call is where inheritance is provable instead.
@@ -4704,7 +4786,7 @@ describe('Tasks', () => {
         `/api/v1/orchestration-runs/${routed.orchestration_run_id}`
       );
       expect(run.status).toBe(200);
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
       // Neither hands a credential back on a read, and a run clears its own
       // bag once it settles the same way the dispatching task already did.
       expect(run.body.tool_context).toBeUndefined();

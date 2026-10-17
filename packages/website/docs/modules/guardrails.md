@@ -61,7 +61,7 @@ An immutable archive of a guardrail's configuration at one version; same shape a
 | `version`      | integer | The archived version number                                                 |
 | `config`       | object  | The versioned surface at that version — today `{ document }` and nothing else |
 | `label`        | string  | Optional human tag, e.g. `pre-tightening`; null when unset                   |
-| `created_by`   | string  | Public ID of the user whose action produced this version; null when there was none |
+| `created_by_principal_type` / `created_by_principal_id` | string | Who produced this version: `user` (`user_…`) or `api_key` (the key's own `key_…`); null when there was none |
 | `created_at`   | string  | ISO 8601 timestamp                                                          |
 
 Only the `document` is versioned; name, description and the context binding are metadata. One version number denotes one policy, which is what an [evaluation record](#evaluation-audit-record) cites.
@@ -201,6 +201,8 @@ Two windows at once, and a failure circuit breaker, in one guard:
 ### Tripwires and `escalate`
 
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception. `escalate: true` routes the call to the [approvals queue](./approvals.md) instead.
+
+A tripwire emits a `guardrail.tripwire` [webhook event](./webhooks.md) naming the guardrail that governed the decision (`resource_id`). `data` is that guardrail as [`GET /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/get-guardrail) answers it, plus `guardrail_version` (the version that tripped), `tool_id`, `tool_name`, `action`, `agent_id`, `generation_id`, `orchestration_run_id` and `node_id` (`null` where the call had none).
 
 `escalate` is per-guardrail: a failing guard yields `tripwire` without it and `route_to_approval` with it; `tripwire` outranks `route_to_approval` in the [decision ordering](#attachment).
 

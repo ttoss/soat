@@ -2,7 +2,6 @@ import type {
   MemoryAssertionMechanism,
   MemoryAssertionOutcome,
 } from '@soat/postgresdb';
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import type { PaginatedResult } from 'src/lib/pagination';
@@ -11,6 +10,8 @@ import {
   resolvePagination,
   totalListOrder,
 } from 'src/lib/pagination';
+import type { PrincipalType } from 'src/lib/principals';
+import { timeRangeWhere } from 'src/lib/timeRange';
 
 const log = createDebug('soat:memories');
 
@@ -30,7 +31,7 @@ export type MemoryAssertionSource = {
   ruleId?: number | null;
   /** The generation's **public** id; resolved to the row here. */
   generationId?: string | null;
-  principalType: string;
+  principalType: Extract<PrincipalType, 'user' | 'api_key' | 'agent'>;
   principalId: string;
 };
 
@@ -241,7 +242,8 @@ export const listMemoryStoreAssertions = async (args: {
   mechanism?: MemoryAssertionMechanism;
   outcome?: MemoryAssertionOutcome;
   generationId?: string;
-  since?: Date;
+  from?: Date;
+  to?: Date;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedMemoryAssertion>> => {
@@ -255,7 +257,8 @@ export const listMemoryStoreAssertions = async (args: {
   const where: Record<string, unknown> = { memoryStoreId: args.memoryStoreId };
   if (args.mechanism) where.mechanism = args.mechanism;
   if (args.outcome) where.outcome = args.outcome;
-  if (args.since) where.createdAt = { [Op.gte]: args.since };
+  const createdAt = timeRangeWhere({ from: args.from, to: args.to });
+  if (createdAt) where.createdAt = createdAt;
 
   if (args.generationId) {
     const generationDbId = await resolveGenerationDbId(args.generationId);

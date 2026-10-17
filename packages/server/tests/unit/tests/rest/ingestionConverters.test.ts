@@ -396,7 +396,7 @@ describe('Converter ingestion', () => {
         expect((await readStatus(fresh)).status).toBe('processing');
         expect(await readStatus(stale)).toMatchObject({
           status: 'failed',
-          error: 'INGESTION_TIMEOUT',
+          error: { code: 'INGESTION_TIMEOUT' },
         });
       }
     );
@@ -407,7 +407,7 @@ describe('Converter ingestion', () => {
 
       expect(await readStatus(documentId)).toMatchObject({
         status: 'failed',
-        error: 'INGESTION_TIMEOUT',
+        error: { code: 'INGESTION_TIMEOUT' },
       });
     });
 
@@ -427,7 +427,7 @@ describe('Converter ingestion', () => {
       expect((await readStatus(fresh.documentId)).status).toBe('processing');
       expect(await readStatus(stale.documentId)).toMatchObject({
         status: 'failed',
-        error: 'CONVERSION_TIMEOUT',
+        error: { code: 'CONVERSION_TIMEOUT' },
       });
     });
   });

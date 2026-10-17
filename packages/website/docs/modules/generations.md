@@ -35,9 +35,9 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `chain_id`                  | string \| null | [Continuation chain](./chains.md) this generation belongs to — set on every member including the root; `null` when it is not part of one |
 | `session_id`                | string \| null | [Session](./sessions.md) this generation was dispatched through; `null` when it was started outside one |
 | `actor_id`                  | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none |
-| `started_by_principal_type` | string \| null | Principal kind that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
+| `started_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
 | `started_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` |
-| `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
+| `status`                    | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                         |
 | `started_at`                | string         | When the generation started                                                                          |
 | `completed_at`              | string \| null | When the generation reached a terminal state                                                         |
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
@@ -56,7 +56,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `retrieval`                 | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served)) |
 | `extraction`                | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))  |
 | `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |
-| `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)                                |
+| `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system` |
 | `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth                               |
 | `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
@@ -85,7 +85,7 @@ principal would let a later re-mint act with the whole of the owning user's acce
 
 ### Lifecycle
 
-A generation starts as `in_progress`. It transitions to:
+A generation starts as `running`. It transitions to:
 
 - `requires_action` when a client tool call pauses the run and the caller must submit tool outputs.
 - `completed` when the model finishes (the `stop_reason` carries the finish reason).
@@ -93,9 +93,9 @@ A generation starts as `in_progress`. It transitions to:
 
 ### Error Recording
 
-When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries `{ code, message }`.
+When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries a [recorded failure](/docs/api#recorded-failures) `{ code, message, meta? }`.
 
-`error` always contains `message`. `code` is set for mapped errors, most notably `AI_PROVIDER_ERROR`: the upstream AI provider returned an error (e.g. exhausted credits, rate limit) or is unreachable.
+`code` is the mapped error's — most notably `AI_PROVIDER_ERROR`: the upstream AI provider returned an error (e.g. exhausted credits, rate limit) or is unreachable — and `GENERATION_FAILED`, keeping the thrown message, for a failure with no code of its own. A transcript's failed tool call reads the same way: its code when the tool raised one, else `TOOL_CALL_FAILED` with the fields the thrown error carried in `meta`.
 
 ### Provider Error Surfacing (`AI_PROVIDER_ERROR`)
 
@@ -234,7 +234,7 @@ distinguish "no content" from "no such generation":
 
 | State | `status` | `input` / `output` | `steps` | `content_redacted_at` |
 |---|---|---|---|---|
-| Still running | `in_progress` | `null` | `[]` | `null` |
+| Still running | `running` | `null` | `[]` | `null` |
 | Never stored (zero-retention) | terminal | `null` | `[]` | set, principal `zero_retention` |
 | Erased by a purge or sweep | terminal | `null` | `[]` | set, purging principal |
 
@@ -443,7 +443,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.generations.listGenerations({
-  query: { trace_id: 'trace_abc123', status: 'failed' },
+  query: { trace_id: 'trace_abc123', status: ['failed'] },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -476,7 +476,7 @@ const { data, error } = await soat.generations.getGeneration({
   path: { generation_id: 'gen_abc123' },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data.status is "in_progress", "requires_action", "completed", or "failed"
+// data.status is "running", "requires_action", "completed", or "failed"
 ```
 
 </TabItem>

@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { signFileDownloadToken } from 'src/lib/fileDownloadToken';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -322,6 +323,34 @@ describe('Files', () => {
   });
 
   describe('DELETE /api/v1/files/:id', () => {
+    test('emits files.deleted with the file as GET answered it', async () => {
+      const uploadRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('Announce my delete'), {
+          filename: 'announced.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      const fileId = uploadRes.body.id as string;
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/files/${fileId}`
+      );
+
+      const [event] = await captureEvents({
+        type: 'files.deleted',
+        where: (event) => {
+          return event.resourceId === fileId;
+        },
+        action: () => {
+          return authenticatedTestClient(userToken).delete(
+            `/api/v1/files/${fileId}`
+          );
+        },
+      });
+
+      expect(asWire(event.data)).toEqual(read.body);
+    });
+
     test('user with permission can delete a file and it is removed from disk', async () => {
       const fileContent = Buffer.from('Delete me!');
       const uploadRes = await authenticatedTestClient(userToken)

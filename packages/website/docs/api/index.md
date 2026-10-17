@@ -97,11 +97,49 @@ as the `x-error-codes` extension of [/openapi.json](/openapi.json), and on the
 [Error Codes](/docs/error-codes) page. `INTERNAL_ERROR` always carries exactly
 that message; the underlying exception is logged server-side, never forwarded.
 
-Work that fails after its request has answered — an orchestration run or node,
-a trigger firing, a decision, a playbook execution or export — records the same
-shape in its `error` field: `{ code, message, meta? }`. A failure the platform
-names keeps its code, message and `meta`; any other records `INTERNAL_ERROR`
-with the same constant message, and its detail reaches the server log only.
+### Recorded failures
+
+Work that fails after its request has answered records the error body without
+`hint` and `docs_url` — `{ code, message, meta? }` — in its `error` field: a
+generation and its trace, a transcript's tool result, an orchestration run or
+node, a trigger firing, a decision, a playbook execution or export, a document's
+ingestion, an eval result, and a formation, its operations and their events. The
+events that report a failure (`agents.generation.failed`,
+`documents.ingest_failed`, `tasks.automation_retrying`) carry the same object.
+`code` is always a key of the catalog, so `error.code` reads the same way
+everywhere.
+
+A failure the platform names keeps its code, message and `meta`. Any other
+records `INTERNAL_ERROR` with the constant message, its detail in the server log
+only — except where the failure's own words are what the record is read for:
+a generation (`GENERATION_FAILED`), a document's ingestion (`INGESTION_FAILED`),
+an eval item (`GENERATION_FAILED`, or `EVAL_SCORING_FAILED` for a scorer) and a
+transcript's tool result (`TOOL_CALL_FAILED`) keep the thrown message under
+their own code.
+
+### Validation problems
+
+A definition refused for its content — `ORCHESTRATION_VALIDATION_FAILED`,
+`PLAYBOOK_VALIDATION_FAILED`, `WORKFLOW_VALIDATION_FAILED` — lists every problem
+found under one `meta` shape:
+
+```json
+{
+  "problems": [
+    {
+      "code": "MISSING_FIELD",
+      "path": "nodes[0].agent_id",
+      "message": "agent node 'a' is missing required field 'agent_id'."
+    }
+  ]
+}
+```
+
+`code` is UPPER_SNAKE and stable; `path` locates the problem in the request
+body, in its wire names. An orchestration adds its non-blocking `warnings` in
+the same item shape. [`POST /api/v1/orchestrations/validate`](/docs/api/orchestrations/validate-orchestration)
+and [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook)
+answer the same items without writing.
 
 Common status codes:
 
@@ -140,6 +178,20 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
 - No `cursor`, `page`, or `sort`/`order` parameter. Sort order is fixed per endpoint (see the module doc), and rows that tie on it are broken by creation order, so a tie never reorders between pages.
 
 The server enforces no per-project or per-API-key request-rate limits or throttling; every authenticated request is processed immediately, bounded only by the limits above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
+
+### List Filters
+
+Every list filter takes one shape:
+
+- **Status** — a `status` (or `*_status`) filter repeats, and its values are ORed. One value is the common case; a value outside the enum, empty string included, is `400 VALIDATION_FAILED`.
+- **Time range** — `from` / `to`, ISO 8601, on the record's natural timestamp (`created_at` unless the module doc says otherwise). A range over another timestamp prefixes the field: `expires_from` / `expires_to` on [approvals](../modules/approvals.md) bound `expires_at`. Both ends are inclusive and either may be omitted; an unparseable or repeated bound is `400 VALIDATION_FAILED`.
+
+```bash
+curl 'https://your-soat-server.com/api/v1/generations?status=failed&status=requires_action' \
+  -H "Authorization: Bearer <token>"
+curl 'https://your-soat-server.com/api/v1/audit-log?project_id=proj_abc&from=2026-01-01T00:00:00Z&to=2026-01-31T23:59:59Z' \
+  -H "Authorization: Bearer <token>"
+```
 
 ### Path and Query Parameters
 

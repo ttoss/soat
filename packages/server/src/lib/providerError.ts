@@ -8,6 +8,7 @@ import {
 } from 'ai';
 
 import { DomainError } from '../errors';
+import { type StoredError, toStoredErrorKeepingMessage } from './storedError';
 
 const unwrapProviderError = (error: unknown): unknown => {
   if (RetryError.isInstance(error)) {
@@ -198,23 +199,10 @@ export const toProviderDomainError = (error: unknown): DomainError | null => {
 };
 
 /**
- * Builds the structured error payload persisted on failed generations and
- * traces.
+ * The error persisted on a failed generation and its trace. A failure with no
+ * code of its own keeps its message under `GENERATION_FAILED`: the record is
+ * what a caller debugs the turn from.
  */
-export const buildGenerationErrorPayload = (
-  error: unknown
-): Record<string, unknown> => {
-  if (error instanceof DomainError) {
-    return {
-      code: error.code,
-      message: error.message,
-      ...(error.meta !== undefined && { meta: error.meta }),
-    };
-  }
-
-  if (error instanceof Error) {
-    return { message: error.message, name: error.name };
-  }
-
-  return { message: String(error) };
+export const buildGenerationErrorPayload = (error: unknown): StoredError => {
+  return toStoredErrorKeepingMessage({ error, code: 'GENERATION_FAILED' });
 };

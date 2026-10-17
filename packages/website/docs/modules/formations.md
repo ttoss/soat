@@ -98,9 +98,9 @@ One record per deploy (create, update, delete); [`GET /api/v1/formations/{format
 | ---------------- | ------ | ----------------------------------------------------- |
 | `id`             | string | Public ID (`form_op_` prefix)                             |
 | `operation_type` | string | `create` \| `update` \| `delete`                      |
-| `status`         | string | `pending` \| `running` \| `succeeded` \| `failed`     |
+| `status`         | string | `queued` \| `running` \| `completed` \| `failed`     |
 | `plan`           | object | Planned changes computed before execution             |
-| `events`         | array  | Per-resource event log with timestamp, action, status |
+| `events`         | array  | Per-resource event log with timestamp, action, status; a `failed` event carries its `error` as `{ code, message, meta? }` |
 | `error`          | object | Why this operation failed, as `{ code, message, meta }` — the same bag the formation carries while that failure is its current state. Null otherwise |
 | `created_at`     | string | ISO 8601 creation timestamp                           |
 | `updated_at`     | string | ISO 8601 last-updated timestamp                       |
@@ -450,7 +450,7 @@ A deploy is a reconciler, so the two failure kinds are reported differently:
 }
 ```
 
-`error.code` is the resource's own failure (`VALIDATION_FAILED`, `SECRET_NOT_FOUND`, `RESOURCE_NOT_FOUND`, …), and `error.meta` carries its details beside `logical_id` and `resource_type`; an unexpected failure reads `INTERNAL_ERROR` with `Internal Server Error`, as every [stored error](/docs/api) does. `error` stays on `get-formation` while the stack is `failed`; the next successful deploy clears it. `list-formation-events` keeps every operation with the same `error` bag.
+`error.code` is the resource's own failure (`VALIDATION_FAILED`, `SECRET_NOT_FOUND`, `RESOURCE_NOT_FOUND`, …), and `error.meta` carries its details beside `logical_id` and `resource_type`; an unexpected failure reads `INTERNAL_ERROR` with `Internal Server Error`, as every [recorded failure](/docs/api#recorded-failures) does. `error` stays on `get-formation` while the stack is `failed`; the next successful deploy clears it. `list-formation-events` keeps every operation with the same `error` bag.
 
 **The CLI exits non-zero on that body.** `create-formation` and `update-formation` print the payload to stdout (`$(…)` capture and `| jq` unaffected), write the reason to stderr and exit `1`:
 
@@ -473,7 +473,7 @@ Left alone:
 - An **updated** resource keeps its new state (no pre-update snapshot is taken).
 - A `deletion_policy: retain` resource survives; its record keeps pointing at it, so the next deploy adopts it rather than provisioning a duplicate.
 
-Each unwind is an entry in the operation's `events` after the triggering failure: `rollback` (`succeeded` or `failed`) for a walked-back resource, `rollback-skipped` for a retained one. A failed `rollback` is reported, never thrown; the original error stays in the operation's `error`, and the record keeps pointing at the physical resource for manual cleanup.
+Each unwind is an entry in the operation's `events` after the triggering failure: `rollback` (`completed` or `failed`) for a walked-back resource, `rollback-skipped` for a retained one. A failed `rollback` is reported, never thrown; the original error stays in the operation's `error`, and the record keeps pointing at the physical resource for manual cleanup.
 
 Stack statuses:
 
@@ -487,7 +487,7 @@ Stack statuses:
 | `deleted`       | All resources removed                                    |
 | `delete_failed` | Stack teardown encountered failures                      |
 
-Deletion is idempotent: a managed resource already removed outside the formation counts as gone. A teardown that cannot finish answers `409 FORMATION_DELETE_FAILED`, naming every blocker in `error.meta.failures` as `{ logical_id, resource_type, error }`.
+Deletion is idempotent: a managed resource already removed outside the formation counts as gone. A teardown that cannot finish answers `409 FORMATION_DELETE_FAILED`, naming every blocker in `error.meta.failures` as `{ logical_id, resource_type, error }`, `error` being the blocker's own `{ code, message, meta? }` (`AGENT_HAS_DEPENDENTS`, `TOOL_HAS_DEPENDENTS`, `PLAYBOOK_HAS_CASES`, …).
 
 **A predictable blocker is caught before anything is deleted.** Teardown pre-flights the resources it is about to remove; a foreseeable refusal destroys nothing, the stack stays `active`, and the same `delete-formation` succeeds once the blocker is resolved. The predictable blockers are an **agent with generation or trace history**, which the platform never force-deletes on its own ([`DELETE /api/v1/agents/{agent_id}?force=true`](/docs/api/agents/delete-agent) is an operator decision), and an **agent or tool a [decider](./deciders.md#formations) outside the stack names**. A decider in the same stack blocks nothing: it is deleted first. Declare the agent with `deletion_policy: retain` to leave it standing; a retained resource is never deleted, so never blocks. An eval run is one generation per dataset item, so an agent shipped with the eval that verifies it has history the moment the suite runs; see [Gate a Canary Promotion on an Eval](../tutorials/gate-a-canary-promotion-on-an-eval.md).
 
@@ -538,7 +538,7 @@ The check runs over the whole template **before anything is applied**: no format
 
 - A `policy` resource needs the `admin` role rather than an action, as the policies routes do.
 - An `api_key` resource is minted **under the deploying caller**, as [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key) mints under the requesting user; the owner's permissions are its ceiling, so declaring one needs only `api-keys:CreateApiKey`.
-- A `trigger` resource's `created_by` is the [run-as identity](./triggers.md#run-as-identity) a firing mints a token for: the deploying caller, so a firing never exceeds who declared it.
+- A `trigger` resource's creator is the [run-as identity](./triggers.md#run-as-identity) a firing mints a token for: the deploying caller, so a firing never exceeds who declared it.
 - A [custom resource type](#custom-resource-types) has no SOAT action, so it is gated on the request's `formations:*` action alone.
 
 ### Ids a Template Names Are Resolved Within Its Own Project
@@ -647,7 +647,7 @@ Cleanup is **deferred to the end of the operation**, after every other change an
 A disposal that still fails never fails the deploy (the desired state is realised). It is reported twice and retried:
 
 - a failed `replace-cleanup` event on the operation, and
-- `error.code: "FORMATION_REPLACE_CLEANUP_FAILED"` on the formation itself while the resource is still live, with `error.meta.failures` naming each `{ logical_id, resource_type, physical_resource_id, error }`. The formation stays `active` and the operation stays `succeeded`.
+- `error.code: "FORMATION_REPLACE_CLEANUP_FAILED"` on the formation itself while the resource is still live, with `error.meta.failures` naming each `{ logical_id, resource_type, physical_resource_id, error }`. The formation stays `active` and the operation stays `completed`.
 
 The un-deleted id stays on the record as pending cleanup; the next deploy and the teardown retry it and clear the error once it succeeds. A pending cleanup failing during teardown is recorded but never leaves the formation `delete_failed`.
 

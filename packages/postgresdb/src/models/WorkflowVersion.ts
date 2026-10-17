@@ -8,7 +8,6 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { User } from './User';
 import { Workflow } from './Workflow';
 
 /**
@@ -88,20 +87,12 @@ export class WorkflowVersion extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 
-  /**
-   * The user whose action produced this version. Null for writes with no
-   * request user behind them.
-   */
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  /** Who produced this version; null for a write with no principal. */
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

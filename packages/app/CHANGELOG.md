@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.84.0](https://github.com/ttoss/soat/compare/v0.83.1...v0.84.0) (2026-10-17)
+
+* fix(server)!: one vocabulary for run status (#1630), closes [#1630](https://github.com/ttoss/soat/issues/1630) [#1620](https://github.com/ttoss/soat/issues/1620)
+
+### BREAKING CHANGES
+
+* orchestration run, playbook execution/export, trigger firing and formation operation/event `succeeded` -> `completed`; generation `in_progress` -> `running`; eval run `canceled` -> `cancelled`; webhook delivery `pending`/`success` -> `queued`/`completed`; trigger firing, playbook execution and formation operation `pending` -> `queued`; event `orchestration_runs.succeeded` -> `orchestration_runs.completed`.
+
+## [0.83.1](https://github.com/ttoss/soat/compare/v0.83.0...v0.83.1) (2026-10-17)
+
+**Note:** Version bump only for package @soat/app
+
 # [0.83.0](https://github.com/ttoss/soat/compare/v0.82.0...v0.83.0) (2026-10-17)
 
 **Note:** Version bump only for package @soat/app

@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import { DomainError } from '../errors';
 import { cyclesExcludingLoopNodes, describeCycles } from './orchestrationGraph';
 import {
   buildPredecessors,
@@ -18,6 +17,7 @@ import {
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 import { collectVarRefs } from './orchestrationVarRefs';
 import { assertValidToolContextAllowlist } from './toolContext';
+import { throwValidationProblems } from './validationProblems';
 
 const log = createDebug('soat:orchestrations');
 
@@ -27,7 +27,7 @@ export type { OrchestrationValidationIssue } from './orchestrationNodeShape';
 
 export type OrchestrationValidationResult = {
   valid: boolean;
-  errors: OrchestrationValidationIssue[];
+  problems: OrchestrationValidationIssue[];
   warnings: OrchestrationValidationIssue[];
 };
 
@@ -101,12 +101,14 @@ const checkEdges = (args: {
   for (const [index, edge] of edges.entries()) {
     if (!nodeIdSet.has(edge.from)) {
       errors.push({
+        code: 'UNKNOWN_NODE',
         path: `edges[${index}].from`,
         message: `Edge references unknown node '${edge.from}'.`,
       });
     }
     if (!nodeIdSet.has(edge.to)) {
       errors.push({
+        code: 'UNKNOWN_NODE',
         path: `edges[${index}].to`,
         message: `Edge references unknown node '${edge.to}'.`,
       });
@@ -207,6 +209,7 @@ const checkNodeReachability = (args: {
       if (verdict === 'unwritten' && key === NODE_ARTIFACTS_STATE_KEY) {
         const referencedNodeId = refPath.split('.')[1];
         errors.push({
+          code: 'NODE_NOT_UPSTREAM',
           path,
           message: `references ${refPath} but '${referencedNodeId}' is not an earlier (upstream) node in this graph.`,
         });
@@ -218,18 +221,20 @@ const checkNodeReachability = (args: {
           ? `'${key}' is declared in input_schema, but run input is seeded under the 'input' namespace only — reference it as {"var": "input.${key}"}.`
           : `it is not declared in input_schema either.`;
         errors.push({
+          code: 'UNWRITTEN_STATE_KEY',
           path,
           message: `references state.${refPath} but no upstream node writes 'state.${key}'; ${suffix}`,
         });
       } else if (verdict === 'conditional') {
         warnings.push({
+          code: 'CONDITIONAL_STATE_KEY',
           path,
           message: `state.${key} is only written on a conditional branch and may be undefined when this node runs.`,
         });
       }
     }
   }
-  return { valid: errors.length === 0, errors, warnings };
+  return { valid: errors.length === 0, problems: errors, warnings };
 };
 
 /**
@@ -261,10 +266,10 @@ const checkReachability = (args: {
       allNodeIds,
     };
     const res = checkNodeReachability({ node, index, ctx });
-    errors.push(...res.errors);
+    errors.push(...res.problems);
     warnings.push(...res.warnings);
   }
-  return { valid: errors.length === 0, errors, warnings };
+  return { valid: errors.length === 0, problems: errors, warnings };
 };
 
 // ── Top-level validation ──────────────────────────────────────────────────
@@ -278,7 +283,13 @@ export const validateOrchestrationGraph = (args: {
   if (!Array.isArray(nodes)) {
     return {
       valid: false,
-      errors: [{ path: 'nodes', message: '`nodes` must be an array.' }],
+      problems: [
+        {
+          code: 'INVALID_TYPE',
+          path: 'nodes',
+          message: '`nodes` must be an array.',
+        },
+      ],
       warnings: [],
     };
   }
@@ -304,7 +315,11 @@ export const validateOrchestrationGraph = (args: {
   const cycles = cyclesExcludingLoopNodes(nodes, edges);
   const cyclic = cycles.length > 0;
   if (cyclic) {
-    errors.push({ path: 'edges', message: describeCycles(cycles) });
+    errors.push({
+      code: 'CYCLE',
+      path: 'edges',
+      message: describeCycles(cycles),
+    });
   }
 
   const danglingEdges = errors.some((e) => {
@@ -312,7 +327,7 @@ export const validateOrchestrationGraph = (args: {
   });
   if (!cyclic && !danglingEdges) {
     const reach = checkReachability({ nodes, edges, nodeIds, inputSchema });
-    errors.push(...reach.errors);
+    errors.push(...reach.problems);
     warnings.push(...reach.warnings);
   }
 
@@ -322,7 +337,7 @@ export const validateOrchestrationGraph = (args: {
     warnings.length
   );
 
-  return { valid: errors.length === 0, errors, warnings };
+  return { valid: errors.length === 0, problems: errors, warnings };
 };
 
 /**
@@ -347,16 +362,12 @@ export const assertOrchestrationValid = (args: {
 
   const result = validateOrchestrationGraph(args);
   if (result.valid) return;
-  const summary = result.errors
-    .map((e) => {
-      return `${e.path}: ${e.message}`;
-    })
-    .join('; ');
-  throw new DomainError(
-    'ORCHESTRATION_VALIDATION_FAILED',
-    `Orchestration validation failed: ${summary}`,
-    { errors: result.errors, warnings: result.warnings }
-  );
+  throwValidationProblems({
+    code: 'ORCHESTRATION_VALIDATION_FAILED',
+    subject: 'Orchestration',
+    problems: result.problems,
+    warnings: result.warnings,
+  });
 };
 
 /**

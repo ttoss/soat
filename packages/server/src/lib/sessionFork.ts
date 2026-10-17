@@ -17,10 +17,10 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitResourceEvent } from './eventBus';
 import { paginatedList } from './pagination';
 import { agentReferences } from './resourceReferences';
 import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
+import { emitSessionEvent } from './sessionEvents';
 import { mapSession } from './sessionMapper';
 import { acceptStoredToolContextUpdate } from './toolContextCarrier';
 
@@ -163,10 +163,10 @@ const copyMessagesIntoFork = async (args: {
 /** The fork's read shape, announced once its records are committed. */
 const announceFork = async (args: {
   fork: Parameters<typeof sessions.reload>[0];
-  projectId: number;
   messageCount: number;
 }) => {
-  const mapped = mapSession(await sessions.reload(args.fork));
+  const fork = await sessions.reload(args.fork);
+  const mapped = mapSession(fork);
 
   log(
     'forkSession: created session=%s messages=%d',
@@ -174,13 +174,7 @@ const announceFork = async (args: {
     args.messageCount
   );
 
-  emitResourceEvent({
-    type: 'sessions.created',
-    projectId: args.projectId,
-    resourceType: 'session',
-    resourceId: mapped.id,
-    data: mapped,
-  });
+  void emitSessionEvent({ type: 'sessions.created', session: fork });
 
   return mapped;
 };
@@ -286,7 +280,6 @@ export const forkSession = async (args: {
 
   return announceFork({
     fork,
-    projectId: parent.projectId,
     messageCount: messages.length,
   });
 };

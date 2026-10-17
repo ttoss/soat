@@ -81,7 +81,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `value`            | any            | The value written                                                              |
 | `basis`            | object \| null | The revision of each input an output, confirmation or rejection was decided on |
 | `playbook_version` | integer        | The version the case was on when it was written                                |
-| `created_by`       | string \| null | The user who wrote it                                                          |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who wrote it: `user` or `api_key` and its id; null for an output the case wrote |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ### Execution
@@ -93,14 +93,14 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `node_id`          | string          | The node that ran                                                                    |
 | `playbook_version` | integer         | The version the case runs on                                                         |
 | `executor`         | object \| null  | `{ type, id }`; null for a `collect` node                                            |
-| `status`           | string          | `pending` until a worker claims it, `running`, then `succeeded` or `failed`          |
+| `status`           | string          | `queued` until a worker claims it, `running`, then `completed` or `failed`           |
 | `result`           | string \| null  | Once settled: `current`, or `superseded` when the node's inputs changed while it ran |
 | `run_id`           | string \| null  | The generation, decision, task or orchestration run it started                       |
 | `input`            | any             | What the executor was given                                                          |
 | `output`           | any             | What the executor answered; null until it succeeds                                   |
 | `output_revision`  | integer \| null | The revision of the output entry it wrote; null when it wrote none                   |
 | `error`            | object \| null  | Why it failed                                                                        |
-| `created_by`       | string \| null  | Who asked for the run                                                                |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the run; null when the case started it |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`      | string \| null  | ISO 8601 settle timestamp                                                            |
 
@@ -116,11 +116,11 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `transformation`   | string         | The transformation's `name`                                                        |
 | `format`           | string         | The transformation's `format`                                                      |
 | `tool_id`          | string         | The tool called                                                                    |
-| `status`           | string         | `running`, then `succeeded` or `failed`                                            |
+| `status`           | string         | `running`, then `completed` or `failed`                                            |
 | `stale`            | boolean        | `revision` is no longer the node's current output, or the node is no longer `done` |
 | `file_id`          | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted       |
 | `error`            | object \| null | Why it failed                                                                      |
-| `created_by`       | string \| null | Who asked for the export                                                           |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the export |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`      | string \| null | ISO 8601 settle timestamp                                                          |
 
@@ -133,14 +133,14 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `from_version` | integer        | The version the case was on                                                                                                                                                                      |
 | `to_version`   | integer        | The version it moved to                                                                                                                                                                          |
 | `diff`         | object         | `{ added, removed, changed }`: node IDs added and removed, and each node, by `node_id`, whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
-| `created_by`   | string \| null | Who upgraded the case                                                                                                                                                                            |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case |
 | `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ## Key Concepts
 
 ### Definition checks
 
-A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one, each with its `code` and the `node_id`, `input`, `transformation` or `nodes` it concerns. A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
+A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one as a [validation problem](/docs/api#validation-problems) `{ code, path, message }`: `DUPLICATE_NODE`, `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`, `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`, `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`, with `path` naming the node, input or transformation (`definition.nodes[0].inputs[1].source.node_id`). A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
 
 ### Versions
 
@@ -215,7 +215,7 @@ Without `wait` the request answers `201` with the execution `running` and it set
 
 ### Pausing a case
 
-[`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way: each case reads `automation_status: paused` with its own `pause_requested_at` unchanged, and running a node, exporting one or resuming a case answers `409 PROJECT_PAUSED` until the project resumes. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `waiting`, `paused` or `idle`. A case `waiting` spends nothing of its own: what runs is the task or run it started, which may wait on a person indefinitely.
+[`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way: each case reads `automation_status: paused` with its own `pause_requested_at` unchanged, and running a node, exporting one or resuming a case answers `409 PROJECT_PAUSED` until the project resumes. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `waiting`, `paused` or `idle`; repeat it to OR values. A case `waiting` spends nothing of its own: what runs is the task or run it started, which may wait on a person indefinitely.
 
 ### Confirming a node
 
@@ -594,7 +594,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
   "case_id": "pbk_case_…",
   "node_id": "pricing",
   "executor": { "type": "tool", "id": "tool_…" },
-  "status": "succeeded",
+  "status": "completed",
   "result": "current",
   "output": { "price": 12000 },
   "output_revision": 5
@@ -648,7 +648,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/nodes/pr
       "revision": 5,
       "transformation": "proposal",
       "format": "pdf",
-      "status": "succeeded",
+      "status": "completed",
       "stale": false,
       "file_id": "file_…"
     }

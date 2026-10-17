@@ -387,7 +387,7 @@ describe('Shared tools', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestration.body.id, wait: true });
 
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
       expect(toolHits.length).toBe(before + 1);
       expect(toolHits.at(-1)?.['x-soat-context-calling_project_id']).toBe(
         granteeId
@@ -421,7 +421,7 @@ describe('Shared tools', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestration.body.id, wait: true });
 
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
       expect(toolHits.length).toBe(before + 1);
     });
   });
@@ -533,7 +533,7 @@ describe('Shared tools', () => {
       const status = await authenticatedTestClient(adminToken).get(
         `/api/v1/documents/${ingest.body.id}/status`
       );
-      expect(status.body.error).toBe('CONVERTER_FAILED');
+      expect(status.body.error.code).toBe('CONVERTER_FAILED');
     });
 
     test("an agent's binding drops, the turn is told, and the feed records why", async () => {

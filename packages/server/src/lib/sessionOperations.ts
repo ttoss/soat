@@ -4,11 +4,10 @@ import { DomainError } from '../errors';
 import { submitToolOutputs } from './agentGeneration';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import { generateConversationMessage } from './conversationGeneration';
+import { emitGenerationEvent } from './generationEvents';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import {
-  emitGenerationCompleted,
-  emitGenerationRequiresAction,
   emitGenerationStarted,
   processToolOutputResult,
 } from './sessionGenerationHelpers';
@@ -75,27 +74,29 @@ const checkConcurrency = (args: {
 /**
  * Emit the appropriate event and build the return value from a generation result.
  */
-const buildGenerationResult = (
+const buildGenerationResult = async (
   session: InstanceType<(typeof db)['Session']>,
   result: Awaited<ReturnType<typeof generateConversationMessage>>
 ) => {
   if (result.status === 'requires_action') {
-    emitGenerationRequiresAction({
-      session,
+    const requiredAction = mapGenerationRequiredAction(result.requiredAction);
+    await emitGenerationEvent({
+      type: 'sessions.generation.requires_action',
+      projectId: session.projectId,
       generationId: result.generationId,
-      traceId: result.traceId,
+      requiredAction,
     });
     return {
       status: 'requires_action' as const,
       generation_id: result.generationId,
       trace_id: result.traceId,
-      required_action: mapGenerationRequiredAction(result.requiredAction),
+      required_action: requiredAction,
     };
   }
-  emitGenerationCompleted({
-    session,
+  await emitGenerationEvent({
+    type: 'sessions.generation.completed',
+    projectId: session.projectId,
     generationId: result.generationId,
-    traceId: result.traceId,
   });
   return {
     status: 'completed' as const,

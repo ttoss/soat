@@ -50,12 +50,12 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 | `id`              | string                             | Public identifier                          |
 | `webhook_id`      | string                             | Public ID of the webhook this delivery belongs to |
 | `event_type`      | string                             | The event type that triggered the delivery |
-| `payload`         | object                             | The event payload that was sent            |
-| `status`          | `pending` \| `success` \| `failed` | Delivery outcome                           |
+| `payload`         | object                             | The [event envelope](#event-payload) that was sent |
+| `status`          | `queued` \| `completed` \| `failed` | Delivery outcome                           |
 | `status_code`     | number \| null                     | HTTP response status code                  |
 | `attempts`        | number                             | Number of delivery attempts made           |
 | `last_attempt_at` | string \| null                     | Timestamp of the most recent attempt       |
-| `next_attempt_at` | string \| null                     | When the next attempt becomes due; null once the delivery succeeded or exhausted its attempts |
+| `next_attempt_at` | string \| null                     | When the next attempt becomes due; null once the delivery completed or exhausted its attempts |
 | `response_body`   | string \| null                     | First 1 KB of the response body returned by the receiver, or the reason a delivery was closed without an attempt |
 | `created_at`      | string                             | ISO 8601 creation timestamp                |
 | `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
@@ -81,7 +81,8 @@ A matching event is delivered as an HTTP POST with these headers ([`SOAT_HEADER_
 | Header                | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |
 | `X-Soat-Event`        | The event type (e.g., `files.created`)                                     |
-| `X-Soat-Delivery`     | Unique delivery ID                                                         |
+| `X-Soat-Delivery`     | Unique delivery ID; a redelivery has its own                               |
+| `X-Soat-Event-Id`     | The event's `id`, the same on every delivery and redelivery of one event   |
 | `X-Soat-Signature`    | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
 
 Deliveries are retried up to three times; each attempt is recorded in the delivery log. See [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message). Test locally with [`soat listen`](../cli/usage.md#testing-webhooks-locally).
@@ -98,7 +99,7 @@ Such a delivery is closed as `failed` without a retry, `attempts` still `0`, the
 
 A delivery row (payload and next due time) is written **before** the first HTTP request; every later attempt is claimed from that row by a background sweep.
 
-- **A restart does not lose a delivery.** A row left `pending` by a killed process is picked up once its lease expires (about a minute).
+- **A restart does not lose a delivery.** A row left `queued` by a killed process is picked up once its lease expires (about a minute).
 - **Retries are spaced.** Exponential backoff with jitter (roughly 1s, then 2s); `next_attempt_at` says when the next is due.
 
 After three failed attempts the delivery is marked `failed` and is not retried automatically. Use [redelivery](#redelivery) to send it again.
@@ -109,23 +110,25 @@ After three failed attempts the delivery is marked `failed` and is not retried a
 
 [`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again.
 
-It creates a **new** delivery record, so the failed attempt stays in the history. Returns `202 Accepted` with the new delivery; poll its `status` for the outcome.
+It creates a **new** delivery record, so the failed attempt stays in the history. Returns `202 Accepted` with the new delivery; poll its `status` for the outcome. The copy sends the stored payload unchanged, so its `id` and `X-Soat-Event-Id` match the original's while `X-Soat-Delivery` differs.
 
 ### Event Payload
 
-The body is a **snake_case** JSON envelope:
+The body is a **snake_case** JSON envelope, the same one an [`event` trigger](./triggers.md#event-triggers) receives as its input:
 
 | Field           | Type   | Description                                                       |
 | --------------- | ------ | ----------------------------------------------------------------- |
+| `id`            | string | The event's identity, shared by every delivery of it              |
 | `event`         | string | Event type, e.g. `files.created`                                  |
 | `project_id`    | string | Public ID of the project the event belongs to                     |
 | `resource_type` | string | Type of the resource that changed, e.g. `file`                    |
 | `resource_id`   | string | Public ID of the resource that changed                            |
-| `data`          | object | The resource payload, in the same shape the REST API returns it   |
+| `data`          | object | The resource named by `resource_id`, as its `GET` returns it      |
 | `timestamp`     | string | ISO 8601 timestamp of the event                                   |
 
 ```json
 {
+  "id": "0b8e7a52-5c1e-4f0e-9a43-3f6f2b8d9c11",
   "event": "files.created",
   "project_id": "proj_a1b2c3d4",
   "resource_type": "file",
@@ -139,7 +142,11 @@ The body is a **snake_case** JSON envelope:
 }
 ```
 
-`data` comes from the same mapper as the REST API; no key inside it is rewritten, so no follow-up `GET` is needed.
+`data` is the record the module's `GET` answers for `resource_type`/`resource_id`, from the same mapper, so `data.id` is `resource_id` and no follow-up `GET` is needed. A fact the event knows beyond the record rides beside the record's own keys, in snake_case (`tasks.transitioned` adds `transition` and `from_state`); each module's events section lists them. A deletion carries the record as it stood before the delete.
+
+Two resources read differently: a [conversation message](./conversations.md#conversation-message) has no `id` and is named by its `document_id`, with `conversation_id` beside it; a [document](./documents.md) is carried without its `content`. An orchestration [`emit_event`](./orchestrations.md#emitting-events) node's event carries whatever its template wrote.
+
+A subscriber can receive one event more than once: a retry after a lost answer, or a [redelivery](#redelivery). Deduplicate on `id` (or `X-Soat-Event-Id`), never on `X-Soat-Delivery`.
 
 ### Secret and Signature Verification
 
@@ -316,7 +323,7 @@ const { data, error } = await soat.webhooks.redeliverWebhookDelivery({
   path: { delivery_id: 'wh_deliv_ABC' },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data is a new pending delivery — poll it to see the outcome
+// data is a new queued delivery — poll it to see the outcome
 ```
 
 </TabItem>

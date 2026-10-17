@@ -122,7 +122,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         startedByPrincipalId: args.startedByPrincipalId ?? null,
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
-        status: 'in_progress',
+        status: 'running',
         startedAt: new Date(),
         completedAt: null,
         lastActivityAt: null,
@@ -371,6 +371,13 @@ export const getGenerationTraceId = async (args: {
   return publicId;
 };
 
+export const GENERATION_STATUSES = [
+  'running',
+  'requires_action',
+  'completed',
+  'failed',
+] as const;
+
 export const listGenerations = async (args: {
   projectIds?: number[];
   agentId?: string;
@@ -381,7 +388,7 @@ export const listGenerations = async (args: {
   chainId?: string;
   orchestrationRunId?: string;
   nodeId?: string;
-  status?: string;
+  statuses?: readonly (typeof GENERATION_STATUSES)[number][];
   limit?: number;
   offset?: number;
 }) => {
@@ -411,7 +418,7 @@ export const listGenerations = async (args: {
   }
   if (args.nodeId !== undefined) where.nodeId = args.nodeId;
 
-  if (args.status !== undefined) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
 
   return paginatedList({
     limit: args.limit,

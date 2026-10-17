@@ -235,7 +235,8 @@ describe('Agent versions', () => {
       const v1 = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agent.id}/versions/1`
       );
-      expect(v1.body.created_by).toMatch(/^user_/);
+      expect(v1.body.created_by_principal_type).toBe('user');
+      expect(v1.body.created_by_principal_id).toMatch(/^user_/);
     });
   });
 
@@ -551,7 +552,10 @@ describe('Agent versions', () => {
       expect(afterUpdate.body.data[0].config.instructions).toBe('formation v2');
       // Same shape as a REST-created version, attributed to the applying
       // principal rather than left anonymous.
-      expect(afterUpdate.body.data[0].created_by).toMatch(/^user_/);
+      expect(afterUpdate.body.data[0].created_by_principal_type).toBe('user');
+      expect(afterUpdate.body.data[0].created_by_principal_id).toMatch(
+        /^user_/
+      );
     });
   });
 

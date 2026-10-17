@@ -273,7 +273,7 @@ export const createDocument = async (
       content: args.content,
     }),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   emitDocumentLifecycleEvent({
@@ -296,7 +296,8 @@ export const deleteDocument = async (args: { id: string }) => {
     await provider.delete({ storagePath: file.storagePath });
   }
 
-  const docPublicId = doc.publicId;
+  // Mapped before the delete: the event carries the document as it stood.
+  const record = mapDocument(doc);
   // Archives are owned by their document, so they go first and no orphan row
   // is left behind. `DELETE` is the permanent act; withdrawal is the one that
   // keeps the history.
@@ -309,7 +310,7 @@ export const deleteDocument = async (args: { id: string }) => {
   emitDocumentLifecycleEvent({
     type: 'documents.deleted',
     doc,
-    data: { id: docPublicId },
+    data: record,
   });
 
   return true;
@@ -367,7 +368,7 @@ export const updateDocument = async (
     expectedVersion: args.expectedVersion,
     before,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await writeDocumentUpdate({ doc, args, chunkChange, transaction });
 

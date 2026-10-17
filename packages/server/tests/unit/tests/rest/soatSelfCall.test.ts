@@ -328,7 +328,7 @@ describe('SOAT self-call', () => {
       // Before the run carried a principal the worker drove it with no auth
       // header at all, so the self-call came back 401 and the node failed.
       expect(run.error).toBeNull();
-      expect(run.status).toBe('succeeded');
+      expect(run.status).toBe('completed');
 
       // The node artifact is the real listing, which only an authenticated,
       // project-scoped call can return.
@@ -355,7 +355,7 @@ describe('SOAT self-call', () => {
       expect(res.status).toBe(200);
       const rows = res.body.data as {
         transition: string | null;
-        principal_kind: string | null;
+        principal_type: string | null;
         principal_id: string | null;
       }[];
       const row = rows.find((entry) => {
@@ -446,7 +446,7 @@ describe('SOAT self-call', () => {
       // assertion lives in the next test; both kinds are covered through a
       // background drive so neither can regress into the other.
       const row = await finishRowOf(taskRes.body.id);
-      expect(row.principal_kind).toBe('user');
+      expect(row.principal_type).toBe('user');
       expect(row.principal_id).toBe(userPublicId);
     });
 
@@ -563,7 +563,7 @@ describe('SOAT self-call', () => {
       expect(state).toBe('done');
 
       const row = await finishRowOf(taskRes.body.id);
-      expect(row.principal_kind).toBe('api_key');
+      expect(row.principal_type).toBe('api_key');
       expect(row.principal_id).toBe(keyPublicId);
     });
 
@@ -634,7 +634,7 @@ describe('SOAT self-call', () => {
         token: rawKey,
         orchestrationId: readOrchestrationId,
       });
-      expect(readRun.status).toBe('succeeded');
+      expect(readRun.status).toBe('completed');
 
       const writeOrchestrationId = await createSoatToolNodeOrchestration({
         token: rawKey,

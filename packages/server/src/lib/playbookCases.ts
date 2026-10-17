@@ -22,6 +22,7 @@ import {
 } from './playbookState';
 import { playbookVersionStore } from './playbookVersionSnapshot';
 import { parsePlaybookDefinition } from './playbookWire';
+import { createdByColumns, type RequestPrincipal } from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 
@@ -165,7 +166,7 @@ export type PlaybookEntryWrite = {
   value: JsonValue | Record<string, unknown>;
   basis: PlaybookBasis | null;
   playbookVersion: number;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
   onBehalfOf: OnBehalfOf | null;
 };
 
@@ -180,10 +181,15 @@ export const appendEntries = async (args: {
 }): Promise<number[]> => {
   const { locked, transaction } = args;
   const revisions: number[] = [];
-  for (const entry of args.entries) {
+  for (const { createdBy, ...entry } of args.entries) {
     const revision = locked.revision + revisions.length + 1;
     await db.PlaybookEntry.create(
-      { ...entry, caseId: locked.id as number, revision },
+      {
+        ...entry,
+        ...createdByColumns(createdBy),
+        caseId: locked.id as number,
+        revision,
+      },
       { transaction }
     );
     revisions.push(revision);
@@ -308,13 +314,13 @@ export const createPlaybookCase = async (args: {
 export const listPlaybookCases = async (args: {
   projectIds?: number[];
   playbookId?: string;
-  automationStatus?: string;
+  automationStatuses?: Parameters<typeof automationWhere>[0];
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<ReturnType<typeof mapCaseSummary>>> => {
   log('listPlaybookCases: projectIds=%o', args.projectIds);
   const where: Record<string | symbol, unknown> = automationWhere(
-    args.automationStatus
+    args.automationStatuses
   );
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
   if (args.playbookId !== undefined) {

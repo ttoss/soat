@@ -331,7 +331,7 @@ const performTransitionTxn = async (args: {
         fromState,
         toState: transition.to,
         transition: transition.name,
-        principalKind: a.principal.kind,
+        principalType: a.principal.kind,
         principalId: a.principal.id,
         ...dispatchProvenance(a),
         note: a.note ?? null,
@@ -459,7 +459,7 @@ export const transitionTask = async (args: TransitionArgs) => {
     type: 'tasks.transitioned',
     projectId,
     task: mapped,
-    extra: { transition: args.transition, fromState: loaded.state },
+    facts: { transition: args.transition, from_state: loaded.state },
   });
   if (result.closed) {
     await emitTaskEvent({ type: 'tasks.closed', projectId, task: mapped });

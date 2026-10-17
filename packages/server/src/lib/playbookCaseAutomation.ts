@@ -1,7 +1,6 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 
 export const AUTOMATION_STATUSES = [
@@ -13,15 +12,10 @@ export const AUTOMATION_STATUSES = [
 
 type AutomationStatus = (typeof AUTOMATION_STATUSES)[number];
 
-const isAutomationStatus = (value: string): value is AutomationStatus => {
-  return (AUTOMATION_STATUSES as readonly string[]).includes(value);
-};
-
 // The case's own work: an execution queued, or running its executor itself.
 // One running with a `run_id` is parked on the task or run it started, which
 // is what spends and may wait on a person for as long as it takes.
-const OWN_WORK =
-  "status = 'pending' OR (status = 'running' AND run_id IS NULL)";
+const OWN_WORK = "status = 'queued' OR (status = 'running' AND run_id IS NULL)";
 const PARKED = "status = 'running' AND run_id IS NOT NULL";
 
 const PAUSED_PROJECTS = () => {
@@ -106,17 +100,10 @@ export const caseAutomation = async (args: {
     };
   };
 };
-/** The listing filter that selects exactly the cases `caseAutomation` names `status`. */
-export const automationWhere = (
-  status: string | undefined
+
+const automationStatusWhere = (
+  status: AutomationStatus
 ): Record<string | symbol, unknown> => {
-  if (status === undefined) return {};
-  if (!isAutomationStatus(status)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `automation_status must be one of ${AUTOMATION_STATUSES.join(', ')}.`
-    );
-  }
   const projectPaused = {
     projectId: { [Op.in]: PAUSED_PROJECTS() },
   };
@@ -140,4 +127,12 @@ export const automationWhere = (
     pauseRequestedAt: null,
     [Op.and]: [{ projectId: { [Op.notIn]: PAUSED_PROJECTS() } }, ...conditions],
   };
+};
+
+/** The listing filter that selects exactly the cases `caseAutomation` names one of `statuses`. */
+export const automationWhere = (
+  statuses: readonly AutomationStatus[] | undefined
+): Record<string | symbol, unknown> => {
+  if (!statuses?.length) return {};
+  return { [Op.or]: statuses.map(automationStatusWhere) };
 };

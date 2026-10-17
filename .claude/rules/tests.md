@@ -146,7 +146,7 @@ changed tool gets a test.
   (`SECRETS_ENCRYPTION_KEY` = 64 hex chars, fixed test value). Add new ones
   with the feature.
 - Project keys need the caller added via `POST /projects/:id/members` first.
-- LLM steps: assert structure/status only, poll `in_progress` with a bounded
+- LLM steps: assert structure/status only, poll `running` with a bounded
   loop, wrap stallable flows in a timeout; `requires_action` flow submits a
   synthetic result to `tool-outputs` then asserts `completed`.
 - The job is not sharded (fixed cost ~4 min). Ollama requests are ~30% of

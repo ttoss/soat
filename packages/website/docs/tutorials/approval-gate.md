@@ -364,7 +364,7 @@ Expect `origin: "node"`, `orchestration_run_id` = your run, `proposed_action.arg
 
 ```ts
 const { data: pending } = await adminSoat.approvals.listApprovals({
-  query: { project_id: PROJECT_ID, status: 'pending' },
+  query: { project_id: PROJECT_ID, status: ['pending'] },
 });
 console.log(pending);
 ```
@@ -391,7 +391,7 @@ Approving resolves the [item](/docs/modules/approvals#approve-reject-edit-then-a
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
+soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 
 soat get-orchestration-run \
   --orchestration-run-id "$RUN_ID" | jq '{status, outcome: .state.outcome}'
@@ -401,7 +401,7 @@ Expected output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "outcome": "Refund issued."
 }
 ```
@@ -429,7 +429,7 @@ console.log('Outcome:', resumed.state.outcome);
 curl -s -X POST "$SOAT_BASE_URL/api/v1/approvals/$APPROVAL_ID/approve" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq '{status, resolved_by}'
+  -d '{}' | jq '{status, resolved_by_principal_type, resolved_by_principal_id}'
 
 curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -466,7 +466,7 @@ Expected output:
 
 ```json
 {
-  "status": "succeeded",
+  "status": "completed",
   "outcome": "Refund declined."
 }
 ```

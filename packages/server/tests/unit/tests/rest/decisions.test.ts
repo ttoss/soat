@@ -845,11 +845,25 @@ describe('Decisions', () => {
       expect(res.body.data[0].id).toBe(made.body.id);
     });
 
-    test('a repeated status filter is refused with 400', async () => {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/decisions?project_id=${projectId}&status=queued&status=failed`
+    test('a repeated status filter ORs its values', async () => {
+      const decider = await createDecider();
+      const made = await decide({ decider });
+
+      const matching = await authenticatedTestClient(userToken).get(
+        `/api/v1/decisions?project_id=${projectId}&decider_id=${decider}&status=failed&status=completed`
       );
-      expect(res.status).toBe(400);
+      const missing = await authenticatedTestClient(userToken).get(
+        `/api/v1/decisions?project_id=${projectId}&decider_id=${decider}&status=queued&status=failed`
+      );
+
+      expect(matching.status).toBe(200);
+      expect(
+        matching.body.data.map((d: { id: string }) => {
+          return d.id;
+        })
+      ).toEqual([made.body.id]);
+      expect(missing.status).toBe(200);
+      expect(missing.body.total).toBe(0);
     });
 
     test('a status filter outside the vocabulary is refused with 400', async () => {

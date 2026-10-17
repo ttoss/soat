@@ -79,7 +79,10 @@ describe('Guardrail versions', () => {
       expect(res.body.version).toBe(1);
       expect(res.body.config).toEqual({ document: { class: 'C' } });
       expect(res.body.label).toBe('initial');
-      expect(res.body.created_by).toBe(userId);
+      expect(res.body).toMatchObject({
+        created_by_principal_type: 'user',
+        created_by_principal_id: userId,
+      });
       expect(res.body.created_at).toBeDefined();
     });
 
@@ -270,7 +273,10 @@ describe('Guardrail versions', () => {
       );
       expect(v3.body.config.document).toEqual({ class: 'A' });
       expect(v3.body.label).toBe('restored from v1');
-      expect(v3.body.created_by).toBe(userId);
+      expect(v3.body).toMatchObject({
+        created_by_principal_type: 'user',
+        created_by_principal_id: userId,
+      });
     });
 
     test('an explicit label annotates the version the restore creates', async () => {

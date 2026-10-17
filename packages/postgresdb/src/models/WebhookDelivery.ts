@@ -69,11 +69,11 @@ export class WebhookDelivery extends Model {
   declare payload: object;
 
   @Column({
-    type: DataType.ENUM('pending', 'success', 'failed'),
+    type: DataType.ENUM('queued', 'completed', 'failed'),
     allowNull: false,
-    defaultValue: 'pending',
+    defaultValue: 'queued',
   })
-  declare status: 'pending' | 'success' | 'failed';
+  declare status: 'queued' | 'completed' | 'failed';
 
   @Column({
     type: DataType.INTEGER,
@@ -103,7 +103,7 @@ export class WebhookDelivery extends Model {
   /**
    * When this delivery becomes eligible for its next attempt. Set at insert
    * time (before the first HTTP call) and pushed out by the backoff after each
-   * failure, so a `pending` row always carries its own due time rather than
+   * failure, so a `queued` row always carries its own due time rather than
    * depending on a retry loop living in some process's memory.
    *
    * Nullable only for rows written before the outbox existed; the sweep treats
@@ -119,7 +119,7 @@ export class WebhookDelivery extends Model {
    * Set while a process is attempting this delivery, and cleared when it
    * schedules the next attempt. A crash leaves the lease behind; the sweep
    * reclaims the row once it expires, which is what makes an interrupted
-   * delivery resume instead of being stranded in `pending` forever.
+   * delivery resume instead of being stranded in `queued` forever.
    */
   @Column({
     type: DataType.DATE,

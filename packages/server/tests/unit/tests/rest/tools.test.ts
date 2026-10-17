@@ -715,10 +715,10 @@ describe('Tools', () => {
             output: {
               let: [
                 {
-                  rate: {
+                  aliquota: {
                     if: [{ '==': [{ var: 'input.regime' }, 'simples'] }, 6, 15],
                   },
-                  price: {
+                  preco: {
                     round: [
                       {
                         '/': [
@@ -731,7 +731,7 @@ describe('Tools', () => {
                                   {
                                     '+': [
                                       { var: 'input.margin' },
-                                      { var: 'rate' },
+                                      { var: 'aliquota' },
                                     ],
                                   },
                                   100,
@@ -745,7 +745,7 @@ describe('Tools', () => {
                     ],
                   },
                 },
-                { price: { var: 'price' }, rate: { var: 'rate' } },
+                { preco: { var: 'preco' }, aliquota: { var: 'aliquota' } },
               ],
             },
           },
@@ -758,7 +758,7 @@ describe('Tools', () => {
         .send({ input: { cost: 100, margin: 30, regime: 'simples' } });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ price: 156.25, rate: 6 });
+      expect(res.body).toEqual({ preco: 156.25, aliquota: 6 });
     });
 
     test('rejects a pipeline referencing an unknown tool (400)', async () => {

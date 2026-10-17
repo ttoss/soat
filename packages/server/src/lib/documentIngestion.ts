@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
+import { DOCUMENT_FAILURES, ingestionFailure } from './documentFailures';
 import {
   type ChunkConfigInput,
   emitIngestFailed,
@@ -40,18 +41,6 @@ const getSyncIngestionMaxBytes = (): number => {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : SYNC_INGESTION_DEFAULT_MAX_BYTES;
-};
-
-/**
- * Normalize a thrown value into a stable, human-readable failure reason.
- * Without this, a non-Error rejection serializes to the useless string
- * `"[object Object]"` (issue #3).
- */
-const describeError = (error: unknown): string => {
-  if (error instanceof DomainError) return error.code;
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.length > 0) return error;
-  return 'INGESTION_FAILED';
 };
 
 const assertSyncIngestible = (
@@ -163,9 +152,9 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   if (!file) {
     await doc.update({
       status: 'failed',
-      failureReason: 'FILE_NOT_FOUND',
+      error: DOCUMENT_FAILURES.FILE_NOT_FOUND,
     });
-    await emitIngestFailed({ docId, error: 'FILE_NOT_FOUND' });
+    await emitIngestFailed({ docId, error: DOCUMENT_FAILURES.FILE_NOT_FOUND });
     return;
   }
 
@@ -239,16 +228,14 @@ const processDocumentIngestion = async (args: {
       error
     );
     try {
+      const failure = ingestionFailure(error);
       await doc.update({
         status: 'failed',
         conversionAttemptId: null,
         pendingDocPath: null,
-        failureReason: describeError(error),
+        error: failure,
       });
-      await emitIngestFailed({
-        docId: args.docId,
-        error: describeError(error),
-      });
+      await emitIngestFailed({ docId: args.docId, error: failure });
     } catch {
       // ignore secondary failure
     }
@@ -405,7 +392,7 @@ export const reingestDocument = async (args: {
     status: 'pending',
     conversionAttemptId: null,
     pendingDocPath: null,
-    failureReason: null,
+    error: null,
     totalPages: null,
     totalChunks: null,
     indexedChunks: null,

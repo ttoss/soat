@@ -3,7 +3,6 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
-import { principalFromAuthUser } from 'src/lib/principals';
 import {
   createTask,
   deleteTask,
@@ -25,6 +24,7 @@ import {
   parseEnumListQuery,
   parseNullableToolContextBody,
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -43,7 +43,7 @@ const tasksRouter = new Router<Context>();
  * audit log.
  */
 const principalFromCtx = (ctx: Context): TaskPrincipal => {
-  const { principalType, principalId } = principalFromAuthUser(ctx.authUser!);
+  const { principalType, principalId } = requestPrincipalFromCtx(ctx);
   return { kind: principalType, id: principalId };
 };
 
@@ -76,7 +76,11 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     projectIds: projectIds ?? [],
     workflowId: ctx.query.workflow_id as string | undefined,
     state: ctx.query.state as string | undefined,
-    status: ctx.query.status as string | undefined,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: ['open', 'closed'],
+    }),
     automationStatuses,
     assignee: ctx.query.assignee as string | undefined,
     ...parsePagination(ctx),
@@ -278,7 +282,7 @@ tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
     id: ctx.params.task_id,
     // The suppressed dispatch runs as whoever resumed: the resume is the
     // decision to spend, and the move that scheduled the work may be weeks old.
-    principal: principalFromAuthUser(ctx.authUser!),
+    principal: requestPrincipalFromCtx(ctx),
   });
 });
 

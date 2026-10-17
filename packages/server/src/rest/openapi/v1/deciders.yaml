@@ -428,10 +428,17 @@ paths:
             example: dcd_V1StGXR8Z5jdHi6B
         - name: status
           in: query
-          description: Only decisions in this status
+          required: false
+          description: >-
+            Only decisions in these statuses. Repeat the parameter to OR values.
+            A value outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [queued, running, completed, failed]
+            type: array
+            items:
+              type: string
+              enum: [queued, running, completed, failed]
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -742,10 +749,20 @@ components:
           type: string
           nullable: true
           example: restored from v2
-        created_by:
-          x-soat-ref: users
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who produced this version. Null for a write with no principal behind
+            it.
+        created_by_principal_id:
           type: string
           nullable: true
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -939,18 +956,10 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/DecisionAnswer'
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: Why a `failed` decision failed.
-          properties:
-            code:
-              type: string
-              example: OUTPUT_SCHEMA_VALIDATION_FAILED
-            message:
-              type: string
-            meta:
-              type: object
-              description: The failure's own details, when it names any
         generation_id:
           x-soat-ref: generations
           type: string

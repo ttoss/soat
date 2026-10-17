@@ -697,7 +697,7 @@ const { data: deliveries } = await adminSoat.webhooks.listWebhookDeliveries({
   query: { webhook_id: webhook.id },
 });
 console.log(deliveries.data[0]?.event_type); // 'eval_run.completed'
-console.log(deliveries.data[0]?.payload.data); // { eval_id, eval_run_id, passed, aggregate_scores }
+console.log(deliveries.data[0]?.payload.data); // the eval run: { id, eval_id, status, passed, aggregate_scores, … }
 ```
 
 </TabItem>
@@ -718,12 +718,13 @@ curl -s "$SOAT_BASE_URL/api/v1/webhooks/deliveries?webhook_id=$WEBHOOK_ID" \
 </TabItem>
 </Tabs>
 
-The run records its origin in `trigger_id`, kept even if the trigger is deleted. The delivered payload carries the verdict inline:
+The run records its origin in `trigger_id`, kept even if the trigger is deleted. The delivered payload is the [eval run](/docs/modules/evaluations#eval-run), verdict included (abridged):
 
 ```json
 {
+  "id": "evrun_g5i4CdIFvcOvRZR8",
   "eval_id": "eval_rgMz0oEpbT3oWEK9",
-  "eval_run_id": "evrun_g5i4CdIFvcOvRZR8",
+  "status": "completed",
   "passed": true,
   "aggregate_scores": {
     "scorers": { "json_logic": { "mean": 1, "pass_rate": 1 } },

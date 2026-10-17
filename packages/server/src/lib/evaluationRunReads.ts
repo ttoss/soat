@@ -14,22 +14,17 @@ import { getEvalRow } from './evaluations';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { RUN_STATUSES } from './runStatus';
 
 const log = createDebug('soat:evaluations');
 
-export const EVAL_RUN_STATUSES = [
-  'queued',
-  'running',
-  'completed',
-  'failed',
-  'canceled',
-] as const;
+export const EVAL_RUN_STATUSES = RUN_STATUSES;
 
 /** Terminal statuses — the only ones a baseline may be taken from. */
 export const TERMINAL_EVAL_RUN_STATUSES: readonly string[] = [
   'completed',
   'failed',
-  'canceled',
+  'cancelled',
 ];
 
 export type EvalRunRow = InstanceType<(typeof db)['EvalRun']> & {

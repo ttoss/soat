@@ -2540,24 +2540,28 @@ describe('Usage', () => {
           return e.resourceId === thresholdId;
         });
         expect(fired).toHaveLength(1);
-        const data = fired[0].data as Record<string, unknown>;
-        expect(data.threshold_id).toBe(thresholdId);
-        expect(data.project_id).toBe(projectId);
-        expect(data.metric).toBe('tokens');
-        expect(data.window).toBe('calendar_month');
-        expect(data.window_key).toMatch(/^\d{4}-\d{2}$/);
-        expect(data.threshold).toBe(5);
-        expect(Number(data.observed_value)).toBeGreaterThanOrEqual(5);
+        // The data is the threshold record as the API reads it, fire state
+        // included, plus the value that crossed it.
+        const { observed_value: observedValue, ...record } = JSON.parse(
+          JSON.stringify(fired[0].data)
+        );
+        expect(Number(observedValue)).toBeGreaterThanOrEqual(5);
+        expect(record.id).toBe(thresholdId);
+        expect(record.project_id).toBe(projectId);
+        expect(record.metric).toBe('tokens');
+        expect(record.window).toBe('calendar_month');
+        expect(record.threshold).toBe(5);
+        expect(record.last_fired_at).not.toBeNull();
+        expect(record.fired_window_key).toMatch(/^\d{4}-\d{2}$/);
 
-        // Fire state is persisted on the threshold.
+        // Fire state is persisted on the threshold, and the event carried it.
         const get = await authenticatedTestClient(userToken).get(
           `/api/v1/usage/thresholds?project_id=${projectId}`
         );
         const row = get.body.data.find((t: { id: string }) => {
           return t.id === thresholdId;
         });
-        expect(row.last_fired_at).not.toBeNull();
-        expect(row.fired_window_key).toMatch(/^\d{4}-\d{2}$/);
+        expect(record).toEqual(row);
 
         // Hysteresis: a second generation in the same window does not re-fire.
         // A low sentinel added after the main threshold fires in the same eval
@@ -2625,7 +2629,7 @@ describe('Usage', () => {
         expect(Number(data.observed_value)).toBeGreaterThan(0);
       });
 
-      test('a rolling_24h token threshold fires with a null window key', async () => {
+      test('a rolling_24h token threshold fires with no fired window key', async () => {
         const thresholdId = await createThreshold({
           metric: 'tokens',
           window: 'rolling_24h',
@@ -2641,8 +2645,11 @@ describe('Usage', () => {
         });
         expect(fired).toHaveLength(1);
         const data = fired[0].data as Record<string, unknown>;
+        expect(data.id).toBe(thresholdId);
         expect(data.window).toBe('rolling_24h');
-        expect(data.window_key).toBeNull();
+        expect(data.last_fired_at).not.toBeNull();
+        expect(data.fired_window_key).toBeNull();
+        expect(Number(data.observed_value)).toBeGreaterThanOrEqual(5);
       });
 
       test('a fired rolling_24h threshold re-arms once usage falls below 90%', async () => {
@@ -2885,7 +2892,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: parentOrch.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       parentRunId = runRes.body.id;
 
       const children = await authenticatedTestClient(userToken).get(
@@ -2966,7 +2973,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       return runRes.body.id as string;
     };
 
@@ -3245,7 +3252,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
 
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/receipt?orchestration_run_id=${runRes.body.id}`
@@ -3423,7 +3430,7 @@ describe('Usage', () => {
         wait: true,
         triggerId: triggerPublicId,
       });
-      expect(run.status).toBe('succeeded');
+      expect(run.status).toBe('completed');
 
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/events?trigger_id=${triggerPublicId}`
@@ -3464,7 +3471,7 @@ describe('Usage', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.status).toBe('completed');
       return runRes.body.id as string;
     };
 

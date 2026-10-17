@@ -15,7 +15,9 @@ import {
   resolvePagination,
   totalListOrder,
 } from './pagination';
+import type { PrincipalType } from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
+import { timeRangeWhere } from './timeRange';
 
 const log = createDebug('soat:audit');
 
@@ -27,7 +29,7 @@ const log = createDebug('soat:audit');
  */
 const AUDIT_ENTRY_CREATED_EVENT = 'audit.entry_created';
 
-export type AuditPrincipalType = 'user' | 'api_key';
+export type AuditPrincipalType = Extract<PrincipalType, 'user' | 'api_key'>;
 
 /** One authorization decision recorded during a request. */
 export type AuditCheck = {
@@ -327,12 +329,8 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
   if (args.resourceSrn) {
     where.resourceSrn = { [Op.or]: srnPrefixMatchers(args.resourceSrn) };
   }
-  if (args.from || args.to) {
-    where.createdAt = {
-      ...(args.from ? { [Op.gte]: args.from } : {}),
-      ...(args.to ? { [Op.lte]: args.to } : {}),
-    };
-  }
+  const createdAt = timeRangeWhere({ from: args.from, to: args.to });
+  if (createdAt) where.createdAt = createdAt;
 
   return where;
 };

@@ -598,7 +598,7 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       const status = await getDocumentStatus(res.body.id);
-      expect(status.error).toBe('CONVERTER_OUTPUT_INVALID');
+      expect(status.error).toMatchObject({ code: 'CONVERTER_OUTPUT_INVALID' });
     });
 
     test('a non-native file with no matching rule is rejected (UNSUPPORTED_FILE_TYPE)', async () => {
@@ -655,7 +655,7 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       const status = await getDocumentStatus(res.body.id);
-      expect(status.error).toBe('CONVERTER_FAILED');
+      expect(status.error).toMatchObject({ code: 'CONVERTER_FAILED' });
     });
 
     test('a converter tool error fails the document (CONVERTER_FAILED)', async () => {
@@ -676,7 +676,7 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       const status = await getDocumentStatus(res.body.id);
-      expect(status.error).toBe('CONVERTER_FAILED');
+      expect(status.error).toMatchObject({ code: 'CONVERTER_FAILED' });
     });
 
     test('a scanned PDF (no text layer) falls back to the converter', async () => {
@@ -719,7 +719,7 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       const status = await getDocumentStatus(res.body.id);
-      expect(status.error).toBe('CONVERTER_FAILED');
+      expect(status.error).toMatchObject({ code: 'CONVERTER_FAILED' });
     });
 
     test('paged output honors page_number/pageNumber and drops empty pages', async () => {
@@ -767,7 +767,7 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       const status = await getDocumentStatus(res.body.id);
-      expect(status.error).toBe('CONVERTER_OUTPUT_INVALID');
+      expect(status.error).toMatchObject({ code: 'CONVERTER_OUTPUT_INVALID' });
     });
 
     test('a native text file with no rule uses native extraction', async () => {
@@ -800,7 +800,7 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       const status = await getDocumentStatus(res.body.id);
-      expect(status.error).toBe('FILE_PARSE_FAILED');
+      expect(status.error).toMatchObject({ code: 'FILE_PARSE_FAILED' });
     });
 
     test('a born-digital PDF uses native extraction (converter not called)', async () => {
@@ -1071,7 +1071,7 @@ describe('IngestionRules', () => {
         );
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('failed');
-        expect(res.body.error).toBe('CONVERSION_TIMEOUT');
+        expect(res.body.error.code).toBe('CONVERSION_TIMEOUT');
 
         // The sweeper already cleared conversionAttemptId, so a late callback
         // loses the race and is rejected — never silently dropped.

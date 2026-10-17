@@ -41,7 +41,9 @@ export type EventDropStage =
   | 'trigger_lookup'
   | 'exception_file'
   | 'memory_rule_dispatch'
-  | 'playbook_execution_settle';
+  | 'playbook_execution_settle'
+  | 'generation_lookup'
+  | 'record_lookup';
 
 const droppedEvents = new Map<EventDropStage, number>();
 
@@ -132,6 +134,12 @@ export interface SoatEvent {
    * already names it, or one that has run too deep. Nothing else reads it.
    */
   causationChain?: readonly string[];
+  /**
+   * The turn's assistant text, on `agents.generation.completed` only, for the
+   * memory rule dispatcher. In-process: no subscriber serializes it, and a
+   * zero-retention turn stores no reply anywhere else.
+   */
+  assistantContent?: string;
 }
 
 /**
@@ -213,6 +221,7 @@ const emitEnvelope = (args: {
    * when the bus happened to be reached.
    */
   timestamp?: string;
+  assistantContent?: string;
 }): void => {
   // Captured here rather than inside `emit`, so the deferred branch below
   // stamps the chain in scope at the emit *site* even if the store were ever
@@ -237,6 +246,9 @@ const emitEnvelope = (args: {
       data: args.data as Record<string, unknown>,
       timestamp: args.timestamp ?? new Date().toISOString(),
       causationChain,
+      ...(args.assistantContent === undefined
+        ? {}
+        : { assistantContent: args.assistantContent }),
     });
   };
 
@@ -283,6 +295,8 @@ export const emitResourceEvent = <R extends SoatResourceType>(args: {
   data: object;
   /** Pass when the event's moment is not the emit's; see {@link emitEnvelope}. */
   timestamp?: string;
+  /** See {@link SoatEvent.assistantContent}. */
+  assistantContent?: string;
 }): void => {
   emitEnvelope(args);
 };

@@ -3,7 +3,10 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { assertValidApprovalFilters } from './approvalFilters';
+import {
+  type ApprovalStatus,
+  assertValidApprovalFilters,
+} from './approvalFilters';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import {
@@ -12,8 +15,10 @@ import {
   resolvePagination,
 } from './pagination';
 import { isPlainObject } from './plainObject';
+import type { RequestPrincipal } from './principals';
 import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
+import { timeRangeWhere } from './timeRange';
 import { sanitizeCallerToolContext } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -33,7 +38,6 @@ export const APPROVAL_EVENT_TYPES = {
 type ApprovalInstance = InstanceType<(typeof db)['ApprovalItem']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
   orchestrationRun?: InstanceType<(typeof db)['OrchestrationRun']> | null;
-  resolvedByUser?: InstanceType<(typeof db)['User']> | null;
 };
 
 // Built lazily inside each query: `db.*` models are only populated after the
@@ -43,7 +47,6 @@ const buildIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.OrchestrationRun, as: 'orchestrationRun' },
-    { model: db.User, as: 'resolvedByUser' },
   ];
 };
 
@@ -74,8 +77,8 @@ const toWireProposedAction = (
 
 /**
  * Maps a persisted approval item to the plain, publicId-only shape returned by
- * the API. The internal `id`, `orchestrationRunId`, and `resolvedByUserId`
- * columns are never exposed — provenance is surfaced via public IDs only.
+ * the API. The internal `id` and `orchestrationRunId` columns are never
+ * exposed — provenance is surfaced via public IDs only.
  */
 export const mapApproval = (instance: ApprovalInstance) => {
   return {
@@ -100,7 +103,8 @@ export const mapApproval = (instance: ApprovalInstance) => {
     task_transition: instance.taskTransition,
     policy_version: instance.policyVersion,
     previous_item_id: instance.previousItemId,
-    resolved_by: instance.resolvedByUser?.publicId ?? null,
+    resolved_by_principal_type: instance.resolvedByPrincipalType,
+    resolved_by_principal_id: instance.resolvedByPrincipalId,
     resolution_reason: instance.resolutionReason,
     edited_arguments: instance.editedArguments,
     created_at: instance.createdAt,
@@ -119,7 +123,8 @@ export type MappedApproval = ReturnType<typeof mapApproval>;
 export type DecisionOutput = {
   decision: 'approved' | 'rejected' | 'expired';
   approvalId: string;
-  resolvedBy: string | null;
+  resolvedByPrincipalType: string | null;
+  resolvedByPrincipalId: string | null;
   editedArgs: object | null;
   reason: string | null;
   result: object | null;
@@ -129,7 +134,8 @@ const buildDecisionOutput = (item: MappedApproval): DecisionOutput => {
   return {
     decision: item.status as 'approved' | 'rejected' | 'expired',
     approvalId: item.id,
-    resolvedBy: item.resolved_by,
+    resolvedByPrincipalType: item.resolved_by_principal_type,
+    resolvedByPrincipalId: item.resolved_by_principal_id,
     editedArgs: item.edited_arguments ?? null,
     // On approval the executed tool output belongs here. Actual execution of
     // the (frozen or edited) action at resolution time is wired in with the
@@ -198,7 +204,7 @@ const emitApprovalEvent = async (args: {
     projectPublicId,
     resourceType: 'approval',
     resourceId: args.item.id,
-    data: { approval: args.item },
+    data: args.item,
   });
 };
 
@@ -383,18 +389,23 @@ export const emitApproval = async (
 
 export const listApprovals = async (args: {
   projectIds: number[];
-  status?: string;
+  statuses?: readonly ApprovalStatus[];
   origin?: string;
-  expiresBefore?: Date;
+  expiresFrom?: Date;
+  expiresTo?: Date;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedApproval>> => {
   assertValidApprovalFilters(args);
 
   const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.status) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
   if (args.origin) where.origin = args.origin;
-  if (args.expiresBefore) where.expiresAt = { [Op.lte]: args.expiresBefore };
+  const expiresAt = timeRangeWhere({
+    from: args.expiresFrom,
+    to: args.expiresTo,
+  });
+  if (expiresAt) where.expiresAt = expiresAt;
 
   return paginatedList({
     limit: args.limit,
@@ -418,7 +429,7 @@ export const listApprovals = async (args: {
 // corrections stays out of this deliberately deterministic module.
 
 /** Default status a recurrence group is built from — recurring *rejections*. */
-const RECURRENCE_DEFAULT_STATUS = 'rejected';
+const RECURRENCE_DEFAULT_STATUSES: readonly ApprovalStatus[] = ['rejected'];
 /** A group must have at least this many items to count as a recurrence. */
 const RECURRENCE_DEFAULT_MIN_COUNT = 2;
 
@@ -489,22 +500,22 @@ const mapRecurrenceGroup = (args: {
  */
 export const listApprovalRecurrences = async (args: {
   projectIds: number[];
-  status?: string;
+  statuses?: readonly ApprovalStatus[];
   minCount?: number;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<ApprovalRecurrenceGroup>> => {
-  const status = args.status ?? RECURRENCE_DEFAULT_STATUS;
-  // Reuse the shared filter guard so an out-of-enum status is a 400, not a 500.
-  assertValidApprovalFilters({ status });
+  const statuses = args.statuses?.length
+    ? args.statuses
+    : RECURRENCE_DEFAULT_STATUSES;
 
   const minCount = normalizeMinCount(args.minCount);
   const { limit, offset } = resolvePagination(args);
 
   log(
-    'listApprovalRecurrences: projects=%d status=%s minCount=%d',
+    'listApprovalRecurrences: projects=%d statuses=%o minCount=%d',
     args.projectIds.length,
-    status,
+    statuses,
     minCount
   );
 
@@ -518,7 +529,7 @@ export const listApprovalRecurrences = async (args: {
   const items = await db.ApprovalItem.findAll({
     where: {
       projectId: args.projectIds,
-      status,
+      status: statuses,
       dedupKey: { [Op.ne]: null },
     },
     order: [['createdAt', 'ASC']],
@@ -731,7 +742,7 @@ const finalizeResolution = async (args: {
 export const approveApproval = async (args: {
   id: string;
   editedArguments?: object | null;
-  resolvedByUserId: number;
+  resolvedBy: RequestPrincipal;
   toolContext?: Record<string, string>;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   log(
@@ -753,7 +764,8 @@ export const approveApproval = async (args: {
   });
 
   item.status = 'approved';
-  item.resolvedByUserId = args.resolvedByUserId;
+  item.resolvedByPrincipalType = args.resolvedBy.principalType;
+  item.resolvedByPrincipalId = args.resolvedBy.principalId;
   item.editedArguments = args.editedArguments ?? null;
   await item.save();
 
@@ -772,7 +784,7 @@ export const approveApproval = async (args: {
 export const rejectApproval = async (args: {
   id: string;
   reason: string;
-  resolvedByUserId: number;
+  resolvedBy: RequestPrincipal;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   log('rejectApproval: id=%s', args.id);
   if (!args.reason || args.reason.trim() === '') {
@@ -787,7 +799,8 @@ export const rejectApproval = async (args: {
   await assertNotExpiredOrExpire(item, 'rejected');
 
   item.status = 'rejected';
-  item.resolvedByUserId = args.resolvedByUserId;
+  item.resolvedByPrincipalType = args.resolvedBy.principalType;
+  item.resolvedByPrincipalId = args.resolvedBy.principalId;
   item.resolutionReason = args.reason;
   await item.save();
 

@@ -19,6 +19,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -82,7 +83,7 @@ playbooksRouter.post('/playbooks', async (ctx: Context) => {
     description: body.description,
     definition: body.definition,
     versionLabel: parseString(body.version_label),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
     author: playbookAuthorOf(ctx),
   });
 });
@@ -141,7 +142,7 @@ playbooksRouter.patch('/playbooks/:playbook_id', async (ctx: Context) => {
     definition: body.definition,
     versionLabel: parseString(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
     author: playbookAuthorOf(ctx),
   });
 });
@@ -239,7 +240,7 @@ playbooksRouter.post(
       playbookId: ctx.params.playbook_id,
       version: parseVersionParam(ctx.params.version),
       label: parseString(body.label),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
       author: playbookAuthorOf(ctx),
     });
   }

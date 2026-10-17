@@ -104,7 +104,7 @@ const writeOutput = async (args: {
         value: args.output,
         basis: execution.basis as PlaybookBasis,
         playbookVersion: execution.playbookVersion,
-        createdByUserId: null,
+        createdBy: null,
         onBehalfOf: null,
       },
     ],
@@ -162,7 +162,7 @@ const settleOnce = async (args: {
     );
     await execution.update(
       {
-        status: 'succeeded',
+        status: 'completed',
         result,
         output: settlement.output,
         outputRevision: revision,
