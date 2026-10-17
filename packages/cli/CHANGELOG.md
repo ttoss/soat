@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.85.1](https://github.com/ttoss/soat/compare/v0.85.0...v0.85.1) (2026-10-17)
+
+**Note:** Version bump only for package @soat/cli
+
 # [0.85.0](https://github.com/ttoss/soat/compare/v0.84.0...v0.85.0) (2026-10-17)
 
 * fix(events)!: event names are the resource type plural and a verb (#1645) ([072b779](https://github.com/ttoss/soat/commit/072b77909828d1de09f0d24585f56ad66bc825b5)), closes [#1645](https://github.com/ttoss/soat/issues/1645) [#1624](https://github.com/ttoss/soat/issues/1624)

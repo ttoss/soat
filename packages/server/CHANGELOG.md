@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.85.1](https://github.com/ttoss/soat/compare/v0.85.0...v0.85.1) (2026-10-17)
+
+### Bug Fixes
+
+* **sessions:** a turn completed through tool-outputs is stored and emitted like a generated turn ([#1648](https://github.com/ttoss/soat/issues/1648)) ([1815537](https://github.com/ttoss/soat/commit/1815537341bab896f3cf9ca1acb271de15ad303e)), closes [#1644](https://github.com/ttoss/soat/issues/1644)
+
 # [0.85.0](https://github.com/ttoss/soat/compare/v0.84.0...v0.85.0) (2026-10-17)
 
 * fix(server)!: wire cosmetics — empty bags, tool_context values, receipt ids, playbook node ids (#1641) ([2fb9222](https://github.com/ttoss/soat/commit/2fb922207a59915606fa2cad55f25316ee1d3f41)), closes [#1641](https://github.com/ttoss/soat/issues/1641) [#1626](https://github.com/ttoss/soat/issues/1626)
