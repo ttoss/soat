@@ -248,7 +248,7 @@ export type CreateGenerationArgs = {
 
 /**
  * Everything that must happen before the provider is called: input validation,
- * the depth guard, the quota check, and writing the `in_progress` generation
+ * the depth guard, the quota check, and writing the `running` generation
  * record. Split out so the blocking and background entry points share one
  * ordering — a background caller must still get a real `400`/`404`/`429` for a
  * bad request, and must still get a generation id that already exists in the
@@ -444,7 +444,7 @@ export type AcceptedGeneration = {
  * Starts a generation and returns as soon as it is admitted, leaving the
  * provider call to run in the background. The caller polls
  * `GET /generations/{id}` with the returned id, which is why the prep phase —
- * including the `in_progress` record write — is awaited first: a handle that
+ * including the `running` record write — is awaited first: a handle that
  * raced the record would 404 on the caller's first poll.
  *
  * A failure after admission is recorded on the generation record (the caller

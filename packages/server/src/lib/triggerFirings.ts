@@ -39,7 +39,7 @@ const firingIncludes = () => {
 };
 
 /**
- * Creates a firing record in the `pending` state with the effective input
+ * Creates a firing record in the `queued` state with the effective input
  * snapshot. The dispatcher transitions it to `running` and then a terminal
  * state. Returns the raw instance so the dispatcher can finalize it.
  */
@@ -63,7 +63,7 @@ export const createFiringRecord = async (args: {
     triggerId: args.triggerId,
     projectId: args.projectId,
     source: args.source,
-    status: 'pending',
+    status: 'queued',
     input: args.input,
     result: null,
     error: null,
@@ -78,11 +78,11 @@ export const createFiringRecord = async (args: {
   return firing;
 };
 
-export const finalizeFiringSucceeded = async (args: {
+export const finalizeFiringCompleted = async (args: {
   firing: InstanceType<(typeof db)['TriggerFiring']>;
   result: Record<string, unknown>;
 }) => {
-  args.firing.status = 'succeeded';
+  args.firing.status = 'completed';
   args.firing.result = args.result;
   args.firing.completedAt = new Date();
   // Released explicitly: a sweep may have taken the lease with a conditional

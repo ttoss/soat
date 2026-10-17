@@ -1570,7 +1570,7 @@ describe('Triggers', () => {
       expect(res.status).toBe(200);
       expect(res.body.id).toMatch(/^trg_fire_/);
       expect(res.body.source).toBe('manual');
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
       expect(res.body.result.target_type).toBe('orchestration');
       expect(res.body.result.result_id).toMatch(/^orch_run_/);
       // effective input is the shallow merge of static + fire-time input
@@ -1600,7 +1600,7 @@ describe('Triggers', () => {
       // reachable endpoint records a `failed` outcome rather than throwing.
       expect(res.status).toBe(200);
       expect(res.body.result?.target_type ?? 'tool').toBe('tool');
-      expect(['succeeded', 'failed']).toContain(res.body.status);
+      expect(['completed', 'failed']).toContain(res.body.status);
       if (res.body.status === 'failed') {
         expect(res.body.error).toBeTruthy();
       }
@@ -1621,7 +1621,7 @@ describe('Triggers', () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
       expect(mockCreateGeneration).toHaveBeenCalledWith(
         expect.objectContaining({
           messages: [{ role: 'user', content: 'from array' }],
@@ -1642,7 +1642,7 @@ describe('Triggers', () => {
         .send({ input: { topic: 'weather', when: 'today' } });
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
       // a non-empty object with no message/messages is JSON-encoded into one user message
       const call = mockCreateGeneration.mock.calls[0][0] as {
         messages: Array<{ role: string; content: string }>;
@@ -1665,7 +1665,7 @@ describe('Triggers', () => {
         .send({ input: { message: 'hello' } });
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
       expect(res.body.result.target_type).toBe('agent');
       expect(res.body.result.result_id).toBe('gen_fire_1');
       expect(mockCreateGeneration).toHaveBeenCalledWith(
@@ -1899,7 +1899,7 @@ describe('Triggers', () => {
         .post(`/api/v1/triggers/${schemaTriggerId}/fire`)
         .send({ input: { count: 3 } });
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
     });
   });
 
@@ -1971,7 +1971,7 @@ describe('Triggers', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(firingId);
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
     });
 
     test('unknown firing returns 404', async () => {
@@ -2026,7 +2026,7 @@ describe('Triggers', () => {
         );
         if (
           res.status === 200 &&
-          ['succeeded', 'failed'].includes(res.body.status)
+          ['completed', 'failed'].includes(res.body.status)
         ) {
           return res.body;
         }
@@ -2062,11 +2062,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(202);
       expect(res.body.firing_id).toMatch(/^trg_fire_/);
       expect(res.body.trigger_id).toBe(hookTriggerId);
-      expect(res.body.status).toBe('pending');
+      expect(res.body.status).toBe('queued');
 
       const firing = await pollFiring(res.body.firing_id);
       expect(firing.source).toBe('webhook');
-      expect(firing.status).toBe('succeeded');
+      expect(firing.status).toBe('completed');
       expect(firing.input).toEqual({ event: 'push', ref: 'main' });
     });
 
@@ -2318,7 +2318,7 @@ describe('Triggers', () => {
         .send({});
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('succeeded');
+      expect(res.body.status).toBe('completed');
       expect(res.body.result.target_type).toBe('eval');
       expect(res.body.result.status).toBe('queued');
       const runId = res.body.result.result_id as string;

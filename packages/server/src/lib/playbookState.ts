@@ -21,7 +21,7 @@ export type PlaybookBasis = Record<string, PlaybookBasisRead>;
 export type PlaybookFieldValue = { revision: number; value: JsonValue };
 
 export type PlaybookExecutionStatus =
-  'pending' | 'running' | 'succeeded' | 'failed';
+  'queued' | 'running' | 'completed' | 'failed';
 
 /** A workflow task or orchestration run an execution started and waits on. */
 export type PlaybookRunRef = { type: 'task' | 'orchestration_run'; id: string };
@@ -127,7 +127,7 @@ const HELD: Read = { held: true };
 
 const UNSET: Read = { held: false, revision: null, value: undefined };
 
-const IN_FLIGHT = new Set<PlaybookExecutionStatus>(['pending', 'running']);
+const IN_FLIGHT = new Set<PlaybookExecutionStatus>(['queued', 'running']);
 
 const readManual = (args: { field?: PlaybookFieldValue }): Read => {
   const { field } = args;

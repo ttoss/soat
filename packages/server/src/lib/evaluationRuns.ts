@@ -404,10 +404,10 @@ export const startEvalRun = async (args: {
 /**
  * Cancels a queued or running run: drops its outstanding item tasks so it stops
  * consuming provider budget on the next worker tick, and settles the row
- * `canceled` with whatever it had scored. Results already written are left as
+ * `cancelled` with whatever it had scored. Results already written are left as
  * they are — real measurements of generations that were really paid for.
  *
- * `aggregate_scores` is deliberately **not** computed for a canceled run: a
+ * `aggregate_scores` is deliberately **not** computed for a cancelled run: a
  * partial roll-up in the field a completed run uses is the "subset reported as
  * a whole-dataset verdict" failure the sync cap exists to prevent.
  */
@@ -442,7 +442,7 @@ export const cancelEvalRun = async (args: {
   await discardEvalItemTasks({ evalRunId: run.id as number });
 
   await run.update({
-    status: 'canceled',
+    status: 'cancelled',
     finishedAt: new Date(),
     toolContext: null,
   });

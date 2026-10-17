@@ -1829,13 +1829,13 @@ components:
         status:
           type: string
           description: >-
-            `pending` until a worker claims it, `running` while its executor
-            runs or a task or run it started is open, then `succeeded` or
+            `queued` until a worker claims it, `running` while its executor
+            runs or a task or run it started is open, then `completed` or
             `failed`
           enum:
-            - pending
+            - queued
             - running
-            - succeeded
+            - completed
             - failed
         result:
           type: string
@@ -1932,10 +1932,10 @@ components:
           example: tool_V1StGXR8Z5jdHi6B
         status:
           type: string
-          description: '`running` while its tool runs, then `succeeded` or `failed`'
+          description: '`running` while its tool runs, then `completed` or `failed`'
           enum:
             - running
-            - succeeded
+            - completed
             - failed
         stale:
           type: boolean

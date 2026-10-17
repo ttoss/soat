@@ -263,7 +263,7 @@ FIRING_ID=$(soat fire-trigger --trigger-id "$TRIGGER_ID" \
   --input '{"cycle":"2025-01-01"}' | jq -r '.id')
 echo "Firing: $FIRING_ID"
 
-# Inspect the terminal firing record (status is succeeded/failed).
+# Inspect the terminal firing record (status is completed/failed).
 soat get-trigger-firing --firing-id "$FIRING_ID"
 
 # List all firings for this trigger.
@@ -278,7 +278,7 @@ const { data: firing } = await adminSoat.triggers.fireTrigger({
   path: { trigger_id: triggerId },
   body: { input: { cycle: '2025-01-01' } },
 });
-console.log(firing.status); // "succeeded"
+console.log(firing.status); // "completed"
 
 const { data: detail } = await adminSoat.triggers.getTriggerFiring({
   path: { firing_id: firing.id },

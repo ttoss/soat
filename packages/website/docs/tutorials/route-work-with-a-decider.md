@@ -607,9 +607,9 @@ echo "$GOLD_RUN" | jq -c "$SUMMARY"
 Expected output:
 
 ```json
-{"status":"succeeded","route":"approve","result":"PAID 30"}
-{"status":"succeeded","route":"review","result":"REVIEW 400"}
-{"status":"succeeded","route":"approve","result":"PAID 400"}
+{"status":"completed","route":"approve","result":"PAID 30"}
+{"status":"completed","route":"review","result":"REVIEW 400"}
+{"status":"completed","route":"approve","result":"PAID 400"}
 ```
 
 </TabItem>

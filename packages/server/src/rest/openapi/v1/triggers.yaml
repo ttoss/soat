@@ -610,9 +610,9 @@ components:
         status:
           type: string
           enum:
-            - pending
+            - queued
             - running
-            - succeeded
+            - completed
             - failed
         input:
           type: object

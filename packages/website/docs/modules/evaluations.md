@@ -90,12 +90,12 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `eval_id` | string | ID of the eval this run belongs to |
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
 | `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
-| `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `canceled` |
+| `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `cancelled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
-| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
-| `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run |
-| `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
+| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a cancelled run |
+| `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a cancelled run |
+| `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [cancelled](#canceling-a-run) run the last two count what actually ran |
 | `metadata` | object \| null | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
 | `created_at` | string | ISO 8601 creation timestamp |
@@ -630,7 +630,7 @@ The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Conte
 ### Canceling a run
 
 [`POST /evals/{eval_id}/runs/{eval_run_id}/cancel`](/docs/api/evaluations/cancel-eval-run) drops a queued or running run's
-outstanding tasks and settles it `canceled`; a run that has already finished is rejected
+outstanding tasks and settles it `cancelled`; a run that has already finished is rejected
 with `400`. Results already written are **kept**, and `completed_count` /
 `errored_count` report what ran — an item a worker had already claimed runs to completion
 and recounts the run after it settles. `aggregate_scores` is left `null` (a partial
@@ -1086,10 +1086,10 @@ const polled = await soat.evaluations.getEvalRun({
 });
 if (polled.error) throw new Error(JSON.stringify(polled.error));
 
-const canceled = await soat.evaluations.cancelEvalRun({
+const cancelled = await soat.evaluations.cancelEvalRun({
   path: { eval_id: evalId, eval_run_id: runId },
 });
-if (canceled.error) throw new Error(JSON.stringify(canceled.error));
+if (cancelled.error) throw new Error(JSON.stringify(cancelled.error));
 ```
 
 </TabItem>

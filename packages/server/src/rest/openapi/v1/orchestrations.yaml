@@ -445,7 +445,7 @@ paths:
         immediately with status "queued" (a worker then claims it and moves it
         to "running") and progress is observed via
         get-orchestration-run or run lifecycle webhook events
-        (orchestration_runs.started/awaiting_input/succeeded/failed). Delay and
+        (orchestration_runs.started/awaiting_input/completed/failed). Delay and
         poll waits park the run as "sleeping" and are woken by a background
         scheduler, surviving restarts. Pass wait=true to block until the run
         reaches a terminal or awaiting_input state.
@@ -564,7 +564,7 @@ paths:
                 - running
                 - sleeping
                 - awaiting_input
-                - succeeded
+                - completed
                 - failed
                 - cancelled
                 - expired
@@ -1238,7 +1238,7 @@ components:
       nullable: true
       additionalProperties: true
       description: >-
-        The shape of a succeeded run's `output`, owned by the orchestration
+        The shape of a completed run's `output`, owned by the orchestration
         rather than by its terminal node ids. Each key is an output field (a
         dotted key such as `summary.title` builds a nested object); each value
         is JSON Logic (https://jsonlogic.com) evaluated against
@@ -1470,7 +1470,7 @@ components:
           description: >-
             Run lifecycle state. `queued` awaits a worker; `running` is actively
             executing; `sleeping` is parked on a delay/poll wait (no worker);
-            `awaiting_input` is parked on a human node; `succeeded`/`failed`/
+            `awaiting_input` is parked on a human node; `completed`/`failed`/
             `cancelled` are terminal; `expired` is a wait that passed its
             deadline.
           enum:
@@ -1479,7 +1479,7 @@ components:
               running,
               sleeping,
               awaiting_input,
-              succeeded,
+              completed,
               failed,
               cancelled,
               expired,
@@ -1560,10 +1560,10 @@ components:
           type: object
           nullable: true
           description: >-
-            What a succeeded run returns: the orchestration's `output_mapping`
+            What a completed run returns: the orchestration's `output_mapping`
             evaluated over the final state, or, when it declares none, the
             terminal node artifacts keyed by node id. Null unless the run
-            succeeded.
+            completed.
         usage:
           allOf:
             - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'
@@ -1799,7 +1799,7 @@ components:
             worker drive and a crash redrive. It is **write-only**: a run is a
             record every principal who may read runs can read, and a credential
             in it is not theirs to see, so it is never returned on one. It also
-            does not outlive the run: reaching a terminal status (`succeeded`,
+            does not outlive the run: reaching a terminal status (`completed`,
             `failed`, `cancelled` or `expired`) clears it. A key that is not a valid HTTP
             header name, or two keys that map to the same header, are rejected
             with `400 INVALID_TOOL_CONTEXT_KEY` and no run is created.
@@ -1862,7 +1862,7 @@ components:
           type: boolean
           default: false
           description: >-
-            When true, block until the run reaches a terminal (succeeded/failed)
+            When true, block until the run reaches a terminal (completed/failed)
             or awaiting_input state and return the settled run. When false
             (default), return immediately with status "queued" and execute the
             run in the background.

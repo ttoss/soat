@@ -88,7 +88,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
  * GET /api/v1/generations/{generation_id}
  * operationId: getGeneration
  * Returns a single generation record by public ID, including its status
- * ('in_progress', 'requires_action', 'completed', or 'failed') and the
+ * ('running', 'requires_action', 'completed', or 'failed') and the
  * structured error payload when the generation failed.
  */
 generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {

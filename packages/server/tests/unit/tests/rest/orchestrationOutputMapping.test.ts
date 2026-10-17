@@ -58,7 +58,7 @@ describe('Orchestration output_mapping', () => {
       .post('/api/v1/orchestration-runs')
       .send({ wait: true, orchestration_id: orchestrationId, input: {} });
     expect(res.status).toBe(201);
-    expect(res.body.status).toBe('succeeded');
+    expect(res.body.status).toBe('completed');
     return res.body;
   };
 

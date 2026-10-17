@@ -52,7 +52,7 @@ export const cancelOrchestrationRun = async (args: {
   if (!run) throw orchestrationRuns.notFound(args.runPublicId);
 
   if (
-    run.status === 'succeeded' ||
+    run.status === 'completed' ||
     run.status === 'failed' ||
     run.status === 'cancelled' ||
     run.status === 'expired'
@@ -79,7 +79,7 @@ export const cancelOrchestrationRun = async (args: {
  * The nodes a `queued` or `sleeping` run must re-drive once its pause is lifted.
  * A queued run has executed nothing, so its frontier is the graph's start nodes
  * — read here rather than left empty, because an empty `activeNodes` would make
- * `resume` settle the run as succeeded without running a node.
+ * `resume` settle the run as completed without running a node.
  */
 const pausedFrontier = async (args: {
   run: OrchestrationRunRow;

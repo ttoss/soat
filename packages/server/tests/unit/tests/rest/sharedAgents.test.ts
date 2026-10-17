@@ -368,7 +368,7 @@ describe('Shared agents', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchestration.body.id, wait: true });
 
-      expect(run.body.status).toBe('succeeded');
+      expect(run.body.status).toBe('completed');
     });
 
     test('an ingestion rule converts with the shared agent', async () => {
