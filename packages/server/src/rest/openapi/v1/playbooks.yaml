@@ -1779,6 +1779,8 @@ components:
           x-soat-ref: users
           type: string
           nullable: true
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -1866,6 +1868,8 @@ components:
           type: string
           nullable: true
           description: Who asked for the run
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -1953,6 +1957,8 @@ components:
           type: string
           nullable: true
           description: Who asked for the export
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time
@@ -2036,6 +2042,8 @@ components:
           type: string
           nullable: true
           description: Who upgraded the case
+        on_behalf_of:
+          $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
           type: string
           format: date-time

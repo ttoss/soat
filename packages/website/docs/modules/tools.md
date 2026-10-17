@@ -454,11 +454,18 @@ curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 | `jti` | Unique per request |
 | `tool_id` | The tool's ID; absent for an inline definition |
 | `project_id` | The tool's own project |
+| `agent_id`, `generation_id` | The agent and generation whose turn made the call, when one did |
 | `calling_project_id` | The caller's project, on a call through a [share](./shares.md) |
 | `session_id`, `actor_id`, `actor_external_id` | The [server-derived identity](../advanced/tool-context.md#auto-populated-keys-sessions), when the call runs in a session |
 | `body_sha256` | Base64url SHA-256 of the request body |
 
 A receiver checks the signature against the key set, `aud` against its own URL, `exp`, and `body_sha256` against the bytes it read. The identity claims are the [reserved context keys](../advanced/tool-context.md#auto-populated-keys-sessions), which no caller can set; a caller-supplied value never reaches a claim.
+
+### Writing on behalf of a tool call
+
+A tool server that writes back into SOAT with its project's API key can send the assertion of the call it is serving, unchanged, in `X-Soat-On-Behalf-Of` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)). The write then records the call beside `created_by` as `on_behalf_of` (`tool_id`, `agent_id`, `generation_id`, `session_id`, `actor_id`): on [playbook](./playbooks.md) entries, executions, exports and upgrades, and on every [audit log](./audit-log.md) entry of the request. It is attribution only: `created_by` and every permission checked stay the key's.
+
+SOAT verifies the assertion against its own key, `iss` and `exp`, and requires an API key scoped to the project the assertion names. Anything else is `400 ON_BEHALF_OF_INVALID`, `meta.reason` `unverified` or `project`, and nothing is written. A deployment that configures no [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration) signs nothing, so it verifies nothing.
 
 ### Calling a Tool Directly
 

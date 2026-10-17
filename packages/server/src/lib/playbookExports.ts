@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
+import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import {
   assertCaseAcceptsWork,
@@ -74,6 +75,7 @@ const mapPlaybookExport = (args: {
     file_id: row.file?.publicId ?? null,
     error: row.error,
     created_by: row.createdBy?.publicId ?? null,
+    on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
     finished_at: row.finishedAt,
   };
@@ -190,6 +192,7 @@ const recordExports = (args: {
   transformations: PlaybookTransformation[];
   revision: unknown;
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
 }) => {
   const { row, node } = args;
   return withLockedCase({
@@ -212,6 +215,7 @@ const recordExports = (args: {
               status: 'running',
               leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
               createdByUserId: args.createdByUserId,
+              onBehalfOf: args.onBehalfOf,
             },
             { transaction }
           )
@@ -261,6 +265,7 @@ export const exportPlaybookCaseNode = async (args: {
   revision: unknown;
   wait: boolean;
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
 }) => {
   log('exportPlaybookCaseNode: case=%s node=%s', args.caseId, args.node);
   const row = await playbookCases.getByPublicId({
@@ -289,6 +294,7 @@ export const exportPlaybookCaseNode = async (args: {
     transformations,
     revision: args.revision,
     createdByUserId: args.createdByUserId,
+    onBehalfOf: args.onBehalfOf,
   });
 
   const exportCase: ExportCase = {

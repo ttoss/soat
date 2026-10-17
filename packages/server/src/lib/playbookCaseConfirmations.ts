@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import type { OnBehalfOf } from './onBehalfOf';
 import { isPlainObject } from './plainObject';
 import { advancePlaybookCase } from './playbookCascade';
 import {
@@ -106,6 +107,7 @@ export const confirmPlaybookCaseNode = async (args: {
   node: string;
   confirmation: Confirmation;
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
   wait?: boolean;
 }) => {
@@ -162,6 +164,7 @@ export const confirmPlaybookCaseNode = async (args: {
             basis: view.basis,
             playbookVersion: row.playbookVersion,
             createdByUserId: args.createdByUserId,
+            onBehalfOf: args.onBehalfOf,
           },
         ],
       });

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
+import type { OnBehalfOf } from './onBehalfOf';
 import { isPlainObject } from './plainObject';
 import { advancePlaybookCase } from './playbookCascade';
 import {
@@ -175,6 +176,7 @@ export const writePlaybookCaseInputs = async (args: {
   id: string;
   writes: PlaybookInputWrite[];
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
   wait?: boolean;
 }): Promise<MappedPlaybookCase> => {
@@ -224,6 +226,7 @@ export const writePlaybookCaseInputs = async (args: {
               basis: null,
               playbookVersion: locked.playbookVersion,
               createdByUserId: args.createdByUserId,
+              onBehalfOf: args.onBehalfOf,
             };
           }),
       });

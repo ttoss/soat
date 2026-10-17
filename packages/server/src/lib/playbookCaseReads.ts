@@ -57,6 +57,7 @@ const mapEntry = (row: EntryRow) => {
     basis: row.basis,
     playbook_version: row.playbookVersion,
     created_by: row.createdBy?.publicId ?? null,
+    on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };
 };

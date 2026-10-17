@@ -9,6 +9,7 @@ import {
 
 import { emitResourceEvent } from './eventBus';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
+import type { OnBehalfOf } from './onBehalfOf';
 import {
   type PageBounds,
   resolvePagination,
@@ -61,6 +62,7 @@ const mapAuditEntry = (
     project_id: projectPublicId ?? instance.project?.publicId ?? null,
     principal_type: instance.principalType,
     principal_id: instance.principalId,
+    on_behalf_of: instance.onBehalfOf ?? null,
     action: instance.action,
     resource_srn: instance.resourceSrn,
     resource_public_id: instance.resourcePublicId,
@@ -159,6 +161,7 @@ const toSnakeAuditEntry = (
     project_id: entry.project_id,
     principal_type: entry.principal_type,
     principal_id: entry.principal_id,
+    on_behalf_of: entry.on_behalf_of,
     action: entry.action,
     resource_srn: entry.resource_srn,
     resource_public_id: entry.resource_public_id,
@@ -209,6 +212,8 @@ export type WriteAuditEntryArgs = {
   ip?: string | null;
   userAgent?: string | null;
   detail?: Record<string, unknown> | null;
+  // The tool call a request was made on behalf of (`lib/onBehalfOf.ts`).
+  onBehalfOf?: OnBehalfOf | null;
   // Marks the entry as describing a read. Read entries are only persisted when
   // the project they name has opted in; a read with no project is never
   // persisted, since no project could opt it in.
@@ -248,9 +253,10 @@ export const writeAuditEntry = async (
     return;
   }
 
-  const entry = await db.AuditEntry.create(
-    buildAuditEntryRow({ args, projectId: project?.id ?? null })
-  );
+  const entry = await db.AuditEntry.create({
+    ...buildAuditEntryRow({ args, projectId: project?.id ?? null }),
+    onBehalfOf: args.onBehalfOf ?? null,
+  });
 
   log(
     'writeAuditEntry: action=%s status=%d resource=%s',

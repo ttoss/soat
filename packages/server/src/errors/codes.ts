@@ -717,6 +717,11 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'The case carries no pause, so there is nothing to resume.',
   },
+  ON_BEHALF_OF_INVALID: {
+    httpStatus: 400,
+    description:
+      'The `On-Behalf-Of` header is not an unexpired tool assertion this deployment signed (`meta.reason: unverified`), or the request is not made with an API key scoped to the project the assertion names (`meta.reason: project`).',
+  },
   PLAYBOOK_SELF_WRITE: {
     httpStatus: 403,
     description:

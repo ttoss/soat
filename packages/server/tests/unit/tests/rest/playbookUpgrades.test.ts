@@ -184,6 +184,7 @@ describe('Playbook case upgrades', () => {
           to_version: version,
           diff: { added: ['contact'], removed: [], changed: [] },
           created_by: expect.any(String),
+          on_behalf_of: null,
           created_at: expect.any(String),
         },
       ]);

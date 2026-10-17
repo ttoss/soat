@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import {
@@ -31,6 +32,7 @@ const mapPlaybookUpgrade = (args: {
     to_version: row.toVersion,
     diff: row.diff,
     created_by: row.createdBy?.publicId ?? null,
+    on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };
 };
@@ -70,6 +72,7 @@ export const upgradePlaybookCase = async (args: {
   id: string;
   version: unknown;
   createdByUserId: number | null;
+  onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
   wait?: boolean;
 }) => {
@@ -127,6 +130,7 @@ export const upgradePlaybookCase = async (args: {
             to,
           }),
           createdByUserId: args.createdByUserId,
+          onBehalfOf: args.onBehalfOf,
         },
         { transaction }
       );
