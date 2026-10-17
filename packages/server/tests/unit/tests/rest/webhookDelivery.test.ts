@@ -611,7 +611,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
 
@@ -646,7 +646,7 @@ describe('Webhook delivery', () => {
         webhookId: webhook.id,
         fileId,
         done: (d) => {
-          return d.status === 'success';
+          return d.status === 'completed';
         },
       });
       // A row whose payload predates the envelope carrying `id`.
