@@ -209,6 +209,12 @@ export class Generation extends Model {
   )
   declare conversation: Conversation | null;
 
+  // The `position` of the last conversation message the turn read (`-1` for an
+  // empty conversation). Its reply is stored right after it, so a turn resumed
+  // from a client-tool pause lands where it would have without the pause.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare conversationSnapshotPosition: number | null;
+
   // Denormalized principal info (set from JWT/API key context)
   @Column({ type: DataType.STRING, allowNull: true })
   declare startedByPrincipalType: string | null;

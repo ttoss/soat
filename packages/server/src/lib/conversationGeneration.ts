@@ -2,10 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
-import {
-  addConversationMessage,
-  type mapMessage,
-} from './conversationMessages';
+import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { agentReferences } from './resourceReferences';
@@ -81,8 +78,6 @@ type InternalGenerationResult =
       status: 'completed';
       generationId: string;
       traceId: string;
-      content: string;
-      model: string;
       output?: GenerationResult['output'];
     }
   | {
@@ -95,6 +90,7 @@ type InternalGenerationResult =
 const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
   conversationId: string;
+  snapshotPosition: number;
   // The conversation's project, where the turn runs and is recorded.
   runProjectId: number;
   messagesForModel: Array<{ role: string; content: unknown }>;
@@ -111,10 +107,13 @@ const runAgentGeneration = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
-    // Persisted on the generation rather than only passed to the post-turn
-    // extraction: a `write_memory` call mid-turn records its generation, and
-    // this is the edge that walks that generation up to its conversation.
-    conversationId: args.conversationId,
+    // Persisted on the generation: a `write_memory` call mid-turn records its
+    // generation, which the id walks up to its conversation, and a turn resumed
+    // from a client-tool pause is stored after the snapshot it read.
+    conversation: {
+      id: args.conversationId,
+      snapshotPosition: args.snapshotPosition,
+    },
     authHeader: args.authHeader,
     initiatorGenerationId: args.initiatorGenerationId,
   });
@@ -139,8 +138,6 @@ const runAgentGeneration = async (args: {
     status: 'completed',
     generationId: result.id,
     traceId: result.traceId,
-    content: result.output?.content ?? '',
-    model: result.output?.model ?? '',
     output: result.output,
   };
 };
@@ -148,6 +145,7 @@ const runAgentGeneration = async (args: {
 const runGenerationForAgent = async (args: {
   generatingAgent: GenerationContext['generatingAgent'];
   conversationId: string;
+  snapshotPosition: number;
   runProjectId: number;
   messagesForModel: Array<{ role: string; content: unknown }>;
   model?: string;
@@ -160,6 +158,7 @@ const runGenerationForAgent = async (args: {
   return runAgentGeneration({
     agent: args.generatingAgent,
     conversationId: args.conversationId,
+    snapshotPosition: args.snapshotPosition,
     runProjectId: args.runProjectId,
     messagesForModel: args.messagesForModel,
     toolContext: args.toolContext,
@@ -262,35 +261,6 @@ const buildPersonaSystem = (agent: {
   return lines.join('\n\n');
 };
 
-/**
- * The turn is finished and persisted; everything after it happens on the bus.
- *
- * Extraction is a `memory_rules` subscriber rather than a second
- * fire-and-forget branch here, so a conversation turn feeds a store through the
- * same path a bare generation does — and through the store's policy, not this
- * agent's.
- */
-const firePostTurnSideEffects = (args: {
-  conversationId: string;
-  projectId: number;
-  generationId: string;
-  traceId: string;
-  message: Awaited<ReturnType<typeof mapMessage>>;
-}): void => {
-  emitResourceEvent({
-    type: 'conversation_messages.generated',
-    projectId: args.projectId,
-    resourceType: 'conversation_message',
-    resourceId: args.message.document_id,
-    data: {
-      ...args.message,
-      conversation_id: args.conversationId,
-      generation_id: args.generationId,
-      trace_id: args.traceId,
-    },
-  });
-};
-
 export type GenerateConversationMessageResult =
   | {
       status: 'completed';
@@ -306,6 +276,89 @@ export type GenerateConversationMessageResult =
       traceId: string;
       requiredAction: NonNullable<GenerationResult['requiredAction']>;
     };
+
+/**
+ * Stores a completed turn and announces it as
+ * `conversation_messages.generated`. Every route that completes a conversation
+ * turn — generate, and a session's tool-outputs after a client-tool pause —
+ * stores it here, so a turn lands and is announced the same way whichever
+ * route finished it.
+ *
+ * The reply goes right after the last message the turn read, so a message that
+ * arrived while it ran stays after the reply it did not see. Extraction is a
+ * `memory_rules` subscriber on the event, so a conversation turn feeds a store
+ * through the store's policy, not this agent's.
+ */
+export const storeGeneratedTurn = async (args: {
+  conversation: InstanceType<(typeof db)['Conversation']>;
+  agentId: string;
+  // `null` when the generation recorded no snapshot: the reply is appended.
+  snapshotPosition: number | null;
+  generationId: string;
+  traceId: string;
+  output?: GenerationResult['output'];
+}): Promise<
+  Extract<GenerateConversationMessageResult, { status: 'completed' }>
+> => {
+  const content = args.output?.content ?? '';
+  const responseMessages = args.output?.responseMessages;
+  const message = await addConversationMessage({
+    conversationId: args.conversation.publicId,
+    message: content,
+    role: 'assistant',
+    agentId: args.agentId,
+    position:
+      args.snapshotPosition === null ? undefined : args.snapshotPosition + 1,
+    responseMessages:
+      responseMessages && responseMessages.length > 0
+        ? responseMessages
+        : undefined,
+  });
+
+  if (!message) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
+  }
+
+  emitResourceEvent({
+    type: 'conversation_messages.generated',
+    projectId: args.conversation.projectId,
+    resourceType: 'conversation_message',
+    resourceId: message.document_id,
+    data: {
+      ...message,
+      conversation_id: args.conversation.publicId,
+      generation_id: args.generationId,
+      trace_id: args.traceId,
+    },
+  });
+
+  return {
+    status: 'completed',
+    content,
+    message,
+    generationId: args.generationId,
+    traceId: args.traceId,
+    model: args.output?.model,
+  };
+};
+
+/**
+ * The snapshot a paused turn recorded in `conversation`, or `null` when the
+ * generation recorded none there.
+ */
+export const pausedTurnSnapshotPosition = async (args: {
+  generationId: string;
+  conversation: InstanceType<(typeof db)['Conversation']>;
+}): Promise<number | null> => {
+  const generation = await db.Generation.findOne({
+    where: {
+      publicId: args.generationId,
+      conversationId: args.conversation.id,
+    },
+    attributes: ['conversationSnapshotPosition'],
+  });
+  return generation?.conversationSnapshotPosition ?? null;
+};
 
 export const generateConversationMessage = async (args: {
   conversationId: string;
@@ -345,6 +398,7 @@ export const generateConversationMessage = async (args: {
   const genResult = await runGenerationForAgent({
     generatingAgent,
     conversationId: args.conversationId,
+    snapshotPosition,
     runProjectId: conversation.projectId,
     messagesForModel,
     model: args.model,
@@ -359,44 +413,12 @@ export const generateConversationMessage = async (args: {
     return genResult;
   }
 
-  const {
-    generationId,
-    traceId,
-    content: assistantContent,
-    model: modelName,
-  } = genResult;
-
-  const responseMessages = genResult.output?.responseMessages;
-  const persisted = await addConversationMessage({
-    conversationId: args.conversationId,
-    message: assistantContent,
-    role: 'assistant',
+  return storeGeneratedTurn({
+    conversation,
     agentId: args.agentId,
-    position: snapshotPosition + 1,
-    responseMessages:
-      responseMessages && responseMessages.length > 0
-        ? responseMessages
-        : undefined,
+    snapshotPosition,
+    generationId: genResult.generationId,
+    traceId: genResult.traceId,
+    output: genResult.output,
   });
-
-  if (!persisted) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
-  }
-
-  firePostTurnSideEffects({
-    conversationId: args.conversationId,
-    projectId: conversation.projectId as number,
-    generationId,
-    traceId,
-    message: persisted,
-  });
-
-  return {
-    status: 'completed',
-    content: assistantContent,
-    message: persisted,
-    generationId,
-    traceId,
-    model: modelName,
-  };
 };

@@ -22,6 +22,8 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 const EXTRACTOR_MARKER = 'Respond with a JSON array of strings';
 const HANDLER_MARKER = 'Respond with JSON of the shape';
+/** A reply that makes the stub call the first tool the request offers. */
+const TOOL_CALL = 'TOOL_CALL';
 
 type StubRequest = { model: string; text: string; kind: RequestKind };
 type RequestKind = 'turn' | 'extractor' | 'handler';
@@ -72,7 +74,11 @@ describe('Memory rule dispatch', () => {
         raw += String(chunk);
       });
       req.on('end', () => {
-        const body = JSON.parse(raw) as { model: string; messages: unknown };
+        const body = JSON.parse(raw) as {
+          model: string;
+          messages: unknown;
+          tools?: Array<{ function: { name: string } }>;
+        };
         const text = JSON.stringify(body.messages);
         const kind = kindOf(text);
         stub.requests.push({ model: body.model, text, kind });
@@ -83,6 +89,21 @@ describe('Memory rule dispatch', () => {
         }
         const reply = stub.replies[kind] ?? 'Noted.';
         const content = typeof reply === 'function' ? reply(text) : reply;
+        const toolName = body.tools?.[0]?.function.name;
+        const message =
+          content === TOOL_CALL && toolName
+            ? {
+                role: 'assistant',
+                content: null,
+                tool_calls: [
+                  {
+                    id: `call_${stub.requests.length}`,
+                    type: 'function',
+                    function: { name: toolName, arguments: '{}' },
+                  },
+                ],
+              }
+            : { role: 'assistant', content };
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -93,8 +114,8 @@ describe('Memory rule dispatch', () => {
             choices: [
               {
                 index: 0,
-                message: { role: 'assistant', content },
-                finish_reason: 'stop',
+                message,
+                finish_reason: message.content === null ? 'tool_calls' : 'stop',
               },
             ],
             usage: {
@@ -636,6 +657,76 @@ describe('Memory rule dispatch', () => {
 
       const [handler] = requestsOf('handler');
       expect(handler.text).toContain('Did my renewal go through?');
+      expect(handler.text).toContain('Your renewal is confirmed.');
+    });
+  });
+
+  describe('POST /api/v1/sessions/:session_id/tool-outputs → conversation_messages.generated', () => {
+    test('a turn completed after a client-tool pause feeds the handler like any generated turn', async () => {
+      const scope = await createProject();
+      const storeId = await scope.createStore();
+      const tool = await asAdmin()
+        .post('/api/v1/tools')
+        .send({
+          project_id: scope.projectId,
+          name: 'look_up_renewal',
+          type: 'client',
+          parameters: { type: 'object', properties: {} },
+        });
+      expect(tool.status).toBe(201);
+      const sourceAgentId = await scope.createAgent({
+        tool_bindings: [{ tool_id: tool.body.id }],
+      });
+      const handlerAgentId = await scope.createAgent();
+      await createRule({
+        memory_store_id: storeId,
+        on: 'conversation_messages.generated',
+        source_agent_ids: [sourceAgentId],
+        agent_id: handlerAgentId,
+      });
+      const session = await asAdmin()
+        .post('/api/v1/sessions')
+        .send({ agent_id: sourceAgentId });
+      expect(session.status).toBe(201);
+      await asAdmin()
+        .post(`/api/v1/sessions/${session.body.id}/messages`)
+        .send({ message: 'Did my renewal go through?' });
+      // The source turn calls the client tool until it holds the tool's result.
+      stub.replies.turn = (text) => {
+        return text.includes('renewal-ok')
+          ? 'Your renewal is confirmed.'
+          : TOOL_CALL;
+      };
+      stub.replies.handler =
+        '{"facts":[{"content":"The renewal is confirmed"}]}';
+
+      const paused = await asAdmin().post(
+        `/api/v1/sessions/${session.body.id}/generate?wait=true`
+      );
+      expect(paused.body.status).toBe('requires_action');
+      const completed = await asAdmin()
+        .post(`/api/v1/sessions/${session.body.id}/tool-outputs`)
+        .send({
+          generation_id: paused.body.generation_id,
+          tool_outputs: [
+            {
+              tool_call_id: paused.body.required_action.tool_calls[0].id,
+              output: 'renewal-ok',
+            },
+          ],
+        });
+      expect(completed.body.status).toBe('completed');
+
+      const memories = await waitForMemories(storeId);
+      expect(
+        memories.map((memory) => {
+          return memory.content;
+        })
+      ).toEqual(['The renewal is confirmed']);
+      expect(memories[0].tags).toMatchObject({
+        'system.conversation': session.body.conversation_id,
+      });
+      const [handler] = requestsOf('handler');
       expect(handler.text).toContain('Your renewal is confirmed.');
     });
   });

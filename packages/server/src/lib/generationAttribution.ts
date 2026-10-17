@@ -93,20 +93,33 @@ export const attributionColumns = (args: GenerationAttribution) => {
 };
 
 /**
- * The conversation a turn served, by public id. Resolved here rather than
- * threaded as an internal id: every other caller of `createGenerationRecord`
- * speaks in public ids, and a conversation that no longer exists simply leaves
- * the column null.
+ * The conversation a turn answers: its public id, and the `position` of the
+ * last message the turn read, which is where its reply is stored after.
  */
-export const findConversationDbId = async (
-  conversationId?: string | null
-): Promise<number | null> => {
-  if (!conversationId) return null;
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: conversationId },
-    attributes: ['id'],
-  });
-  return (conversation?.id as number | undefined) ?? null;
+export type GenerationConversation = { id: string; snapshotPosition: number };
+
+/**
+ * The conversation columns of a turn's record. The conversation is resolved by
+ * public id rather than threaded as an internal id: every other caller of
+ * `createGenerationRecord` speaks in public ids, and a conversation that no
+ * longer exists simply leaves the column null.
+ */
+export const conversationColumns = async (
+  conversation?: GenerationConversation
+): Promise<{
+  conversationId: number | null;
+  conversationSnapshotPosition: number | null;
+}> => {
+  const row = conversation
+    ? await db.Conversation.findOne({
+        where: { publicId: conversation.id },
+        attributes: ['id'],
+      })
+    : null;
+  return {
+    conversationId: (row?.id as number | undefined) ?? null,
+    conversationSnapshotPosition: conversation?.snapshotPosition ?? null,
+  };
 };
 
 export const findInitiatorGeneration = async (args: {

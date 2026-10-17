@@ -62,6 +62,8 @@ An optional `idempotency_key` string can accompany either variant — see [Idemp
 
 What [`POST /api/v1/sessions/{session_id}/generate`](/docs/api/sessions/generate-session-response) with `?wait=true`, an auto-generating [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and [`POST /api/v1/sessions/{session_id}/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs) answer. It is the body [conversation generate](./conversations.md#generating-the-next-message) answers.
 
+A completed turn is stored right after the last message it read, so a message sent while it ran or waited on `tool-outputs` stays after it, and it emits `conversation_messages.generated` whichever of the three routes completed it.
+
 | Field             | Type   | Description                                                                                                                                                                 |
 | ----------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `status`          | string | `completed` or `requires_action`                                                                                                                                            |

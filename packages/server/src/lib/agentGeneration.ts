@@ -12,6 +12,7 @@ import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
 import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
+import { type GenerationConversation } from './generationAttribution';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import {
   claimKeyedGeneration,
@@ -100,7 +101,7 @@ type ResolveContextArgs = {
   nodeId?: string;
   nodeAttempt?: number;
   sessionId?: string;
-  conversationId?: string;
+  conversation?: GenerationConversation;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
   pinnedAgentVersion?: number | null;
@@ -159,11 +160,12 @@ const resolveContextAndRecord = async (
     sessionId: args.sessionId ?? null,
     // The conversation this turn served, so a memory assertion recorded against
     // the generation can be walked up to the conversation the fact was learned
-    // in. Absent on every other entry point — there is no conversation behind a
-    // direct generation, a trigger or an orchestration node. No `?? null`: the
-    // record writer normalizes it, and a branch here would cost this function
-    // its complexity budget, as the note on `nodeAttempt` below records.
-    conversationId: args.conversationId,
+    // in, and a turn resumed from a pause is stored where this one would have
+    // been. Absent on every other entry point — there is no conversation behind
+    // a direct generation, a trigger or an orchestration node. No `?? null`:
+    // the record writer normalizes it, and a branch here would cost this
+    // function its complexity budget, as the note on `nodeAttempt` below records.
+    conversation: args.conversation,
     // Usage attribution and the served agent version: typed columns, for the
     // same reason. `metadata` carries only what the caller sent (F-15).
     actionId: args.actionId ?? null,
@@ -227,7 +229,7 @@ export type CreateGenerationArgs = {
   // generations, triggers, and orchestration nodes — no end user behind them.
   sessionId?: string;
   // The conversation this turn answers, set by the conversation path only.
-  conversationId?: string;
+  conversation?: GenerationConversation;
   metadata?: Record<string, unknown> | null;
   // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
   // Context); the `context.*` namespace guards read at tool-dispatch time.
@@ -345,7 +347,7 @@ const prepareGeneration = async (
     nodeId: args.nodeId,
     nodeAttempt: args.nodeAttempt,
     sessionId: args.sessionId,
-    conversationId: args.conversationId,
+    conversation: args.conversation,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
     pinnedAgentVersion: args.pinnedAgentVersion,
