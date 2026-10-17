@@ -97,11 +97,49 @@ as the `x-error-codes` extension of [/openapi.json](/openapi.json), and on the
 [Error Codes](/docs/error-codes) page. `INTERNAL_ERROR` always carries exactly
 that message; the underlying exception is logged server-side, never forwarded.
 
-Work that fails after its request has answered — an orchestration run or node,
-a trigger firing, a decision, a playbook execution or export — records the same
-shape in its `error` field: `{ code, message, meta? }`. A failure the platform
-names keeps its code, message and `meta`; any other records `INTERNAL_ERROR`
-with the same constant message, and its detail reaches the server log only.
+### Recorded failures
+
+Work that fails after its request has answered records the error body without
+`hint` and `docs_url` — `{ code, message, meta? }` — in its `error` field: a
+generation and its trace, a transcript's tool result, an orchestration run or
+node, a trigger firing, a decision, a playbook execution or export, a document's
+ingestion, an eval result, and a formation, its operations and their events. The
+events that report a failure (`agents.generation.failed`,
+`documents.ingest_failed`, `tasks.automation_retrying`) carry the same object.
+`code` is always a key of the catalog, so `error.code` reads the same way
+everywhere.
+
+A failure the platform names keeps its code, message and `meta`. Any other
+records `INTERNAL_ERROR` with the constant message, its detail in the server log
+only — except where the failure's own words are what the record is read for:
+a generation (`GENERATION_FAILED`), a document's ingestion (`INGESTION_FAILED`),
+an eval item (`GENERATION_FAILED`, or `EVAL_SCORING_FAILED` for a scorer) and a
+transcript's tool result (`TOOL_CALL_FAILED`) keep the thrown message under
+their own code.
+
+### Validation problems
+
+A definition refused for its content — `ORCHESTRATION_VALIDATION_FAILED`,
+`PLAYBOOK_VALIDATION_FAILED`, `WORKFLOW_VALIDATION_FAILED` — lists every problem
+found under one `meta` shape:
+
+```json
+{
+  "problems": [
+    {
+      "code": "MISSING_FIELD",
+      "path": "nodes[0].agent_id",
+      "message": "agent node 'a' is missing required field 'agent_id'."
+    }
+  ]
+}
+```
+
+`code` is UPPER_SNAKE and stable; `path` locates the problem in the request
+body, in its wire names. An orchestration adds its non-blocking `warnings` in
+the same item shape. [`POST /api/v1/orchestrations/validate`](/docs/api/orchestrations/validate-orchestration)
+and [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook)
+answer the same items without writing.
 
 Common status codes:
 

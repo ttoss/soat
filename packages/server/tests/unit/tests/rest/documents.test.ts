@@ -874,7 +874,7 @@ describe('Documents', () => {
       );
       return res.body as {
         chunk_count?: number;
-        error?: string;
+        error?: { code: string; message: string };
       };
     };
 
@@ -1138,7 +1138,7 @@ describe('Documents', () => {
       );
       expect(doc.status).toBe('failed');
       const status = await getDocumentStatus(doc.id as string);
-      expect(status.error).toBe('FILE_PARSE_FAILED');
+      expect(status.error).toMatchObject({ code: 'FILE_PARSE_FAILED' });
     });
 
     test('GET /documents/:id returns status while processing', async () => {
@@ -1246,7 +1246,7 @@ describe('Documents', () => {
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
       const status = await getDocumentStatus(ingestRes.body.id);
-      expect(status.error).toBe('FILE_PARSE_FAILED');
+      expect(status.error).toMatchObject({ code: 'FILE_PARSE_FAILED' });
     });
 
     test('?wait=true sets failure reason RESOURCE_NOT_FOUND when file bytes are missing from storage', async () => {
@@ -1270,10 +1270,10 @@ describe('Documents', () => {
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
       const status = await getDocumentStatus(ingestRes.body.id);
-      expect(status.error).toBe('RESOURCE_NOT_FOUND');
+      expect(status.error).toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
     });
 
-    test('failure_reason never serializes to [object Object] (issue #3)', async () => {
+    test('a non-Error rejection records INGESTION_FAILED, never [object Object]', async () => {
       // A non-Error rejection (plain object) must not leak as "[object Object]".
       extractPdfPagesSpy.mockRejectedValueOnce({ unexpected: 'shape' });
 
@@ -1290,13 +1290,14 @@ describe('Documents', () => {
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
       const status = await getDocumentStatus(ingestRes.body.id);
-      const reason = status.error;
-      expect(reason).not.toBe('[object Object]');
-      expect(typeof reason).toBe('string');
-      expect((reason as string).length).toBeGreaterThan(0);
+      expect(status.error).toEqual({
+        code: 'INGESTION_FAILED',
+        message: expect.not.stringContaining('[object Object]'),
+      });
+      expect(status.error?.message.length).toBeGreaterThan(0);
     });
 
-    test('preserves an Error message in failure_reason', async () => {
+    test('preserves an Error message in the recorded error', async () => {
       extractPdfPagesSpy.mockRejectedValueOnce(new Error('boom while parsing'));
 
       const fileId = await uploadFile({
@@ -1312,7 +1313,10 @@ describe('Documents', () => {
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
       const status = await getDocumentStatus(ingestRes.body.id);
-      expect(status.error).toBe('boom while parsing');
+      expect(status.error).toEqual({
+        code: 'INGESTION_FAILED',
+        message: 'boom while parsing',
+      });
     });
 
     test('?wait=true on a file over the sync limit returns 413 (issue #3)', async () => {
@@ -1423,7 +1427,7 @@ describe('Documents', () => {
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
       const status = await getDocumentStatus(ingestRes.body.id);
-      expect(status.error).toBe('FILE_PARSE_FAILED');
+      expect(status.error).toMatchObject({ code: 'FILE_PARSE_FAILED' });
     });
   });
 
@@ -1572,7 +1576,7 @@ describe('Documents', () => {
       expect(failed).toBeDefined();
       expect(failed?.resourceId).toBe(docId);
       expect(failed?.data.status).toBe('failed');
-      expect(failed?.data.error).toBe('FILE_PARSE_FAILED');
+      expect(failed?.data.error).toMatchObject({ code: 'FILE_PARSE_FAILED' });
     });
 
     test('an ingestion that throws mid-pipeline still emits documents.ingest_failed', async () => {
@@ -1598,7 +1602,10 @@ describe('Documents', () => {
       });
       expect(failed).toBeDefined();
       expect(failed?.resourceId).toBe(docId);
-      expect(failed?.data.error).toBe('extractor exploded');
+      expect(failed?.data.error).toEqual({
+        code: 'INGESTION_FAILED',
+        message: 'extractor exploded',
+      });
     });
 
     test('a re-ingest emits a fresh documents.ingested event', async () => {
@@ -1659,7 +1666,7 @@ describe('Documents', () => {
         return e.type === 'documents.ingest_failed';
       });
       expect(failed?.resourceId).toBe(docId);
-      expect(failed?.data.error).toBe('INGESTION_TIMEOUT');
+      expect(failed?.data.error).toMatchObject({ code: 'INGESTION_TIMEOUT' });
     });
   });
 
@@ -1763,7 +1770,7 @@ describe('Documents', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('failed');
-      expect(res.body.error).toBe('FILE_PARSE_FAILED');
+      expect(res.body.error.code).toBe('FILE_PARSE_FAILED');
       // A failed document has no meaningful progress.
       expect(res.body.progress).toBeNull();
     });
@@ -1823,7 +1830,7 @@ describe('Documents', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('failed');
-      expect(res.body.error).toBe('INGESTION_TIMEOUT');
+      expect(res.body.error.code).toBe('INGESTION_TIMEOUT');
     });
   });
 

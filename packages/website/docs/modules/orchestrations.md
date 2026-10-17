@@ -59,7 +59,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `state`            | object         | Current mutable execution state                                   |
 | `active_nodes`     | array          | Node IDs awaiting input or a scheduled wake (populated when `awaiting_input`, or `sleeping` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
-| `error`            | object \| null | Error details if failed                                           |
+| `error`            | object \| null | `{ code, message, meta? }` when `status` is `failed` ([recorded failure](/docs/api#recorded-failures)) |
 | `usage`            | object         | What the run cost: token/cost roll-up (`input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, `cost_usd`) summed across this run's generations **and every run it started** through `loop` / `sub_orchestration` nodes, at any depth (see [Run usage](#run-usage)). Present only on the single-run read; omitted from run lists and every write's response, a start with `wait: true` included |
 | `usage_own`        | object         | The same roll-up restricted to **this run's own nodes**, excluding nested runs. Equal to `usage` for a run with no children. Present only on the single-run read, like `usage` |
 | `required_action`  | object \| null | Present when status is `awaiting_input` — why the run is parked (see [Human Nodes](#human-nodes) and [Pausing a run](#pausing-a-run)) |
@@ -511,25 +511,28 @@ A `loop` / `sub_orchestration` child settling **non-success terminal** (`failed`
 
 ### Static Validation
 
-Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `errors` and `warnings` arrays. A `tool`, `poll` or `approval` node's `tool_id` and an `agent` node's `agent_id` must name a resource in the orchestration's own project (`400 TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` with `meta.missing`). A run always belongs to the orchestration's project, whichever projects the caller can reach, and its nodes resolve their references there. `validate-orchestration` runs the same checks without persisting and returns `{ valid, errors, warnings }`.
+Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `problems` and `warnings` arrays of [validation problems](/docs/api#validation-problems). A `tool`, `poll` or `approval` node's `tool_id` and an `agent` node's `agent_id` must name a resource in the orchestration's own project (`400 TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` with `meta.missing`). A run always belongs to the orchestration's project, whichever projects the caller can reach, and its nodes resolve their references there. `validate-orchestration` runs the same checks without persisting and returns `{ valid, problems, warnings }`.
 
-**Errors (block create/update):**
+**Problems (block create/update):**
 
-| Check | Example |
-| ----- | ------- |
-| Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression` |
-| Duplicate node id | two nodes share `id: "a"` |
-| Dangling edge | an edge whose `from`/`to` references a node that does not exist |
-| Cycle (no `loop` node present) | `a → b → a` |
-| Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
-| Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |
-| Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
+| `code` | Check | Example |
+| ------ | ----- | ------- |
+| `MISSING_FIELD` | Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression`, a `poll` node without `exit_condition` or `interval` |
+| `WRONG_FIELD` | A field named for another node type | a `tool` node with `action` instead of `operation_id` |
+| `INVALID_VALUE` | A field outside its accepted values | a `loop` node's `on_item_error` other than `fail` / `collect` |
+| `INVALID_TYPE` | `nodes` is not an array | |
+| `DUPLICATE_NODE_ID` | Duplicate node id | two nodes share `id: "a"` |
+| `UNKNOWN_NODE` | Dangling edge | an edge whose `from`/`to` references a node that does not exist |
+| `CYCLE` | Cycle (no `loop` node present) | `a → b → a` |
+| `UNWRITTEN_STATE_KEY` | Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
+| `NODE_NOT_UPSTREAM` | Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |
+| `RESERVED_STATE_KEY` | Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
 
 **Warnings (never block):**
 
-| Check | Example |
-| ----- | ------- |
-| Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
+| `code` | Check | Example |
+| ------ | ----- | ------- |
+| `CONDITIONAL_STATE_KEY` | Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
 
 An unwritten `input_mapping` reference is an **error** only under a declared `input_schema` (a closed input contract); without one a parallel node's `state_mapping` may write the key first, so the graph stays permissive. An unwritten `{"var": "nodes.<id>..."}` reference is always an error.
 
@@ -541,7 +544,7 @@ soat validate-orchestration \
   --nodes '[{"id":"a","type":"transform","expression":1,"state_mapping": { "state.step1": { "var": "output.result" } }},
             {"id":"b","type":"transform","expression":1,"input_mapping":{"val":{"var":"step1"}}}]' \
   --edges '[{"from":"a","to":"b"}]'
-# → { "valid": true, "errors": [], "warnings": [] }
+# → { "valid": true, "problems": [], "warnings": [] }
 ```
 
 </TabItem>
@@ -861,7 +864,7 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 
 | Code                              | Status | Cause                                                                                       | What to do                                                                                                 |
 | ---------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.errors`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
+| `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.problems`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
 | `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
 | `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's [node execution](#node-executions) record for the exact `error` — see [Node Executions](#node-executions) |
 | _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from its [node execution](#node-executions) record |

@@ -140,7 +140,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 ### Definition checks
 
-A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one, each with its `code` and the `node`, `input`, `transformation` or `nodes` it concerns. A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
+A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one as a [validation problem](/docs/api#validation-problems) `{ code, path, message }`: `DUPLICATE_NODE`, `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`, `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`, `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`, with `path` naming the node, input or transformation (`definition.nodes[0].inputs[1].source.node`). A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
 
 ### Versions
 

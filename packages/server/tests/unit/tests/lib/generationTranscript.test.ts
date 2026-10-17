@@ -119,9 +119,40 @@ describe('projectTranscriptSteps', () => {
         tool_call_id: 'call_9',
         tool_name: 'get_weather',
         result: null,
-        error: { name: 'HttpToolError', message: 'upstream 502' },
+        error: {
+          code: 'TOOL_CALL_FAILED',
+          message: 'upstream 502',
+          meta: { name: 'HttpToolError' },
+        },
       },
     ]);
+  });
+
+  test('a tool error that carries a registered code keeps it', () => {
+    const steps = [
+      {
+        content: [
+          {
+            type: 'tool-error',
+            toolCallId: 'call_10',
+            toolName: 'get_weather',
+            error: {
+              name: 'DomainError',
+              code: 'MISSING_TOOL_CONTEXT_KEY',
+              httpStatus: 400,
+              message: 'no key',
+              meta: { key: 'token' },
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(projectTranscriptSteps(steps)[0].tool_results[0].error).toEqual({
+      code: 'MISSING_TOOL_CONTEXT_KEY',
+      message: 'no key',
+      meta: { key: 'token' },
+    });
   });
 
   test('ignores the getter-backed fields a stored step never carries', () => {

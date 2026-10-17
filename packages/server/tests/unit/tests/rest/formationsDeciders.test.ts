@@ -495,7 +495,9 @@ describe('Formations — decider resources', () => {
         expect(res.body.error.meta.failures).toEqual([
           expect.objectContaining({
             logical_id: 'Backend',
-            error: expect.stringMatching(/decider/),
+            error: expect.objectContaining({
+              message: expect.stringMatching(/decider/),
+            }),
           }),
         ]);
         const read = await authenticatedTestClient(userToken).get(

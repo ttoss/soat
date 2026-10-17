@@ -627,9 +627,10 @@ components:
           nullable: true
           description: '{ target_type, result_id, status, output } — output truncated'
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: '{ code, message, meta }'
+          description: Why the firing failed, when it did.
         idempotency_key:
           type: string
           nullable: true

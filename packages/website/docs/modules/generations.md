@@ -93,9 +93,9 @@ A generation starts as `running`. It transitions to:
 
 ### Error Recording
 
-When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries `{ code, message }`.
+When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries a [recorded failure](/docs/api#recorded-failures) `{ code, message, meta? }`.
 
-`error` always contains `message`. `code` is set for mapped errors, most notably `AI_PROVIDER_ERROR`: the upstream AI provider returned an error (e.g. exhausted credits, rate limit) or is unreachable.
+`code` is the mapped error's — most notably `AI_PROVIDER_ERROR`: the upstream AI provider returned an error (e.g. exhausted credits, rate limit) or is unreachable — and `GENERATION_FAILED`, keeping the thrown message, for a failure with no code of its own. A transcript's failed tool call reads the same way: its code when the tool raised one, else `TOOL_CALL_FAILED` with the fields the thrown error carried in `meta`.
 
 ### Provider Error Surfacing (`AI_PROVIDER_ERROR`)
 

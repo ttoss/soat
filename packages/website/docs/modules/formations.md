@@ -100,7 +100,7 @@ One record per deploy (create, update, delete); [`GET /api/v1/formations/{format
 | `operation_type` | string | `create` \| `update` \| `delete`                      |
 | `status`         | string | `queued` \| `running` \| `completed` \| `failed`     |
 | `plan`           | object | Planned changes computed before execution             |
-| `events`         | array  | Per-resource event log with timestamp, action, status |
+| `events`         | array  | Per-resource event log with timestamp, action, status; a `failed` event carries its `error` as `{ code, message, meta? }` |
 | `error`          | object | Why this operation failed, as `{ code, message, meta }` — the same bag the formation carries while that failure is its current state. Null otherwise |
 | `created_at`     | string | ISO 8601 creation timestamp                           |
 | `updated_at`     | string | ISO 8601 last-updated timestamp                       |
@@ -450,7 +450,7 @@ A deploy is a reconciler, so the two failure kinds are reported differently:
 }
 ```
 
-`error.code` is the resource's own failure (`VALIDATION_FAILED`, `SECRET_NOT_FOUND`, `RESOURCE_NOT_FOUND`, …), and `error.meta` carries its details beside `logical_id` and `resource_type`; an unexpected failure reads `INTERNAL_ERROR` with `Internal Server Error`, as every [stored error](/docs/api) does. `error` stays on `get-formation` while the stack is `failed`; the next successful deploy clears it. `list-formation-events` keeps every operation with the same `error` bag.
+`error.code` is the resource's own failure (`VALIDATION_FAILED`, `SECRET_NOT_FOUND`, `RESOURCE_NOT_FOUND`, …), and `error.meta` carries its details beside `logical_id` and `resource_type`; an unexpected failure reads `INTERNAL_ERROR` with `Internal Server Error`, as every [recorded failure](/docs/api#recorded-failures) does. `error` stays on `get-formation` while the stack is `failed`; the next successful deploy clears it. `list-formation-events` keeps every operation with the same `error` bag.
 
 **The CLI exits non-zero on that body.** `create-formation` and `update-formation` print the payload to stdout (`$(…)` capture and `| jq` unaffected), write the reason to stderr and exit `1`:
 
@@ -487,7 +487,7 @@ Stack statuses:
 | `deleted`       | All resources removed                                    |
 | `delete_failed` | Stack teardown encountered failures                      |
 
-Deletion is idempotent: a managed resource already removed outside the formation counts as gone. A teardown that cannot finish answers `409 FORMATION_DELETE_FAILED`, naming every blocker in `error.meta.failures` as `{ logical_id, resource_type, error }`.
+Deletion is idempotent: a managed resource already removed outside the formation counts as gone. A teardown that cannot finish answers `409 FORMATION_DELETE_FAILED`, naming every blocker in `error.meta.failures` as `{ logical_id, resource_type, error }`, `error` being the blocker's own `{ code, message, meta? }` (`AGENT_HAS_DEPENDENTS`, `TOOL_HAS_DEPENDENTS`, `PLAYBOOK_HAS_CASES`, …).
 
 **A predictable blocker is caught before anything is deleted.** Teardown pre-flights the resources it is about to remove; a foreseeable refusal destroys nothing, the stack stays `active`, and the same `delete-formation` succeeds once the blocker is resolved. The predictable blockers are an **agent with generation or trace history**, which the platform never force-deletes on its own ([`DELETE /api/v1/agents/{agent_id}?force=true`](/docs/api/agents/delete-agent) is an operator decision), and an **agent or tool a [decider](./deciders.md#formations) outside the stack names**. A decider in the same stack blocks nothing: it is deleted first. Declare the agent with `deletion_policy: retain` to leave it standing; a retained resource is never deleted, so never blocks. An eval run is one generation per dataset item, so an agent shipped with the eval that verifies it has history the moment the suite runs; see [Gate a Canary Promotion on an Eval](../tutorials/gate-a-canary-promotion-on-an-eval.md).
 

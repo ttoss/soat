@@ -309,7 +309,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
-      expect(response.body.error.meta.errors).toContainEqual(
+      expect(response.body.error.meta.problems).toContainEqual(
         expect.objectContaining({ path: 'edges[0].to' })
       );
     });
@@ -335,7 +335,7 @@ describe('Orchestrations', () => {
         .send({});
       expect(response.status).toBe(200);
       expect(response.body.valid).toBe(true);
-      expect(response.body.errors).toEqual([]);
+      expect(response.body.problems).toEqual([]);
     });
 
     test('returns valid=true for a sound graph', async () => {
@@ -360,7 +360,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(200);
       expect(response.body.valid).toBe(true);
-      expect(response.body.errors).toEqual([]);
+      expect(response.body.problems).toEqual([]);
     });
 
     test('reports errors for an invalid graph without persisting', async () => {
@@ -372,7 +372,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(200);
       expect(response.body.valid).toBe(false);
-      expect(response.body.errors.length).toBeGreaterThan(0);
+      expect(response.body.problems.length).toBeGreaterThan(0);
     });
 
     test('reports a warning for a conditional-branch reference', async () => {
@@ -423,7 +423,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(200);
       expect(response.body.valid).toBe(true);
-      expect(response.body.errors).toEqual([]);
+      expect(response.body.problems).toEqual([]);
     });
 
     test('rejects a node referencing nodes.<id> of a non-upstream node', async () => {
@@ -443,7 +443,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(200);
       expect(response.body.valid).toBe(false);
-      expect(response.body.errors).toEqual(
+      expect(response.body.problems).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             message: expect.stringContaining("'ghost' is not an earlier"),
@@ -468,7 +468,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(200);
       expect(response.body.valid).toBe(false);
-      expect(response.body.errors).toEqual(
+      expect(response.body.problems).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             message: expect.stringContaining(
@@ -2915,7 +2915,7 @@ describe('Orchestrations', () => {
         });
       expect(createRes.status).toBe(400);
       expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
-      expect(createRes.body.error.meta.errors).toContainEqual(
+      expect(createRes.body.error.meta.problems).toContainEqual(
         expect.objectContaining({
           message: expect.stringContaining('Cycle detected'),
         })

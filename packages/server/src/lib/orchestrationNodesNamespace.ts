@@ -1,4 +1,5 @@
 import type { OrchestrationNode } from './orchestrations';
+import type { ValidationProblem } from './validationProblems';
 
 /**
  * Reserved top-level state key: every node's artifact is recorded here (see
@@ -58,8 +59,8 @@ const topSegment = (path: string): string => {
  */
 export const checkReservedNodeNamespace = (args: {
   nodes: OrchestrationNode[];
-}): Array<{ path: string; message: string }> => {
-  const issues: Array<{ path: string; message: string }> = [];
+}): ValidationProblem[] => {
+  const issues: ValidationProblem[] = [];
   for (const [index, node] of args.nodes.entries()) {
     if (!node.stateMapping) continue;
     for (const statePath of Object.keys(node.stateMapping)) {
@@ -69,6 +70,7 @@ export const checkReservedNodeNamespace = (args: {
       const remainder = normalizedPath.slice('state.'.length);
       if (topSegment(remainder) === NODE_ARTIFACTS_STATE_KEY) {
         issues.push({
+          code: 'RESERVED_STATE_KEY',
           path: `nodes[${index}].state_mapping.${statePath}`,
           message:
             "writes to the reserved 'nodes' state namespace, which the engine owns exclusively for per-node artifacts (state.nodes.<nodeId>).",

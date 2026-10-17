@@ -80,7 +80,7 @@ export const handleOrphanedDeletes = async (args: {
         resourceType: resource.resourceType,
         action: 'delete',
         status: 'failed',
-        error: formationFailure(error).message,
+        error: formationFailure(error),
       });
     }
   }

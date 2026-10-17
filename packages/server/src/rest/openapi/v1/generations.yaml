@@ -565,21 +565,13 @@ components:
             generation budget, or 'error' when the turn failed.
           example: error
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: >
-            Structured error payload recorded when the generation failed.
-            Contains at least `message`; `code` is set for mapped errors
-            (e.g. AI_PROVIDER_ERROR for upstream provider failures).
-          properties:
-            code:
-              type: string
-              example: AI_PROVIDER_ERROR
-            message:
-              type: string
-              example: 'Provider returned 402: insufficient credits'
-            meta:
-              type: object
+          description: >-
+            Why the generation failed: `AI_PROVIDER_ERROR` for an upstream
+            provider failure, `GENERATION_FAILED` for any other failure of the
+            turn.
         action_id:
           type: string
           nullable: true
@@ -964,7 +956,14 @@ components:
           example:
             tempC: 18
         error:
-          description: The tool's failure, when the step recorded one.
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
+          nullable: true
+          description: >-
+            The tool's failure, when the step recorded one. A failure the tool
+            raised with a code keeps it; any other is `TOOL_CALL_FAILED`, with
+            the fields the thrown error carried (`name`, `status`, …) in
+            `meta`.
           example: null
 
     TranscriptStep:
@@ -1104,9 +1103,10 @@ components:
               description: The finish reason of the actual last step.
               example: stop
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: Structured error payload when the generation failed.
+          description: Why the generation failed.
         content_redacted_at:
           type: string
           format: date-time

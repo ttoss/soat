@@ -2337,14 +2337,15 @@ components:
             declares no parameters.
         error:
           allOf:
-            - $ref: '#/components/schemas/FormationError'
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: >
-            Why the formation is `failed` or `delete_failed`, in the same
-            `{ code, message, meta }` shape as an error response. Null in every
+            Why the formation is `failed` or `delete_failed`. Null in every
             other status, and cleared by the next successful deploy. This is the
             reason a `2xx` deploy response can report `status: "failed"` without
-            a second call to `list-formation-events`.
+            a second call to `list-formation-events`. A failed apply names the
+            resource that broke it in `meta` (`logical_id`, `resource_type`); a
+            failed teardown lists every blocker under `meta.failures`.
 
 
             One case carries an error while the formation is `active`:
@@ -2464,43 +2465,6 @@ components:
           description: The action the caller lacks.
           example: guardrails:CreateGuardrail
 
-    FormationError:
-      type: object
-      description: >-
-        Why a deploy or teardown failed, in the one error shape the API has.
-        Carried on the formation itself and on the operation that failed.
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          description: >-
-            The failing operation's error code (`VALIDATION_FAILED`,
-            `RESOURCE_NOT_FOUND`, `SECRET_NOT_FOUND`, `FORMATION_DELETE_FAILED`,
-            `FORMATION_REPLACE_CLEANUP_FAILED`, …), or `INTERNAL_ERROR` with
-            the message `Internal Server Error` for an unexpected failure,
-            whose detail reaches the server log only.
-          example: VALIDATION_FAILED
-        message:
-          type: string
-          description: The failure, as reported by the resource that raised it.
-          example: >-
-            dataset_id is immutable: item 'dsit_V1StGXR8Z5jdHi6B' belongs to
-            'dset_V1StGXR8Z5jdHi6B'. Declare a new dataset_item instead.
-        meta:
-          type: object
-          additionalProperties: true
-          description: >-
-            Context for the failure. A failed apply names the resource that
-            broke it (`logical_id`, `resource_type`); a failed teardown lists
-            every blocker under `failures`, and so does a completed deploy that
-            could not dispose of a replaced resource — there each entry adds the
-            `physical_resource_id` still live.
-          example:
-            logical_id: case1
-            resource_type: dataset_item
-
     FormationEvent:
       type: object
       properties:
@@ -2528,8 +2492,10 @@ components:
           type: string
           nullable: true
         error:
-          type: string
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
+          description: Why the resource's step failed, when `status` is `failed`.
 
     FormationOperation:
       type: object
@@ -2563,7 +2529,7 @@ components:
           nullable: true
         error:
           allOf:
-            - $ref: '#/components/schemas/FormationError'
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: >-
             Why this operation failed. Null for a completed or running

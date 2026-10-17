@@ -54,7 +54,12 @@ export const ERROR_CODES = {
   GENERATION_NOT_COMPLETED: {
     httpStatus: 409,
     description:
-      'The generation has not completed, so it has no finished turn to promote. Only a completed generation can be curated into a dataset item.',
+      'The generation has not completed, so it has no finished turn: it cannot be curated into a dataset item, and an eval item whose generation settled in another status (a `requires_action` pause, for one) is recorded with this code rather than scored. `meta.status` is the status it settled in.',
+  },
+  EVAL_SCORING_FAILED: {
+    httpStatus: 500,
+    description:
+      "Recorded on an eval result, never returned by a request: a scorer could not grade the item's output for a reason no more specific code names. The item is excluded from the aggregates rather than scored 0.",
   },
   GENERATION_CONTENT_UNAVAILABLE: {
     httpStatus: 409,
@@ -406,6 +411,21 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The referenced file does not exist.',
   },
+  INGESTION_FAILED: {
+    httpStatus: 500,
+    description:
+      'Recorded on a document, never returned by a request: its ingestion failed for a reason no more specific code names. The message carries the failure.',
+  },
+  INGESTION_TIMEOUT: {
+    httpStatus: 500,
+    description:
+      'Recorded on a document, never returned by a request: its ingestion made no progress within `INGESTION_STALL_TIMEOUT_MS` (five minutes by default), so the next read marked it failed.',
+  },
+  CONVERSION_TIMEOUT: {
+    httpStatus: 500,
+    description:
+      'Recorded on a document, never returned by a request: its converter deferred with `{ status: "pending" }` and did not call back within `CONVERSION_STALL_TIMEOUT_MS` (thirty minutes by default), so the next read marked it failed.',
+  },
   UPLOAD_TOKEN_NOT_FOUND: {
     httpStatus: 404,
     description: 'The upload token does not exist.',
@@ -541,6 +561,11 @@ export const ERROR_CODES = {
     httpStatus: 502,
     description:
       'An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. The error `meta` carries the tool name and the server URL. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.',
+  },
+  TOOL_CALL_FAILED: {
+    httpStatus: 500,
+    description:
+      "Recorded on a generation transcript's tool result, never returned by a request: a tool call made during the turn failed with an error that carries no code of its own, and the model received the failure as the call's result. `meta` carries the fields the thrown error held (`name`, an HTTP tool's `status`, `url`, `body`, …).",
   },
   TOOL_UNREACHABLE: {
     httpStatus: 502,

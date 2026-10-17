@@ -254,10 +254,12 @@ paths:
                     description: The refusing declaration's selector.
                     example: /reports
                   error:
-                    type: string
+                    allOf:
+                      - $ref: './errors.yaml#/components/schemas/StoredError'
                     nullable: true
-                    description: What the metadata violates, field by field.
-                    example: /quarter must be equal to one of the allowed values
+                    description: >-
+                      The error the write would be refused with; its message
+                      names what the metadata violates, field by field.
         '401':
           description: Unauthorized
           content:

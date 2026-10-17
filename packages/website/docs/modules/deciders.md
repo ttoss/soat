@@ -56,7 +56,7 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 | `status`          | string  | `queued` \| `running` \| `completed` \| `failed`                                                    |
 | `answers`         | array   | One [answer](#answers) per question, in question order. Null until the decision completes           |
 | `answers_by_name` | object  | The same answers keyed by question name. Null until the decision completes                          |
-| `error`           | object  | `{ code, message }` on a `failed` decision                                                          |
+| `error`           | object  | `{ code, message, meta? }` on a `failed` decision ([recorded failure](/docs/api#recorded-failures)) |
 | `generation_id`   | string  | The generation that answered; its receipt carries what the decision cost. Null for a tool          |
 | `metadata`        | object  | Caller-owned annotations, written once with the decision                                            |
 | `created_at`      | string  | ISO 8601 creation timestamp                                                                         |

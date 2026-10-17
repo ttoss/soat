@@ -165,7 +165,7 @@ describe('POST /api/v1/evals/:eval_id/runs — llm_judge provider resolution', (
 
     expect(run.status).toBe('completed');
     expect(run.errored_count).toBe(1);
-    expect(result.error).toMatch(/not found in the project/);
+    expect(result.error.message).toMatch(/not found in the project/);
     expect(judgedModels).toEqual([]);
   });
 });

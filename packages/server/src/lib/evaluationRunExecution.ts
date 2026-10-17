@@ -28,6 +28,7 @@ import { resolveRunPassed } from './evaluationScorerAggregation';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { runToolScorerCall } from './evaluationToolScorer';
 import type { GenerationInputMessage } from './generationInputMessages';
+import { type StoredError, toStoredErrorKeepingMessage } from './storedError';
 
 const log = createDebug('soat:evaluations');
 
@@ -46,12 +47,8 @@ export type ItemOutcome = {
   passed: boolean;
   errored: boolean;
   output: string | null;
-  error: string | null;
+  error: StoredError | null;
   generationDbId: number | null;
-};
-
-const errorMessage = (error: unknown): string => {
-  return error instanceof Error ? error.message : String(error);
 };
 
 const generationDbIdOf = async (publicId: string): Promise<number | null> => {
@@ -72,7 +69,7 @@ const generationDbIdOf = async (publicId: string): Promise<number | null> => {
  * on it. The item is still errored, never scored 0.
  */
 const erroredOutcome = (
-  error: string,
+  error: StoredError,
   generationDbId: number | null,
   output: string | null = null
 ): ItemOutcome => {
@@ -84,6 +81,27 @@ const erroredOutcome = (
     error,
     generationDbId,
   };
+};
+
+const generationFailure = (error: unknown): StoredError => {
+  return toStoredErrorKeepingMessage({ error, code: 'GENERATION_FAILED' });
+};
+
+const notCompleted = (generation: GenerationResult): StoredError => {
+  return {
+    code: 'GENERATION_NOT_COMPLETED',
+    message: `Generation did not complete (status '${generation.status}'); the item could not be evaluated.`,
+    meta: { generation_id: generation.id, status: generation.status },
+  };
+};
+
+/** The scorer's own failure, named as one: the generation itself succeeded. */
+const scoringFailure = (error: unknown): StoredError => {
+  const failure = toStoredErrorKeepingMessage({
+    error,
+    code: 'EVAL_SCORING_FAILED',
+  });
+  return { ...failure, message: `Scoring failed: ${failure.message}` };
 };
 
 /**
@@ -175,14 +193,16 @@ export const runEvalItem = async (args: {
       toolContext: args.toolContext,
     });
   } catch (error) {
-    return erroredOutcome(errorMessage(error), null);
+    return erroredOutcome(generationFailure(error), null);
   }
 
   /* istanbul ignore next -- `stream: false` above means createGeneration never
      returns a stream here; the branch exists only to narrow the union. */
   if (generation instanceof ReadableStream) {
     return erroredOutcome(
-      'Generation returned a stream; eval runs require stream=false.',
+      generationFailure(
+        'Generation returned a stream; eval runs require stream=false.'
+      ),
       null
     );
   }
@@ -190,10 +210,7 @@ export const runEvalItem = async (args: {
   const generationDbId = await generationDbIdOf(generation.id);
 
   if (generation.status !== 'completed' || !generation.output) {
-    return erroredOutcome(
-      `Generation did not complete (status '${generation.status}'); the item could not be evaluated.`,
-      generationDbId
-    );
+    return erroredOutcome(notCompleted(generation), generationDbId);
   }
 
   const output = {
@@ -221,7 +238,7 @@ export const runEvalItem = async (args: {
     // fabricate a regression. The generation and output are kept: they happened
     // and cost money, and the output is what the failed scorer was looking at.
     return erroredOutcome(
-      `Scoring failed: ${errorMessage(error)}`,
+      scoringFailure(error),
       generationDbId,
       output.content
     );

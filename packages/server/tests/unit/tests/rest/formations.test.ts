@@ -1380,7 +1380,10 @@ resources:
         expect.objectContaining({
           logical_id: 'CorruptedResource',
           resource_type: 'unsupported_resource_type',
-          error: expect.any(String),
+          error: expect.objectContaining({
+            code: 'FORMATION_RESOURCE_TYPE_UNREGISTERED',
+            message: expect.any(String),
+          }),
         }),
       ]);
 
@@ -1479,7 +1482,10 @@ resources:
         expect.objectContaining({
           logical_id: 'HistoricAgent',
           resource_type: 'agent',
-          error: expect.stringContaining('trace'),
+          error: expect.objectContaining({
+            code: 'AGENT_HAS_DEPENDENTS',
+            message: expect.stringContaining('trace'),
+          }),
         }),
       ]);
 

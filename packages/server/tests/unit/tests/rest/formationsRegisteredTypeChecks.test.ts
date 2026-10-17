@@ -299,7 +299,11 @@ describe('DELETE /api/v1/formations/{formation_id} — a type no longer register
       {
         logical_id: 'Chan',
         resource_type: 'test_channel',
-        error: 'Unsupported resource type for delete: test_channel',
+        error: {
+          code: 'FORMATION_RESOURCE_TYPE_UNREGISTERED',
+          message: 'Unsupported resource type for delete: test_channel',
+          meta: { resource_type: 'test_channel' },
+        },
       },
     ]);
   });

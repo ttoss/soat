@@ -2041,15 +2041,48 @@ describe('Tasks', () => {
           { name: 'to_failed', from: ['writing'], to: 'failed' },
         ],
       });
-      const taskId = await startTask(wf, {});
-      const settled = await pollTask({
-        token: userToken,
-        taskId,
-        predicate: (t) => {
-          return t.state === 'failed';
-        },
-      });
+      const events: SoatEvent[] = [];
+      const handler = (e: SoatEvent) => {
+        events.push(e);
+      };
+      eventBus.on('soat:event', handler);
+      let taskId: string;
+      let settled: Record<string, unknown>;
+      try {
+        taskId = await startTask(wf, {});
+        settled = await pollTask({
+          token: userToken,
+          taskId,
+          predicate: (t) => {
+            return t.state === 'failed';
+          },
+        });
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
 
+      // Each retried attempt names its failure in the one error shape.
+      const retried = events.filter((e) => {
+        return (
+          e.type === 'tasks.automation_retrying' && e.resourceId === taskId
+        );
+      });
+      expect(
+        retried.map((e) => {
+          return e.data.error;
+        })
+      ).toEqual([
+        {
+          code: 'AI_PROVIDER_ERROR',
+          message: 'always down',
+          meta: { generation_id: 'gen_down822' },
+        },
+        {
+          code: 'AI_PROVIDER_ERROR',
+          message: 'always down',
+          meta: { generation_id: 'gen_down822' },
+        },
+      ]);
       expect(mockCreateGeneration).toHaveBeenCalledTimes(3);
       expect(settled.status).toBe('closed');
       const history = (

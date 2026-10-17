@@ -1527,7 +1527,12 @@ components:
           description: Ingestion progress as a percentage (`chunk_count / total_chunks`). `0` while `pending`, climbs while `processing` (capped at 99), `100` when `ready`, and `null` when `failed` or not yet computable.
           example: 100
         error:
-          type: string
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: Failure reason when `status` is `failed` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`).
-          example: 'INGESTION_TIMEOUT'
+          description: >-
+            Why the ingestion failed, when `status` is `failed`; its `code` is
+            for example `FILE_PARSE_FAILED` or `INGESTION_TIMEOUT`.
+          example:
+            code: INGESTION_TIMEOUT
+            message: Ingestion stalled and was marked failed.

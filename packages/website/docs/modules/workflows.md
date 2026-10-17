@@ -150,7 +150,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 
 - **`dispatch`** — `kind: agent` (`agent_id`), `kind: orchestration` (`orchestration_id`) or `kind: tool` (`tool_id`, optional `operation_id` for a multi-operation tool). `input_mapping` is JSON Logic over `{task}` resolving the dispatch input (a `tool` dispatch's arguments). `payload_writes` (optional) is JSON Logic over `{task, result}`, written into named `task.payload` keys atomically with `last_result` on completion, so a value outlives the one hop `last_result` covers. Each write overwrites its key; in a loop an earlier pass's value lingers until the state dispatches again.
 - **`on_complete`** — rules evaluated in order against `{task, result}`; the first match fires its transition **as the `automation` principal** (same guards). `{result}` is the generation output plus the `ai_provider_id` that served its `model` (agent), the final run state (orchestration) or the return value (tool), also written to `task.last_result`. No match → `automation_status: completed` and a `tasks.automation_unrouted` event. A matched transition rejected (guard fails for `automation`, or a concurrent move invalidated it) → `automation_status: unrouted` and a `tasks.automation_rejected` event carrying the matched `transition` and the rejection `error_code`.
-- **`retry`** (optional) — covers **execution** failures, never `on_complete` routing. `max_attempts` counts the first attempt (1–10); the delay before attempt `n` is `backoff_seconds * backoff_multiplier^(n - 2)` (defaults: 0, 1). `on_failure`, or the parked `automation_status: failed`, fires only after the last attempt; leaving the state between attempts abandons the rest. Each attempt is `active_dispatch.attempt`; every retried failure emits `tasks.automation_retrying` (`attempt`, `max_attempts`, the error, the failed `generation_id`/`orchestration_run_id`).
+- **`retry`** (optional) — covers **execution** failures, never `on_complete` routing. `max_attempts` counts the first attempt (1–10); the delay before attempt `n` is `backoff_seconds * backoff_multiplier^(n - 2)` (defaults: 0, 1). `on_failure`, or the parked `automation_status: failed`, fires only after the last attempt; leaving the state between attempts abandons the rest. Each attempt is `active_dispatch.attempt`; every retried failure emits `tasks.automation_retrying` (`attempt`, `max_attempts`, the [recorded failure](/docs/api#recorded-failures) in `error`, the failed `generation_id`/`orchestration_run_id`).
 - **`on_failure`** — transition fired on terminal dispatch failure. Omitted → the task stays with `automation_status: failed` for a human.
 
 A state, a transition and everything under `on_enter` take the fields named here and nothing else: any other key is `400 VALIDATION_FAILED` on create and update, by path (`states.0.on_enter.dispatch.agent`). `input_mapping`, `payload_writes`, a guard and an `on_complete` `when` are JSON Logic bodies, so their contents are carried as written.
@@ -361,7 +361,7 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | Code                       | Status | When                                                            |
 | -------------------------- | ------ | --------------------------------------------------------------- |
 | `WORKFLOW_NOT_FOUND`       | 404    | The workflow does not exist or is not accessible               |
-| `WORKFLOW_VALIDATION_FAILED`| 400   | The workflow definition is invalid                             |
+| `WORKFLOW_VALIDATION_FAILED`| 400   | The workflow definition is invalid; `meta.problems` lists every problem as a [validation problem](/docs/api#validation-problems) |
 | `WORKFLOW_HAS_OPEN_TASKS`  | 409    | The workflow has open tasks and cannot be deleted              |
 | `TASK_NOT_FOUND`           | 404    | The task does not exist or is not accessible                   |
 | `TASK_PAYLOAD_INVALID`     | 400    | The payload violates the workflow's `payload_schema`           |
@@ -387,7 +387,7 @@ Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/ta
 | `tasks.closed`               | A task enters a terminal state                           | |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |
-| `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains | `attempt`, `max_attempts`, `error`, `generation_id`, `orchestration_run_id` |
+| `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains | `attempt`, `max_attempts`, `error` (`{ code, message, meta? }`), `generation_id`, `orchestration_run_id` |
 | `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) | |
 | `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) | `transition`, `error_code` |
 | `tasks.paused`               | An operator paused a task's automation                   | |

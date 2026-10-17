@@ -121,9 +121,12 @@ export class EvalResult extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false })
   declare passed: boolean;
 
-  /** Item-level failure reason. Set instead of scoring, never alongside it. */
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare error: string | null;
+  /**
+   * Item-level failure reason, `{ code, message, meta? }`. Set instead of
+   * scoring, never alongside it.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare error: object | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

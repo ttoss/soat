@@ -21,6 +21,7 @@ import {
   readGenerationSteps,
 } from './generationTurn';
 import { isPlainObject } from './plainObject';
+import { isErrorCode, type StoredError } from './storedError';
 import type { UsageTotals } from './usageTotals';
 import { readReportedUsage, usageTotalsFromReported } from './usageTotals';
 
@@ -39,7 +40,7 @@ export type TranscriptToolResult = {
   /** Tool-owned payload, copied as a value. Null when the call errored. */
   result: unknown;
   /** The tool's failure, when the step recorded one. Null on success. */
-  error: unknown;
+  error: StoredError | null;
 };
 
 export type TranscriptStep = {
@@ -122,6 +123,43 @@ const projectToolCalls = (
   });
 };
 
+const TOOL_CALL_FAILED_MESSAGE = 'The tool call failed.';
+
+/**
+ * A stored tool failure as a failure reason. The stored value is the thrown
+ * error serialized field by field (`serializeSteps`), so a `DomainError` keeps
+ * its code and meta, and any other error is `TOOL_CALL_FAILED` with every field
+ * but its message in `meta`.
+ */
+const toolFailure = (stored: unknown): StoredError => {
+  if (typeof stored === 'string') {
+    return {
+      code: 'TOOL_CALL_FAILED',
+      message: stored || TOOL_CALL_FAILED_MESSAGE,
+    };
+  }
+  if (!isPlainObject(stored)) {
+    return { code: 'TOOL_CALL_FAILED', message: TOOL_CALL_FAILED_MESSAGE };
+  }
+  const { message: rawMessage, ...fields } = stored;
+  const message =
+    typeof rawMessage === 'string' && rawMessage
+      ? rawMessage
+      : TOOL_CALL_FAILED_MESSAGE;
+  if (typeof fields.code === 'string' && isErrorCode(fields.code)) {
+    return {
+      code: fields.code,
+      message,
+      ...(isPlainObject(fields.meta) && { meta: fields.meta }),
+    };
+  }
+  return {
+    code: 'TOOL_CALL_FAILED',
+    message,
+    ...(Object.keys(fields).length > 0 && { meta: fields }),
+  };
+};
+
 /**
  * Successful results and tool errors, in one ordered list.
  *
@@ -147,7 +185,7 @@ const projectToolResults = (
       tool_call_id: asStringOrNull(part.toolCallId),
       tool_name: asStringOrNull(part.toolName),
       result: null,
-      error: part.error ?? null,
+      error: toolFailure(part.error),
     };
   });
 

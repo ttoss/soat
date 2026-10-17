@@ -91,6 +91,7 @@ The flow they follow is
 | `2026-10-17-on-behalf-of` | `on_behalf_of` on `playbook_entries`, `playbook_executions`, `playbook_upgrades`, `playbook_exports` and `audit_entries`, the tool call a write was made for |
 | `2026-10-17-run-status-vocabulary` | run, attempt and delivery statuses renamed to `queued`/`running`/`completed`/`failed`/`cancelled` (enum labels renamed in place, string columns and the statuses inside `formation_operations.events` and `trigger_firings.result` rewritten), and `orchestration_runs.succeeded` → `orchestration_runs.completed` in webhook subscriptions, trigger patterns and stored formation templates |
 | `2026-10-17-principal-pairs` | every `<verb>_by_user_id` naming who acted (config versions, playbook entries, executions, exports and upgrades, approval and exception resolution) becomes a `<verb>_by_principal_type`/`_id` pair, backfilled as `user`; `task_transitions.principal_kind` becomes `principal_type` |
+| `2026-10-17-failure-reasons-stored-error` | `documents.failure_reason` to the jsonb `documents.error`, `eval_results.error` to jsonb, and every recorded failure reason — those two, formation event errors, and generation and trace errors with no `code` — to `{ code, message, meta? }` |
 
 Run them from the server package, which owns the entrypoint:
 

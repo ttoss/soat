@@ -407,7 +407,15 @@ describe('Metadata schemas', () => {
       expect(response.body.valid).toBe(false);
       expect(response.body.metadata_schema_id).toBe(declared.id);
       expect(response.body.path_prefix).toBe(declared.path_prefix);
-      expect(response.body.error).toContain('quarter');
+      expect(response.body.error).toEqual({
+        code: 'VALIDATION_FAILED',
+        message: expect.stringContaining('quarter'),
+        meta: {
+          metadata_schema_id: declared.id,
+          resource_type: 'document',
+          path_prefix: declared.path_prefix,
+        },
+      });
     });
 
     test('reports metadata that would be accepted', async () => {

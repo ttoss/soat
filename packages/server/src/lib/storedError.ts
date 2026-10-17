@@ -1,5 +1,5 @@
 import { DomainError } from '../errors';
-import type { ErrorCode } from '../errors/codes';
+import { ERROR_CODES, type ErrorCode } from '../errors/codes';
 
 /** The `error` a resource records when its work fails, as its `GET` answers it. */
 export type StoredError = {
@@ -12,6 +12,19 @@ export type StoredError = {
 export const INTERNAL_FAILURE: StoredError = {
   code: 'INTERNAL_ERROR',
   message: 'Internal Server Error',
+};
+
+/** Whether `code` is a key of the `ERROR_CODES` registry. */
+export const isErrorCode = (code: string): code is ErrorCode => {
+  return Object.hasOwn(ERROR_CODES, code);
+};
+
+const fromDomainError = (error: DomainError): StoredError => {
+  return {
+    code: error.code,
+    message: error.message,
+    ...(error.meta !== undefined && { meta: error.meta }),
+  };
 };
 
 /**
@@ -30,14 +43,30 @@ export const toStoredError = (args: {
   label: string;
 }): StoredError => {
   const { error } = args;
-  if (error instanceof DomainError) {
-    return {
-      code: error.code,
-      message: error.message,
-      ...(error.meta !== undefined && { meta: error.meta }),
-    };
-  }
+  if (error instanceof DomainError) return fromDomainError(error);
   // eslint-disable-next-line no-console
   console.error(`${args.label}: recorded as ${args.opaque.code}`, error);
   return args.opaque;
+};
+
+/**
+ * A thrown value as a resource records it where the failure's own words are
+ * part of the record a caller debugs from: a `DomainError` as
+ * {@link toStoredError} keeps it, any other error under `code` with its own
+ * message, and a value with no message under `code` with the code's
+ * description.
+ */
+export const toStoredErrorKeepingMessage = (args: {
+  error: unknown;
+  code: ErrorCode;
+}): StoredError => {
+  const { error, code } = args;
+  if (error instanceof DomainError) return fromDomainError(error);
+  if (error instanceof Error && error.message) {
+    return { code, message: error.message };
+  }
+  if (typeof error === 'string' && error.length > 0) {
+    return { code, message: error };
+  }
+  return { code, message: ERROR_CODES[code].description };
 };

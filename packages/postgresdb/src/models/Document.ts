@@ -193,12 +193,9 @@ export class Document extends Model {
   })
   declare indexedChunks: number | null;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-    field: 'failure_reason',
-  })
-  declare failureReason: string | null;
+  /** `{ code, message, meta? }` when `status` is `failed`. */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare error: object | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

@@ -4,6 +4,7 @@ import { DomainError } from '../errors';
 import { countConverterRules } from './converterRuleDependents';
 import { countBackendDeciders } from './deciderDependents';
 import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
+import type { StoredError } from './storedError';
 import { tools } from './tools';
 
 const log = createDebug('soat:tools');
@@ -56,7 +57,7 @@ export const findToolDeletionBlocker = async (args: {
   id: string;
   /** Physical ids deleted alongside the tool; a decider among them blocks nothing. */
   alsoDeleting: ReadonlySet<string>;
-}): Promise<string | null> => {
+}): Promise<StoredError | null> => {
   log('findToolDeletionBlocker: id=%s', args.id);
   const tool = await tools.getByPublicId(args);
   const deciderCount = await countBackendDeciders({
@@ -64,7 +65,11 @@ export const findToolDeletionBlocker = async (args: {
     excludingPublicIds: args.alsoDeleting,
   });
   if (deciderCount > 0) {
-    return `Tool '${args.id}' is the backend of ${String(deciderCount)} decider(s), so it cannot be deleted.`;
+    return {
+      code: 'TOOL_HAS_DEPENDENTS',
+      message: `Tool '${args.id}' is the backend of ${String(deciderCount)} decider(s), so it cannot be deleted.`,
+      meta: { decider_count: deciderCount },
+    };
   }
   const [acceptedShareCount, ingestionRuleCount] = await Promise.all([
     countAcceptedShares({ resourceType: 'tool', resourceId: tool.publicId }),
@@ -75,5 +80,12 @@ export const findToolDeletionBlocker = async (args: {
     }),
   ]);
   if (acceptedShareCount === 0 && ingestionRuleCount === 0) return null;
-  return `Tool '${args.id}' is shared with ${String(acceptedShareCount)} project(s) that accepted it and converts for ${String(ingestionRuleCount)} ingestion rule(s), so it cannot be deleted.`;
+  return {
+    code: 'TOOL_HAS_DEPENDENTS',
+    message: `Tool '${args.id}' is shared with ${String(acceptedShareCount)} project(s) that accepted it and converts for ${String(ingestionRuleCount)} ingestion rule(s), so it cannot be deleted.`,
+    meta: {
+      accepted_share_count: acceptedShareCount,
+      ingestion_rule_count: ingestionRuleCount,
+    },
+  };
 };

@@ -277,7 +277,7 @@ export type FormationModule = {
      * before this resource's turn, so it refuses nothing.
      */
     alsoDeleting: ReadonlySet<string>;
-  }) => Promise<string | null>;
+  }) => Promise<StoredError | null>;
   /**
    * Read the current live state of a resource and return its properties in
    * the same snake_case format used by the formation template. Returns null
@@ -374,7 +374,7 @@ export type FormationEvent = {
   action: string;
   status: 'completed' | 'failed';
   physicalResourceId?: string;
-  error?: string;
+  error?: StoredError;
 };
 
 /**
@@ -386,11 +386,7 @@ export type FormationEvent = {
  * instead of pointing at a second call to `list-formation-events`.
  * Being a stored bag it is written snake_case, like every other wire value.
  */
-export type FormationError = {
-  code: ErrorCode;
-  message: string;
-  meta?: Record<string, unknown>;
-};
+export type FormationError = StoredError;
 
 /**
  * A failed resource as the formation records it, on its error bag and in its
@@ -444,7 +440,7 @@ export type FormationEventWire = {
   action: string;
   status: 'completed' | 'failed';
   physical_resource_id?: string;
-  error?: string;
+  error?: StoredError;
 };
 
 /** Converts an internal `PlanChange` to its snake_case wire shape. */

@@ -587,9 +587,9 @@ describe('Playbook exports', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.problems).toContainEqual({
-        code: 'duplicate_transformation',
-        node: 'pricing',
-        transformation: 'proposal',
+        code: 'DUPLICATE_TRANSFORMATION',
+        path: expect.stringMatching(/\.transformations\[1\]\.name$/),
+        message: expect.stringContaining("'proposal'"),
       });
     });
   });

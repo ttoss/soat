@@ -2648,7 +2648,7 @@ describe('MCP tools - happy path', () => {
       expect(result.data[0].node_id).toBe('two');
     });
 
-    test('validate-orchestration reports errors for an invalid graph', async () => {
+    test('validate-orchestration reports problems for an invalid graph', async () => {
       const res = await mcpCall('validate-orchestration', {
         nodes: [{ id: 'a', type: 'agent' }],
         edges: [{ from: 'a', to: 'ghost' }],
@@ -2656,7 +2656,14 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.problems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'UNKNOWN_NODE',
+            path: 'edges[0].to',
+          }),
+        ])
+      );
     });
 
     // PATCH/DELETE-backed MCP tools surfaced a DomainError body as the literal

@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
 import { parseConverterOutput } from './converterInvocation';
+import { DOCUMENT_FAILURES } from './documentFailures';
 import {
   emitIngestFailed,
   finalizeIngestedPages,
@@ -69,7 +70,7 @@ const failStaleConversion = async (
       status: 'failed',
       conversionAttemptId: null,
       pendingDocPath: null,
-      failureReason: 'CONVERSION_TIMEOUT',
+      error: DOCUMENT_FAILURES.CONVERSION_TIMEOUT,
     },
     {
       where: {
@@ -83,7 +84,7 @@ const failStaleConversion = async (
   await doc.reload();
   await emitIngestFailed({
     docId: doc.id as number,
-    error: 'CONVERSION_TIMEOUT',
+    error: DOCUMENT_FAILURES.CONVERSION_TIMEOUT,
   });
   log(
     'recoverStaleDocument: marked stalled conversion failed id=%s attemptId=%s',
@@ -117,11 +118,11 @@ export const recoverStaleDocument = async (
 
   await doc.update({
     status: 'failed',
-    failureReason: 'INGESTION_TIMEOUT',
+    error: DOCUMENT_FAILURES.INGESTION_TIMEOUT,
   });
   await emitIngestFailed({
     docId: doc.id as number,
-    error: 'INGESTION_TIMEOUT',
+    error: DOCUMENT_FAILURES.INGESTION_TIMEOUT,
   });
   log(
     'recoverStaleDocument: marked stalled ingestion failed id=%s',

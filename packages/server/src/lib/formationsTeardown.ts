@@ -173,14 +173,13 @@ export const performResourceDeletions = async (args: {
         continue;
       }
       hasError = true;
-      const errorMsg = formationFailure(error).message;
       events.push({
         timestamp: new Date().toISOString(),
         logicalId: resource.logicalId,
         resourceType: resource.resourceType,
         action: 'delete',
         status: 'failed',
-        error: errorMsg,
+        error: formationFailure(error),
       });
     }
   }

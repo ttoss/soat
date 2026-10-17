@@ -956,18 +956,10 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/DecisionAnswer'
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: Why a `failed` decision failed.
-          properties:
-            code:
-              type: string
-              example: OUTPUT_SCHEMA_VALIDATION_FAILED
-            message:
-              type: string
-            meta:
-              type: object
-              description: The failure's own details, when it names any
         generation_id:
           x-soat-ref: generations
           type: string
