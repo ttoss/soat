@@ -1,5 +1,6 @@
 import type { DB } from './db';
 import type { PolicyDocument } from './lib/iam';
+import type { OnBehalfOf } from './lib/onBehalfOf';
 
 export type AuthUser = {
   id: number;
@@ -79,6 +80,11 @@ export type AuthUser = {
    * back into the work that minted it, so it can narrow and never grant.
    */
   runWorkPublicId?: string;
+  /**
+   * The tool call the request writes on behalf of, from a verified
+   * `On-Behalf-Of` assertion (`lib/onBehalfOf.ts`). Recorded, never authorizing.
+   */
+  onBehalfOf?: OnBehalfOf;
 };
 
 export type Context = {

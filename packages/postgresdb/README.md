@@ -88,6 +88,7 @@ The flow they follow is
 | `2026-10-01-generation-input-modalities` | `generations.input_modalities`, the part types a turn's input carried |
 | `2026-10-07-decisions-openai-shape` | decider questions and decision answers converted to the OpenAI Decisions API shape (arrays carrying `name`, `predicate` for `boolean`); `decisions.decider_id`/`decider_version` nullable and `decisions.questions` for a decision sent with its own questions |
 | `2026-10-12-conversation-message-idempotency-digest` | `conversation_messages.idempotency_digest`, the digest of the request a session message's idempotency key names |
+| `2026-10-17-on-behalf-of` | `on_behalf_of` on `playbook_entries`, `playbook_executions`, `playbook_upgrades`, `playbook_exports` and `audit_entries`, the tool call a write was made for |
 | `2026-10-17-failure-reasons-stored-error` | `documents.failure_reason` to the jsonb `documents.error`, `eval_results.error` to jsonb, and every recorded failure reason — those two, formation event errors, and generation and trace errors with no `code` — to `{ code, message, meta? }` |
 
 Run them from the server package, which owns the entrypoint:

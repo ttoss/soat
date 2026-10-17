@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.83.0](https://github.com/ttoss/soat/compare/v0.82.0...v0.83.0) (2026-10-17)
+
+### Features
+
+* **server:** agents driving playbook cases — rerun done nodes, computing pipelines, round/let, wait on writes, on-behalf-of ([#1631](https://github.com/ttoss/soat/issues/1631)) ([4b90b46](https://github.com/ttoss/soat/commit/4b90b4665ca99ec7ed0351591ab97c2386658a72)), closes [#1613](https://github.com/ttoss/soat/issues/1613) [#1614](https://github.com/ttoss/soat/issues/1614) [#1615](https://github.com/ttoss/soat/issues/1615) [#1616](https://github.com/ttoss/soat/issues/1616) [#1629](https://github.com/ttoss/soat/issues/1629)
+
+# [0.82.0](https://github.com/ttoss/soat/compare/v0.81.0...v0.82.0) (2026-10-17)
+
+### Features
+
+* **server:** forward the request id on tool requests ([#1612](https://github.com/ttoss/soat/issues/1612)) ([07c2baf](https://github.com/ttoss/soat/commit/07c2baf9e1e5775dea3cd8dd45d46c06219622b6))
+
 # [0.81.0](https://github.com/ttoss/soat/compare/v0.80.1...v0.81.0) (2026-10-17)
 
 ### Features

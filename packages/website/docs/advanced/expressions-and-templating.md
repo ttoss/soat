@@ -32,6 +32,35 @@ An expression is a **single-key object whose key is a registered operator** (`va
 }
 ```
 
+### Operators beyond the standard set
+
+| Operator | Form | Result |
+| -------- | ---- | ------ |
+| `round` | `{"round": [x, digits]}` or `{"round": x}` | `x` rounded to `digits` decimal places (default `0`), half away from zero |
+| `floor` / `ceil` | same as `round` | `x` rounded down / up to `digits` places |
+| `let` | `{"let": [{"<name>": <expr>, …}, <body>]}` | `body` evaluated with each name readable as `{"var": "<name>"}` |
+
+`digits` is an integer from `-15` to `15`; a negative one rounds to tens, hundreds, …. `x` is a number or a numeric string; anything else fails with `EXPRESSION_FAILED`.
+
+`let` evaluates its bindings in order, each over the context plus the bindings before it, so a value is named once and read anywhere after. A binding shadows a context key of the same name. Names are letters, digits and `_`.
+
+```json
+{
+  "let": [
+    {
+      "rate": { "if": [{ "==": [{ "var": "input.regime" }, "simples"] }, 6, 15] },
+      "price": {
+        "round": [
+          { "/": [{ "var": "input.cost" }, { "-": [1, { "/": [{ "+": [{ "var": "input.margin" }, { "var": "rate" }] }, 100] }] }] },
+          2
+        ]
+      }
+    },
+    { "price": { "var": "price" }, "rate": { "var": "rate" } }
+  ]
+}
+```
+
 ### Where each surface points `var`
 
 Only the **context root** differs:

@@ -355,6 +355,7 @@ const recordEntry = (
     projectPublicId,
     principalType,
     principalId,
+    onBehalfOf: ctx.authUser!.onBehalfOf ?? null,
     action: primary.action,
     resourceSrn,
     resourcePublicId:

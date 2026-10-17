@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import type { Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
 import type { PolicyDocument } from '../lib/iam';
+import { requestOnBehalfOf } from '../lib/onBehalfOf';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
 import type { IsAllowedFn } from './authProjectResolvers';
 import {
@@ -360,6 +361,13 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
     } else {
       await resolveJwt(ctx, token);
     }
+  }
+
+  if (ctx.authUser) {
+    ctx.authUser.onBehalfOf = requestOnBehalfOf({
+      headers: ctx.headers ?? {},
+      apiKeyProjectPublicId: ctx.authUser.apiKeyProjectPublicId,
+    });
   }
 
   await next();

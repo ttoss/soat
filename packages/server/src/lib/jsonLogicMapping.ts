@@ -14,6 +14,49 @@ const log = createDebug('soat:jsonLogicMapping');
  */
 const engine = new LogicEngine();
 
+const readNumber = (args: { operator: string; value: unknown }): number => {
+  const number =
+    typeof args.value === 'string' && args.value.trim() !== ''
+      ? Number(args.value)
+      : args.value;
+  if (typeof number !== 'number' || !Number.isFinite(number)) {
+    throw new Error(
+      `${args.operator} needs a number, got ${JSON.stringify(args.value)}.`
+    );
+  }
+  return number;
+};
+
+/**
+ * `{ "<operator>": [value, digits] }` or `{ "<operator>": value }`. Scales by
+ * exponent notation rather than multiplying, so `1.005` rounds to `1.01`;
+ * `round` takes a half away from zero.
+ */
+const toDigits = (operator: string, apply: (value: number) => number) => {
+  return (args: unknown): number => {
+    const [rawValue, rawDigits = 0] = Array.isArray(args) ? args : [args];
+    const value = readNumber({ operator, value: rawValue });
+    const digits = readNumber({ operator, value: rawDigits });
+    if (!Number.isInteger(digits) || Math.abs(digits) > 15) {
+      throw new Error(`${operator} digits must be an integer from -15 to 15.`);
+    }
+    const scaled = apply(Number(`${value}e${digits}`));
+    return Number(`${scaled}e${-digits}`) + 0;
+  };
+};
+
+engine.addMethod(
+  'round',
+  toDigits('round', (value) => {
+    return Math.sign(value) * Math.round(Math.abs(value));
+  }),
+  { deterministic: true }
+);
+engine.addMethod('floor', toDigits('floor', Math.floor), {
+  deterministic: true,
+});
+engine.addMethod('ceil', toDigits('ceil', Math.ceil), { deterministic: true });
+
 /**
  * Structural check matching the legacy `json-logic-js` `is_logic`, tightened
  * with an operator check: a JSON Logic expression is a non-null, non-array
@@ -89,6 +132,45 @@ export const evaluateLogic = (value: unknown, context: unknown): unknown => {
   }
   return value;
 };
+
+const BINDING_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * `{ "let": [{ "<name>": <expr>, ... }, <body>] }`: each binding is evaluated
+ * in order over the context plus the bindings before it, and the body over
+ * the context with every binding on top, read as `{ "var": "<name>" }`.
+ */
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const evaluateLet = (args: unknown, context: unknown): unknown => {
+  if (!Array.isArray(args) || args.length !== 2 || !isPlainObject(args[0])) {
+    throw new Error('let takes [{ "<name>": <expression>, ... }, <body>].');
+  }
+  const [bindings, body] = args;
+  let scope: Record<string, unknown> = isPlainObject(context)
+    ? { ...context }
+    : {};
+  for (const [name, expression] of Object.entries(bindings)) {
+    if (!BINDING_NAME.test(name)) {
+      throw new Error(`let binding '${name}' must be a plain name.`);
+    }
+    scope = { ...scope, [name]: evaluateLogic(expression, scope) };
+  }
+  return evaluateLogic(body, scope);
+};
+
+engine.addMethod(
+  'let',
+  {
+    lazy: true,
+    method: (args: unknown, context: unknown) => {
+      return evaluateLet(args, context);
+    },
+  },
+  { deterministic: false }
+);
 
 /**
  * Resolves every value of a mapping object against `context` via
