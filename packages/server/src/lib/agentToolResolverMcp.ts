@@ -22,11 +22,16 @@ import { parseJsonRpcBody, readMcpCallResult } from './mcpProtocol';
 import { fetchMcpToolListing, type McpToolListing } from './mcpToolListing';
 import { type McpTransport, postMcp } from './mcpTransport';
 import {
+  GATE_PRESETS,
   mergePresetParameters,
   presetsDeclaredBy,
   stripPresetKeysFromSchema,
+  type ToolWithGatePresets,
 } from './toolPresetParameters';
-import { resolvePresetParametersForCall } from './toolTemplates';
+import {
+  resolvePresetParametersForCall,
+  resolvePresetParametersForGate,
+} from './toolTemplates';
 import {
   meterToolExecution,
   type ToolExecutionMeter,
@@ -74,10 +79,7 @@ export const buildMcpToolExecute = (args: {
 }) => {
   return async (toolArgs: unknown) => {
     const presetParameters = resolvePresetParametersForCall({
-      presetParameters: presetsDeclaredBy({
-        presetParameters: args.presetParameters,
-        schema: args.presetSchema,
-      }),
+      presetParameters: args.presetParameters,
       toolContext: args.toolContext,
       toolName: args.mcpToolName,
       schema: args.presetSchema,
@@ -153,7 +155,11 @@ const toolMetadata = (
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 };
 
-/** One listed MCP tool, as the model sees it and as it dispatches. */
+/**
+ * One listed MCP tool, as the model sees it and as it dispatches. Its schema,
+ * its dispatch and its guardrail gate all read the presets this action
+ * declares, worked out once here.
+ */
 const buildMcpToolEntry = (args: {
   mcpTool: McpToolListing;
   transport: McpTransport;
@@ -164,8 +170,12 @@ const buildMcpToolEntry = (args: {
   viaCall?: string;
   allowInner?: (name: string) => boolean;
   proxyCall?: boolean;
-}): Tool => {
+}): ToolWithGatePresets => {
   const { mcpTool } = args;
+  const presetParameters = presetsDeclaredBy({
+    presetParameters: args.presetParameters,
+    schema: mcpTool.inputSchema,
+  });
   const entry = {
     description: mcpTool.description ?? undefined,
     title: mcpTool.title,
@@ -176,14 +186,14 @@ const buildMcpToolEntry = (args: {
           type: 'object',
           properties: {},
         }) as JSONSchema7,
-        args.presetParameters
+        presetParameters
       )
     ),
     execute: buildMcpToolExecute({
       transport: args.transport,
       mcpToolName: mcpTool.name,
       meter: args.meter,
-      presetParameters: args.presetParameters,
+      presetParameters,
       toolContext: args.toolContext,
       presetSchema: mcpTool.inputSchema,
       logToolCallingError: args.logToolCallingError,
@@ -196,12 +206,21 @@ const buildMcpToolEntry = (args: {
   // Two calls rather than an optional key: `outputSchema` is what the SDK
   // infers a tool's output type from, and an `outputSchema: undefined` in the
   // literal makes that inference `never`.
-  return mcpTool.outputSchema
+  const built = mcpTool.outputSchema
     ? tool({
         ...entry,
         outputSchema: jsonSchema<unknown>(mcpTool.outputSchema as JSONSchema7),
       })
     : tool(entry);
+  return {
+    ...built,
+    [GATE_PRESETS]: resolvePresetParametersForGate({
+      presetParameters,
+      toolContext: args.toolContext,
+      toolName: mcpTool.name,
+      schema: mcpTool.inputSchema,
+    }),
+  };
 };
 
 /** The binding's allowlist and denylist, as one predicate over tool names. */

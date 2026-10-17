@@ -294,21 +294,26 @@ export const findNullVarMappings = (
 
 /**
  * Reshapes a tool's raw result via its `outputMapping` (JSON Logic evaluated
- * over `{ output: rawResult, input: mergedInput }`), e.g. `{ var: "output.text" }`
- * extracts a bare scalar field and `{ var: "input.title" }` echoes back a field
- * of the request that produced the response. When no mapping is
- * configured, the raw result is returned untouched — unlike
- * {@link applyOutputMapping}, which defaults to `{}`.
+ * over `{ output, input, action }`), e.g. `{ var: "output.text" }` extracts a
+ * bare scalar field and `{ var: "input.title" }` echoes back a field of the
+ * request that produced the response. `action` names the `mcp` or `builtin`
+ * action that ran, `null` for a tool with none, so one mapping can reshape
+ * each action its own way. When no mapping is configured, the raw result is
+ * returned untouched — unlike {@link applyOutputMapping}, which defaults to
+ * `{}`.
  */
-export const applyToolOutputMapping = (
-  outputMapping: Record<string, unknown> | null | undefined,
-  rawResult: unknown,
-  mergedInput?: Record<string, unknown>
-): unknown => {
+export const applyToolOutputMapping = (args: {
+  outputMapping: Record<string, unknown> | null | undefined;
+  rawResult: unknown;
+  input?: Record<string, unknown>;
+  action?: string | null;
+}): unknown => {
+  const { outputMapping, rawResult } = args;
   if (!outputMapping) return rawResult;
   const result = evaluateLogic(outputMapping, {
     output: rawResult,
-    input: mergedInput ?? {},
+    input: args.input ?? {},
+    action: args.action ?? null,
   });
   for (const miss of findNullVarMappings(outputMapping, result)) {
     log(
@@ -318,4 +323,17 @@ export const applyToolOutputMapping = (
     );
   }
   return result;
+};
+
+/**
+ * The action an `output_mapping` reads as `action`: the action of an `mcp` or
+ * `builtin` tool, `null` for a tool type that has none.
+ */
+export const actionOfType = (args: {
+  type: string;
+  action?: string | null;
+}): string | null => {
+  return args.type === 'mcp' || args.type === 'builtin'
+    ? (args.action ?? null)
+    : null;
 };

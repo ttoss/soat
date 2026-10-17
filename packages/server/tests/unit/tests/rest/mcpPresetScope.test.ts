@@ -18,7 +18,10 @@ describe('mcp preset scope', () => {
   };
 
   /** A server listing `search` (takes `folder`), `fetch` (does not) and `ping` (no schema). */
-  const mcpTool = async (presets: Record<string, unknown>) => {
+  const mcpTool = async (
+    presets: Record<string, unknown>,
+    extra: Record<string, unknown> = {}
+  ) => {
     const path = `/${turn.unique('mcp')}`;
     turn.target.reply(path, (body) => {
       if (body.method === 'tools/list') {
@@ -54,6 +57,7 @@ describe('mcp preset scope', () => {
       parameters: undefined,
       mcp: { url: `${turn.target.baseUrl}${path}` },
       preset_parameters: presets,
+      ...extra,
     });
     return { ...created, path };
   };
@@ -161,6 +165,69 @@ describe('mcp preset scope', () => {
         ])
       );
       expect(sentArguments(tool.path)).toHaveLength(2);
+    });
+  });
+  /**
+   * A guardrail judges the call that goes out, so it sees the presets the
+   * action takes and no other. This one lets a call through only when it
+   * carries no `folder`.
+   */
+  describe('guardrails', () => {
+    const noFolder = { class: 'B', guard: { '!': { var: 'args.folder' } } };
+
+    const gatedMcpTool = async () => {
+      return mcpTool(
+        { folder: '/pinned' },
+        { guardrail_ids: [await turn.createGuardrail(noFolder)] }
+      );
+    };
+
+    test('a direct call of an action without the preset is judged without it', async () => {
+      const tool = await gatedMcpTool();
+
+      const res = await call({
+        toolId: tool.id,
+        action: 'fetch',
+        input: { id: 'doc_1' },
+      });
+
+      expect(res.status).toBe(200);
+      expect(sentArguments(tool.path)).toEqual([
+        { name: 'fetch', arguments: { id: 'doc_1' } },
+      ]);
+    });
+
+    test('a direct call of an action with the preset is judged with it', async () => {
+      const tool = await gatedMcpTool();
+
+      const res = await call({
+        toolId: tool.id,
+        action: 'search',
+        input: { query: 'q' },
+      });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('TOOL_DISPATCH_FAILED');
+      expect(sentArguments(tool.path)).toEqual([]);
+    });
+
+    test('a call the model makes is judged on the presets its action takes', async () => {
+      const tool = await gatedMcpTool();
+      const agentId = await turn.createAgent({
+        tool_bindings: [{ tool_id: tool.id }],
+      });
+
+      await turn.generate({
+        agentId,
+        calls: [
+          { name: 'search', args: { query: 'q' } },
+          { name: 'fetch', args: { id: 'doc_1' } },
+        ],
+      });
+
+      expect(sentArguments(tool.path)).toEqual([
+        { name: 'fetch', arguments: { id: 'doc_1' } },
+      ]);
     });
   });
 });
