@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { lockForTransaction } from './advisoryLocks';
 import { type SequelizeInstance, type Transaction } from './dbTransaction';
 import { taskLeaseTtlMs } from './orchestration-queue-drivers/config';
 import type { RunTaskKind } from './orchestration-queue-drivers/types';
@@ -12,11 +13,6 @@ import { recordClaimLatency } from './orchestrationQueueMetrics';
 const RUN_TASK_TABLE = 'orchestration_run_tasks';
 const RUN_TABLE = 'orchestration_runs';
 const PROJECT_TABLE = 'projects';
-
-// Advisory-lock namespace (first key of the two-int `pg_advisory_xact_lock`)
-// used to serialize per-project concurrency claim decisions across workers.
-// Distinct from the schema-sync lock key so the two never collide.
-const PROJECT_CONCURRENCY_LOCK_NAMESPACE = 0x50a7_c000;
 
 const log = createDebug('soat:orchestrations');
 
@@ -168,9 +164,11 @@ const loadProjectOccupancy = async (args: {
   if (limitedProjectIds.length === 0) return occupancy;
 
   for (const pid of limitedProjectIds) {
-    await args.sequelize.query('SELECT pg_advisory_xact_lock(:ns, :pid)', {
-      replacements: { ns: PROJECT_CONCURRENCY_LOCK_NAMESPACE, pid },
+    await lockForTransaction({
+      sequelize: args.sequelize,
       transaction: args.transaction,
+      namespace: 'projectConcurrency',
+      id: pid,
     });
   }
 

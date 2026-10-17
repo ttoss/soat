@@ -127,6 +127,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The dispatch did not survive long enough to record an outcome. Check the target named by the trigger for work that ends the process, then re-fire the trigger manually.',
   VERSION_CONFLICT:
     'Re-read the resource, re-apply the change on top of the version `meta.current_version` names, and retry with that version. A retry of the same body against the same stale version conflicts again.',
+  CONVERSATION_POSITION_CONFLICT:
+    'Retry the write unchanged: nothing was stored, and the retry resolves its position again.',
   NAME_CONFLICT:
     'A resource with this name already exists in the project. Pick another name, or update the existing resource instead of creating a second one.',
   IDEMPOTENCY_KEY_REUSED:

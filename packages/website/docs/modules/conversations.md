@@ -144,7 +144,7 @@ No two messages share a slot:
 
 - **Append** (default): omitted `position` writes at `MAX(position) + 1`.
 - **Insert between**: a colliding `position` shifts that message and all after it up by one in a single transaction.
-- **Concurrent writes** that resolve the same `position` race on the unique index: one is stored, the other fails and is not retried.
+- **Concurrent writes** to one conversation are serialized: each resolves its `position` in turn, so every one is stored. A write that still finds its `position` taken answers `409 CONVERSATION_POSITION_CONFLICT` and stores nothing; retry it.
 
 ### Generating the Next Message
 
@@ -212,7 +212,7 @@ Flow (with `?wait=true`):
 
 #### Concurrency
 
-Nothing serializes generate calls on one conversation. Each turn reads the history as it stands when it starts, so concurrent turns answer the same history, and stores its reply right after the last message it read, so a message added while it runs stays after the reply. Each message write resolves its `position` in its own transaction; the unique `(conversation_id, position)` index is what keeps two writes off one slot (see [Message ordering](#message-ordering)).
+Nothing serializes generate calls on one conversation. Each turn reads the history as it stands when it starts, so concurrent turns answer the same history, and stores its reply right after the last message it read, so a message added while it runs stays after the reply. Message writes to one conversation are serialized, so a reply and the messages added while it ran are all stored (see [Message ordering](#message-ordering)).
 
 #### Streaming
 
