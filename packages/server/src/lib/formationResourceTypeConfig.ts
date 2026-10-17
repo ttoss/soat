@@ -72,6 +72,8 @@ export type FormationHandlerConfig = {
 export type FormationResourceTypeRegistration = {
   name: string;
   description?: string;
+  /** Replaces the built-in of the same name. See {@link parseOverridesBuiltin}. */
+  overridesBuiltin: boolean;
   handler: FormationHandlerConfig;
   capabilities: ReadonlySet<HandlerCapability>;
   /**
@@ -238,6 +240,46 @@ const parseWriteOnlyProperties = (args: {
   return parsed;
 };
 
+/**
+ * Whether the entry replaces the built-in of the same name, which it may do
+ * only when it says so. Explicit both ways: an implicit shadow would let a
+ * misnamed entry silently redirect an `agent` resource to an external handler,
+ * under the handler's authorization rather than the built-in's IAM actions; and
+ * a flag on a name no built-in has is a typo that would leave the built-in it
+ * meant to replace running.
+ */
+const parseOverridesBuiltin = (args: {
+  value: unknown;
+  name: string;
+  builtInTypes: ReadonlySet<string>;
+  source: string;
+  at: string;
+}): boolean => {
+  const { value, name, builtInTypes, source, at } = args;
+  if (value !== undefined && typeof value !== 'boolean') {
+    return fail({
+      source,
+      message: `${at}\`overrides_builtin\` must be a boolean`,
+    });
+  }
+
+  const overrides = value === true;
+  const isBuiltIn = builtInTypes.has(name);
+  if (isBuiltIn && !overrides) {
+    return fail({
+      source,
+      message: `${at}'${name}' is a built-in formation resource type; set \`overrides_builtin: true\` to replace it`,
+    });
+  }
+  if (!isBuiltIn && overrides) {
+    return fail({
+      source,
+      message: `${at}\`overrides_builtin\` is set, but '${name}' is not a built-in formation resource type`,
+    });
+  }
+  return overrides;
+};
+
 const parseEntry = (args: {
   entry: unknown;
   index: number;
@@ -263,14 +305,13 @@ const parseEntry = (args: {
       message: `${at}\`name\` must match ${NAME_PATTERN.source} — the same spelling built-in types use`,
     });
   }
-  if (builtInTypes.has(name)) {
-    // Shadowing a built-in would let deployment config silently redirect an
-    // `agent` resource to an external handler.
-    return fail({
-      source,
-      message: `${at}'${name}' is a built-in formation resource type and cannot be redefined`,
-    });
-  }
+  const overridesBuiltin = parseOverridesBuiltin({
+    value: entry.overrides_builtin,
+    name,
+    builtInTypes,
+    source,
+    at,
+  });
   if (seen.has(name)) {
     return fail({
       source,
@@ -292,6 +333,7 @@ const parseEntry = (args: {
   return {
     name,
     ...(typeof description === 'string' ? { description } : {}),
+    overridesBuiltin,
     handler: parseHandler({ handler: entry.handler, env, source, at }),
     capabilities: parseCapabilities({
       capabilities: entry.capabilities,
@@ -393,6 +435,20 @@ export const loadFormationResourceTypeConfig = (args: {
     env: args.env,
     source,
   });
+
+  const overrides = registrations.filter((registration) => {
+    return registration.overridesBuiltin;
+  });
+  if (overrides.length > 0) {
+    log(
+      'overriding built-in formation resource type(s): %s',
+      overrides
+        .map((registration) => {
+          return registration.name;
+        })
+        .join(', ')
+    );
+  }
 
   log(
     'registered %d custom formation resource type(s): %s',

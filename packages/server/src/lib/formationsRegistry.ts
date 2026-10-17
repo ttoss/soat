@@ -88,8 +88,12 @@ registerFormationModule({ module: playbooksFormationModule });
  * registration) would otherwise silently start asserting things about custom
  * types they cannot hold for.
  */
+const BUILT_IN_MODULES: ReadonlyMap<string, FormationModule> = new Map(
+  registeredModules
+);
+
 const BUILT_IN_RESOURCE_TYPES: ReadonlySet<string> = new Set(
-  registeredModules.keys()
+  BUILT_IN_MODULES.keys()
 );
 
 export const builtInResourceTypes = (): ReadonlySet<string> => {
@@ -122,36 +126,47 @@ export const supportedResourceTypes = (): ReadonlySet<string> => {
  * from any route: the handler URL and its signing secret are deployment config
  * at the same trust level as the database URL.
  *
- * A name colliding with a built-in throws, so a registration can never shadow
- * `agent` and quietly redirect it. The parser rejects that earlier with a
- * message naming the file; this is the backstop for any other caller.
+ * A registration replaces a built-in only when it declares `overridesBuiltin`,
+ * and declares it only for a built-in name; anything else throws. The parser
+ * rejects both earlier with a message naming the file; this is the backstop for
+ * any other caller.
  */
 export const registerFormationResourceTypes = (args: {
   registrations: FormationResourceTypeRegistration[];
 }): void => {
   for (const registration of args.registrations) {
-    if (BUILT_IN_RESOURCE_TYPES.has(registration.name)) {
+    const isBuiltIn = BUILT_IN_RESOURCE_TYPES.has(registration.name);
+    if (isBuiltIn !== registration.overridesBuiltin) {
       throw new Error(
-        `Cannot register formation resource type '${registration.name}': it is a built-in type`
+        isBuiltIn
+          ? `Cannot register formation resource type '${registration.name}': it is a built-in type and the registration does not override it`
+          : `Cannot override formation resource type '${registration.name}': it is not a built-in type`
       );
     }
-    registerFormationModule({
-      module: buildRegisteredFormationModule({ registration }),
-    });
+    const module = buildRegisteredFormationModule({ registration });
+    if (isBuiltIn) {
+      registeredModules.set(registration.name, module);
+    } else {
+      registerFormationModule({ module });
+    }
   }
 };
 
 /**
  * Removes operator-registered types again. Exists for tests, which must not
  * leak a registry mutation into another file (`.claude/rules/tests.md`); a
- * built-in is never removable.
+ * built-in is never removable, and an overridden one gets its module back.
  */
 export const unregisterFormationResourceTypes = (args: {
   names: string[];
 }): void => {
   for (const name of args.names) {
-    if (BUILT_IN_RESOURCE_TYPES.has(name)) continue;
-    registeredModules.delete(name);
+    const builtIn = BUILT_IN_MODULES.get(name);
+    if (builtIn) {
+      registeredModules.set(name, builtIn);
+    } else {
+      registeredModules.delete(name);
+    }
   }
 };
 

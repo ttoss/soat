@@ -10,6 +10,7 @@ import {
 import {
   getFormationModule,
   initFormationResourceTypes,
+  registerFormationResourceTypes,
   supportedResourceTypes,
   unregisterFormationResourceTypes,
 } from 'src/lib/formationsRegistry';
@@ -127,6 +128,21 @@ describe('parseFormationResourceTypeConfig', () => {
       expect([...declared.writeOnlyProperties]).toEqual(['agent_id']);
     });
 
+    test('a built-in name is accepted when the entry says it overrides it', () => {
+      const [registration] = parse({
+        resource_types: [
+          { ...VALID_ENTRY, name: 'agent', overrides_builtin: true },
+        ],
+      });
+      expect(registration.name).toBe('agent');
+      expect(registration.overridesBuiltin).toBe(true);
+    });
+
+    test('overrides_builtin defaults to false', () => {
+      const [registration] = parse({ resource_types: [VALID_ENTRY] });
+      expect(registration.overridesBuiltin).toBe(false);
+    });
+
     test('an http handler URL is accepted, for a handler on a private network', () => {
       const [registration] = parse({
         resource_types: [
@@ -188,7 +204,27 @@ describe('parseFormationResourceTypeConfig', () => {
       // `agent` resource to an external handler.
       rejects(
         { resource_types: [{ ...VALID_ENTRY, name: 'agent' }] },
-        /'agent' is a built-in formation resource type/
+        /'agent' is a built-in formation resource type.*`overrides_builtin: true`/
+      );
+    });
+
+    test('rejects overrides_builtin on a name that is not a built-in', () => {
+      // A typo in the name would otherwise register an unrelated type while the
+      // built-in it meant to replace kept running.
+      rejects(
+        { resource_types: [{ ...VALID_ENTRY, overrides_builtin: true }] },
+        /'channel' is not a built-in formation resource type/
+      );
+    });
+
+    test('rejects an overrides_builtin that is not a boolean', () => {
+      rejects(
+        {
+          resource_types: [
+            { ...VALID_ENTRY, name: 'agent', overrides_builtin: 'yes' },
+          ],
+        },
+        /`overrides_builtin` must be a boolean/
       );
     });
 
@@ -376,6 +412,21 @@ describe('loadFormationResourceTypeConfig', () => {
     ).toEqual(['channel']);
   });
 
+  test('reads an entry that overrides a built-in', () => {
+    writeConfig({
+      resource_types: [
+        { ...VALID_ENTRY, name: 'agent', overrides_builtin: true },
+      ],
+    });
+
+    const [registration] = loadFormationResourceTypeConfig({
+      builtInTypes: BUILT_INS,
+      env: { ...ENV, FORMATION_RESOURCE_TYPES_CONFIG: configPath },
+    });
+
+    expect(registration.overridesBuiltin).toBe(true);
+  });
+
   test('a file that cannot be read is a boot failure naming the path', () => {
     const missing = path.join(path.dirname(configPath), 'does-not-exist.json');
 
@@ -426,5 +477,49 @@ describe('loadFormationResourceTypeConfig', () => {
   test('unregistering never removes a built-in type', () => {
     unregisterFormationResourceTypes({ names: ['agent'] });
     expect(getFormationModule({ resourceType: 'agent' })).toBeDefined();
+  });
+});
+
+// ── Overriding a built-in ───────────────────────────────────────────────────
+
+describe('registerFormationResourceTypes — overriding a built-in', () => {
+  const webhookOverride = () => {
+    return parseFormationResourceTypeConfig({
+      config: {
+        resource_types: [
+          { ...VALID_ENTRY, name: 'webhook', overrides_builtin: true },
+        ],
+      },
+      builtInTypes: new Set(['webhook']),
+      env: ENV,
+      source: 'test',
+    })[0];
+  };
+
+  test('replaces the built-in module, and unregistering restores it', () => {
+    const builtIn = getFormationModule({ resourceType: 'webhook' });
+    expect(builtIn?.authorization).not.toHaveProperty('operatorRegistered');
+
+    try {
+      registerFormationResourceTypes({ registrations: [webhookOverride()] });
+      expect(getFormationModule({ resourceType: 'webhook' })).toMatchObject({
+        authorization: { operatorRegistered: true },
+      });
+    } finally {
+      unregisterFormationResourceTypes({ names: ['webhook'] });
+    }
+
+    expect(getFormationModule({ resourceType: 'webhook' })).toBe(builtIn);
+  });
+
+  test('an override of a name no built-in has is refused by the registry', () => {
+    expect(() => {
+      registerFormationResourceTypes({
+        registrations: [{ ...webhookOverride(), name: 'not_a_builtin' }],
+      });
+    }).toThrow(/'not_a_builtin': it is not a built-in type/);
+    expect(
+      getFormationModule({ resourceType: 'not_a_builtin' })
+    ).toBeUndefined();
   });
 });

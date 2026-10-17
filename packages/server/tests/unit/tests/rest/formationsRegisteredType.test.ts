@@ -132,6 +132,50 @@ afterAll(async () => {
   await handler.close();
 });
 
+describe('POST /api/v1/formations — a registration overriding a built-in', () => {
+  beforeEach(() => {
+    handler.reset();
+    registerFormationResourceTypes({
+      registrations: [
+        {
+          ...handler.registration({}),
+          name: 'webhook',
+          overridesBuiltin: true,
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    unregisterFormationResourceTypes({ names: ['webhook'] });
+  });
+
+  test('a `webhook` resource reaches the handler, not the built-in module', async () => {
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'ext_webhook' },
+    };
+    const before = await db.Webhook.count();
+
+    // The caller holds only `formations:*` actions: the built-in would refuse
+    // it `webhooks:CreateWebhook`, so a 201 also shows the override carries
+    // the registered type's authorization, not the built-in's.
+    const res = await createFormation({
+      resources: {
+        Hook: {
+          type: 'webhook',
+          properties: { name: 'Inbound', kind: 'push' },
+        },
+      },
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.resources[0].physical_resource_id).toBe('ext_webhook');
+    expect(requestsOfType('create')[0].body.resource_type).toBe('webhook');
+    expect(await db.Webhook.count()).toBe(before);
+  });
+});
+
 describe('POST /api/v1/formations — operator-registered type', () => {
   withRegisteredType();
 

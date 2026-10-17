@@ -67,6 +67,7 @@ const buildRegistration = (args: {
   return {
     name: 'test_channel',
     description: 'A test channel.',
+    overridesBuiltin: false,
     handler: {
       url: `${args.baseUrl}/formation-resources`,
       secret: HANDLER_SECRET,

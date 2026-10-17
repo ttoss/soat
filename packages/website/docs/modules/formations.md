@@ -575,7 +575,8 @@ Registration is **deployment configuration, not an API**: the handler URL and si
 
 A registration declares:
 
-- **`name`** — the type a template writes; `^[a-z][a-z0-9_]*$`, no collision with a built-in.
+- **`name`** — the type a template writes; `^[a-z][a-z0-9_]*$`. A built-in name requires `overrides_builtin`.
+- **`overrides_builtin`** — `true` replaces the built-in type of the same name. See [Overriding a built-in type](#overriding-a-built-in-type).
 - **`handler`** — URL, the environment variable holding the signing secret, and the timeout.
 - **`capabilities`** — the **optional** operations the handler implements (below). `create`, `update` and `delete` are always required and never listed.
 - **`schema`** — JSON Schema for `properties`; the sole allowlist. An undeclared field is `VALIDATION_FAILED` naming the field; a missing `required` field fails a create.
@@ -638,6 +639,12 @@ Consequences:
 - **A write-only property always looks changed**: with nothing stored to compare against, every deploy sends it again (the handler is expected to be idempotent), so the resource never reports "no changes".
 - **`read` should not return it either**: a credential echoed in `read.properties` goes straight back into the drift comparison.
 
+#### Overriding a built-in type
+
+An entry whose `name` is a built-in type and that sets `overrides_builtin: true` replaces that built-in on the deployment: every template resource of that type goes to the handler, with the registered `schema`, and is gated on the formation's own actions instead of the built-in's IAM actions. The built-in's routes are unchanged. The flag is a boot failure on a name that is not a built-in, and a built-in name without it is a boot failure too.
+
+Resources of that type already in the resource ledger are handed to the handler as well, which does not know their ids: `read` reports them gone and the next deploy recreates them. Override a type only on a deployment whose ledger holds none.
+
 #### Replacement
 
 When an `update` answers with a different `physical_resource_id`, the resource record is re-pointed at it, every `ref` resolves to the new id, and the old resource is disposed of under the resource's `deletion_policy` (`retain` leaves it alive).
@@ -687,7 +694,7 @@ The un-deleted id stays on the record as pending cleanup; the next deploy and th
 
 The secret is referenced by variable **name**, never inlined, so the file carries nothing confidential. It is read **once, at boot**; changes take effect on the next restart.
 
-Every problem with the file is a **hard boot failure** naming the file and the offending entry: a name that collides with a built-in or repeats within the file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that is unset or empty, a non-positive timeout, an unknown capability, a `write_only_properties` entry the schema does not declare, or a `schema` that is not an object schema.
+Every problem with the file is a **hard boot failure** naming the file and the offending entry: a built-in name without `overrides_builtin: true`, an `overrides_builtin` on a name that is not a built-in or that is not a boolean, a name that repeats within the file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that is unset or empty, a non-positive timeout, an unknown capability, a `write_only_properties` entry the schema does not declare, or a `schema` that is not an object schema.
 
 ## Examples
 
