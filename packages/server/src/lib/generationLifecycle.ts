@@ -2,11 +2,8 @@ import type { LanguageModel, LanguageModelUsage } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import type {
-  GenerationResult,
-  PendingGeneration,
-} from './agentGenerationTypes';
-import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import type { PendingGeneration } from './agentGenerationTypes';
+import { emitGenerationEvent } from './generationEvents';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId } from './modelRouteExecutor';
@@ -70,7 +67,6 @@ export const recordGenerationFailure = async (args: {
    * channel a background caller has (it already got its `202` and went away).
    */
   projectId: number;
-  projectPublicId: string;
   /**
    * Token usage the turn spent before it failed, from `usageFromFailure`. A
    * failure that never reached the model has none; one that failed *on* the
@@ -118,30 +114,12 @@ export const recordGenerationFailure = async (args: {
   ]);
 
   // Without this, the only way to learn a background generation died is to poll
-  // the record. Wrapped so emitting can never mask the original error.
-  try {
-    emitResourceEvent({
-      type: 'agents.generation.failed',
-      projectId: args.projectId,
-      projectPublicId: args.projectPublicId,
-      resourceType: 'generation',
-      resourceId: args.generationId,
-      // snake_case: an event payload is a wire surface, reaching subscribers
-      // through the webhook dispatcher verbatim.
-      data: {
-        id: args.generationId,
-        trace_id: args.traceId,
-        status: 'failed',
-        error: errorPayload,
-      },
-    });
-  } catch (error) {
-    log(
-      'recordGenerationFailure: failed to emit failure event generationId=%s error=%s',
-      args.generationId,
-      error instanceof Error ? error.message : String(error)
-    );
-  }
+  // the record. After the writes above, so the event carries the failed record.
+  await emitGenerationEvent({
+    type: 'agents.generation.failed',
+    projectId: args.projectId,
+    generationId: args.generationId,
+  });
 
   // Meta keys are
   // written in snake_case to match the external REST contract.
@@ -206,7 +184,6 @@ export const recordContinuationFailure = async (args: {
     error: args.error,
     model: args.pending.resolvedModel,
     projectId: args.pending.projectId,
-    projectPublicId: args.pending.projectPublicId,
     // The continuation fails on the model's answer the same way the initial
     // turn does, and its tokens were billed the same way.
     usage: usageFromFailure(args.error),
@@ -220,9 +197,9 @@ type CompletionSideEffectsArgs = {
   result: {
     steps: unknown[];
     finishReason: string;
+    text: string;
     response?: { modelId?: string };
   };
-  completedResult: GenerationResult;
 };
 
 /**
@@ -311,25 +288,12 @@ const runCompletionSideEffects = async (
     }),
   ]);
 
-  try {
-    const projectPublicId = await resolveProjectPublicId({
-      projectId: args.pending.projectId,
-    });
-    emitResourceEvent({
-      type: 'agents.generation.completed',
-      projectId: args.pending.projectId,
-      projectPublicId,
-      resourceType: 'generation',
-      resourceId: args.generationId,
-      data: args.completedResult,
-    });
-  } catch (error) {
-    log(
-      'runCompletionSideEffects: failed to emit completion event generationId=%s error=%s',
-      args.generationId,
-      error instanceof Error ? error.message : String(error)
-    );
-  }
+  await emitGenerationEvent({
+    type: 'agents.generation.completed',
+    projectId: args.pending.projectId,
+    generationId: args.generationId,
+    assistantContent: args.result.text,
+  });
 };
 
 /**

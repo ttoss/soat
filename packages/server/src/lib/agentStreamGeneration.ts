@@ -179,7 +179,6 @@ const recordStreamFailure = async (args: {
     error: toProviderDomainError(args.error) ?? args.error,
     model: args.model,
     projectId: args.typedAgent.project.id,
-    projectPublicId: args.typedAgent.project.publicId,
     stepsAlreadySpent: 0,
   });
 };
