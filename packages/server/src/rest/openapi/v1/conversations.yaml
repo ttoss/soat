@@ -870,7 +870,12 @@ components:
             for the assistant's response text.
           example: 'Hello! How can I help you today?'
         message:
-          $ref: '#/components/schemas/ConversationMessageRecord'
+          description: >-
+            The stored assistant message, the record
+            `GET /api/v1/conversations/{conversation_id}/messages` lists at its
+            `position`. Its `document_id` addresses it.
+          allOf:
+            - $ref: '#/components/schemas/ConversationMessageRecord'
         generation_id:
           x-soat-ref: generations
           type: string
@@ -908,6 +913,21 @@ components:
         required_action:
           type: object
           description: Tool-call information the client must resolve.
+          properties:
+            type:
+              type: string
+              enum: [submit_tool_outputs]
+            tool_calls:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  tool_name:
+                    type: string
+                  args:
+                    type: object
     GenerateConversationMessageResponse:
       oneOf:
         - $ref: '#/components/schemas/GenerateConversationMessageCompleted'

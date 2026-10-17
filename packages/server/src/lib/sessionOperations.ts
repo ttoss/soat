@@ -2,8 +2,8 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { submitToolOutputs } from './agentGeneration';
-import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import { generateConversationMessage } from './conversationGeneration';
+import { mapGeneratedTurn } from './generatedTurn';
 import { emitGenerationEvent } from './generationEvents';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
@@ -78,36 +78,22 @@ const buildGenerationResult = async (
   session: InstanceType<(typeof db)['Session']>,
   result: Awaited<ReturnType<typeof generateConversationMessage>>
 ) => {
-  if (result.status === 'requires_action') {
-    const requiredAction = mapGenerationRequiredAction(result.requiredAction);
-    await emitGenerationEvent({
-      type: 'sessions.generation.requires_action',
-      projectId: session.projectId,
-      generationId: result.generationId,
-      requiredAction,
-    });
-    return {
-      status: 'requires_action' as const,
-      generation_id: result.generationId,
-      trace_id: result.traceId,
-      required_action: requiredAction,
-    };
-  }
-  await emitGenerationEvent({
-    type: 'sessions.generation.completed',
-    projectId: session.projectId,
-    generationId: result.generationId,
-  });
-  return {
-    status: 'completed' as const,
-    message: {
-      role: 'assistant' as const,
-      content: result.content,
-      model: result.model,
-    },
-    generation_id: result.generationId,
-    trace_id: result.traceId,
-  };
+  const turn = mapGeneratedTurn(result);
+  await emitGenerationEvent(
+    turn.status === 'requires_action'
+      ? {
+          type: 'sessions.generation.requires_action',
+          projectId: session.projectId,
+          generationId: turn.generation_id,
+          requiredAction: turn.required_action,
+        }
+      : {
+          type: 'sessions.generation.completed',
+          projectId: session.projectId,
+          generationId: turn.generation_id,
+        }
+  );
+  return turn;
 };
 
 const checkSessionExpiry = async (

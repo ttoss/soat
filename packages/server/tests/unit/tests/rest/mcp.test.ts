@@ -11,6 +11,7 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { saveTrace } from 'src/lib/traces';
 
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /** Tools a client calls by name; every operation goes through `call`. */
@@ -2205,6 +2206,37 @@ describe('MCP tools - happy path', () => {
       const result = parseResult(res);
       expect(result.role).toBe('user');
       expect(result.content).toBe('hello from mcp session');
+    });
+
+    test('generate-session-response answers the stored message record', async () => {
+      const session = parseResult(
+        await mcpCall('create-session', { agent_id: sessionAgentId })
+      );
+      await mcpCall('add-session-message', {
+        session_id: session.id,
+        message: 'hello',
+      });
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_mcp_session_reply',
+        traceId: 'trace_mcp_session_reply',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Hi', finishReason: 'stop' },
+      });
+
+      const res = await mcpCall('generate-session-response', {
+        session_id: session.id,
+      });
+
+      expect(res.status).toBe(200);
+      const reply = parseResult(res);
+      const listed = parseResult(
+        await mcpCall('list-conversation-messages', {
+          conversation_id: session.conversation_id,
+        })
+      );
+      expect(reply.status).toBe('completed');
+      expect(reply.message.document_id).toMatch(/^doc_/);
+      expect(listed.data).toContainEqual(reply.message);
     });
 
     test('delete-session deletes the session', async () => {
