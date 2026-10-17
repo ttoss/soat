@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.86.0](https://github.com/ttoss/soat/compare/v0.85.1...v0.86.0) (2026-10-17)
+
+### Bug Fixes
+
+* **generations:** a streamed turn that completes emits generations.completed ([#1653](https://github.com/ttoss/soat/issues/1653)) ([3eb2979](https://github.com/ttoss/soat/commit/3eb2979e80856a293bdc904667d0136f18acbabf)), closes [#1651](https://github.com/ttoss/soat/issues/1651)
+* **playbooks:** list optional inputs in a case's missing waves ([#1654](https://github.com/ttoss/soat/issues/1654)) ([d4f8adf](https://github.com/ttoss/soat/commit/d4f8adf906ef0a4187856d61fb0287a6fd3b539f)), closes [#1652](https://github.com/ttoss/soat/issues/1652)
+
+### Features
+
+* **formations:** let a registered resource type override a built-in ([#1650](https://github.com/ttoss/soat/issues/1650)) ([1cdd06d](https://github.com/ttoss/soat/commit/1cdd06dca1e842c043b409da981ba7bc27ca0a58))
+
 ## [0.85.1](https://github.com/ttoss/soat/compare/v0.85.0...v0.85.1) (2026-10-17)
 
 ### Bug Fixes
