@@ -2,6 +2,7 @@ import type { Sequelize } from '@ttoss/postgresdb';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 
 import { installEmbeddingStub } from './embeddingStub';
+import { installEventRecordContract } from './eventRecordContract';
 import { installTestDatabase } from './testDatabaseLifecycle';
 
 beforeEach(() => {
@@ -24,6 +25,8 @@ installEmbeddingStub({
     return Array(Number(process.env.EMBEDDING_DIMENSIONS)).fill(0.1);
   },
 });
+
+installEventRecordContract();
 
 export let sequelize: Sequelize;
 

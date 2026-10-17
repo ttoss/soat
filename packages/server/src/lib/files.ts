@@ -4,7 +4,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import { resolveProjectPublicId, type SoatEventTypeFor } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
 import {
   assertCallerPath,
@@ -26,6 +26,7 @@ import {
 } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
 import { assertStorageQuota } from './quotaStorage';
+import { emitLoadedRecordEvent } from './recordEvents';
 import { nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, mergeTags } from './tags';
 
@@ -57,6 +58,29 @@ const mapFile = (file: InstanceType<(typeof db)['File']>) => {
     created_at: file.createdAt,
     updated_at: file.updatedAt,
   };
+};
+
+/**
+ * Emits a file event whose `data` is the file as `GET` answers it, which names
+ * its project where `mapFile` alone does not. Mapped from the instance in hand,
+ * so a deleted file is announced as it stood.
+ */
+const emitFileEvent = (args: {
+  type: SoatEventTypeFor<'file'>;
+  file: InstanceType<(typeof db)['File']>;
+  projectPublicId?: string;
+}): Promise<void> => {
+  const { file } = args;
+  return emitLoadedRecordEvent({
+    type: args.type,
+    projectId: file.projectId,
+    projectPublicId: args.projectPublicId,
+    resourceType: 'file',
+    resourceId: file.publicId,
+    load: ({ projectPublicId }) => {
+      return { ...mapFile(file), project_id: projectPublicId };
+    },
+  });
 };
 
 export const listFiles = async (args: {
@@ -193,14 +217,7 @@ export const uploadFile = async (args: {
 
   const mapped = mapFile(file);
 
-  emitResourceEvent({
-    type: 'files.created',
-    projectId: args.projectId,
-    projectPublicId,
-    resourceType: 'file',
-    resourceId: file.publicId,
-    data: mapped,
-  });
+  void emitFileEvent({ type: 'files.created', file, projectPublicId });
 
   return mapped;
 };
@@ -334,13 +351,7 @@ export const updateFileMetadata = async (args: {
   }
   const mapped = mapFile(file);
 
-  emitResourceEvent({
-    type: 'files.updated',
-    projectId: file.projectId,
-    resourceType: 'file',
-    resourceId: file.publicId,
-    data: mapped,
-  });
+  void emitFileEvent({ type: 'files.updated', file });
 
   return mapped;
 };
@@ -383,13 +394,7 @@ export const createFile = async (args: {
   }
   const mapped = mapFile(file);
 
-  emitResourceEvent({
-    type: 'files.created',
-    projectId: args.projectId,
-    resourceType: 'file',
-    resourceId: file.publicId,
-    data: mapped,
-  });
+  void emitFileEvent({ type: 'files.created', file });
 
   return mapped;
 };
@@ -418,18 +423,9 @@ export const deleteFile = async (args: { id: string }) => {
     await provider.delete({ storagePath: file.storagePath });
   }
 
-  const filePublicId = file.publicId;
-  const fileProjectId = file.projectId;
-
   await file.destroy();
 
-  emitResourceEvent({
-    type: 'files.deleted',
-    projectId: fileProjectId,
-    resourceType: 'file',
-    resourceId: filePublicId,
-    data: { id: filePublicId },
-  });
+  void emitFileEvent({ type: 'files.deleted', file });
 
   return true;
 };
@@ -464,15 +460,7 @@ export const updateFileTags = async (args: {
   });
   await file.update({ tags: newTags });
 
-  const mapped = { ...mapFile(file), tags: newTags };
-
-  emitResourceEvent({
-    type: 'files.updated',
-    projectId: file.projectId,
-    resourceType: 'file',
-    resourceId: file.publicId,
-    data: mapped,
-  });
+  void emitFileEvent({ type: 'files.updated', file });
 
   // The tag routes' contract is the tag map itself, not the file resource.
   return newTags;

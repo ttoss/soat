@@ -380,7 +380,6 @@ export const evalSettlement = (args: {
  */
 export const finalizeEvalRun = async (args: {
   run: EvalRunRowInstance;
-  evalPublicId: string;
   projectId: number;
   settlement: EvalSettlement;
 }): Promise<void> => {
@@ -423,13 +422,10 @@ export const finalizeEvalRun = async (args: {
     passed
   );
 
-  emitEvalRunEvent({
+  await emitEvalRunEvent({
     event: EVAL_RUN_COMPLETED_EVENT,
     projectId: args.projectId,
-    evalPublicId: args.evalPublicId,
-    runPublicId: args.run.publicId,
-    passed,
-    aggregateScores: aggregate,
+    run: args.run,
   });
 };
 
@@ -443,7 +439,6 @@ export const finalizeEvalRun = async (args: {
  */
 export const failEvalRun = async (args: {
   run: EvalRunRowInstance;
-  evalPublicId: string;
   projectId: number;
   reason: string;
 }): Promise<void> => {
@@ -455,13 +450,10 @@ export const failEvalRun = async (args: {
     toolContext: null,
   });
 
-  emitEvalRunEvent({
+  await emitEvalRunEvent({
     event: 'eval_run.failed',
     projectId: args.projectId,
-    evalPublicId: args.evalPublicId,
-    runPublicId: args.run.publicId,
-    passed: null,
-    aggregateScores: null,
+    run: args.run,
   });
 };
 
@@ -499,7 +491,6 @@ export const claimRunFinalization = async (args: {
  */
 export const finalizeIfUnclaimed = async (args: {
   run: EvalRunRowInstance;
-  evalPublicId: string;
   projectId: number;
   settlement: EvalSettlement;
   now?: Date;
@@ -516,7 +507,6 @@ export const finalizeIfUnclaimed = async (args: {
 
   await finalizeEvalRun({
     run: args.run,
-    evalPublicId: args.evalPublicId,
     projectId: args.projectId,
     settlement: args.settlement,
   });
