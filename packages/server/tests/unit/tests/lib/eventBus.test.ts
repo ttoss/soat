@@ -12,6 +12,12 @@ import { isSoatEventType, SOAT_EVENT_TYPES } from 'src/lib/soatEvents';
  * (`.claude/rules/tests.md`).
  */
 describe('eventBus', () => {
+  // A minimal envelope that still holds the payload contract every emitted
+  // event is checked against (`eventRecordContract.ts`).
+  const envelope = (type: string) => {
+    return { type, resourceId: 'res_1', data: { id: 'res_1' } };
+  };
+
   const drain = async () => {
     await new Promise((resolve) => {
       return setImmediate(resolve);
@@ -28,8 +34,8 @@ describe('eventBus', () => {
       onEvent({ handler });
 
       try {
-        eventBus.emit('soat:event', { type: 'files.created' });
-        eventBus.emit('soat:event', { type: 'sessions.created' });
+        eventBus.emit('soat:event', envelope('files.created'));
+        eventBus.emit('soat:event', envelope('sessions.created'));
         await drain();
         expect(seen).toEqual(['files.created', 'sessions.created']);
       } finally {
@@ -48,9 +54,9 @@ describe('eventBus', () => {
       });
 
       try {
-        eventBus.emit('soat:event', { type: 'files.created' });
-        eventBus.emit('soat:event', { type: 'sessions.created' });
-        eventBus.emit('soat:event', { type: 'files.deleted' });
+        eventBus.emit('soat:event', envelope('files.created'));
+        eventBus.emit('soat:event', envelope('sessions.created'));
+        eventBus.emit('soat:event', envelope('files.deleted'));
         await drain();
         expect(seen).toEqual(['files.created', 'files.deleted']);
       } finally {
@@ -69,8 +75,8 @@ describe('eventBus', () => {
       });
 
       try {
-        eventBus.emit('soat:event', { type: 'order.shipped' });
-        eventBus.emit('soat:event', { type: 'orchestration_runs.succeeded' });
+        eventBus.emit('soat:event', envelope('order.shipped'));
+        eventBus.emit('soat:event', envelope('orchestration_runs.succeeded'));
         await drain();
         expect(seen).toEqual(['orchestration_runs.succeeded']);
       } finally {

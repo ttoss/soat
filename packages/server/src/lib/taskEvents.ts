@@ -5,6 +5,8 @@ import {
 } from './eventBus';
 import type { mapTask } from './tasks';
 
+type MappedTask = ReturnType<typeof mapTask>;
+
 /**
  * Fires one task lifecycle event, mirroring `orchestrationEvents.ts` and
  * `evaluationEvents.ts`: the emitters live beside the module they belong to
@@ -13,12 +15,15 @@ import type { mapTask } from './tasks';
  * `type` is drawn from the `task` entry of the event registry
  * (`soatEvents.ts`), so a name that is not a registered task event — or that
  * belongs to some other resource — does not compile.
+ *
+ * `data` is the task as `GET` answers it; `facts` are what the event knows
+ * beyond the record, snake_case, and may not reuse one of the task's keys.
  */
 export const emitTaskEvent = async (args: {
   type: SoatEventTypeFor<'task'>;
   projectId: number;
-  task: ReturnType<typeof mapTask>;
-  extra?: Record<string, unknown>;
+  task: MappedTask;
+  facts?: Record<string, unknown> & { [K in keyof MappedTask]?: never };
 }): Promise<void> => {
   const projectPublicId = await resolveProjectPublicId({
     projectId: args.projectId,
@@ -29,6 +34,6 @@ export const emitTaskEvent = async (args: {
     projectPublicId,
     resourceType: 'task',
     resourceId: args.task.id,
-    data: { task: args.task, ...(args.extra ?? {}) },
+    data: { ...args.task, ...args.facts },
   });
 };

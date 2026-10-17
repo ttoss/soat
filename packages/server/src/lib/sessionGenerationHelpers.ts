@@ -2,18 +2,12 @@ import type { db } from '../db';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
-import { emitResourceEvent } from './eventBus';
+import { emitSessionEvent } from './sessionEvents';
 
 export const emitGenerationStarted = (
   session: InstanceType<(typeof db)['Session']>
 ) => {
-  emitResourceEvent({
-    type: 'sessions.generation.started',
-    projectId: session.projectId,
-    resourceType: 'session',
-    resourceId: session.publicId,
-    data: { sessionId: session.publicId },
-  });
+  void emitSessionEvent({ type: 'sessions.generation.started', session });
 };
 
 export const processToolOutputResult = async (args: {

@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { emitResourceEvent } from './eventBus';
+import { emitSessionEvent } from './sessionEvents';
 import { mergeTags } from './tags';
 
 // Only ever called by the session-tags REST routes, which resolve the session
@@ -34,13 +34,7 @@ export const updateSessionTags = async (args: {
 
   await session.save();
 
-  emitResourceEvent({
-    type: 'sessions.tags.updated',
-    projectId: session.projectId,
-    resourceType: 'session',
-    resourceId: session.publicId,
-    data: { tags: session.tags },
-  });
+  void emitSessionEvent({ type: 'sessions.updated', session });
 
   return session.tags;
 };

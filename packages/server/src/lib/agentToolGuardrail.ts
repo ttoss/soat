@@ -206,7 +206,7 @@ const evaluateAll = async (args: {
 // The guardrail whose decision matched the composed (strictest) outcome — its
 // version stamps the approval item / provenance. First match wins, matching the
 // left-to-right (project → agent → tool) collection order.
-const governingResult = (
+export const governingResult = (
   evaluated: EvaluatedGuardrail[],
   decision: GuardrailDecision
 ): GuardrailEvaluationResult | undefined => {
@@ -498,14 +498,16 @@ export const evaluateAndRoute = async (args: {
   if (decision === 'execute') {
     return { decision, cleanArgs };
   }
-  if (decision === 'tripwire') {
-    emitGuardrailTripwireEvent({
+  const tripped =
+    decision === 'tripwire' ? governingResult(evaluated, decision) : undefined;
+  if (tripped) {
+    void emitGuardrailTripwireEvent({
       projectId: args.context.projectId,
       projectPublicId: args.context.projectPublicId,
+      guardrail: tripped,
       toolId: args.toolId,
       toolName: args.toolName,
       action: args.action,
-      guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
       orchestrationRunId: args.context.orchestrationRunId,
       agentId: args.context.agentId,
       generationId: args.context.generationId,
