@@ -33,8 +33,8 @@ import { priceBookResource } from './2026-10-01-priceBookResource';
 import { shareCap } from './2026-10-01-shareCap';
 import { decisionsOpenaiShape } from './2026-10-07-decisionsOpenaiShape';
 import { conversationMessageIdempotencyDigest } from './2026-10-12-conversationMessageIdempotencyDigest';
-import { onBehalfOf } from './2026-10-17-onBehalfOf';
 import { failureReasonsStoredError } from './2026-10-17-failureReasonsStoredError';
+import { onBehalfOf } from './2026-10-17-onBehalfOf';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
