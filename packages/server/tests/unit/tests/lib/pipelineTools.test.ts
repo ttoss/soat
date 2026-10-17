@@ -47,10 +47,16 @@ describe('validatePipelineConfig', () => {
     }).toThrow(/pipeline/i);
   });
 
-  test('throws when steps is empty', () => {
+  test('throws when steps is empty and there is no output', () => {
     expect(() => {
       return validatePipelineConfig({ steps: [] });
-    }).toThrow(/non-empty/i);
+    }).toThrow(/output/i);
+  });
+
+  test('accepts no steps beside an output', () => {
+    expect(
+      validatePipelineConfig({ steps: [], output: { var: 'input.n' } })
+    ).toEqual({ steps: [], output: { var: 'input.n' } });
   });
 
   test('throws on duplicate step id', () => {

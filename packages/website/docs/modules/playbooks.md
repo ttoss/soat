@@ -82,6 +82,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `basis`            | object \| null | The revision of each input an output, confirmation or rejection was decided on |
 | `playbook_version` | integer        | The version the case was on when it was written                                |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who wrote it: `user` or `api_key` and its id; null for an output the case wrote |
+| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ### Execution
 
@@ -100,6 +101,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `output_revision`  | integer \| null | The revision of the output entry it wrote; null when it wrote none                   |
 | `error`            | object \| null  | Why it failed                                                                        |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the run; null when the case started it |
+| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`      | string \| null  | ISO 8601 settle timestamp                                                            |
 
 ### Export
@@ -119,6 +121,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `file_id`          | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted       |
 | `error`            | object \| null | Why it failed                                                                      |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the export |
+| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`      | string \| null | ISO 8601 settle timestamp                                                          |
 
 ### Upgrade
@@ -131,6 +134,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `to_version`   | integer        | The version it moved to                                                                                                                                                                          |
 | `diff`         | object         | `{ added, removed, changed }`: node keys added and removed, and each node whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case |
+| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ## Key Concepts
 
@@ -201,9 +205,13 @@ A workflow task or an orchestration run settles its node when the task closes or
 
 ### Running a node
 
-[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now; it is how a `failed` node is retried. Only a `ready`, `stale` or `failed` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `done` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `blocked_by`. A paused case answers `409 PLAYBOOK_CASE_PAUSED`.
+[`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run`](/docs/api/playbooks/run-playbook-case-node) runs one node now; it is how a `failed` node is retried, and how a `done` node is recomputed. Only a `ready`, `stale`, `failed` or `done` node with every required input set runs; a `confirm` node, a blocked one, a `running` one and a `waiting` one answer `409 PLAYBOOK_NODE_NOT_RUNNABLE`, `meta` carrying its `state`, `missing` and `blocked_by`. A paused case answers `409 PLAYBOOK_CASE_PAUSED`.
 
 Without `wait` the request answers `201` with the execution `running` and it settles in the background; poll [`GET /api/v1/playbook-cases/{case_id}/executions/{execution_id}`](/docs/api/playbooks/get-playbook-case-execution). With `wait: true` it answers once the executor settles, or once it parks: a workflow task still open, or an orchestration run waiting on a person or a timer, settles the node when it closes or ends. See [Sync and Async](../advanced/sync-and-async.md). [`GET /api/v1/playbook-cases/{case_id}/executions`](/docs/api/playbooks/list-playbook-case-executions) lists a case's executions, newest first.
+
+### Waiting on the cascade
+
+[`POST /api/v1/playbook-cases/{case_id}/inputs`](/docs/api/playbooks/write-playbook-case-inputs), [`POST /api/v1/playbook-cases/{case_id}/nodes/{node}/confirmation`](/docs/api/playbooks/confirm-playbook-case-node) and [`POST /api/v1/playbook-cases/{case_id}/upgrade`](/docs/api/playbooks/upgrade-playbook-case) answer once the write is done; the executions it queues run in the background, and the case reads `automation_status: running` until they settle. With `wait: true` the answer waits until every execution the write queued, and every one those queue in turn, has settled or parked on a task or run, and returns the case as it then stands. A paused case answers at once. The wait is bounded by the execution lease (15 minutes); a case still running then answers as it stands. See [Sync and Async](../advanced/sync-and-async.md).
 
 ### Pausing a case
 
@@ -731,7 +739,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 | `PLAYBOOK_INPUT_CONFLICT`         | 409    | An input write's `expected_revision` is not the field's current one                                                                                                                                                            |
 | `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | The version's author may not start an executor the definition names                                                                                                                                                            |
 | `PLAYBOOK_AUTHOR_UNAVAILABLE`     | 409    | The version has no author a node can run as                                                                                                                                                                                    |
-| `PLAYBOOK_NODE_NOT_RUNNABLE`      | 409    | The node is a `confirm` node, blocked, `running` or `done`                                                                                                                                                                     |
+| `PLAYBOOK_NODE_NOT_RUNNABLE`      | 409    | The node is a `confirm` node, blocked, `running` or `waiting`                                                                                                                                                                  |
 | `PLAYBOOK_CASE_PAUSED`            | 409    | A run of a node in a paused case                                                                                                                                                                                               |
 | `PLAYBOOK_CASE_NOT_PAUSED`        | 409    | A resume of a case that is not paused                                                                                                                                                                                          |
 | `PROJECT_PAUSED`                  | 409    | A run, an export or a case resume while the case's [project](./projects.md) is paused                                                                                                                                          |

@@ -30,6 +30,7 @@ import {
   recountEvalRunProgress,
 } from './evaluationRunExecution';
 import { scorerList } from './evaluationScorers';
+import { runAsJob } from './requestCorrelation';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:evaluations');
@@ -257,7 +258,9 @@ export const drainEvalQueueOnce = async (args?: {
   await Promise.all(
     tasks.map(async (task) => {
       try {
-        await handleEvalItemTask({ task });
+        await runAsJob(() => {
+          return handleEvalItemTask({ task });
+        });
         await ackEvalItemTask({ id: task.id as number });
         touchedRunIds.add(task.evalRunId as number);
       } catch (error) {

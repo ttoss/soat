@@ -2,14 +2,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import {
-  mapPlaybookCase,
   playbookCases,
   versionDefinition,
   withLockedCase,
 } from './playbookCases';
+import { answerPlaybookCase } from './playbookCaseWait';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookUpgradeDiff } from './playbookUpgrade';
 import { createdByColumns, type RequestPrincipal } from './principals';
@@ -31,6 +32,7 @@ const mapPlaybookUpgrade = (args: {
     diff: row.diff,
     created_by_principal_type: row.createdByPrincipalType,
     created_by_principal_id: row.createdByPrincipalId,
+    on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };
 };
@@ -70,7 +72,9 @@ export const upgradePlaybookCase = async (args: {
   id: string;
   version: unknown;
   createdBy: RequestPrincipal | null;
+  onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
+  wait?: boolean;
 }) => {
   log('upgradePlaybookCase: id=%s version=%s', args.id, args.version);
   const row = await playbookCases.getByPublicId(args);
@@ -126,6 +130,7 @@ export const upgradePlaybookCase = async (args: {
             to,
           }),
           ...createdByColumns(args.createdBy),
+          onBehalfOf: args.onBehalfOf,
         },
         { transaction }
       );
@@ -136,7 +141,7 @@ export const upgradePlaybookCase = async (args: {
   });
 
   if (upgraded) await advancePlaybookCase({ caseDbId: row.id as number });
-  return mapPlaybookCase(await playbookCases.reload(row));
+  return answerPlaybookCase({ row, wait: args.wait === true });
 };
 
 export const listPlaybookCaseUpgrades = async (args: {

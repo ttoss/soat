@@ -749,7 +749,8 @@ components:
             the same shape as `CreateToolRequest` minus `project_id` —
             executed directly without a Tool row, but never both. An inline
             step `tool` cannot itself be of type `pipeline`. An optional
-            `output` maps the final result. A literal credential in an inline
+            `output` maps the final result; `steps` may be empty when
+            `output` is set, which computes `output` over the input alone. A literal credential in an inline
             step `tool` is refused, exactly as in `execute`.
         output_mapping:
           type: object

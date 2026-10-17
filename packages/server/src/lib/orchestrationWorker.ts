@@ -8,6 +8,7 @@ import {
 import { driveQueuedRun, redriveRun, wakeRun } from './orchestrationEngine';
 import { withTaskLeaseHeld } from './orchestrationTaskLease';
 import { writeWorkerHeartbeat } from './orchestrationWorkerHealth';
+import { runAsJob } from './requestCorrelation';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:orchestrations');
@@ -200,11 +201,13 @@ export const drainQueueOnce = async (args?: {
       try {
         // The lease is held for the whole drive: redelivery is for a worker
         // that stopped, and a node slower than one lease is not that.
-        await withTaskLeaseHeld({
-          task,
-          run: () => {
-            return handleRunTask({ task });
-          },
+        await runAsJob(() => {
+          return withTaskLeaseHeld({
+            task,
+            run: () => {
+              return handleRunTask({ task });
+            },
+          });
         });
         await driver.ack({ task });
       } catch (error) {

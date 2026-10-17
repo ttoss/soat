@@ -54,6 +54,7 @@ const mapEntry = (row: InstanceType<(typeof db)['PlaybookEntry']>) => {
     playbook_version: row.playbookVersion,
     created_by_principal_type: row.createdByPrincipalType,
     created_by_principal_id: row.createdByPrincipalId,
+    on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };
 };

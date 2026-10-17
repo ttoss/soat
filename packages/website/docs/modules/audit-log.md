@@ -32,6 +32,7 @@ The API is read-only; writes go through a fire-and-forget queue, so auditing nev
 | `project_id`         | string  | Owning project; `null` for global actions (e.g. `users:CreateUser`)                               |
 | `principal_type`     | string  | `user` or `api_key`; `null` for platform-originated entries (see [System-originated entries](#system-originated-entries)) |
 | `principal_id`       | string  | Public id of the principal (`user_…` or `key_…`); `null` for platform-originated entries |
+| `on_behalf_of`       | object  | The tool call the request was made for; `null` for most ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `action`             | string  | The permission-action string that authorized the request                                         |
 | `resource_srn`       | string  | SRN the action targeted; type-level (`srn:{project}:{type}:*`) on creates                        |
 | `resource_public_id` | string  | Target resource id — from the SRN, or the response body `id` on creates                           |
@@ -46,7 +47,7 @@ The API is read-only; writes go through a fire-and-forget queue, so auditing nev
 
 ### Request correlation (`X-Request-Id`)
 
-Every response carries `X-Request-Id`, stored as `request_id`. A caller-supplied value is honored; otherwise one is generated.
+Every response carries `X-Request-Id`, stored as `request_id` and named in the server's error log. A caller-supplied value is honored when it is 1–128 characters of `A-Z a-z 0-9 . _ : -`; otherwise one is generated. Every request an [`http` or `mcp` tool](./tools.md#request-correlation-x-request-id) sends for it carries the same id.
 
 ### Resource SRN precision
 

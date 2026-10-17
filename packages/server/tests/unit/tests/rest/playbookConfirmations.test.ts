@@ -235,6 +235,30 @@ describe('Playbook confirmations', () => {
       });
     });
 
+    test('with wait it answers once the cascade it starts settles', async () => {
+      const caseId = await newCase();
+      await writeAmount(caseId, 5);
+      const approve = await nodeOf(caseId, 'approve');
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/playbook-cases/${caseId}/nodes/approve/confirmation`)
+        .send({
+          decision: 'approve',
+          expected_revisions: { amount: approve.inputs[0].revision },
+          wait: true,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.automation_status).toBe('idle');
+      const pricing = res.body.nodes.find((node: { key: string }) => {
+        return node.key === 'pricing';
+      });
+      expect(pricing).toMatchObject({
+        state: 'done',
+        output: { value: { doubled: 10 } },
+      });
+    });
+
     test('a rejection holds the node and its readers until its inputs change', async () => {
       const caseId = await newCase();
       await writeAmount(caseId, 5);

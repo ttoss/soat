@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
+import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import { automationWhere, caseAutomation } from './playbookCaseAutomation';
@@ -166,6 +167,7 @@ export type PlaybookEntryWrite = {
   basis: PlaybookBasis | null;
   playbookVersion: number;
   createdBy: RequestPrincipal | null;
+  onBehalfOf: OnBehalfOf | null;
 };
 
 /**
