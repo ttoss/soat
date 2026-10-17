@@ -68,7 +68,7 @@ Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Aut
 
 ### Context Headers (`X-Soat-Context-*`)
 
-Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
+Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
 
 ### Tool ID vs Tool Name
 
@@ -431,7 +431,7 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 
 ### Tool Assertions
 
-When the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration), every request an `mcp` tool sends (`tools/list`, a deferred server's `describe`, `tools/call`) carries a JWT in `X-Soat-Tool-Assertion` (renamed by `TOOL_ASSERTION_HEADER`), so the server can tell which tool of which project called it without holding a secret of SOAT's. A header the tool defines under that name, in any casing, is replaced, and a [redirect to another origin](#where-a-tool-may-reach-egress) drops it like `Authorization`.
+When the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration), every request an `mcp` tool sends (`tools/list`, a deferred server's `describe`, `tools/call`) carries a JWT in `X-Soat-Tool-Assertion` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)), so the server can tell which tool of which project called it without holding a secret of SOAT's. A header the tool defines under that name, in any casing, is replaced, and a [redirect to another origin](#where-a-tool-may-reach-egress) drops it like `Authorization`.
 
 The JWT is signed with EdDSA (Ed25519). The public key is published, unauthenticated, at `GET /.well-known/tool-assertion-jwks.json` under the header's `kid` (the key's RFC 7638 thumbprint); with no key configured the set is empty and no header is sent.
 
@@ -510,7 +510,6 @@ Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-t
 | ------------------------- | -------- | ----------- |
 | `TOOL_RESPONSE_MAX_BYTES` | No       | Ceiling on an http tool's `response_mode: base64` body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger body is `502 TOOL_RESPONSE_TOO_LARGE`. |
 | `TOOL_ASSERTION_PRIVATE_KEY` | No | PEM (PKCS #8) Ed25519 private key that signs [tool assertions](#tool-assertions); `\n` escapes are accepted. Unset sends none. Any other key type fails the call before it is sent. |
-| `TOOL_ASSERTION_HEADER` | No | Header the assertion is sent in. Defaults to `X-Soat-Tool-Assertion`. Must be a valid HTTP header name. |
 
 ## Examples
 

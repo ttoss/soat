@@ -62,7 +62,7 @@ describe('Tool assertions', () => {
   let publicJwk: JsonWebKey;
   const savedEnv = {
     key: process.env.TOOL_ASSERTION_PRIVATE_KEY,
-    header: process.env.TOOL_ASSERTION_HEADER,
+    prefix: process.env.SOAT_HEADER_PREFIX,
   };
 
   const rpc = (body: Record<string, unknown>, result: object) => {
@@ -111,16 +111,16 @@ describe('Tool assertions', () => {
 
   beforeEach(() => {
     process.env.TOOL_ASSERTION_PRIVATE_KEY = privateKeyPem;
-    delete process.env.TOOL_ASSERTION_HEADER;
+    delete process.env.SOAT_HEADER_PREFIX;
     turn.target.reset();
   });
 
   afterAll(async () => {
     process.env.TOOL_ASSERTION_PRIVATE_KEY = savedEnv.key;
-    process.env.TOOL_ASSERTION_HEADER = savedEnv.header;
+    process.env.SOAT_HEADER_PREFIX = savedEnv.prefix;
     if (savedEnv.key === undefined)
       delete process.env.TOOL_ASSERTION_PRIVATE_KEY;
-    if (savedEnv.header === undefined) delete process.env.TOOL_ASSERTION_HEADER;
+    if (savedEnv.prefix === undefined) delete process.env.SOAT_HEADER_PREFIX;
     await turn.close();
   });
 
@@ -282,8 +282,8 @@ describe('Tool assertions', () => {
       }
     });
 
-    test('TOOL_ASSERTION_HEADER renames the header', async () => {
-      process.env.TOOL_ASSERTION_HEADER = 'X-Acme-Tool-Assertion';
+    test('SOAT_HEADER_PREFIX renames the header', async () => {
+      process.env.SOAT_HEADER_PREFIX = 'X-Acme-';
       const tool = await mcpTool();
 
       await callEcho(tool.id);
@@ -293,8 +293,8 @@ describe('Tool assertions', () => {
       expect(assertionOf(listing, 'x-acme-tool-assertion')).toBeDefined();
     });
 
-    test('an invalid TOOL_ASSERTION_HEADER fails the call before anything is sent', async () => {
-      process.env.TOOL_ASSERTION_HEADER = 'Bad Header';
+    test('an invalid SOAT_HEADER_PREFIX fails the call before anything is sent', async () => {
+      process.env.SOAT_HEADER_PREFIX = 'Bad Prefix-';
       const tool = await mcpTool();
 
       const res = await callEcho(tool.id);

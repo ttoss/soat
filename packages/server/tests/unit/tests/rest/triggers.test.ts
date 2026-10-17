@@ -2083,6 +2083,30 @@ describe('Triggers', () => {
       expect(firing.input).toEqual({ payload: 42 });
     });
 
+    test('SOAT_HEADER_PREFIX names the signature header the hook reads', async () => {
+      const saved = process.env.SOAT_HEADER_PREFIX;
+      process.env.SOAT_HEADER_PREFIX = 'X-Acme-';
+      try {
+        const body = JSON.stringify({ event: 'push' });
+        const prefixed = await testClient
+          .post(`/hooks/triggers/${hookTriggerId}`)
+          .set('Content-Type', 'application/json')
+          .set('X-Acme-Signature', sign(hookSecret, body))
+          .send(body);
+        const unprefixed = await testClient
+          .post(`/hooks/triggers/${hookTriggerId}`)
+          .set('Content-Type', 'application/json')
+          .set('X-Soat-Signature', sign(hookSecret, body))
+          .send(body);
+
+        expect(prefixed.status).toBe(202);
+        expect(unprefixed.status).toBe(401);
+      } finally {
+        if (saved === undefined) delete process.env.SOAT_HEADER_PREFIX;
+        else process.env.SOAT_HEADER_PREFIX = saved;
+      }
+    });
+
     test('missing signature returns 401', async () => {
       const body = JSON.stringify({ a: 1 });
       const res = await testClient

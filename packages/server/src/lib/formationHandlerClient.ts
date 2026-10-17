@@ -15,16 +15,20 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
+import { soatHeader } from './headerPrefix';
 import {
   hmacHex,
-  SIGNATURE_HEADER,
+  signatureHeader,
   timestampedSignature,
 } from './hmacSignature';
 import { isObjectRecord } from './openapiSchemaFields';
 
 const log = createDebug('soat:formations:handler');
 
-export const IDEMPOTENCY_HEADER = 'X-Soat-Idempotency-Key';
+/** `<SOAT_HEADER_PREFIX>Idempotency-Key`. */
+export const idempotencyHeader = (): string => {
+  return soatHeader('Idempotency-Key');
+};
 
 export type HandlerRequestType =
   'create' | 'update' | 'delete' | 'validate' | 'read';
@@ -184,11 +188,11 @@ export const callFormationHandler = async (args: {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        [SIGNATURE_HEADER]: timestampedSignature({
+        [signatureHeader()]: timestampedSignature({
           payload,
           secret: registration.handler.secret,
         }),
-        [IDEMPOTENCY_HEADER]: idempotencyKey({ resourceType, request }),
+        [idempotencyHeader()]: idempotencyKey({ resourceType, request }),
       },
       body: payload,
       signal: AbortSignal.timeout(registration.handler.timeoutMs),

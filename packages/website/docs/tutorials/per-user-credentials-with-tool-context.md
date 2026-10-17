@@ -678,7 +678,7 @@ Expected output:
 
 :::tip[Self-hosting under your own brand?]
 
-Set [`TOOL_CONTEXT_HEADER_PREFIX`](/docs/advanced/tool-context#configuring-the-header-prefix) (e.g. `X-Acme-Context-`) to rename the `X-Soat-Context-` prefix. `{{context:...}}` never uses the prefix.
+Set [`SOAT_HEADER_PREFIX`](/docs/advanced/tool-context#configuring-the-header-prefix) (e.g. `X-Acme-`) to rename the `X-Soat-Context-` prefix to `X-Acme-Context-`. `{{context:...}}` never uses the prefix.
 
 :::
 

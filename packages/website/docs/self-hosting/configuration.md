@@ -128,6 +128,24 @@ constraint owns the index.
 | `PORT`                    | `5047`  | HTTP port the server listens on                              |
 | `SOAT_ERROR_LOGS_ENABLED` | `true`  | Controls request error logs from the global error middleware |
 
+### Header Prefix
+
+| Variable             | Default   | Description                                    |
+| -------------------- | --------- | ---------------------------------------------- |
+| `SOAT_HEADER_PREFIX` | `X-Soat-` | Prefix on every header SOAT sends or reads |
+
+Every header SOAT names is `<SOAT_HEADER_PREFIX><name>` (e.g. to hide the SOAT name from tool providers and webhook subscribers):
+
+| Header | Sent to | With `X-Acme-` |
+| --- | --- | --- |
+| [Context headers](../advanced/tool-context.md#configuring-the-header-prefix) `Context-<key>` | `http`, `mcp` tools | `X-Acme-Context-userId` |
+| [Tool assertion](../modules/tools.md#tool-assertions) `Tool-Assertion` | `mcp` tools | `X-Acme-Tool-Assertion` |
+| [Webhook](../modules/webhooks.md) `Event`, `Delivery`, `Signature` | webhook subscribers | `X-Acme-Signature` |
+| [Formation handler](../modules/formations.md) `Signature`, `Idempotency-Key` | registered resource-type handlers | `X-Acme-Idempotency-Key` |
+| [Inbound trigger hook](../modules/triggers.md) `Signature` | read from the caller of `/hooks/triggers/{trigger_id}` | `X-Acme-Signature` |
+
+Prepended verbatim, so include the trailing `-`. Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the request with an error naming the variable. Empty or unset keeps the default. Changing it breaks every receiver and sender already using these names: set it before wiring anything up, or update both sides together.
+
 ### Debug Logging
 
 Logging uses the [`debug`](https://www.npmjs.com/package/debug) package.
@@ -277,15 +295,11 @@ Mount a persistent volume here in Docker.
 | Variable                     | Default           | Description                                                                                     |
 | ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
 | `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000`          | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
-| `TOOL_CONTEXT_HEADER_PREFIX` | `X-Soat-Context-` | Prefix prepended to every `tool_context` key to form the outbound request header name           |
 | `TOOL_ASSERTION_PRIVATE_KEY` | — | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
-| `TOOL_ASSERTION_HEADER` | `X-Soat-Tool-Assertion` | Header the tool assertion is sent in |
 
 A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation.
 
 `TOOL_ASSERTION_PRIVATE_KEY` turns on [tool assertions](../modules/tools.md#tool-assertions); its public half is served at `/.well-known/tool-assertion-jwks.json`. Generate one with `openssl genpkey -algorithm ed25519`. To rotate, replace the key: a verifier that refetches the key set on an unknown `kid` picks up the new one, and assertions signed with the old key expire within 60 seconds.
-
-`TOOL_CONTEXT_HEADER_PREFIX` renames the [context headers](../advanced/tool-context.md#configuring-the-header-prefix) a deployment emits (e.g. to hide the SOAT name from third-party tool providers). Prepended verbatim, so include the trailing `-` (`X-Acme-Context-` + `userId` → `X-Acme-Context-userId`). Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the tool call with an error naming the variable. Empty or unset keeps the default; the prefix cannot be removed, since an unprefixed key could land on `Authorization`. Changing it breaks every tool endpoint already reading these headers: set it before wiring up tools, or update both sides together.
 
 ### Knowledge search
 

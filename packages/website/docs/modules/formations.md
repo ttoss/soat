@@ -597,7 +597,7 @@ One signed `POST` to the registration's URL per operation, with a JSON body:
 
 `physical_resource_id` replaces `properties` on `delete` and accompanies it on `update` and `read`. `project_id` is on **every** request type except `validate`, which is not bound to a deploy.
 
-Two headers travel with every call:
+Two headers travel with every call ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
 
 | Header | Meaning |
 | --- | --- |

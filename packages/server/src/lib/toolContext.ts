@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { HEADER_TOKEN_CHARS, soatHeader } from './headerPrefix';
 
 /**
  * `tool_context` — the key/value map a caller injects so `http`, `mcp` and
@@ -12,57 +13,23 @@ import { DomainError } from '../errors';
  */
 
 /**
- * RFC 7230 `token` characters — the grammar for a valid HTTP header name. A key
- * outside this set produces a header name that `fetch` rejects with a
- * `TypeError` at tool-call time, mid-generation. The same grammar constrains the
- * configurable prefix, since prefix + key must be one valid header name.
- *
- * Exported as a character class rather than only a finished regex because
- * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar:
- * the key inside a template token is the same key that becomes a header, so the
- * three checks — key, prefix, token — must not be able to disagree about which
- * characters exist.
+ * The header-name grammar a `tool_context` key must fit, since a key becomes
+ * a header. Re-exported because `toolTemplates.ts` composes it into the
+ * `{{context:<key>}}` token grammar: key, prefix and token must not be able to
+ * disagree about which characters exist.
  */
-export const TOOL_CONTEXT_KEY_CHARS = "A-Za-z0-9!#$%&'*+\\-.^_`|~";
+export const TOOL_CONTEXT_KEY_CHARS = HEADER_TOKEN_CHARS;
 
 const HEADER_TOKEN_RE = new RegExp(`^[${TOOL_CONTEXT_KEY_CHARS}]+$`);
 
 /**
- * The prefix a `tool_context` key is stamped with, when the deployment does not
- * configure one. Every SOAT deployment that has not set
- * `TOOL_CONTEXT_HEADER_PREFIX` keeps exactly this behavior.
- */
-export const DEFAULT_TOOL_CONTEXT_HEADER_PREFIX = 'X-Soat-Context-';
-
-/**
- * The prefix is deployment configuration, not a caller input: a platform
- * fronting SOAT must be able to keep the substrate's name out of the requests
- * its agents send to third-party tool providers.
- *
- * Read per call rather than captured at module load, so the value a deployment
- * sets is the value used regardless of when the module graph was loaded — the
- * same shape as `getEncryptionKey` in `secrets.ts`.
- *
- * An empty or unset value means "not configured" and falls back to the default.
- * It deliberately cannot *remove* the prefix: an unprefixed key would let a
- * caller-supplied `tool_context` entry land on an arbitrary header name —
- * `Authorization` included — which is precisely the invariant the prefix exists
- * to hold.
+ * `<SOAT_HEADER_PREFIX>Context-`, so a platform fronting SOAT keeps the
+ * substrate's name out of the requests its agents send to third-party tool
+ * providers. Never empty: an unprefixed key would let a caller-supplied entry
+ * land on an arbitrary header name, `Authorization` included.
  */
 const getContextHeaderPrefix = (): string => {
-  const configured = process.env.TOOL_CONTEXT_HEADER_PREFIX;
-  if (!configured) return DEFAULT_TOOL_CONTEXT_HEADER_PREFIX;
-
-  // A prefix outside the header-name grammar fails inside `fetch`, on every
-  // tool call the deployment makes, with a `TypeError` that names neither the
-  // env var nor the prefix. Fail with something an operator can act on instead.
-  if (!HEADER_TOKEN_RE.test(configured)) {
-    throw new Error(
-      `TOOL_CONTEXT_HEADER_PREFIX '${configured}' is not a valid HTTP header-name prefix — it may only contain letters, digits and the characters !#$%&'*+-.^_\`|~.`
-    );
-  }
-
-  return configured;
+  return soatHeader('Context-');
 };
 
 /**

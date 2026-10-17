@@ -228,10 +228,10 @@ SOAT enforces no length or total-header-bytes limit; the receiving server's own 
 
 ## Configuring the header prefix
 
-`TOOL_CONTEXT_HEADER_PREFIX` replaces `X-Soat-Context-` on every context header the deployment emits (white-labeling).
+[`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-` on every header the deployment names, so context headers become `<prefix>Context-<key>` (white-labeling).
 
 ```bash
-TOOL_CONTEXT_HEADER_PREFIX=X-Acme-Context-
+SOAT_HEADER_PREFIX=X-Acme-
 ```
 
 | `tool_context` key | Forwarded header |
@@ -239,10 +239,9 @@ TOOL_CONTEXT_HEADER_PREFIX=X-Acme-Context-
 | `userId` | `X-Acme-Context-userId` |
 | `tenant_external_id` | `X-Acme-Context-tenant_external_id` |
 
-The prefix is prepended verbatim (include the trailing `-` yourself), the key is still never re-cased, the [auto-populated keys](#auto-populated-keys-sessions) take the same names after the prefix, and the [validation rules](#validation) are evaluated against the configured prefix.
+The key is still never re-cased, the [auto-populated keys](#auto-populated-keys-sessions) take the same names after the prefix, and the [validation rules](#validation) are evaluated against the configured prefix.
 
-- **The value must be a valid HTTP header-name prefix** — letters, digits and ``!#$%&'*+-.^_`|~``. An invalid prefix fails the tool call with an error naming the variable.
-- **The prefix cannot be removed.** An empty or unset value keeps the default. Without a prefix, a caller-supplied `tool_context` key could name any header, `Authorization` included.
+- **The prefix cannot be removed.** An empty or unset value keeps the default, and `Context-` always follows it. Without a prefix, a caller-supplied `tool_context` key could name any header, `Authorization` included.
 
 Changing the prefix on a running deployment breaks every tool endpoint already reading the old header names. Set it before wiring up tools, or migrate both sides together.
 

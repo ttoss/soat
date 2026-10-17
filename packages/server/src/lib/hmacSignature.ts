@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { soatHeader } from './headerPrefix';
+
 /**
  * The one timestamped-HMAC scheme SOAT signs outbound requests with:
  *
@@ -14,7 +16,10 @@ import crypto from 'node:crypto';
  * protocol signs identically rather than growing a second scheme.
  */
 
-export const SIGNATURE_HEADER = 'X-Soat-Signature';
+/** `<SOAT_HEADER_PREFIX>Signature`. */
+export const signatureHeader = (): string => {
+  return soatHeader('Signature');
+};
 
 export const hmacHex = (args: { secret: string; value: string }): string => {
   return crypto

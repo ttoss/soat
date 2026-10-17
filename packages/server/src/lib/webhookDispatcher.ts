@@ -6,7 +6,8 @@ import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
-import { SIGNATURE_HEADER, timestampedSignature } from './hmacSignature';
+import { soatHeader } from './headerPrefix';
+import { signatureHeader, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
 import { fetchWithEgressGuard } from './toolEgress';
 import { retryTransient } from './transientRetry';
@@ -49,7 +50,7 @@ type DeliveryRow = InstanceType<(typeof db)['WebhookDelivery']>;
  * would have no replay protection while believing the delivery is signed.
  */
 const signatureHeaders = (args: { payload: string; secret: string }) => {
-  return { [SIGNATURE_HEADER]: timestampedSignature(args) };
+  return { [signatureHeader()]: timestampedSignature(args) };
 };
 
 /** Exponential backoff with jitter, so a fleet of retries does not sync up. */
@@ -250,8 +251,8 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
       headers: {
         'Content-Type': 'application/json',
         ...headers,
-        'X-Soat-Event': delivery.eventType,
-        'X-Soat-Delivery': delivery.publicId,
+        [soatHeader('Event')]: delivery.eventType,
+        [soatHeader('Delivery')]: delivery.publicId,
       },
       body: payload,
       signal: controller.signal,

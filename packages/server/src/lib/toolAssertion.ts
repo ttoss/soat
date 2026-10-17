@@ -2,11 +2,9 @@ import crypto from 'node:crypto';
 
 import createDebug from 'debug';
 
+import { soatHeader } from './headerPrefix';
 import { ISSUER } from './serverIssuer';
-import {
-  RESERVED_TOOL_CONTEXT_KEYS,
-  TOOL_CONTEXT_KEY_CHARS,
-} from './toolContext';
+import { RESERVED_TOOL_CONTEXT_KEYS } from './toolContext';
 
 const log = createDebug('soat:toolAssertion');
 
@@ -17,12 +15,8 @@ const log = createDebug('soat:toolAssertion');
  * let it forge one.
  */
 
-export const DEFAULT_TOOL_ASSERTION_HEADER = 'X-Soat-Tool-Assertion';
-
 /** Long enough for one request to arrive, short enough that a copy is stale. */
 export const TOOL_ASSERTION_TTL_SECONDS = 60;
-
-const HEADER_NAME_RE = new RegExp(`^[${TOOL_CONTEXT_KEY_CHARS}]+$`);
 
 type PublishedKey = {
   kty: 'OKP';
@@ -99,19 +93,9 @@ export const toolAssertionJwks = (): { keys: PublishedKey[] } => {
   return { keys: key ? [key.published] : [] };
 };
 
-/**
- * The header the assertion rides in. Configurable so a platform fronting SOAT
- * keeps the substrate's name off the requests its tools send.
- */
+/** `<SOAT_HEADER_PREFIX>Tool-Assertion`. */
 export const toolAssertionHeaderName = (): string => {
-  const configured = process.env.TOOL_ASSERTION_HEADER;
-  if (!configured) return DEFAULT_TOOL_ASSERTION_HEADER;
-  if (!HEADER_NAME_RE.test(configured)) {
-    throw new Error(
-      `TOOL_ASSERTION_HEADER '${configured}' is not a valid HTTP header name — it may only contain letters, digits and the characters !#$%&'*+-.^_\`|~.`
-    );
-  }
-  return configured;
+  return soatHeader('Tool-Assertion');
 };
 
 /**

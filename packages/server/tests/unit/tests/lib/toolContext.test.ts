@@ -2,7 +2,6 @@ import {
   assertValidToolContextKeys,
   buildContextHeaderName,
   buildContextHeaders,
-  DEFAULT_TOOL_CONTEXT_HEADER_PREFIX,
   pinServerIdentityToolContext,
   RESERVED_TOOL_CONTEXT_KEYS,
 } from 'src/lib/toolContext';
@@ -99,30 +98,29 @@ describe('pinServerIdentityToolContext', () => {
 // The header prefix is deployment configuration, so a platform fronting SOAT
 // does not leak the substrate name to third-party tool providers. A plain
 // concatenation: no character of the key is transformed.
-describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
-  const originalPrefix = process.env.TOOL_CONTEXT_HEADER_PREFIX;
+describe('SOAT_HEADER_PREFIX — context headers', () => {
+  const originalPrefix = process.env.SOAT_HEADER_PREFIX;
 
   afterEach(() => {
     if (originalPrefix === undefined) {
-      delete process.env.TOOL_CONTEXT_HEADER_PREFIX;
+      delete process.env.SOAT_HEADER_PREFIX;
     } else {
-      process.env.TOOL_CONTEXT_HEADER_PREFIX = originalPrefix;
+      process.env.SOAT_HEADER_PREFIX = originalPrefix;
     }
   });
 
-  test('defaults to X-Soat-Context- when unset, so an existing deployment is unchanged', () => {
-    delete process.env.TOOL_CONTEXT_HEADER_PREFIX;
-    expect(DEFAULT_TOOL_CONTEXT_HEADER_PREFIX).toBe('X-Soat-Context-');
+  test('defaults to X-Soat-Context- when unset', () => {
+    delete process.env.SOAT_HEADER_PREFIX;
     expect(buildContextHeaderName('userId')).toBe('X-Soat-Context-userId');
   });
 
   test('an empty prefix falls back to the default rather than disabling it', () => {
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = '';
+    process.env.SOAT_HEADER_PREFIX = '';
     expect(buildContextHeaderName('userId')).toBe('X-Soat-Context-userId');
   });
 
   test('a configured prefix replaces the default, key verbatim', () => {
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = 'X-Naturali-Context-';
+    process.env.SOAT_HEADER_PREFIX = 'X-Naturali-';
     expect(buildContextHeaderName('userId')).toBe('X-Naturali-Context-userId');
     expect(buildContextHeaderName('actor_external_id')).toBe(
       'X-Naturali-Context-actor_external_id'
@@ -130,7 +128,7 @@ describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
   });
 
   test('buildContextHeaders applies the configured prefix to every key', () => {
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = 'X-Naturali-Context-';
+    process.env.SOAT_HEADER_PREFIX = 'X-Naturali-';
     expect(
       buildContextHeaders({
         toolContext: { tenantId: 't1', region: 'us-east-1' },
@@ -145,10 +143,10 @@ describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
   // that sets it after the module graph is loaded (and a test that sets it per
   // case) sees the configured value.
   test('is read per call, not frozen at module load', () => {
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = 'X-One-';
-    expect(buildContextHeaderName('k')).toBe('X-One-k');
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = 'X-Two-';
-    expect(buildContextHeaderName('k')).toBe('X-Two-k');
+    process.env.SOAT_HEADER_PREFIX = 'X-One-';
+    expect(buildContextHeaderName('k')).toBe('X-One-Context-k');
+    process.env.SOAT_HEADER_PREFIX = 'X-Two-';
+    expect(buildContextHeaderName('k')).toBe('X-Two-Context-k');
   });
 
   // A prefix outside the RFC 7230 `token` grammar produces a header name
@@ -156,20 +154,20 @@ describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
   // deployment fails, far from the misconfiguration. Fail with a named error
   // instead.
   test.each([
-    ['X-Bad Context-', 'a space'],
-    ['X-Bad:Context-', 'a colon'],
-    ['X-Bad(Context)-', 'parentheses'],
+    ['X-Bad Name-', 'a space'],
+    ['X-Bad:Name-', 'a colon'],
+    ['X-Bad(Name)-', 'parentheses'],
   ])('rejects the invalid prefix %p (%s)', (prefix) => {
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = prefix;
+    process.env.SOAT_HEADER_PREFIX = prefix;
     expect(() => {
       return buildContextHeaderName('userId');
-    }).toThrow(/TOOL_CONTEXT_HEADER_PREFIX/);
+    }).toThrow(/SOAT_HEADER_PREFIX/);
   });
 
   // The key→header collision check runs against the *configured* prefix, so a
   // deployment cannot lose the duplicate-key guard by renaming the prefix.
   test('key validation still catches a header collision under a custom prefix', () => {
-    process.env.TOOL_CONTEXT_HEADER_PREFIX = 'X-Naturali-Context-';
+    process.env.SOAT_HEADER_PREFIX = 'X-Naturali-';
     expect(() => {
       return assertValidToolContextKeys({ userId: 'a', userID: 'b' });
     }).toThrow(/both map to the header X-Naturali-Context-/);

@@ -157,7 +157,7 @@ POST /hooks/triggers/{trigger_id}
 ```
 
 No bearer token, no snake→camel transform of the payload, not in the generated
-SDK/CLI/MCP surface. The caller signs the **raw request body**:
+SDK/CLI/MCP surface. The caller signs the **raw request body** (the header is prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)):
 
 ```
 X-Soat-Signature: sha256=<hex(HMAC-SHA256(secret, body))>
