@@ -709,6 +709,30 @@ describe('Tasks', () => {
         })
       ).toBe(true);
     });
+
+    test('a repeated status filter ORs its values', async () => {
+      const task = (await createTask()).body;
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?workflow_id=${workflowId}&status=closed&status=open&limit=100`
+      );
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((t: { id: string }) => {
+          return t.id;
+        })
+      ).toContain(task.id);
+    });
+
+    test('a status outside the vocabulary is refused with 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?workflow_id=${workflowId}&status=done`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   // The stop side of a spend gate has to find the cards whose automation is

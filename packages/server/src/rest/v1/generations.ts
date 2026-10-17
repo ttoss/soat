@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeGenerationContent } from 'src/lib/contentPurge';
 import {
+  GENERATION_STATUSES,
   generations,
   getGeneration,
   getGenerationMemoryAssertions,
@@ -15,6 +16,7 @@ import { validateMetadataBag } from 'src/lib/metadataBag';
 import { traceRows } from 'src/lib/traces';
 
 import {
+  parseEnumListQuery,
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
@@ -63,7 +65,6 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     chain_id: chainId,
     orchestration_run_id: orchestrationRunId,
     node_id: nodeId,
-    status,
   } = ctx.query as Record<string, string | undefined>;
 
   const result = await listGenerations({
@@ -76,7 +77,11 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     chainId,
     orchestrationRunId,
     nodeId,
-    status,
+    statuses: parseEnumListQuery({
+      ctx,
+      name: 'status',
+      allowed: GENERATION_STATUSES,
+    }),
     ...parsePagination(ctx),
   });
 

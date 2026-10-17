@@ -16,6 +16,7 @@ import {
   totalListOrder,
 } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { timeRangeWhere } from './timeRange';
 
 const log = createDebug('soat:audit');
 
@@ -327,12 +328,8 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
   if (args.resourceSrn) {
     where.resourceSrn = { [Op.or]: srnPrefixMatchers(args.resourceSrn) };
   }
-  if (args.from || args.to) {
-    where.createdAt = {
-      ...(args.from ? { [Op.gte]: args.from } : {}),
-      ...(args.to ? { [Op.lte]: args.to } : {}),
-    };
-  }
+  const createdAt = timeRangeWhere({ from: args.from, to: args.to });
+  if (createdAt) where.createdAt = createdAt;
 
   return where;
 };

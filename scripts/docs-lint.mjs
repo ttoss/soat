@@ -111,6 +111,15 @@ const CHECKS = [
     label: "stale toggle: '?async=' (the sync/async toggle is 'wait')",
     re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/,
   },
+  // A time-range filter is `from`/`to` (`<field>_from`/`<field>_to` off the
+  // record's natural timestamp); `listFilterShapeContract.test.ts` holds the
+  // specs to it. The flag half needs whitespace before `--`, so a heading
+  // anchor such as `#step-11--observe-before-you-enforce` does not match.
+  {
+    label:
+      "stale time filter: use 'from'/'to' (or '<field>_from'/'<field>_to')",
+    re: /[?&](since|until|\w+_before|\w+_after)=|(?:^|\s)--(since|until|[a-z]+(?:[-_][a-z]+)*[-_](?:before|after))\b/,
+  },
   // Fields no endpoint accepts. `\btool_ids\b` does not match
   // `active_tool_ids`, still a real field, since `_` is a word character. The
   // `tools` shorthand gets no entry: too common to denylist, and a documented

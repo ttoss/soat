@@ -364,7 +364,7 @@ Expect `origin: "node"`, `orchestration_run_id` = your run, `proposed_action.arg
 
 ```ts
 const { data: pending } = await adminSoat.approvals.listApprovals({
-  query: { project_id: PROJECT_ID, status: 'pending' },
+  query: { project_id: PROJECT_ID, status: ['pending'] },
 });
 console.log(pending);
 ```

@@ -406,7 +406,7 @@ soat list-sessions --agent-id agent_01 --status open
 
 ```ts
 const { data: sessions } = await soat.sessions.listSessions({
-  query: { agent_id: 'agent_01', status: 'open' },
+  query: { agent_id: 'agent_01', status: ['open'] },
 });
 ```
 

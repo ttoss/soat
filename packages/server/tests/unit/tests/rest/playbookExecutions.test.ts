@@ -923,6 +923,35 @@ describe('Playbook executions', () => {
       });
     });
 
+    test('a repeated automation_status filter ORs its values', async () => {
+      const paused = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+      await pause(paused);
+      const idle = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: doubleToolId }),
+      });
+
+      const idsIn = async (query: string) => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/playbook-cases?project_id=${projectId}&${query}&limit=100`
+        );
+        expect(res.status).toBe(200);
+        return res.body.data.map((row: { id: string }) => {
+          return row.id;
+        });
+      };
+
+      expect(
+        await idsIn('automation_status=idle&automation_status=paused')
+      ).toEqual(expect.arrayContaining([paused, idle]));
+      const pausedOrRunning = await idsIn(
+        'automation_status=paused&automation_status=running'
+      );
+      expect(pausedOrRunning).toContain(paused);
+      expect(pausedOrRunning).not.toContain(idle);
+    });
+
     test('returns 400 for an unknown status', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/playbook-cases?project_id=${projectId}&automation_status=busy`

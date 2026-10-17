@@ -372,7 +372,7 @@ describe('MCP tools - happy path', () => {
     const listed = parseResult(
       await mcpCall('list-chains', {
         project_id: projectId,
-        status: 'budget_exhausted',
+        status: ['expired', 'budget_exhausted'],
       })
     );
     expect(

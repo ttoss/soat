@@ -124,7 +124,7 @@ soat update-project --project-id proj_01 --max-chain-generations 25
 
 ```ts
 const { data: chains } = await client.GET('/api/v1/chains', {
-  params: { query: { project_id: 'proj_01', status: 'active' } },
+  params: { query: { project_id: 'proj_01', status: ['active'] } },
 });
 
 const { data: chain } = await client.GET('/api/v1/chains/{chain_id}', {

@@ -224,22 +224,26 @@ describe('MemoryAssertions', () => {
       expect(response.body.data).toEqual([]);
     });
 
-    test('filters by since', async () => {
-      const memoryStoreId = await createMemoryStore('Ledger Since');
-      await writeMemory({ memoryStoreId, content: 'Since fact' });
+    test('from and to bound created_at, both inclusive', async () => {
+      const memoryStoreId = await createMemoryStore('Ledger Range');
+      await writeMemory({ memoryStoreId, content: 'Range fact' });
 
       const future = new Date(Date.now() + 60_000).toISOString();
       const past = new Date(Date.now() - 60_000).toISOString();
+      const list = (query: string) => {
+        return authenticatedTestClient(userToken).get(
+          `/api/v1/memory-stores/${memoryStoreId}/assertions?${query}`
+        );
+      };
 
-      const afterFuture = await authenticatedTestClient(userToken).get(
-        `/api/v1/memory-stores/${memoryStoreId}/assertions?since=${future}`
-      );
-      const afterPast = await authenticatedTestClient(userToken).get(
-        `/api/v1/memory-stores/${memoryStoreId}/assertions?since=${past}`
-      );
+      const all = await list('');
+      const at = encodeURIComponent(all.body.data[0].created_at);
 
-      expect(afterFuture.body.total).toBe(0);
-      expect(afterPast.body.total).toBe(1);
+      expect((await list(`from=${future}`)).body.total).toBe(0);
+      expect((await list(`from=${past}`)).body.total).toBe(1);
+      expect((await list(`to=${past}`)).body.total).toBe(0);
+      expect((await list(`to=${future}`)).body.total).toBe(1);
+      expect((await list(`from=${at}&to=${at}`)).body.total).toBe(1);
     });
 
     test('an unknown mechanism returns 400', async () => {
@@ -253,15 +257,16 @@ describe('MemoryAssertions', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('a since that is not a timestamp returns 400', async () => {
-      const memoryStoreId = await createMemoryStore('Ledger Bad Since');
+    test('a to that is not a timestamp returns 400', async () => {
+      const memoryStoreId = await createMemoryStore('Ledger Bad To');
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/memory-stores/${memoryStoreId}/assertions?since=yesterday`
+        `/api/v1/memory-stores/${memoryStoreId}/assertions?to=yesterday`
       );
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/ISO 8601/);
     });
 
     test('unauthenticated request returns 401', async () => {

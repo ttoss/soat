@@ -49,10 +49,17 @@ paths:
             example: proj_V1StGXR8Z5jdHi6B
         - name: status
           in: query
-          description: Filter by chain status
+          required: false
+          description: >-
+            Filter by chain status. Repeat the parameter to OR values. A value
+            outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [active, concluded, expired, budget_exhausted]
+            type: array
+            items:
+              type: string
+              enum: [active, concluded, expired, budget_exhausted]
+          style: form
+          explode: true
         - name: agent_id
           in: query
           description: Filter by the agent whose continuation opened the chain

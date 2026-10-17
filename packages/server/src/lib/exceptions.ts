@@ -20,6 +20,10 @@ export const EXCEPTION_EVENT_TYPES = {
   created: 'exceptions.created',
 } as const;
 
+export const EXCEPTION_STATUSES = ['open', 'acknowledged', 'resolved'] as const;
+
+type ExceptionStatus = (typeof EXCEPTION_STATUSES)[number];
+
 export type ExceptionSeverity = 'info' | 'warning' | 'critical';
 export type ExceptionKind =
   | 'run_failed'
@@ -284,14 +288,14 @@ export const fileException = async (
 
 export const listExceptions = async (args: {
   projectIds: number[];
-  status?: string;
+  statuses?: readonly ExceptionStatus[];
   severity?: string;
   kind?: string;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedException>> => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.status) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
   if (args.severity) where.severity = args.severity;
   if (args.kind) where.kind = args.kind;
 
