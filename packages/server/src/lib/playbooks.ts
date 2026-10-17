@@ -23,6 +23,7 @@ import {
 } from './playbookWire';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
+import type { StoredError } from './storedError';
 import type { VersionedWrite } from './writePrecondition';
 
 const log = createDebug('soat:playbooks');
@@ -272,10 +273,15 @@ const hasCasesMessage = (args: { id: string; cases: number }): string => {
 /** Why deleting the playbook would refuse, or `null` when it would not. */
 export const findPlaybookDeletionBlocker = async (args: {
   id: string;
-}): Promise<string | null> => {
+}): Promise<StoredError | null> => {
   log('findPlaybookDeletionBlocker: id=%s', args.id);
   const cases = await casesOf(await playbooks.getByPublicId(args));
-  return cases > 0 ? hasCasesMessage({ id: args.id, cases }) : null;
+  if (cases === 0) return null;
+  return {
+    code: 'PLAYBOOK_HAS_CASES',
+    message: hasCasesMessage({ id: args.id, cases }),
+    meta: { cases },
+  };
 };
 
 export const deletePlaybook = async (args: {

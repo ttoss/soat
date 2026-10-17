@@ -306,7 +306,7 @@ A document that carries **no** metadata is judged as carrying an empty bag, so u
 
 ## Step 5 — Check a batch before sending it
 
-An importer with a thousand rows wants to know what it would be told, without writing anything. [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers exactly that: which declaration governs the path, and what the bag violates.
+An importer with a thousand rows wants to know what it would be told, without writing anything. [`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers exactly that: which declaration governs the path, and the error the write would be refused with.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -355,7 +355,15 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/metadata-schemas/validate" \
   "resource_type": "document",
   "metadata_schema_id": "mdschema_V1StGXR8Z5jdHi6B",
   "path_prefix": "/reports",
-  "error": "(root) must have required property 'owner'"
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "metadata does not satisfy the schema declared for '/reports': (root) must have required property 'owner'",
+    "meta": {
+      "metadata_schema_id": "mdschema_V1StGXR8Z5jdHi6B",
+      "resource_type": "document",
+      "path_prefix": "/reports"
+    }
+  }
 }
 ```
 

@@ -4,8 +4,8 @@ info:
   version: 1.0.0
   description: >-
     The shape every error response carries. This file declares no paths: it
-    exists so the envelope is defined once rather than once per module, which
-    is what kept eighteen byte-identical copies of it in step by hand.
+    exists so the envelope, the failure reason a resource records and a
+    validation problem are each defined once rather than once per module.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -82,3 +82,53 @@ components:
             meta:
               type: object
               description: Optional structured context for the error.
+    StoredError:
+      type: object
+      description: >-
+        Why a resource's work failed, in the shape of an error response's
+        `error` without `hint` and `docs_url`. Every `error` field a resource
+        records carries it, so `code` can be read without first checking the
+        type of `error`.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: >-
+            A key from the server's ERROR_CODES registry, documented on the
+            Error Codes page. `INTERNAL_ERROR`, with the message `Internal
+            Server Error`, records an unexpected failure whose detail reaches
+            the server log only.
+          example: AI_PROVIDER_ERROR
+        message:
+          type: string
+          example: 'Provider returned 402: insufficient credits'
+        meta:
+          type: object
+          additionalProperties: true
+          description: The failure's own structured context, when it names any.
+    ValidationProblem:
+      type: object
+      description: >-
+        One reason a definition was refused. A validation refusal lists every
+        one under `meta.problems`, and a dry-run validate endpoint answers the
+        same items.
+      required:
+        - code
+        - path
+        - message
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          description: What kind of problem it is, stable across releases.
+          example: MISSING_FIELD
+        path:
+          type: string
+          description: Where in the request body the problem is.
+          example: nodes[0].agent_id
+        message:
+          type: string
+          description: The problem in words, naming the values involved.
+          example: "agent node 'a' is missing required field 'agent_id'."

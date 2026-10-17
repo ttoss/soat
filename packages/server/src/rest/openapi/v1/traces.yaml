@@ -284,21 +284,12 @@ components:
             Public ID of the root trace for the entire execution tree.
             Null if this trace is itself the root.
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: >
-            Structured error payload recorded when a generation in this trace
-            failed (e.g. an upstream AI provider error). Null if no failure
-            has been recorded.
-          properties:
-            code:
-              type: string
-              example: AI_PROVIDER_ERROR
-            message:
-              type: string
-              example: 'Provider returned 402: insufficient credits'
-            meta:
-              type: object
+          description: >-
+            Why a generation in this trace failed (e.g. an upstream AI provider
+            error). Null if no failure has been recorded.
         content_redacted_at:
           type: string
           format: date-time
@@ -352,9 +343,10 @@ components:
           type: string
           nullable: true
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: Structured error payload recorded when a generation in this trace failed
+          description: Why a generation in this trace failed
         created_at:
           type: string
           format: date-time

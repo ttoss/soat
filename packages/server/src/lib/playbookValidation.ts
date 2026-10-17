@@ -5,17 +5,13 @@ import {
   type PlaybookNode,
 } from './playbookDefinition';
 import { nodesByKey, topologicalWaves } from './playbookGraph';
+import type { ValidationProblem } from './validationProblems';
 
-export type PlaybookDefinitionProblem =
-  | { code: 'duplicate_node'; node: string }
-  | { code: 'duplicate_input'; node: string; input: string }
-  | { code: 'missing_node'; node: string; input: string }
-  | { code: 'unknown_field'; node: string; input: string }
-  | { code: 'executor_required'; node: string }
-  | { code: 'executor_forbidden'; node: string }
-  | { code: 'transformations_not_final'; node: string }
-  | { code: 'duplicate_transformation'; node: string; transformation: string }
-  | { code: 'cycle'; nodes: string[] };
+export type PlaybookDefinitionProblem = ValidationProblem;
+
+const nodePath = (index: number): string => {
+  return `definition.nodes[${index}]`;
+};
 
 /** A collect or confirm node's output is its inputs, so its fields are known. */
 const fieldExists = (args: {
@@ -44,16 +40,17 @@ const fieldExists = (args: {
 /** A transformation's name is how an export selects it, so it is unique per node. */
 const transformationProblems = (args: {
   node: PlaybookNode;
+  path: string;
 }): PlaybookDefinitionProblem[] => {
   const { key, transformations } = args.node;
   const problems: PlaybookDefinitionProblem[] = [];
   const names = new Set<string>();
-  for (const { name } of transformations ?? []) {
+  for (const [index, { name }] of (transformations ?? []).entries()) {
     if (names.has(name)) {
       problems.push({
-        code: 'duplicate_transformation',
-        node: key,
-        transformation: name,
+        code: 'DUPLICATE_TRANSFORMATION',
+        path: `${args.path}.transformations[${index}].name`,
+        message: `Node '${key}' declares transformation '${name}' more than once.`,
       });
     }
     names.add(name);
@@ -64,30 +61,44 @@ const transformationProblems = (args: {
 
 const nodeProblems = (args: {
   node: PlaybookNode;
+  path: string;
 }): PlaybookDefinitionProblem[] => {
   const { key, kind, executor, transformations, final } = args.node;
 
   const problems: PlaybookDefinitionProblem[] = [];
 
   if (kind === 'execute' && !executor) {
-    problems.push({ code: 'executor_required', node: key });
+    problems.push({
+      code: 'EXECUTOR_REQUIRED',
+      path: `${args.path}.executor`,
+      message: `Execute node '${key}' needs an executor.`,
+    });
   }
 
   if (kind !== 'execute' && executor) {
-    problems.push({ code: 'executor_forbidden', node: key });
+    problems.push({
+      code: 'EXECUTOR_FORBIDDEN',
+      path: `${args.path}.executor`,
+      message: `${kind} node '${key}' cannot have an executor; only an execute node runs one.`,
+    });
   }
 
   if (transformations?.length && !final) {
-    problems.push({ code: 'transformations_not_final', node: key });
+    problems.push({
+      code: 'TRANSFORMATIONS_NOT_FINAL',
+      path: `${args.path}.transformations`,
+      message: `Node '${key}' declares transformations but is not final.`,
+    });
   }
 
-  problems.push(...transformationProblems({ node: args.node }));
+  problems.push(...transformationProblems(args));
 
   return problems;
 };
 
 const inputProblems = (args: {
   node: PlaybookNode;
+  path: string;
   byKey: Map<string, PlaybookNode>;
 }): PlaybookDefinitionProblem[] => {
   const { node, byKey } = args;
@@ -95,11 +106,16 @@ const inputProblems = (args: {
   const problems: PlaybookDefinitionProblem[] = [];
   const seen = new Set<string>();
 
-  for (const input of node.inputs) {
-    const at = { node: node.key, input: input.name };
+  for (const [index, input] of node.inputs.entries()) {
+    const path = `${args.path}.inputs[${index}]`;
+    const named = `Input '${input.name}' of node '${node.key}'`;
 
     if (seen.has(input.name)) {
-      problems.push({ code: 'duplicate_input', ...at });
+      problems.push({
+        code: 'DUPLICATE_INPUT',
+        path: `${path}.name`,
+        message: `${named} is declared more than once.`,
+      });
     }
 
     seen.add(input.name);
@@ -110,9 +126,17 @@ const inputProblems = (args: {
     const field = parseField({ field: input.source.field });
 
     if (!source) {
-      problems.push({ code: 'missing_node', ...at });
+      problems.push({
+        code: 'MISSING_NODE',
+        path: `${path}.source.node`,
+        message: `${named} reads node '${input.source.node}', which the definition does not declare.`,
+      });
     } else if (!field || !fieldExists({ source, field })) {
-      problems.push({ code: 'unknown_field', ...at });
+      problems.push({
+        code: 'UNKNOWN_FIELD',
+        path: `${path}.source.field`,
+        message: `${named} reads '${input.source.field}', which node '${source.key}' does not produce.`,
+      });
     }
   }
 
@@ -132,20 +156,37 @@ export const validatePlaybookDefinition = (args: {
   const problems: PlaybookDefinitionProblem[] = [];
   const keys = new Set<string>();
 
-  for (const node of definition.nodes) {
+  for (const [index, node] of definition.nodes.entries()) {
     if (keys.has(node.key)) {
-      problems.push({ code: 'duplicate_node', node: node.key });
+      problems.push({
+        code: 'DUPLICATE_NODE',
+        path: `${nodePath(index)}.key`,
+        message: `Node key '${node.key}' is used by more than one node.`,
+      });
     }
 
     keys.add(node.key);
   }
 
-  for (const node of definition.nodes) {
-    problems.push(...nodeProblems({ node }), ...inputProblems({ node, byKey }));
+  for (const [index, node] of definition.nodes.entries()) {
+    const path = nodePath(index);
+    problems.push(
+      ...nodeProblems({ node, path }),
+      ...inputProblems({ node, path, byKey })
+    );
   }
 
   for (const nodes of topologicalWaves({ definition }).cycles) {
-    problems.push({ code: 'cycle', nodes });
+    const named = nodes
+      .map((key) => {
+        return `'${key}'`;
+      })
+      .join(', ');
+    problems.push({
+      code: 'CYCLE',
+      path: 'definition.nodes',
+      message: `Nodes ${named} read each other in a cycle.`,
+    });
   }
 
   return problems;

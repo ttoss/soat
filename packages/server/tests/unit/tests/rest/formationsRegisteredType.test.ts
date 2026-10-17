@@ -358,7 +358,9 @@ describe('POST /api/v1/formations — operator-registered type', () => {
           action: 'rollback',
           status: 'failed',
           physical_resource_id: 'chn_stuck',
-          error: expect.stringContaining('stuck'),
+          error: expect.objectContaining({
+            message: expect.stringContaining('stuck'),
+          }),
         }),
       ])
     );
@@ -540,7 +542,9 @@ describe('PUT /api/v1/formations/:formation_id — operator-registered type', ()
         logical_id: 'Chan',
         resource_type: 'test_channel',
         physical_resource_id: 'chn_300',
-        error: expect.stringContaining('cannot delete'),
+        error: expect.objectContaining({
+          message: expect.stringContaining('cannot delete'),
+        }),
       },
     ]);
   });
@@ -712,7 +716,9 @@ describe('PUT /api/v1/formations/:formation_id — operator-registered type', ()
           logical_id: 'Drop',
           action: 'delete',
           status: 'failed',
-          error: expect.stringContaining('refused'),
+          error: expect.objectContaining({
+            message: expect.stringContaining('refused'),
+          }),
         }),
       ])
     );

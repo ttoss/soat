@@ -2,10 +2,12 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
+import { DOCUMENT_FAILURES } from './documentFailures';
 import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
 import type { MappedIngestionRule } from './ingestionRules';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:documents');
 
@@ -78,7 +80,7 @@ export const emitIngestionSettled = async (args: {
  */
 export const emitIngestFailed = async (args: {
   docId: number;
-  error: string;
+  error: StoredError;
 }): Promise<void> => {
   try {
     await emitIngestionSettled({
@@ -176,10 +178,13 @@ export const finalizeIngestedPages = async (
       status: 'failed',
       conversionAttemptId: null,
       pendingDocPath: null,
-      failureReason: 'FILE_PARSE_FAILED',
+      error: DOCUMENT_FAILURES.FILE_PARSE_FAILED,
     });
     log('finalizeIngestedPages: no extractable text docId=%d', docId);
-    await emitIngestFailed({ docId, error: 'FILE_PARSE_FAILED' });
+    await emitIngestFailed({
+      docId,
+      error: DOCUMENT_FAILURES.FILE_PARSE_FAILED,
+    });
     return;
   }
 
@@ -206,7 +211,7 @@ export const finalizeIngestedPages = async (
     status: 'ready',
     conversionAttemptId: null,
     pendingDocPath: null,
-    failureReason: null,
+    error: null,
     // Persist the effective chunk config so the document reads back the settings
     // it was ingested with (formation round-trip / drift convergence).
     chunkStrategy: chunkConfig.strategy,

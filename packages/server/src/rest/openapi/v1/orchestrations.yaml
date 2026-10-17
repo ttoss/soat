@@ -104,10 +104,11 @@ paths:
         unique, edges reference existing nodes, the graph is acyclic (unless it
         contains a loop node), and every `input_mapping` `{"var": "..."}`
         reference resolves to a state key written by an upstream node or seeded
-        by `input_schema`. Returns blocking `errors` and non-blocking
+        by `input_schema`. Returns blocking `problems` and non-blocking
         `warnings` (e.g. a state key only written on a conditional branch). The
-        same `errors` checks are enforced on create and update, which fail with
-        `400` when any error is present.
+        same checks are enforced on create and update, which fail with `400
+        ORCHESTRATION_VALIDATION_FAILED` listing the same items under
+        `meta.problems` and `meta.warnings`.
       operationId: validateOrchestration
       requestBody:
         required: true
@@ -1496,9 +1497,10 @@ components:
           type: object
           description: Map of node ID to output artifact.
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: '`{ code, message, meta? }` when status is failed.'
+          description: Why it failed, when `status` is `failed`.
         trace_id:
           x-soat-ref: traces
           type: string
@@ -1673,9 +1675,10 @@ components:
           nullable: true
           description: Output artifact the node produced (null when failed).
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: '`{ code, message, meta? }` when status is failed.'
+          description: Why it failed, when `status` is `failed`.
         started_at:
           type: string
           format: date-time
@@ -1893,31 +1896,28 @@ components:
           nullable: true
           description: Optional JSON Schema for run inputs; its top-level properties seed state.
 
-    OrchestrationValidationError:
-      type: object
-      properties:
-        path:
-          type: string
-          description: Location of the issue (e.g. nodes[1].input_mapping.val).
-        message:
-          type: string
-          description: Human-readable description of the issue.
-
     OrchestrationValidationResult:
       type: object
       required:
         - valid
-        - errors
+        - problems
         - warnings
       properties:
         valid:
           type: boolean
-          description: True when there are no blocking errors.
-        errors:
+          description: True when there are no blocking problems.
+        problems:
           type: array
+          description: >-
+            Every blocking problem — the items a refused write lists under
+            `meta.problems`.
           items:
-            $ref: '#/components/schemas/OrchestrationValidationError'
+            $ref: './errors.yaml#/components/schemas/ValidationProblem'
         warnings:
           type: array
+          description: >-
+            Problems that do not block a write, such as a state key written
+            only on a conditional branch (`CONDITIONAL_STATE_KEY`). A refused
+            write carries them under `meta.warnings`.
           items:
-            $ref: '#/components/schemas/OrchestrationValidationError'
+            $ref: './errors.yaml#/components/schemas/ValidationProblem'

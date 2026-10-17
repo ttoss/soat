@@ -15,6 +15,7 @@ import {
   type PlaybookTransformation,
 } from './playbookDefinition';
 import { validatePlaybookDefinition } from './playbookValidation';
+import { throwValidationProblems } from './validationProblems';
 
 /**
  * A node key and an input name are JSON Logic `var` path segments and the
@@ -251,10 +252,11 @@ export const assertPlaybookDefinitionValid = (args: {
 }): void => {
   const problems = validatePlaybookDefinition(args);
   if (problems.length > 0) {
-    throw new DomainError(
-      'PLAYBOOK_VALIDATION_FAILED',
-      `The playbook definition has ${problems.length} problem(s).`,
-      { problems }
-    );
+    throwValidationProblems({
+      code: 'PLAYBOOK_VALIDATION_FAILED',
+      subject: 'Playbook definition',
+      problems,
+      warnings: null,
+    });
   }
 };

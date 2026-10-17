@@ -1282,7 +1282,11 @@ describe('Evaluations', () => {
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
       const errored = results.body.data[1];
-      expect(errored.error).toMatch(/requires_action/);
+      expect(errored.error).toEqual({
+        code: 'GENERATION_NOT_COMPLETED',
+        message: expect.stringMatching(/requires_action/),
+        meta: { generation_id: expect.any(String), status: 'requires_action' },
+      });
       expect(errored.scores).toEqual([]);
       expect(errored.output).toBeNull();
     });
@@ -1304,7 +1308,10 @@ describe('Evaluations', () => {
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
-      expect(results.body.data[0].error).toBe('provider exploded');
+      expect(results.body.data[0].error).toEqual({
+        code: 'GENERATION_FAILED',
+        message: 'provider exploded',
+      });
     });
 
     // Rows written in one millisecond tie on `created_at`, and Postgres returns
@@ -2537,7 +2544,7 @@ describe('Evaluations', () => {
       expect(run.status).toBe('completed');
       expect(run.errored_count).toBe(1);
       expect(run.completed_count).toBe(0);
-      expect(result.error).toMatch(/did not answer with a JSON object/);
+      expect(result.error.message).toMatch(/did not answer with a JSON object/);
       expect(result.scores).toEqual([]);
       // Excluded from the aggregates rather than depressing them.
       expect(run.aggregate_scores.scored_item_count).toBe(0);
@@ -2558,7 +2565,7 @@ describe('Evaluations', () => {
       const { run, result } = await runJudged(judged.id);
 
       expect(run.errored_count).toBe(1);
-      expect(result.error).toMatch(/outside the 0–1 range/);
+      expect(result.error.message).toMatch(/outside the 0–1 range/);
     });
   });
 
@@ -3336,7 +3343,7 @@ describe('Evaluations', () => {
           `/api/v1/evals/${evaluation.id}/runs/${res.body.id}/results`
         );
         const [result] = results.body.data;
-        expect(result.error).toMatch(/tone/);
+        expect(result.error.message).toMatch(/tone/);
         // The generation was good; the output it was graded on is kept.
         expect(result.output).toBe('Sure.');
       });

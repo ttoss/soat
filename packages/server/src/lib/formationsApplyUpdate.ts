@@ -24,6 +24,7 @@ import {
   type FormationEvent,
   formationFailure,
 } from './formationsTypes';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:formations');
 
@@ -99,7 +100,7 @@ export type CleanupFailure = {
   logical_id: string;
   resource_type: string;
   physical_resource_id: string;
-  error: string;
+  error: StoredError;
 };
 
 /**
@@ -158,12 +159,12 @@ export const runPendingCleanups = async (args: {
       });
     } catch (error) {
       if (!isResourceAlreadyGone(error)) {
-        const { message } = formationFailure(error);
+        const failure = formationFailure(error);
         log(
           'runPendingCleanups: leaked %s id=%s error=%s',
           resourceType,
           physicalResourceId,
-          message
+          failure.message
         );
         events.push({
           timestamp: new Date().toISOString(),
@@ -172,13 +173,13 @@ export const runPendingCleanups = async (args: {
           action: 'replace-cleanup',
           status: 'failed',
           physicalResourceId,
-          error: message,
+          error: failure,
         });
         failures.push({
           logical_id: logicalId,
           resource_type: resourceType,
           physical_resource_id: physicalResourceId,
-          error: message,
+          error: failure,
         });
         continue;
       }

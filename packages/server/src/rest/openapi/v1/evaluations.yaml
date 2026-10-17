@@ -1862,12 +1862,14 @@ components:
           type: boolean
           description: AND over the per-scorer passed flags
         error:
-          type: string
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
           description: >-
             Item-level failure reason. A generation that did not complete — a
-            `requires_action` pause, a provider failure — is recorded here and
-            excluded from the aggregates rather than scored 0.
+            `requires_action` pause (`GENERATION_NOT_COMPLETED`), a provider
+            failure — or a scorer that could not grade the output is recorded
+            here and excluded from the aggregates rather than scored 0.
         created_at:
           type: string
           format: date-time

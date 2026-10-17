@@ -313,7 +313,7 @@ CLOSE_EDGES='[
 ]'
 
 soat validate-orchestration --nodes "$CLOSE_NODES" --edges "$CLOSE_EDGES" \
-  | jq '{valid, errors, warnings}'
+  | jq '{valid, problems, warnings}'
 
 CLOSE_ORCH_ID=$(soat create-orchestration \
   --project-id "$PROJECT_ID" \
@@ -329,7 +329,7 @@ Expected validation output:
 ```json
 {
   "valid": true,
-  "errors": [],
+  "problems": [],
   "warnings": []
 }
 ```
@@ -507,7 +507,7 @@ const { data: validation } =
   await adminSoat.orchestrations.validateOrchestration({
     body: { nodes: closeNodes, edges: closeEdges },
   });
-console.log('Valid:', validation.valid, validation.errors);
+console.log('Valid:', validation.valid, validation.problems);
 
 const { data: closeOrch } =
   await adminSoat.orchestrations.createOrchestration({
@@ -532,7 +532,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations/validate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"nodes":'"$CLOSE_NODES"',"edges":'"$CLOSE_EDGES"'}' \
-  | jq '{valid, errors, warnings}'
+  | jq '{valid, problems, warnings}'
 
 CLOSE_ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \

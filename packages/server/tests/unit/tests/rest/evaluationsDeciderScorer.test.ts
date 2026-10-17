@@ -144,7 +144,9 @@ describe('Evaluations — decider scorers', () => {
       `/api/v1/evals/${evalId}/runs/${runId}/results`
     );
     expect(res.status).toBe(200);
-    return res.body.data as Array<Record<string, unknown>>;
+    return res.body.data as Array<
+      Record<string, unknown> & { error: { message: string } | null }
+    >;
   };
 
   beforeAll(async () => {
@@ -454,9 +456,9 @@ describe('Evaluations — decider scorers', () => {
       expect(res.body.errored_count).toBe(1);
       const [result] = await resultsOf(evalId, res.body.id);
       expect(result.output).toBe('Refund issued.');
-      expect(result.error).toContain("scorer 'reply_review'");
-      expect(result.error).toContain('DECISION_ANSWER_INVALID');
-      expect(result.error).toMatch(/dec_\w+/);
+      expect(result.error?.message).toContain("scorer 'reply_review'");
+      expect(result.error?.message).toContain('DECISION_ANSWER_INVALID');
+      expect(result.error?.message).toMatch(/dec_\w+/);
     });
 
     test('a decision refused at admission errors the item, naming the scorer', async () => {
@@ -482,8 +484,8 @@ describe('Evaluations — decider scorers', () => {
 
       expect(res.body.errored_count).toBe(1);
       const [result] = await resultsOf(evalId, res.body.id);
-      expect(result.error).toContain("scorer 'reply_review'");
-      expect(result.error).toContain('pins input');
+      expect(result.error?.message).toContain("scorer 'reply_review'");
+      expect(result.error?.message).toContain('pins input');
       expect(received).toHaveLength(0);
     });
 
@@ -499,7 +501,7 @@ describe('Evaluations — decider scorers', () => {
 
       expect(res.body.errored_count).toBe(1);
       const [result] = await resultsOf(evalId, res.body.id);
-      expect(result.error).toContain('between 0 and 1');
+      expect(result.error?.message).toContain('between 0 and 1');
     });
 
     test('a decider deleted since the eval was written refuses the run', async () => {

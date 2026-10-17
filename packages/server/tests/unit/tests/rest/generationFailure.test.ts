@@ -174,7 +174,7 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
     });
 
     // A thrown value that is not an `Error` carries no message worth showing
-    // a caller, but the record still keeps what it was.
+    // a caller, so the record names the code's own description.
     test('a non-Error failure is a GENERATION_FAILED that names its trace', async () => {
       const agentId = await createAgent('Non-Error Failure Agent');
       // Sanctioned force-failure: drives the `.catch` around the dispatch with
@@ -195,7 +195,10 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
       );
       expect(generation.status).toBe(200);
       expect(generation.body.status).toBe('failed');
-      expect(generation.body.error).toEqual({ message: '[object Object]' });
+      expect(generation.body.error).toEqual({
+        code: 'GENERATION_FAILED',
+        message: expect.not.stringContaining('[object Object]'),
+      });
     });
   });
 });

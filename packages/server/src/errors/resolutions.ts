@@ -93,6 +93,16 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Check the tool's URL and that its host is reachable from the server; the message names the network failure. A timeout or a dropped connection may succeed on retry.",
   EXPRESSION_FAILED:
     'Fix the JSON Logic expression the message names: an unknown operator, or a `throw` the expression reached with the data it was given.',
+  INGESTION_FAILED:
+    'Read the message for the cause, fix the file or its ingestion rule, and ingest the document again.',
+  INGESTION_TIMEOUT:
+    'Ingest the document again. A large file or a busy worker can outlast the window; raise `INGESTION_STALL_TIMEOUT_MS` when it does so repeatedly.',
+  CONVERSION_TIMEOUT:
+    "Check that the converter calls back to the document's callback URL, then ingest the document again. Raise `CONVERSION_STALL_TIMEOUT_MS` for a converter that legitimately takes longer.",
+  EVAL_SCORING_FAILED:
+    "Read the message for the scorer's failure, fix the scorer's configuration, and run the eval again.",
+  TOOL_CALL_FAILED:
+    'Read `meta` for what the tool raised. The turn went on with the failure as the call result, so fix the tool or its target for the next turn.',
   INTERNAL_ERROR:
     'Retry with backoff. The underlying exception is logged server-side and deliberately never forwarded, so the response carries nothing further to act on.',
   NOT_IMPLEMENTED:

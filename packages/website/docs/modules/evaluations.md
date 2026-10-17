@@ -115,7 +115,7 @@ One row per dataset item per run.
 | `output` | string | The agent's final output text. `null` only when there is none — the generation failed or never completed — or once the linked generation's content is [purged](#retention-and-erasure). An item errored by a **scorer** keeps the output it was graded on |
 | `scores` | array | `[{ scorer, score, passed, reasoning?, decision_id? }]`, one entry per scorer in the order the eval declares them. `scorer` is the type — or the scorer's `name` for a [`tool`](#custom-scorers-tool) or [`decider`](#decider-scorers-decider) scorer. `reasoning` is present for `llm_judge`, and for `tool` scorers whose tool returned one; `decision_id` for `decider` scorers |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
-| `error` | string | Item-level failure reason; set instead of scoring, never alongside it |
+| `error` | object | Item-level failure reason as a [recorded failure](/docs/api#recorded-failures) — `GENERATION_NOT_COMPLETED`, `GENERATION_FAILED`, or a scorer's own code (`EVAL_SCORING_FAILED` when it has none) with a message starting `Scoring failed:`; set instead of scoring, never alongside it |
 | `created_at` | string | ISO 8601 creation timestamp |
 
 ## Key Concepts

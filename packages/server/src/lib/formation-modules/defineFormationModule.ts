@@ -25,6 +25,7 @@ import type {
   FormationModuleAuthorization,
   ValidationError,
 } from '../formationsTypes';
+import type { StoredError } from '../storedError';
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
 import {
   isObjectRecord,
@@ -124,7 +125,7 @@ export type FormationModuleDefinition<TResource> = {
   deletionBlocker?: (args: {
     physicalResourceId: string;
     alsoDeleting: ReadonlySet<string>;
-  }) => Promise<string | null>;
+  }) => Promise<StoredError | null>;
   /**
    * Loads the live resource. Any throw, and a `null`/`undefined` result, mean
    * "gone" — the factory reports drift rather than failing the plan.

@@ -82,7 +82,7 @@ bring-your-own seam documents its exact input and output contract.
   answers garbage marks the *item* errored — never a score of 0, never a failed run
   ([errors are not zeros](/docs/modules/evaluations#errors-are-not-zeros)). A converter
   that fails marks the *document* failed with a named
-  [`failure_reason`](/docs/modules/ingestion-rules#failure-reasons). An extraction that
+  [`error.code`](/docs/modules/ingestion-rules#failure-reasons). An extraction that
   fails is skipped; the turn it came from is unaffected.
 - **Contracts are wire contracts.** Every seam speaks snake_case JSON in and out, the same
   convention as the REST API, so your tool is an ordinary endpoint, testable with `curl`.

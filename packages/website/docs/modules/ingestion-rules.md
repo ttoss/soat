@@ -144,9 +144,9 @@ A document awaiting a callback longer than `CONVERSION_STALL_TIMEOUT_MS` is fail
 
 ### Failure Reasons
 
-Converter-related `failure_reason` values (alongside `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`):
+Converter-related `error.code` values on a failed document (alongside `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`, `INGESTION_FAILED`):
 
-| `failure_reason` | Meaning |
+| `error.code` | Meaning |
 |------------------|---------|
 | `CONVERTER_FAILED` | The converter tool/agent call errored, an agent converter returned an async deferral (unsupported), or a tool converter returned an async deferral during synchronous ingestion (`?wait=true`) |
 | `CONVERTER_OUTPUT_INVALID` | The tool (or callback) returned an unrecognized output shape |

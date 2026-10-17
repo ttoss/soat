@@ -1,332 +1,32 @@
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { isPlainObject } from './plainObject';
 import { agentReferences, toolReferences } from './resourceReferences';
-import {
-  assertRetryPolicyValid,
-  type RetryPolicy,
-} from './workflowsRetryPolicy';
+import type { ValidationProblem } from './validationProblems';
+import { DISPATCH_REQUIRED_ID, refuseWorkflow } from './workflowsStructure';
+import type {
+  WorkflowDispatch,
+  WorkflowState,
+  WorkflowTransition,
+} from './workflowsTypes';
 
-/**
- * Types describing a workflow definition as it is stored (structural keys in
- * camelCase — the case-transform middleware converts the snake_case API
- * contract inbound — while JSON Logic bodies `guard`/`when` and the opaque
- * `payload`/`payloadSchema` bags round-trip verbatim).
- */
-export type WorkflowDispatch = {
-  kind: 'agent' | 'orchestration' | 'tool';
-  agentId?: string;
-  orchestrationId?: string;
-  /** `tool` dispatch: the tool to call. */
-  toolId?: string;
-  /**
-   * `tool` dispatch: which operation of a multi-operation tool to invoke —
-   * the same selector an orchestration `tool` node's `operation_id` is.
-   */
-  operationId?: string;
-  inputMapping?: Record<string, unknown>;
-  /**
-   * JSON Logic expressions, evaluated over the same `{task, result}` context
-   * `on_complete` rules see, written into `task.payload` atomically with the
-   * `last_result` column when the dispatch completes. Unlike `last_result`
-   * (overwritten on every dispatch), each key here is a named, deterministic
-   * cross-hop channel — no model in the path. A write is a raw overwrite of its key;
-   * a value written by an earlier pass through a looping state lingers in the
-   * payload until the state runs again.
-   */
-  payloadWrites?: Record<string, unknown>;
-};
-
-export type OnCompleteRule = {
-  when: unknown;
-  transition: string;
-};
-
-export type { RetryPolicy };
-
-export type OnEnter = {
-  dispatch: WorkflowDispatch;
-  retry?: RetryPolicy | null;
-  onComplete?: OnCompleteRule[];
-  onFailure?: string | null;
-};
-
-export type WorkflowState = {
-  name: string;
-  initial?: boolean;
-  terminal?: boolean;
-  /** `human` states never dispatch — the task parks until a transition fires. */
-  kind?: string;
-  /** Seconds parked in this state before the sweeper emits `tasks.stalled`. */
-  stalledAfter?: number | null;
-  onEnter?: OnEnter | null;
-};
-
-export type WorkflowTransition = {
-  name: string;
-  from: string[];
-  to: string;
-  guard?: unknown;
-  requiresApproval?: boolean;
-};
-
+export {
+  assertWorkflowValid,
+  initialStateOf,
+  refuseWorkflow,
+} from './workflowsStructure';
+export type {
+  OnCompleteRule,
+  OnEnter,
+  RetryPolicy,
+  WorkflowDispatch,
+  WorkflowState,
+  WorkflowTransition,
+} from './workflowsTypes';
 export {
   workflowCollectionToCamel,
   workflowCollectionToSnake,
 } from './workflowsWire';
-
-const fail = (message: string, meta?: Record<string, unknown>): never => {
-  throw new DomainError('WORKFLOW_VALIDATION_FAILED', message, meta);
-};
-
-const isNonEmptyString = (value: unknown): value is string => {
-  return typeof value === 'string' && value.length > 0;
-};
-
-/**
- * The id field each dispatch kind requires, and the wire name to report when it
- * is missing. A table rather than a chain of branches, so adding a kind is a row
- * — and so the "unknown kind" message below can never drift out of step with the
- * kinds actually accepted.
- */
-const DISPATCH_REQUIRED_ID: Record<
-  WorkflowDispatch['kind'],
-  { field: 'agentId' | 'orchestrationId' | 'toolId'; wireName: string }
-> = {
-  agent: { field: 'agentId', wireName: 'agent_id' },
-  orchestration: { field: 'orchestrationId', wireName: 'orchestration_id' },
-  tool: { field: 'toolId', wireName: 'tool_id' },
-};
-
-const KNOWN_DISPATCH_KINDS = Object.keys(DISPATCH_REQUIRED_ID) as Array<
-  WorkflowDispatch['kind']
->;
-
-const validateOnEnterDispatch = (state: WorkflowState): void => {
-  const dispatch = state.onEnter?.dispatch;
-  if (!dispatch || typeof dispatch !== 'object') {
-    fail(`State '${state.name}' on_enter is missing a dispatch.`, {
-      state: state.name,
-    });
-    return;
-  }
-  if (
-    dispatch.payloadWrites != null &&
-    !isPlainObject(dispatch.payloadWrites)
-  ) {
-    fail(`State '${state.name}' dispatch payload_writes must be an object.`, {
-      state: state.name,
-    });
-  }
-
-  const required = DISPATCH_REQUIRED_ID[dispatch.kind];
-  if (!required) {
-    const kinds = KNOWN_DISPATCH_KINDS.map((k) => {
-      return `'${k}'`;
-    }).join(', ');
-    fail(`State '${state.name}' dispatch kind must be one of ${kinds}.`, {
-      state: state.name,
-    });
-    return;
-  }
-  if (!isNonEmptyString(dispatch[required.field])) {
-    fail(
-      `State '${state.name}' ${dispatch.kind} dispatch is missing ${required.wireName}.`,
-      { state: state.name }
-    );
-  }
-};
-
-const validateStateEntry = (args: {
-  state: WorkflowState;
-  names: Set<string>;
-}): void => {
-  const { state, names } = args;
-  if (!isNonEmptyString(state.name)) {
-    fail('Every state must have a non-empty `name`.');
-  }
-  if (names.has(state.name)) {
-    fail(`Duplicate state name '${state.name}'.`, { name: state.name });
-  }
-  names.add(state.name);
-
-  if (state.kind === 'human' && state.onEnter) {
-    fail(`Human state '${state.name}' cannot declare on_enter automation.`, {
-      state: state.name,
-    });
-  }
-  if (
-    state.stalledAfter != null &&
-    (typeof state.stalledAfter !== 'number' ||
-      !Number.isFinite(state.stalledAfter) ||
-      state.stalledAfter <= 0)
-  ) {
-    fail(
-      `State '${state.name}' stalled_after must be a positive number of seconds.`,
-      {
-        state: state.name,
-      }
-    );
-  }
-  if (state.onEnter) {
-    validateOnEnterDispatch(state);
-    assertRetryPolicyValid({
-      stateName: state.name,
-      retry: state.onEnter.retry,
-    });
-  }
-};
-
-const validateStates = (states: WorkflowState[]): void => {
-  if (!Array.isArray(states) || states.length === 0) {
-    fail('A workflow must define at least one state.');
-  }
-
-  const names = new Set<string>();
-  for (const state of states) {
-    validateStateEntry({ state, names });
-  }
-
-  const initialCount = states.filter((s) => {
-    return s.initial === true;
-  }).length;
-  if (initialCount !== 1) {
-    fail(
-      `A workflow must have exactly one initial state (found ${initialCount}).`
-    );
-  }
-};
-
-const validateStateRouting = (args: {
-  state: WorkflowState;
-  onEnter: OnEnter;
-  transitionNames: Set<string>;
-}): void => {
-  const { state, onEnter, transitionNames } = args;
-  for (const rule of onEnter.onComplete ?? []) {
-    if (!isNonEmptyString(rule.transition)) {
-      fail(`State '${state.name}' on_complete rule is missing a transition.`, {
-        state: state.name,
-      });
-    }
-    if (!transitionNames.has(rule.transition)) {
-      fail(
-        `State '${state.name}' on_complete references unknown transition '${rule.transition}'.`,
-        { state: state.name, transition: rule.transition }
-      );
-    }
-  }
-  if (onEnter.onFailure != null && !transitionNames.has(onEnter.onFailure)) {
-    fail(
-      `State '${state.name}' on_failure references unknown transition '${onEnter.onFailure}'.`,
-      { state: state.name, transition: onEnter.onFailure }
-    );
-  }
-};
-
-const validateAutomationRouting = (args: {
-  states: WorkflowState[];
-  transitionNames: Set<string>;
-}): void => {
-  for (const state of args.states) {
-    if (!state.onEnter) continue;
-    validateStateRouting({
-      state,
-      onEnter: state.onEnter,
-      transitionNames: args.transitionNames,
-    });
-  }
-};
-
-const validateTransitionStates = (args: {
-  transition: WorkflowTransition;
-  stateNames: Set<string>;
-}): void => {
-  const { transition: t, stateNames } = args;
-  if (!Array.isArray(t.from) || t.from.length === 0) {
-    fail(`Transition '${t.name}' must list at least one \`from\` state.`, {
-      transition: t.name,
-    });
-  }
-  for (const from of t.from) {
-    if (!stateNames.has(from)) {
-      fail(`Transition '${t.name}' references unknown from-state '${from}'.`, {
-        transition: t.name,
-        state: from,
-      });
-    }
-  }
-  if (!stateNames.has(t.to)) {
-    fail(`Transition '${t.name}' references unknown to-state '${t.to}'.`, {
-      transition: t.name,
-      state: t.to,
-    });
-  }
-};
-
-const validateGuardShape = (t: WorkflowTransition): void => {
-  if (t.guard != null && typeof t.guard !== 'object') {
-    fail(`Transition '${t.name}' guard must be a JSON Logic object.`, {
-      transition: t.name,
-    });
-  }
-};
-
-const validateTransitionEntry = (args: {
-  transition: WorkflowTransition;
-  stateNames: Set<string>;
-  transitionNames: Set<string>;
-}): void => {
-  const { transition: t, stateNames, transitionNames } = args;
-  if (!isNonEmptyString(t.name)) {
-    fail('Every transition must have a non-empty `name`.');
-  }
-  if (transitionNames.has(t.name)) {
-    fail(`Duplicate transition name '${t.name}'.`, { name: t.name });
-  }
-  transitionNames.add(t.name);
-
-  validateTransitionStates({ transition: t, stateNames });
-  validateGuardShape(t);
-};
-
-const validateTransitions = (args: {
-  states: WorkflowState[];
-  transitions: WorkflowTransition[];
-}): void => {
-  if (!Array.isArray(args.transitions)) {
-    fail('`transitions` must be an array.');
-  }
-
-  const stateNames = new Set(
-    args.states.map((s) => {
-      return s.name;
-    })
-  );
-  const transitionNames = new Set<string>();
-
-  for (const transition of args.transitions) {
-    validateTransitionEntry({ transition, stateNames, transitionNames });
-  }
-
-  validateAutomationRouting({ states: args.states, transitionNames });
-};
-
-/**
- * Statically validates a workflow definition (§5): unique state names, exactly
- * one initial state, a positive `stalled_after` where present, transitions
- * referencing existing states, well-formed guards, and on_enter automation whose
- * routing targets exist. Mirrors `assertOrchestrationValid` in shape. Throws
- * `WORKFLOW_VALIDATION_FAILED`.
- */
-export const assertWorkflowValid = (args: {
-  states: WorkflowState[];
-  transitions: WorkflowTransition[];
-}): void => {
-  validateStates(args.states);
-  validateTransitions({ states: args.states, transitions: args.transitions });
-};
 
 /** How each dispatch kind's target is found in the workflow's project. */
 const DISPATCH_TARGET_LOOKUPS: Record<
@@ -365,11 +65,12 @@ export const assertDispatchTargetsValid = async (args: {
   projectId: number;
   states: WorkflowState[];
 }): Promise<void> => {
-  for (const state of args.states) {
+  const problems: ValidationProblem[] = [];
+  for (const [index, state] of args.states.entries()) {
     const dispatch = state.onEnter?.dispatch;
     if (!dispatch) continue;
 
-    const { field } = DISPATCH_REQUIRED_ID[dispatch.kind];
+    const { field, wireName } = DISPATCH_REQUIRED_ID[dispatch.kind];
     const targetId = dispatch[field];
     if (!targetId) continue;
 
@@ -379,13 +80,14 @@ export const assertDispatchTargetsValid = async (args: {
       projectId: args.projectId,
     });
     if (!target) {
-      throw new DomainError(
-        'WORKFLOW_VALIDATION_FAILED',
-        `State '${state.name}' references ${lookup.noun} '${targetId}', which does not exist in this project.`,
-        { state: state.name, [field]: targetId }
-      );
+      problems.push({
+        code: 'TARGET_NOT_FOUND',
+        path: `states[${index}].on_enter.dispatch.${wireName}`,
+        message: `State '${state.name}' references ${lookup.noun} '${targetId}', which does not exist in this project.`,
+      });
     }
   }
+  if (problems.length > 0) refuseWorkflow(problems);
 };
 
 type JsonSchemaLike = {

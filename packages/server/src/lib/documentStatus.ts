@@ -69,8 +69,7 @@ export const getDocumentStatus = async (args: { id: string }) => {
       chunkCount,
       totalChunks,
     }),
-    error:
-      doc.status === 'failed' ? (doc.failureReason ?? undefined) : undefined,
+    error: doc.status === 'failed' ? (doc.error ?? undefined) : undefined,
     // For the route's permission check, not the public response shape. Named
     // snake_case like every lib return — a camelCase twin here silently
     // resolves to `undefined`.

@@ -13,7 +13,11 @@ import {
 } from './tasksAutomationStatus';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContext } from './toolContextCarrier';
-import { validatePayload, type WorkflowState } from './workflowsValidation';
+import {
+  initialStateOf,
+  validatePayload,
+  type WorkflowState,
+} from './workflowsValidation';
 
 export { transitionTask } from './tasksTransition';
 
@@ -195,20 +199,6 @@ export const stateByName = (args: {
   });
 };
 
-const findInitialState = (states: WorkflowState[]): WorkflowState => {
-  const initial = states.find((s) => {
-    return s.initial === true;
-  });
-  if (!initial) {
-    // Guarded by workflow validation on create/update, so this is defensive.
-    throw new DomainError(
-      'WORKFLOW_VALIDATION_FAILED',
-      'Workflow has no initial state.'
-    );
-  }
-  return initial;
-};
-
 // Dispatch is fire-and-forget, but this lets callers needing determinism —
 // tests, a graceful shutdown — drain the trailing writes via
 // `flushTaskAutomations` rather than leaving them in flight past teardown.
@@ -265,7 +255,7 @@ const resolveEntryState = (args: {
   workflowId: string;
   state?: string | null;
 }): WorkflowState => {
-  if (!args.state) return findInitialState(args.states);
+  if (!args.state) return initialStateOf(args.states);
   const found = stateByName({ states: args.states, name: args.state });
   if (!found) {
     throw new DomainError(

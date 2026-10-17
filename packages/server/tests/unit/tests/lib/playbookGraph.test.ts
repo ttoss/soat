@@ -15,6 +15,14 @@ const validate = (definition: PlaybookDefinition) => {
   return validatePlaybookDefinition({ definition });
 };
 
+const problem = (code: string, path: string, message?: string) => {
+  return {
+    code,
+    path,
+    message: message ? expect.stringContaining(message) : expect.any(String),
+  };
+};
+
 describe('validatePlaybookDefinition', () => {
   test('a well-formed playbook has no problems', () => {
     expect(validate(pricing())).toEqual([]);
@@ -26,7 +34,11 @@ describe('validatePlaybookDefinition', () => {
     });
 
     expect(problems).toEqual([
-      { code: 'missing_node', node: 'price', input: 'regime' },
+      problem(
+        'MISSING_NODE',
+        'definition.nodes[0].inputs[0].source.node',
+        "'tax_regime'"
+      ),
     ]);
   });
 
@@ -39,7 +51,9 @@ describe('validatePlaybookDefinition', () => {
       ],
     });
 
-    expect(problems).toEqual([{ code: 'cycle', nodes: ['a', 'b'] }]);
+    expect(problems).toEqual([
+      problem('CYCLE', 'definition.nodes', "'a', 'b'"),
+    ]);
   });
 
   test('each cycle is named apart, in definition order', () => {
@@ -53,8 +67,8 @@ describe('validatePlaybookDefinition', () => {
         ],
       })
     ).toEqual([
-      { code: 'cycle', nodes: ['c', 'd'] },
-      { code: 'cycle', nodes: ['a', 'b'] },
+      problem('CYCLE', 'definition.nodes', "'c', 'd'"),
+      problem('CYCLE', 'definition.nodes', "'a', 'b'"),
     ]);
   });
 
@@ -63,7 +77,7 @@ describe('validatePlaybookDefinition', () => {
       validate({
         nodes: [execute('a', [reads('a', 'a', 'output')])],
       })
-    ).toEqual([{ code: 'cycle', nodes: ['a'] }]);
+    ).toEqual([problem('CYCLE', 'definition.nodes', "'a'")]);
   });
 
   test('a key or an input name used twice is refused', () => {
@@ -75,8 +89,8 @@ describe('validatePlaybookDefinition', () => {
         ],
       })
     ).toEqual([
-      { code: 'duplicate_node', node: 'a' },
-      { code: 'duplicate_input', node: 'a', input: 'x' },
+      problem('DUPLICATE_NODE', 'definition.nodes[1].key'),
+      problem('DUPLICATE_INPUT', 'definition.nodes[0].inputs[1].name'),
     ]);
   });
 
@@ -93,7 +107,9 @@ describe('validatePlaybookDefinition', () => {
           execute('b', [reads('x', 'a', field)]),
         ],
       })
-    ).toEqual([{ code: 'unknown_field', node: 'b', input: 'x' }]);
+    ).toEqual([
+      problem('UNKNOWN_FIELD', 'definition.nodes[1].inputs[0].source.field'),
+    ]);
   });
 
   test('an execute output may be read at any path', () => {
@@ -116,8 +132,8 @@ describe('validatePlaybookDefinition', () => {
         ],
       })
     ).toEqual([
-      { code: 'executor_forbidden', node: 'a' },
-      { code: 'executor_required', node: 'b' },
+      problem('EXECUTOR_FORBIDDEN', 'definition.nodes[0].executor'),
+      problem('EXECUTOR_REQUIRED', 'definition.nodes[1].executor'),
     ]);
   });
 
@@ -130,7 +146,12 @@ describe('validatePlaybookDefinition', () => {
           }),
         ],
       })
-    ).toEqual([{ code: 'transformations_not_final', node: 'a' }]);
+    ).toEqual([
+      problem(
+        'TRANSFORMATIONS_NOT_FINAL',
+        'definition.nodes[0].transformations'
+      ),
+    ]);
   });
 });
 

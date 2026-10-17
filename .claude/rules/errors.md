@@ -57,6 +57,20 @@ Tests read `response.body.error.code`, never `toContain` on `error`.
 The CLI spreads the SDK's `result.error` (the raw body) into its output; never
 wrap it in another `error` key.
 
+## Recorded failures
+
+A resource or event that records a failure carries `StoredError`
+(`lib/storedError.ts`; spec `errors.yaml#/components/schemas/StoredError`),
+never a string: `toStoredError` (unexpected → `INTERNAL_ERROR`) or
+`toStoredErrorKeepingMessage` (unexpected → the site's own code, message kept).
+Every spec property named `error` / `*_error` refs it
+(`lib/openapiFailureReasons.test.ts`).
+
+A refused definition throws through `throwValidationProblems`
+(`lib/validationProblems.ts`): `meta.problems` (`[{ code, path, message }]`,
+UPPER_SNAKE codes), plus `warnings` where a module has them
+(`rest/validationProblemsContract.test.ts`).
+
 ## Auth/scope preamble
 
 Every guard in `src/rest/v1/helpers.ts` throws; call one as a bare statement:

@@ -183,7 +183,15 @@ curl -X POST "$SOAT_BASE_URL/api/v1/metadata-schemas/validate" \
   "resource_type": "document",
   "metadata_schema_id": "mdschema_V1StGXR8Z5jdHi6B",
   "path_prefix": "/reports",
-  "error": "(root) must have required property 'quarter'"
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "metadata does not satisfy the schema declared for '/reports': (root) must have required property 'quarter'",
+    "meta": {
+      "metadata_schema_id": "mdschema_V1StGXR8Z5jdHi6B",
+      "resource_type": "document",
+      "path_prefix": "/reports"
+    }
+  }
 }
 ```
 

@@ -1417,34 +1417,6 @@ components:
           description: The definition to check
           allOf:
             - $ref: '#/components/schemas/PlaybookDefinition'
-    PlaybookDefinitionProblem:
-      type: object
-      description: >-
-        One reason a definition cannot be stored. `node` and `input` name where
-        it is; a `cycle` names every node on it in `nodes`.
-      properties:
-        code:
-          type: string
-          enum:
-            - duplicate_node
-            - duplicate_input
-            - missing_node
-            - unknown_field
-            - executor_required
-            - executor_forbidden
-            - transformations_not_final
-            - duplicate_transformation
-            - cycle
-        node:
-          type: string
-        input:
-          type: string
-        transformation:
-          type: string
-        nodes:
-          type: array
-          items:
-            type: string
     PlaybookValidationResult:
       type: object
       required:
@@ -1455,8 +1427,14 @@ components:
           type: boolean
         problems:
           type: array
+          description: >-
+            Every reason the definition cannot be stored: `DUPLICATE_NODE`,
+            `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`,
+            `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`,
+            `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`.
+            The same items a refused write lists under `meta.problems`.
           items:
-            $ref: '#/components/schemas/PlaybookDefinitionProblem'
+            $ref: './errors.yaml#/components/schemas/ValidationProblem'
     PlaybookVersion:
       type: object
       description: An immutable archive of a playbook's definition at one version.
@@ -1844,9 +1822,10 @@ components:
           nullable: true
           description: The revision of the output entry it wrote; null when it wrote none
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: 'Why it failed: `{ code, message, meta? }`'
+          description: Why it failed
         created_by:
           x-soat-ref: users
           type: string
@@ -1931,9 +1910,10 @@ components:
           description: The file rendered; null until it succeeds, and once the file is deleted
           example: file_V1StGXR8Z5jdHi6B
         error:
-          type: object
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
           nullable: true
-          description: 'Why it failed: `{ code, message, meta? }`'
+          description: Why it failed
         created_by:
           x-soat-ref: users
           type: string

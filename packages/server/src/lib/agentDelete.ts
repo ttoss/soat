@@ -17,6 +17,7 @@ import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:agents');
 
@@ -209,14 +210,18 @@ export const findAgentDeletionBlocker = async (args: {
   id: string;
   /** Physical ids deleted alongside the agent; a decider among them blocks nothing. */
   alsoDeleting: ReadonlySet<string>;
-}): Promise<string | null> => {
+}): Promise<StoredError | null> => {
   const agent = await agents.getByPublicId(args);
   const deciderCount = await countBackendDeciders({
     backend: { agentId: agent.id as number },
     excludingPublicIds: args.alsoDeleting,
   });
   if (deciderCount > 0) {
-    return `Agent '${args.id}' is the agent of ${String(deciderCount)} decider(s), so it cannot be deleted.`;
+    return {
+      code: 'AGENT_HAS_DEPENDENTS',
+      message: `Agent '${args.id}' is the agent of ${String(deciderCount)} decider(s), so it cannot be deleted.`,
+      meta: { decider_count: deciderCount },
+    };
   }
   const counts = await countAgentDependents({
     agent,
@@ -224,11 +229,13 @@ export const findAgentDeletionBlocker = async (args: {
   });
   if (!hasDependents(counts)) return null;
 
-  return (
-    `Agent '${args.id}' has ${String(counts.generationCount)} dependent generation(s), ` +
-    `${String(counts.traceCount)} trace(s), ${String(counts.acceptedShareCount)} accepted ` +
-    `share(s) and ${String(counts.ingestionRuleCount)} ingestion rule(s), so it cannot be deleted.`
-  );
+  return {
+    code: 'AGENT_HAS_DEPENDENTS',
+    message:
+      `Agent '${args.id}' has ${String(counts.generationCount)} dependent generation(s), ` +
+      `${String(counts.traceCount)} trace(s), ${String(counts.acceptedShareCount)} accepted ` +
+      `share(s) and ${String(counts.ingestionRuleCount)} ingestion rule(s), so it cannot be deleted.`,
+  };
 };
 
 export const deleteAgent = async (args: {

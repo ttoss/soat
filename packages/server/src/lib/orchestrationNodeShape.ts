@@ -8,10 +8,14 @@ import {
   LOOP_ITEM_ERROR_MODES,
   type OrchestrationNode,
 } from './orchestrations';
+import type { ValidationProblem } from './validationProblems';
 
-export type OrchestrationValidationIssue = {
-  path: string;
-  message: string;
+export type OrchestrationValidationIssue = ValidationProblem;
+
+const toWireName = (field: string): string => {
+  return field.replace(/[A-Z]/g, (letter) => {
+    return `_${letter.toLowerCase()}`;
+  });
 };
 
 /**
@@ -27,6 +31,7 @@ const toolNodeShapeIssues = (args: {
   if (raw['action'] !== undefined && !node.operationId) {
     return [
       {
+        code: 'WRONG_FIELD',
         path: `${basePath}.action`,
         message: `tool node '${node.id}' uses 'operationId', not 'action'; rename the field to 'operationId'.`,
       },
@@ -47,12 +52,14 @@ const pollNodeShapeIssues = (args: {
   const issues: OrchestrationValidationIssue[] = [];
   if (node.exitCondition === undefined || node.exitCondition === null) {
     issues.push({
+      code: 'MISSING_FIELD',
       path: `${basePath}.exit_condition`,
       message: `poll node '${node.id}' is missing required field 'exit_condition' (the JSON Logic stop condition).`,
     });
   }
   if (!node.interval) {
     issues.push({
+      code: 'MISSING_FIELD',
       path: `${basePath}.interval`,
       message: `poll node '${node.id}' is missing required field 'interval'.`,
     });
@@ -76,6 +83,7 @@ const loopNodeShapeIssues = (args: {
   }
   return [
     {
+      code: 'INVALID_VALUE',
       path: `${basePath}.on_item_error`,
       message: `loop node '${node.id}' has on_item_error '${String(value)}'; expected one of ${LOOP_ITEM_ERROR_MODES.join(', ')}.`,
     },
@@ -91,10 +99,18 @@ const validateNodeShape = (args: {
   const basePath = `nodes[${index}]`;
 
   if (!node.id || typeof node.id !== 'string') {
-    issues.push({ path: `${basePath}.id`, message: '`id` is required.' });
+    issues.push({
+      code: 'MISSING_FIELD',
+      path: `${basePath}.id`,
+      message: '`id` is required.',
+    });
   }
   if (!node.type) {
-    issues.push({ path: `${basePath}.type`, message: '`type` is required.' });
+    issues.push({
+      code: 'MISSING_FIELD',
+      path: `${basePath}.type`,
+      message: '`type` is required.',
+    });
     return issues;
   }
 
@@ -102,9 +118,11 @@ const validateNodeShape = (args: {
   if (requiredField) {
     const value = node[requiredField];
     if (value === undefined || value === null) {
+      const wireName = toWireName(requiredField);
       issues.push({
-        path: `${basePath}.${requiredField}`,
-        message: `${node.type} node '${node.id}' is missing required field '${requiredField}'.`,
+        code: 'MISSING_FIELD',
+        path: `${basePath}.${wireName}`,
+        message: `${node.type} node '${node.id}' is missing required field '${wireName}'.`,
       });
     }
   }
@@ -134,6 +152,7 @@ export const checkNodeShapes = (
     if (typeof node.id === 'string') {
       if (seenIds.has(node.id)) {
         errors.push({
+          code: 'DUPLICATE_NODE_ID',
           path: `nodes[${index}].id`,
           message: `Duplicate node id '${node.id}'.`,
         });

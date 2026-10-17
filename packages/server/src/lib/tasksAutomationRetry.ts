@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { RequestPrincipal } from './principals';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
 import { mapTask } from './tasks';
@@ -134,8 +135,11 @@ const recordRetriedAttempt = async (args: {
     extra: {
       attempt: args.attempt,
       max_attempts: args.maxAttempts,
-      error:
-        args.error instanceof Error ? args.error.message : String(args.error),
+      error: toStoredError({
+        error: args.error,
+        opaque: INTERNAL_FAILURE,
+        label: 'task dispatch attempt',
+      }),
       generation_id: generationId,
       orchestration_run_id: orchestrationRunId,
     },
