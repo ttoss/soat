@@ -42,7 +42,7 @@ An expression is a **single-key object whose key is a registered operator** (`va
 
 `digits` is an integer from `-15` to `15`; a negative one rounds to tens, hundreds, …. `x` is a number or a numeric string; anything else fails with `EXPRESSION_FAILED`.
 
-`let` evaluates its bindings in order, each over the context plus the bindings before it, so a value is named once and read anywhere after. A binding shadows a context key of the same name. Names are letters, digits and `_`.
+`let` evaluates each binding after the bindings it reads, whatever order they are written in, so a value is named once and read by any other binding and the body. Bindings that read each other in a cycle fail with `EXPRESSION_FAILED`. A binding shadows a context key of the same name, except in its own expression, where the name reads the context. Names are letters, digits and `_`.
 
 ```json
 {

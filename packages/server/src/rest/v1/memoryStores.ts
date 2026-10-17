@@ -33,6 +33,7 @@ import {
 
 import {
   type AuthenticatedContext,
+  parseDateQuery,
   parsePagination,
   requireAuth,
   resolveReadProjectIds,
@@ -288,15 +289,6 @@ memoryStoresRouter.get(
       id: ctx.params.memory_store_id,
     });
 
-    const since = ctx.query.since as string | undefined;
-    const sinceDate = since ? new Date(since) : undefined;
-    if (sinceDate && Number.isNaN(sinceDate.getTime())) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'since must be an ISO 8601 timestamp'
-      );
-    }
-
     ctx.body = await listMemoryStoreAssertions({
       memoryStoreId: store!.id,
       mechanism: readEnum<MemoryAssertionMechanism>({
@@ -310,7 +302,8 @@ memoryStoresRouter.get(
         field: 'outcome',
       }),
       generationId: ctx.query.generation_id as string | undefined,
-      since: sinceDate,
+      from: parseDateQuery({ ctx, name: 'from' }),
+      to: parseDateQuery({ ctx, name: 'to' }),
       ...parsePagination(ctx),
     });
   }

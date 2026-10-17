@@ -428,10 +428,17 @@ paths:
             example: dcd_V1StGXR8Z5jdHi6B
         - name: status
           in: query
-          description: Only decisions in this status
+          required: false
+          description: >-
+            Only decisions in these statuses. Repeat the parameter to OR values.
+            A value outside the enum, empty string included, is a `400`.
           schema:
-            type: string
-            enum: [queued, running, completed, failed]
+            type: array
+            items:
+              type: string
+              enum: [queued, running, completed, failed]
+          style: form
+          explode: true
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:

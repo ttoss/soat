@@ -420,17 +420,21 @@ export const requestPrincipalFromCtx = (ctx: Context): RequestPrincipal => {
  * variable interpolates to nothing, and answering `?status=` with the whole
  * listing hands back the full scan a status filter exists to avoid.
  */
-export const parseEnumListQuery = (args: {
+export const parseEnumListQuery = <T extends string>(args: {
   ctx: Context;
   name: string;
-  allowed: readonly string[];
-}): string[] | undefined => {
+  allowed: readonly T[];
+}): T[] | undefined => {
   const raw = args.ctx.query[args.name];
   if (raw === undefined) return undefined;
 
+  const allowed: readonly string[] = args.allowed;
+  const isAllowed = (value: string): value is T => {
+    return allowed.includes(value);
+  };
   const values = Array.isArray(raw) ? raw : [raw];
   const unknown = values.filter((value) => {
-    return !args.allowed.includes(value);
+    return !isAllowed(value);
   });
   if (unknown.length > 0) {
     throw new DomainError(
@@ -445,7 +449,38 @@ export const parseEnumListQuery = (args: {
     );
   }
 
-  return [...new Set(values)];
+  return [...new Set(values.filter(isAllowed))];
+};
+
+/**
+ * One end of a time-range filter (`from`, `to`, `expires_to`), as a `Date`.
+ *
+ * Absent is not invalid: an unsupplied bound is simply not applied. A supplied
+ * unparseable one throws — it must never widen a query into "every row"
+ * without the caller knowing.
+ */
+export const parseDateQuery = (args: {
+  ctx: Context;
+  name: string;
+}): Date | undefined => {
+  const value = args.ctx.query[args.name];
+  if (Array.isArray(value)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `'${args.name}' is one bound and takes one value.`,
+      { parameter: args.name }
+    );
+  }
+  if (value === undefined || value.length === 0) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `'${args.name}' is not a valid ISO 8601 date: '${value}'.`,
+      { parameter: args.name }
+    );
+  }
+  return date;
 };
 
 /**

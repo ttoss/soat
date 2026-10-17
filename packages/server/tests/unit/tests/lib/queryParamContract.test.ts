@@ -46,7 +46,7 @@ const readQueryNames = (source: string): Set<string> => {
   // Read through helpers that take the name as an argument rather than
   // touching `ctx.query` at the call site.
   for (const match of source.matchAll(
-    /parseEnumListQuery\(\{[^}]*name:\s*'([^']+)'/gs
+    /(?:parseEnumListQuery|parseDateQuery)\(\{[^}]*name:\s*'([^']+)'/gs
   )) {
     names.add(match[1]);
   }

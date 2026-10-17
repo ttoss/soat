@@ -77,13 +77,13 @@ export type MappedChain = ReturnType<typeof mapChain>;
 
 export const listChains = async (args: {
   projectIds: number[];
-  status?: string;
+  statuses?: readonly ChainStatus[];
   agentId?: string;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<MappedChain>> => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.status) where.status = args.status;
+  if (args.statuses?.length) where.status = args.statuses;
   // A plain public-id string, not an FK: an unknown value matches no row, which
   // is the same answer as an agent with no chains.
   if (args.agentId) where.agentId = args.agentId;

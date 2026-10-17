@@ -276,7 +276,7 @@ soat revoke-share-acceptance --share-id shr_ABC --acceptance-id shr_acc_XYZ
 ```ts
 const { data: acceptances } = await soat.shares.listShareAcceptances({
   path: { share_id: 'shr_ABC' },
-  query: { status: 'active' },
+  query: { status: ['active'] },
 });
 
 const { data, error } = await soat.shares.revokeShareAcceptance({

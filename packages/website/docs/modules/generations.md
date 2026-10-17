@@ -443,7 +443,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.generations.listGenerations({
-  query: { trace_id: 'trace_abc123', status: 'failed' },
+  query: { trace_id: 'trace_abc123', status: ['failed'] },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
