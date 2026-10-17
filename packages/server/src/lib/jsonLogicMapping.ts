@@ -135,15 +135,61 @@ export const evaluateLogic = (value: unknown, context: unknown): unknown => {
 
 const BINDING_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/**
- * `{ "let": [{ "<name>": <expr>, ... }, <body>] }`: each binding is evaluated
- * in order over the context plus the bindings before it, and the body over
- * the context with every binding on top, read as `{ "var": "<name>" }`.
- */
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
+/** The first segment of every `var` path in `expression`, at any depth. */
+const varRoots = (expression: unknown, roots: Set<string>): Set<string> => {
+  if (Array.isArray(expression)) {
+    for (const item of expression) varRoots(item, roots);
+  } else if (isPlainObject(expression)) {
+    for (const [key, value] of Object.entries(expression)) {
+      const path = Array.isArray(value) ? value[0] : value;
+      if (key === 'var' && typeof path === 'string') {
+        roots.add(path.split('.')[0]);
+      }
+      varRoots(value, roots);
+    }
+  }
+  return roots;
+};
+
+/**
+ * The binding names in evaluation order: each after the bindings it reads.
+ * Key order cannot decide it, since a stored definition is JSONB, which does
+ * not keep the order its keys were written in.
+ */
+const bindingOrder = (bindings: Record<string, unknown>): string[] => {
+  const names = Object.keys(bindings);
+  const order: string[] = [];
+  const state = new Map<string, 'visiting' | 'done'>();
+  const visit = (name: string) => {
+    if (state.get(name) === 'done') return;
+    if (state.get(name) === 'visiting') {
+      throw new Error(`let bindings read each other in a cycle at '${name}'.`);
+    }
+    state.set(name, 'visiting');
+    for (const root of varRoots(bindings[name], new Set())) {
+      if (root !== name && root in bindings) visit(root);
+    }
+    state.set(name, 'done');
+    order.push(name);
+  };
+  for (const name of names) {
+    if (!BINDING_NAME.test(name)) {
+      throw new Error(`let binding '${name}' must be a plain name.`);
+    }
+    visit(name);
+  }
+  return order;
+};
+
+/**
+ * `{ "let": [{ "<name>": <expr>, ... }, <body>] }`: each binding is evaluated
+ * over the context plus the bindings it reads, and the body over the context
+ * with every binding on top, read as `{ "var": "<name>" }`.
+ */
 const evaluateLet = (args: unknown, context: unknown): unknown => {
   if (!Array.isArray(args) || args.length !== 2 || !isPlainObject(args[0])) {
     throw new Error('let takes [{ "<name>": <expression>, ... }, <body>].');
@@ -152,11 +198,8 @@ const evaluateLet = (args: unknown, context: unknown): unknown => {
   let scope: Record<string, unknown> = isPlainObject(context)
     ? { ...context }
     : {};
-  for (const [name, expression] of Object.entries(bindings)) {
-    if (!BINDING_NAME.test(name)) {
-      throw new Error(`let binding '${name}' must be a plain name.`);
-    }
-    scope = { ...scope, [name]: evaluateLogic(expression, scope) };
+  for (const name of bindingOrder(bindings)) {
+    scope = { ...scope, [name]: evaluateLogic(bindings[name], scope) };
   }
   return evaluateLogic(body, scope);
 };
