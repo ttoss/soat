@@ -2,6 +2,7 @@ import type http from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import * as generationsModule from 'src/lib/generations';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -121,6 +122,41 @@ describe('Streamed agent generations', () => {
     throw new Error(`no settled generation for ${agentId}`);
   };
 
+  /**
+   * Streams one turn while collecting `generations.*` events, and waits until
+   * its record is settled. The completed event follows the settled record, so
+   * the wait also gives it time to arrive.
+   */
+  const streamCollectingEvents = async (agentId: string) => {
+    const events: SoatEvent[] = [];
+    const handler = (event: SoatEvent) => {
+      if (event.type.startsWith('generations.')) events.push(event);
+    };
+    eventBus.on('soat:event', handler);
+    try {
+      await stream(agentId);
+      const generation = await settledGenerationOf(agentId);
+      const settled = () => {
+        return events.some((event) => {
+          return event.resourceId === generation.id;
+        });
+      };
+      for (let tick = 0; tick < 200 && !settled(); tick += 1) {
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 10);
+        });
+      }
+      return {
+        generation,
+        events: events.filter((event) => {
+          return event.resourceId === generation.id;
+        }),
+      };
+    } finally {
+      eventBus.off('soat:event', handler);
+    }
+  };
+
   const offeredToolNames = (body: Record<string, unknown>): string[] => {
     const tools = Array.isArray(body.tools) ? body.tools : [];
     return tools
@@ -197,6 +233,40 @@ describe('Streamed agent generations', () => {
       expect(generation.status).toBe('completed');
       expect(generation.stop_reason).toBe('stop');
       expect(generation.error).toBeNull();
+    });
+
+    test('a streamed answer emits generations.completed once, carrying its record', async () => {
+      const agentId = await createAgent();
+
+      const { generation, events } = await streamCollectingEvents(agentId);
+
+      expect(
+        events.map((event) => {
+          return event.type;
+        })
+      ).toEqual(['generations.completed']);
+      const [event] = events;
+      expect(event.assistantContent).toBe('It is sunny in Lisbon.');
+      const record = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${generation.id}`
+      );
+      expect(JSON.parse(JSON.stringify(event.data))).toEqual(record.body);
+      expect(event.data.status).toBe('completed');
+    });
+
+    test('a streamed answer recorded failed emits no generations.completed', async () => {
+      streamedText =
+        '```json\n{"name": "lookup_weather", "arguments": {}}\n```';
+      const agentId = await createAgent();
+
+      const { generation, events } = await streamCollectingEvents(agentId);
+
+      expect(generation.status).toBe('failed');
+      expect(
+        events.filter((event) => {
+          return event.type === 'generations.completed';
+        })
+      ).toEqual([]);
     });
 
     test('a streamed tool call the model wrote out as text is recorded failed', async () => {

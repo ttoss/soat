@@ -20,6 +20,7 @@ import {
   type TurnToolChoice,
 } from './agentStepRules';
 import { resolveStopWhen } from './agentStopConditions';
+import { emitGenerationEvent } from './generationEvents';
 import { recordGenerationFailure } from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
@@ -70,8 +71,9 @@ const recordStreamedTextEncodedToolCall = async (args: {
 
 /**
  * Everything a finished stream persists: the trace, the terminal status, the
- * routing stamp and the usage event. All fire-and-forget — the stream has
- * already been delivered, so there is no caller left to throw at.
+ * routing stamp, the usage event and, for a completed turn,
+ * `generations.completed`. All fire-and-forget — the stream has already been
+ * delivered, so there is no caller left to throw at.
  */
 const fireStreamEndSideEffects = (args: {
   generationId: string;
@@ -114,6 +116,7 @@ const fireStreamEndSideEffects = (args: {
     text: args.finalText,
     toolNames: Object.keys(args.resolvedTools),
   });
+  let completedWrite: Promise<unknown> | undefined;
   if (streamedToolCall) {
     void recordStreamedTextEncodedToolCall({
       generationId: args.generationId,
@@ -121,7 +124,7 @@ const fireStreamEndSideEffects = (args: {
       toolName: streamedToolCall,
     });
   } else if (!args.failed) {
-    updateGenerationRecord({
+    completedWrite = updateGenerationRecord({
       publicId: args.generationId,
       status: 'completed',
       completedAt: new Date(),
@@ -140,9 +143,8 @@ const fireStreamEndSideEffects = (args: {
     /* istanbul ignore next -- fire-and-forget alongside the trace write */
     () => {}
   );
-  // recordGenerationUsage never rejects (it catches internally), so `void`
-  // marks the intentional fire-and-forget without an extra no-op handler.
-  void recordGenerationUsage({
+  // recordGenerationUsage never rejects (it catches internally).
+  const usageWrite = recordGenerationUsage({
     generationId: args.generationId,
     model: args.typedAgent.model ?? '',
     usage: args.usage,
@@ -155,6 +157,19 @@ const fireStreamEndSideEffects = (args: {
       outcome: args.failed ? 'error' : 'ok',
     },
   });
+
+  // After the status and usage writes, as the non-stream path emits after
+  // metering: the event carries the record as `GET` then answers it.
+  if (completedWrite) {
+    void Promise.all([completedWrite, usageWrite]).then(() => {
+      return emitGenerationEvent({
+        type: 'generations.completed',
+        projectId: args.typedAgent.project.id as number,
+        generationId: args.generationId,
+        assistantContent: args.finalText,
+      });
+    });
+  }
 };
 
 /**
