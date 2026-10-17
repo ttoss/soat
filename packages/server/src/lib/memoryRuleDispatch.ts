@@ -45,12 +45,12 @@ const emptySummary = (candidates: number): RuleFiringSummary => {
 };
 
 /**
- * The generation a firing reads. `agents.generation.completed` names it
- * directly; `conversations.message.generated` names the message and carries the
+ * The generation a firing reads. `generations.completed` names it
+ * directly; `conversation_messages.generated` names the message and carries the
  * generation's id in its payload.
  */
 const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
-  if (event.type === 'agents.generation.completed') return event.resourceId;
+  if (event.type === 'generations.completed') return event.resourceId;
   // `data` is the envelope's own `Record<string, unknown>`, so only the value
   // needs narrowing, not the bag.
   const generationId = event.data.generation_id;
@@ -63,7 +63,7 @@ const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
  * conversation one — so each event supplies it from what it already has.
  */
 const resolveAssistantContent = async (event: SoatEvent): Promise<string> => {
-  if (event.type === 'agents.generation.completed') {
+  if (event.type === 'generations.completed') {
     return event.assistantContent ?? '';
   }
   const content = await readGeneratedMessageContent({
@@ -183,7 +183,7 @@ const writeCandidates = async (args: {
  * Keyed by rule, because a store can have several and a flat pair of counts
  * cannot say which one produced them. Written once, after every rule for this
  * event has run, so there is no read-modify-write to race. Only the turn-level
- * event records it; a `conversations.message.generated` firing is visible in
+ * event records it; a `conversation_messages.generated` firing is visible in
  * the assertion ledger, which is where every firing lands either way.
  *
  * Only ever called with at least one rule's counts: the dispatcher returns
@@ -281,7 +281,7 @@ const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
     );
   }
 
-  if (event.type === 'agents.generation.completed') {
+  if (event.type === 'generations.completed') {
     await recordFiringSummary({ generationPublicId, summaries });
   }
 };

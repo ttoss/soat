@@ -10,7 +10,7 @@ const log = createDebug('soat:memoryRules');
 /**
  * The `source` a handler agent's own generation is stamped with, and the first
  * half of the loop guard: without it a handler agent's turn emits
- * `agents.generation.completed`, matches the rule that invoked it, and the mill
+ * `generations.completed`, matches the rule that invoked it, and the mill
  * never stops.
  */
 export const MEMORY_RULE_GENERATION_SOURCE = 'memory_rule';

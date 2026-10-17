@@ -525,14 +525,14 @@ Both modes share one execution and finalize path.
 An **empty** dataset is rejected in both modes.
 
 For a queued run, a worker claims tasks in batches; the one that drains the run's
-**last** task settles it and fires [`eval_run.completed`](#lifecycle-webhooks). Poll
+**last** task settles it and fires [`eval_runs.completed`](#lifecycle-webhooks). Poll
 [`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run) or subscribe to the webhook. Task delivery is
 at-least-once, but a result row is unique per `(run, item)` and settling is an atomic
 claim, so the completion event fires exactly once.
 
 A background reaper settles non-terminal runs that have gone quiet past a grace period
 (30 minutes by default): a run whose items all have results is finalized; a run with items
-missing and no outstanding work is settled `failed` and `eval_run.failed` fires. A run
+missing and no outstanding work is settled `failed` and `eval_runs.failed` fires. A run
 that still has queued tasks is left alone.
 
 ### Run metadata
@@ -840,8 +840,8 @@ Two [webhook](./webhooks.md) events carry a run's outcome:
 
 | Event | Fires when |
 | --- | --- |
-| `eval_run.completed` | A run reached a terminal status with its items scored |
-| `eval_run.failed` | A run could not be executed to completion |
+| `eval_runs.completed` | A run reached a terminal status with its items scored |
+| `eval_runs.failed` | A run could not be executed to completion |
 
 Both carry the [eval run](#eval-run) in `data`, `passed` and `aggregate_scores` included,
 so a promotion gate needs no second call. Exactly one event fires per terminal run.

@@ -388,7 +388,7 @@ data: {"error":"Provider returned 404: model \"gemini-2.0-flash\" not found"}
 ```
 
 - No `[DONE]` means the stream did not complete; chunks produced before the failure are still delivered ahead of the error frame.
-- The generation is recorded `failed` with error code `AI_PROVIDER_ERROR`, readable via [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) and announced as an `agents.generation.failed` [webhook](./webhooks.md) event.
+- The generation is recorded `failed` with error code `AI_PROVIDER_ERROR`, readable via [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) and announced as a `generations.failed` [webhook](./webhooks.md) event.
 
 ### Tool Context
 
@@ -1020,18 +1020,18 @@ Only the agent's own project is counted and deleted. Generations, traces and ses
 
 Dispatched to project [webhooks](./webhooks.md) over a generation's lifecycle; for a background generation (the default) a caller that took its `202` has no other channel to learn how the turn ended.
 
-| Event type                          | Trigger                                                     |
-| ----------------------------------- | ----------------------------------------------------------- |
-| `agents.generation.completed`       | The model loop finished and the turn is recorded            |
-| `agents.generation.failed`          | The turn ended in an error, which is recorded on the record |
-| `agents.generation.requires_action` | The turn paused on a client tool call awaiting outputs      |
-| `agents.deleted`                    | An agent was deleted                                        |
+| Event type                    | Trigger                                                     |
+| ----------------------------- | ----------------------------------------------------------- |
+| `generations.completed`       | The model loop finished and the turn is recorded            |
+| `generations.failed`          | The turn ended in an error, which is recorded on the record |
+| `generations.requires_action` | The turn paused on a client tool call awaiting outputs      |
+| `agents.deleted`              | An agent was deleted                                        |
 
-A generation event names the generation (`resource_type: generation`, `resource_id` its id), and its `data` is the generation record exactly as [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) returns it at that moment: `status`, `trace_id`, `usage`, the structured `error` on `agents.generation.failed`, and the rest of the [record](./generations.md). A `requires_action` event adds the pending `required_action` (`type`, `tool_calls[]` with `id`, `tool_name`, `args`), which the record does not hold. The reply text is not on the record; read it from the [transcript](/docs/api/generations/get-generation-transcript) or the conversation. Subscribe to the family with `agents.generation.*`. Session turns emit the same shape under their own names: [Sessions → Webhook Events](./sessions.md#webhook-events).
+A generation event names the generation (`resource_type: generation`, `resource_id` its id), and its `data` is the generation record exactly as [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) returns it at that moment: `status`, `trace_id`, `usage`, the structured `error` on `generations.failed`, and the rest of the [record](./generations.md). A `requires_action` event adds the pending `required_action` (`type`, `tool_calls[]` with `id`, `tool_name`, `args`), which the record does not hold. The reply text is not on the record; read it from the [transcript](/docs/api/generations/get-generation-transcript) or the conversation. Subscribe to the family with `generations.*`. Every turn emits each event once, whatever ran it; a [session](./sessions.md#webhook-events) turn's record names its `session_id`.
 
 ```json
 {
-  "event": "agents.generation.completed",
+  "event": "generations.completed",
   "project_id": "proj_V1StGXR8Z5jdHi6B",
   "resource_type": "generation",
   "resource_id": "gen_V1StGXR8Z5jdHi6B",

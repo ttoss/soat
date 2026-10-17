@@ -51,7 +51,7 @@ describe('eventRecordFindings', () => {
 
   test('a conversation message is named by its document_id', () => {
     const message = event({
-      type: 'conversations.message.created',
+      type: 'conversation_messages.created',
       resourceType: 'conversation_message',
       resourceId: 'doc_1',
     });
@@ -59,7 +59,7 @@ describe('eventRecordFindings', () => {
       eventRecordFindings({ ...message, data: { document_id: 'doc_1' } })
     ).toEqual([]);
     expect(eventRecordFindings({ ...message, data: { id: 'doc_1' } })).toEqual([
-      'conversations.message.created (doc_1): data.document_id is undefined, not the resource_id',
+      'conversation_messages.created (doc_1): data.document_id is undefined, not the resource_id',
     ]);
   });
 

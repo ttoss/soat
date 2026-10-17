@@ -12,12 +12,10 @@ export type GenerationRequiredActionWire = {
 };
 
 type GenerationEventFacts =
-  | { type: 'agents.generation.completed'; assistantContent: string }
-  | { type: 'agents.generation.failed' | 'sessions.generation.completed' }
+  | { type: 'generations.completed'; assistantContent: string }
+  | { type: 'generations.failed' }
   | {
-      type:
-        | 'agents.generation.requires_action'
-        | 'sessions.generation.requires_action';
+      type: 'generations.requires_action';
       requiredAction: GenerationRequiredActionWire;
     };
 

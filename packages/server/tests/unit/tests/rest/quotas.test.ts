@@ -1823,9 +1823,9 @@ describe('Quotas', () => {
     });
   });
 
-  // ── quota.exceeded webhook + monitor mode (Phase 3) ────────────────────────
+  // ── quotas.exceeded webhook + monitor mode (Phase 3) ────────────────────────
 
-  describe('quota.exceeded webhook and monitor mode', () => {
+  describe('quotas.exceeded webhook and monitor mode', () => {
     // The webhook fires synchronously inside evaluateRequestQuotas (awaited by
     // the middleware before the response), so events are captured without any
     // polling.
@@ -1834,7 +1834,7 @@ describe('Quotas', () => {
     ): Promise<SoatEvent[]> => {
       const captured: SoatEvent[] = [];
       const handler = (event: SoatEvent) => {
-        if (event.type === 'quota.exceeded') captured.push(event);
+        if (event.type === 'quotas.exceeded') captured.push(event);
       };
       eventBus.on('soat:event', handler);
       try {

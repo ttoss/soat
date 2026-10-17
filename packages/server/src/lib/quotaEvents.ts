@@ -12,7 +12,7 @@ const log = createDebug('soat:quotas');
 
 // Fired on the first breach within a window, in both modes: a `monitor` quota
 // fires this and nothing else, an `enforce` one fires it alongside the 429.
-export const QUOTA_EXCEEDED_EVENT = 'quota.exceeded';
+export const QUOTA_EXCEEDED_EVENT = 'quotas.exceeded';
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
 
@@ -77,7 +77,7 @@ export const reportUnpricedCostQuota = async (args: {
 };
 
 /**
- * Fires the `quota.exceeded` webhook once per window for a breached quota.
+ * Fires the `quotas.exceeded` webhook once per window for a breached quota.
  *
  * A quota's window always has a discrete fixed key (rolling windows are
  * implemented as fixed windows keyed by the truncated timestamp), and usage

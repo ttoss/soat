@@ -270,7 +270,7 @@ export const savePendingGeneration = async (args: {
   };
 
   await emitGenerationEvent({
-    type: 'agents.generation.requires_action',
+    type: 'generations.requires_action',
     projectId: args.typedAgent.project.id as number,
     generationId: args.generationId,
     requiredAction: mapGenerationRequiredAction(requiredAction),
@@ -404,7 +404,7 @@ export const buildCompletedGenerationResult = async (args: {
   await meterCompletedTurn({ ...args, modelId: model });
 
   await emitGenerationEvent({
-    type: 'agents.generation.completed',
+    type: 'generations.completed',
     projectId: args.typedAgent.project.id as number,
     generationId: args.generationId,
     assistantContent: args.result.text,

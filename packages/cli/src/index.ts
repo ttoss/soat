@@ -142,7 +142,7 @@ program
   )
   .option(
     '--filter <pattern>',
-    'filter event type(s), supports prefix wildcard and comma separation (e.g. sessions.generation.*,files.*)'
+    'filter event type(s), supports prefix wildcard and comma separation (e.g. generations.*,files.*)'
   )
   .option('--json', 'print one JSON object per line')
   // eslint-disable-next-line max-lines-per-function

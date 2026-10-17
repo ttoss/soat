@@ -68,7 +68,7 @@ export const mapMessage = async (message: ConversationMessageRow) => {
 
 /**
  * The text of one generated assistant message, addressed by the document id the
- * `conversations.message.generated` event names.
+ * `conversation_messages.generated` event names.
  *
  * Here rather than in the subscriber because the bytes are behind a file the
  * storage backend owns, and `readStoredFileContent` is that reader — a second
@@ -211,7 +211,7 @@ const emitMessageCreated = (args: {
   mapped: Awaited<ReturnType<typeof mapMessage>>;
 }) => {
   emitResourceEvent({
-    type: 'conversations.message.created',
+    type: 'conversation_messages.created',
     projectId: args.projectId,
     resourceType: 'conversation_message',
     resourceId: args.mapped.document_id,
@@ -447,7 +447,7 @@ export const removeConversationMessage = async (args: {
   }
 
   emitResourceEvent({
-    type: 'conversations.message.deleted',
+    type: 'conversation_messages.deleted',
     projectId: conversation.projectId,
     resourceType: 'conversation_message',
     resourceId: args.documentId,

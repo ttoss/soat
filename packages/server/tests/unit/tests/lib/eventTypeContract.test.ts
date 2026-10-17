@@ -25,6 +25,18 @@ const SRC_DIR = join(__dirname, '../../../../src');
 /** The only module allowed to emit an unregistered, user-authored name. */
 const CUSTOM_EMIT_ALLOWLIST = ['lib/orchestrationEmitEventNode.ts'];
 
+// A `<namespace>.*` pattern is exactly one resource's events only while every
+// namespace is its resource type's plural. `audit` is the IAM resource type of
+// an audit entry.
+const IRREGULAR_PLURALS: Record<string, string> = {
+  audit: 'audit_entries',
+  memory: 'memories',
+};
+
+const eventNamespace = (resourceType: string): string => {
+  return IRREGULAR_PLURALS[resourceType] ?? `${resourceType}s`;
+};
+
 const collectSourceFiles = (dir: string, prefix = ''): string[] => {
   const found: string[] = [];
 
@@ -60,14 +72,26 @@ describe('event type contract', () => {
   // Each carries the generation record as its GET answers it; a second emit
   // site would decide that shape a second time.
   test('only generationEvents.ts emits a generation lifecycle event', () => {
-    const lifecycle =
-      /'(agents\.generation\.(completed|failed|requires_action)|sessions\.generation\.(completed|requires_action))'/;
+    const lifecycle = /'generations\.(completed|failed|requires_action)'/;
     const offenders = collectSourceFiles(SRC_DIR).filter((relative) => {
       const source = readFileSync(join(SRC_DIR, relative), 'utf-8');
       return source.includes('emitResourceEvent(') && lifecycle.test(source);
     });
 
     expect(offenders).toEqual(['lib/generationEvents.ts']);
+  });
+
+  test('every registered name is <plural of its resource type>.<verb>', () => {
+    const offenders = Object.entries(SOAT_EVENTS).flatMap(
+      ([resourceType, events]) => {
+        const name = new RegExp(`^${eventNamespace(resourceType)}\\.[a-z_]+$`);
+        return Object.keys(events).filter((type) => {
+          return !name.test(type);
+        });
+      }
+    );
+
+    expect(offenders).toEqual([]);
   });
 
   test('every registered resource type carries at least one event', () => {

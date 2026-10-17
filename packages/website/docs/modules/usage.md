@@ -87,7 +87,7 @@ A versioned unit price for one billable **component** of a SKU. Three scopes liv
 
 ### UsageThreshold
 
-A per-project alert rule: when `metric` over `window` crosses `threshold`, a `usage.threshold_crossed` [webhook](./webhooks.md) fires. Immutable apart from deletion; delete and recreate to change one (resets its fire state).
+A per-project alert rule: when `metric` over `window` crosses `threshold`, a `usage_thresholds.crossed` [webhook](./webhooks.md) fires. Immutable apart from deletion; delete and recreate to change one (resets its fire state).
 
 | Field              | Type            | Description                                                                       |
 | ------------------ | --------------- | -------------------------------------------------------------------------------- |
@@ -445,7 +445,7 @@ All read live at evaluation time and fail closed; the full grammar is in [Guards
 
 ### Thresholds and alerts
 
-After **each** usage-event write, every [`UsageThreshold`](#usagethreshold) on the project is evaluated against its windowed aggregate; `usage.threshold_crossed` [webhook](./webhooks.md) fires for any that cross. Re-fire hysteresis:
+After **each** usage-event write, every [`UsageThreshold`](#usagethreshold) on the project is evaluated against its windowed aggregate; `usage_thresholds.crossed` [webhook](./webhooks.md) fires for any that cross. Re-fire hysteresis:
 
 - **`calendar_month`** — at most once per window; `fired_window_key` blocks re-fire until the `YYYY-MM` key changes.
 - **`rolling_24h`** — re-arms once the value drops below 90% of the threshold.
@@ -466,7 +466,7 @@ The webhook payload (`data`) is the [`UsageThreshold`](#usagethreshold) record a
 }
 ```
 
-`fired_window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage.threshold_crossed` (or `usage.*`) to receive it.
+`fired_window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage_thresholds.crossed` (or `usage_thresholds.*`) to receive it.
 
 ### Who may act on a usage threshold
 

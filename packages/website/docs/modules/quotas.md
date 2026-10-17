@@ -181,7 +181,7 @@ Verdict rules:
 - `unpriced_rows` lists the distinct `(provider, model, component)` the window metered and no price row covered, capped at 10, so no trip through the [rollup](./usage.md#aggregation) is needed. Zero-quantity components and non-billable details are left out. Rows are per **component**, not per event, which exposes a **partly priced event**: a model priced for input but not output tokens carries a real `cost_usd` that understates itself; `output_tokens` in `unpriced_rows` shows it.
 - The verdict reads the [`llm_tokens`](./usage.md#meter-types-and-components) meter alone, while the guarded aggregate sums **every** priced meter the [meter scope](#meter-scope) admits. Platform meters such as `compute_execution` are priced by the operator from a `soat` SKU; counting them would let unpriced platform events refuse the first priced AI generation, or a priced platform event mask a genuine AI blackout. A quota naming a **platform** meter therefore has no verdict: never a blackout, never the exception below. An `llm_tokens`-scoped quota is held to the verdict.
 - [Embeddings](./embeddings.md#pricing-embeddings) are held out of the verdict: their rate is deployment configuration outside every price book tier, so counting them unpriced would refuse a cap no one in the project can satisfy, and counting them priced (an unset rate meters at `0`) would report the window measurable. Embedding spend still counts towards the aggregate and never appears in `unpriced_rows`.
-- **No `Retry-After`, and no `quota.exceeded` webhook**: no limit was reached. Configure the [price book](./usage.md#pricing) for the models in use, or set `on_unpriced` to `allow`.
+- **No `Retry-After`, and no `quotas.exceeded` webhook**: no limit was reached. Configure the [price book](./usage.md#pricing) for the models in use, or set `on_unpriced` to `allow`.
 - A quota reads a window the meter already wrote, so the generations that opened it ran. To refuse an unpriced model before it runs, set [`require_priced_model`](./projects.md#priced-models) on the project.
 - **`monitor` mode never blocks**, whatever `on_unpriced` says; it gets the exception below and nothing else.
 - `on_unpriced` is storable on `cost_usd` quotas only; elsewhere the write is `400`.
@@ -271,7 +271,7 @@ This differs from `agent` scope, where a null `scope_ref` aggregates the whole p
 
 #### Webhook granularity
 
-The `quota.exceeded` webhook fires **once per window per quota**, not per actor: the first actor to breach fires it, later ones in that window are silent. Every actor is still blocked independently. To see who hit their cap, query the meter with `group_by=actor` (see [Usage](./usage.md)).
+The `quotas.exceeded` webhook fires **once per window per quota**, not per actor: the first actor to breach fires it, later ones in that window are silent. Every actor is still blocked independently. To see who hit their cap, query the meter with `group_by=actor` (see [Usage](./usage.md)).
 
 ### Windows and counters
 
@@ -304,15 +304,15 @@ A **flow** breach returns HTTP `429` with a `Retry-After` header (seconds until 
 }
 ```
 
-### quota.exceeded webhook
+### quotas.exceeded webhook
 
-Every breach fires `quota.exceeded` **once per window**, for `enforce` and `monitor` quotas alike; the fire state is one stored window key, re-fired only when the window rolls (no hysteresis). `data` is the quota as [`GET /api/v1/quotas/{quota_id}`](/docs/api/quotas/get-quota) answers it, plus the breached `window_key` and the `observed_value`, so a consumer can tell which [meter](#meter-scope) breached without a fetch. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard).
+Every breach fires `quotas.exceeded` **once per window**, for `enforce` and `monitor` quotas alike; the fire state is one stored window key, re-fired only when the window rolls (no hysteresis). `data` is the quota as [`GET /api/v1/quotas/{quota_id}`](/docs/api/quotas/get-quota) answers it, plus the breached `window_key` and the `observed_value`, so a consumer can tell which [meter](#meter-scope) breached without a fetch. Subscribe a [webhook](./webhooks.md) to `quotas.exceeded` (or a wildcard).
 
 A `storage_bytes` quota's `window_key` is the **snapshot's own UTC day**: one report per fresh measurement while a project stays over cap.
 
 ### Monitor mode
 
-`mode: monitor` observes without blocking: a breach fires `quota.exceeded` and lets the request, generation or corpus write through. Dry-run a cap, then flip `mode` to `enforce` via `PATCH`; the next breaching request is blocked. `enforce` quotas fire the same webhook beside the `429`.
+`mode: monitor` observes without blocking: a breach fires `quotas.exceeded` and lets the request, generation or corpus write through. Dry-run a cap, then flip `mode` to `enforce` via `PATCH`; the next breaching request is blocked. `enforce` quotas fire the same webhook beside the `429`.
 
 A monitor breach leaves no trace on the request, so it also writes an [audit-log](./audit-log.md) entry once per window: `action: quotas:MonitorBreach` (`principal_type`/`principal_id` null), the quota as resource, `detail.kind` `quota_monitor_breach` with metric, meter scope, window, limit and observed value. `enforce` breaches need none: the audit log records the `429`.
 

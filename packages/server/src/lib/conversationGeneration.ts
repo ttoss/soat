@@ -278,7 +278,7 @@ const firePostTurnSideEffects = (args: {
   message: Awaited<ReturnType<typeof mapMessage>>;
 }): void => {
   emitResourceEvent({
-    type: 'conversations.message.generated',
+    type: 'conversation_messages.generated',
     projectId: args.projectId,
     resourceType: 'conversation_message',
     resourceId: args.message.document_id,

@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 Every completed generation writes an append-only
 [usage event](/docs/modules/usage) with the provider's token counts. This
 tutorial prices that ledger, aggregates it per project, and subscribes a webhook
-to the `usage.threshold_crossed` budget alert.
+to the `usage_thresholds.crossed` budget alert.
 
 ## Prerequisites
 
@@ -387,7 +387,7 @@ curl -s "$SOAT_URL/api/v1/usage/prices" -H "Authorization: Bearer $ADMIN_TOKEN" 
 ## Step 8 — Set a budget threshold and subscribe to the alert
 
 A [`UsageThreshold`](/docs/modules/usage#usagethreshold) fires the
-`usage.threshold_crossed` [webhook](/docs/modules/webhooks) after any
+`usage_thresholds.crossed` [webhook](/docs/modules/webhooks) after any
 usage-event write that crosses a project's windowed metric. A `tokens`
 threshold works immediately (tokens are always metered); a `cost_usd`
 threshold counts priced usage only. Create both, then subscribe a webhook.
@@ -410,7 +410,7 @@ soat create-webhook \
   --project-id "$PROJECT_ID" \
   --name "budget-alerts" \
   --url "https://example.com/usage-alerts" \
-  --events '["usage.threshold_crossed"]'
+  --events '["usage_thresholds.crossed"]'
 soat list-usage-thresholds --project-id "$PROJECT_ID"
 ```
 
@@ -429,7 +429,7 @@ await adminSoat.webhooks.createWebhook({
     project_id: PROJECT_ID,
     name: 'budget-alerts',
     url: 'https://example.com/usage-alerts',
-    events: ['usage.threshold_crossed'],
+    events: ['usage_thresholds.crossed'],
   },
 });
 const { data: thresholds } = await adminSoat.usage.listUsageThresholds({
@@ -450,7 +450,7 @@ curl -s -X POST "$SOAT_URL/api/v1/usage/thresholds" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"metric\":\"cost_usd\",\"window\":\"calendar_month\",\"threshold\":50}"
 curl -s -X POST "$SOAT_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"budget-alerts\",\"url\":\"https://example.com/usage-alerts\",\"events\":[\"usage.threshold_crossed\"]}"
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"budget-alerts\",\"url\":\"https://example.com/usage-alerts\",\"events\":[\"usage_thresholds.crossed\"]}"
 curl -s "$SOAT_URL/api/v1/usage/thresholds?project_id=$PROJECT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```

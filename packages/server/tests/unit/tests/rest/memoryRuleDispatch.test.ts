@@ -169,7 +169,7 @@ describe('Memory rule dispatch', () => {
   const createRule = async (body: Record<string, unknown>) => {
     const res = await asAdmin()
       .post('/api/v1/memory-rules')
-      .send({ on: 'agents.generation.completed', ...body });
+      .send({ on: 'generations.completed', ...body });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };
@@ -248,7 +248,7 @@ describe('Memory rule dispatch', () => {
     jest.restoreAllMocks();
   });
 
-  describe('agents.generation.completed → the built-in extractor', () => {
+  describe('generations.completed → the built-in extractor', () => {
     test('writes the facts it proposes, under the rule that accepted them', async () => {
       const scope = await createProject();
       const storeId = await scope.createStore();
@@ -363,7 +363,7 @@ describe('Memory rule dispatch', () => {
     });
   });
 
-  describe('agents.generation.completed → which rules fire', () => {
+  describe('generations.completed → which rules fire', () => {
     test('only enabled rules whose selector names the agent', async () => {
       const scope = await createProject();
       const agentId = await scope.createAgent();
@@ -427,7 +427,7 @@ describe('Memory rule dispatch', () => {
     });
   });
 
-  describe('agents.generation.completed → an agent handler', () => {
+  describe('generations.completed → an agent handler', () => {
     test('writes the handler’s facts with their tags, and never reads its own turn back', async () => {
       const scope = await createProject();
       const storeId = await scope.createStore();
@@ -507,7 +507,7 @@ describe('Memory rule dispatch', () => {
     });
   });
 
-  describe('agents.generation.completed → a tool handler', () => {
+  describe('generations.completed → a tool handler', () => {
     let toolServer: Server;
     let toolServerUrl: string;
     let lastToolInput: Record<string, unknown> | undefined;
@@ -575,7 +575,7 @@ describe('Memory rule dispatch', () => {
       expect(memories[0].content).toBe('The customer is on the annual plan');
       expect(lastToolInput).toMatchObject({
         style: 'terse',
-        event: 'agents.generation.completed',
+        event: 'generations.completed',
         rule_id: ruleId,
         agent_id: sourceAgentId,
         generation_id: generationId,
@@ -587,7 +587,7 @@ describe('Memory rule dispatch', () => {
     });
   });
 
-  describe('POST /api/v1/conversations/:conversation_id/generate → conversations.message.generated', () => {
+  describe('POST /api/v1/conversations/:conversation_id/generate → conversation_messages.generated', () => {
     test('feeds the persisted reply to the handler and stamps the conversation on each fact', async () => {
       const scope = await createProject();
       const storeId = await scope.createStore();
@@ -595,7 +595,7 @@ describe('Memory rule dispatch', () => {
       const handlerAgentId = await scope.createAgent();
       await createRule({
         memory_store_id: storeId,
-        on: 'conversations.message.generated',
+        on: 'conversation_messages.generated',
         source_agent_ids: [sourceAgentId],
         agent_id: handlerAgentId,
       });

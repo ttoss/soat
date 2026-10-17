@@ -88,7 +88,7 @@ describe('Memory rules — the built-in extractor', () => {
 
   const createRule = async (body: Record<string, unknown>) => {
     return create('/api/v1/memory-rules', {
-      on: 'agents.generation.completed',
+      on: 'generations.completed',
       ...body,
     });
   };

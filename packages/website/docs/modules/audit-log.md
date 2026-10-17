@@ -79,7 +79,7 @@ Every record that names who acted uses one shape: a `<verb>_by_principal_type` /
 
 Events no principal authorized leave `principal_type` and `principal_id` **null** and are identified by `action`. There is no null-principal filter; filter by `action` (`quotas:MonitorBreach`, `guardrails:Evaluate`). Producers:
 
-- **Quota monitoring** — a [monitor-mode quota](./quotas.md#monitor-mode) breach writes `action: quotas:MonitorBreach`, the quota as resource, `detail.kind: quota_monitor_breach` (metric, window, limit, observed value); once per window, mirroring the `quota.exceeded` webhook.
+- **Quota monitoring** — a [monitor-mode quota](./quotas.md#monitor-mode) breach writes `action: quotas:MonitorBreach`, the quota as resource, `detail.kind: quota_monitor_breach` (metric, window, limit, observed value); once per window, mirroring the `quotas.exceeded` webhook.
 - **Guardrail evaluations** — an [evaluation](./guardrails.md#evaluation-audit-record) that **changed the outcome** (`route_to_approval`, `blocked`, `tripwire`) writes `action: guardrails:Evaluate`, the guardrail as resource, `detail.kind: guardrail_evaluation` with the full record (governing version, resolved class, decision, guard outcome, context snapshot, provenance). Plain `execute` evaluations are not audited; they stay in the guardrails' own evaluation records. A `route_to_approval` entry also carries `approval_id` in `detail`.
 
 ### Read auditing
@@ -139,16 +139,16 @@ Entries are never updated or deleted through the API; the model layer rejects up
 
 The export is not an MCP or `builtin` tool action (unbounded stream); tools use the paged `list-audit-entries` with the same filters.
 
-### `audit.entry_created` webhook
+### `audit_entries.created` webhook
 
-Every persisted **project-scoped** entry emits an `audit.entry_created` [webhook](./webhooks.md) event with the full entry as `data`, in the read API's snake_case shape. Subscribe with `audit.*` or the exact name:
+Every persisted **project-scoped** entry emits an `audit_entries.created` [webhook](./webhooks.md) event with the full entry as `data`, in the read API's snake_case shape. Subscribe with `audit_entries.*` or the exact name:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 soat create-webhook --project-id proj_ABC \
-  --url https://siem.example.com/soat --events "audit.entry_created"
+  --url https://siem.example.com/soat --events "audit_entries.created"
 ```
 
 </TabItem>
@@ -159,7 +159,7 @@ const { data, error } = await soat.webhooks.createWebhook({
   body: {
     project_id: 'proj_ABC',
     url: 'https://siem.example.com/soat',
-    events: ['audit.entry_created'],
+    events: ['audit_entries.created'],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -175,7 +175,7 @@ curl -X POST https://api.example.com/api/v1/webhooks \
   -d '{
     "project_id": "proj_ABC",
     "url": "https://siem.example.com/soat",
-    "events": ["audit.entry_created"]
+    "events": ["audit_entries.created"]
   }'
 ```
 

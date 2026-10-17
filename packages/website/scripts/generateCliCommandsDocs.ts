@@ -709,7 +709,7 @@ const main = async () => {
     'soat listen --port 8787 --path /webhook',
     '',
     '# Filter only session generation lifecycle events',
-    'soat listen --port 8787 --path /webhook --filter sessions.generation.*',
+    'soat listen --port 8787 --path /webhook --filter generations.*',
     '',
     '# Verify webhook signatures and output JSON lines',
     'soat listen --port 8787 --path /webhook --secret "<webhook-secret>" --json',

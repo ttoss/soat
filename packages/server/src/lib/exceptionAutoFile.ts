@@ -3,7 +3,7 @@
  * so producers stay decoupled: an exhausted run and a lapsed approval reuse
  * the existing `orchestration_runs.failed` / `approvals.expired` events with
  * no change to those modules; a guardrail tripwire and a refused continuation
- * chain emit dedicated `guardrail.tripwire` / `generations.chain_limit`
+ * chain emit dedicated `guardrails.tripwire` / `generations.chain_limit`
  * events. Every handler is fire-and-forget — a filing
  * failure must never disturb the producer.
  *
@@ -140,7 +140,7 @@ const EXCEPTION_FILERS = new Map<
 >([
   ['orchestration_runs.failed', fileRunFailedException],
   ['approvals.expired', fileApprovalExpiredException],
-  ['guardrail.tripwire', fileGuardrailTripwireException],
+  ['guardrails.tripwire', fileGuardrailTripwireException],
   ['generations.chain_limit', fileChainLimitException],
 ]);
 
@@ -171,7 +171,7 @@ export const initializeExceptionsListener = (): void => {
 };
 
 /**
- * Emits a `guardrail.tripwire` event the exceptions listener turns into a
+ * Emits a `guardrails.tripwire` event the exceptions listener turns into a
  * `guardrail_tripwire` exception: `data` is the guardrail that tripped, as
  * `GET` answers it, with the version that governed and the aborted call beside
  * it. Fire-and-forget from the guardrail dispatch path — mirrors how audit
@@ -190,7 +190,7 @@ export const emitGuardrailTripwireEvent = (args: {
   generationId?: string | null;
 }): Promise<void> => {
   return emitLoadedRecordEvent({
-    type: 'guardrail.tripwire',
+    type: 'guardrails.tripwire',
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
     resourceType: 'guardrail',

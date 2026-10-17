@@ -39,7 +39,7 @@ type Refusal = { reason: 'repeat' | 'depth'; chain: readonly string[] };
  * - **repeat** — the chain already names this trigger, so dispatching it again
  *   is the self-feeding cycle (`agent emits → trigger runs agent → …`). Caught
  *   on the *first* recurrence rather than five hops later, which is also what
- *   keeps a `quota.exceeded` from the guard below out of its own trigger: the
+ *   keeps a `quotas.exceeded` from the guard below out of its own trigger: the
  *   breach event is emitted inside the chain that already names the trigger a
  *   `*` pattern would match.
  * - **depth** — the chain is long enough that even a cycle with no repeated
@@ -158,7 +158,7 @@ const admitFiring = async (args: {
  * Runs one matched trigger for one event: guard, admit, dispatch.
  *
  * Everything from the guard onward runs inside the extended causation scope, so
- * an event *this* firing causes — including the `quota.exceeded` the admission
+ * an event *this* firing causes — including the `quotas.exceeded` the admission
  * below may emit — arrives at the next subscriber carrying this trigger's id and
  * is refused by `refusalFor` rather than recursing.
  */

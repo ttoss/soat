@@ -523,8 +523,8 @@ describe('Exceptions', () => {
       expect(match!.detail).toBeNull();
     });
 
-    test('guardrail.tripwire with a generation (no run) files on the agent', async () => {
-      emit('guardrail.tripwire', 'guardrail', 'grd_gen_1', {
+    test('guardrails.tripwire with a generation (no run) files on the agent', async () => {
+      emit('guardrails.tripwire', 'guardrail', 'grd_gen_1', {
         id: 'grd_gen_1',
         guardrail_version: 1,
         tool_name: 'tool_gen_1',
@@ -545,8 +545,8 @@ describe('Exceptions', () => {
       expect(match!.agent_id).toBe('agent_trip_1');
     });
 
-    test('guardrail.tripwire with no run folds repeated trips of the same agent/tool call site into one item, ignoring the (always-fresh) generation id', async () => {
-      emit('guardrail.tripwire', 'guardrail', 'grd_loop_1', {
+    test('guardrails.tripwire with no run folds repeated trips of the same agent/tool call site into one item, ignoring the (always-fresh) generation id', async () => {
+      emit('guardrails.tripwire', 'guardrail', 'grd_loop_1', {
         id: 'grd_loop_1',
         guardrail_version: 1,
         tool_name: 'tool_loop_1',
@@ -566,7 +566,7 @@ describe('Exceptions', () => {
 
       // Same agent/tool call site, but a brand-new generation_id (as every real
       // agent generation gets) — must fold into the same open item.
-      emit('guardrail.tripwire', 'guardrail', 'grd_loop_1', {
+      emit('guardrails.tripwire', 'guardrail', 'grd_loop_1', {
         id: 'grd_loop_1',
         guardrail_version: 1,
         tool_name: 'tool_loop_1',

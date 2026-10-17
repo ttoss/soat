@@ -439,7 +439,7 @@ describe('a formation declared in camelCase', () => {
       camel: () => {
         return {
           memoryStoreId: fx.memoryStoreId,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
           agentId: fx.agentId,
         };
       },

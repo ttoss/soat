@@ -831,7 +831,7 @@ curl -s "$SOAT_BASE_URL/api/v1/exceptions?project_id=$PROJECT_ID&kind=quota_unpr
 
 ## Step 11 — Observe before you enforce
 
-`mode: monitor` runs the same check, fires the `quota.exceeded` [webhook](/docs/modules/webhooks), writes a `quotas:MonitorBreach` [audit entry](/docs/modules/audit-log#system-originated-entries), and lets the request through.
+`mode: monitor` runs the same check, fires the `quotas.exceeded` [webhook](/docs/modules/webhooks), writes a `quotas:MonitorBreach` [audit entry](/docs/modules/audit-log#system-originated-entries), and lets the request through.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

@@ -56,7 +56,7 @@ loop you already have rather than replacing it.
 Both are started by a client, or by a [trigger](/docs/modules/triggers):
 
 - An **`event` trigger** subscribes to an internal platform event
-  (`documents.ingested`, `agents.generation.completed`, an orchestration's own
+  (`documents.ingested`, `generations.completed`, an orchestration's own
   `emit_event`). Delivery is best-effort and unordered, and the reactive edge is capped by
   a [causation depth guard](/docs/modules/triggers#loops-and-cost). Use it when the work is
   a *reaction* and promptness is the point.

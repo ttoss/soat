@@ -125,7 +125,7 @@ describe('POST /api/v1/agents/:agent_id/generate — token and cost quotas', () 
   ): Promise<SoatEvent[]> => {
     const captured: SoatEvent[] = [];
     const handler = (event: SoatEvent) => {
-      if (event.type === 'quota.exceeded') captured.push(event);
+      if (event.type === 'quotas.exceeded') captured.push(event);
     };
     eventBus.on('soat:event', handler);
     try {
@@ -194,7 +194,7 @@ describe('POST /api/v1/agents/:agent_id/generate — token and cost quotas', () 
       expectAdmitted(await generate(ctx.agentPublicId));
     });
 
-    test('a monitor quota fires quota.exceeded without blocking', async () => {
+    test('a monitor quota fires quotas.exceeded without blocking', async () => {
       const ctx = await fresh('genquota-monitor-fire');
       await seedUsageEvent({
         projectInternalId: ctx.projectInternalId,
@@ -220,7 +220,7 @@ describe('POST /api/v1/agents/:agent_id/generate — token and cost quotas', () 
       });
     });
 
-    test('an enforce breach fires quota.exceeded once per window', async () => {
+    test('an enforce breach fires quotas.exceeded once per window', async () => {
       const ctx = await fresh('genquota-enforce-fire');
       await seedUsageEvent({
         projectInternalId: ctx.projectInternalId,
@@ -243,7 +243,7 @@ describe('POST /api/v1/agents/:agent_id/generate — token and cost quotas', () 
       expect(captured[0].data.mode).toBe('enforce');
     });
 
-    test('an unpriced refusal fires no quota.exceeded — nothing was exceeded', async () => {
+    test('an unpriced refusal fires no quotas.exceeded — nothing was exceeded', async () => {
       const ctx = await fresh('genquota-unpriced-nofire');
       for (let i = 0; i < 3; i += 1) {
         await seedUsageEvent({

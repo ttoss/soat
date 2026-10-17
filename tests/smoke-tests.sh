@@ -1888,7 +1888,7 @@ echo "--- Creating a memory rule (built-in extractor) ---"
 # the unit suite — it is asynchronous and LLM-dependent.
 MRULE_RESP=$($SOAT_CLI create-memory-rule \
   --memory-store-id "$MEM_ID" \
-  --on agents.generation.completed \
+  --on generations.completed \
   --prompt "Extract decisions only.")
 MRULE_ID=$(printf '%s\n' "$MRULE_RESP" | jq -r '.id')
 if [ -z "$MRULE_ID" ] || [ "$MRULE_ID" = "null" ]; then
@@ -1928,7 +1928,7 @@ echo "--- The built-in extractor cannot bind to the message event ---"
 MRULE_BAD_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memory-rules" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"memory_store_id\":\"$MEM_ID\",\"on\":\"conversations.message.generated\"}")
+  -d "{\"memory_store_id\":\"$MEM_ID\",\"on\":\"conversation_messages.generated\"}")
 if [ "$MRULE_BAD_STATUS" != "400" ]; then
   echo "ERROR: handlerless rule on the message event expected 400, got $MRULE_BAD_STATUS" >&2
   exit 1
@@ -5482,7 +5482,7 @@ echo "Webhook secret rotated."
 
 # Redeliver a stored delivery. Needs a delivery to exist first, so this uses its
 # own wildcard webhook: an audited mutation in the project emits
-# `audit.entry_created`, which the wildcard subscription matches.
+# `audit_entries.created`, which the wildcard subscription matches.
 echo "--- Redelivering a webhook delivery ---"
 REDELIVER_HOOK_RESP=$($SOAT_CLI create-webhook --project-id "$PROJECT_PUBLIC_ID" \
   --name "Smoke Redeliver Webhook" \

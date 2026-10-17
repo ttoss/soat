@@ -13,6 +13,9 @@
  * lives in the entry because the generated reference reads it: a new event is
  * documented by the same edit that registers it.
  *
+ * Every name is `<resource type, plural>.<verb>`, so a `<plural>.*` pattern is
+ * exactly one resource type's events (pinned by `eventTypeContract.test.ts`).
+ *
  * **This file deliberately imports nothing** — the website's docs generator
  * loads it, so a runtime import would drag the DB layer into a docs build.
  *
@@ -34,7 +37,7 @@ export const SOAT_EVENTS = {
     'approvals.expired': 'A pending approval passed its deadline unanswered.',
   },
   audit: {
-    'audit.entry_created': 'An audit entry was recorded.',
+    'audit_entries.created': 'An audit entry was recorded.',
   },
   conversation: {
     'conversations.created': 'A conversation was created.',
@@ -42,11 +45,11 @@ export const SOAT_EVENTS = {
     'conversations.deleted': 'A conversation was deleted.',
   },
   conversation_message: {
-    'conversations.message.created':
+    'conversation_messages.created':
       'A message was added to a conversation; the payload carries the message plus its `conversation_id`.',
-    'conversations.message.generated':
+    'conversation_messages.generated':
       'An assistant message was generated in a conversation; the payload carries the message plus `conversation_id`, `generation_id` and `trace_id`.',
-    'conversations.message.deleted':
+    'conversation_messages.deleted':
       'A message was removed from a conversation; the payload carries the message as it stood plus its `conversation_id`.',
   },
   decision: {
@@ -69,9 +72,9 @@ export const SOAT_EVENTS = {
       'A document ingestion settled in failure (`status=failed`); the payload carries the document plus the `error` reason (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`).',
   },
   eval_run: {
-    'eval_run.completed':
+    'eval_runs.completed':
       'An eval run reached a terminal status with its items scored; the payload is the run, carrying the pass/fail verdict consumed by eval-gated promotion.',
-    'eval_run.failed':
+    'eval_runs.failed':
       'An eval run could not be executed to completion (infrastructure failure).',
   },
   exception: {
@@ -83,20 +86,18 @@ export const SOAT_EVENTS = {
     'files.deleted': 'A file was deleted.',
   },
   generation: {
-    'agents.generation.requires_action':
-      'An agent generation paused for a client-side tool result.',
-    'agents.generation.completed': 'An agent generation completed.',
-    'agents.generation.failed': 'An agent generation failed.',
-    'sessions.generation.requires_action':
-      'A session generation paused for a client-side tool result.',
-    'sessions.generation.completed': 'A session generation completed.',
+    'generations.requires_action':
+      'A generation paused for a client-side tool result; the payload carries the generation plus the pending `required_action`.',
+    'generations.completed':
+      'A generation completed; a turn run in a session carries its `session_id`.',
+    'generations.failed': 'A generation failed.',
     'generations.content_purged':
       "A generation's content was redacted, leaving its auditable skeleton.",
     'generations.chain_limit':
       'A continuation chain reached its generation budget and was refused; the payload carries the root generation plus `chain_size`, `limit`, `limit_source`, `refused_agent_id` and `refused_initiator_generation_id`.',
   },
   guardrail: {
-    'guardrail.tripwire':
+    'guardrails.tripwire':
       'A guardrail tripwire aborted a tool call; the payload carries the guardrail plus `guardrail_version` and the aborted call (`tool_id`, `tool_name`, `action`, `agent_id`, `generation_id`, `orchestration_run_id`, `node_id`).',
   },
   memory: {
@@ -117,14 +118,15 @@ export const SOAT_EVENTS = {
       'A project was resumed: the runs and tasks its pause held are handed back, and its schedules fire again.',
   },
   quota: {
-    'quota.exceeded':
+    'quotas.exceeded':
       'A quota limit was exceeded; the payload carries the quota plus the breached `window_key` and the `observed_value`.',
   },
   session: {
     'sessions.created': 'A session was created.',
     'sessions.updated': 'A session was updated.',
     'sessions.deleted': 'A session was deleted.',
-    'sessions.generation.started': 'A session generation started.',
+    'sessions.generation_started':
+      'A generation started in a session; the payload is the session, before the generation is created. The turn settles as a `generations.*` event.',
   },
   task: {
     'tasks.created': 'A task was created.',
@@ -148,7 +150,7 @@ export const SOAT_EVENTS = {
       "A trace's content was redacted, leaving its auditable skeleton.",
   },
   usage_threshold: {
-    'usage.threshold_crossed': 'A usage threshold was crossed.',
+    'usage_thresholds.crossed': 'A usage threshold was crossed.',
   },
 } as const satisfies Readonly<Record<string, Readonly<Record<string, string>>>>;
 

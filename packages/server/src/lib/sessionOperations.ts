@@ -4,7 +4,6 @@ import { DomainError } from '../errors';
 import { submitToolOutputs } from './agentGeneration';
 import { generateConversationMessage } from './conversationGeneration';
 import { mapGeneratedTurn } from './generatedTurn';
-import { emitGenerationEvent } from './generationEvents';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import {
@@ -72,28 +71,13 @@ const checkConcurrency = (args: {
 };
 
 /**
- * Emit the appropriate event and build the return value from a generation result.
+ * The session's answer for a settled turn. The turn's `generations.*` event is
+ * emitted by the generation itself, whichever transport ran it.
  */
-const buildGenerationResult = async (
-  session: InstanceType<(typeof db)['Session']>,
+const buildGenerationResult = (
   result: Awaited<ReturnType<typeof generateConversationMessage>>
 ) => {
-  const turn = mapGeneratedTurn(result);
-  await emitGenerationEvent(
-    turn.status === 'requires_action'
-      ? {
-          type: 'sessions.generation.requires_action',
-          projectId: session.projectId,
-          generationId: turn.generation_id,
-          requiredAction: turn.required_action,
-        }
-      : {
-          type: 'sessions.generation.completed',
-          projectId: session.projectId,
-          generationId: turn.generation_id,
-        }
-  );
-  return turn;
+  return mapGeneratedTurn(result);
 };
 
 const checkSessionExpiry = async (
@@ -219,7 +203,7 @@ export const generateSessionResponse = async (args: {
     }
   }
 
-  return buildGenerationResult(session, result);
+  return buildGenerationResult(result);
 };
 
 export const addSessionMessage = async (args: {

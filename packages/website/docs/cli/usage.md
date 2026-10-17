@@ -94,7 +94,7 @@ Point a webhook's `url` (or a `webhook`-type trigger's target, via a tunnel such
 - `--port` — port to listen on (default `8787`)
 - `--path` — request path to accept (default `/webhook`)
 - `--secret` — verify the payload's signature against this webhook/trigger secret, read from `X-Soat-Signature` (`t=<unix>,v1=<hex>` on a webhook delivery, `sha256=<hex>` on a trigger payload); mismatch is rejected with `401`
-- `--filter` — only print events matching a pattern, e.g. `sessions.generation.*,files.*` (comma-separated, trailing `*` wildcard)
+- `--filter` — only print events matching a pattern, e.g. `generations.*,files.*` (comma-separated, trailing `*` wildcard)
 - `--json` — print one JSON object per line instead of a human-readable block
 
 Each accepted delivery prints `event_type`, `delivery_id`, signature validity (with `--secret`), then the pretty-printed payload.

@@ -1816,9 +1816,9 @@ components:
         on:
           type: string
           description: >-
-            `agents.generation.completed` (once per completed turn, and the only
+            `generations.completed` (once per completed turn, and the only
             event the built-in extractor may bind to) or
-            `conversations.message.generated` (per persisted assistant reply,
+            `conversation_messages.generated` (per persisted assistant reply,
             custom handlers only).
         source_agent_ids:
           x-soat-ref: agents

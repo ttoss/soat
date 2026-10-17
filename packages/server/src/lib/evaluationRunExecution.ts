@@ -372,7 +372,7 @@ export const evalSettlement = (args: {
 
 /**
  * Rolls a run's persisted results up to its terminal state and fires
- * `eval_run.completed`.
+ * `eval_runs.completed`.
  *
  * The single finalize path for both run modes, and the only place the completion
  * event is emitted — which is what makes "exactly once per terminal run" a
@@ -432,7 +432,7 @@ export const finalizeEvalRun = async (args: {
 /**
  * Settles a run that could not be executed at all (an infrastructure failure,
  * not an item's generation failing — that is caught per item) and fires
- * `eval_run.failed`.
+ * `eval_runs.failed`.
  *
  * A gate consumer must hear about this: a run that silently stayed `running`
  * forever is a promotion that never resolves either way.
@@ -451,7 +451,7 @@ export const failEvalRun = async (args: {
   });
 
   await emitEvalRunEvent({
-    event: 'eval_run.failed',
+    event: 'eval_runs.failed',
     projectId: args.projectId,
     run: args.run,
   });
@@ -464,7 +464,7 @@ export const failEvalRun = async (args: {
  * observe an empty task queue, so "is it done?" must not be a read followed by
  * a write. This is one conditional `UPDATE` on `finished_at IS NULL`: exactly
  * one caller sees a row count of 1. Without it a run would fire
- * `eval_run.completed` more than once — and a promotion gate that receives the
+ * `eval_runs.completed` more than once — and a promotion gate that receives the
  * same verdict twice can act twice.
  *
  * Guarding on `finished_at` rather than a `finalizing` status keeps the public
@@ -487,7 +487,7 @@ export const claimRunFinalization = async (args: {
  *
  * The one place the claim and the finalize are paired, so neither worker call
  * site can drift into finalizing without claiming first — which is what would
- * let `eval_run.completed` fire twice for one run.
+ * let `eval_runs.completed` fire twice for one run.
  */
 export const finalizeIfUnclaimed = async (args: {
   run: EvalRunRowInstance;

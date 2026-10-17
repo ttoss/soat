@@ -188,7 +188,7 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
  * GET /api/v1/usage/thresholds
  * operationId: listUsageThresholds
  * Lists the usage thresholds the caller can access, optionally filtered by
- * project_id. Each threshold alerts (via the usage.threshold_crossed webhook)
+ * project_id. Each threshold alerts (via the usage_thresholds.crossed webhook)
  * when a project's cost or token usage over a calendar-month or rolling-24h
  * window crosses the configured value. Requires usage:ListThresholds.
  */
