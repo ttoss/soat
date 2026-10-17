@@ -85,6 +85,9 @@ export const SOAT_EVENTS = {
       'An agent generation paused for a client-side tool result.',
     'agents.generation.completed': 'An agent generation completed.',
     'agents.generation.failed': 'An agent generation failed.',
+    'sessions.generation.requires_action':
+      'A session generation paused for a client-side tool result.',
+    'sessions.generation.completed': 'A session generation completed.',
     'generations.content_purged':
       "A generation's content was redacted, leaving its auditable skeleton.",
     'generations.chain_limit':
@@ -119,9 +122,6 @@ export const SOAT_EVENTS = {
     'sessions.deleted': 'A session was deleted.',
     'sessions.tags.updated': "A session's tags were replaced.",
     'sessions.generation.started': 'A session generation started.',
-    'sessions.generation.requires_action':
-      'A session generation paused for a client-side tool result.',
-    'sessions.generation.completed': 'A session generation completed.',
   },
   task: {
     'tasks.created': 'A task was created.',

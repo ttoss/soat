@@ -23,6 +23,7 @@ import { fetchMcpToolListing, type McpToolListing } from './mcpToolListing';
 import { type McpTransport, postMcp } from './mcpTransport';
 import {
   mergePresetParameters,
+  presetsDeclaredBy,
   stripPresetKeysFromSchema,
 } from './toolPresetParameters';
 import { resolvePresetParametersForCall } from './toolTemplates';
@@ -73,7 +74,10 @@ export const buildMcpToolExecute = (args: {
 }) => {
   return async (toolArgs: unknown) => {
     const presetParameters = resolvePresetParametersForCall({
-      presetParameters: args.presetParameters,
+      presetParameters: presetsDeclaredBy({
+        presetParameters: args.presetParameters,
+        schema: args.presetSchema,
+      }),
       toolContext: args.toolContext,
       toolName: args.mcpToolName,
       schema: args.presetSchema,
