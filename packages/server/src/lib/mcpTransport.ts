@@ -43,6 +43,8 @@ const identityOf = async (args: {
   return {
     toolId: args.meter.toolId,
     projectId: project.publicId,
+    agentId: args.meter.attribution.agentId,
+    generationId: args.meter.attribution.generationId,
     context: args.toolContext,
   };
 };

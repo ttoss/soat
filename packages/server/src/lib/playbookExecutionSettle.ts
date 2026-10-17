@@ -105,6 +105,7 @@ const writeOutput = async (args: {
         basis: execution.basis as PlaybookBasis,
         playbookVersion: execution.playbookVersion,
         createdByUserId: null,
+        onBehalfOf: null,
       },
     ],
   });

@@ -108,6 +108,14 @@ export class AuditEntry extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare principalId: string | null;
 
+  /**
+   * The tool call the write was made on behalf of (`tool_id`, `agent_id`,
+   * `generation_id`, `session_id`, `actor_id`), verified from the request's
+   * `On-Behalf-Of` assertion; null for a write made as the credential alone.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare onBehalfOf: Record<string, string | null> | null;
+
   /** The permission-action string that authorized the request. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare action: string;

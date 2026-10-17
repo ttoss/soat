@@ -461,7 +461,7 @@ export const ERROR_CODES = {
   PIPELINE_INVALID_STEP: {
     httpStatus: 400,
     description:
-      'The pipeline tool configuration is invalid (e.g. no steps, a duplicate or malformed step id, a missing tool reference, a forward reference to a later step, or a step that targets a client tool).',
+      'The pipeline tool configuration is invalid (e.g. no steps and no `output`, a duplicate or malformed step id, a missing tool reference, a forward reference to a later step, or a step that targets a client tool).',
   },
   PIPELINE_STEP_FAILED: {
     httpStatus: 422,
@@ -701,7 +701,7 @@ export const ERROR_CODES = {
   PLAYBOOK_NODE_NOT_RUNNABLE: {
     httpStatus: 409,
     description:
-      'The node cannot run now: it is a `confirm` node, a required input is unset or reads a node that is not `done`, it is already `running` or `waiting` on the task or run it started, or its output is current (`done`). `meta` carries the `state`, `missing` and `blocked_by`.',
+      'The node cannot run now: it is a `confirm` node, a required input is unset or reads a node that is not `done`, or it is already `running` or `waiting` on the task or run it started. `meta` carries the `state`, `missing` and `blocked_by`.',
   },
   PLAYBOOK_EXECUTION_INTERRUPTED: {
     httpStatus: 500,
@@ -716,6 +716,11 @@ export const ERROR_CODES = {
   PLAYBOOK_CASE_NOT_PAUSED: {
     httpStatus: 409,
     description: 'The case carries no pause, so there is nothing to resume.',
+  },
+  ON_BEHALF_OF_INVALID: {
+    httpStatus: 400,
+    description:
+      'The `On-Behalf-Of` header is not an unexpired tool assertion this deployment signed (`meta.reason: unverified`), or the request is not made with an API key scoped to the project the assertion names (`meta.reason: project`).',
   },
   PLAYBOOK_SELF_WRITE: {
     httpStatus: 403,

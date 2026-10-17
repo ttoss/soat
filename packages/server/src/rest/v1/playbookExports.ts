@@ -40,6 +40,7 @@ playbookExportsRouter.post(
       revision: body.revision,
       wait: body.wait === true,
       createdByUserId: ctx.authUser.id,
+      onBehalfOf: ctx.authUser.onBehalfOf ?? null,
     });
   }
 );

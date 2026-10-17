@@ -682,7 +682,7 @@ describe('Tools', () => {
       expect(res.body.pipeline.output).toEqual({ echo: { var: 'input.n' } });
     });
 
-    test('rejects a pipeline with no steps (400)', async () => {
+    test('rejects a pipeline with neither steps nor output (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -693,6 +693,72 @@ describe('Tools', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('a pipeline with no steps computes its output over the input', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'price-calculator',
+          type: 'pipeline',
+          parameters: {
+            type: 'object',
+            properties: {
+              cost: { type: 'number' },
+              margin: { type: 'number' },
+              regime: { type: 'string' },
+            },
+          },
+          pipeline: {
+            steps: [],
+            output: {
+              let: [
+                {
+                  rate: {
+                    if: [{ '==': [{ var: 'input.regime' }, 'simples'] }, 6, 15],
+                  },
+                  price: {
+                    round: [
+                      {
+                        '/': [
+                          { var: 'input.cost' },
+                          {
+                            '-': [
+                              1,
+                              {
+                                '/': [
+                                  {
+                                    '+': [
+                                      { var: 'input.margin' },
+                                      { var: 'rate' },
+                                    ],
+                                  },
+                                  100,
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      2,
+                    ],
+                  },
+                },
+                { price: { var: 'price' }, rate: { var: 'rate' } },
+              ],
+            },
+          },
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.pipeline.steps).toEqual([]);
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${created.body.id}/call`)
+        .send({ input: { cost: 100, margin: 30, regime: 'simples' } });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ price: 156.25, rate: 6 });
     });
 
     test('rejects a pipeline referencing an unknown tool (400)', async () => {
