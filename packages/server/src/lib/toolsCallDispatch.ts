@@ -17,6 +17,7 @@ import { fetchMcpToolListing } from './mcpToolListing';
 import { type McpTransport, openMcpTransport } from './mcpTransport';
 import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
+import { presetsDeclaredBy } from './toolPresetParameters';
 import type { CallableToolDefinition } from './toolsCall';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
@@ -151,10 +152,40 @@ const assertActionBound = (args: {
 };
 
 /**
+ * The merged input without the presets this action's schema does not declare
+ * (`presetsDeclaredBy`). Presets reach this path already merged, so the keys to
+ * drop are the presets' own, never a key only the caller sent.
+ */
+const withoutUndeclaredPresets = (args: {
+  input: Record<string, unknown>;
+  presetParameters?: object | null;
+  schema?: unknown;
+}): Record<string, unknown> => {
+  const declared = presetsDeclaredBy({
+    presetParameters: args.presetParameters,
+    schema: args.schema,
+  });
+  if (!args.presetParameters || declared === args.presetParameters) {
+    return args.input;
+  }
+  const dropped = new Set(
+    Object.keys(args.presetParameters).filter((key) => {
+      return !Object.hasOwn(declared ?? {}, key);
+    })
+  );
+  return Object.fromEntries(
+    Object.entries(args.input).filter(([key]) => {
+      return !dropped.has(key);
+    })
+  );
+};
+
+/**
  * On a deferred server (`mcpDeferredProxy.ts`): the proxy to send `action`
  * through when the server does not list it, or `proxyCall` on a direct call
  * of the proxy, after holding it to the binding's lists by the tool it
- * targets. Empty on a server that lists its tools, or whose listing cannot be
+ * targets. `schema` is the listed action's input schema; nothing more on a
+ * server that lists its tools, and nothing at all when the listing cannot be
  * read.
  */
 const deferredRoute = async (args: {
@@ -162,13 +193,18 @@ const deferredRoute = async (args: {
   action: string;
   input: Record<string, unknown>;
   transport: McpTransport;
-}): Promise<{ viaCall?: string; proxyCall?: boolean }> => {
+}): Promise<{ viaCall?: string; proxyCall?: boolean; schema?: unknown }> => {
   const listing = await fetchMcpToolListing({
     transport: args.transport,
     logToolCallingError: noopLogToolCallingError,
   });
   const proxy = listing ? findDeferredProxy(listing) : null;
-  if (!listing || !proxy) return {};
+  if (!listing || !proxy) {
+    const listed = listing?.find((mcpTool) => {
+      return mcpTool.name === args.action;
+    });
+    return { schema: listed?.inputSchema };
+  }
 
   if (args.action === proxy.callName) {
     assertActionBound({
@@ -177,19 +213,22 @@ const deferredRoute = async (args: {
     });
     return { proxyCall: true };
   }
-  const listed = listing.some((mcpTool) => {
+  const listed = listing.find((mcpTool) => {
     return mcpTool.name === args.action;
   });
-  return listed ? {} : { viaCall: proxy.callName };
+  return listed ? { schema: listed.inputSchema } : { viaCall: proxy.callName };
 };
 
-export const callMcpTool = async (
-  tool: CallableToolDefinition,
-  action: string | undefined,
-  mergedInput: Record<string, unknown>,
-  meter: ToolExecutionMeter,
-  toolContext?: Record<string, string>
-): Promise<unknown> => {
+export const callMcpTool = async (args: {
+  tool: CallableToolDefinition;
+  action: string | undefined;
+  mergedInput: Record<string, unknown>;
+  meter: ToolExecutionMeter;
+  toolContext?: Record<string, string>;
+  presetParameters?: object | null;
+}): Promise<unknown> => {
+  const { tool, action, mergedInput, meter, toolContext, presetParameters } =
+    args;
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -216,11 +255,16 @@ export const callMcpTool = async (
     toolContext,
     contextKeys: tool.contextKeys,
   });
-  const route = await deferredRoute({
+  const { schema, ...route } = await deferredRoute({
     tool,
     action,
     input: mergedInput,
     transport,
+  });
+  const input = withoutUndeclaredPresets({
+    input: mergedInput,
+    presetParameters,
+    schema,
   });
   return buildMcpToolExecute({
     transport,
@@ -231,7 +275,7 @@ export const callMcpTool = async (
     logToolCallingError: noopLogToolCallingError,
     // A tool the server itself reported as failed is a `502`, not the `500` an
     // unmapped throw would be: the call reached the server and it answered.
-  })(mergedInput).catch((error: unknown) => {
+  })(input).catch((error: unknown) => {
     throw toMcpToolDomainError(error) ?? error;
   });
 };
@@ -249,6 +293,7 @@ export const dispatchDirectTool = async (args: {
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
+  presetParameters?: object | null;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(
@@ -269,13 +314,14 @@ export const dispatchDirectTool = async (args: {
     });
   }
   if (args.type === 'mcp') {
-    return callMcpTool(
-      args.tool,
-      args.action,
-      args.mergedInput,
-      args.meter,
-      args.toolContext
-    );
+    return callMcpTool({
+      tool: args.tool,
+      action: args.action,
+      mergedInput: args.mergedInput,
+      meter: args.meter,
+      toolContext: args.toolContext,
+      presetParameters: args.presetParameters,
+    });
   }
   throw new DomainError(
     'TOOL_CALL_NOT_SUPPORTED',
