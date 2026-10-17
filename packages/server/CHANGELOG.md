@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.84.0](https://github.com/ttoss/soat/compare/v0.83.1...v0.84.0) (2026-10-17)
+
+* fix(server)!: every failure reason is { code, message, meta } (#1637), closes [#1637](https://github.com/ttoss/soat/issues/1637) [#1623](https://github.com/ttoss/soat/issues/1623)
+* fix(server)!: one shape for who did it (#1634), closes [#1634](https://github.com/ttoss/soat/issues/1634) [#1621](https://github.com/ttoss/soat/issues/1621)
+* fix(server)!: one shape for list filters (#1638), closes [#1638](https://github.com/ttoss/soat/issues/1638) [#1625](https://github.com/ttoss/soat/issues/1625)
+* fix(server)!: one vocabulary for run status (#1630), closes [#1630](https://github.com/ttoss/soat/issues/1630) [#1620](https://github.com/ttoss/soat/issues/1620)
+* fix(events)!: every event's data is its resource's record, in snake_case (#1633), closes [#1633](https://github.com/ttoss/soat/issues/1633) [#1618](https://github.com/ttoss/soat/issues/1618)
+* feat(server)!: generation and threshold events carry their records; expose a message's idempotency_key (#1617) ([984591d](https://github.com/ttoss/soat/commit/984591d6646ca583281e0bffa43339274cd43117)), closes [#1617](https://github.com/ttoss/soat/issues/1617) [#1609](https://github.com/ttoss/soat/issues/1609) [#1610](https://github.com/ttoss/soat/issues/1610) [#1611](https://github.com/ttoss/soat/issues/1611)
+
+### Bug Fixes
+
+* **server:** evaluate let bindings by what they read, not key order ([#1640](https://github.com/ttoss/soat/issues/1640)) ([613f372](https://github.com/ttoss/soat/commit/613f3729ff4da6acef3ef983aba459aea6a02796))
+
+### Features
+
+* **webhooks:** events carry their id to webhooks and triggers ([#1628](https://github.com/ttoss/soat/issues/1628)) ([d86b604](https://github.com/ttoss/soat/commit/d86b604154ba1d5e703af80d69586599951f8ae9)), closes [#1619](https://github.com/ttoss/soat/issues/1619)
+
+### BREAKING CHANGES
+
+* created_by, resolved_by and acknowledged_by become <verb>_by_principal_type/_id pairs, and task history principal_kind becomes principal_type.
+* every `error` failure reason is { code, message, meta? } and validation meta is { problems: [{ code, path, message }] } with UPPER_SNAKE codes.
+* generation.* webhook payloads change shape.
+* memory-store assertions take `from`/`to` instead of `since`, approvals take `expires_from`/`expires_to` instead of `expires_before`, and a status filter outside its enum is `400` on every list.
+* orchestration run, playbook execution/export, trigger firing and formation operation/event `succeeded` -> `completed`; generation `in_progress` -> `running`; eval run `canceled` -> `cancelled`; webhook delivery `pending`/`success` -> `queued`/`completed`; trigger firing, playbook execution and formation operation `pending` -> `queued`; event `orchestration_runs.succeeded` -> `orchestration_runs.completed`.
+* webhook and event-trigger payloads change shape: data is the resource record (no wrapper), facts are snake_case, guardrail.tripwire names the guardrail, and a session tag write emits sessions.updated.
+
 ## [0.83.1](https://github.com/ttoss/soat/compare/v0.83.0...v0.83.1) (2026-10-17)
 
 ### Bug Fixes
