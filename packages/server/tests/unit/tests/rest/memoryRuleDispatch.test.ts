@@ -78,6 +78,7 @@ describe('Memory rule dispatch', () => {
           model: string;
           messages: unknown;
           tools?: Array<{ function: { name: string } }>;
+          stream?: boolean;
         };
         const text = JSON.stringify(body.messages);
         const kind = kindOf(text);
@@ -104,6 +105,22 @@ describe('Memory rule dispatch', () => {
                 ],
               }
             : { role: 'assistant', content };
+        if (body.stream) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+          const chunk = (delta: object, finish: string | null) => {
+            return `data: ${JSON.stringify({
+              id: 'chatcmpl-stub',
+              object: 'chat.completion.chunk',
+              created: 0,
+              model: body.model,
+              choices: [{ index: 0, delta, finish_reason: finish }],
+            })}\n\n`;
+          };
+          res.write(chunk({ role: 'assistant', content }, null));
+          res.write(chunk({}, 'stop'));
+          res.end('data: [DONE]\n\n');
+          return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -312,6 +329,37 @@ describe('Memory rule dispatch', () => {
         principal_id: agentId,
         outcome: 'created',
       });
+    });
+
+    test('a streamed turn fires the rule like any completed turn', async () => {
+      const scope = await createProject();
+      const storeId = await scope.createStore();
+      const agentId = await scope.createAgent();
+      const ruleId = await createRule({
+        memory_store_id: storeId,
+        source_agent_ids: [agentId],
+      });
+      stub.replies.turn = 'Noted, I will call you.';
+      stub.replies.extractor = '["User prefers phone calls"]';
+
+      const res = await asAdmin()
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+        .send({
+          messages: [{ role: 'user', content: 'Please call me.' }],
+          stream: true,
+        });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('Noted, I will call you.');
+      const listed = await asAdmin()
+        .get('/api/v1/generations')
+        .query({ agent_id: agentId });
+      const generationId = listed.body.data[0].id as string;
+
+      expect(await waitForSummary(generationId)).toEqual({
+        [ruleId]: { candidates: 1, created: 1, superseded: 0, skipped: 0 },
+      });
+      const [extraction] = requestsOf('extractor');
+      expect(extraction.text).toContain('Noted, I will call you.');
     });
 
     test('counts a duplicate candidate as skipped', async () => {
