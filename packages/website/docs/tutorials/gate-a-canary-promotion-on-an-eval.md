@@ -598,7 +598,7 @@ A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on
 WEBHOOK_ID=$(soat create-webhook --project-id "$PROJECT_ID" \
   --name "eval-verdicts" \
   --url "http://127.0.0.1:9/eval-verdicts" \
-  --events '["eval_run.completed","eval_run.failed"]' | jq -r '.id')
+  --events '["eval_runs.completed","eval_runs.failed"]' | jq -r '.id')
 
 NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq \
   '.resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *"}} | .outputs.trigger_id = {"ref":"nightly"}')
@@ -618,7 +618,7 @@ const { data: webhook } = await adminSoat.webhooks.createWebhook({
     project_id: project.id,
     name: 'eval-verdicts',
     url: 'https://example.com/eval-verdicts',
-    events: ['eval_run.completed', 'eval_run.failed'],
+    events: ['eval_runs.completed', 'eval_runs.failed'],
   },
 });
 
@@ -648,7 +648,7 @@ const TRIGGER_ID = withNightly.outputs?.trigger_id as string;
 ```bash
 WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"eval-verdicts\",\"url\":\"https://example.com/eval-verdicts\",\"events\":[\"eval_run.completed\",\"eval_run.failed\"]}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"eval-verdicts\",\"url\":\"https://example.com/eval-verdicts\",\"events\":[\"eval_runs.completed\",\"eval_runs.failed\"]}" | jq -r '.id')
 
 NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq -c \
   '.resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *"}} | .outputs.trigger_id = {"ref":"nightly"}')
@@ -679,7 +679,7 @@ soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$NIGHTLY_RUN_ID" \
   | jq '{status, passed, agent_version, trigger_id}'
 
 # → retry 30
-soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq -e '.data[0].event_type == "eval_run.completed"'
+soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq -e '.data[0].event_type == "eval_runs.completed"'
 
 soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq '.data[0].payload.data'
 ```
@@ -696,7 +696,7 @@ console.log(firing.result); // { target_type: 'eval', status: 'queued', result_i
 const { data: deliveries } = await adminSoat.webhooks.listWebhookDeliveries({
   query: { webhook_id: webhook.id },
 });
-console.log(deliveries.data[0]?.event_type); // 'eval_run.completed'
+console.log(deliveries.data[0]?.event_type); // 'eval_runs.completed'
 console.log(deliveries.data[0]?.payload.data); // the eval run: { id, eval_id, status, passed, aggregate_scores, … }
 ```
 

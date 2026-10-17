@@ -104,7 +104,7 @@ Work that fails after its request has answered records the error body without
 generation and its trace, a transcript's tool result, an orchestration run or
 node, a trigger firing, a decision, a playbook execution or export, a document's
 ingestion, an eval result, and a formation, its operations and their events. The
-events that report a failure (`agents.generation.failed`,
+events that report a failure (`generations.failed`,
 `documents.ingest_failed`, `tasks.automation_retrying`) carry the same object.
 `code` is always a key of the catalog, so `error.code` reads the same way
 everywhere.

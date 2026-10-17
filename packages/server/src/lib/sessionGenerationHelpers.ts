@@ -12,7 +12,7 @@ const log = createDebug('soat:session-generation');
 export const emitGenerationStarted = (
   session: InstanceType<(typeof db)['Session']>
 ) => {
-  void emitSessionEvent({ type: 'sessions.generation.started', session });
+  void emitSessionEvent({ type: 'sessions.generation_started', session });
 };
 
 // A completed turn is stored even when it carries no text, as conversation

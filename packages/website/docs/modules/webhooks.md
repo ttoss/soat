@@ -64,7 +64,7 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 
 ### Event Patterns
 
-Patterns are dot-separated:
+An event is named `<resource type, plural>.<verb>` (`files.created`, `generations.completed`), so `<plural>.*` matches exactly one resource type's events. Patterns are dot-separated:
 
 | Pattern         | Matches                           |
 | --------------- | --------------------------------- |

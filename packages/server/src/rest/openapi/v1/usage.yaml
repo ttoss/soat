@@ -503,7 +503,7 @@ paths:
       description: >
         Lists the usage alert thresholds the caller can access, optionally
         filtered by project_id. Each threshold fires the
-        `usage.threshold_crossed` webhook when a project's cost or token usage
+        `usage_thresholds.crossed` webhook when a project's cost or token usage
         over a calendar-month or rolling-24h window crosses the configured
         value.
       operationId: listUsageThresholds
@@ -1262,7 +1262,7 @@ components:
       type: object
       description: >
         A per-project alert rule on windowed usage. When the project's `metric`
-        over `window` crosses `threshold`, a `usage.threshold_crossed` webhook
+        over `window` crosses `threshold`, a `usage_thresholds.crossed` webhook
         fires. Fire state is enforced with once-per-window (calendar) / 10%
         re-arm (rolling) hysteresis.
       properties:

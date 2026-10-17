@@ -432,10 +432,10 @@ Manage them with [`POST /api/v1/memory-rules`](/docs/api/memory-rules/create-mem
 
 | `on` | Fires | Fit |
 | --- | --- | --- |
-| `agents.generation.completed` | once per completed turn — conversation or bare, streaming or not | turn-level extraction, and the **only** event the built-in extractor may bind to |
-| `conversations.message.generated` | once per persisted assistant reply | conversation-backed only; fine for a custom handler |
+| `generations.completed` | once per completed turn — conversation or bare, streaming or not | turn-level extraction, and the **only** event the built-in extractor may bind to |
+| `conversation_messages.generated` | once per persisted assistant reply | conversation-backed only; fine for a custom handler |
 
-`conversations.message.created` is deliberately not offered: it fires per message, including the user's and before the reply, so a rule bound there would read half a turn.
+`conversation_messages.created` is deliberately not offered: it fires per message, including the user's and before the reply, so a rule bound there would read half a turn.
 
 #### Handlers
 
@@ -465,12 +465,12 @@ The custom `prompt` controls *what* to extract, not the response format; the ser
 
 - Each write appends an [assertion](#assertions) with `mechanism: "rule"`, the rule's `rule_id`, and the turn's `generation_id`. The principal is the **source agent**.
 - Memories from a conversation turn carry `source_type: "conversation"` and its id in `source_id`; a bare agent generation has no conversation, so those read `manual`.
-- Rules bound to `agents.generation.completed` record a summary on the originating generation's `extraction` field ([Generations](./generations.md) API), keyed by rule id: `{ "mrule_…": { candidates, created, superseded, skipped } }`. A store can have several rules, so one flat pair of counts could not say which produced them. Firings on `conversations.message.generated` are visible in the assertion ledger, like every other write.
+- Rules bound to `generations.completed` record a summary on the originating generation's `extraction` field ([Generations](./generations.md) API), keyed by rule id: `{ "mrule_…": { candidates, created, superseded, skipped } }`. A store can have several rules, so one flat pair of counts could not say which produced them. Firings on `conversation_messages.generated` are visible in the assertion ledger, like every other write.
 - A rule never blocks or fails the turn it reads: a handler that throws, times out, or answers with nonsense contributes nothing.
 
 #### Loop guard
 
-A handler agent's own generation completes and emits `agents.generation.completed` like any other, so the dispatcher skips two kinds of turn: one it started itself (the generation is stamped `source: "memory_rule"`), and one by an agent that handles any rule in the project — which is what keeps "test the handler by hand" from becoming an infinite mill. A handler generation also declares the source turn as its initiator, so it inherits that turn's trace lineage and continuation budget.
+A handler agent's own generation completes and emits `generations.completed` like any other, so the dispatcher skips two kinds of turn: one it started itself (the generation is stamped `source: "memory_rule"`), and one by an agent that handles any rule in the project — which is what keeps "test the handler by hand" from becoming an infinite mill. A handler generation also declares the source turn as its initiator, so it inherits that turn's trace lineage and continuation budget.
 
 #### Example
 
@@ -485,7 +485,7 @@ Two rules on one store, different handlers, different selectors — unexpressibl
       "type": "memory_rule",
       "properties": {
         "memory_store_id": { "ref": "SupportFacts" },
-        "on": "agents.generation.completed",
+        "on": "generations.completed",
         "source_agent_ids": [{ "ref": "SupportAgent" }],
         "model": "<cheap-model>"
       }
@@ -495,7 +495,7 @@ Two rules on one store, different handlers, different selectors — unexpressibl
       "type": "memory_rule",
       "properties": {
         "memory_store_id": { "ref": "SupportFacts" },
-        "on": "agents.generation.completed",
+        "on": "generations.completed",
         "source_agent_ids": [{ "ref": "BillingAgent" }],
         "agent_id": { "ref": "StrictBillingExtractor" }
       }

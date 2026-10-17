@@ -471,7 +471,7 @@ Start the listener before creating the webhook; it prints each matching delivery
 
 ```bash
 WEBHOOK_BASE_URL=${SOAT_WEBHOOK_BASE_URL:-http://localhost:8787}
-soat listen --port 8787 --path /webhook --filter sessions.generation.* --json > session-webhooks.log 2>&1 &
+soat listen --port 8787 --path /webhook --filter sessions.generation_started,generations.* --json > session-webhooks.log 2>&1 &
 LISTENER_PID=$!
 sleep 2
 ```
@@ -496,7 +496,7 @@ createServer((req, res) => {
 
 ```bash
 WEBHOOK_BASE_URL=${SOAT_WEBHOOK_BASE_URL:-http://localhost:8787}
-soat listen --port 8787 --path /webhook --filter sessions.generation.* --json > session-webhooks.log 2>&1 &
+soat listen --port 8787 --path /webhook --filter sessions.generation_started,generations.* --json > session-webhooks.log 2>&1 &
 LISTENER_PID=$!
 sleep 2
 ```
@@ -518,7 +518,7 @@ WEBHOOK_ID=$(soat create-webhook \
   --project-id "$PROJECT_ID" \
   --name "session-events" \
   --url "$WEBHOOK_BASE_URL/webhook" \
-  --events '["sessions.generation.*"]' | jq -r '.id')
+  --events '["sessions.generation_started","generations.*"]' | jq -r '.id')
 echo "WEBHOOK_ID: $WEBHOOK_ID"
 ```
 
@@ -535,7 +535,7 @@ const { data: webhook, error: webhookErr } =
       project_id: PROJECT_ID,
       name: 'session-events',
       url: `${WEBHOOK_BASE_URL}/webhook`,
-      events: ['sessions.generation.*'],
+      events: ['sessions.generation_started', 'generations.*'],
     },
   });
 
@@ -551,7 +551,7 @@ const WEBHOOK_ID = webhook.id; // whk_...
 WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"session-events\",\"url\":\"$WEBHOOK_BASE_URL/webhook\",\"events\":[\"sessions.generation.*\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"session-events\",\"url\":\"$WEBHOOK_BASE_URL/webhook\",\"events\":[\"sessions.generation_started\",\"generations.*\"]}" \
   | jq -r '.id')
 echo "WEBHOOK_ID: $WEBHOOK_ID"
 ```
@@ -642,8 +642,8 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/generate" \
 
 The `soat listen` terminal logs:
 
-- `sessions.generation.started`
-- `sessions.generation.completed`
+- `sessions.generation_started`
+- `generations.completed`
 
 ---
 

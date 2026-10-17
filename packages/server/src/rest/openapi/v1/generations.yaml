@@ -616,10 +616,10 @@ components:
           nullable: true
           description: >
             What each [memory rule](/docs/modules/memories#memory-rules) bound
-            to `agents.generation.completed` wrote for this turn, keyed by the
+            to `generations.completed` wrote for this turn, keyed by the
             rule's id — a store may have several rules, and one flat pair of
             counts could not say which produced them. Absent when no rule fired.
-            Rules bound to `conversations.message.generated` are recorded only
+            Rules bound to `conversation_messages.generated` are recorded only
             as memory assertions. The rows behind every count are listed by
             `GET /api/v1/generations/{generation_id}/memory-assertions`, so the
             summary and what it summarizes can be reconciled.

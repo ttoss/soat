@@ -202,7 +202,7 @@ Two windows at once, and a failure circuit breaker, in one guard:
 
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception. `escalate: true` routes the call to the [approvals queue](./approvals.md) instead.
 
-A tripwire emits a `guardrail.tripwire` [webhook event](./webhooks.md) naming the guardrail that governed the decision (`resource_id`). `data` is that guardrail as [`GET /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/get-guardrail) answers it, plus `guardrail_version` (the version that tripped), `tool_id`, `tool_name`, `action`, `agent_id`, `generation_id`, `orchestration_run_id` and `node_id` (`null` where the call had none).
+A tripwire emits a `guardrails.tripwire` [webhook event](./webhooks.md) naming the guardrail that governed the decision (`resource_id`). `data` is that guardrail as [`GET /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/get-guardrail) answers it, plus `guardrail_version` (the version that tripped), `tool_id`, `tool_name`, `action`, `agent_id`, `generation_id`, `orchestration_run_id` and `node_id` (`null` where the call had none).
 
 `escalate` is per-guardrail: a failing guard yields `tripwire` without it and `route_to_approval` with it; `tripwire` outranks `route_to_approval` in the [decision ordering](#attachment).
 

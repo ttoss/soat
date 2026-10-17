@@ -2287,7 +2287,7 @@ describe('Usage', () => {
   describe('usage thresholds and alerts', () => {
     // Bounded poll on a predicate — no fixed settle sleep. Metering (and the
     // threshold evaluation it drives) runs fire-and-forget after the generation
-    // response, so tests wait for the observable `usage.threshold_crossed`
+    // response, so tests wait for the observable `usage_thresholds.crossed`
     // emission rather than a timer.
     const pollUntil = async (predicate: () => boolean): Promise<void> => {
       for (let attempt = 0; attempt < 100; attempt++) {
@@ -2299,14 +2299,14 @@ describe('Usage', () => {
       throw new Error('pollUntil: predicate never became true');
     };
 
-    // Runs `action` with a live listener collecting `usage.threshold_crossed`
+    // Runs `action` with a live listener collecting `usage_thresholds.crossed`
     // events, then tears it down so it never leaks into later tests.
     const withCapture = async (
       action: (captured: SoatEvent[]) => Promise<void>
     ): Promise<SoatEvent[]> => {
       const captured: SoatEvent[] = [];
       const handler = (event: SoatEvent) => {
-        if (event.type === 'usage.threshold_crossed') captured.push(event);
+        if (event.type === 'usage_thresholds.crossed') captured.push(event);
       };
       eventBus.on('soat:event', handler);
       try {

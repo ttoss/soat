@@ -601,9 +601,9 @@ describe('Conversations', () => {
       ).toBe(false);
     });
 
-    test('emits conversations.message.created with the message and its conversation_id', async () => {
+    test('emits conversation_messages.created with the message and its conversation_id', async () => {
       const [event] = await captureEvents({
-        type: 'conversations.message.created',
+        type: 'conversation_messages.created',
         where: (event) => {
           return event.data.conversation_id === conversationId;
         },
@@ -626,7 +626,7 @@ describe('Conversations', () => {
       });
     });
 
-    test('emits conversations.message.deleted with the message as it stood', async () => {
+    test('emits conversation_messages.deleted with the message as it stood', async () => {
       const added = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
         .send({ message: 'Delete me', role: 'user', actor_id: actorId });
@@ -639,7 +639,7 @@ describe('Conversations', () => {
       });
 
       const [event] = await captureEvents({
-        type: 'conversations.message.deleted',
+        type: 'conversation_messages.deleted',
         where: (event) => {
           return event.resourceId === documentId;
         },

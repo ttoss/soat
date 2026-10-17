@@ -308,13 +308,13 @@ const CASES: RoundTripCase[] = [
       return {
         create: {
           memory_store_id: fx.memoryStoreId,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
           source_agent_ids: [fx.agentId],
           prompt: 'Only deployment facts',
         },
         expectRead: {
           memory_store_id: fx.memoryStoreId,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
           source_agent_ids: [fx.agentId],
           prompt: 'Only deployment facts',
           // No handler: the built-in extractor.
@@ -324,7 +324,7 @@ const CASES: RoundTripCase[] = [
         // `null` widens the selector back to every agent in the project.
         update: {
           memory_store_id: fx.memoryStoreId,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
           enabled: false,
           source_agent_ids: null,
           prompt: 'Only deployment facts',
@@ -345,7 +345,7 @@ const CASES: RoundTripCase[] = [
       return {
         create: {
           memory_store_id: fx.memoryStoreId,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
           agent_id: fx.agentId,
         },
         expectRead: { memory_store_id: fx.memoryStoreId, agent_id: fx.agentId },

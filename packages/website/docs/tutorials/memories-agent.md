@@ -822,7 +822,7 @@ agent's turns, with no handler so the built-in extractor runs:
 ```bash
 MEMORY_RULE_ID=$(soat create-memory-rule \
   --memory-store-id "$MEMORY_STORE_ID" \
-  --on agents.generation.completed \
+  --on generations.completed \
   --source-agent-ids '["'"$AGENT_ID"'"]' \
   | jq -r '.id')
 echo "$MEMORY_RULE_ID"
@@ -835,7 +835,7 @@ echo "$MEMORY_RULE_ID"
 const { data: rule } = await adminSoat.memoryRules.createMemoryRule({
   body: {
     memory_store_id: MEMORY_STORE_ID,
-    on: 'agents.generation.completed',
+    on: 'generations.completed',
     source_agent_ids: [AGENT_ID],
   },
 });
@@ -849,7 +849,7 @@ const MEMORY_RULE_ID = rule.id;
 MEMORY_RULE_ID=$(curl -s -X POST "$SOAT_URL/api/v1/memory-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"memory_store_id\":\"$MEMORY_STORE_ID\",\"on\":\"agents.generation.completed\",\"source_agent_ids\":[\"$AGENT_ID\"]}" \
+  -d "{\"memory_store_id\":\"$MEMORY_STORE_ID\",\"on\":\"generations.completed\",\"source_agent_ids\":[\"$AGENT_ID\"]}" \
   | jq -r '.id')
 echo "$MEMORY_RULE_ID"
 ```

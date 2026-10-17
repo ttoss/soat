@@ -102,7 +102,7 @@ describe('Memory Rules API', () => {
   describe('POST /api/v1/memory-rules', () => {
     test('creates a rule with no handler — the built-in extractor', async () => {
       const res = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         source_agent_ids: [agentId],
         model: 'cheap-model',
         prompt: 'Only billing facts',
@@ -114,7 +114,7 @@ describe('Memory Rules API', () => {
       expect(res.body.id.startsWith('mrule_')).toBe(true);
       expect(res.body.memory_store_id).toBe(memoryStoreId);
       expect(res.body.project_id).toBe(projectId);
-      expect(res.body.on).toBe('agents.generation.completed');
+      expect(res.body.on).toBe('generations.completed');
       expect(res.body.source_agent_ids).toEqual([agentId]);
       expect(res.body.agent_id).toBeNull();
       expect(res.body.tool_id).toBeNull();
@@ -126,7 +126,7 @@ describe('Memory Rules API', () => {
 
     test('creates a rule with an agent handler', async () => {
       const res = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         agent_id: agentId,
       });
 
@@ -137,7 +137,7 @@ describe('Memory Rules API', () => {
 
     test('creates a rule with a tool handler and its action', async () => {
       const res = await createRule({
-        on: 'conversations.message.generated',
+        on: 'conversation_messages.generated',
         tool_id: toolId,
         action: 'extract',
         preset_parameters: { style: 'terse' },
@@ -151,7 +151,7 @@ describe('Memory Rules API', () => {
 
     test('a null selector means every agent in the project', async () => {
       const res = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         source_agent_ids: null,
       });
 
@@ -161,7 +161,7 @@ describe('Memory Rules API', () => {
 
     test('rejects a rule naming both an agent and a tool handler', async () => {
       const res = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         agent_id: agentId,
         tool_id: toolId,
       });
@@ -171,7 +171,7 @@ describe('Memory Rules API', () => {
     });
 
     test('rejects the built-in extractor on the message event', async () => {
-      const res = await createRule({ on: 'conversations.message.generated' });
+      const res = await createRule({ on: 'conversation_messages.generated' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
@@ -179,7 +179,7 @@ describe('Memory Rules API', () => {
 
     test('rejects an extractor override combined with a handler', async () => {
       const res = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         agent_id: agentId,
         prompt: 'Only billing facts',
       });
@@ -189,7 +189,7 @@ describe('Memory Rules API', () => {
     });
 
     test('rejects an unknown event', async () => {
-      const res = await createRule({ on: 'conversations.message.created' });
+      const res = await createRule({ on: 'conversation_messages.created' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
@@ -213,7 +213,7 @@ describe('Memory Rules API', () => {
         });
 
       const res = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         source_agent_ids: [otherAgentRes.body.id],
       });
 
@@ -224,7 +224,7 @@ describe('Memory Rules API', () => {
     test('requires memory_store_id', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/memory-rules')
-        .send({ on: 'agents.generation.completed' });
+        .send({ on: 'generations.completed' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -233,7 +233,7 @@ describe('Memory Rules API', () => {
     test('401 without a token', async () => {
       const res = await testClient.post('/api/v1/memory-rules').send({
         memory_store_id: memoryStoreId,
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
       });
 
       expect(res.status).toBe(401);
@@ -241,7 +241,7 @@ describe('Memory Rules API', () => {
 
     test('403 without the action', async () => {
       const res = await createRule(
-        { on: 'agents.generation.completed' },
+        { on: 'generations.completed' },
         noPermToken
       );
 
@@ -253,7 +253,7 @@ describe('Memory Rules API', () => {
         .post('/api/v1/memory-rules')
         .send({
           memory_store_id: otherStoreId,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
         });
 
       expect(res.status).toBe(403);
@@ -270,7 +270,7 @@ describe('Memory Rules API', () => {
         .post('/api/v1/memory-rules')
         .send({
           memory_store_id: storeRes.body.id,
-          on: 'agents.generation.completed',
+          on: 'generations.completed',
         });
 
       const res = await authenticatedTestClient(adminToken).get(
@@ -310,7 +310,7 @@ describe('Memory Rules API', () => {
 
   describe('GET /api/v1/memory-rules/{memory_rule_id}', () => {
     test('returns the rule', async () => {
-      const created = await createRule({ on: 'agents.generation.completed' });
+      const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(adminToken).get(
         `/api/v1/memory-rules/${created.body.id}`
@@ -336,7 +336,7 @@ describe('Memory Rules API', () => {
     });
 
     test('403 without the action', async () => {
-      const created = await createRule({ on: 'agents.generation.completed' });
+      const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/memory-rules/${created.body.id}`
@@ -348,7 +348,7 @@ describe('Memory Rules API', () => {
   describe('PATCH /api/v1/memory-rules/{memory_rule_id}', () => {
     test('disables a rule without touching the rest of it', async () => {
       const created = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         prompt: 'Only billing facts',
       });
 
@@ -363,7 +363,7 @@ describe('Memory Rules API', () => {
 
     test('a handler cannot be added to a rule that still carries an override', async () => {
       const created = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         prompt: 'Only billing facts',
       });
 
@@ -377,7 +377,7 @@ describe('Memory Rules API', () => {
 
     test('clearing the override in the same request lets the handler through', async () => {
       const created = await createRule({
-        on: 'agents.generation.completed',
+        on: 'generations.completed',
         prompt: 'Only billing facts',
       });
 
@@ -391,11 +391,11 @@ describe('Memory Rules API', () => {
     });
 
     test('a handlerless rule cannot be moved onto the message event', async () => {
-      const created = await createRule({ on: 'agents.generation.completed' });
+      const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/memory-rules/${created.body.id}`)
-        .send({ on: 'conversations.message.generated' });
+        .send({ on: 'conversation_messages.generated' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
@@ -416,7 +416,7 @@ describe('Memory Rules API', () => {
     });
 
     test('403 without the action', async () => {
-      const created = await createRule({ on: 'agents.generation.completed' });
+      const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/memory-rules/${created.body.id}`)
@@ -427,7 +427,7 @@ describe('Memory Rules API', () => {
 
   describe('DELETE /api/v1/memory-rules/{memory_rule_id}', () => {
     test('deletes the rule', async () => {
-      const created = await createRule({ on: 'agents.generation.completed' });
+      const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(adminToken).delete(
         `/api/v1/memory-rules/${created.body.id}`
@@ -455,7 +455,7 @@ describe('Memory Rules API', () => {
     });
 
     test('403 without the action', async () => {
-      const created = await createRule({ on: 'agents.generation.completed' });
+      const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/memory-rules/${created.body.id}`

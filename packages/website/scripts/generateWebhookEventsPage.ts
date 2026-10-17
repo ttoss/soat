@@ -52,7 +52,7 @@ description: "Every event SOAT emits, the resource type each belongs to, and wha
 
 # Webhook Events
 
-The ${total} events SOAT emits, grouped by the \`resource_type\` each carries. A [webhook](./modules/webhooks.md) subscribes to them by exact name, by \`<prefix>.*\`, or to all of them with \`*\`.
+The ${total} events SOAT emits, grouped by the \`resource_type\` each carries. Every name is \`<resource type, plural>.<verb>\`. A [webhook](./modules/webhooks.md) subscribes to them by exact name, to one resource type's with \`<plural>.*\`, or to all of them with \`*\`.
 
 Each event arrives as the envelope described in [Webhooks → Event Payload](./modules/webhooks.md#event-payload): the name below is the \`event\` field and the \`X-Soat-Event\` header, the heading above each table is the \`resource_type\` field, and \`data\` carries the resource in the same shape the REST API returns it.
 

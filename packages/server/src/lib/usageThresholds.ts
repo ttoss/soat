@@ -19,7 +19,7 @@ export type UsageThresholdMetric = (typeof USAGE_THRESHOLD_METRICS)[number];
 export type UsageThresholdWindow = (typeof USAGE_THRESHOLD_WINDOWS)[number];
 
 // The webhook event fired when a project's windowed usage crosses a threshold.
-export const USAGE_THRESHOLD_CROSSED_EVENT = 'usage.threshold_crossed';
+export const USAGE_THRESHOLD_CROSSED_EVENT = 'usage_thresholds.crossed';
 
 // The token components that count toward a `tokens` threshold: every billable
 // input dimension plus output (the non-billable `reasoning_tokens` detail is
@@ -348,7 +348,7 @@ const applyFireDecision = async (args: {
   return false;
 };
 
-// Emits the `usage.threshold_crossed` webhook event: the threshold record as
+// Emits the `usage_thresholds.crossed` webhook event: the threshold record as
 // it now reads, fire state included, plus the value that crossed it.
 const emitThresholdCrossed = (args: {
   threshold: UsageThresholdRow;
@@ -370,7 +370,7 @@ const emitThresholdCrossed = (args: {
 
 /**
  * Evaluates every threshold on a project against its windowed usage and fires
- * the `usage.threshold_crossed` webhook for any that cross, honoring the
+ * the `usage_thresholds.crossed` webhook for any that cross, honoring the
  * once-per-window (calendar) / 10% re-arm (rolling) hysteresis. Called
  * synchronously after each usage-event write — the single metering choke point.
  * Never throws: threshold evaluation must not fail the write it follows.

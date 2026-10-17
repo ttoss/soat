@@ -13,7 +13,7 @@ import { Project } from './Project';
 /**
  * A per-project alert rule on windowed usage. When a project's `metric`
  * (`cost_usd` or `tokens`) over the configured `window` crosses `threshold`, a
- * `usage.threshold_crossed` webhook fires. The mutable fire state
+ * `usage_thresholds.crossed` webhook fires. The mutable fire state
  * (`lastFiredAt`, `firedWindowKey`) enforces the once-per-window /
  * hysteresis re-fire rules, which is why thresholds live in their own table
  * rather than a JSONB blob on the project. Thresholds are immutable apart from

@@ -33,6 +33,7 @@ import { priceBookResource } from './2026-10-01-priceBookResource';
 import { shareCap } from './2026-10-01-shareCap';
 import { decisionsOpenaiShape } from './2026-10-07-decisionsOpenaiShape';
 import { conversationMessageIdempotencyDigest } from './2026-10-12-conversationMessageIdempotencyDigest';
+import { eventNames } from './2026-10-17-eventNames';
 import { failureReasonsStoredError } from './2026-10-17-failureReasonsStoredError';
 import { onBehalfOf } from './2026-10-17-onBehalfOf';
 import { playbookNodeIds } from './2026-10-17-playbookNodeIds';
@@ -96,5 +97,6 @@ export const MIGRATIONS: Migration[] = [
   runStatusVocabulary,
   principalPairs,
   failureReasonsStoredError,
+  eventNames,
   playbookNodeIds,
 ];

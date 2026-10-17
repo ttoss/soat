@@ -500,7 +500,7 @@ export const ERROR_CODES = {
   MEMORY_RULE_VALIDATION_FAILED: {
     httpStatus: 400,
     description:
-      'The memory rule configuration is invalid (e.g. agent_id and tool_id are both set, `on` is not a supported event, the built-in extractor is bound to conversations.message.generated, an extractor override is combined with a handler, or source_agent_ids is not an array of agent ids).',
+      'The memory rule configuration is invalid (e.g. agent_id and tool_id are both set, `on` is not a supported event, the built-in extractor is bound to conversation_messages.generated, an extractor override is combined with a handler, or source_agent_ids is not an array of agent ids).',
   },
   INGESTION_RULE_GLOB_CONFLICT: {
     httpStatus: 409,

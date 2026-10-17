@@ -16,10 +16,10 @@ import { emitLoadedRecordEvent } from './recordEvents';
 const log = createDebug('soat:evaluations');
 
 /** A run reached a terminal status with its items scored. */
-export const EVAL_RUN_COMPLETED_EVENT = 'eval_run.completed';
+export const EVAL_RUN_COMPLETED_EVENT = 'eval_runs.completed';
 
 /** A run could not be executed to completion (infrastructure failure). */
-export const EVAL_RUN_FAILED_EVENT = 'eval_run.failed';
+export const EVAL_RUN_FAILED_EVENT = 'eval_runs.failed';
 
 /**
  * Fires one eval run lifecycle event, carrying the run as `GET` answers it.

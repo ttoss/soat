@@ -854,7 +854,7 @@ paths:
         `wait: false` (the default) enqueues one task per item and returns
         immediately with `status: "queued"`. A worker executes the items and the
         run settles itself; poll `GET /evals/{eval_id}/runs/{eval_run_id}` for the
-        terminal status, or subscribe to the `eval_run.completed` webhook. There
+        terminal status, or subscribe to the `eval_runs.completed` webhook. There
         is no item cap on a queued run.
 
 

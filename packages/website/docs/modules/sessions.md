@@ -309,16 +309,14 @@ See [Traces](./traces.md#debugging-joins-trace-generation-session) for the full 
 
 Dispatched to project webhooks as sessions change state. `sessions.created`, `sessions.updated` and `sessions.deleted` carry the session as [`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) answers it, `usage` included; a deletion carries it as it stood. A [tag](#tags) write is a `sessions.updated`.
 
-| Event type                            | Trigger                                                |
-| ------------------------------------- | ------------------------------------------------------ |
-| `sessions.created`                    | A new session is created                               |
-| `sessions.updated`                    | A session's `name`, `status`, or `tags` are changed    |
-| `sessions.deleted`                    | A session is deleted                                   |
-| `sessions.generation.completed`       | LLM generation finished successfully                   |
-| `sessions.generation.requires_action` | LLM returned a client-tool call requiring tool outputs |
-| `sessions.generation.started`         | LLM generation has started for a session               |
+| Event type                    | Trigger                                             |
+| ----------------------------- | --------------------------------------------------- |
+| `sessions.created`            | A new session is created                            |
+| `sessions.updated`            | A session's `name`, `status`, or `tags` are changed |
+| `sessions.deleted`            | A session is deleted                                |
+| `sessions.generation_started` | LLM generation has started for a session            |
 
-`sessions.generation.completed` and `sessions.generation.requires_action` are generation events, shaped like the [agent generation events](./agents.md#webhook-events): `resource_type` is `generation`, `resource_id` the generation id, and `data` the generation record, whose `session_id` names the session. The other session events name the session in `resource_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
+Every session event names the session in `resource_id`. A session turn settles as a [generation event](./agents.md#webhook-events) (`generations.completed`, `generations.failed`, `generations.requires_action`) whose record's `session_id` names the session. Permissions are namespaced under `agents:` since each session belongs to an agent.
 
 ### Who may fork a session
 
