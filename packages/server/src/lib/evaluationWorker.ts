@@ -71,7 +71,6 @@ const isLive = (status: string): boolean => {
 
 type LoadedRun = {
   run: InstanceType<(typeof db)['EvalRun']>;
-  evalPublicId: string;
   projectId: number;
   settlement: EvalSettlement;
 };
@@ -93,7 +92,6 @@ const loadRunContext = async (args: {
 
   return {
     run,
-    evalPublicId: evaluation.publicId,
     projectId: evaluation.projectId as number,
     settlement: evalSettlement({ evaluation }),
   };
@@ -345,7 +343,6 @@ export const reapAbandonedEvalRuns = async (args?: {
       );
       await failEvalRun({
         run: context.run,
-        evalPublicId: context.evalPublicId,
         projectId: context.projectId,
         reason: `Abandoned with ${resultCount} of ${String(run.itemCount)} items scored.`,
       });

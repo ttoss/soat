@@ -8,6 +8,7 @@ import type {
 import {
   classifyGuardrailCall,
   governingGuardrailVersion,
+  governingResult,
 } from './agentToolGuardrail';
 import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import type { CollectedGuardrail } from './guardrailCollection';
@@ -164,14 +165,18 @@ const enactToolNodeDecision = (args: {
   }
 
   if (decision === 'blocked' || decision === 'tripwire') {
-    if (decision === 'tripwire') {
-      emitGuardrailTripwireEvent({
+    const tripped =
+      decision === 'tripwire'
+        ? governingResult(evaluated, decision)
+        : undefined;
+    if (tripped) {
+      void emitGuardrailTripwireEvent({
         projectId: args.projectId,
         projectPublicId: args.projectPublicId,
+        guardrail: tripped,
         toolId: args.toolId,
         toolName: args.toolName,
         action: args.node.operationId ?? args.toolName,
-        guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
         orchestrationRunId: args.orchestrationRunId,
         nodeId: args.node.id,
       });

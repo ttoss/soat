@@ -2,7 +2,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
-import { addConversationMessage } from './conversationMessages';
+import {
+  addConversationMessage,
+  type mapMessage,
+} from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { agentReferences } from './resourceReferences';
@@ -269,22 +272,21 @@ const buildPersonaSystem = (agent: {
  */
 const firePostTurnSideEffects = (args: {
   conversationId: string;
-  agentId: string;
   projectId: number;
   generationId: string;
   traceId: string;
-  documentId: string;
+  message: Awaited<ReturnType<typeof mapMessage>>;
 }): void => {
   emitResourceEvent({
     type: 'conversations.message.generated',
     projectId: args.projectId,
     resourceType: 'conversation_message',
-    resourceId: args.documentId,
+    resourceId: args.message.document_id,
     data: {
-      conversationId: args.conversationId,
-      agentId: args.agentId,
-      generationId: args.generationId,
-      traceId: args.traceId,
+      ...args.message,
+      conversation_id: args.conversationId,
+      generation_id: args.generationId,
+      trace_id: args.traceId,
     },
   });
 };
@@ -383,11 +385,10 @@ export const generateConversationMessage = async (args: {
 
   firePostTurnSideEffects({
     conversationId: args.conversationId,
-    agentId: args.agentId,
     projectId: conversation.projectId as number,
     generationId,
     traceId,
-    documentId: persisted.document_id,
+    message: persisted,
   });
 
   return {

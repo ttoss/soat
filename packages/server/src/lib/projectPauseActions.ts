@@ -110,7 +110,7 @@ const emitProjectEvent = (args: {
     projectPublicId: args.project.id,
     resourceType: 'project',
     resourceId: args.project.id,
-    data: { project: args.project },
+    data: args.project,
   });
 };
 

@@ -274,6 +274,8 @@ export const deleteConversation = async (args: { id: string }) => {
   }
 
   const projectId = conversation.projectId;
+  // Mapped before the delete: the event carries the conversation as it stood.
+  const record = mapConversation(await conversations.reload(conversation));
 
   await deleteTurnDocuments({ conversationId: conversation.id as number });
 
@@ -284,7 +286,7 @@ export const deleteConversation = async (args: { id: string }) => {
     projectId,
     resourceType: 'conversation',
     resourceId: args.id,
-    data: { id: args.id },
+    data: record,
   });
 
   return { id: args.id };

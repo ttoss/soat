@@ -2094,9 +2094,13 @@ describe('Evaluations', () => {
       expect(event.resourceId).toBe(runId);
       // The payload is the promotion gate's input: a consumer must be able to
       // decide from the event alone, without a second call that could fail open.
-      expect(event.data).toEqual({
+      // It is the run exactly as `GET` answers it.
+      const read = await asUser().get(`/api/v1/evals/${evalId}/runs/${runId}`);
+      expect(JSON.parse(JSON.stringify(event.data))).toEqual(read.body);
+      expect(event.data).toMatchObject({
+        id: runId,
         eval_id: evalId,
-        eval_run_id: runId,
+        status: 'completed',
         passed: true,
         aggregate_scores: expect.objectContaining({ pass_rate: 1 }),
       });
@@ -2152,9 +2156,10 @@ describe('Evaluations', () => {
         return event.resourceId === abandoned.publicId;
       });
       expect(failure?.type).toBe('eval_run.failed');
-      expect(failure?.data).toEqual({
+      expect(failure?.data).toMatchObject({
+        id: abandoned.publicId,
         eval_id: evalId,
-        eval_run_id: abandoned.publicId,
+        status: 'failed',
         passed: null,
         aggregate_scores: null,
       });

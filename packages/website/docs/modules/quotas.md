@@ -306,7 +306,7 @@ A **flow** breach returns HTTP `429` with a `Retry-After` header (seconds until 
 
 ### quota.exceeded webhook
 
-Every breach fires `quota.exceeded` **once per window**, for `enforce` and `monitor` quotas alike; the fire state is one stored window key, re-fired only when the window rolls (no hysteresis). `data` carries `quota_id`, `project_id`, `scope`, `scope_ref`, `metric`, `meter_type`, `window`, `window_key`, `limit`, `observed_value`, and `mode`, so a consumer can tell which [meter](#meter-scope) breached without a fetch. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard).
+Every breach fires `quota.exceeded` **once per window**, for `enforce` and `monitor` quotas alike; the fire state is one stored window key, re-fired only when the window rolls (no hysteresis). `data` is the quota as [`GET /api/v1/quotas/{quota_id}`](/docs/api/quotas/get-quota) answers it, plus the breached `window_key` and the `observed_value`, so a consumer can tell which [meter](#meter-scope) breached without a fetch. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard).
 
 A `storage_bytes` quota's `window_key` is the **snapshot's own UTC day**: one report per fresh measurement while a project stays over cap.
 

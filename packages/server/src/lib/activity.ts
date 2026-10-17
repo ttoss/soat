@@ -316,9 +316,7 @@ const fileApprovalActivity = async (args: {
   kind: 'approval_created' | 'approval_resolved';
   summarize: (approvalId: string | null, status: string) => string;
 }): Promise<void> => {
-  const approval = asRecord(args.event.data).approval;
-  if (!approval) return;
-  const record = asRecord(approval);
+  const record = args.event.data;
   const approvalId = asStringOrNull(record.id);
   const status =
     asStringOrNull(record.status) ??
@@ -365,9 +363,7 @@ const fileApprovalResolvedActivity = async (
 const fileExceptionCreatedActivity = async (
   event: SoatEvent
 ): Promise<void> => {
-  const exception = asRecord(event.data).exception;
-  if (!exception) return;
-  const record = asRecord(exception);
+  const record = event.data;
   const exceptionId = asStringOrNull(record.id);
   await emitActivityEntry({
     projectId: event.projectId,
