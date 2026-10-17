@@ -41,7 +41,8 @@ export type EventDropStage =
   | 'trigger_lookup'
   | 'exception_file'
   | 'memory_rule_dispatch'
-  | 'playbook_execution_settle';
+  | 'playbook_execution_settle'
+  | 'record_lookup';
 
 const droppedEvents = new Map<EventDropStage, number>();
 

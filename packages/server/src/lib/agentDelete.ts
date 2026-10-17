@@ -10,6 +10,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
+import { mapAgent } from './agents';
 import { agentVersionStore } from './agentVersionSnapshot';
 import { countConverterRules } from './converterRuleDependents';
 import type { Transaction } from './dbTransaction';
@@ -17,6 +18,7 @@ import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
+import { redactAgentToolSecrets } from './toolSecretRedaction';
 
 const log = createDebug('soat:agents');
 
@@ -263,6 +265,9 @@ export const deleteAgent = async (args: {
     );
   }
 
+  // Mapped before the delete: the event carries the agent as it stood.
+  const record = redactAgentToolSecrets(mapAgent(agent));
+
   await revokeResourceShares({ resourceType: 'agent', resourceId: args.id });
 
   if (generationCount > 0 || traceCount > 0) {
@@ -288,6 +293,6 @@ export const deleteAgent = async (args: {
     projectId: agent.projectId,
     resourceType: 'agent',
     resourceId: args.id,
-    data: { id: args.id },
+    data: record,
   });
 };

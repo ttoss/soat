@@ -121,7 +121,7 @@ The body is a **snake_case** JSON envelope:
 | `project_id`    | string | Public ID of the project the event belongs to                     |
 | `resource_type` | string | Type of the resource that changed, e.g. `file`                    |
 | `resource_id`   | string | Public ID of the resource that changed                            |
-| `data`          | object | The resource payload, in the same shape the REST API returns it   |
+| `data`          | object | The resource named by `resource_id`, as its `GET` returns it      |
 | `timestamp`     | string | ISO 8601 timestamp of the event                                   |
 
 ```json
@@ -139,7 +139,9 @@ The body is a **snake_case** JSON envelope:
 }
 ```
 
-`data` comes from the same mapper as the REST API; no key inside it is rewritten, so no follow-up `GET` is needed.
+`data` is the record the module's `GET` answers for `resource_type`/`resource_id`, from the same mapper, so `data.id` is `resource_id` and no follow-up `GET` is needed. A fact the event knows beyond the record rides beside the record's own keys, in snake_case (`tasks.transitioned` adds `transition` and `from_state`); each module's events section lists them. A deletion carries the record as it stood before the delete.
+
+Two resources read differently: a [conversation message](./conversations.md#conversation-message) has no `id` and is named by its `document_id`, with `conversation_id` beside it; a [document](./documents.md) is carried without its `content`. An orchestration [`emit_event`](./orchestrations.md#emitting-events) node's event carries whatever its template wrote.
 
 ### Secret and Signature Verification
 

@@ -16,9 +16,10 @@
  * **This file deliberately imports nothing** — the website's docs generator
  * loads it, so a runtime import would drag the DB layer into a docs build.
  *
- * The event `data` payload stays an opaque value and is not described here.
- * Nothing on the bus reads a key of it, so nothing on the bus needs its shape:
- * type the envelope, keep the payload a value.
+ * The event `data` payload is not typed here: it is the record the resource's
+ * `GET` answers, and a description names only the facts an event carries
+ * beside it. Nothing on the bus reads a key of it, so nothing on the bus needs
+ * its shape: type the envelope, keep the payload a value.
  */
 export const SOAT_EVENTS = {
   agent: {
@@ -41,11 +42,12 @@ export const SOAT_EVENTS = {
     'conversations.deleted': 'A conversation was deleted.',
   },
   conversation_message: {
-    'conversations.message.created': 'A message was added to a conversation.',
+    'conversations.message.created':
+      'A message was added to a conversation; the payload carries the message plus its `conversation_id`.',
     'conversations.message.generated':
-      'An assistant message was generated in a conversation.',
+      'An assistant message was generated in a conversation; the payload carries the message plus `conversation_id`, `generation_id` and `trace_id`.',
     'conversations.message.deleted':
-      'A message was removed from a conversation.',
+      'A message was removed from a conversation; the payload carries the message as it stood plus its `conversation_id`.',
   },
   decision: {
     'decisions.completed':
@@ -68,7 +70,7 @@ export const SOAT_EVENTS = {
   },
   eval_run: {
     'eval_run.completed':
-      'An eval run reached a terminal status with its items scored; carries the pass/fail verdict consumed by eval-gated promotion.',
+      'An eval run reached a terminal status with its items scored; the payload is the run, carrying the pass/fail verdict consumed by eval-gated promotion.',
     'eval_run.failed':
       'An eval run could not be executed to completion (infrastructure failure).',
   },
@@ -88,10 +90,11 @@ export const SOAT_EVENTS = {
     'generations.content_purged':
       "A generation's content was redacted, leaving its auditable skeleton.",
     'generations.chain_limit':
-      'A continuation chain reached its generation budget and was refused.',
+      'A continuation chain reached its generation budget and was refused; the payload carries the root generation plus `chain_size`, `limit`, `limit_source`, `refused_agent_id` and `refused_initiator_generation_id`.',
   },
   guardrail: {
-    'guardrail.tripwire': 'A guardrail tripwire aborted a tool call.',
+    'guardrail.tripwire':
+      'A guardrail tripwire aborted a tool call; the payload carries the guardrail plus `guardrail_version` and the aborted call (`tool_id`, `tool_name`, `action`, `agent_id`, `generation_id`, `orchestration_run_id`, `node_id`).',
   },
   memory: {
     'memories.retracted':
@@ -111,13 +114,13 @@ export const SOAT_EVENTS = {
       'A project was resumed: the runs and tasks its pause held are handed back, and its schedules fire again.',
   },
   quota: {
-    'quota.exceeded': 'A quota limit was exceeded.',
+    'quota.exceeded':
+      'A quota limit was exceeded; the payload carries the quota plus the breached `window_key` and the `observed_value`.',
   },
   session: {
     'sessions.created': 'A session was created.',
     'sessions.updated': 'A session was updated.',
     'sessions.deleted': 'A session was deleted.',
-    'sessions.tags.updated': "A session's tags were replaced.",
     'sessions.generation.started': 'A session generation started.',
     'sessions.generation.requires_action':
       'A session generation paused for a client-side tool result.',
@@ -125,15 +128,20 @@ export const SOAT_EVENTS = {
   },
   task: {
     'tasks.created': 'A task was created.',
-    'tasks.transitioned': 'A task moved to a new state.',
+    'tasks.transitioned':
+      'A task moved to a new state; the payload carries the task plus `transition` and `from_state`.',
     'tasks.closed': 'A task reached a terminal state.',
     'tasks.stalled': 'A task exceeded its stall threshold without progress.',
     'tasks.paused': "A task's automation was paused by an operator.",
     'tasks.resumed': "A task's automation was resumed.",
-    'tasks.approval_failed': "A task's approval gate was rejected or expired.",
-    'tasks.automation_retrying': "A task's automation is being retried.",
-    'tasks.automation_rejected': "A task's automation rejected the task.",
-    'tasks.automation_unrouted': 'A task matched no automation route.',
+    'tasks.approval_failed':
+      "A task's approved transition could no longer apply; the payload carries the task plus `transition` and `error_code`.",
+    'tasks.automation_retrying':
+      "A task's automation is being retried; the payload carries the task plus `attempt`, `max_attempts`, `error`, `generation_id` and `orchestration_run_id`.",
+    'tasks.automation_rejected':
+      "A task's automation rejected the task; the payload carries the task plus `result`, `transition` and `error_code`.",
+    'tasks.automation_unrouted':
+      'A task matched no automation route; the payload carries the task plus `result`.',
   },
   trace: {
     'traces.content_purged':

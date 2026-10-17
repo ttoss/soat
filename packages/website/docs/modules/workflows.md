@@ -149,7 +149,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 ```
 
 - **`dispatch`** — `kind: agent` (`agent_id`), `kind: orchestration` (`orchestration_id`) or `kind: tool` (`tool_id`, optional `operation_id` for a multi-operation tool). `input_mapping` is JSON Logic over `{task}` resolving the dispatch input (a `tool` dispatch's arguments). `payload_writes` (optional) is JSON Logic over `{task, result}`, written into named `task.payload` keys atomically with `last_result` on completion, so a value outlives the one hop `last_result` covers. Each write overwrites its key; in a loop an earlier pass's value lingers until the state dispatches again.
-- **`on_complete`** — rules evaluated in order against `{task, result}`; the first match fires its transition **as the `automation` principal** (same guards). `{result}` is the generation output plus the `ai_provider_id` that served its `model` (agent), the final run state (orchestration) or the return value (tool), also written to `task.last_result`. No match → `automation_status: completed` and a `tasks.automation_unrouted` event. A matched transition rejected (guard fails for `automation`, or a concurrent move invalidated it) → `automation_status: unrouted` and a `tasks.automation_rejected` event carrying the matched `transition` and the rejection `errorCode`.
+- **`on_complete`** — rules evaluated in order against `{task, result}`; the first match fires its transition **as the `automation` principal** (same guards). `{result}` is the generation output plus the `ai_provider_id` that served its `model` (agent), the final run state (orchestration) or the return value (tool), also written to `task.last_result`. No match → `automation_status: completed` and a `tasks.automation_unrouted` event. A matched transition rejected (guard fails for `automation`, or a concurrent move invalidated it) → `automation_status: unrouted` and a `tasks.automation_rejected` event carrying the matched `transition` and the rejection `error_code`.
 - **`retry`** (optional) — covers **execution** failures, never `on_complete` routing. `max_attempts` counts the first attempt (1–10); the delay before attempt `n` is `backoff_seconds * backoff_multiplier^(n - 2)` (defaults: 0, 1). `on_failure`, or the parked `automation_status: failed`, fires only after the last attempt; leaving the state between attempts abandons the rest. Each attempt is `active_dispatch.attempt`; every retried failure emits `tasks.automation_retrying` (`attempt`, `max_attempts`, the error, the failed `generation_id`/`orchestration_run_id`).
 - **`on_failure`** — transition fired on terminal dispatch failure. Omitted → the task stays with `automation_status: failed` for a human.
 
@@ -256,7 +256,7 @@ Archive nothing: a metadata-only edit (`name`, `description`); re-writing the de
 
 Firing a `requires_approval: true` transition (user, API key or automation outcome) does **not** move the task: it parks a pending [ApprovalItem](./approvals.md) (`origin: task_transition`, carrying `task_id` and `task_transition`) and returns the task with `pending_transition` set. No other transition fires while the gate is open (`TASK_TRANSITION_CONFLICT`, 409); one gate per task. Resolve it through the [approvals](./approvals.md) endpoints:
 
-- **Approve** → the transition fires **as the `approval` principal** through the single transition path, guard **re-evaluated at resolution time**; if no longer valid, the gate clears and `tasks.approval_failed` fires with `transition` and `errorCode`.
+- **Approve** → the transition fires **as the `approval` principal** through the single transition path, guard **re-evaluated at resolution time**; if no longer valid, the gate clears and `tasks.approval_failed` fires with `transition` and `error_code`.
 - **Reject** → the gate clears; history gets a note (`principal_kind: approval`, `transition: null`). The task never moved.
 - **Expire** → the approvals expiry sweeper clears the gate and appends an expiry note.
 
@@ -378,18 +378,20 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 
 ## Webhook events
 
-| Event                        | When                                                     |
-| ---------------------------- | -------------------------------------------------------- |
-| `tasks.created`              | A task is created and placed in its initial state        |
-| `tasks.transitioned`         | A task moves between states                              |
-| `tasks.closed`               | A task enters a terminal state                           |
-| `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   |
-| `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) |
-| `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains (carries `attempt`, `max_attempts`, the error, and the failed generation/run id) |
-| `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) |
-| `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) |
-| `tasks.paused`               | An operator paused a task's automation                   |
-| `tasks.resumed`              | An operator lifted a task's pause                        |
+Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/tasks/get-task) answers it; the keys listed beside an event ride next to the task's own.
+
+| Event                        | When                                                     | Beside the task |
+| ---------------------------- | -------------------------------------------------------- | --------------- |
+| `tasks.created`              | A task is created and placed in its initial state        | |
+| `tasks.transitioned`         | A task moves between states                              | `transition`, `from_state` |
+| `tasks.closed`               | A task enters a terminal state                           | |
+| `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
+| `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |
+| `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains | `attempt`, `max_attempts`, `error`, `generation_id`, `orchestration_run_id` |
+| `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) | |
+| `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) | `transition`, `error_code` |
+| `tasks.paused`               | An operator paused a task's automation                   | |
+| `tasks.resumed`              | An operator lifted a task's pause                        | |
 
 ## Examples
 

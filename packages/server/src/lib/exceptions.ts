@@ -140,7 +140,7 @@ const emitExceptionEvent = async (args: {
     projectPublicId,
     resourceType: 'exception',
     resourceId: args.item.id,
-    data: { exception: args.item },
+    data: args.item,
   });
 };
 

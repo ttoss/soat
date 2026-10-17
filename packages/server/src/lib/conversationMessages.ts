@@ -214,10 +214,7 @@ const emitMessageCreated = (args: {
     projectId: args.projectId,
     resourceType: 'conversation_message',
     resourceId: args.mapped.document_id,
-    data: {
-      ...args.mapped,
-      conversationId: args.conversationId,
-    },
+    data: { ...args.mapped, conversation_id: args.conversationId },
   });
 };
 
@@ -427,16 +424,20 @@ export const removeConversationMessage = async (args: {
     return null;
   }
 
-  const message = await db.ConversationMessage.findOne({
+  const message = (await db.ConversationMessage.findOne({
     where: {
       conversationId: conversation.id,
       documentId: document.id,
     },
-  });
+    include: conversationMessageIncludes(),
+  })) as ConversationMessageRow | null;
 
   if (!message) {
     return null;
   }
+
+  // Mapped before the delete: the event carries the message as it stood.
+  const mapped = await mapMessage(message);
 
   await message.destroy();
 
@@ -449,10 +450,7 @@ export const removeConversationMessage = async (args: {
     projectId: conversation.projectId,
     resourceType: 'conversation_message',
     resourceId: args.documentId,
-    data: {
-      conversationId: args.conversationId,
-      documentId: args.documentId,
-    },
+    data: { ...mapped, conversation_id: args.conversationId },
   });
 
   return { conversationId: args.conversationId, documentId: args.documentId };

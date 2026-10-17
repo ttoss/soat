@@ -69,6 +69,8 @@ Listed messages carry the document's full `content`, `role`, `actor_id`, and `ag
 
 Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds.
 
+Each message emits a [webhook event](./webhooks.md) named by its `document_id`: `conversations.message.created` when added, `conversations.message.generated` when an agent's reply is saved, and `conversations.message.deleted` when removed. `data` is the message as [listed](/docs/api/conversations/list-conversation-messages), with `conversation_id` beside it; a generated reply adds `generation_id` and `trace_id`, and a deletion carries the message as it stood.
+
 ### Retrieval
 
 Each message is stored as a [Document](./documents.md) under

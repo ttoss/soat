@@ -229,7 +229,7 @@ Pausing is idempotent and keeps the first reason. [`POST /api/v1/projects/{proje
 
 The resume hands back only what the pause held. A run or task an operator paused before the project was paused keeps its own pause; resuming one run or task on its own while the project is paused is `409 PROJECT_PAUSED`.
 
-Both transitions emit a [webhook event](./webhooks.md): `projects.paused` and `projects.resumed`, each carrying the project.
+Both transitions emit a [webhook event](./webhooks.md): `projects.paused` and `projects.resumed`, each carrying the project as its `data`.
 
 ### Deletion
 

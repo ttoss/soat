@@ -300,7 +300,6 @@ const executeSyncRun = async (args: {
     // `running`, fires the lifecycle event, then propagates.
     await failEvalRun({
       run,
-      evalPublicId: plan.evaluation.publicId,
       projectId,
       reason: error instanceof Error ? error.message : String(error),
     });
@@ -309,7 +308,6 @@ const executeSyncRun = async (args: {
 
   await finalizeEvalRun({
     run,
-    evalPublicId: plan.evaluation.publicId,
     projectId,
     settlement: evalSettlement({ evaluation: plan.evaluation }),
   });

@@ -53,7 +53,7 @@ const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
   if (event.type === 'agents.generation.completed') return event.resourceId;
   // `data` is the envelope's own `Record<string, unknown>`, so only the value
   // needs narrowing, not the bag.
-  const { generationId } = event.data;
+  const generationId = event.data.generation_id;
   return typeof generationId === 'string' ? generationId : undefined;
 };
 
