@@ -7,11 +7,13 @@ export type PlaybookMissingInput = {
   input: string;
   schema: JsonSchema;
   description?: string;
+  required: boolean;
 };
 
 /**
- * The manual inputs a person still has to fill before `node` can be reached,
- * grouped by the wave of the node that holds them.
+ * The manual inputs still unset or refused upstream of `node`, grouped by the
+ * wave of the node that holds them. Optional ones are listed too, since an
+ * agent asks for exactly what this lists; `required` says which ones block.
  */
 export const playbookMissingInputs = (args: {
   definition: PlaybookDefinition;
@@ -30,11 +32,13 @@ export const playbookMissingInputs = (args: {
           return upstream.has(key);
         })
         .flatMap((key) => {
-          const missing = new Set(views.get(key)?.missing);
+          const values = views.get(key)?.values ?? {};
 
           return (byKey.get(key)?.inputs ?? [])
             .filter((input) => {
-              return input.source === 'manual' && missing.has(input.name);
+              return (
+                input.source === 'manual' && !Object.hasOwn(values, input.name)
+              );
             })
             .map((input) => {
               return {
@@ -44,6 +48,7 @@ export const playbookMissingInputs = (args: {
                 ...(input.description !== undefined && {
                   description: input.description,
                 }),
+                required: input.required,
               };
             });
         });

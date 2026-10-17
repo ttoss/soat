@@ -3729,8 +3729,22 @@ describe('MCP tools - happy path', () => {
 
       expect(res.status).toBe(200);
       expect(parseResult(res).waves).toEqual([
-        [{ node_id: 'revenue', input: 'amount', schema: { type: 'number' } }],
-        [{ node_id: 'pricing', input: 'margin', schema: { type: 'number' } }],
+        [
+          {
+            node_id: 'revenue',
+            input: 'amount',
+            schema: { type: 'number' },
+            required: true,
+          },
+        ],
+        [
+          {
+            node_id: 'pricing',
+            input: 'margin',
+            schema: { type: 'number' },
+            required: true,
+          },
+        ],
       ]);
     });
 

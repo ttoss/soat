@@ -11,7 +11,10 @@ const CASE_ACTIONS = [
   'playbooks:ListPlaybookCaseEntries',
 ];
 
-/** Revenue and the CNAE are filled by a person; pricing reads the revenue. */
+/**
+ * Revenue and the CNAE are filled by a person; pricing reads the revenue and
+ * may read a competitor's price.
+ */
 const DEFINITION = {
   nodes: [
     {
@@ -57,6 +60,13 @@ const DEFINITION = {
           name: 'margin',
           schema: { type: 'number' },
           required: true,
+          source: 'manual',
+        },
+        {
+          name: 'competitor_price',
+          schema: { type: 'number' },
+          required: false,
+          description: 'What a competitor charges, in BRL',
           source: 'manual',
         },
       ],
@@ -394,7 +404,75 @@ describe('Playbook cases', () => {
       expect(res.status).toBe(200);
       expect(res.body.node_id).toBe('pricing');
       expect(res.body.waves).toEqual([
-        [{ node_id: 'pricing', input: 'margin', schema: { type: 'number' } }],
+        [
+          {
+            node_id: 'pricing',
+            input: 'margin',
+            schema: { type: 'number' },
+            required: true,
+          },
+          {
+            node_id: 'pricing',
+            input: 'competitor_price',
+            schema: { type: 'number' },
+            description: 'What a competitor charges, in BRL',
+            required: false,
+          },
+        ],
+      ]);
+    });
+
+    test('keeps an unset optional input once every required one is set', async () => {
+      const playbookCase = await newCase();
+      await writeInputs(playbookCase.id, [
+        {
+          node_id: 'revenue',
+          name: 'annual_revenue',
+          value: 1,
+          expected_revision: null,
+        },
+        {
+          node_id: 'pricing',
+          name: 'margin',
+          value: 0.2,
+          expected_revision: null,
+        },
+      ]);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/playbook-cases/${playbookCase.id}/missing?node_id=pricing`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.waves).toEqual([
+        [
+          expect.objectContaining({
+            input: 'competitor_price',
+            required: false,
+          }),
+        ],
+      ]);
+    });
+
+    test('drops an optional input once it is set', async () => {
+      const playbookCase = await newCase();
+      await writeInputs(playbookCase.id, [
+        {
+          node_id: 'pricing',
+          name: 'competitor_price',
+          value: 80,
+          expected_revision: null,
+        },
+      ]);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/playbook-cases/${playbookCase.id}/missing?node_id=pricing`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.waves).toEqual([
+        [expect.objectContaining({ input: 'annual_revenue', required: true })],
+        [expect.objectContaining({ input: 'margin', required: true })],
       ]);
     });
 
