@@ -68,7 +68,7 @@ Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Aut
 
 ### Request correlation (`X-Request-Id`)
 
-Every request an `mcp` tool sends carries the [`X-Request-Id`](./audit-log.md#request-correlation-x-request-id) of the API request it runs for, so the server's log and the runtime's name the same request. A header of that name in `mcp.headers` is kept.
+Every request an `http` or `mcp` tool sends carries the [`X-Request-Id`](./audit-log.md#request-correlation-x-request-id) of the API request it runs for, so the server's log and the runtime's name the same request. Work no request started — a scheduled trigger, a queued orchestration or evaluation step — runs under a fresh id per job. A header of that name in `execute.headers` or `mcp.headers` is kept.
 
 ### Context Headers (`X-Soat-Context-*`)
 

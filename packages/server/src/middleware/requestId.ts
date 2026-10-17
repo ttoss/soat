@@ -5,8 +5,9 @@ import { runWithRequestId } from '../lib/requestCorrelation';
 
 type Next = () => Promise<void>;
 
-// The id is forwarded to the servers `mcp` tools call and written to logs and
-// the audit log, so a caller's value is honored only as a short token.
+// The id is forwarded to the servers `http` and `mcp` tools call and written
+// to logs and the audit log, so a caller's value is honored only as a short
+// token.
 const HONORED_REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /**
@@ -18,8 +19,8 @@ const HONORED_REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
  * minted.
  *
  * The audit log records this id on each entry, tying a stored entry back to the
- * exact request that produced it, and every `mcp` tool request the work sends
- * carries it (`requestCorrelation.ts`).
+ * exact request that produced it, and every `http` and `mcp` tool request the
+ * work sends carries it (`requestCorrelation.ts`).
  */
 export const requestIdMiddleware = async (ctx: Context, next: Next) => {
   const incoming = ctx.headers?.['x-request-id'];

@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
-import { currentRequestId } from './requestCorrelation';
+import { withRequestIdHeader } from './requestCorrelation';
 import { resolveSecretRefsInString } from './secrets';
 import {
   isToolAssertionConfigured,
@@ -48,22 +48,6 @@ const identityOf = async (args: {
 };
 
 /**
- * Names the request this work runs for, so the server's log and the runtime's
- * meet on one id. A header of that name the tool defines is kept.
- */
-const withRequestId = (
-  headers: Record<string, string>
-): Record<string, string> => {
-  const requestId = currentRequestId();
-  const defined = Object.keys(headers).some((key) => {
-    return key.toLowerCase() === 'x-request-id';
-  });
-  return requestId && !defined
-    ? { ...headers, 'X-Request-Id': requestId }
-    : headers;
-};
-
-/**
  * Resolves the binding's `{{secret:}}` and `{{context:}}` references and adds
  * the context headers, at the point of use, so the stored config keeps the
  * references. Throws a missing context key or secret before anything is sent.
@@ -84,7 +68,7 @@ export const openMcpTransport = async (args: {
     projectId,
     toolContext: args.toolContext,
   });
-  const headers = withRequestId({
+  const headers = withRequestIdHeader({
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
     ...(resolved ?? {}),

@@ -1,3 +1,5 @@
+import { drainQueueOnce } from 'src/lib/orchestrationWorker';
+
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -6,8 +8,9 @@ import { proposeCalls } from '../../fixtures/scriptedModel';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * A request's `X-Request-Id` reaches the server an `mcp` tool calls, so a
- * receiver's log line and the runtime's name the same request.
+ * A request's `X-Request-Id` reaches the server an `http` or `mcp` tool calls,
+ * so a receiver's log line and the runtime's name the same request. Work no
+ * request started runs under an id of its own.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -49,7 +52,33 @@ describe('Request correlation', () => {
     });
   };
 
+  /** An http tool posting to its own path on the target. */
+  const httpTool = async (headers?: Record<string, string>) => {
+    const name = turn.unique('http');
+    turn.target.reply(`/${name}`, () => {
+      return { body: { ok: true } };
+    });
+    const created = await turn.createTool({
+      name,
+      execute: {
+        url: `${turn.target.baseUrl}/${name}`,
+        method: 'POST',
+        headers,
+      },
+    });
+    return { ...created, path: `/${name}` };
+  };
+
+  const callHttp = (toolId: string) => {
+    return authenticatedTestClient(turn.adminToken)
+      .post(`/api/v1/tools/${toolId}/call`)
+      .send({ input: { amount: 1 } });
+  };
+
+  const savedWorkerDisabled = process.env.ORCHESTRATION_WORKER_DISABLED;
+
   beforeAll(async () => {
+    process.env.ORCHESTRATION_WORKER_DISABLED = 'true';
     turn = await startAgentToolTurn({ prefix: 'reqcorrelation' });
   });
 
@@ -58,6 +87,11 @@ describe('Request correlation', () => {
   });
 
   afterAll(async () => {
+    if (savedWorkerDisabled === undefined) {
+      delete process.env.ORCHESTRATION_WORKER_DISABLED;
+    } else {
+      process.env.ORCHESTRATION_WORKER_DISABLED = savedWorkerDisabled;
+    }
     await turn.close();
   });
 
@@ -90,6 +124,61 @@ describe('Request correlation', () => {
       await callEcho(tool.id).set('X-Request-Id', 'req-call-2');
 
       expect(requestIdsAt(tool.path)).toEqual(['tool-own-id', 'tool-own-id']);
+    });
+  });
+
+  describe('POST /api/v1/tools/:tool_id/call — http', () => {
+    test("the request carries the caller's X-Request-Id", async () => {
+      const tool = await httpTool();
+
+      const res = await callHttp(tool.id).set('X-Request-Id', 'req-http-1');
+
+      expect(res.status).toBe(200);
+      expect(requestIdsAt(tool.path)).toEqual(['req-http-1']);
+    });
+
+    test('a header the tool defines under that name is kept', async () => {
+      const tool = await httpTool({ 'X-Request-ID': 'tool-own-id' });
+
+      await callHttp(tool.id).set('X-Request-Id', 'req-http-2');
+
+      expect(requestIdsAt(tool.path)).toEqual(['tool-own-id']);
+    });
+  });
+
+  describe('POST /api/v1/orchestration-runs — drained by the worker', () => {
+    test('the tool request carries an id of its own, not the starting request’s', async () => {
+      const tool = await httpTool();
+      const orchestration = await authenticatedTestClient(turn.adminToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: turn.projectId,
+          name: turn.unique('orch'),
+          nodes: [
+            {
+              id: 'act',
+              type: 'tool',
+              tool_id: tool.id,
+              input_mapping: { amount: 1 },
+            },
+          ],
+          edges: [],
+        });
+      expect(orchestration.status).toBe(201);
+
+      const run = await authenticatedTestClient(turn.adminToken)
+        .post('/api/v1/orchestration-runs')
+        .set('X-Request-Id', 'req-start-1')
+        .send({
+          orchestration_id: orchestration.body.id,
+          input: {},
+          wait: false,
+        });
+      expect(run.status).toBe(201);
+      expect(await drainQueueOnce()).toBe(1);
+
+      const [sent] = requestIdsAt(tool.path);
+      expect(sent).toMatch(UUID);
     });
   });
 
