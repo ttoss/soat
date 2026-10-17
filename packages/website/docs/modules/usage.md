@@ -450,21 +450,23 @@ After **each** usage-event write, every [`UsageThreshold`](#usagethreshold) on t
 - **`calendar_month`** — at most once per window; `fired_window_key` blocks re-fire until the `YYYY-MM` key changes.
 - **`rolling_24h`** — re-arms once the value drops below 90% of the threshold.
 
-The webhook payload (`data`) is:
+The webhook payload (`data`) is the [`UsageThreshold`](#usagethreshold) record as [`GET /api/v1/usage/thresholds`](/docs/api/usage/list-usage-thresholds) returns it after the fire, plus `observed_value`, the windowed value that crossed it:
 
 ```json
 {
-  "threshold_id": "uthr_V1StGXR8Z5jdHi6B",
+  "id": "uthr_V1StGXR8Z5jdHi6B",
   "project_id": "proj_V1StGXR8Z5jdHi6B",
   "metric": "cost_usd",
   "window": "calendar_month",
-  "window_key": "2026-07",
   "threshold": 100,
+  "last_fired_at": "2026-07-14T09:30:00.000Z",
+  "fired_window_key": "2026-07",
+  "created_at": "2026-07-01T00:00:00.000Z",
   "observed_value": 101.37
 }
 ```
 
-`window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage.threshold_crossed` (or `usage.*`) to receive it.
+`fired_window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage.threshold_crossed` (or `usage.*`) to receive it.
 
 ### Who may act on a usage threshold
 

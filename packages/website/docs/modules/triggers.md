@@ -63,7 +63,7 @@ firing record holds the outcome.
 | `input`        | object \| null                                      | Effective (post-merge) input snapshot                                 |
 | `result`       | object \| null                                      | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated |
 | `error`        | object \| null                                      | `{ code, message, meta }` when the firing failed                      |
-| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing, null otherwise — one firing per pair |
+| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing (`event_id` is the `id` in `input`), null otherwise — one firing per pair |
 | `attempts`     | number                                              | Dispatch starts. Above 1 means an interrupted start was redelivered ([Delivery Guarantees](#delivery-guarantees)) |
 | `started_at`   | string \| null                                      | ISO 8601 timestamp when execution began                               |
 | `completed_at` | string \| null                                      | ISO 8601 timestamp when the firing reached a terminal status          |
@@ -210,11 +210,12 @@ A pattern whose first segment is a **platform namespace** must resolve to a
 (`orders.shipped`) is accepted as written, since an orchestration
 [`emit_event` node](./orchestrations.md) emits names SOAT does not own.
 
-**The event payload is the firing input**, the same envelope a webhook
-subscriber receives:
+**The event payload is the firing input**, the same
+[envelope](./webhooks.md#event-payload) a webhook subscriber receives:
 
 ```json
 {
+  "id": "0b8e7a52-5c1e-4f0e-9a43-3f6f2b8d9c11",
   "event": "documents.ingested",
   "project_id": "proj_ABC",
   "resource_type": "document",
@@ -262,7 +263,9 @@ row another process redelivers.
   started runs that target again, so an event target must be idempotent.
 - **Deduplicated per (event, trigger).** Each event firing carries an
   `idempotency_key` of `<event_id>:<trigger_id>`, so the same event reaching
-  the same trigger twice produces one firing.
+  the same trigger twice produces one firing. A target that must not act twice
+  deduplicates on the envelope's `id`, which a webhook subscribed to the same
+  event receives too.
 - **Unordered.** Sequential events may fire in either order; triggers on the
   same event fire independently.
 

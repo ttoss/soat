@@ -221,6 +221,11 @@ describe('Event trigger dispatch', () => {
         resource_type: 'orchestration_run',
         data: { reason: 'cycle' },
       });
+      // The envelope's `id` is the event's own, the half of the key that a
+      // webhook subscriber to the same event also receives.
+      expect(firing.idempotency_key).toBe(
+        `${String(firing.input?.id)}:${triggerId}`
+      );
       expect(firing.result).toMatchObject({
         target_type: 'orchestration',
         status: 'completed',

@@ -16,42 +16,6 @@ export const emitGenerationStarted = (
   });
 };
 
-export const emitGenerationRequiresAction = (args: {
-  session: InstanceType<(typeof db)['Session']>;
-  generationId: string;
-  traceId: string;
-}) => {
-  emitResourceEvent({
-    type: 'sessions.generation.requires_action',
-    projectId: args.session.projectId,
-    resourceType: 'session',
-    resourceId: args.session.publicId,
-    data: {
-      sessionId: args.session.publicId,
-      generationId: args.generationId,
-      traceId: args.traceId,
-    },
-  });
-};
-
-export const emitGenerationCompleted = (args: {
-  session: InstanceType<(typeof db)['Session']>;
-  generationId: string;
-  traceId: string;
-}) => {
-  emitResourceEvent({
-    type: 'sessions.generation.completed',
-    projectId: args.session.projectId,
-    resourceType: 'session',
-    resourceId: args.session.publicId,
-    data: {
-      sessionId: args.session.publicId,
-      generationId: args.generationId,
-      traceId: args.traceId,
-    },
-  });
-};
-
 export const processToolOutputResult = async (args: {
   result: GenerationResult;
   conversation: InstanceType<(typeof db)['Conversation']>;

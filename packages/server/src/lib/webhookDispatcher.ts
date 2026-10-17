@@ -5,6 +5,7 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
+import { buildEventEnvelope, envelopeEventId } from './eventEnvelope';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { soatHeader } from './headerPrefix';
 import { signatureHeader, timestampedSignature } from './hmacSignature';
@@ -234,6 +235,7 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
   if (!prepared) return;
 
   const { webhook, payload, headers } = prepared;
+  const eventId = envelopeEventId({ payload: delivery.payload });
 
   const attempt = delivery.attempts + 1;
   const controller = new AbortController();
@@ -253,6 +255,7 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
         ...headers,
         [soatHeader('Event')]: delivery.eventType,
         [soatHeader('Delivery')]: delivery.publicId,
+        ...(eventId ? { [soatHeader('Event-Id')]: eventId } : {}),
       },
       body: payload,
       signal: controller.signal,
@@ -328,20 +331,10 @@ const enqueueDelivery = async (args: {
 }) => {
   const now = new Date();
 
-  // A wire payload, so snake_case like every other surface. `data` stays an
-  // opaque value — it is already snake_case from a lib mapper, and nothing here
-  // reads or rewrites a key of it.
   return db.WebhookDelivery.create({
     webhookId: args.webhook.id,
     eventType: args.event.type,
-    payload: {
-      event: args.event.type,
-      project_id: args.event.projectPublicId,
-      resource_type: args.event.resourceType,
-      resource_id: args.event.resourceId,
-      data: args.event.data,
-      timestamp: args.event.timestamp,
-    },
+    payload: buildEventEnvelope({ event: args.event }),
     status: 'queued',
     attempts: 0,
     nextAttemptAt: now,

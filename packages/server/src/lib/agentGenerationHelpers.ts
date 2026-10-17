@@ -8,7 +8,7 @@ import {
   toAgentConfig,
   type TypedAgent,
 } from './agentGenerationTypes';
-import { emitResourceEvent } from './eventBus';
+import { emitGenerationEvent } from './generationEvents';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId } from './modelRouteExecutor';
@@ -251,46 +251,45 @@ export const savePendingGeneration = async (args: {
 
   await storePendingGenerationState({ ...args, aiProviderId });
 
+  const requiredAction: NonNullable<GenerationResult['requiredAction']> = {
+    type: 'submit_tool_outputs',
+    toolCalls: args.pendingToolCalls.map((tc) => {
+      return {
+        id: tc.toolCallId,
+        toolName: tc.toolName,
+        args: tc.input,
+      };
+    }),
+  };
   const requiresActionResult: GenerationResult = {
     id: args.generationId,
     traceId: args.traceId,
     status: 'requires_action',
     aiProviderId,
-    requiredAction: {
-      type: 'submit_tool_outputs',
-      toolCalls: args.pendingToolCalls.map((tc) => {
-        return {
-          id: tc.toolCallId,
-          toolName: tc.toolName,
-          args: tc.input,
-        };
-      }),
-    },
+    requiredAction,
   };
 
-  emitResourceEvent({
+  await emitGenerationEvent({
     type: 'agents.generation.requires_action',
     projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    resourceType: 'generation',
-    resourceId: args.generationId,
-    data: requiresActionResult,
+    generationId: args.generationId,
+    requiredAction: mapGenerationRequiredAction(requiredAction),
   });
 
   return requiresActionResult;
 };
 
 /**
- * The terminal record write for a completed turn. Fire-and-forget: the result
- * is already built, and a failed status write must not fail the generation.
+ * The terminal record write for a completed turn. A failed status write must
+ * not fail the generation, whose result is already built.
  */
-const markGenerationCompleted = (args: {
+const markGenerationCompleted = async (args: {
   generationId: string;
   finishReason: string;
   stepCount: number;
   maxSteps: unknown;
-}): void => {
-  updateGenerationRecord({
+}): Promise<void> => {
+  await updateGenerationRecord({
     publicId: args.generationId,
     status: 'completed',
     completedAt: new Date(),
@@ -299,7 +298,9 @@ const markGenerationCompleted = (args: {
       stepCount: args.stepCount,
       maxSteps: args.maxSteps,
     }),
-  }).catch(() => {});
+  }).catch(() => {
+    return null;
+  });
 };
 
 // A turn that completed in one `generateText` call is one metered segment.
@@ -375,7 +376,7 @@ export const buildCompletedGenerationResult = async (args: {
     outputSchema: args.typedAgent.outputSchema,
     generationId: args.generationId,
   });
-  markGenerationCompleted({
+  await markGenerationCompleted({
     generationId: args.generationId,
     finishReason: args.result.finishReason,
     stepCount: serializedStepsCompleted.length,
@@ -402,13 +403,11 @@ export const buildCompletedGenerationResult = async (args: {
 
   await meterCompletedTurn({ ...args, modelId: model });
 
-  emitResourceEvent({
+  await emitGenerationEvent({
     type: 'agents.generation.completed',
     projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    resourceType: 'generation',
-    resourceId: args.generationId,
-    data: completedResult,
+    generationId: args.generationId,
+    assistantContent: args.result.text,
   });
 
   return completedResult;

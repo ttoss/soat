@@ -50,7 +50,7 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 | `id`              | string                             | Public identifier                          |
 | `webhook_id`      | string                             | Public ID of the webhook this delivery belongs to |
 | `event_type`      | string                             | The event type that triggered the delivery |
-| `payload`         | object                             | The event payload that was sent            |
+| `payload`         | object                             | The [event envelope](#event-payload) that was sent |
 | `status`          | `queued` \| `completed` \| `failed` | Delivery outcome                           |
 | `status_code`     | number \| null                     | HTTP response status code                  |
 | `attempts`        | number                             | Number of delivery attempts made           |
@@ -81,7 +81,8 @@ A matching event is delivered as an HTTP POST with these headers ([`SOAT_HEADER_
 | Header                | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |
 | `X-Soat-Event`        | The event type (e.g., `files.created`)                                     |
-| `X-Soat-Delivery`     | Unique delivery ID                                                         |
+| `X-Soat-Delivery`     | Unique delivery ID; a redelivery has its own                               |
+| `X-Soat-Event-Id`     | The event's `id`, the same on every delivery and redelivery of one event   |
 | `X-Soat-Signature`    | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
 
 Deliveries are retried up to three times; each attempt is recorded in the delivery log. See [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message). Test locally with [`soat listen`](../cli/usage.md#testing-webhooks-locally).
@@ -109,14 +110,15 @@ After three failed attempts the delivery is marked `failed` and is not retried a
 
 [`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again.
 
-It creates a **new** delivery record, so the failed attempt stays in the history. Returns `202 Accepted` with the new delivery; poll its `status` for the outcome.
+It creates a **new** delivery record, so the failed attempt stays in the history. Returns `202 Accepted` with the new delivery; poll its `status` for the outcome. The copy sends the stored payload unchanged, so its `id` and `X-Soat-Event-Id` match the original's while `X-Soat-Delivery` differs.
 
 ### Event Payload
 
-The body is a **snake_case** JSON envelope:
+The body is a **snake_case** JSON envelope, the same one an [`event` trigger](./triggers.md#event-triggers) receives as its input:
 
 | Field           | Type   | Description                                                       |
 | --------------- | ------ | ----------------------------------------------------------------- |
+| `id`            | string | The event's identity, shared by every delivery of it              |
 | `event`         | string | Event type, e.g. `files.created`                                  |
 | `project_id`    | string | Public ID of the project the event belongs to                     |
 | `resource_type` | string | Type of the resource that changed, e.g. `file`                    |
@@ -126,6 +128,7 @@ The body is a **snake_case** JSON envelope:
 
 ```json
 {
+  "id": "0b8e7a52-5c1e-4f0e-9a43-3f6f2b8d9c11",
   "event": "files.created",
   "project_id": "proj_a1b2c3d4",
   "resource_type": "file",
@@ -140,6 +143,8 @@ The body is a **snake_case** JSON envelope:
 ```
 
 `data` comes from the same mapper as the REST API; no key inside it is rewritten, so no follow-up `GET` is needed.
+
+A subscriber can receive one event more than once: a retry after a lost answer, or a [redelivery](#redelivery). Deduplicate on `id` (or `X-Soat-Event-Id`), never on `X-Soat-Delivery`.
 
 ### Secret and Signature Verification
 
