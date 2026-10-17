@@ -6,6 +6,7 @@ import {
   isWithdrawnConfig,
 } from './documentVersionSnapshot';
 import { emitDocumentRestored, isWithdrawn } from './documentWithdrawal';
+import type { RequestPrincipal } from './principals';
 import {
   type ArchivedVersionRow,
   configNumber,
@@ -136,7 +137,7 @@ const documentVersionArchive = makeVersionArchive({
       chunkSize: configNumber(args.config.chunk_size) ?? undefined,
       chunkOverlap: configNumber(args.config.chunk_overlap) ?? undefined,
       versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
+      createdBy: args.createdBy,
     });
 
     /* istanbul ignore next -- the archive loaded the document to find the
@@ -180,7 +181,7 @@ export const restoreDocumentVersion = async (args: {
   documentId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }) => {
   const document = await loadDocumentRef({ id: args.documentId });
   const withdrawn = await isWithdrawn({ documentDbId: document.dbId });
@@ -191,7 +192,7 @@ export const restoreDocumentVersion = async (args: {
     resourceId: args.documentId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   if (withdrawn) {

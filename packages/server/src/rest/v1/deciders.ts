@@ -29,6 +29,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parseEnumListQuery,
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -96,7 +97,7 @@ decidersRouter.post('/deciders', async (ctx: Context) => {
     toolId: body.tool_id,
     questions: body.questions,
     versionLabel: parseString(body.version_label),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 });
 
@@ -156,7 +157,7 @@ decidersRouter.patch('/deciders/:decider_id', async (ctx: Context) => {
     questions: body.questions,
     versionLabel: parseString(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
-    createdByUserId: ctx.authUser.id,
+    createdBy: requestPrincipalFromCtx(ctx),
   });
 });
 
@@ -247,7 +248,7 @@ decidersRouter.post(
       deciderId: ctx.params.decider_id,
       version: parseVersionParam(ctx.params.version),
       label: parseString(body.label),
-      createdByUserId: ctx.authUser.id,
+      createdBy: requestPrincipalFromCtx(ctx),
     });
   }
 );

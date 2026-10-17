@@ -525,13 +525,17 @@ components:
             null when none was. Copied onto the generation's usage event, so it
             is the same dimension `group_by=actor` buckets on.
         started_by_principal_type:
-          type: string
           nullable: true
-          description: Type of the principal that started the generation
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who started the generation
         started_by_principal_id:
           type: string
           nullable: true
-          description: ID of the principal that started the generation
+          description: >-
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
+          example: user_V1StGXR8Z5jdHi6B
         status:
           type: string
           description: Lifecycle status of the generation
@@ -799,16 +803,21 @@ components:
             cleared, while the usage/audit skeleton — ids, timestamps, status,
             stop reason and the attribution fields — is preserved.
         content_redacted_by_principal_type:
-          type: string
           nullable: true
-          description: Principal kind that purged the content ('user' or 'api_key')
-          example: user
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who purged the content: `user` or `api_key` for a purge request,
+            `system` for the retention sweep and for content never stored under
+            zero retention.
         content_redacted_by_principal_id:
           type: string
           nullable: true
-          description: >
-            Public ID of the principal that purged the content — the API key's
-            own id for key auth, so the record names which key acted.
+          description: >-
+            Public id of that principal — the API key's own id for key auth, so
+            the record names which key acted. `retention_sweep` or
+            `zero_retention` for `system`.
+          example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -1105,13 +1114,13 @@ components:
           description: >
             When the generation's content was erased; null while it is intact.
         content_redacted_by_principal_type:
-          type: string
           nullable: true
-          description: Principal kind that erased the content.
-          example: system
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who erased the content.
         content_redacted_by_principal_id:
           type: string
           nullable: true
           description: >
-            Public ID of that principal. `zero_retention` when the content was
+            Public id of that principal. `zero_retention` when the content was
             never stored, distinguishing it from content erased later.

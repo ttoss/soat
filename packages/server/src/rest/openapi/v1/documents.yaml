@@ -1372,12 +1372,19 @@ components:
             the `version_label` of the write that archived it, or generated for
             a restore or a withdrawal.
           example: pre-correction
-        created_by:
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: >-
+            Who produced this version. Null for a write with no principal behind
+            it.
+        created_by_principal_id:
           type: string
           nullable: true
           description: >-
-            Public ID of the user whose write produced this version; null for a
-            write with no request user behind it.
+            Public id of that principal: the user (`user_…`), or for API key
+            auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
         created_at:
           type: string

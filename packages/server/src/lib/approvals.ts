@@ -15,6 +15,7 @@ import {
   resolvePagination,
 } from './pagination';
 import { isPlainObject } from './plainObject';
+import type { RequestPrincipal } from './principals';
 import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
 import { timeRangeWhere } from './timeRange';
@@ -37,7 +38,6 @@ export const APPROVAL_EVENT_TYPES = {
 type ApprovalInstance = InstanceType<(typeof db)['ApprovalItem']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
   orchestrationRun?: InstanceType<(typeof db)['OrchestrationRun']> | null;
-  resolvedByUser?: InstanceType<(typeof db)['User']> | null;
 };
 
 // Built lazily inside each query: `db.*` models are only populated after the
@@ -47,7 +47,6 @@ const buildIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.OrchestrationRun, as: 'orchestrationRun' },
-    { model: db.User, as: 'resolvedByUser' },
   ];
 };
 
@@ -78,8 +77,8 @@ const toWireProposedAction = (
 
 /**
  * Maps a persisted approval item to the plain, publicId-only shape returned by
- * the API. The internal `id`, `orchestrationRunId`, and `resolvedByUserId`
- * columns are never exposed — provenance is surfaced via public IDs only.
+ * the API. The internal `id` and `orchestrationRunId` columns are never
+ * exposed — provenance is surfaced via public IDs only.
  */
 export const mapApproval = (instance: ApprovalInstance) => {
   return {
@@ -104,7 +103,8 @@ export const mapApproval = (instance: ApprovalInstance) => {
     task_transition: instance.taskTransition,
     policy_version: instance.policyVersion,
     previous_item_id: instance.previousItemId,
-    resolved_by: instance.resolvedByUser?.publicId ?? null,
+    resolved_by_principal_type: instance.resolvedByPrincipalType,
+    resolved_by_principal_id: instance.resolvedByPrincipalId,
     resolution_reason: instance.resolutionReason,
     edited_arguments: instance.editedArguments,
     created_at: instance.createdAt,
@@ -123,7 +123,8 @@ export type MappedApproval = ReturnType<typeof mapApproval>;
 export type DecisionOutput = {
   decision: 'approved' | 'rejected' | 'expired';
   approvalId: string;
-  resolvedBy: string | null;
+  resolvedByPrincipalType: string | null;
+  resolvedByPrincipalId: string | null;
   editedArgs: object | null;
   reason: string | null;
   result: object | null;
@@ -133,7 +134,8 @@ const buildDecisionOutput = (item: MappedApproval): DecisionOutput => {
   return {
     decision: item.status as 'approved' | 'rejected' | 'expired',
     approvalId: item.id,
-    resolvedBy: item.resolved_by,
+    resolvedByPrincipalType: item.resolved_by_principal_type,
+    resolvedByPrincipalId: item.resolved_by_principal_id,
     editedArgs: item.edited_arguments ?? null,
     // On approval the executed tool output belongs here. Actual execution of
     // the (frozen or edited) action at resolution time is wired in with the
@@ -740,7 +742,7 @@ const finalizeResolution = async (args: {
 export const approveApproval = async (args: {
   id: string;
   editedArguments?: object | null;
-  resolvedByUserId: number;
+  resolvedBy: RequestPrincipal;
   toolContext?: Record<string, string>;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   log(
@@ -762,7 +764,8 @@ export const approveApproval = async (args: {
   });
 
   item.status = 'approved';
-  item.resolvedByUserId = args.resolvedByUserId;
+  item.resolvedByPrincipalType = args.resolvedBy.principalType;
+  item.resolvedByPrincipalId = args.resolvedBy.principalId;
   item.editedArguments = args.editedArguments ?? null;
   await item.save();
 
@@ -781,7 +784,7 @@ export const approveApproval = async (args: {
 export const rejectApproval = async (args: {
   id: string;
   reason: string;
-  resolvedByUserId: number;
+  resolvedBy: RequestPrincipal;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   log('rejectApproval: id=%s', args.id);
   if (!args.reason || args.reason.trim() === '') {
@@ -796,7 +799,8 @@ export const rejectApproval = async (args: {
   await assertNotExpiredOrExpire(item, 'rejected');
 
   item.status = 'rejected';
-  item.resolvedByUserId = args.resolvedByUserId;
+  item.resolvedByPrincipalType = args.resolvedBy.principalType;
+  item.resolvedByPrincipalId = args.resolvedBy.principalId;
   item.resolutionReason = args.reason;
   await item.save();
 

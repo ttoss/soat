@@ -357,7 +357,8 @@ describe('Playbook executions', () => {
         executor: null,
         status: 'completed',
         result: 'current',
-        created_by: null,
+        created_by_principal_type: null,
+        created_by_principal_id: null,
       });
       expect(tool).toMatchObject({
         node: 'pricing',
@@ -677,7 +678,8 @@ describe('Playbook executions', () => {
         id: expect.stringMatching(/^pbk_exe_/),
         case_id: caseId,
         status: 'running',
-        created_by: expect.any(String),
+        created_by_principal_type: 'user',
+        created_by_principal_id: expect.stringMatching(/^user_/),
       });
       expect((await settled(caseId, res.body.id)).status).toBe('failed');
     });

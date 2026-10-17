@@ -74,7 +74,8 @@ Immutable archive of one config version, written on create and on every config-c
 | `config`      | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures)                                           |
 | `label`       | string/null | Optional human tag, e.g. `pre-tone-change`                                                                                                                  |
 | `eval_run_id` | string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
-| `created_by`  | string/null | User whose action produced this version                                                                                                                     |
+| `created_by_principal_type` | string/null | [Principal](./audit-log.md#principals) that produced this version: `user` or `api_key`                                                              |
+| `created_by_principal_id`   | string/null | Public id of that principal — the key's own `key_…` when a key acted, else `user_…`                                                                 |
 | `created_at`  | string      | ISO 8601 creation timestamp                                                                                                                                 |
 
 ### Agent Release

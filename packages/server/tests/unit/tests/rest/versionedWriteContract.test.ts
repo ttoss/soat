@@ -31,6 +31,9 @@ type Driver = {
 describe('versioned write contract', () => {
   let userToken: string;
   let userId: string;
+  let key: { id: string; raw: string };
+  // Every driver writes as this credential; one test swaps in the API key.
+  let actingToken: string;
   let projectId: string;
   let aiProviderId: string;
   let seq = 0;
@@ -40,7 +43,7 @@ describe('versioned write contract', () => {
   };
 
   const client = () => {
-    return authenticatedTestClient(userToken);
+    return authenticatedTestClient(actingToken);
   };
 
   const createIn = async (path: string, body: Record<string, unknown>) => {
@@ -334,8 +337,15 @@ describe('versioned write contract', () => {
       ],
     });
     userToken = setup.userToken;
+    actingToken = userToken;
     userId = setup.userId;
     projectId = setup.projectId;
+
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({ name: 'versioned-write-key' });
+    expect(keyRes.status).toBe(201);
+    key = { id: keyRes.body.id, raw: keyRes.body.key };
 
     const provider = await authenticatedTestClient(setup.adminToken)
       .post('/api/v1/ai-providers')
@@ -368,6 +378,20 @@ describe('versioned write contract', () => {
     }
   });
 
+  const authorOf = (
+    row:
+      | {
+          created_by_principal_type: string | null;
+          created_by_principal_id: string | null;
+        }
+      | undefined
+  ) => {
+    return {
+      type: row?.created_by_principal_type,
+      id: row?.created_by_principal_id,
+    };
+  };
+
   const readState = async (driver: Driver, id: string) => {
     const res = await client().get(`${driver.path}/${id}`);
     expect(res.status).toBe(200);
@@ -380,7 +404,14 @@ describe('versioned write contract', () => {
       updated_at: res.body.updated_at as string,
       history: history ? (history.body.data as unknown[]).length : undefined,
       author: history
-        ? (history.body.data as { created_by: string | null }[])[0]?.created_by
+        ? authorOf(
+            (
+              history.body.data as {
+                created_by_principal_type: string | null;
+                created_by_principal_id: string | null;
+              }[]
+            )[0]
+          )
         : undefined,
     };
   };
@@ -394,7 +425,7 @@ describe('versioned write contract', () => {
       if (driver.archived) {
         expect({ write: 'create', author: previous.author }).toEqual({
           write: 'create',
-          author: userId,
+          author: { type: 'user', id: userId },
         });
       }
 
@@ -426,13 +457,34 @@ describe('versioned write contract', () => {
           });
           expect({ write: write.name, author: current.author }).toEqual({
             write: write.name,
-            author: userId,
+            author: { type: 'user', id: userId },
           });
         }
         previous = current;
       }
     }
   );
+
+  test.each(
+    Object.keys(VERSIONED_RESOURCES)
+      .sort()
+      .filter((model) => {
+        return drivers[model].archived;
+      })
+  )('%s: a write through an API key names the key', async (model) => {
+    const driver = drivers[model];
+    actingToken = key.raw;
+    try {
+      const id = await driver.create();
+      const res = await driver.writes[0].send(id);
+      expect(res.status).toBe(200);
+
+      const state = await readState(driver, id);
+      expect(state.author).toEqual({ type: 'api_key', id: key.id });
+    } finally {
+      actingToken = userToken;
+    }
+  });
 
   /**
    * A refused write must leave nothing behind, including state kept outside

@@ -10,7 +10,6 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
-import { User } from './User';
 
 /**
  * A human-decision queue item. Created by the platform (an `approval`
@@ -154,16 +153,12 @@ export class ApprovalItem extends Model {
   declare previousItemId: string | null;
 
   // ── Resolution ───────────────────────────────────────────────────────────
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare resolvedByUserId: number | null;
+  // Null while pending and on expiry, which no principal resolves.
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare resolvedByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare resolvedByUser: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare resolvedByPrincipalId: string | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare resolutionReason: string | null;

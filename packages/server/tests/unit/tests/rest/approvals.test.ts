@@ -87,8 +87,8 @@ describe('Approvals', () => {
       expect(found.expires_at).toBeDefined();
       // No run backs this approval, so the field is present but null.
       expect(found.orchestration_run_id).toBeNull();
-      // Internal columns must never leak.
-      expect(found.resolved_by_user_id).toBeUndefined();
+      expect(found.resolved_by_principal_type).toBeNull();
+      expect(found.resolved_by_principal_id).toBeNull();
     });
 
     test('exposes tool-call provenance and filters by origin', async () => {
@@ -338,8 +338,25 @@ describe('Approvals', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('approved');
-      expect(res.body.resolved_by).toMatch(/^user_/);
+      expect(res.body.resolved_by_principal_type).toBe('user');
+      expect(res.body.resolved_by_principal_id).toMatch(/^user_/);
       expect(res.body.edited_arguments).toBeNull();
+    });
+
+    test('an API key resolving names the key, not its owner', async () => {
+      const key = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'approval-resolver-key' });
+      expect(key.status).toBe(201);
+      const seeded = await seedApproval();
+
+      const res = await authenticatedTestClient(key.body.key)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.resolved_by_principal_type).toBe('api_key');
+      expect(res.body.resolved_by_principal_id).toBe(key.body.id);
     });
 
     test('edit-then-approve stores the edited arguments', async () => {
@@ -609,7 +626,8 @@ describe('Approvals', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('rejected');
       expect(res.body.resolution_reason).toBe('Exceeds monthly budget');
-      expect(res.body.resolved_by).toMatch(/^user_/);
+      expect(res.body.resolved_by_principal_type).toBe('user');
+      expect(res.body.resolved_by_principal_id).toMatch(/^user_/);
     });
 
     test('missing reason returns 400', async () => {

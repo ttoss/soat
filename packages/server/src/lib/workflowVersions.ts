@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { RequestPrincipal } from './principals';
 import {
   type ArchivedVersionRow,
   configObject,
@@ -120,7 +121,7 @@ const workflowVersionArchive = makeVersionArchive({
       // "cleared", never "leave as is".
       payloadSchema: configObject(args.config.payload_schema),
       versionLabel: args.label,
-      createdByUserId: args.createdByUserId,
+      createdBy: args.createdBy,
     });
   },
 });
@@ -153,7 +154,7 @@ export const restoreWorkflowVersion = async (args: {
   workflowId: string;
   version: number;
   label?: string | null;
-  createdByUserId: number | null;
+  createdBy: RequestPrincipal | null;
 }): Promise<MappedWorkflow> => {
   // Appends rather than rewinding the counter, so a task pinned to any version
   // in between still resolves the machine it entered on. A restore is an
@@ -162,6 +163,6 @@ export const restoreWorkflowVersion = async (args: {
     resourceId: args.workflowId,
     version: args.version,
     label: args.label,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 };

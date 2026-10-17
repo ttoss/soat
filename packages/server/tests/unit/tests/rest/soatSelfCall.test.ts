@@ -355,7 +355,7 @@ describe('SOAT self-call', () => {
       expect(res.status).toBe(200);
       const rows = res.body.data as {
         transition: string | null;
-        principal_kind: string | null;
+        principal_type: string | null;
         principal_id: string | null;
       }[];
       const row = rows.find((entry) => {
@@ -446,7 +446,7 @@ describe('SOAT self-call', () => {
       // assertion lives in the next test; both kinds are covered through a
       // background drive so neither can regress into the other.
       const row = await finishRowOf(taskRes.body.id);
-      expect(row.principal_kind).toBe('user');
+      expect(row.principal_type).toBe('user');
       expect(row.principal_id).toBe(userPublicId);
     });
 
@@ -563,7 +563,7 @@ describe('SOAT self-call', () => {
       expect(state).toBe('done');
 
       const row = await finishRowOf(taskRes.body.id);
-      expect(row.principal_kind).toBe('api_key');
+      expect(row.principal_type).toBe('api_key');
       expect(row.principal_id).toBe(keyPublicId);
     });
 

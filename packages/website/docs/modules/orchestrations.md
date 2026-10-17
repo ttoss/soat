@@ -130,7 +130,7 @@ Every completed node produces an **artifact**: what `state_mapping` reads as `ou
 | `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
 | `knowledge` | `{ results }` — the matched entries. |
 | `human`, `webhook` (`mode: "receive"`) | The payload submitted to `submit-human-input`, verbatim. |
-| `approval` | `{ decision, approvalId, resolvedBy, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
+| `approval` | `{ decision, approvalId, resolvedByPrincipalType, resolvedByPrincipalId, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
 | `loop` | `{ results, failed_count }` — one entry per item, each the sub-run's `output`. See [Loops](#loops-collection-iteration). |
 | `poll` | `{ result, attempts, conditionMet, timedOut }`. See [Polling](#polling). |
 | `delay` | `{ waited }` — the `duration` as declared. |

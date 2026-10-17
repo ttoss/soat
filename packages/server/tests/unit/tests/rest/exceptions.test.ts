@@ -101,15 +101,16 @@ describe('Exceptions', () => {
       expect(get.body.id).toBe(filed.id);
       expect(get.body.project_id).toBe(projectId);
       expect(get.body.kind).toBe('manual');
-      // internal ids never leak
-      expect(get.body.resolved_by_user_id).toBeUndefined();
+      expect(get.body.acknowledged_by_principal_type).toBeNull();
+      expect(get.body.resolved_by_principal_id).toBeNull();
 
       const ack = await authenticatedTestClient(userToken)
         .post(`/api/v1/exceptions/${filed.id}/acknowledge`)
         .send({});
       expect(ack.status).toBe(200);
       expect(ack.body.status).toBe('acknowledged');
-      expect(ack.body.acknowledged_by).toBeDefined();
+      expect(ack.body.acknowledged_by_principal_type).toBe('user');
+      expect(ack.body.acknowledged_by_principal_id).toMatch(/^user_/);
 
       const resolve = await authenticatedTestClient(userToken)
         .post(`/api/v1/exceptions/${filed.id}/resolve`)
@@ -117,7 +118,8 @@ describe('Exceptions', () => {
       expect(resolve.status).toBe(200);
       expect(resolve.body.status).toBe('resolved');
       expect(resolve.body.resolution_note).toBe('Fixed the root cause.');
-      expect(resolve.body.resolved_by).toBeDefined();
+      expect(resolve.body.resolved_by_principal_type).toBe('user');
+      expect(resolve.body.resolved_by_principal_id).toMatch(/^user_/);
 
       const again = await authenticatedTestClient(userToken)
         .post(`/api/v1/exceptions/${filed.id}/resolve`)
@@ -163,6 +165,34 @@ describe('Exceptions', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an API key acknowledging and resolving names the key', async () => {
+      const key = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'exception-resolver-key' });
+      expect(key.status).toBe(201);
+      const filed = await fileException({
+        projectId: projectInternalId,
+        kind: 'manual',
+        title: 'Resolved by a key',
+      });
+
+      const ack = await authenticatedTestClient(key.body.key)
+        .post(`/api/v1/exceptions/${filed.id}/acknowledge`)
+        .send({});
+      expect(ack.status).toBe(200);
+      const resolve = await authenticatedTestClient(key.body.key)
+        .post(`/api/v1/exceptions/${filed.id}/resolve`)
+        .send({});
+
+      expect(resolve.status).toBe(200);
+      expect(resolve.body).toMatchObject({
+        acknowledged_by_principal_type: 'api_key',
+        acknowledged_by_principal_id: key.body.id,
+        resolved_by_principal_type: 'api_key',
+        resolved_by_principal_id: key.body.id,
+      });
     });
 
     test('unauthenticated list is 401', async () => {

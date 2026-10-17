@@ -12,7 +12,11 @@ import {
 import { redactAgentToolSecrets } from 'src/lib/toolSecretRedaction';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
-import { parsePagination, requireAuth } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+} from './helpers';
 
 /**
  * Agent version history and staged rollout (the agents module doc — Versioning and Staged Rollout).
@@ -97,7 +101,7 @@ agentVersionsRouter.post(
         agentId: ctx.params.agent_id,
         version: parseVersionParam(ctx.params.version),
         label: typeof body.label === 'string' ? body.label : undefined,
-        createdByUserId: ctx.authUser.id,
+        createdBy: requestPrincipalFromCtx(ctx),
       })
     );
   }
@@ -153,7 +157,7 @@ agentVersionsRouter.post(
       await promoteAgentRelease({
         projectIds,
         agentId: ctx.params.agent_id,
-        createdByUserId: ctx.authUser.id,
+        createdBy: requestPrincipalFromCtx(ctx),
       })
     );
   }
@@ -177,7 +181,7 @@ agentVersionsRouter.post(
       await abortAgentRelease({
         projectIds,
         agentId: ctx.params.agent_id,
-        createdByUserId: ctx.authUser.id,
+        createdBy: requestPrincipalFromCtx(ctx),
       })
     );
   }

@@ -35,7 +35,7 @@ Every agent generation records a trace: the model's steps, tool invocations, inp
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent call tree; `null` when this trace is itself the root |
 | `error`           | object \| null | Structured error payload recorded when a generation in this trace failed; `null` otherwise |
 | `content_redacted_at` | string \| null | When the trace's content was purged; `null` while content is intact                |
-| `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)     |
+| `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system` |
 | `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth     |
 | `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 

@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Playbook } from './Playbook';
-import { User } from './User';
 
 /**
  * Immutable archive of a playbook's definition at a given version, which a
@@ -75,16 +74,11 @@ export class PlaybookVersion extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare createdByPrincipalType: string | null;
 
-  @BelongsTo(() => {
-    return User;
-  })
-  declare createdBy: User | null;
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare createdByPrincipalId: string | null;
 
   // Who wrote this version, by credential: a node's executor runs as it, so an
   // API key's boundary still applies to work it set up. Null when the

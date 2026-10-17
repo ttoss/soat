@@ -84,12 +84,12 @@ components:
             `api` and `formation` doors, which have no generation behind them.
           example: gen_V1StGXR8Z5jdHi6B
         principal_type:
-          type: string
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
           description: >-
-            Who claimed the fact, in the vocabulary a generation records its
-            starter with, plus `agent`. On both agent doors the principal is
-            the agent itself — the extractor runs under its identity.
-          example: agent
+            Who claimed the fact: `user` or `api_key` on the `api` and
+            `formation` doors, `agent` on both agent doors — the extractor runs
+            under the agent's identity.
         principal_id:
           type: string
           example: agent_V1StGXR8Z5jdHi6B

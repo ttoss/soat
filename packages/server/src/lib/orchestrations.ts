@@ -394,7 +394,7 @@ export const createOrchestration = async (
     version: 1,
     config: buildOrchestrationConfigSnapshot(mapped),
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
   });
 
   return mapped;
@@ -516,7 +516,7 @@ export const updateOrchestration = async (
     expectedVersion: args.expectedVersion,
     before: beforeConfig,
     label: args.versionLabel,
-    createdByUserId: args.createdByUserId,
+    createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
       await orch.update(updates, { transaction });
       return {

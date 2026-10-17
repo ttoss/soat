@@ -254,7 +254,6 @@ describe('recoverPlaybookExports', () => {
       toolId: 'tool_gone',
       status: 'running',
       leaseExpiresAt: new Date(Date.now() - 1000),
-      createdByUserId: null,
     });
 
     expect(await recoverPlaybookExports({ now: new Date() })).toBe(1);
@@ -282,7 +281,6 @@ describe('recoverPlaybookExports', () => {
       toolId: 'tool_live',
       status: 'running',
       leaseExpiresAt: new Date(Date.now() + 60_000),
-      createdByUserId: null,
     });
 
     expect(await recoverPlaybookExports({ now: new Date() })).toBe(0);

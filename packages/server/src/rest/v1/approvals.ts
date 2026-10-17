@@ -21,6 +21,7 @@ import {
   parseEnumListQuery,
   parsePagination,
   parseToolContextBody,
+  requestPrincipalFromCtx,
   requireAuth,
   resolveReadProjectIds,
 } from './helpers';
@@ -246,7 +247,7 @@ approvalsRouter.post(
     const { item } = await approveApproval({
       id: ctx.params.approval_id,
       editedArguments: body.arguments ?? null,
-      resolvedByUserId: ctx.authUser.id,
+      resolvedBy: requestPrincipalFromCtx(ctx),
       toolContext: parseToolContextBody(body.tool_context),
     });
 
@@ -275,7 +276,7 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
   const { item } = await rejectApproval({
     id: ctx.params.approval_id,
     reason: body.reason,
-    resolvedByUserId: ctx.authUser.id,
+    resolvedBy: requestPrincipalFromCtx(ctx),
   });
 
   ctx.body = item;
