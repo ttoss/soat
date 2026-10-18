@@ -281,6 +281,59 @@ const buildInitialResumePending = (args: {
   };
 };
 
+/**
+ * Pauses the initial turn on the client calls it proposed — or, when the gate
+ * released none, resumes it with their synthesized results. `null` when the
+ * turn proposed no client call, so the caller completes it. Shared by the
+ * streamed and unstreamed paths: a turn pauses the same way however it ran.
+ */
+export const settleInitialClientCalls = async (args: {
+  generationId: string;
+  traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+  allMessages: Array<{ role: string; content: unknown }>;
+  resolvedTools: Record<string, Tool>;
+  model: LanguageModel;
+  typedAgent: TypedAgent;
+  agentId: string;
+  result: SettleSaveArgs['result'];
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
+}): Promise<GenerationResult | null> => {
+  const partition = await partitionClientCalls({
+    steps: args.result.steps,
+    resolvedTools: args.resolvedTools,
+  });
+  if (!partition) return null;
+
+  return settlePartition({
+    pending: buildInitialResumePending({
+      generationId: args.generationId,
+      traceId: args.traceId,
+      parentTraceId: args.parentTraceId,
+      rootTraceId: args.rootTraceId,
+      allMessages: args.allMessages,
+      resolvedTools: args.resolvedTools,
+      model: args.model,
+      typedAgent: args.typedAgent,
+      agentId: args.agentId,
+      responseMessages: args.result.responseMessages,
+      initialSteps: args.result.steps,
+      toolContext: args.toolContext,
+    }),
+    partition,
+    save: {
+      typedAgent: args.typedAgent,
+      model: args.model,
+      allMessages: args.allMessages,
+      result: args.result,
+      remainingDepth: args.remainingDepth,
+    },
+    resumeCount: 0,
+  });
+};
+
 const resolveGenerationResult = async (args: {
   generationId: string;
   traceId: string;
@@ -295,39 +348,11 @@ const resolveGenerationResult = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): Promise<GenerationResult> => {
-  const partition = await partitionClientCalls({
-    steps: args.result.steps,
-    resolvedTools: args.resolvedTools,
+  const paused = await settleInitialClientCalls({
+    ...args,
+    result: args.result as SettleSaveArgs['result'],
   });
-
-  if (partition) {
-    const resultForPending = args.result as SettleSaveArgs['result'];
-    return settlePartition({
-      pending: buildInitialResumePending({
-        generationId: args.generationId,
-        traceId: args.traceId,
-        parentTraceId: args.parentTraceId,
-        rootTraceId: args.rootTraceId,
-        allMessages: args.allMessages,
-        resolvedTools: args.resolvedTools,
-        model: args.model,
-        typedAgent: args.typedAgent,
-        agentId: args.agentId,
-        responseMessages: resultForPending.responseMessages,
-        initialSteps: args.result.steps,
-        toolContext: args.toolContext,
-      }),
-      partition,
-      save: {
-        typedAgent: args.typedAgent,
-        model: args.model,
-        allMessages: args.allMessages,
-        result: resultForPending,
-        remainingDepth: args.remainingDepth,
-      },
-      resumeCount: 0,
-    });
-  }
+  if (paused) return paused;
 
   return buildCompletedGenerationResult({
     generationId: args.generationId,

@@ -60,6 +60,8 @@ const dispatchGeneration = (args: {
       agentId: args.agentId,
       parentTraceId: args.parentTraceId ?? null,
       rootTraceId: args.rootTraceId ?? null,
+      toolContext: args.ctx.toolContext ?? null,
+      remainingDepth: args.ctx.remainingDepth ?? null,
     });
   }
   return runNonStreamGeneration({
