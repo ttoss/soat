@@ -173,13 +173,16 @@ type SettleSaveArgs = {
   allMessages: Array<{ role: string; content: unknown }>;
   result: {
     steps: unknown[];
-    response: { messages: unknown[]; modelId?: string };
+    response: { modelId?: string };
+    responseMessages: unknown[];
     text: string;
     finishReason: string;
     usage?: LanguageModelUsage;
   };
   /** Steps the turn spent before `result` — empty on its first segment. */
   priorSteps?: unknown[];
+  /** Trailing `allMessages` the turn produced before `result`. */
+  priorTurnMessageCount?: number;
   remainingDepth?: number | null;
 };
 
@@ -219,6 +222,7 @@ const settlePartition = async (args: {
       allMessages: args.save.allMessages,
       result: args.save.result,
       priorSteps: args.save.priorSteps,
+      priorTurnMessageCount: args.save.priorTurnMessageCount,
       model: args.save.model,
       typedAgent: args.save.typedAgent,
       agentId: args.pending.agentId,
@@ -262,6 +266,7 @@ const buildInitialResumePending = (args: {
     pendingToolCalls: [],
     syntheticToolResults: [],
     messages: [...args.allMessages, ...args.responseMessages],
+    turnMessageCount: args.responseMessages.length,
     steps: serializeSteps(args.initialSteps),
     resolvedModel: args.model,
     aiProviderId: servedAiProviderId({
@@ -308,7 +313,7 @@ const resolveGenerationResult = async (args: {
         model: args.model,
         typedAgent: args.typedAgent,
         agentId: args.agentId,
-        responseMessages: resultForPending.response.messages,
+        responseMessages: resultForPending.responseMessages,
         initialSteps: args.result.steps,
         toolContext: args.toolContext,
       }),
@@ -334,6 +339,7 @@ const resolveGenerationResult = async (args: {
       finishReason: args.result.finishReason,
       text: args.result.text,
       response: args.result.response,
+      responseMessages: args.result.responseMessages,
       object: args.typedAgent.outputSchema ? args.result.output : undefined,
       usage: args.result.usage,
     },
@@ -467,7 +473,8 @@ export const runNonStreamGeneration = async (args: {
 const exhaustedTurnResult = (): AgentRunResult => {
   return {
     steps: [],
-    response: { messages: [], modelId: '' },
+    response: { modelId: '' },
+    responseMessages: [],
     text: '',
     finishReason: 'tool-calls',
   };
@@ -549,6 +556,8 @@ const completeContinuation = async (args: {
   generationId: string;
   pending: PendingGeneration;
   result: AgentRunResult;
+  /** Every message the turn produced, across all its segments. */
+  turnMessages: unknown[];
 }): Promise<GenerationResult> => {
   // A continuation ends on model text too, so a call written out as text is no
   // more an answer here than on the initial turn. Failing before
@@ -583,7 +592,7 @@ const completeContinuation = async (args: {
       model: args.result.response.modelId,
       content: args.result.text,
       finishReason: args.result.finishReason,
-      responseMessages: args.result.response.messages,
+      responseMessages: args.turnMessages,
       ...(args.pending.agentConfig.outputSchema
         ? { object: args.result.output }
         : {}),
@@ -602,6 +611,19 @@ const completeContinuation = async (args: {
   return completedResult;
 };
 
+// The messages the turn produced before this segment: what the pause froze,
+// plus the tool results injected to resume it.
+const priorTurnMessages = (args: {
+  pending: PendingGeneration;
+  allMessages: unknown[];
+}): unknown[] => {
+  const count =
+    (args.pending.turnMessageCount ?? 0) +
+    args.allMessages.length -
+    args.pending.messages.length;
+  return args.allMessages.slice(args.allMessages.length - count);
+};
+
 export const resolveToolOutputsResult = async (args: {
   generationId: string;
   agentId: string;
@@ -612,6 +634,7 @@ export const resolveToolOutputsResult = async (args: {
 }): Promise<GenerationResult> => {
   const resumeCount = args.resumeCount ?? 0;
   const priorSteps = args.pending.steps ?? [];
+  const priorMessages = priorTurnMessages(args);
   const partition = await partitionClientCalls({
     steps: args.result.steps,
     resolvedTools: args.pending.resolvedTools,
@@ -636,8 +659,10 @@ export const resolveToolOutputsResult = async (args: {
       ...args.pending,
       messages: [
         ...(args.allMessages as Array<{ role: string; content: unknown }>),
-        ...args.result.response.messages,
+        ...args.result.responseMessages,
       ],
+      turnMessageCount:
+        priorMessages.length + args.result.responseMessages.length,
       steps: [...priorSteps, ...serializeSteps(args.result.steps)],
     };
     return settlePartition({
@@ -652,6 +677,7 @@ export const resolveToolOutputsResult = async (args: {
         }>,
         result: args.result as SettleSaveArgs['result'],
         priorSteps,
+        priorTurnMessageCount: priorMessages.length,
         remainingDepth: null,
       },
       resumeCount,
@@ -662,6 +688,7 @@ export const resolveToolOutputsResult = async (args: {
     generationId: args.generationId,
     pending: args.pending,
     result: args.result,
+    turnMessages: [...priorMessages, ...args.result.responseMessages],
   });
 };
 

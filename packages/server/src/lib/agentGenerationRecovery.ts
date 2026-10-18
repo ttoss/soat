@@ -195,6 +195,7 @@ type PendingStateDb = {
   }>;
   syntheticToolResults?: ClientToolResult[];
   messages: Array<{ role: string; content: string }>;
+  turnMessageCount?: number;
   steps?: unknown[];
   parentTraceId: string | null;
   rootTraceId: string | null;
@@ -253,6 +254,7 @@ const buildPendingFromState = async (args: {
       messages: args.pendingState.messages,
       unavailableToolNames,
     }),
+    turnMessageCount: args.pendingState.turnMessageCount,
     steps: args.pendingState.steps ?? [],
     resolvedModel: resolution.model,
     aiProviderId: args.typedAgent.aiProvider?.publicId ?? null,

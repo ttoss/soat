@@ -25,6 +25,11 @@ describe('Agent client tools', () => {
     args: {},
   };
   let toolCount = 0;
+  // When set, the model makes the n-th call once n tool results are in the
+  // conversation, and answers after the last.
+  let plan: Array<{ name: string; args: Record<string, unknown> }> | null =
+    null;
+  let lastRequestMessages: Array<Record<string, unknown>> = [];
 
   const listen = async (server: http.Server): Promise<string> => {
     await new Promise<void>((resolve) => {
@@ -43,9 +48,11 @@ describe('Agent client tools', () => {
   };
 
   const completionFor = (body: { messages?: Array<{ role?: string }> }) => {
-    const answered = (body.messages ?? []).some((message) => {
+    const toolResults = (body.messages ?? []).filter((message) => {
       return message.role === 'tool';
-    });
+    }).length;
+    const nextCall = plan ? plan[toolResults] : firstCall;
+    const answered = plan ? nextCall === undefined : toolResults > 0;
     const message = answered
       ? { role: 'assistant', content: 'all done' }
       : {
@@ -56,8 +63,8 @@ describe('Agent client tools', () => {
               id: `call_client_${modelRequestCount}`,
               type: 'function',
               function: {
-                name: firstCall.name,
-                arguments: JSON.stringify(firstCall.args),
+                name: nextCall.name,
+                arguments: JSON.stringify(nextCall.args),
               },
             },
           ],
@@ -129,8 +136,10 @@ describe('Agent client tools', () => {
       });
       req.on('end', () => {
         modelRequestCount += 1;
+        const body = JSON.parse(raw);
+        lastRequestMessages = body.messages ?? [];
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(completionFor(JSON.parse(raw))));
+        res.end(JSON.stringify(completionFor(body)));
       });
     });
     const modelBaseUrl = await listen(modelServer);
@@ -254,6 +263,128 @@ describe('Agent client tools', () => {
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('completed');
         expect(res.body.output).toMatchObject({ content: 'all done' });
+      });
+    });
+
+    describe('a turn of several steps', () => {
+      let agentId: string;
+
+      const lookup = { name: 'lookup_order', args: {} };
+      const confirm = { name: 'confirm_with_user', args: {} };
+
+      const toolCallNames = (messages: unknown[]): string[] => {
+        return messages.flatMap((message) => {
+          const content = (message as { content?: unknown }).content;
+          return Array.isArray(content)
+            ? content
+                .filter((part) => {
+                  return part.type === 'tool-call';
+                })
+                .map((part) => {
+                  return part.toolName as string;
+                })
+            : [];
+        });
+      };
+
+      const requestedToolNames = (): string[] => {
+        return lastRequestMessages.flatMap((message) => {
+          const calls = (message.tool_calls ?? []) as Array<{
+            function: { name: string };
+          }>;
+          return calls.map((call) => {
+            return call.function.name;
+          });
+        });
+      };
+
+      const submit = async (generation: {
+        id: string;
+        required_action?: { tool_calls: Array<{ id: string }> };
+      }) => {
+        const [call] = generation.required_action?.tool_calls ?? [];
+        const res = await authenticatedTestClient(adminToken)
+          .post(
+            `/api/v1/agents/${agentId}/generate/${generation.id}/tool-outputs`
+          )
+          .send({ tool_outputs: [{ tool_call_id: call.id, output: 'yes' }] });
+        expect(res.status).toBe(200);
+        return res.body;
+      };
+
+      beforeAll(async () => {
+        const serverToolId = await createTool({
+          name: 'lookup_order',
+          type: 'http',
+          description: 'Look an order up',
+          parameters: { type: 'object', properties: {} },
+          execute: { url: `${toolBaseUrl}/lookup`, method: 'POST' },
+        });
+        const clientToolId = await createTool({
+          name: 'confirm_with_user',
+          type: 'client',
+          description: 'Ask the user to confirm',
+          parameters: { type: 'object', properties: {} },
+        });
+        agentId = await createAgent([serverToolId, clientToolId]);
+      });
+
+      afterEach(() => {
+        plan = null;
+      });
+
+      test('response_messages carry every step of a completed turn', async () => {
+        plan = [lookup];
+
+        const result = await generate(agentId);
+
+        expect(result.status).toBe('completed');
+        const output = result.output as unknown as {
+          response_messages: unknown[];
+        };
+        expect(toolCallNames(output.response_messages)).toEqual([
+          'lookup_order',
+        ]);
+      });
+
+      test('a resumed turn keeps the steps before its pause', async () => {
+        plan = [lookup, confirm];
+        const paused = await generate(agentId);
+        expect(paused.status).toBe('requires_action');
+
+        const resumed = await submit(paused);
+
+        expect(resumed.status).toBe('completed');
+        expect(requestedToolNames()).toEqual([
+          'lookup_order',
+          'confirm_with_user',
+        ]);
+        expect(toolCallNames(resumed.output.response_messages)).toEqual([
+          'lookup_order',
+          'confirm_with_user',
+        ]);
+      });
+
+      test('a turn paused twice keeps the steps between its pauses', async () => {
+        plan = [confirm, lookup, confirm];
+        const paused = await generate(agentId);
+        expect(paused.status).toBe('requires_action');
+        const pausedAgain = await submit(paused);
+        expect(pausedAgain.status).toBe('requires_action');
+
+        const resumed = await submit(pausedAgain);
+
+        expect(resumed.status).toBe('completed');
+        expect(requestedToolNames()).toEqual([
+          'confirm_with_user',
+          'lookup_order',
+          'confirm_with_user',
+        ]);
+        expect(toolCallNames(resumed.output.response_messages)).toEqual([
+          'confirm_with_user',
+          'lookup_order',
+          'confirm_with_user',
+        ]);
       });
     });
   });

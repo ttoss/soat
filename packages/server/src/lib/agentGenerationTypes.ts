@@ -187,6 +187,11 @@ export type PendingGeneration = {
   // the provider sees a tool call with no result.
   syntheticToolResults?: ClientToolResult[];
   messages: Array<unknown>;
+  /**
+   * How many trailing `messages` the turn itself produced before the pause.
+   * Counted from the end because recovery may insert a note at the front.
+   */
+  turnMessageCount?: number;
   steps: unknown[];
   resolvedModel: LanguageModel;
   /** Provider serving the frozen model, so the continuation reports it too. */
@@ -235,7 +240,12 @@ export type GenerationResult = {
  */
 export type AgentRunResult = {
   steps: unknown[];
-  response: { messages: unknown[]; modelId: string };
+  response: { modelId: string };
+  /**
+   * The whole turn's messages, every step's. `response.messages` holds only the
+   * final step's, so it is left out of this type.
+   */
+  responseMessages: unknown[];
   text: string;
   finishReason: string;
   output?: unknown;
