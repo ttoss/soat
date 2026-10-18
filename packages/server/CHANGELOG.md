@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.86.3](https://github.com/ttoss/soat/compare/v0.86.2...v0.86.3) (2026-10-18)
+
+### Bug Fixes
+
+* **agents:** a streamed turn that calls a client tool pauses with requires_action ([#1666](https://github.com/ttoss/soat/issues/1666)) ([61890a6](https://github.com/ttoss/soat/commit/61890a6bc26ed96ad25cf74a42eb70b7b6ac8ba4)), closes [#1665](https://github.com/ttoss/soat/issues/1665)
+
 ## [0.86.2](https://github.com/ttoss/soat/compare/v0.86.1...v0.86.2) (2026-10-18)
 
 ### Bug Fixes
