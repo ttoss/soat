@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import * as generationsModule from 'src/lib/generations';
+import * as tracesModule from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -389,6 +390,21 @@ describe('Streamed agent generations', () => {
 
       expect(res.text).toContain('It is sunny in Lisbon.');
       expect(res.text).toContain('[DONE]');
+    });
+
+    test('a trace write that fails after the stream does not break it', async () => {
+      // Drives the swallow on the fire-and-forget trace write.
+      const agentId = await createAgent();
+      jest
+        .spyOn(tracesModule, 'saveTrace')
+        .mockRejectedValueOnce(new Error('trace write failed'));
+
+      const res = await stream(agentId);
+
+      expect(res.text).toContain('It is sunny in Lisbon.');
+      expect(res.text).toContain('[DONE]');
+      const generation = await settledGenerationOf(agentId);
+      expect(generation.status).toBe('completed');
     });
   });
 
