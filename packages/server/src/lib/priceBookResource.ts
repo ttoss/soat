@@ -15,9 +15,8 @@ type PriceableType = keyof typeof RESOURCE_METER_TYPES;
 /** The SKU vendor a resource row is filed under; `model` carries the SRN. */
 export const RESOURCE_PROVIDER = 'soat';
 
-// No execution of their own to meter: a pipeline is metered per step, and a
-// client tool runs in the caller.
-const UNPRICEABLE_TOOL_TYPES = new Set(['pipeline', 'client']);
+// No execution of its own to meter: a client tool runs in the caller.
+const UNPRICEABLE_TOOL_TYPES = new Set(['client']);
 
 export type PriceRowKey = {
   meterType: string;
@@ -63,7 +62,7 @@ const assertPriceableTool = async (args: {
   }
   if (UNPRICEABLE_TOOL_TYPES.has(tool.type)) {
     throw invalid(
-      `A ${tool.type} tool has no execution of its own to price; price the tools it runs.`
+      `A ${tool.type} tool runs in the caller and has no execution of its own to price.`
     );
   }
 };

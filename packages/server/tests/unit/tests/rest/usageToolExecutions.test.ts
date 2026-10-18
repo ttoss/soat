@@ -233,7 +233,7 @@ describe('tool_execution usage', () => {
       expect(events[0].outcome).toBe('ok');
     });
 
-    test('a pipeline records one event per step and none of its own', async () => {
+    test('a pipeline records one event of its own beside one per step', async () => {
       const stepToolId = await createHttpTool();
       const pipelineId = await createTool({
         type: 'pipeline',
@@ -249,7 +249,42 @@ describe('tool_execution usage', () => {
       expect(res.status).toBe(200);
 
       expect(await toolEvents(stepToolId)).toHaveLength(2);
-      expect(await toolEvents(pipelineId)).toEqual([]);
+      const own = await toolEvents(pipelineId);
+      expect(own).toHaveLength(1);
+      expect(own[0].outcome).toBe('ok');
+      expect(own[0].components).toEqual([
+        expect.objectContaining({ component: 'tool_call', quantity: 1 }),
+      ]);
+    });
+
+    // A step-less pipeline is a pure computation: its own event is the only
+    // record that it ran.
+    test('a step-less pipeline called directly records one event', async () => {
+      const pipelineId = await createTool({
+        type: 'pipeline',
+        pipeline: { steps: [], output: { total: { '+': [1, 2] } } },
+      });
+
+      const res = await call(pipelineId);
+      expect(res.status).toBe(200);
+
+      const events = await toolEvents(pipelineId);
+      expect(events).toHaveLength(1);
+      expect(events[0].outcome).toBe('ok');
+    });
+
+    test('a pipeline whose step fails records its own call as error', async () => {
+      const stepToolId = await createHttpTool('/fail');
+      const pipelineId = await createTool({
+        type: 'pipeline',
+        pipeline: { steps: [{ id: 'only', tool_id: stepToolId, input: {} }] },
+      });
+
+      await call(pipelineId);
+
+      const events = await toolEvents(pipelineId);
+      expect(events).toHaveLength(1);
+      expect(events[0].outcome).toBe('error');
     });
 
     test('a client tool is never recorded', async () => {
@@ -331,6 +366,42 @@ describe('tool_execution usage', () => {
           tool_id: toolId,
           orchestration_run_id: run.body.id,
           node_id: 'call',
+          outcome: 'ok',
+        }),
+      ]);
+    });
+  });
+
+  describe('a step-less pipeline as an orchestration tool node', () => {
+    test('records one event attributed to the run', async () => {
+      const pipelineId = await createTool({
+        type: 'pipeline',
+        pipeline: { steps: [], output: { total: { '+': [1, 2] } } },
+      });
+      const orchestration = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: `pipeline-${Math.random().toString(36).slice(2, 10)}`,
+          nodes: [{ id: 'compute', type: 'tool', tool_id: pipelineId }],
+          edges: [],
+        });
+      expect(orchestration.status).toBe(201);
+
+      const run = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestration.body.id,
+          input: {},
+        });
+      expect(run.body.status).toBe('completed');
+
+      expect(await toolEvents(pipelineId)).toEqual([
+        expect.objectContaining({
+          tool_id: pipelineId,
+          orchestration_run_id: run.body.id,
+          node_id: 'compute',
           outcome: 'ok',
         }),
       ]);

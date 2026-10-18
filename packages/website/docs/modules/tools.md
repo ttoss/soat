@@ -485,7 +485,7 @@ A tool can be offered to another project with a [share](./shares.md). The grante
 
 ### Pricing a tool
 
-A project prices a tool it owns with [resource price rows](./usage.md#resource-prices): each adds a component to the tool's `tool_execution` events, its quantity read off the call's `input`, `response` (after `output_mapping`), `outcome` or `duration_ms`. A call through a share is priced from the owner's rows. A `pipeline` or `client` tool has no execution of its own to price.
+A project prices a tool it owns with [resource price rows](./usage.md#resource-prices): each adds a component to the tool's `tool_execution` events, its quantity read off the call's `input`, `response` (after `output_mapping`), `outcome` or `duration_ms`. A call through a share is priced from the owner's rows. A `client` tool has no execution of its own to price; a `pipeline` is priced on its own call, beside its steps.
 
 ### Deleting a tool
 
