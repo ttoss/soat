@@ -2,6 +2,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Embeddings', () => {
   let adminToken: string;
+  let projectId: string;
 
   beforeAll(async () => {
     await testClient
@@ -9,6 +10,11 @@ describe('Embeddings', () => {
       .send({ username: 'admin', password: 'supersecret' });
 
     adminToken = await loginAs('admin', 'supersecret');
+    projectId = (
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Embeddings Project' })
+    ).body.id;
   });
 
   describe('POST /api/v1/embeddings', () => {
@@ -41,7 +47,7 @@ describe('Embeddings', () => {
     test('single input returns embedding vector', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/embeddings')
-        .send({ input: 'The quick brown fox.' });
+        .send({ project_id: projectId, input: 'The quick brown fox.' });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.embedding)).toBe(true);
@@ -53,6 +59,7 @@ describe('Embeddings', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/embeddings')
         .send({
+          project_id: projectId,
           inputs: [
             'The quick brown fox.',
             'Pack my box with five dozen liquor jugs.',
@@ -74,7 +81,7 @@ describe('Embeddings', () => {
       try {
         const response = await authenticatedTestClient(adminToken)
           .post('/api/v1/embeddings')
-          .send({ input: 'hello world' });
+          .send({ project_id: projectId, input: 'hello world' });
 
         expect(response.status).toBe(503);
         expect(response.body.error.code).toBe('EMBEDDING_NOT_CONFIGURED');
@@ -87,6 +94,7 @@ describe('Embeddings', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/embeddings')
         .send({
+          project_id: projectId,
           input: 'Hello world.',
           inputs: ['Foo', 'Bar'],
         });

@@ -4,7 +4,11 @@ import { DomainError } from 'src/errors';
 import { createEmbeddings } from 'src/lib/embeddings';
 import { MAX_EMBEDDINGS_INPUTS } from 'src/lib/requestBounds';
 
-import { requireAuth, resolveWriteProjectId } from './helpers';
+import {
+  requireAuth,
+  resolveWriteProjectId,
+  resolveWriteProjectPublicId,
+} from './helpers';
 
 const embeddingsRouter = new Router<Context>();
 
@@ -46,16 +50,14 @@ embeddingsRouter.post('/embeddings', async (ctx: Context) => {
 
   const { hasSingle, hasBatch } = assertEmbeddingsRequest(body);
 
-  // Billing attribution only — this route's authorization is unchanged. An
-  // explicit `project_id` is authorized like any project-scoped write, because
-  // spend must never be attributed to a project the caller cannot write to; the
-  // project a scoped credential is *bound* to needs no such check, since the
-  // credential can act nowhere else. Neither, and the call is not metered.
-  const projectPublicId =
-    ctx.authUser.apiKeyProjectPublicId ??
-    ctx.authUser.oauthProjectPublicId ??
-    null;
-
+  // Every embedding is billed to a project, so a call names one or carries a
+  // credential bound to one. An explicit `project_id` is authorized like any
+  // project-scoped write; the bound project needs no such check, since the
+  // credential can act nowhere else.
+  const billingProjectPublicId = resolveWriteProjectPublicId({
+    ctx,
+    projectPublicId: body.project_id,
+  });
   if (body.project_id) {
     await resolveWriteProjectId({
       ctx,
@@ -64,8 +66,6 @@ embeddingsRouter.post('/embeddings', async (ctx: Context) => {
       resourceType: 'embedding',
     });
   }
-
-  const billingProjectPublicId = body.project_id ?? projectPublicId;
 
   const response: { embedding?: number[]; embeddings?: number[][] } = {};
 

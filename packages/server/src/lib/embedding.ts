@@ -78,10 +78,8 @@ const isEmbeddingProvider = (value: string): value is EmbeddingProvider => {
 };
 
 /**
- * Who an embedding call is billed to. `null` where the call belongs to no
- * single project — an unscoped `POST /embeddings`, or a knowledge search whose
- * scope spans several projects — in which case nothing is metered because a
- * usage event has no project to attribute.
+ * Who an embedding call is billed to. `null` only for an admin's knowledge
+ * search naming no project, which spans every project and is not metered.
  *
  * `generationId` is the public id of the generation the embedding is made for —
  * the retrieval ahead of an agent's turn — and `null` for work no generation
@@ -116,6 +114,50 @@ export const projectEmbeddingBilling = (args: {
 export type EmbeddingSubject =
   { documentId: number } | { memoryStoreId: number } | null;
 
+/**
+ * Embeds `texts` one provider call at a time, as `embedMany` would split them,
+ * and settles every call before answering: the provider bills each call that
+ * completed, so a batch whose later call fails still reports the tokens the
+ * earlier ones spent.
+ */
+const embedInProviderCalls = async (args: {
+  model: EmbeddingModel;
+  texts: string[];
+}): Promise<{
+  embeddings: number[][];
+  tokens: number;
+  failure: PromiseRejectedResult | undefined;
+}> => {
+  const perCall =
+    typeof args.model === 'string'
+      ? undefined
+      : await args.model.maxEmbeddingsPerCall;
+  const size =
+    perCall && Number.isFinite(perCall) ? perCall : args.texts.length || 1;
+  const calls: string[][] = [];
+  for (let start = 0; start < args.texts.length; start += size) {
+    calls.push(args.texts.slice(start, start + size));
+  }
+  const settled = await Promise.allSettled(
+    calls.map((values) => {
+      return embedMany({ model: args.model, values });
+    })
+  );
+  let tokens = 0;
+  const embeddings: number[][] = [];
+  for (const call of settled) {
+    if (call.status !== 'fulfilled') continue;
+    tokens += Number.isFinite(call.value.usage.tokens)
+      ? call.value.usage.tokens
+      : 0;
+    embeddings.push(...call.value.embeddings);
+  }
+  const failure = settled.find((call): call is PromiseRejectedResult => {
+    return call.status === 'rejected';
+  });
+  return { embeddings, tokens, failure };
+};
+
 export const getEmbeddings = async (args: {
   texts: string[];
   billing: EmbeddingBilling;
@@ -149,26 +191,27 @@ export const getEmbeddings = async (args: {
     args.billing
   );
 
-  const { embeddings, usage } = await embedMany({
+  const batch = await embedInProviderCalls({
     model: buildEmbeddingModel({ provider, model }),
-    values: args.texts,
+    texts: args.texts,
   });
 
   // Awaited, not fire-and-forget: most callers swallow an embedding failure and
   // continue, so an unawaited write could still be in flight when the request
   // that owns it has already answered.
-  if (args.billing !== null) {
+  if (args.billing !== null && batch.tokens > 0) {
     await recordEmbeddingUsage({
       projectId: args.billing.projectId,
       generationId: args.billing.generationId,
       subject: args.subject,
       provider,
       model,
-      tokens: usage.tokens,
+      tokens: batch.tokens,
     });
   }
 
-  return embeddings;
+  if (batch.failure) throw batch.failure.reason;
+  return batch.embeddings;
 };
 
 export const getEmbedding = async (args: {

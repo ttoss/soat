@@ -32,7 +32,7 @@ paths:
         `project_id` names the project the call's token usage is metered against, so
         embedding spend reaches the usage rollup and the project's `cost_usd` / `tokens`
         quotas. A project-scoped credential supplies its own project; a call that names
-        none and is bound to none is served but not metered.
+        none and is bound to none is `400 VALIDATION_FAILED`.
       operationId: createEmbeddings
       requestBody:
         required: true
@@ -44,9 +44,9 @@ paths:
                 project_id:
                   type: string
                   description: >-
-                    Project the call's usage is billed to. Optional; a project-scoped
-                    credential supplies its own. Requires write access to the named
-                    project.
+                    Project the call's usage is billed to. Required unless the
+                    credential is bound to a project, which then supplies its own.
+                    Requires write access to the named project.
                   example: proj_V1StGXR8Z5jdHi6B
                 input:
                   type: string
@@ -73,7 +73,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/EmbeddingsResponse'
         '400':
-          description: Invalid request body
+          description: Invalid request body, or no project to bill (no `project_id` and a credential bound to none)
           content:
             application/json:
               schema:

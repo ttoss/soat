@@ -28,7 +28,7 @@ The model is configured server-side (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`; ba
 | `EMBEDDING_API_KEY`   | No       | API key for the backend: the OpenAI key (`openai`), or a Bedrock `ABSK…` bearer token (`bedrock`). For `openai`, falls back to `OPENAI_API_KEY`. |
 | `EMBEDDING_BASE_URL`  | No       | Override the base URL for any OpenAI-compatible endpoint (`openai` only).                                 |
 | `EMBEDDING_REGION`    | No       | AWS region for Bedrock (`bedrock` only). Falls back to `AWS_REGION`, then `us-east-1`.                    |
-| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | No | USD per **million** input tokens, the unit vendors publish (`$0.02 / 1M` → `0.02`). Unset meters embeddings at `0`. See [Pricing embeddings](#pricing-embeddings). |
+| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | No | USD per **million** input tokens, the unit vendors publish (`$0.02 / 1M` → `0.02`). Unset meters embeddings unpriced (`0` on `ollama`). See [Pricing embeddings](#pricing-embeddings). |
 
 ### Provider selection
 
@@ -51,7 +51,7 @@ Stateless; nothing is stored. The response shape depends on the inputs:
 
 Both fields can be present if the request includes both `input` and `inputs`.
 
-Optional `project_id` names the project billed; see [Metering](#metering).
+`project_id` names the project billed, required unless the credential is bound to a project; see [Metering](#metering).
 
 ## Key Concepts
 
@@ -67,15 +67,17 @@ All embeddings from one deployment share a vector space, so cosine similarity be
 
 Every embedding call is metered as an `llm_tokens` usage event with `source` `embedding`, whatever the origin: this endpoint, ingestion, a memory write, an `embedding_similarity` scorer, or a knowledge-search query. Spend appears in [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and counts towards `cost_usd` and `tokens` [quotas](./quotas.md).
 
+A batch the provider serves in several calls meters every call that completed, even when a later one fails the batch.
+
 A usage event belongs to a project, so an embedding call needs one:
 
 | Call | Billed to |
 | --- | --- |
 | [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) with `project_id` | that project — the caller must be able to write to it |
 | The same call from a project-scoped credential | the credential's project |
-| The same call with neither | nothing — the call is served but not metered |
+| The same call with neither | refused, `400 VALIDATION_FAILED` |
 | Ingestion, memory, evaluation | the document's, memory's or run's project |
-| A knowledge search | the project searched, when the search is scoped to exactly one |
+| A knowledge search | the project searched; across several, the first of them; an admin's search naming none is not metered |
 
 The query an agent's [`knowledge_config`](./agents.md#knowledge-config) embeds before its turn is also attributed to that generation: the event carries the generation's `generation_id`, `agent_id`, `trace_id`, `session_id` and `actor_id`, so the spend reads per generation and counts towards `agent` and `actor` [quotas](./quotas.md). If the generation's record is never written, the event is billed to the project only.
 
@@ -93,7 +95,7 @@ EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_INPUT_1M_TOKEN_PRICE_USD=0.02
 ```
 
-**Unset means zero.** With no rate, every embedding is metered at `cost_usd` `0` (not `null`), so a `cost_usd` [quota](./quotas.md) window always evaluates. Right for a local model; on a vendor-billed provider it reports spend as free, so the server warns at startup naming the variable. Cost is frozen per event; a rate set later prices the *next* embedding.
+**Unset means unpriced.** With no rate, every embedding is metered with its tokens and `cost_usd` `null`, as an unpriced model is; the server warns at startup naming the variable. On `ollama`, a local model billed nothing per token, unset means `0`. Cost is frozen per event; a rate set later prices the *next* embedding.
 
 **The [price book](./usage.md#pricing) does not reach embeddings.** A row naming the embedding model is ignored:
 
@@ -167,7 +169,8 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-embeddings --inputs '["First sentence.", "Second sentence.", "Third sentence."]'
+soat create-embeddings --project-id "proj_V1StGXR8Z5jdHi6B" \
+  --inputs '["First sentence.", "Second sentence.", "Third sentence."]'
 ```
 
 </TabItem>
@@ -177,6 +180,7 @@ soat create-embeddings --inputs '["First sentence.", "Second sentence.", "Third 
 const { data } = await Embeddings.createEmbeddings({
   client,
   body: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
     inputs: ['First sentence.', 'Second sentence.', 'Third sentence.'],
   },
 });
@@ -191,7 +195,7 @@ console.log(data.embeddings.length); // 3
 curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"inputs":["First sentence.","Second sentence.","Third sentence."]}' \
+  -d '{"project_id":"proj_V1StGXR8Z5jdHi6B","inputs":["First sentence.","Second sentence.","Third sentence."]}' \
   | jq '.embeddings | length'
 ```
 

@@ -148,18 +148,6 @@ describe('Usage — embedding metering', () => {
     expect(rows[0].cost_usd).toBeCloseTo(4 * UNIT_PRICE, 12);
   });
 
-  test('a call naming no project is not metered', async () => {
-    const before = await readEmbeddingMeters();
-
-    const res = await authenticatedTestClient(userToken)
-      .post('/api/v1/embeddings')
-      .send({ input: 'unattributed words here' });
-    expect(res.status).toBe(200);
-
-    const after = await readEmbeddingMeters();
-    expect(after).toHaveLength(before.length);
-  });
-
   test('an explicit project the caller cannot write to is refused, not billed', async () => {
     const before = await readEmbeddingMeters();
 
@@ -170,14 +158,6 @@ describe('Usage — embedding metering', () => {
 
     const after = await readEmbeddingMeters();
     expect(after).toHaveLength(before.length);
-  });
-
-  test("the same caller without a project_id is still served — the route's authorization is unchanged", async () => {
-    const res = await authenticatedTestClient(noPermToken)
-      .post('/api/v1/embeddings')
-      .send({ input: 'still allowed' });
-    expect(res.status).toBe(200);
-    expect(res.body.embedding).toHaveLength(1024);
   });
 
   test('unauthenticated request returns 401', async () => {
@@ -362,14 +342,15 @@ describe('Usage — embedding metering', () => {
       expect(rows[0].cost_usd).toBeCloseTo(2 * 0.000003, 12);
     });
 
-    test('an unset rate meters at zero rather than null', async () => {
+    test('an unset rate meters the call unpriced', async () => {
       delete process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD;
       const before = await readEmbeddingMeters();
 
       await embed('no rate set');
 
       const rows = await waitForMeters(before.length + 1);
-      expect(rows[0].cost_usd).toBe(0);
+      expect(quantityOf(rows[0], 'input_tokens')).toBe(3);
+      expect(rows[0].cost_usd).toBeNull();
     });
 
     // A rate meant to be set fails loudly rather than metering at zero — and a
