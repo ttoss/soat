@@ -90,6 +90,8 @@ const fireStreamEndSideEffects = (args: {
   finalText: string;
   finishReason: string;
   usage?: LanguageModelUsage;
+  /** The model the provider served, which is what a price matches. */
+  servedModel?: string;
   /**
    * Whether `onError` already captured a provider failure. A stream that dies
    * *after* a step completed still reaches `onEnd`, and the terminal status
@@ -147,7 +149,7 @@ const fireStreamEndSideEffects = (args: {
   // recordGenerationUsage never rejects (it catches internally).
   const usageWrite = recordGenerationUsage({
     generationId: args.generationId,
-    model: args.typedAgent.model ?? '',
+    model: args.servedModel || (args.typedAgent.model ?? ''),
     usage: args.usage,
     aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: 0,
@@ -310,6 +312,7 @@ const fireStreamEnd = (args: {
     finalText: end.text,
     finishReason: end.finishReason,
     usage: end.usage,
+    servedModel: end.response.modelId,
     failed: args.failed,
   });
 };
