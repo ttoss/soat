@@ -25,6 +25,8 @@ describe('Streamed agent generations', () => {
   let modelServer: http.Server;
   let requestBodies: Array<Record<string, unknown>> = [];
   let streamedText = 'It is sunny in Lisbon.';
+  // When set, the streamed step ends on this tool call instead of `stop`.
+  let streamedToolCall: { name: string; args: unknown } | undefined;
   let agentCount = 0;
 
   const WEATHER_TOOL = 'lookup_weather';
@@ -48,9 +50,56 @@ describe('Streamed agent generations', () => {
     res.write(
       `data: ${JSON.stringify(chunk({ role: 'assistant', content: streamedText }, null))}\n\n`
     );
-    res.write(`data: ${JSON.stringify(chunk({}, 'stop'))}\n\n`);
+    const toolCall = streamedToolCall;
+    streamedToolCall = undefined;
+    if (toolCall) {
+      res.write(
+        `data: ${JSON.stringify(
+          chunk(
+            {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call_stream_1',
+                  type: 'function',
+                  function: {
+                    name: toolCall.name,
+                    arguments: JSON.stringify(toolCall.args),
+                  },
+                },
+              ],
+            },
+            null
+          )
+        )}\n\n`
+      );
+    }
+    res.write(
+      `data: ${JSON.stringify(chunk({}, toolCall ? 'tool_calls' : 'stop'))}\n\n`
+    );
     res.write('data: [DONE]\n\n');
     res.end();
+  };
+
+  // A resume after `tool-outputs` runs unstreamed.
+  const writeCompletion = (res: http.ServerResponse): void => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        id: 'chatcmpl-resume',
+        object: 'chat.completion',
+        created: 0,
+        model: 'stub-model',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: 'The manager agreed.' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      })
+    );
   };
 
   const createTool = async (name: string): Promise<string> => {
@@ -173,8 +222,13 @@ describe('Streamed agent generations', () => {
         raw += chunk;
       });
       req.on('end', () => {
-        requestBodies.push(JSON.parse(raw) as Record<string, unknown>);
-        writeStream(res);
+        const body = JSON.parse(raw) as Record<string, unknown>;
+        requestBodies.push(body);
+        if (body.stream) {
+          writeStream(res);
+        } else {
+          writeCompletion(res);
+        }
       });
     });
     await new Promise<void>((resolve) => {
@@ -210,6 +264,7 @@ describe('Streamed agent generations', () => {
 
   afterEach(() => {
     streamedText = 'It is sunny in Lisbon.';
+    streamedToolCall = undefined;
     jest.restoreAllMocks();
   });
 
@@ -334,6 +389,123 @@ describe('Streamed agent generations', () => {
 
       expect(res.text).toContain('It is sunny in Lisbon.');
       expect(res.text).toContain('[DONE]');
+    });
+  });
+
+  describe('POST /api/v1/agents/{agent_id}/generate (stream: true) — client tool', () => {
+    const CLIENT_TOOL = 'ask_manager';
+    let clientAgentId: string;
+
+    /** Every `data:` payload, `[DONE]` excluded. */
+    const framesOf = (text: string): Array<Record<string, unknown>> => {
+      return text
+        .split('\n')
+        .filter((line) => {
+          return line.startsWith('data: ') && line !== 'data: [DONE]';
+        })
+        .map((line) => {
+          return JSON.parse(line.slice('data: '.length)) as Record<
+            string,
+            unknown
+          >;
+        });
+    };
+
+    beforeAll(async () => {
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: CLIENT_TOOL,
+          type: 'client',
+          description: 'Asks the manager',
+          parameters: {
+            type: 'object',
+            properties: { question: { type: 'string' } },
+          },
+        });
+      expect(toolRes.status).toBe(201);
+      clientAgentId = await createAgent({
+        tool_bindings: [
+          { tool_id: weatherToolId },
+          { tool_id: toolRes.body.id },
+        ],
+      });
+    });
+
+    const streamPausedTurn = async () => {
+      streamedText = 'Let me check with the manager.';
+      streamedToolCall = { name: CLIENT_TOOL, args: { question: 'refund?' } };
+      return stream(clientAgentId);
+    };
+
+    test('the stream ends on a requires_action frame naming the pending call', async () => {
+      const res = await streamPausedTurn();
+
+      expect(res.text).toContain('Let me check with the manager.');
+      expect(res.text).toContain('[DONE]');
+      const last = framesOf(res.text).at(-1) as {
+        id: string;
+        status: string;
+        trace_id: string;
+        required_action: {
+          type: string;
+          tool_calls: Array<{ id: string; tool_name: string; args: unknown }>;
+        };
+      };
+      expect(last.id).toMatch(/^gen_/);
+      expect(last.trace_id).toBeDefined();
+      expect(last.status).toBe('requires_action');
+      expect(last.required_action).toEqual({
+        type: 'submit_tool_outputs',
+        tool_calls: [
+          {
+            id: 'call_stream_1',
+            tool_name: CLIENT_TOOL,
+            args: { question: 'refund?' },
+          },
+        ],
+      });
+
+      const record = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${last.id}`
+      );
+      expect(record.body.status).toBe('requires_action');
+    });
+
+    test('tool-outputs resumes the paused streamed turn', async () => {
+      const res = await streamPausedTurn();
+      const last = framesOf(res.text).at(-1) as { id: string };
+
+      const resumed = await authenticatedTestClient(adminToken)
+        .post(
+          `/api/v1/agents/${clientAgentId}/generate/${last.id}/tool-outputs`
+        )
+        .send({
+          tool_outputs: [{ tool_call_id: 'call_stream_1', output: 'yes' }],
+        });
+
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.id).toBe(last.id);
+      expect(resumed.body.status).toBe('completed');
+      expect(resumed.body.output.content).toBe('The manager agreed.');
+    });
+
+    test('a pause that cannot be recorded fails the stream instead of claiming [DONE]', async () => {
+      // Drives the catch around the pause write; everything else runs on the
+      // real database.
+      jest
+        .spyOn(generationsModule, 'updateGenerationRecord')
+        .mockRejectedValueOnce(new Error('pause write failed'));
+
+      const res = await streamPausedTurn();
+
+      expect(res.text).not.toContain('[DONE]');
+      expect(framesOf(res.text).at(-1)).toEqual({
+        error: 'pause write failed',
+      });
+      const generation = await settledGenerationOf(clientAgentId);
+      expect(generation.status).toBe('failed');
     });
   });
 });

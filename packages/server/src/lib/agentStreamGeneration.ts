@@ -12,8 +12,9 @@ import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
 import { streamText } from 'ai';
 import createDebug from 'debug';
 
-import type { TypedAgent } from './agentGenerationTypes';
+import type { GenerationResult, TypedAgent } from './agentGenerationTypes';
 import { modelCallSettings } from './agentModelSettings';
+import { settleInitialClientCalls } from './agentNonStreamGeneration';
 import {
   buildPrepareStep,
   resolveAgentStepRuleToolIdToName,
@@ -199,6 +200,13 @@ const recordStreamFailure = async (args: {
 };
 
 /**
+ * A text delta, or the generation a turn that did not complete from the
+ * stream itself ended on — paused on a client tool, or resumed past a gated
+ * one — which only its record can tell the caller.
+ */
+export type StreamedGenerationPart = string | { generation: GenerationResult };
+
+/**
  * Wraps `streamText`'s stream so a captured failure reaches the caller.
  *
  * `streamText` hands failures to `onError` and then closes the stream cleanly,
@@ -210,10 +218,11 @@ const recordStreamFailure = async (args: {
 const withTerminalError = (args: {
   source: ReadableStream<string>;
   readStreamError: () => unknown;
+  readTerminalGeneration: () => GenerationResult | undefined;
   recordFailure: (error: unknown) => Promise<unknown>;
-}): ReadableStream<string> => {
+}): ReadableStream<StreamedGenerationPart> => {
   const reader = args.source.getReader();
-  return new ReadableStream<string>({
+  return new ReadableStream<StreamedGenerationPart>({
     pull: async (controller) => {
       const chunk = await reader.read();
       if (chunk.value !== undefined) {
@@ -222,6 +231,8 @@ const withTerminalError = (args: {
       if (!chunk.done) return;
       const streamError = args.readStreamError();
       if (streamError === undefined) {
+        const generation = args.readTerminalGeneration();
+        if (generation) controller.enqueue({ generation });
         controller.close();
         return;
       }
@@ -230,7 +241,7 @@ const withTerminalError = (args: {
   });
 };
 
-export const runStreamGeneration = async (args: {
+type StreamRunArgs = {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
@@ -241,7 +252,71 @@ export const runStreamGeneration = async (args: {
   agentId: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
-}): Promise<ReadableStream> => {
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
+};
+
+/** What `streamText` hands `onEnd` that the turn's records are built from. */
+type StreamEnd = {
+  steps: unknown[];
+  text: string;
+  finishReason: string;
+  usage?: LanguageModelUsage;
+  response: { modelId?: string };
+  responseMessages: unknown[];
+};
+
+/**
+ * Pauses a streamed turn that proposed client calls, as the unstreamed path
+ * does. `null` when it proposed none.
+ */
+const settleStreamedClientCalls = (args: {
+  run: StreamRunArgs;
+  end: StreamEnd;
+}): Promise<GenerationResult | null> => {
+  const { run, end } = args;
+  return settleInitialClientCalls({
+    generationId: run.generationId,
+    traceId: run.traceId,
+    parentTraceId: run.parentTraceId ?? null,
+    rootTraceId: run.rootTraceId ?? null,
+    allMessages: run.allMessages,
+    resolvedTools: run.resolvedTools,
+    model: run.model,
+    typedAgent: run.typedAgent,
+    agentId: run.agentId,
+    result: end,
+    toolContext: run.toolContext ?? null,
+    remainingDepth: run.remainingDepth ?? null,
+  });
+};
+
+const fireStreamEnd = (args: {
+  run: StreamRunArgs;
+  end: StreamEnd;
+  failed: boolean;
+}): void => {
+  const { run, end } = args;
+  fireStreamEndSideEffects({
+    generationId: run.generationId,
+    traceId: run.traceId,
+    parentTraceId: run.parentTraceId ?? null,
+    rootTraceId: run.rootTraceId ?? null,
+    agentId: run.agentId,
+    typedAgent: run.typedAgent,
+    model: run.model,
+    resolvedTools: run.resolvedTools,
+    steps: end.steps,
+    finalText: end.text,
+    finishReason: end.finishReason,
+    usage: end.usage,
+    failed: args.failed,
+  });
+};
+
+export const runStreamGeneration = async (
+  args: StreamRunArgs
+): Promise<ReadableStream<StreamedGenerationPart>> => {
   const system = collectSystemInstructions(args.allMessages);
   const nonSystemMessages = withoutSystemMessages(args.allMessages);
   const prepareStep = buildPrepareStep({
@@ -262,6 +337,7 @@ export const runStreamGeneration = async (args: {
   // Captured, not acted on: `onError` fires mid-read, and the failure must not
   // overtake chunks already on their way to the caller.
   let streamError: unknown;
+  let terminalGeneration: GenerationResult | undefined;
   const result = streamText({
     model: args.model,
     // Routed models own every attempt themselves (see `routedMaxRetries`).
@@ -279,28 +355,39 @@ export const runStreamGeneration = async (args: {
     onError: ({ error }) => {
       streamError = error;
     },
-    onEnd: ({ steps, text, finishReason, usage }) => {
-      fireStreamEndSideEffects({
-        generationId: args.generationId,
-        traceId: args.traceId,
-        parentTraceId: args.parentTraceId ?? null,
-        rootTraceId: args.rootTraceId ?? null,
-        agentId: args.agentId,
-        typedAgent: args.typedAgent,
-        model: args.model,
-        resolvedTools: args.resolvedTools,
-        steps: steps as unknown[],
-        finalText: text,
-        finishReason,
-        usage,
-        failed: streamError !== undefined,
-      });
+    // Awaited by `streamText` before the text stream closes, so the pause is
+    // recorded before the caller reads the frame announcing it.
+    onEnd: async (event) => {
+      const end: StreamEnd = {
+        steps: event.steps as unknown[],
+        text: event.text,
+        finishReason: event.finishReason,
+        usage: event.usage,
+        response: event.response,
+        responseMessages: event.responseMessages,
+      };
+      if (streamError === undefined) {
+        try {
+          terminalGeneration =
+            (await settleStreamedClientCalls({ run: args, end })) ?? undefined;
+        } catch (error) {
+          // The settle owns this turn's records; `recordFailure` writes the
+          // terminal status.
+          streamError = error;
+          return;
+        }
+        if (terminalGeneration) return;
+      }
+      fireStreamEnd({ run: args, end, failed: streamError !== undefined });
     },
   });
   return withTerminalError({
     source: result.textStream,
     readStreamError: () => {
       return streamError;
+    },
+    readTerminalGeneration: () => {
+      return terminalGeneration;
     },
     recordFailure: (error) => {
       return recordStreamFailure({

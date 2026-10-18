@@ -410,6 +410,13 @@ paths:
                   SSE stream of delta chunks ending with `data: [DONE]`.
 
 
+                  A turn that pauses on a `client` tool ends with one more frame
+                  before `[DONE]`: the generation as the non-streaming path
+                  returns it, `status: requires_action` with `required_action`
+                  naming the pending calls. Submit their results to
+                  `tool-outputs` to resume.
+
+
                   The response headers are written before the provider is
                   called, so a failure cannot become a status code once the
                   stream is open. It arrives instead as a terminal

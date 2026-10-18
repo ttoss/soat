@@ -16,6 +16,7 @@ import {
   submitToolOutputs,
 } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
+import type { StreamedGenerationPart } from 'src/lib/agentStreamGeneration';
 import { storeResumedConversationTurn } from 'src/lib/conversationGeneration';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
@@ -26,8 +27,15 @@ import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
+const toSseFrame = (part: StreamedGenerationPart): string => {
+  if (typeof part === 'string') {
+    return `data: ${JSON.stringify({ choices: [{ delta: { content: part } }] })}\n\n`;
+  }
+  return `data: ${JSON.stringify(mapGenerationResult(part.generation))}\n\n`;
+};
+
 const pipeStreamToResponse = async (
-  stream: ReadableStream,
+  stream: ReadableStream<StreamedGenerationPart>,
   res: ServerResponse
 ): Promise<void> => {
   const reader = stream.getReader();
@@ -36,9 +44,7 @@ const pipeStreamToResponse = async (
     const chunk = await reader.read();
     done = chunk.done;
     if (chunk.value) {
-      res.write(
-        `data: ${JSON.stringify({ choices: [{ delta: { content: chunk.value } }] })}\n\n`
-      );
+      res.write(toSseFrame(chunk.value));
     }
   }
   res.write('data: [DONE]\n\n');

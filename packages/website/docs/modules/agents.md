@@ -377,6 +377,13 @@ When `content.type` is `document` (`{ "type": "document", "document_id": "doc_ab
 
 `stream: true` returns Server-Sent Events, each step's output as generated; a completed stream ends with `data: [DONE]`.
 
+A streamed turn that calls a `client` tool pauses as an unstreamed one does. Its last frame before `[DONE]` is the generation, in the same shape as the non-streaming response, and the turn resumes through [`POST /api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs):
+
+```
+data: {"id":"gen_...","trace_id":"trace_...","status":"requires_action","ai_provider_id":"aip_...","required_action":{"type":"submit_tool_outputs","tool_calls":[{"id":"call_...","tool_name":"ask_manager","args":{"question":"refund?"}}]}}
+data: [DONE]
+```
+
 REST/SDK/CLI only: the `create-agent-generation` tool (MCP client or an agent's `builtin` tool) is one request returning one result, so it has no `stream` and returns the completed generation.
 
 #### Upstream provider errors on a stream
