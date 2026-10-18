@@ -189,16 +189,19 @@ export type VertexSettings =
       googleAuthOptions?: GoogleVertexProviderSettings['googleAuthOptions'];
     };
 
+const KEY_FILE_FIELDS = ['project_id', 'client_email', 'private_key'] as const;
+
 const parseVertexSecret = (secretValue: string | null): VertexSecret => {
   if (!secretValue) return {};
   const parsed = parseJsonObject(secretValue);
   if (parsed) {
-    return {
-      apiKey: readNonEmptyString(parsed.apiKey),
-      project_id: readNonEmptyString(parsed.project_id),
-      client_email: readNonEmptyString(parsed.client_email),
-      private_key: readNonEmptyString(parsed.private_key),
-    };
+    // The key file's own field names are Google's, read verbatim.
+    const keyFile = Object.fromEntries(
+      KEY_FILE_FIELDS.map((field) => {
+        return [field, readNonEmptyString(parsed[field])];
+      })
+    );
+    return { ...keyFile, apiKey: readNonEmptyString(parsed.apiKey) };
   }
   // Every other API-key provider stores the bare key as the secret value, so
   // a non-object secret is read the same way here.
