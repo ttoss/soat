@@ -6,6 +6,7 @@ import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { decryptValue } from 'src/lib/secrets';
 
+import { assertLinkedSecretUsable } from './agentModel';
 import { assertAiProviderConfig } from './aiProviderConfigValidation';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 
@@ -73,6 +74,32 @@ export const getAiProvider = async (args: { id: string }) => {
   return mapAiProvider(provider);
 };
 
+/**
+ * The linked secret's value, `''` when the row it names has none, so a link
+ * that resolves to nothing still reads as a link rather than as no credential.
+ */
+const readLinkedSecretValue = async (
+  secretId: number | null | undefined
+): Promise<string | null> => {
+  if (!secretId) return null;
+  const secret = await db.Secret.findByPk(secretId);
+  return secret?.encryptedValue ? decryptValue(secret.encryptedValue) : '';
+};
+
+const assertProviderCredential = async (args: {
+  provider: AiProviderSlug;
+  secretId?: number | null;
+  config?: Record<string, unknown> | null;
+}) => {
+  assertAiProviderCarriesCredential(args);
+  if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
+  assertLinkedSecretUsable({
+    provider: args.provider,
+    secretValue: await readLinkedSecretValue(args.secretId),
+    config: args.config,
+  });
+};
+
 export const createAiProvider = async (args: {
   projectId: number;
   secretId?: number;
@@ -87,7 +114,7 @@ export const createAiProvider = async (args: {
     baseUrl: args.baseUrl,
     config: args.config,
   });
-  assertAiProviderCarriesCredential({
+  await assertProviderCredential({
     provider: args.provider,
     secretId: args.secretId,
     config: args.config,
@@ -133,7 +160,7 @@ export const updateAiProvider = async (args: {
     baseUrl: instance.baseUrl,
     config: instance.config,
   });
-  assertAiProviderCarriesCredential({
+  await assertProviderCredential({
     provider: instance.provider,
     secretId: instance.secretId,
     config: instance.config,
@@ -281,13 +308,7 @@ export const resolveAiProviderSecret = async (args: {
   });
   if (!instance) return null;
 
-  let decryptedValue: string | null = null;
-  if (instance.secretId) {
-    const secret = await db.Secret.findByPk(instance.secretId);
-    if (secret?.encryptedValue) {
-      decryptedValue = decryptValue(secret.encryptedValue);
-    }
-  }
+  const decryptedValue = await readLinkedSecretValue(instance.secretId);
 
   return {
     // Internal ids, for callers that must attribute usage to the exact provider

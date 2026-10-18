@@ -276,6 +276,10 @@ credential:
 - `400 AI_PROVIDER_MISCONFIGURED` when such a record generates or lists models,
   so one that reached the table another way fails closed.
 
+The fallback applies only to a record that links no secret and sets no
+`config.apiKey`. A record whose linked secret holds no usable credential is
+`400 AI_PROVIDER_MISCONFIGURED` at write and at use, whatever this is set to.
+
 Set `true` only on a **single-tenant** deployment (an EC2 instance profile or
 ECS task role serving your own team); otherwise a tenant's record generates on
 the deployment's cloud account, quotas and IAM role.

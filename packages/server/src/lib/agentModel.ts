@@ -45,17 +45,56 @@ export type BedrockCredentials =
       credentialProvider: ReturnType<typeof fromNodeProviderChain>;
     };
 
+const readNonEmptyString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value !== '' ? value : undefined;
+};
+
+const parseJsonObject = (value: string): Record<string, unknown> | null => {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { ...parsed };
+    }
+  } catch {
+    // Not JSON — the caller reads the bare value.
+  }
+  return null;
+};
+
 const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
   if (!secretValue) return {};
-  try {
-    return JSON.parse(secretValue) as BedrockSecret;
-  } catch {
-    // Plain ABSK bearer token stored directly as the secret value
-    if (secretValue.startsWith('ABSK')) {
-      return { apiKey: secretValue };
-    }
-    return {};
+  const parsed = parseJsonObject(secretValue);
+  if (parsed) {
+    return {
+      apiKey: readNonEmptyString(parsed.apiKey),
+      accessKeyId: readNonEmptyString(parsed.accessKeyId),
+      secretAccessKey: readNonEmptyString(parsed.secretAccessKey),
+      sessionToken: readNonEmptyString(parsed.sessionToken),
+    };
   }
+  // Plain ABSK bearer token stored directly as the secret value
+  if (secretValue.startsWith('ABSK')) {
+    return { apiKey: secretValue };
+  }
+  return {};
+};
+
+/**
+ * A record that links a secret declared a credential of its own, so one whose
+ * value holds none is misconfigured: the deployment's credentials are a
+ * fallback only for a record that links nothing, whatever the operator allows.
+ */
+const refuseUnusableLinkedSecret = (args: {
+  provider: 'bedrock' | 'vertex';
+  secretValue: string | null;
+}): void => {
+  if (args.secretValue === null) return;
+  throw new DomainError(
+    'AI_PROVIDER_MISCONFIGURED',
+    args.provider === 'bedrock'
+      ? "The secret linked to this 'bedrock' AI provider holds no usable credential: store a JSON object with `apiKey`, or with `accessKeyId` and `secretAccessKey`, or a bare `ABSK…` bearer token."
+      : "The secret linked to this 'vertex' AI provider holds no usable credential: store a service-account key file (with `client_email` and `private_key`), a JSON object with `apiKey`, or a bare API key."
+  );
 };
 
 /**
@@ -64,7 +103,7 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
  * Pulled out of `buildBedrockModel` so the rules can be asserted directly
  * rather than through the opaque model object they configure.
  *
- * With no bearer token and no complete static pair it falls back to the AWS
+ * A record that links no secret and no `config.apiKey` falls back to the AWS
  * default credential chain (`fromNodeProviderChain`) so role-based auth works.
  * `@ai-sdk/amazon-bedrock` does NOT walk that chain on its own (vercel/ai#2216)
  * — passing no credentials makes it throw a SigV4 error instead.
@@ -101,6 +140,10 @@ export const resolveBedrockCredentials = (args: {
     };
   }
   if (!args.allowAmbientCredentials) {
+    refuseUnusableLinkedSecret({
+      provider: 'bedrock',
+      secretValue: args.secretValue,
+    });
     assertAmbientCredentialsAllowed({ provider: 'bedrock' });
   }
   return { region, credentialProvider: fromNodeProviderChain() };
@@ -148,13 +191,14 @@ export type VertexSettings =
 
 const parseVertexSecret = (secretValue: string | null): VertexSecret => {
   if (!secretValue) return {};
-  try {
-    const parsed: unknown = JSON.parse(secretValue);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as VertexSecret;
-    }
-  } catch {
-    // Not JSON — fall through to the plain-API-key reading below.
+  const parsed = parseJsonObject(secretValue);
+  if (parsed) {
+    return {
+      apiKey: readNonEmptyString(parsed.apiKey),
+      project_id: readNonEmptyString(parsed.project_id),
+      client_email: readNonEmptyString(parsed.client_email),
+      private_key: readNonEmptyString(parsed.private_key),
+    };
   }
   // Every other API-key provider stores the bare key as the secret value, so
   // a non-object secret is read the same way here.
@@ -227,6 +271,10 @@ export const resolveVertexSettings = (args: {
   if (!googleAuthOptions) {
     // Neither an express-mode key nor a service-account key file: whatever
     // signs this request comes from the deployment, not from the record.
+    refuseUnusableLinkedSecret({
+      provider: 'vertex',
+      secretValue: args.secretValue,
+    });
     assertAmbientCredentialsAllowed({ provider: 'vertex' });
   }
 
@@ -242,6 +290,38 @@ export const resolveVertexSettings = (args: {
   return googleAuthOptions
     ? { project, location, googleAuthOptions }
     : { project, location };
+};
+
+const SECRET_HOLDS_CREDENTIAL = {
+  bedrock: (secretValue: string) => {
+    const secret = parseBedrockSecret(secretValue);
+    return Boolean(
+      secret.apiKey || (secret.accessKeyId && secret.secretAccessKey)
+    );
+  },
+  vertex: (secretValue: string) => {
+    const secret = parseVertexSecret(secretValue);
+    return Boolean(secret.apiKey || readServiceAccountAuth(secret));
+  },
+};
+
+/**
+ * The write-time half of {@link refuseUnusableLinkedSecret}, so the caller is
+ * refused where they can still fix the record. `secretValue` is the linked
+ * secret's value, `null` when the record links none.
+ */
+export const assertLinkedSecretUsable = (args: {
+  provider: AiProviderSlug;
+  secretValue: string | null;
+  config?: Record<string, unknown> | null;
+}): void => {
+  if (args.secretValue === null || args.config?.apiKey) return;
+  if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
+  if (SECRET_HOLDS_CREDENTIAL[args.provider](args.secretValue)) return;
+  refuseUnusableLinkedSecret({
+    provider: args.provider,
+    secretValue: args.secretValue,
+  });
 };
 
 /**

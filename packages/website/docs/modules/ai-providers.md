@@ -104,7 +104,9 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 > **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. A bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) would be used — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `bedrock` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used.
+A record that links no secret and sets no `config.apiKey` would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
+
+A record that links a secret holding neither an `apiKey` nor a complete key pair never falls back to the deployment's credentials, whatever the setting: it is `400 AI_PROVIDER_MISCONFIGURED` at create, update, generation and model listing.
 
 The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production.
 
@@ -137,7 +139,7 @@ As with `bedrock`, the authentication mode is determined by the shape of the lin
 
 **Application Default Credentials** — link no secret and the server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. No key material is stored.
 
-Those are the deployment's credentials, so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
+Those are the deployment's credentials, so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used. A record that links a secret holding neither an API key nor a complete service-account key file (`client_email` and `private_key`) never reaches ADC: it is `400 AI_PROVIDER_MISCONFIGURED` at create, update, generation and model listing. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
 
 #### Federating an AWS identity (SOAT on ECS or EC2)
 
