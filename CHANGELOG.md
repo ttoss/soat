@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.86.2](https://github.com/ttoss/soat/compare/v0.86.1...v0.86.2) (2026-10-18)
+
+### Bug Fixes
+
+* **conversations:** serialize writes to one conversation; session tool-outputs refuses a foreign generation ([#1662](https://github.com/ttoss/soat/issues/1662)) ([77dd263](https://github.com/ttoss/soat/commit/77dd263b4ff8073fe92e1a2bb2d2c83738d19eed)), closes [#1657](https://github.com/ttoss/soat/issues/1657) [#1658](https://github.com/ttoss/soat/issues/1658)
+
 ## [0.86.1](https://github.com/ttoss/soat/compare/v0.86.0...v0.86.1) (2026-10-17)
 
 ### Bug Fixes
