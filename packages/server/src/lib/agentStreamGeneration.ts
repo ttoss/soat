@@ -40,6 +40,7 @@ import {
   textEncodedToolCallError,
 } from './textEncodedToolCall';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
+import { carrySpentUsage, spentUsageOf } from './turnSpend';
 import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
@@ -195,6 +196,8 @@ const recordStreamFailure = async (args: {
     generationId: args.generationId,
     traceId: args.traceId,
     error: toProviderDomainError(args.error) ?? args.error,
+    // Read before the mapping, which builds a new error.
+    usage: spentUsageOf(args.error),
     model: args.model,
     projectId: args.typedAgent.project.id,
     stepsAlreadySpent: 0,
@@ -375,8 +378,8 @@ export const runStreamGeneration = async (
             (await settleStreamedClientCalls({ run: args, end })) ?? undefined;
         } catch (error) {
           // The settle owns this turn's records; `recordFailure` writes the
-          // terminal status.
-          streamError = error;
+          // terminal status, and meters the calls the turn already made.
+          streamError = carrySpentUsage({ error, usage: end.usage });
           return;
         }
         if (terminalGeneration) return;

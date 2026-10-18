@@ -50,6 +50,7 @@ import {
   textEncodedToolCallError,
 } from './textEncodedToolCall';
 import { saveTrace, serializeSteps } from './traces';
+import { addUsage, carrySpentUsage, sumStepUsage } from './turnSpend';
 
 // Bounds the auto-resume loop: a model re-proposing a blocked client tool every
 // turn would otherwise resume forever.
@@ -350,7 +351,14 @@ const resolveGenerationResult = async (args: {
 }): Promise<GenerationResult> => {
   const paused = await settleInitialClientCalls({
     ...args,
-    result: args.result as SettleSaveArgs['result'],
+    result: {
+      steps: args.result.steps,
+      response: args.result.response,
+      responseMessages: args.result.responseMessages,
+      text: args.result.text,
+      finishReason: args.result.finishReason,
+      usage: args.result.usage,
+    },
   });
   if (paused) return paused;
 
@@ -379,6 +387,8 @@ const callWithToolFallback = async (args: {
   callArgs: Omit<Parameters<typeof callGenerateText>[0], 'resolvedTools'>;
   resolvedTools: Record<string, Tool>;
   ranSteps: unknown[];
+  /** What an attempt the fallback abandoned spent; the provider billed it. */
+  spend: { abandoned?: LanguageModelUsage };
 }) => {
   try {
     return await callGenerateText({
@@ -405,8 +415,44 @@ const callWithToolFallback = async (args: {
       error instanceof Error ? error.message : String(error)
     );
     // The retry replaces the abandoned attempt, as its result does on success.
+    args.spend.abandoned = sumStepUsage(args.ranSteps);
     args.ranSteps.splice(0);
     return callGenerateText({ ...args.callArgs, resolvedTools: {} });
+  }
+};
+
+/**
+ * {@link resolveGenerationResult} on the turn's whole spend: its calls plus any
+ * attempt the tool fallback abandoned. A refusal after the calls completed — a
+ * text-encoded tool call, a gate on the client calls it proposed — carries that
+ * spend to the failure, since the provider billed it.
+ */
+const resolveSpentGenerationResult = async (
+  args: Parameters<typeof resolveGenerationResult>[0] & {
+    abandoned: LanguageModelUsage | undefined;
+  }
+): Promise<GenerationResult> => {
+  const { result, abandoned, ...rest } = args;
+  const usage = addUsage(result.usage, abandoned);
+  try {
+    return await resolveGenerationResult({
+      ...rest,
+      result: {
+        steps: result.steps,
+        response: result.response,
+        responseMessages: result.responseMessages,
+        text: result.text,
+        finishReason: result.finishReason,
+        // A getter, as on the SDK's result: a turn that paused has no output,
+        // and reading one throws.
+        get output() {
+          return result.output;
+        },
+        usage,
+      },
+    });
+  } catch (error) {
+    throw carrySpentUsage({ error, usage });
   }
 };
 
@@ -457,12 +503,14 @@ export const runNonStreamGeneration = async (args: {
     },
   };
 
+  const spend: { abandoned?: LanguageModelUsage } = {};
   let result;
   try {
     result = await callWithToolFallback({
       callArgs,
       resolvedTools: args.resolvedTools,
       ranSteps,
+      spend,
     });
   } catch (error) {
     if (ranSteps.length > 0) {
@@ -479,12 +527,16 @@ export const runNonStreamGeneration = async (args: {
         }),
       ]);
     }
-    throw error;
+    throw carrySpentUsage({
+      error,
+      usage: addUsage(spend.abandoned, sumStepUsage(ranSteps)),
+    });
   }
 
-  return resolveGenerationResult({
+  return resolveSpentGenerationResult({
     ...args,
     result: result as AgentRunResult,
+    abandoned: spend.abandoned,
   });
 };
 

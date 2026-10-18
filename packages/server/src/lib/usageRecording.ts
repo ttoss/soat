@@ -9,6 +9,7 @@ import {
   type GenerationTurnFacts,
   priceAgentResource,
 } from './usageAgentPricing';
+import { reportLostUsageEvent } from './usageEventWrite';
 import { readGenerationEventAttribution } from './usageGenerationAttribution';
 import { reportInvalidQuantities } from './usageResourcePricing';
 import { evaluateProjectThresholds } from './usageThresholds';
@@ -371,11 +372,11 @@ export const recordCompletionUsage = async (args: {
       await evaluateProjectThresholds({ projectId: args.projectId });
     }
   } catch (error) {
-    log(
-      'recordCompletionUsage: failed source=%s error=%s',
-      args.source,
-      error instanceof Error ? error.message : String(error)
-    );
+    reportLostUsageEvent({
+      recorder: 'recordCompletionUsage',
+      detail: `source=${args.source}`,
+      error,
+    });
   }
 };
 
@@ -412,10 +413,10 @@ export const recordGenerationUsage = async (args: {
   try {
     await writeGenerationEvent(args);
   } catch (error) {
-    log(
-      'recordGenerationUsage: failed generationId=%s error=%s',
-      args.generationId,
-      error instanceof Error ? error.message : String(error)
-    );
+    reportLostUsageEvent({
+      recorder: 'recordGenerationUsage',
+      detail: `generationId=${args.generationId}`,
+      error,
+    });
   }
 };

@@ -5,7 +5,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { sumComponentCostUsd } from './priceCompute';
-import { insertUsageEvent } from './usageEventWrite';
+import { insertUsageEvent, reportLostUsageEvent } from './usageEventWrite';
 import {
   priceToolResource,
   reportInvalidQuantities,
@@ -290,6 +290,7 @@ export const meterToolExecution = async <T>(args: {
   meter: ToolExecutionMeter;
   send: (markSent: (sent?: SentToolCall) => void) => Promise<T>;
 }): Promise<T> => {
+  log('meterToolExecution: tool=%s', args.meter.toolId);
   const startedAt = Date.now();
   const sent: { call?: SentToolCall } = {};
   let outcome: ToolExecutionOutcome = 'ok';
@@ -316,11 +317,11 @@ export const meterToolExecution = async <T>(args: {
           },
         });
       } catch (error) {
-        log(
-          'meterToolExecution: failed tool=%s error=%s',
-          args.meter.toolId,
-          error instanceof Error ? error.message : String(error)
-        );
+        reportLostUsageEvent({
+          recorder: 'meterToolExecution',
+          detail: `tool=${args.meter.toolId}`,
+          error,
+        });
       }
     }
   }

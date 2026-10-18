@@ -10,7 +10,7 @@ import {
   computeComponentCostUsd,
   sumComponentCostUsd,
 } from './priceCompute';
-import { withDurablePublicIds } from './usageEventWrite';
+import { reportLostUsageEvent, withDurablePublicIds } from './usageEventWrite';
 import {
   type GenerationEventAttribution,
   readGenerationEventAttribution,
@@ -170,11 +170,11 @@ export const recordEmbeddingUsage = async (args: {
       await evaluateProjectThresholds({ projectId: args.projectId });
     }
   } catch (error) {
-    log(
-      'recordEmbeddingUsage: failed projectId=%d error=%s',
-      args.projectId,
-      error
-    );
+    reportLostUsageEvent({
+      recorder: 'recordEmbeddingUsage',
+      detail: `projectId=${args.projectId}`,
+      error,
+    });
   }
 };
 
