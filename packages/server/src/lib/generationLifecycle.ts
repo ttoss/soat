@@ -6,7 +6,7 @@ import type { PendingGeneration } from './agentGenerationTypes';
 import { emitGenerationEvent } from './generationEvents';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
-import { routedAiProviderId } from './modelRouteExecutor';
+import { routedAiProviderId, routedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
@@ -48,7 +48,8 @@ const meterFailedSegment = (args: {
   return [
     recordGenerationUsage({
       generationId: args.generationId,
-      model: modelIdOf(args.model),
+      model:
+        (args.model && routedModelName(args.model)) ?? modelIdOf(args.model),
       usage: args.usage,
       aiProviderId: args.model ? routedAiProviderId(args.model) : null,
       stepsAlreadySpent: args.stepsAlreadySpent,

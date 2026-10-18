@@ -368,6 +368,8 @@ export const recordCompletionUsage = async (args: {
 
     // Same choke-point rule as the generation path: only a newly written event
     // can move a windowed total across a threshold.
+    /* istanbul ignore else -- the key is a fresh uuid per call, so the write is
+       never the idempotent no-op the other meters guard against */
     if (created) {
       await evaluateProjectThresholds({ projectId: args.projectId });
     }

@@ -106,16 +106,24 @@ export const readRoutingMetadata = (
  * model no route composed (the caller falls back to the agent's pinned
  * provider) and for a route that succeeded on no target.
  */
-export const routedAiProviderId = (model: LanguageModel): string | null => {
+const servedAttempt = (model: LanguageModel) => {
   const routing = readRoutingMetadata(model);
-  if (!routing) return null;
-  const served = [...routing.attempts].reverse().find((attempt) => {
+  if (!routing) return undefined;
+  return [...routing.attempts].reverse().find((attempt) => {
     return (
       attempt.target_index === routing.target_index &&
       attempt.error_class === undefined
     );
   });
-  return served?.ai_provider_id ?? null;
+};
+
+export const routedAiProviderId = (model: LanguageModel): string | null => {
+  return servedAttempt(model)?.ai_provider_id ?? null;
+};
+
+/** The model name the route's served target ran, beside {@link routedAiProviderId}. */
+export const routedModelName = (model: LanguageModel): string | null => {
+  return servedAttempt(model)?.model ?? null;
 };
 
 /**

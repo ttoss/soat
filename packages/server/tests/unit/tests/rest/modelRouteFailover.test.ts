@@ -707,6 +707,65 @@ describe('Model route failover through agent generation', () => {
     expect(healthy.requests()).toBe(1);
   });
 
+  // The step a target served before the turn failed was billed, so the failed
+  // turn meters it against that target's provider.
+  test('a routed turn that fails after a completed step meters that step', async () => {
+    const toolServer = track(
+      await startLlmStub(() => {
+        return { status: 200, body: { temperature: 21 } };
+      })
+    );
+    const failingAtStepTwo = track(
+      await startLlmStub((requestNumber) => {
+        return requestNumber === 1
+          ? chatCompletion({
+              model: 'spent-model',
+              toolCall: { id: 'call_1', name: 'get_forecast', args: {} },
+            })
+          : { status: 400, body: { error: 'refused' } };
+      })
+    );
+    const toolRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'get_forecast',
+        type: 'http',
+        description: 'Returns the forecast',
+        parameters: { type: 'object', properties: {} },
+        execute: { url: `${toolServer.baseUrl}/forecast`, method: 'GET' },
+      });
+    expect(toolRes.status).toBe(201);
+    const providerId = await createProvider({
+      name: 'mrfail-spent',
+      baseUrl: failingAtStepTwo.baseUrl,
+      defaultModel: 'spent-model',
+    });
+    const routeId = await createRoute({
+      name: 'spent-before-failure',
+      targets: [{ ai_provider_id: providerId, model: 'spent-model' }],
+    });
+    const agentId = await createRoutedAgent({
+      name: 'Spent Before Failure Agent',
+      routeId,
+      toolIds: [toolRes.body.id],
+    });
+
+    const res = await generate(agentId, 'forecast?');
+
+    expect(res.status).toBe(502);
+    const meters = await authenticatedTestClient(userToken).get(
+      `/api/v1/usage/events?generation_id=${res.body.error.meta.generation_id}&meter_type=llm_tokens`
+    );
+    expect(meters.status).toBe(200);
+    expect(meters.body.data).toHaveLength(1);
+    expect(meters.body.data[0]).toMatchObject({
+      ai_provider_id: providerId,
+      provider: 'ollama',
+      model: 'spent-model',
+    });
+  });
+
   test('a route-only agent resumes a client-tool generation through the recovery path', async () => {
     // Target 0 pauses the run with a client tool call, then 500s on the
     // continuation so the resumption itself has to fail over — the recovery
