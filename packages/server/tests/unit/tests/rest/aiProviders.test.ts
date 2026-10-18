@@ -50,6 +50,7 @@ describe('AI Providers', () => {
   let projectId: string;
   let otherProjectId: string;
   let secretId: string;
+  let bedrockSecretId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
@@ -82,6 +83,17 @@ describe('AI Providers', () => {
         value: 'sk-test',
       });
     secretId = secretRes.body.id;
+
+    // A bedrock record reads its linked secret as a credential, so it needs
+    // one shaped like a bedrock credential.
+    const bedrockSecretRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/secrets')
+      .send({
+        project_id: projectId,
+        name: 'Bedrock Bearer Secret',
+        value: 'ABSKtest',
+      });
+    bedrockSecretId = bedrockSecretRes.body.id;
   });
 
   describe('GET /api/v1/ai-providers', () => {
@@ -106,7 +118,7 @@ describe('AI Providers', () => {
           name: 'Listed Shape',
           provider: 'bedrock',
           default_model: 'model-x',
-          secret_id: secretId,
+          secret_id: bedrockSecretId,
           base_url: 'https://example.invalid',
           config: { region: 'us-east-1' },
         });
@@ -185,7 +197,7 @@ describe('AI Providers', () => {
           default_model: 'model-x',
           // `bedrock` and `vertex` are refused without one; every other slug is
           // indifferent to it, so the sweep links one throughout.
-          secret_id: secretId,
+          secret_id: provider === 'bedrock' ? bedrockSecretId : secretId,
         });
 
       expect(response.status).toBe(201);

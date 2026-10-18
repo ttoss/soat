@@ -3037,6 +3037,7 @@ echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 # and pipeline-output level).
 echo "--- Calling pipeline tool ---"
 STEP_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
+PIPELINE_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
 PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{"tag":"hello-nested"}')
 printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
 if ! printf '%s\n' "$PIPELINE_CALL_RESP" | jq -e 'has("from_a") and has("from_b")' > /dev/null; then
@@ -3051,12 +3052,12 @@ if [ "$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.echoed.container')" != "he
 fi
 echo "Pipeline call OK (nested JSON Logic resolution verified)"
 
-# Each step is one tool_execution event against the step's tool; the pipeline
-# itself executes nothing on the wire and writes none.
+# Each step is one tool_execution event against the step's tool, and the
+# pipeline's own call is one more against the pipeline.
 STEP_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-PIPELINE_OWN_CALLS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-if [ "$((STEP_CALLS_AFTER - STEP_CALLS_BEFORE))" != "2" ] || [ "$PIPELINE_OWN_CALLS" != "0" ]; then
-  echo "FAIL: expected 2 tool_execution events for the steps and 0 for the pipeline, got $((STEP_CALLS_AFTER - STEP_CALLS_BEFORE)) and $PIPELINE_OWN_CALLS"
+PIPELINE_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
+if [ "$((STEP_CALLS_AFTER - STEP_CALLS_BEFORE))" != "2" ] || [ "$((PIPELINE_CALLS_AFTER - PIPELINE_CALLS_BEFORE))" != "1" ]; then
+  echo "FAIL: expected 2 tool_execution events for the steps and 1 for the pipeline, got $((STEP_CALLS_AFTER - STEP_CALLS_BEFORE)) and $((PIPELINE_CALLS_AFTER - PIPELINE_CALLS_BEFORE))"
   exit 1
 fi
 TOOL_AGG_RESP=$($SOAT_CLI get-usage-aggregate --project-id "$PROJECT_PUBLIC_ID" \

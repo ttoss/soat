@@ -11,40 +11,61 @@ import {
 // parse — a rate this module accepts is frozen onto every embedding event.
 describe('parseEmbeddingInputTokenPriceUsd', () => {
   test('converts USD per million tokens to USD per token', () => {
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '0.02' })).toBe(
-      '0.00000002'
-    );
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '0.02', provider: 'openai' })
+    ).toBe('0.00000002');
   });
 
   test('keeps the conversion exact rather than going through a float', () => {
     // 0.07 / 1e6 is 6.999999999999999e-8 in binary floating point. The shift is
     // decimal, so the rate an operator wrote is the rate that gets frozen.
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '0.07' })).toBe(
-      '0.00000007'
-    );
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '0.13' })).toBe(
-      '0.00000013'
-    );
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '0.07', provider: 'openai' })
+    ).toBe('0.00000007');
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '0.13', provider: 'openai' })
+    ).toBe('0.00000013');
   });
 
   test('an integer rate needs no decimal point to shift', () => {
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '2' })).toBe('0.000002');
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '2', provider: 'openai' })
+    ).toBe('0.000002');
   });
 
-  test('unset is zero — the deployment states no rate, so nothing is charged', () => {
-    expect(parseEmbeddingInputTokenPriceUsd({ value: undefined })).toBe('0');
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '' })).toBe('0');
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '   ' })).toBe('0');
+  // A vendor bills every call, so a deployment that states no rate has not
+  // priced it: the event is captured unpriced rather than frozen at zero.
+  test('unset is unpriced for a vendor-billed provider', () => {
+    expect(
+      parseEmbeddingInputTokenPriceUsd({
+        value: undefined,
+        provider: 'bedrock',
+      })
+    ).toBeNull();
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '', provider: 'openai' })
+    ).toBeNull();
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '   ', provider: 'openai' })
+    ).toBeNull();
   });
 
-  test('an explicit zero is a rate, and reads the same as unset', () => {
-    expect(parseEmbeddingInputTokenPriceUsd({ value: '0' })).toBe('0');
+  test('unset is zero for a local model, which bills nothing per token', () => {
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: undefined, provider: 'ollama' })
+    ).toBe('0');
+  });
+
+  test('an explicit zero is a rate', () => {
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: '0', provider: 'bedrock' })
+    ).toBe('0');
   });
 
   test('surrounding whitespace is tolerated', () => {
-    expect(parseEmbeddingInputTokenPriceUsd({ value: ' 0.02 ' })).toBe(
-      '0.00000002'
-    );
+    expect(
+      parseEmbeddingInputTokenPriceUsd({ value: ' 0.02 ', provider: 'openai' })
+    ).toBe('0.00000002');
   });
 
   test.each([
@@ -56,7 +77,7 @@ describe('parseEmbeddingInputTokenPriceUsd', () => {
     ['a trailing unit', '0.02/1M'],
   ])('rejects %s rather than guessing', (_label, value) => {
     expect(() => {
-      return parseEmbeddingInputTokenPriceUsd({ value });
+      return parseEmbeddingInputTokenPriceUsd({ value, provider: 'openai' });
     }).toThrow(EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV);
   });
 });

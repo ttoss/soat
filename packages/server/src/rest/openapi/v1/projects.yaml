@@ -744,8 +744,8 @@ components:
                   for a resource row; omit `provider` and `model`. A tool's row
                   prices its `tool_execution` events, beside `tool_call`; an
                   agent's prices its `llm_tokens` events, beside the provider
-                  cost. A pipeline or client tool has no execution of its own
-                  and cannot be priced.
+                  cost. A client tool has no execution of its own and cannot
+                  be priced.
                 example: srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B
               quantity:
                 type: object

@@ -54,7 +54,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in
 
-Obtain an admin token ([Users](/docs/modules/users#examples)).
+Obtain an admin token ([Users](/docs/modules/users#examples)) and create the [project](/docs/modules/projects) the embeddings are billed to ([Embeddings — Metering](/docs/modules/embeddings#metering)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -62,6 +62,8 @@ Obtain an admin token ([Users](/docs/modules/users#examples)).
 ```bash
 ADMIN_TOKEN=$(soat login-user --username admin --password Admin1234! | jq -r '.token')
 export SOAT_TOKEN=$ADMIN_TOKEN
+
+PROJECT_ID=$(soat create-project --name "Embeddings Project" | jq -r '.id')
 ```
 
 </TabItem>
@@ -84,6 +86,15 @@ const client = createClient(
     headers: { Authorization: `Bearer ${TOKEN}` },
   })
 );
+
+const authed = new SoatClient({
+  baseUrl: 'http://localhost:5047',
+  token: TOKEN,
+});
+const { data: project } = await authed.projects.createProject({
+  body: { name: 'Embeddings Project' },
+});
+const PROJECT_ID = project!.id;
 ```
 
 </TabItem>
@@ -93,6 +104,11 @@ const client = createClient(
 ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin1234!"}' | jq -r '.token')
+
+PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Embeddings Project"}' | jq -r '.id')
 ```
 
 </TabItem>
@@ -109,6 +125,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ```bash
 soat create-embeddings \
+  --project-id "$PROJECT_ID" \
   --input "SOAT is an open-source platform for building AI-powered applications." \
   | jq '{dimensions: (.embedding | length), first_values: .embedding[:3]}'
 ```
@@ -129,6 +146,7 @@ Expected output:
 const { data } = await Embeddings.createEmbeddings({
   client,
   body: {
+    project_id: PROJECT_ID,
     input: 'SOAT is an open-source platform for building AI-powered applications.',
   },
 });
@@ -144,7 +162,7 @@ console.log(data.embedding.slice(0, 3)); // first three values
 curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input":"SOAT is an open-source platform for building AI-powered applications."}' \
+  -d '{"project_id":"'"$PROJECT_ID"'","input":"SOAT is an open-source platform for building AI-powered applications."}' \
   | jq '{dimensions: (.embedding | length), first_values: .embedding[:3]}'
 ```
 
@@ -162,6 +180,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
 
 ```bash
 soat create-embeddings \
+  --project-id "$PROJECT_ID" \
   --inputs '["Wooden cutting board", "Cast iron skillet", "Silicone spatula set", "Stainless steel mixing bowls"]' \
   | jq '{count: (.embeddings | length), dims: (.embeddings[0] | length)}'
 ```
@@ -182,6 +201,7 @@ Expected output:
 const { data } = await Embeddings.createEmbeddings({
   client,
   body: {
+    project_id: PROJECT_ID,
     inputs: [
       'Wooden cutting board',
       'Cast iron skillet',
@@ -202,7 +222,7 @@ console.log(data.embeddings[0].length); // 1024
 curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"inputs":["Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
+  -d '{"project_id":"'"$PROJECT_ID"'","inputs":["Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
   | jq '{count: (.embeddings | length), dims: (.embeddings[0] | length)}'
 ```
 
@@ -220,6 +240,7 @@ Cosine similarity ranges from `-1` (opposite) to `1` (identical), independent of
 
 ```bash
 VECS=$(soat create-embeddings \
+  --project-id "$PROJECT_ID" \
   --inputs '["I love cooking pasta", "My favourite dish is spaghetti"]' \
   | jq '.embeddings')
 node << EOF
@@ -247,6 +268,7 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 const { data } = await Embeddings.createEmbeddings({
   client,
   body: {
+    project_id: PROJECT_ID,
     inputs: [
       'I love cooking pasta',
       'My favourite dish is spaghetti',
@@ -267,7 +289,7 @@ console.log('similarity:', cosineSimilarity(vecA, vecB).toFixed(4));
 VECS=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"inputs":["I love cooking pasta","My favourite dish is spaghetti"]}' \
+  -d '{"project_id":"'"$PROJECT_ID"'","inputs":["I love cooking pasta","My favourite dish is spaghetti"]}' \
   | jq '.embeddings')
 node << EOF
 const vecs = $VECS;
@@ -293,6 +315,7 @@ Embed the query and the collection in one batch call ([Embeddings key concepts](
 
 ```bash
 ALL=$(soat create-embeddings \
+  --project-id "$PROJECT_ID" \
   --inputs '["something to cook with on the stove","Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]' \
   | jq '.embeddings')
 node << EOF
@@ -345,7 +368,7 @@ const items = [
 // Embed query + all items in one batch call
 const { data } = await Embeddings.createEmbeddings({
   client,
-  body: { inputs: [query, ...items] },
+  body: { project_id: PROJECT_ID, inputs: [query, ...items] },
 });
 
 const [queryVec, ...itemVecs] = data.embeddings;
@@ -368,7 +391,7 @@ ranked.forEach((r) => console.log(r.score.toFixed(4), r.name));
 ALL=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"inputs":["something to cook with on the stove","Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
+  -d '{"project_id":"'"$PROJECT_ID"'","inputs":["something to cook with on the stove","Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
   | jq '.embeddings')
 node << EOF
 const vecs  = $ALL;

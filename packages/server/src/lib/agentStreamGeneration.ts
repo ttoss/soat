@@ -40,6 +40,7 @@ import {
   textEncodedToolCallError,
 } from './textEncodedToolCall';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
+import { carrySpentUsage, spentUsageOf } from './turnSpend';
 import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
@@ -90,6 +91,8 @@ const fireStreamEndSideEffects = (args: {
   finalText: string;
   finishReason: string;
   usage?: LanguageModelUsage;
+  /** The model the provider served, which is what a price matches. */
+  servedModel?: string;
   /**
    * Whether `onError` already captured a provider failure. A stream that dies
    * *after* a step completed still reaches `onEnd`, and the terminal status
@@ -147,7 +150,7 @@ const fireStreamEndSideEffects = (args: {
   // recordGenerationUsage never rejects (it catches internally).
   const usageWrite = recordGenerationUsage({
     generationId: args.generationId,
-    model: args.typedAgent.model ?? '',
+    model: args.servedModel || (args.typedAgent.model ?? ''),
     usage: args.usage,
     aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: 0,
@@ -193,6 +196,8 @@ const recordStreamFailure = async (args: {
     generationId: args.generationId,
     traceId: args.traceId,
     error: toProviderDomainError(args.error) ?? args.error,
+    // Read before the mapping, which builds a new error.
+    usage: spentUsageOf(args.error),
     model: args.model,
     projectId: args.typedAgent.project.id,
     stepsAlreadySpent: 0,
@@ -310,6 +315,7 @@ const fireStreamEnd = (args: {
     finalText: end.text,
     finishReason: end.finishReason,
     usage: end.usage,
+    servedModel: end.response.modelId,
     failed: args.failed,
   });
 };
@@ -372,8 +378,8 @@ export const runStreamGeneration = async (
             (await settleStreamedClientCalls({ run: args, end })) ?? undefined;
         } catch (error) {
           // The settle owns this turn's records; `recordFailure` writes the
-          // terminal status.
-          streamError = error;
+          // terminal status, and meters the calls the turn already made.
+          streamError = carrySpentUsage({ error, usage: end.usage });
           return;
         }
         if (terminalGeneration) return;

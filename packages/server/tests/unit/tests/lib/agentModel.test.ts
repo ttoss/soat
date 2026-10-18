@@ -361,16 +361,18 @@ describe('resolveVertexSettings', () => {
     });
   });
 
-  test('ignores an incomplete service-account key file and falls back to ADC', () => {
+  test('refuses an incomplete service-account key file even where ADC is allowed', () => {
     withAmbientCredentials('true', () => {
-      expect(
-        resolveVertexSettings({
+      expect(() => {
+        return resolveVertexSettings({
           secretValue: JSON.stringify({
             project_id: 'sa-project',
             client_email: 'vertex@sa-project.iam.gserviceaccount.com',
           }),
-        })
-      ).toEqual({ project: 'sa-project', location: 'us-central1' });
+        });
+      }).toThrow(
+        expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+      );
     });
   });
 
@@ -397,16 +399,15 @@ describe('resolveBedrockCredentials', () => {
     });
   });
 
-  test('falls back to the AWS default credential chain when the key pair is incomplete', () => {
+  test('refuses an incomplete key pair even where the default chain is allowed', () => {
     withAmbientCredentials('true', () => {
-      const result = resolveBedrockCredentials({
-        secretValue: JSON.stringify({ accessKeyId: 'AKIAIOSFODNN7EXAMPLE' }),
-      });
-      expect(result.region).toBe('us-east-1');
-      expect('credentialProvider' in result).toBe(true);
-      if ('credentialProvider' in result) {
-        expect(typeof result.credentialProvider).toBe('function');
-      }
+      expect(() => {
+        return resolveBedrockCredentials({
+          secretValue: JSON.stringify({ accessKeyId: 'AKIAIOSFODNN7EXAMPLE' }),
+        });
+      }).toThrow(
+        expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+      );
     });
   });
 
@@ -428,16 +429,13 @@ describe('resolveBedrockCredentials', () => {
     });
   });
 
-  test('falls back to the AWS default credential chain when the secret is invalid JSON and not an ABSK token', () => {
+  test('refuses a secret that is neither JSON nor an ABSK token even where the default chain is allowed', () => {
     withAmbientCredentials('true', () => {
-      const result = resolveBedrockCredentials({
-        secretValue: 'not-valid-json',
-      });
-      expect(result.region).toBe('us-east-1');
-      expect('credentialProvider' in result).toBe(true);
-      if ('credentialProvider' in result) {
-        expect(typeof result.credentialProvider).toBe('function');
-      }
+      expect(() => {
+        return resolveBedrockCredentials({ secretValue: 'not-valid-json' });
+      }).toThrow(
+        expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+      );
     });
   });
 
@@ -624,6 +622,50 @@ describe('a record that links no credential of its own', () => {
       ).toEqual({ project: 'my-project', location: 'us-central1' });
     });
   });
+
+  // A record that links a secret declared a credential of its own, so the
+  // deployment's is never a fallback for it, opt-in or not.
+  test.each([
+    ['bedrock', 'not-a-credential'],
+    ['bedrock', '{"apiKey":""}'],
+    ['bedrock', 'null'],
+    ['bedrock', ''],
+    ['vertex', '{"project_id":"p"}'],
+    ['vertex', '{"apiKey":""}'],
+    ['vertex', ''],
+  ] as const)(
+    'a %s record linking the unusable secret %p is refused even where the operator opted in',
+    (provider, secretValue) => {
+      withAmbientCredentials('true', () => {
+        expect(() => {
+          return buildModel({
+            provider,
+            secretValue,
+            model: 'some-model',
+            config: { region: 'us-east-1', project: 'p' },
+          });
+        }).toThrow(
+          expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+        );
+      });
+    }
+  );
+
+  test.each(['bedrock', 'vertex'] as const)(
+    'a %s record linking an unusable secret beside config.apiKey signs with config.apiKey',
+    (provider) => {
+      withAmbientCredentials(undefined, () => {
+        expect(() => {
+          return buildModel({
+            provider,
+            secretValue: '{}',
+            model: 'some-model',
+            config: { region: 'us-east-1', project: 'p', apiKey: 'k' },
+          });
+        }).not.toThrow();
+      });
+    }
+  );
 
   // The embedding stack is the deployment's own: EMBEDDING_PROVIDER and its
   // region are operator settings that no tenant writes, so an instance role is

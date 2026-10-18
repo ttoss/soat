@@ -73,3 +73,20 @@ export const insertUsageEvent = async (args: {
     transaction: args.transaction,
   });
 };
+
+/**
+ * A usage event a meter could not write. Logged through `console.error` rather
+ * than `debug`, which is off in production: the call it measured was billed by
+ * the provider, and the log is the only record the event is missing.
+ */
+export const reportLostUsageEvent = (args: {
+  recorder: string;
+  detail: string;
+  error: unknown;
+}): void => {
+  // eslint-disable-next-line no-console
+  console.error(
+    `${args.recorder}: usage event not written (${args.detail})`,
+    args.error
+  );
+};

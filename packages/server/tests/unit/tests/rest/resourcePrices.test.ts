@@ -252,17 +252,12 @@ describe('Resource prices', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('a pipeline tool cannot be priced', async () => {
-      const step = await createTool();
-      const pipeline = await createTool({
-        type: 'pipeline',
-        execute: undefined,
-        pipeline: { steps: [{ id: 'call', tool_id: step }] },
-      });
+    test('a client tool cannot be priced', async () => {
+      const client = await createTool({ type: 'client', execute: undefined });
 
       const response = await putPrices({
         projectId: publisherId,
-        rows: [priceRow({ toolId: pipeline })],
+        rows: [priceRow({ toolId: client })],
       });
 
       expect(response.status).toBe(400);
@@ -284,6 +279,30 @@ describe('Resource prices', () => {
   });
 
   describe('a priced call', () => {
+    test('prices a pipeline on its own execution', async () => {
+      const pipeline = await createTool({
+        type: 'pipeline',
+        execute: undefined,
+        pipeline: { steps: [], output: { pages: 4 } },
+      });
+      await putPrices({
+        projectId: publisherId,
+        rows: [
+          priceRow({ toolId: pipeline, quantity: { var: 'response.pages' } }),
+        ],
+      });
+
+      expect(
+        (await callTool({ toolId: pipeline, key: publisherKey })).status
+      ).toBe(200);
+
+      const event = await lastEvent({ toolId: pipeline, key: publisherKey });
+      expect(componentOf(event, 'page')).toMatchObject({
+        quantity: 4,
+        cost_usd: 0.008,
+      });
+    });
+
     test('adds the resource component, read off the response', async () => {
       const toolId = await createTool();
       await putPrices({

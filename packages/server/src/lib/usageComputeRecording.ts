@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { getEffectivePrice } from './priceBook';
 import { computeComponentCostUsd } from './priceCompute';
-import { insertUsageEvent } from './usageEventWrite';
+import { insertUsageEvent, reportLostUsageEvent } from './usageEventWrite';
 import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
@@ -138,11 +138,10 @@ export const recordComputeUsage = async (args: {
       await evaluateProjectThresholds({ projectId: args.projectId });
     }
   } catch (error) {
-    log(
-      'recordComputeUsage: failed run=%s node=%s error=%s',
-      args.runPublicId,
-      args.nodeId,
-      error instanceof Error ? error.message : String(error)
-    );
+    reportLostUsageEvent({
+      recorder: 'recordComputeUsage',
+      detail: `run=${args.runPublicId} node=${args.nodeId}`,
+      error,
+    });
   }
 };

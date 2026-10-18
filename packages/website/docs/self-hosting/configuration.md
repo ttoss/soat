@@ -276,6 +276,10 @@ credential:
 - `400 AI_PROVIDER_MISCONFIGURED` when such a record generates or lists models,
   so one that reached the table another way fails closed.
 
+The fallback applies only to a record that links no secret and sets no
+`config.apiKey`. A record whose linked secret holds no usable credential is
+`400 AI_PROVIDER_MISCONFIGURED` at write and at use, whatever this is set to.
+
 Set `true` only on a **single-tenant** deployment (an EC2 instance profile or
 ECS task role serving your own team); otherwise a tenant's record generates on
 the deployment's cloud account, quotas and IAM role.
@@ -327,9 +331,9 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 | `EMBEDDING_API_KEY`                  | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY`           |
 | `EMBEDDING_BASE_URL`                 | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                                  |
 | `EMBEDDING_REGION`                   | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                                  |
-| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_                | USD per **million** input tokens. Unset meters embeddings at `0`; the price book does not price them |
+| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_                | USD per **million** input tokens. Unset meters embeddings unpriced (`0` on `ollama`); the price book does not price them |
 
-Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding at `0` (correct for a local model, silently free on a vendor-billed one) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
+Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding unpriced (`cost_usd` `null`; `0` on `ollama`, a local model) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
 Change `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together. Dimensions may not exceed **2000**, the widest vector pgvector can build an HNSW index over; a larger model is refused at startup. Bedrock without `EMBEDDING_API_KEY` uses the AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 

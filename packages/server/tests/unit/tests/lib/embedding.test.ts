@@ -1,3 +1,7 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+import { db } from 'src/db';
 import { buildEmbeddingModel, getEmbeddings } from 'src/lib/embedding';
 
 // The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
@@ -150,5 +154,92 @@ describe('getEmbeddings', () => {
     expect(embeddings[1]).toHaveLength(
       Number(process.env.EMBEDDING_DIMENSIONS)
     );
+  });
+});
+
+// A batch past the provider's per-call limit is several provider calls, each
+// billed on its own. No route reaches one with the stub's 2048-value limit
+// (`POST /embeddings` takes 256), so the batch is driven here.
+describe('getEmbeddings — a batch whose later call fails', () => {
+  const PER_CALL = 2048;
+  let stub: Server;
+  let previousBaseUrl: string | undefined;
+  let projectId: number;
+
+  beforeAll(async () => {
+    stub = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += String(chunk);
+      });
+      req.on('end', () => {
+        const inputs = (JSON.parse(raw) as { input: string[] }).input;
+        res.setHeader('content-type', 'application/json');
+        if (inputs.includes('poison')) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: { message: 'refused' } }));
+          return;
+        }
+        res.end(
+          JSON.stringify({
+            object: 'list',
+            data: inputs.map((_input, index) => {
+              return { object: 'embedding', index, embedding: [0.1] };
+            }),
+            usage: {
+              prompt_tokens: inputs.length,
+              total_tokens: inputs.length,
+            },
+          })
+        );
+      });
+    });
+    await new Promise<void>((resolve) => {
+      stub.listen(0, '127.0.0.1', resolve);
+    });
+    previousBaseUrl = process.env.EMBEDDING_BASE_URL;
+    process.env.EMBEDDING_BASE_URL = `http://127.0.0.1:${(stub.address() as AddressInfo).port}/v1`;
+
+    const project = await db.Project.create({ name: 'Partial batch' });
+    projectId = project.id as number;
+  });
+
+  afterAll(async () => {
+    process.env.EMBEDDING_BASE_URL = previousBaseUrl;
+    await new Promise<void>((resolve) => {
+      stub.close(() => {
+        resolve();
+      });
+    });
+  });
+
+  test('meters the calls that completed, then fails', async () => {
+    const texts = [
+      ...Array.from({ length: PER_CALL }, () => {
+        return 'word';
+      }),
+      'poison',
+    ];
+
+    await expect(
+      getEmbeddings({
+        texts,
+        billing: { projectId, generationId: null },
+        subject: null,
+      })
+    ).rejects.toThrow();
+
+    const events = await db.UsageEvent.findAll({
+      where: { projectId, source: 'embedding' },
+    });
+    expect(events).toHaveLength(1);
+    const components = await db.UsageComponent.findAll({
+      where: { usageEventId: events[0].id },
+    });
+    expect(
+      components.map((component) => {
+        return [component.component, Number(component.quantity)];
+      })
+    ).toEqual([['input_tokens', PER_CALL]]);
   });
 });

@@ -50,16 +50,17 @@ const shiftDecimalLeft = (args: { value: string; places: number }): string => {
 /**
  * USD per input token, from a value denominated per million tokens.
  *
- * Unset is zero: a deployment that states no rate charges nothing, which is
- * true of a local model and is the deployment's own claim about its cost
- * anywhere else. An unparseable value throws instead, so a rate that was meant
- * to be set fails loudly rather than metering at zero.
+ * Unset is unpriced (`null`): a vendor bills every call, and a deployment that
+ * states no rate has not priced it. A local model bills nothing per token, so
+ * unset is a real zero there. An unparseable value throws, so a rate that was
+ * meant to be set fails loudly.
  */
 export const parseEmbeddingInputTokenPriceUsd = (args: {
   value: string | undefined;
-}): string => {
+  provider: string | undefined;
+}): string | null => {
   const raw = args.value?.trim();
-  if (!raw) return '0';
+  if (!raw) return args.provider === 'ollama' ? '0' : null;
   if (!PLAIN_DECIMAL.test(raw)) throw invalid(raw);
   return shiftDecimalLeft({
     value: raw,
@@ -67,21 +68,17 @@ export const parseEmbeddingInputTokenPriceUsd = (args: {
   });
 };
 
-export const readEmbeddingInputTokenPriceUsd = (): string => {
+export const readEmbeddingInputTokenPriceUsd = (): string | null => {
   return parseEmbeddingInputTokenPriceUsd({
     value: process.env[EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV],
+    provider: process.env.EMBEDDING_PROVIDER,
   });
 };
 
 /**
- * The boot line for a deployment that will meter embeddings at zero without
- * having said so.
- *
- * An unset rate is a valid configuration and the recorded cost is a real zero,
- * which is why this is a log line and not a refusal. But zero is also what a
- * deployment paying a vendor per token gets by omission, and the figure is
- * frozen onto every event — so the one boot where it can still be caught cheaply
- * is worth a sentence.
+ * The boot line for a deployment that will meter embeddings unpriced without
+ * having said so. A log line, not a refusal: an unpriced event is still
+ * captured, and can be priced by setting the rate.
  *
  * Silent for a local model, where nothing is billed per token and the line would
  * be noise on every dev boot.
@@ -94,7 +91,8 @@ export const embeddingPriceWarning = (args: {
   if (args.value?.trim()) return null;
   return (
     `${EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV} is not set, so embeddings on ` +
-    `provider '${args.provider}' are metered at $0. Set it to this model's ` +
-    'USD per million input tokens for cost usage and quotas to reflect them.'
+    `provider '${args.provider}' are metered unpriced (cost_usd null). Set ` +
+    "it to this model's USD per million input tokens for cost usage and " +
+    'quotas to reflect them.'
   );
 };

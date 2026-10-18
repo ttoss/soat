@@ -10,7 +10,7 @@ import {
   computeComponentCostUsd,
   sumComponentCostUsd,
 } from './priceCompute';
-import { withDurablePublicIds } from './usageEventWrite';
+import { reportLostUsageEvent, withDurablePublicIds } from './usageEventWrite';
 import {
   type GenerationEventAttribution,
   readGenerationEventAttribution,
@@ -45,10 +45,13 @@ const priceEmbeddingComponents = (args: {
     return {
       ...component,
       unitPrice,
-      costUsd: computeComponentCostUsd({
-        quantity: component.quantity,
-        unitPrice: Number(unitPrice),
-      }),
+      costUsd:
+        unitPrice === null
+          ? null
+          : computeComponentCostUsd({
+              quantity: component.quantity,
+              unitPrice: Number(unitPrice),
+            }),
       priceId: null,
     };
   });
@@ -92,9 +95,8 @@ const resolveEmbeddingAttribution = async (args: {
  * The embedding stack is configured per deployment (`EMBEDDING_PROVIDER` /
  * `EMBEDDING_MODEL`), not by an `AiProvider` row, so the event bills against
  * the provider *slug* with `ai_provider_id = null` and is priced from
- * `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`. An unset rate meters at zero, so an
- * embedding always carries a cost and can never make a `cost_usd` quota
- * unenforceable.
+ * `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`; unset, it is unpriced (see
+ * `embeddingPrice.ts`).
  *
  * Like a generation-less completion, an embedding call has no replay identity —
  * nothing re-delivers it and a retried request really did reach the provider —
@@ -168,11 +170,11 @@ export const recordEmbeddingUsage = async (args: {
       await evaluateProjectThresholds({ projectId: args.projectId });
     }
   } catch (error) {
-    log(
-      'recordEmbeddingUsage: failed projectId=%d error=%s',
-      args.projectId,
-      error
-    );
+    reportLostUsageEvent({
+      recorder: 'recordEmbeddingUsage',
+      detail: `projectId=${args.projectId}`,
+      error,
+    });
   }
 };
 

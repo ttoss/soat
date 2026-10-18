@@ -291,6 +291,46 @@ describe('Streamed agent generations', () => {
       expect(generation.error).toBeNull();
     });
 
+    // The agent names no model, so it runs its provider's default: the meter
+    // records the model the provider served, which is what a price matches.
+    test('a streamed turn of an agent with no model meters the served model, priced', async () => {
+      const priceRes = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/ai-providers/${aiProviderId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'stub-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000001,
+              effective_from: new Date(Date.now() - 1000).toISOString(),
+            },
+          ],
+        });
+      expect(priceRes.status).toBe(200);
+      const agentId = await createAgent();
+
+      await stream(agentId);
+      const generation = await settledGenerationOf(agentId);
+
+      let events: Array<{ model: string | null; cost_usd: number | null }> = [];
+      for (let attempt = 0; attempt < 200 && events.length === 0; attempt++) {
+        const res = await authenticatedTestClient(adminToken)
+          .get('/api/v1/usage/events')
+          .query({ generation_id: generation.id, meter_type: 'llm_tokens' });
+        expect(res.status).toBe(200);
+        events = res.body.data;
+        if (events.length === 0) {
+          await new Promise((resolve) => {
+            return setTimeout(resolve, 25);
+          });
+        }
+      }
+      expect(events).toHaveLength(1);
+      expect(events[0].model).toBe('stub-model');
+      expect(events[0].cost_usd).not.toBeNull();
+    });
+
     test('a streamed answer emits generations.completed once, carrying its record', async () => {
       const agentId = await createAgent();
 

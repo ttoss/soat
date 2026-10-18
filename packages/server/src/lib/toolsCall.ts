@@ -22,6 +22,7 @@ import {
 } from './toolsCallDispatch';
 import { resolvePresetParametersForCall } from './toolTemplates';
 import {
+  meterToolExecution,
   type ToolCallAttribution,
   type ToolExecutionMeter,
   withReleasingGuardrails,
@@ -287,25 +288,33 @@ const runResolvedTool = async (
   });
 
   if (type === 'pipeline') {
-    const rawResult = await runPipeline({
-      pipeline: args.tool.pipeline,
-      presetParameters,
-      input,
-      remainingDepth: args.remainingDepth,
-      callStep: (step: Parameters<PipelineStepCaller>[0]) => {
-        return callPipelineStep({
-          step,
-          pipeline: args,
-          attribution,
-          callResolved: runResolvedTool,
+    // In-process, so the call is under way once the gate released it: it is
+    // metered as an execution of its own, beside each step's.
+    return meterToolExecution({
+      meter: { ...meter, attribution },
+      send: async (markSent) => {
+        markSent();
+        const rawResult = await runPipeline({
+          pipeline: args.tool.pipeline,
+          presetParameters,
+          input,
+          remainingDepth: args.remainingDepth,
+          callStep: (step: Parameters<PipelineStepCaller>[0]) => {
+            return callPipelineStep({
+              step,
+              pipeline: args,
+              attribution,
+              callResolved: runResolvedTool,
+            });
+          },
+        });
+        return applyToolOutputMapping({
+          outputMapping:
+            (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
+          rawResult,
+          input: mergedInput,
         });
       },
-    });
-    return applyToolOutputMapping({
-      outputMapping:
-        (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
-      rawResult,
-      input: mergedInput,
     });
   }
 

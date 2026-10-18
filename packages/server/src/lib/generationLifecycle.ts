@@ -6,10 +6,11 @@ import type { PendingGeneration } from './agentGenerationTypes';
 import { emitGenerationEvent } from './generationEvents';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
-import { routedAiProviderId } from './modelRouteExecutor';
+import { routedAiProviderId, routedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
+import { spentUsageOf, sumStepUsage } from './turnSpend';
 import { recordGenerationUsage } from './usage';
 import type { GenerationTurnFacts } from './usageAgentPricing';
 
@@ -47,7 +48,8 @@ const meterFailedSegment = (args: {
   return [
     recordGenerationUsage({
       generationId: args.generationId,
-      model: modelIdOf(args.model),
+      model:
+        (args.model && routedModelName(args.model)) ?? modelIdOf(args.model),
       usage: args.usage,
       aiProviderId: args.model ? routedAiProviderId(args.model) : null,
       stepsAlreadySpent: args.stepsAlreadySpent,
@@ -82,7 +84,8 @@ export const recordGenerationFailure = async (args: {
   // Derived here so no failure path has to remember to pass it: `usage` is only
   // supplied explicitly by a caller that mapped the error before handing it over
   // (the mapped `DomainError` carries no counts).
-  const usage = args.usage ?? usageFromFailure(args.error);
+  const usage =
+    args.usage ?? spentUsageOf(args.error) ?? usageFromFailure(args.error);
 
   log(
     'recordGenerationFailure: generationId=%s traceId=%s error=%o',
@@ -184,9 +187,9 @@ export const recordContinuationFailure = async (args: {
     error: args.error,
     model: args.pending.resolvedModel,
     projectId: args.pending.projectId,
-    // The continuation fails on the model's answer the same way the initial
-    // turn does, and its tokens were billed the same way.
-    usage: usageFromFailure(args.error),
+    // Every call the segment completed was billed, the one whose answer
+    // failed `output_schema` included.
+    usage: sumStepUsage(args.steps) ?? usageFromFailure(args.error),
     stepsAlreadySpent: priorStepsOf(args.pending).length,
   });
 };
