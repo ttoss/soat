@@ -49,21 +49,19 @@ const seedReHandoffPending = (args: {
     allMessages: args.ctx.allMessages,
     result: {
       steps: [],
-      response: {
-        messages: [
-          {
-            role: 'assistant',
-            content: [
-              {
-                type: 'tool-call',
-                toolCallId,
-                toolName: args.toolName,
-                input: args.frozenArgs,
-              },
-            ],
-          },
-        ],
-      },
+      responseMessages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool-call',
+              toolCallId,
+              toolName: args.toolName,
+              input: args.frozenArgs,
+            },
+          ],
+        },
+      ],
     },
     model: args.ctx.model,
     typedAgent: args.ctx.typedAgent,

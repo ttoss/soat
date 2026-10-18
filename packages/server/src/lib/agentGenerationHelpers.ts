@@ -146,9 +146,11 @@ const storePendingGenerationState = (args: {
   pendingToolCalls: ClientToolCall[];
   syntheticToolResults?: ClientToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
-  result: { steps: unknown[]; response: { messages: unknown[] } };
+  result: { steps: unknown[]; responseMessages: unknown[] };
   /** Steps this turn spent before the segment `result` describes. */
   priorSteps?: unknown[];
+  /** Trailing `allMessages` this turn produced before `result`. */
+  priorTurnMessageCount?: number;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
   toolContext?: Record<string, string> | null;
@@ -160,7 +162,9 @@ const storePendingGenerationState = (args: {
   // a different history than a live one.
   const syntheticToolResults = args.syntheticToolResults ?? [];
   const pendingToolCalls = toPendingToolCalls(args.pendingToolCalls);
-  const messages = [...args.allMessages, ...args.result.response.messages];
+  const messages = [...args.allMessages, ...args.result.responseMessages];
+  const turnMessageCount =
+    (args.priorTurnMessageCount ?? 0) + args.result.responseMessages.length;
   // The whole turn's steps, not the last segment's: a turn can pause more than
   // once, and both its step budget and its trace are counted across all of them.
   const steps = [
@@ -178,6 +182,7 @@ const storePendingGenerationState = (args: {
     pendingToolCalls,
     syntheticToolResults,
     messages,
+    turnMessageCount,
     steps,
     resolvedModel: args.model,
     aiProviderId: args.aiProviderId,
@@ -192,6 +197,7 @@ const storePendingGenerationState = (args: {
     pendingToolCalls,
     syntheticToolResults,
     messages,
+    turnMessageCount,
     steps,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
@@ -235,8 +241,9 @@ export const savePendingGeneration = async (args: {
   pendingToolCalls: ClientToolCall[];
   syntheticToolResults?: ClientToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
-  result: { steps: unknown[]; response: { messages: unknown[] } };
+  result: { steps: unknown[]; responseMessages: unknown[] };
   priorSteps?: unknown[];
+  priorTurnMessageCount?: number;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -337,7 +344,8 @@ export const buildCompletedGenerationResult = async (args: {
   rootTraceId?: string | null;
   result: {
     steps: unknown[];
-    response: { modelId: string; messages?: Array<unknown> };
+    response: { modelId: string };
+    responseMessages: unknown[];
     text: string;
     finishReason: string;
     object?: unknown;
@@ -394,7 +402,7 @@ export const buildCompletedGenerationResult = async (args: {
       model,
       content: args.result.text,
       finishReason: args.result.finishReason,
-      responseMessages: args.result.response.messages,
+      responseMessages: args.result.responseMessages,
       ...(args.result.object !== undefined
         ? { object: args.result.object }
         : {}),
