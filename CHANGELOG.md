@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.86.4](https://github.com/ttoss/soat/compare/v0.86.3...v0.86.4) (2026-10-18)
+
+### Bug Fixes
+
+* **usage:** meter every provider call the runtime pays for ([#1673](https://github.com/ttoss/soat/issues/1673)) ([b3827c9](https://github.com/ttoss/soat/commit/b3827c9c3a3a795075121e20413333f4a3b4fd1a)), closes [#1668](https://github.com/ttoss/soat/issues/1668) [#1672](https://github.com/ttoss/soat/issues/1672) [#1670](https://github.com/ttoss/soat/issues/1670) [#1671](https://github.com/ttoss/soat/issues/1671) [#1669](https://github.com/ttoss/soat/issues/1669)
+
 ## [0.86.3](https://github.com/ttoss/soat/compare/v0.86.2...v0.86.3) (2026-10-18)
 
 ### Bug Fixes
