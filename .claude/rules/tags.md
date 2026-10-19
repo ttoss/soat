@@ -32,10 +32,20 @@ resource that hand-rolls any of them is a bug. Everything shared lives in
       `additionalProperties: { type: string }` (`tagSchemaContract.test.ts`)
 - [ ] Permissions: the three operationIds in `src/permissions/<module>.json`
 - [ ] Docs: a `### Tags` entry under Key Concepts naming the `?tags=` filter;
-      `iam.md` §Tags lists the resource
+      the resource's row in `iam.md` §Which resources carry which bag
+      marks `tags`
 - [ ] Tests: `tests/unit/tests/rest/<module>Tags.test.ts` — happy path, `401`,
       `403`, `404`, `400` on a non-string value and on an array body, list
       filter narrows, pair without a colon is `400`
+
+## Choosing the bags
+
+A new resource gets `tags` when a policy must scope its rows
+(`soat:ResourceTag`) or callers match it by label (`?tags=`, knowledge
+search); `metadata` when callers attach a typed record; both when both. The
+field-level rule is `iam.md` §Choosing a bag. Every model declaring either
+column has a row in `iam.md` §Which resources carry which bag, naming exactly
+its bags (`tests/harness/annotationBags.test.mjs`).
 
 ## Rules
 
