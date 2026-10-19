@@ -735,10 +735,21 @@ export const resolveToolOutputsResult = async (args: {
   const resumeCount = args.resumeCount ?? 0;
   const priorSteps = args.pending.steps ?? [];
   const priorMessages = priorTurnMessages(args);
-  const partition = await partitionClientCalls({
-    steps: args.result.steps,
-    resolvedTools: args.pending.resolvedTools,
-  });
+  let partition: ClientCallPartition | null;
+  try {
+    partition = await partitionClientCalls({
+      steps: args.result.steps,
+      resolvedTools: args.pending.resolvedTools,
+    });
+  } catch (error) {
+    // The calls the gate refused were already billed, as on the initial turn.
+    throw await recordContinuationFailure({
+      generationId: args.generationId,
+      pending: args.pending,
+      steps: args.result.steps,
+      error,
+    });
+  }
 
   // All-gated with the resume budget spent → stop looping and complete.
   const capReached =
