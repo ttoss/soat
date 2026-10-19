@@ -4,6 +4,7 @@ import { authenticatedTestClient } from '../../testClient';
 const ACTIONS = [
   'documents:CreateDocument',
   'knowledge:SearchKnowledge',
+  'embeddings:CreateEmbeddings',
   'metadata-schemas:CreateMetadataSchema',
 ];
 

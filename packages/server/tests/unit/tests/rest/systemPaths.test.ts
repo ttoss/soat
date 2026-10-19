@@ -33,6 +33,7 @@ describe('the reserved system root', () => {
         'conversations:GetConversation',
         'conversations:UpdateConversation',
         'knowledge:SearchKnowledge',
+        'embeddings:CreateEmbeddings',
       ],
     });
     userToken = setup.userToken;

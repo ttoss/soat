@@ -256,6 +256,8 @@ One statement allows listing and searching across the whole project, then **subt
 
 The condition never names `$FINANCE_DOC_ID`. A document tagged `team: finance` tomorrow is out of scope the moment it is written — no policy edit.
 
+A second statement grants `embeddings:CreateEmbeddings`, which a search with a `query` bills to the project ([Who pays for the query](/docs/modules/knowledge#who-pays-for-the-query)).
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -279,6 +281,11 @@ POLICY_ID=$(soat create-policy \
         "condition": {
           "StringNotEquals": { "soat:ResourceTag/team": "finance" }
         }
+      },
+      {
+        "effect": "Allow",
+        "action": ["embeddings:CreateEmbeddings"],
+        "resource": ["srn:'"$PROJECT_ID"':*:*"]
       }
     ]
   }' | jq -r '.id')
@@ -318,6 +325,11 @@ const { data: policy, error: policyErr } =
             condition: {
               StringNotEquals: { 'soat:ResourceTag/team': 'finance' },
             },
+          },
+          {
+            effect: 'Allow',
+            action: ['embeddings:CreateEmbeddings'],
+            resource: [`srn:${PROJECT_ID}:*:*`],
           },
         ],
       },
@@ -370,6 +382,11 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
           \"condition\": {
             \"StringNotEquals\": {\"soat:ResourceTag/team\": \"finance\"}
           }
+        },
+        {
+          \"effect\": \"Allow\",
+          \"action\": [\"embeddings:CreateEmbeddings\"],
+          \"resource\": [\"srn:${PROJECT_ID}:*:*\"]
         }
       ]
     }
