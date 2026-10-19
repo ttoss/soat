@@ -262,6 +262,10 @@ This does not make retrieved content safe to act on: a tool call made after read
 
 `project_id` is optional; when omitted, accessible projects come from the caller's identity (API key scope, admin wildcard, or policy grants).
 
+### Who pays for the query
+
+A search with a `query` embeds it once, billed to the first project in scope, by public id, that the caller may spend embeddings on (`embeddings:CreateEmbeddings`), as [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) requires. A caller who may only read is refused with `403 FORBIDDEN`; a search by `tags`, `metadata`, paths or ids alone embeds nothing and needs no such permission. See [Embeddings](./embeddings.md).
+
 ### Policy Conditions Narrow the Candidate Set
 
 With `project_id`, the caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `soat:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).

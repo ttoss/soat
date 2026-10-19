@@ -77,7 +77,7 @@ A usage event belongs to a project, so an embedding call needs one:
 | The same call from a project-scoped credential | the credential's project |
 | The same call with neither | refused, `400 VALIDATION_FAILED` |
 | Ingestion, memory, evaluation | the document's, memory's or run's project |
-| A knowledge search | the project searched; across several, the first of them; an admin's search naming none is not metered |
+| A knowledge search with a `query` | the first project in scope, by public id, the caller holds `embeddings:CreateEmbeddings` on (a project-scoped credential's own project); `403 FORBIDDEN` when there is none; an admin's search naming no project is not metered. A search with no `query` embeds nothing |
 
 The query an agent's [`knowledge_config`](./agents.md#knowledge-config) embeds before its turn is also attributed to that generation: the event carries the generation's `generation_id`, `agent_id`, `trace_id`, `session_id` and `actor_id`, so the spend reads per generation and counts towards `agent` and `actor` [quotas](./quotas.md). If the generation's record is never written, the event is billed to the project only.
 

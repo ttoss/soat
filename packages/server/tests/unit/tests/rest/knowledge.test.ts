@@ -39,7 +39,11 @@ describe('Knowledge', () => {
           statement: [
             {
               effect: 'Allow',
-              action: ['documents:CreateDocument', 'knowledge:SearchKnowledge'],
+              action: [
+                'documents:CreateDocument',
+                'knowledge:SearchKnowledge',
+                'embeddings:CreateEmbeddings',
+              ],
             },
           ],
         },

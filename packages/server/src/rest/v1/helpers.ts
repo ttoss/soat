@@ -14,6 +14,10 @@
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
+  EMBEDDING_SPEND,
+  firstProjectByPublicId,
+} from 'src/lib/embeddingSpend';
+import {
   principalFromAuthUser,
   type RequestPrincipal,
 } from 'src/lib/principals';
@@ -403,6 +407,36 @@ export const resolveWriteProjectId = async (args: {
   }
 
   return projectIds![0];
+};
+
+/**
+ * The project a caller's embedding is billed to, among `scope`: the first, by
+ * public id, the caller may spend embeddings on. A credential bound to one
+ * project resolves to it. `undefined` scope is an admin's unrestricted search,
+ * which names no project; an empty scope embeds over nothing.
+ */
+export const resolveEmbeddingSpendProjectId = async (args: {
+  ctx: Context;
+  scope: number[] | undefined;
+}): Promise<number | null> => {
+  const { ctx, scope } = args;
+  requireAuth(ctx);
+  if (scope === undefined || scope.length === 0) return null;
+
+  const spendable = await ctx.authUser.resolveProjectIds(EMBEDDING_SPEND);
+  const candidates =
+    spendable === undefined
+      ? scope
+      : scope.filter((id) => {
+          return spendable?.includes(id) ?? false;
+        });
+  if (candidates.length === 0) {
+    throw new DomainError(
+      'FORBIDDEN',
+      `Embedding the query is billed to a project, and the caller holds ${EMBEDDING_SPEND.action} on none in scope.`
+    );
+  }
+  return firstProjectByPublicId({ projectIds: candidates });
 };
 
 export type { RequestPrincipal } from 'src/lib/principals';

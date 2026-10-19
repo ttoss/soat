@@ -12,7 +12,11 @@ import {
 } from 'src/lib/structuredFilter';
 import { hasTagFilter, readTagBag } from 'src/lib/tags';
 
-import { requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  requireAuth,
+  resolveEmbeddingSpendProjectId,
+  resolveReadProjectIds,
+} from './helpers';
 
 const knowledgeRouter = new Router<Context>();
 
@@ -147,14 +151,14 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     return;
   }
 
+  // One query embedding, billed once, and only when there is a query to embed.
+  const billedProjectId = body.query
+    ? await resolveEmbeddingSpendProjectId({ ctx, scope: projectIds })
+    : null;
+
   const results = await searchKnowledge({
     projectIds,
-    // One query embedding, billed once: to the first project of a scope
-    // spanning several. An admin's unrestricted search names no project.
-    embeddingBilling: projectEmbeddingBilling({
-      projectId:
-        projectIds && projectIds.length > 0 ? Math.min(...projectIds) : null,
-    }),
+    embeddingBilling: projectEmbeddingBilling({ projectId: billedProjectId }),
     policyWhere,
     query: body.query,
     minSimilarity: body.min_similarity,

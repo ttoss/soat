@@ -13,6 +13,7 @@ const DOCUMENT_ACTIONS = [
   'documents:GetDocumentVersion',
   'documents:RestoreDocumentVersion',
   'knowledge:SearchKnowledge',
+  'embeddings:CreateEmbeddings',
 ];
 
 /**

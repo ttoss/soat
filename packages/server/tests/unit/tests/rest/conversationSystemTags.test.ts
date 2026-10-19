@@ -75,6 +75,7 @@ describe('conversation system tags', () => {
         'documents:ListDocuments',
         'documents:UpdateDocument',
         'knowledge:SearchKnowledge',
+        'embeddings:CreateEmbeddings',
       ],
     });
     userToken = setup.userToken;
