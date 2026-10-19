@@ -138,6 +138,8 @@ paths:
         - Tasks
       summary: Create a task
       operationId: createTask
+      parameters:
+        - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -145,6 +147,15 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateTaskRequest'
       responses:
+        '200':
+          description: >-
+            The idempotency key already names a task created by the same
+            request; that task is returned as it is now and no second task is
+            created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
         '201':
           description: Task created
           content:
@@ -153,15 +164,20 @@ paths:
                 $ref: '#/components/schemas/Task'
         '400':
           description: >-
-            Bad request — invalid payload (`TASK_PAYLOAD_INVALID`), or `state`
+            Bad request — invalid payload (`TASK_PAYLOAD_INVALID`), `state`
             does not name a declared state of the workflow
-            (`TASK_STATE_NOT_FOUND`)
+            (`TASK_STATE_NOT_FOUND`), or an invalid idempotency key
+            (`VALIDATION_FAILED`)
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '404':
           description: Workflow not found
+        '409':
+          description: >-
+            The idempotency key names a task created by a different request
+            (`IDEMPOTENCY_KEY_REUSED`)
 
   /api/v1/tasks/{task_id}:
     get:
@@ -774,6 +790,16 @@ components:
         assignee:
           type: string
           nullable: true
+        idempotency_key:
+          type: string
+          maxLength: 255
+          description: >-
+            The create's deduplication key, unique within the project and
+            claimed for as long as the task it created exists. The same key
+            with the same body returns that task as it is now (`200`) instead
+            of creating a second one; with a different body it is
+            `409 IDEMPOTENCY_KEY_REUSED`. A create that fails claims no key.
+            Equivalent to the `Idempotency-Key` header.
         state:
           type: string
           description: >-

@@ -42,6 +42,13 @@ import { Workflow } from './Workflow';
       name: 'tasks_status_stall_deadline_at_idx',
       fields: ['status', 'stall_deadline_at'],
     },
+    // A create's deduplication key is unique within its project; null for a
+    // create that sent none, which Postgres never counts as a duplicate.
+    {
+      name: 'tasks_project_id_idempotency_key_unique',
+      unique: true,
+      fields: ['project_id', 'idempotency_key'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: Task) => {
@@ -196,6 +203,16 @@ export class Task extends Model {
   // paused is left for the row's own `resume`.
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare pausedByProject: boolean;
+
+  // The key of the create that wrote this task, claimed for as long as the task
+  // exists, so a retried create replays instead of creating a second task.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare idempotencyKey: string | null;
+
+  // Digest of the create request the key names; a different request under it
+  // is refused rather than replayed.
+  @Column({ type: DataType.STRING(64), allowNull: true })
+  declare idempotencyDigest: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

@@ -2,11 +2,17 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { runStateAutomation } from './tasksAutomation';
+import {
+  findCreatedTask,
+  type TaskCreateIdempotency,
+  taskIdempotencyColumns,
+} from './tasksCreateIdempotency';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import {
@@ -254,7 +260,7 @@ const finalizeCreatedTask = async (args: {
   return mapped;
 };
 
-export const createTask = async (args: {
+export type CreateTaskArgs = {
   projectId: number;
   workflowId: string;
   title: string;
@@ -281,8 +287,15 @@ export const createTask = async (args: {
    * it the place for an attribution label rather than `payload`.
    */
   metadata?: Record<string, unknown>;
+  /**
+   * Claimed by the task this create writes, unique within the project. A
+   * retry under it replays that task as it is now, flagged `idempotent`.
+   */
+  idempotency?: TaskCreateIdempotency;
   principal: TaskPrincipal;
-}) => {
+};
+
+const insertTask = async (args: CreateTaskArgs) => {
   log(
     'createTask: projectId=%d workflowId=%s title=%s state=%s',
     args.projectId,
@@ -331,6 +344,7 @@ export const createTask = async (args: {
     payload,
     metadata: args.metadata ?? null,
     assignee: args.assignee ?? null,
+    ...taskIdempotencyColumns(args.idempotency),
     // A task created straight into a terminal state dispatches nothing and can
     // never be moved again, so it never holds a credential at rest.
     toolContext: closed ? null : toolContext,
@@ -364,6 +378,34 @@ export const createTask = async (args: {
     closed,
     principal: args.principal,
   });
+};
+
+/**
+ * A created task, plus the marker the route reads to tell a fresh create
+ * (`201`) from a replay (`200`). The marker never reaches the wire.
+ */
+export type CreatedTask = Awaited<ReturnType<typeof insertTask>> & {
+  idempotent?: true;
+};
+
+export const createTask = async (
+  args: CreateTaskArgs
+): Promise<CreatedTask> => {
+  const claim = args.idempotency;
+  if (!claim) return insertTask(args);
+
+  const claimed = await claimIdempotencyKey({
+    replay: async () => {
+      const id = await findCreatedTask({ projectId: args.projectId, claim });
+      return id
+        ? { ...(await getTask({ id })), idempotent: true as const }
+        : null;
+    },
+    create: () => {
+      return insertTask(args);
+    },
+  });
+  return 'created' in claimed ? claimed.created : claimed.replayed;
 };
 
 // ── Update (payload / title / assignee — never state) ─────────────────────────
