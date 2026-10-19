@@ -20,6 +20,7 @@ import {
   TASK_AUTOMATION_STATUSES,
   type TaskAutomationStatus,
 } from 'src/lib/tasksAutomationStatus';
+import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
@@ -180,8 +181,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     action: 'tasks:CreateTask',
     resourceType: 'task',
   });
-  const task = await createTask({
-    projectId,
+  const request = {
     workflowId: body.workflow_id,
     title: body.title,
     payload: body.payload,
@@ -190,10 +190,18 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     toolContext: parseNullableToolContextBody(body.tool_context),
     // Rejected before the task row exists, like every other metadata bag.
     metadata: parseMetadataBag(body.metadata),
+  };
+  const idempotencyKey = idempotencyKeyOf(ctx);
+  const { idempotent, ...task } = await createTask({
+    projectId,
+    ...request,
+    idempotency: idempotencyKey
+      ? { key: idempotencyKey, digest: createTaskRequestDigest(request) }
+      : undefined,
     principal: principalFromCtx(ctx),
   });
 
-  ctx.status = 201;
+  ctx.status = idempotent ? 200 : 201;
   ctx.body = task;
 });
 

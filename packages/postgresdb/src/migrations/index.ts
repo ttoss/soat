@@ -41,6 +41,7 @@ import { principalPairs } from './2026-10-17-principalPairs';
 import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
 import { approvalItemTaskPayload } from './2026-10-19-approvalItemTaskPayload';
 import { documentPendingEndUser } from './2026-10-19-documentPendingEndUser';
+import { taskIdempotencyKey } from './2026-10-19-taskIdempotencyKey';
 import { taskTransitionIdempotencyKey } from './2026-10-19-taskTransitionIdempotencyKey';
 import { taskTransitionWorkflowVersions } from './2026-10-19-taskTransitionWorkflowVersions';
 
@@ -107,4 +108,5 @@ export const MIGRATIONS: Migration[] = [
   taskTransitionIdempotencyKey,
   approvalItemTaskPayload,
   taskTransitionWorkflowVersions,
+  taskIdempotencyKey,
 ];

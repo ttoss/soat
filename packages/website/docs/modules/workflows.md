@@ -148,6 +148,10 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 
 `payload` on [`POST /tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) is merged over the task's payload under the transition's lock, before the guard reads it, exactly as [`PATCH /tasks/{task_id}`](/docs/api/tasks/update-task) merges it, and validated against the pinned `payload_schema` (`TASK_PAYLOAD_INVALID`, 400). No other write can land between the payload and the guard that reads it, and a refused move (guard, conflict, invalid payload) writes none of it. On a `requires_approval` transition the payload stays with the gate and is merged when the approval fires the move, so the guard re-run at resolution reads what the requester sent, and a rejected or expired gate writes nothing. The idempotency key compares `payload` like the rest of the body.
 
+### Retrying a create
+
+[`POST /tasks`](/docs/api/tasks/create-task) accepts an `Idempotency-Key` header or `idempotency_key` body field, unique within the project. The same key with the same body answers `200` with the task the first request created, as it is now, and creates nothing; a retry racing the original replays it too. The same key with a different body (any of `workflow_id`, `title`, `payload`, `assignee`, `state`, `tool_context`, `metadata`) is `IDEMPOTENCY_KEY_REUSED` (409). A create that fails claims no key. The key stays claimed for as long as the task exists, so deleting the task releases it.
+
 ### Retrying a transition
 
 [`POST /tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) accepts an `Idempotency-Key` header or `idempotency_key` body field, unique within the task. The same key with the same body answers `200` with the task as it is now and moves nothing, whether the first request applied the move or parked an approval, so a retry after a timeout is safe even on a self-loop. A retry racing the original waits on the task's lock and replays. The same key with a different body is `IDEMPOTENCY_KEY_REUSED` (409). The key stays claimed for as long as the task exists.

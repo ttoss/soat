@@ -6446,6 +6446,37 @@ fi
 $SOAT_CLI delete-task --task-id "$(printf '%s\n' "$ALT_ENTRY_RESP" | jq -r '.id')" >/dev/null
 echo "Alternate entry point: OK (task created directly in 'drafting')"
 
+# A create retried under one idempotency key replays the first task; the
+# same key with a different body is refused.
+TASK_IDEM_KEY="smoke-task-create-$(date +%s)"
+TASK_IDEM_FIRST=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "idempotent card" \
+  --state "drafting" \
+  --payload '{"theme":"the lake"}' \
+  --idempotency-key "$TASK_IDEM_KEY" | jq -r '.id')
+TASK_IDEM_REPLAY=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "idempotent card" \
+  --state "drafting" \
+  --payload '{"theme":"the lake"}' \
+  --idempotency-key "$TASK_IDEM_KEY" | jq -r '.id')
+if [ "$TASK_IDEM_FIRST" = "null" ] || [ "$TASK_IDEM_REPLAY" != "$TASK_IDEM_FIRST" ]; then
+  echo "ERROR: a create-task retry under the same idempotency key did not replay $TASK_IDEM_FIRST (got $TASK_IDEM_REPLAY)" >&2
+  exit 1
+fi
+expect_cli_error_status 409 create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "a different card" \
+  --state "drafting" \
+  --payload '{"theme":"the lake"}' \
+  --idempotency-key "$TASK_IDEM_KEY"
+$SOAT_CLI delete-task --task-id "$TASK_IDEM_FIRST" >/dev/null
+echo "create-task idempotency key: OK (replayed, 409 on a different body)"
+
 # An unknown state name is rejected instead of silently falling back to initial.
 expect_cli_error_status 400 create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
