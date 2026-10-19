@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { getEmbedding, projectEmbeddingBilling } from './embedding';
+import type { GenerationEndUser } from './generationAttribution';
 
 const log = createDebug('soat:chunking');
 
@@ -151,12 +152,16 @@ const embedChunk = async (args: {
   projectId: number;
   documentId: number;
   embed?: boolean;
+  endUser?: GenerationEndUser;
 }): Promise<number[] | null> => {
   if (args.embed === false) return null;
   try {
     return await getEmbedding({
       text: args.chunk.content,
-      billing: projectEmbeddingBilling({ projectId: args.projectId }),
+      billing: projectEmbeddingBilling({
+        projectId: args.projectId,
+        endUser: args.endUser,
+      }),
       subject: { documentId: args.documentId },
     });
   } catch {
@@ -207,6 +212,8 @@ export const persistChunks = async (args: {
    * billed. Defaults on, which is what an uploaded document wants.
    */
   embed?: boolean;
+  /** Who the ingest runs for; its embeddings are metered against them. */
+  endUser?: GenerationEndUser;
   onProgress?: (completed: number) => Promise<void> | void;
 }): Promise<void> => {
   const concurrency = args.concurrency ?? DEFAULT_EMBEDDING_CONCURRENCY;
@@ -226,6 +233,7 @@ export const persistChunks = async (args: {
       projectId: args.projectId,
       documentId: args.documentId,
       embed: args.embed,
+      endUser: args.endUser,
     });
 
     await db.DocumentChunk.create({

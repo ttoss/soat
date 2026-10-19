@@ -11,6 +11,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced actor does not exist.',
   },
+  SESSION_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced session does not exist.',
+  },
   MEMORY_STORE_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced memory store does not exist.',

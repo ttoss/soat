@@ -229,5 +229,6 @@ export const completeIngestionCallback = async (args: {
     chunkStrategy: (doc.chunkStrategy as ChunkStrategy) ?? undefined,
     chunkSize: doc.chunkSize ?? undefined,
     chunkOverlap: doc.chunkOverlap ?? undefined,
+    endUser: { sessionId: doc.pendingSessionId, actorId: doc.pendingActorId },
   });
 };

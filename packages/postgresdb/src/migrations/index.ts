@@ -39,6 +39,7 @@ import { onBehalfOf } from './2026-10-17-onBehalfOf';
 import { playbookNodeIds } from './2026-10-17-playbookNodeIds';
 import { principalPairs } from './2026-10-17-principalPairs';
 import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
+import { documentPendingEndUser } from './2026-10-19-documentPendingEndUser';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -99,4 +100,5 @@ export const MIGRATIONS: Migration[] = [
   failureReasonsStoredError,
   eventNames,
   playbookNodeIds,
+  documentPendingEndUser,
 ];

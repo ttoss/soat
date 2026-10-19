@@ -5,6 +5,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { resolveBedrockCredentials } from './agentModel';
+import type { GenerationEndUser } from './generationAttribution';
 import { recordEmbeddingUsage } from './usageEmbeddingRecording';
 
 const log = createDebug('soat:embedding');
@@ -92,6 +93,8 @@ const isEmbeddingProvider = (value: string): value is EmbeddingProvider => {
 export type EmbeddingBilling = {
   projectId: number;
   generationId: string | null;
+  /** Who work no generation runs is made for — an ingest naming its end user. */
+  endUser?: GenerationEndUser;
 } | null;
 
 /**
@@ -100,10 +103,11 @@ export type EmbeddingBilling = {
  */
 export const projectEmbeddingBilling = (args: {
   projectId: number | null;
+  endUser?: GenerationEndUser;
 }): EmbeddingBilling => {
   return args.projectId === null
     ? null
-    : { projectId: args.projectId, generationId: null };
+    : { projectId: args.projectId, generationId: null, endUser: args.endUser };
 };
 
 /**
@@ -203,6 +207,7 @@ export const getEmbeddings = async (args: {
     await recordEmbeddingUsage({
       projectId: args.billing.projectId,
       generationId: args.billing.generationId,
+      endUser: args.billing.endUser,
       subject: args.subject,
       provider,
       model,

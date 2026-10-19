@@ -164,8 +164,10 @@ const insertGenerationRecord = async (
     // the memory assertions walk up from a generation.
     conversation?: GenerationConversation;
     // Public id of the session this generation serves. The end-user actor is
-    // derived from it (see resolveEndUserAttribution), never passed separately.
+    // derived from it (see resolveGenerationEndUser).
     sessionId?: string | null;
+    // Public id of an actor named with no session; ignored beside a session.
+    actorId?: string | null;
     metadata?: Record<string, unknown> | null;
     // The turn's resolved input messages, recorded so the generation can later
     // be promoted into an eval dataset item. Content, so zero-retention refuses
@@ -201,6 +203,7 @@ const insertGenerationRecord = async (
   const endUser = await resolveEndUserAttribution({
     projectId: args.projectId,
     sessionId: args.sessionId,
+    actorId: args.actorId,
   });
 
   // Zero-retention: `metadata` and `inputMessages` are content, so they

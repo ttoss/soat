@@ -6,6 +6,7 @@ import { DOCUMENT_FAILURES } from './documentFailures';
 import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
+import type { GenerationEndUser } from './generationAttribution';
 import type { MappedIngestionRule } from './ingestionRules';
 import type { StoredError } from './storedError';
 
@@ -127,6 +128,7 @@ const persistChunksWithProgress = async (args: {
   projectId: number;
   totalPages: number;
   chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
+  endUser?: GenerationEndUser;
 }): Promise<void> => {
   const writeProgress = (indexed: number) => {
     return args.doc.update({
@@ -143,6 +145,7 @@ const persistChunksWithProgress = async (args: {
     documentId: args.docId,
     projectId: args.projectId,
     chunks: args.chunks,
+    endUser: args.endUser,
     onProgress: async (indexed) => {
       const now = Date.now();
       if (now - lastTouch < 10_000 && indexed < args.chunks.length) return;
@@ -169,6 +172,8 @@ export const finalizeIngestedPages = async (
     docPath: string;
     pages: { text: string; pageNumber?: number }[];
     rule: MappedIngestionRule | null;
+    /** Who the ingest runs for; its embeddings are metered against them. */
+    endUser?: GenerationEndUser;
   }
 ): Promise<void> => {
   const { doc, docId } = args;
@@ -200,6 +205,7 @@ export const finalizeIngestedPages = async (
     projectId: args.projectId,
     totalPages: args.pages.length,
     chunks,
+    endUser: args.endUser,
   });
 
   const file = await db.File.findByPk(doc.fileId);

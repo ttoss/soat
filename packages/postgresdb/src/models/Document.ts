@@ -167,6 +167,26 @@ export class Document extends Model {
   })
   declare pendingDocPath: string | null;
 
+  /**
+   * The end user an ingest named (public ids), kept across the async-converter
+   * round trip so the callback meters the document's embeddings against them.
+   * Not FKs: attribution degrades to null if the session or actor is deleted
+   * meanwhile, as everywhere else.
+   */
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'pending_session_id',
+  })
+  declare pendingSessionId: string | null;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'pending_actor_id',
+  })
+  declare pendingActorId: string | null;
+
   @Column({
     type: DataType.INTEGER,
     allowNull: true,

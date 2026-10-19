@@ -4,6 +4,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { resolveEndUserAttribution } from './generationAttribution';
 import { sumComponentCostUsd } from './priceCompute';
 import { insertUsageEvent, reportLostUsageEvent } from './usageEventWrite';
 import {
@@ -41,6 +42,10 @@ export type ToolCallAttribution = {
   orchestrationRunId?: string | null;
   nodeId?: string | null;
   triggerId?: string | null;
+  // The end user of a call no generation makes — a converter tool run for an
+  // ingest that named one. Public ids, validated by that entry point.
+  sessionId?: string | null;
+  actorId?: string | null;
   // What the call was made for when it is not production traffic.
   source?: string | null;
   // The guardrails whose evaluation released the call — a pipeline passes its
@@ -197,8 +202,11 @@ const resolveAttribution = async (
     }),
     nodeId: attribution.nodeId ?? null,
     traceId: null,
-    actorId: null,
-    sessionId: null,
+    ...(await resolveEndUserAttribution({
+      projectId,
+      sessionId: attribution.sessionId,
+      actorId: attribution.actorId,
+    })),
     triggerId: attribution.triggerId ?? null,
     actionId: null,
     source: attribution.source ?? null,
