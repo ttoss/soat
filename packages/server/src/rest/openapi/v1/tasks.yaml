@@ -252,6 +252,56 @@ paths:
           description: Task not found
 
   /api/v1/tasks/{task_id}/transitions:
+    get:
+      description: >-
+        Lists every transition of the workflow version the task is pinned to,
+        with whether firing it now as the caller would be accepted and, when
+        not, the error code firing it would answer. The guard runs with the
+        caller as `principal`. A `requires_approval` transition is allowed
+        before its guard passes: the guard runs when the approval resolves.
+        Advisory: firing re-validates under the task's lock.
+      tags:
+        - Tasks
+      summary: List a task's transitions
+      operationId: listTaskTransitions
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task whose transitions are listed.
+          schema:
+            type: string
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: The pinned version's transitions, in definition order
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskTransitionOption'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
     post:
       description: >-
         Fires a named transition on a task. The transition must exist in the
@@ -610,6 +660,38 @@ components:
         created_at:
           type: string
           format: date-time
+    TaskTransitionOption:
+      type: object
+      required:
+        - name
+        - to
+        - requires_approval
+        - allowed
+        - error_code
+      properties:
+        name:
+          type: string
+        to:
+          type: string
+          description: The state the transition moves the task to.
+        requires_approval:
+          type: boolean
+          description: Firing it parks an approval instead of moving the task.
+        allowed:
+          type: boolean
+          description: Whether firing it now as the caller would be accepted.
+        error_code:
+          type: string
+          nullable: true
+          enum:
+            - TASK_TRANSITION_CONFLICT
+            - TASK_GUARD_REJECTED
+            - null
+          description: >-
+            The code firing it would answer: `TASK_TRANSITION_CONFLICT` when
+            the task is closed, has a transition pending approval, or is not in
+            one of the transition's `from` states; `TASK_GUARD_REJECTED` when
+            its guard fails. Null when `allowed`.
     CreateTaskRequest:
       type: object
       required:

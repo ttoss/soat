@@ -14,12 +14,11 @@ import {
   findTaskInstance,
   mapTask,
   type TaskInstance,
+  type TaskPrincipal,
   transitionTask,
 } from './tasks';
-import {
-  findValidTransition,
-  type WorkflowTransition,
-} from './workflowsValidation';
+import { assertTransitionAllowed } from './tasksTransitionCheck';
+import type { WorkflowTransition } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
 
@@ -33,42 +32,6 @@ const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
   'TASK_TRANSITION_CONFLICT',
 ]);
-
-// Pre-checks a park against the loaded snapshot for a clear, fast error before
-// the atomic claim. The claim itself is the authority under contention.
-const assertParkable = (args: {
-  task: TaskInstance;
-  transition: WorkflowTransition;
-  transitions: WorkflowTransition[];
-}): void => {
-  const { task, transition, transitions } = args;
-  if (task.status === 'closed') {
-    throw new DomainError(
-      'TASK_TRANSITION_CONFLICT',
-      `Task '${task.publicId}' is closed and can no longer transition.`
-    );
-  }
-  if (task.pendingTransition) {
-    throw new DomainError(
-      'TASK_TRANSITION_CONFLICT',
-      `Task '${task.publicId}' already has transition '${task.pendingTransition}' pending approval.`,
-      { pendingTransition: task.pendingTransition }
-    );
-  }
-  if (
-    !findValidTransition({
-      transitions,
-      name: transition.name,
-      fromState: task.state,
-    })
-  ) {
-    throw new DomainError(
-      'TASK_TRANSITION_CONFLICT',
-      `Transition '${transition.name}' is not valid from state '${task.state}'.`,
-      { transition: transition.name, fromState: task.state }
-    );
-  }
-};
 
 // Emits the gate's ApprovalItem, rolling the claim back on failure so the task
 // is never left parked with no item behind the gate.
@@ -130,6 +93,8 @@ export const parkTransitionForApproval = async (args: {
    * transition was validated against a moment earlier.
    */
   transitions: WorkflowTransition[];
+  /** Who fired the move; never `approval`, which applies rather than parks. */
+  principal: TaskPrincipal;
   note: string | null;
   /**
    * The sanitized `tool_context` this move supplied, or `undefined` to keep the
@@ -147,7 +112,14 @@ export const parkTransitionForApproval = async (args: {
     transition.name
   );
 
-  assertParkable({ task, transition, transitions });
+  // A fast, clear error before the atomic claim, which is the authority under
+  // contention.
+  assertTransitionAllowed({
+    task,
+    transition,
+    transitions,
+    principal: args.principal,
+  });
 
   // Atomically claim the gate: at most one pending transition per task, and only
   // while it is still open and in the from-state we validated. A concurrent park
