@@ -89,6 +89,7 @@ describe('POST /api/v1/memories supersedes', () => {
         'memories:UpdateMemory',
         'memories:ListMemoryAssertions',
         'knowledge:SearchKnowledge',
+        'embeddings:CreateEmbeddings',
       ],
       createOtherProject: true,
     });

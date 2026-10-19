@@ -612,7 +612,10 @@ describe('POST /api/v1/knowledge/search — hybrid ranking', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['knowledge:SearchKnowledge'],
+                action: [
+                  'knowledge:SearchKnowledge',
+                  'embeddings:CreateEmbeddings',
+                ],
                 resource: [`srn:${projectId}:*:*`],
               },
               {
