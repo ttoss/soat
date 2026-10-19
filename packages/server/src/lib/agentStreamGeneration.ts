@@ -149,7 +149,7 @@ const fireStreamEndSideEffects = (args: {
     /* istanbul ignore next -- fire-and-forget alongside the trace write */
     () => {}
   );
-  // recordGenerationUsage never rejects (it catches internally).
+  // Never rejects: `recordGenerationUsage` beneath it catches internally.
   const usageWrite = recordSegmentUsage({
     generationId: args.generationId,
     model: args.model,
@@ -323,6 +323,15 @@ const fireStreamEnd = (args: {
   });
 };
 
+// What the stream's completed calls spent, for the failure path to meter.
+const carryStreamEndSpend = (args: { error: unknown; end: StreamEnd }) => {
+  return carrySpentUsage({
+    error: args.error,
+    usage: args.end.usage,
+    reportedModelId: args.end.response.modelId,
+  });
+};
+
 export const runStreamGeneration = async (
   args: StreamRunArgs
 ): Promise<ReadableStream<StreamedGenerationPart>> => {
@@ -382,11 +391,7 @@ export const runStreamGeneration = async (
         } catch (error) {
           // The settle owns this turn's records; `recordFailure` writes the
           // terminal status, and meters the calls the turn already made.
-          streamError = carrySpentUsage({
-            error,
-            usage: end.usage,
-            reportedModelId: end.response.modelId,
-          });
+          streamError = carryStreamEndSpend({ error, end });
           return;
         }
         if (terminalGeneration) return;

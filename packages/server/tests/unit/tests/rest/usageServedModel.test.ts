@@ -3,9 +3,9 @@ import { resetModelRouteBreakers } from 'src/lib/modelRouteBreaker';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
+  startChatCompletionsStub,
   type StubReply,
   type StubResponder,
-  startChatCompletionsStub,
 } from '../../fixtures/chatCompletionsStub';
 import { authenticatedTestClient } from '../../testClient';
 

@@ -140,9 +140,7 @@ export const servedModelName = (args: {
   if (args.model === undefined) return args.reportedModelId ?? '';
   const configured =
     typeof args.model === 'string' ? args.model : args.model.modelId;
-  return (
-    routedModelName(args.model) ?? (args.reportedModelId || configured)
-  );
+  return routedModelName(args.model) ?? (args.reportedModelId || configured);
 };
 
 /**
