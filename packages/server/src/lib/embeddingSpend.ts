@@ -13,16 +13,23 @@ export const EMBEDDING_SPEND = {
   resourceType: 'embedding',
 } as const;
 
-/** The first of `projectIds` by public id, so the choice is stable across environments. */
+/**
+ * The first of `projectIds` by public id in code-unit order, compared here
+ * rather than in SQL so the database collation cannot reorder mixed case.
+ */
 export const firstProjectByPublicId = async (args: {
   projectIds: number[];
 }): Promise<number | null> => {
   log('firstProjectByPublicId: candidates=%d', args.projectIds.length);
-  if (args.projectIds.length === 0) return null;
-  const project = await db.Project.findOne({
+  const projects = await db.Project.findAll({
     where: { id: args.projectIds },
-    attributes: ['id'],
-    order: [['publicId', 'ASC']],
+    attributes: ['id', 'publicId'],
   });
-  return (project?.id as number | undefined) ?? null;
+  const first = projects.reduce<(typeof projects)[number] | null>(
+    (best, project) => {
+      return best === null || project.publicId < best.publicId ? project : best;
+    },
+    null
+  );
+  return (first?.id as number | undefined) ?? null;
 };
