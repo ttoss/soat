@@ -132,6 +132,8 @@ export const SOAT_EVENTS = {
     'tasks.created': 'A task was created.',
     'tasks.transitioned':
       'A task moved to a new state; the payload carries the task plus `transition` and `from_state`.',
+    'tasks.migrated':
+      'A task moved onto a newer workflow version; the payload carries the task plus `from_state` and `from_workflow_version`.',
     'tasks.closed': 'A task reached a terminal state.',
     'tasks.stalled': 'A task exceeded its stall threshold without progress.',
     'tasks.paused': "A task's automation was paused by an operator.",

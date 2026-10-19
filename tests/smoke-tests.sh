@@ -6454,6 +6454,39 @@ expect_cli_error_status 400 create-task \
   --state "not-a-real-state"
 echo "Alternate entry point, unknown state: OK (400 TASK_STATE_NOT_FOUND as expected)"
 
+# Migration: a task pinned to v1 moves onto v2, its state renamed through
+# --state-map, and the history row names both versions.
+MIG_WORKFLOW_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-migration-workflow \
+  --states '[{"name":"todo","initial":true},{"name":"done","terminal":true}]' \
+  --transitions '[{"name":"finish","from":["todo"],"to":"done"}]' | jq -r '.id')
+MIG_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$MIG_WORKFLOW_ID" \
+  --title "migrating card" | jq -r '.id')
+$SOAT_CLI update-workflow \
+  --workflow-id "$MIG_WORKFLOW_ID" \
+  --states '[{"name":"backlog","initial":true},{"name":"done","terminal":true}]' \
+  --transitions '[{"name":"finish","from":["backlog"],"to":"done"}]' >/dev/null
+expect_cli_error_status 400 migrate-task --task-id "$MIG_TASK_ID" --to-version 2
+MIG_RESP=$($SOAT_CLI migrate-task \
+  --task-id "$MIG_TASK_ID" \
+  --to-version 2 \
+  --state-map '{"todo":"backlog"}')
+if [ "$(printf '%s\n' "$MIG_RESP" | jq -r '"\(.workflow_version) \(.state)"')" != "2 backlog" ]; then
+  echo "ERROR: migrate-task expected version 2 in 'backlog'" >&2
+  printf '%s\n' "$MIG_RESP" >&2
+  exit 1
+fi
+MIG_ROW=$($SOAT_CLI get-task-history --task-id "$MIG_TASK_ID" | jq -r '.data[-1] | "\(.from_workflow_version) \(.to_workflow_version)"')
+if [ "$MIG_ROW" != "1 2" ]; then
+  echo "ERROR: migration history row expected '1 2', got '$MIG_ROW'" >&2
+  exit 1
+fi
+$SOAT_CLI transition-task --task-id "$MIG_TASK_ID" --transition finish >/dev/null
+echo "Task migration: OK (v1 -> v2, todo -> backlog, unmapped state refused)"
+
 # Forward, then a backward move (review -> drafting) a DAG would reject.
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition start >/dev/null
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null

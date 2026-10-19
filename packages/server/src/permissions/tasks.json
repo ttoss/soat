@@ -37,6 +37,11 @@
       "description": "Fire a named transition on a task"
     },
     {
+      "operationId": "migrateTask",
+      "action": "tasks:MigrateTask",
+      "description": "Move an open task onto a newer version of its workflow"
+    },
+    {
       "operationId": "pauseTask",
       "action": "tasks:PauseTask",
       "description": "Pause a task's automation, suppressing every state dispatch"

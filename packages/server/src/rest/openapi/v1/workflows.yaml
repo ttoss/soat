@@ -237,8 +237,8 @@ paths:
     get:
       description: >
         Returns the exact state machine a given version describes. Every task
-        records the version it entered on in `workflow_version` and runs on that
-        machine for its whole life, so this is how you read the definition a task
+        records the version it runs on in `workflow_version`, fixed at creation
+        and moved only by migrate-task, so this is how you read the definition a task
         is actually being validated against — including a task whose workflow has
         been rewired since.
       tags:

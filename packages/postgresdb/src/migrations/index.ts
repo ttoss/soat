@@ -42,6 +42,7 @@ import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
 import { approvalItemTaskPayload } from './2026-10-19-approvalItemTaskPayload';
 import { documentPendingEndUser } from './2026-10-19-documentPendingEndUser';
 import { taskTransitionIdempotencyKey } from './2026-10-19-taskTransitionIdempotencyKey';
+import { taskTransitionWorkflowVersions } from './2026-10-19-taskTransitionWorkflowVersions';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -105,4 +106,5 @@ export const MIGRATIONS: Migration[] = [
   documentPendingEndUser,
   taskTransitionIdempotencyKey,
   approvalItemTaskPayload,
+  taskTransitionWorkflowVersions,
 ];

@@ -97,6 +97,7 @@ The flow they follow is
 | `2026-10-19-document-pending-end-user` | `documents.pending_session_id` and `documents.pending_actor_id`, the end user an ingest named, kept across the async-converter round trip |
 | `2026-10-19-task-transition-idempotency-key` | `idempotency_key`, unique per task, and `idempotency_digest` on `task_transitions` and on `approval_items`, which a parked transition writes instead |
 | `2026-10-19-approval-item-task-payload` | `approval_items.task_payload`, the payload a parked task transition applies when its approval fires it |
+| `2026-10-19-task-transition-workflow-versions` | `task_transitions.from_workflow_version` and `to_workflow_version`, the versions a task migration moves a task between |
 
 Run them from the server package, which owns the entrypoint:
 

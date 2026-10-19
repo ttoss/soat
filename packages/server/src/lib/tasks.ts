@@ -15,6 +15,7 @@ import {
   type WorkflowState,
 } from './workflowsValidation';
 
+export { migrateTask } from './tasksMigrate';
 export { transitionTask } from './tasksTransition';
 export { listTaskTransitions } from './tasksTransitionCheck';
 
@@ -321,8 +322,8 @@ export const createTask = async (args: {
   const task = await db.Task.create({
     projectId: args.projectId,
     workflowId: workflow.id as number,
-    // The pin: the task runs on this version of the state machine for its
-    // whole life, however long the workflow is edited around it.
+    // The pin: the task runs on this version of the state machine, however
+    // long the workflow is edited around it, until a migration moves it.
     workflowVersion: workflow.version,
     title: args.title,
     state: entryState.name,
@@ -465,6 +466,8 @@ export const getTaskHistory = async (args: {
         orchestration_run_id: row.orchestrationRunId,
         tool_id: row.toolId,
         note: row.note,
+        from_workflow_version: row.fromWorkflowVersion ?? null,
+        to_workflow_version: row.toWorkflowVersion ?? null,
         created_at: row.createdAt,
       };
     },

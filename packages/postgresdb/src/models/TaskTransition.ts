@@ -13,7 +13,7 @@ import { Task } from './Task';
 /**
  * Append-only history of a task's state changes. Every move — human, API,
  * automation outcome, approval resolution — writes exactly one row through
- * `transitionTask`, so the history is the audited contract for a task.
+ * `transitionTask`, and a version migration one through `migrateTask`, so the history is the audited contract for a task.
  */
 @Table({
   tableName: 'task_transitions',
@@ -97,6 +97,14 @@ export class TaskTransition extends Model {
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare note: string | null;
+
+  // Set only on a migration row, which moves the task between workflow
+  // versions; a transition runs within one version and leaves both null.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare fromWorkflowVersion: number | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare toWorkflowVersion: number | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
