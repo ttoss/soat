@@ -25,8 +25,11 @@ export const firstProjectByPublicId = async (args: {
     where: { id: args.projectIds },
     attributes: ['id', 'publicId'],
   });
-  const first = projects.reduce((best, project) => {
-    return project.publicId < best.publicId ? project : best;
-  });
-  return first.id as number;
+  const idByPublicId = new Map(
+    projects.map((project) => {
+      return [project.publicId, project.id as number];
+    })
+  );
+  const [firstPublicId] = [...idByPublicId.keys()].sort();
+  return idByPublicId.get(firstPublicId as string) as number;
 };
