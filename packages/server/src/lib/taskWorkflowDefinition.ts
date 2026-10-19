@@ -49,7 +49,7 @@ const liveDefinition = (
  * The archive stores the definition wire-shaped, so it comes back through the
  * same snake_case → camelCase boundary an inbound request uses.
  */
-const findArchivedDefinition = async (args: {
+export const findArchivedDefinition = async (args: {
   workflowDbId: number;
   version: number;
 }): Promise<WorkflowDefinition | null> => {

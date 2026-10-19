@@ -74,7 +74,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `id`                | string           | Public identifier (`task_…`)                                            |
 | `project_id`        | string           | Owning project (hard security boundary)                                 |
 | `workflow_id`       | string           | The workflow definition this task is bound to                           |
-| `workflow_version`  | integer \| null  | The workflow version this task runs on, fixed when the task was created (see [Versioning](#versioning)). `null` for tasks created before pinning existed, which run on the live definition |
+| `workflow_version`  | integer \| null  | The workflow version this task runs on, fixed when the task was created and changed only by a [migration](#migrating-a-task-to-a-newer-version). `null` for tasks created before pinning existed, which run on the live definition |
 | `title`             | string           | Human-readable label                                                    |
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
@@ -110,6 +110,8 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 | `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
 | `tool_id`       | string \| null  | The tool a `tool` dispatch called, when that dispatch caused the move. A tool call produces no record of its own, so the tool is the cause |
 | `note`          | string \| null  | Optional reason supplied by the caller                            |
+| `from_workflow_version` | integer \| null | On a [migration](#migrating-a-task-to-a-newer-version) row, the version the task left (`null` when it had none); `null` on every other row |
+| `to_workflow_version` | integer \| null | On a migration row, the version the task moved onto; `null` on every other row |
 | `created_at`    | string          | ISO 8601 timestamp                                                |
 
 ## Key Concepts
@@ -248,7 +250,7 @@ The state machine is versioned by the same append-only archive as [agent version
 
 A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
 
-**A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps `version` onto the task as `workflow_version`; validating a transition, parking an approval gate and validating a payload patch all read that version. Editing never re-shapes a task in flight; the live definition is a draft for tasks created from now on.
+**A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps `version` onto the task as `workflow_version`; validating a transition, parking an approval gate and validating a payload patch all read that version. Editing never re-shapes a task in flight; the live definition is a draft for tasks created from now on, and [a migration](#migrating-a-task-to-a-newer-version) moves an open task onto it.
 
 Archive nothing: a metadata-only edit (`name`, `description`); re-writing the definition already held (compared structurally); restoring the live version. `version_label` on a create or update annotates the archived version and is never itself a change.
 
@@ -259,6 +261,25 @@ Archive nothing: a metadata-only edit (`name`, `description`); re-writing the de
 | Roll back to a version | [`POST /api/v1/workflows/{workflow_id}/versions/{version}/restore`](/docs/api/workflows/restore-workflow-version) |
 
 **Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's definition back as **v3**; a task pinned to v2 still runs on it. Only the definition rolls back; `name` and `description` are untouched. A restored definition passes the same validation, including resolving every `on_enter` dispatch target (agent, tool or orchestration) in the workflow's project, so a version whose target was deleted fails with `WORKFLOW_VALIDATION_FAILED` (400).
+
+### Migrating a task to a newer version
+
+[`POST /tasks/{task_id}/migrate`](/docs/api/tasks/migrate-task) `{ to_version, state_map? }` moves an open task onto a newer version of its workflow. Needs `tasks:MigrateTask`.
+
+- A state the target version declares maps to itself; `state_map` maps one it lacks (an entry for a shared state overrides the identity).
+- The payload is re-validated against the target `payload_schema`.
+- The mapped state's `on_enter` is not fired; transition the task to run the target's automation. Changing state clears `active_dispatch` and `automation_status`.
+- Recorded in history with `transition: null`, `from_workflow_version`, `to_workflow_version` and the caller as principal; emits `tasks.migrated`.
+
+| Refusal | Code |
+| --- | --- |
+| `to_version` not newer than `workflow_version` | `VALIDATION_FAILED` (400) |
+| The workflow has no such version | `WORKFLOW_VERSION_NOT_FOUND` (400) |
+| The current state is unmapped | `TASK_MIGRATION_STATE_UNMAPPED` (400) |
+| A `state_map` target is undeclared | `TASK_STATE_NOT_FOUND` (400) |
+| A mapped state is terminal | `VALIDATION_FAILED` (400) |
+| The payload fails the target schema | `TASK_PAYLOAD_INVALID` (400) |
+| The task is closed, has a transition pending approval, or a dispatch in flight | `TASK_MIGRATION_CONFLICT` (409) |
 
 ### Alternate entry points
 
@@ -414,7 +435,10 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `WORKFLOW_HAS_OPEN_TASKS`  | 409    | The workflow has open tasks and cannot be deleted              |
 | `TASK_NOT_FOUND`           | 404    | The task does not exist or is not accessible                   |
 | `TASK_PAYLOAD_INVALID`     | 400    | The payload violates the workflow's `payload_schema`           |
-| `TASK_STATE_NOT_FOUND`     | 400    | [`POST /tasks`](/docs/api/tasks/create-task) `state` does not name a declared state of the workflow |
+| `TASK_STATE_NOT_FOUND`     | 400    | [`POST /tasks`](/docs/api/tasks/create-task) `state`, or a migration's `state_map` target, does not name a declared state of the workflow version |
+| `TASK_MIGRATION_STATE_UNMAPPED` | 400 | The target version lacks the task's state and `state_map` does not map it. See [Migrating a task](#migrating-a-task-to-a-newer-version) |
+| `TASK_MIGRATION_CONFLICT`  | 409    | The task is closed, has a transition pending approval, or has a dispatch in flight |
+| `WORKFLOW_VERSION_NOT_FOUND` | 400  | A migration's `to_version` names no version of the workflow |
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
@@ -434,6 +458,7 @@ Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/ta
 | `tasks.created`              | A task is created and placed in its initial state        | |
 | `tasks.transitioned`         | A task moves between states                              | `transition`, `from_state` |
 | `tasks.closed`               | A task enters a terminal state                           | |
+| `tasks.migrated`             | A task moves onto a newer workflow version               | `from_state`, `from_workflow_version` |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |
 | `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains | `attempt`, `max_attempts`, `error` (`{ code, message, meta? }`), `generation_id`, `orchestration_run_id` |

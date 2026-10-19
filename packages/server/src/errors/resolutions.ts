@@ -125,6 +125,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The document is already out of every default read. To bring it back, restore the version before the withdrawal.',
   TRIGGER_FIRING_ABANDONED:
     'The dispatch did not survive long enough to record an outcome. Check the target named by the trigger for work that ends the process, then re-fire the trigger manually.',
+  TASK_MIGRATION_STATE_UNMAPPED:
+    'Add `state_map: { "<meta.state>": "<a state the target version declares>" }` to the migration.',
+  TASK_MIGRATION_CONFLICT:
+    'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:
     'Re-read the resource, re-apply the change on top of the version `meta.current_version` names, and retry with that version. A retry of the same body against the same stale version conflicts again.',
   CONVERSATION_POSITION_CONFLICT:

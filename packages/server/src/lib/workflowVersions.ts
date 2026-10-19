@@ -27,9 +27,9 @@ import { workflowVersionStore } from './workflowVersionSnapshot';
  * identical history.
  *
  * Workflows have no release/canary layer: a task is pinned at creation and stays
- * on that version for its whole life, which can be weeks. A workflow release
- * would mean "the version new tasks are created into", with no mid-life
- * reassignment; nothing has asked for it, and the mechanism is
+ * on that version until an explicit `migrateTask`, which can be weeks. A
+ * workflow release would mean "the version new tasks are created into";
+ * nothing has asked for it, and the mechanism is
  * already extracted and pure in `releaseAssignment.ts` for when something does.
  */
 

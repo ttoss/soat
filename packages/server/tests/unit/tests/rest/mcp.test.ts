@@ -533,6 +533,47 @@ describe('MCP tools - happy path', () => {
     ).toEqual(['todo', 'doing', 'done']);
   });
 
+  test('migrate-task moves a task onto a newer workflow version via MCP', async () => {
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        project_id: projectId,
+        name: 'mcp-migration',
+        states: [
+          { name: 'todo', initial: true },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['todo'], to: 'done' }],
+      })
+    );
+    const task = parseResult(
+      await mcpCall('create-task', {
+        project_id: projectId,
+        workflow_id: workflow.id,
+        title: 'migrating card',
+      })
+    );
+    parseResult(
+      await mcpCall('update-workflow', {
+        workflow_id: workflow.id,
+        states: [
+          { name: 'backlog', initial: true },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['backlog'], to: 'done' }],
+      })
+    );
+
+    const migrated = parseResult(
+      await mcpCall('migrate-task', {
+        task_id: task.id,
+        to_version: 2,
+        state_map: { todo: 'backlog' },
+      })
+    );
+    expect(migrated.workflow_version).toBe(2);
+    expect(migrated.state).toBe('backlog');
+  });
+
   test('workflow version tools list, fetch and restore a definition', async () => {
     const states = [
       { name: 'todo', initial: true },

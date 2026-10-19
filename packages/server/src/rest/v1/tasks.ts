@@ -10,6 +10,7 @@ import {
   getTask,
   getTaskHistory,
   listTaskTransitions,
+  migrateTask,
   type TaskPrincipal,
   transitionTask,
   updateTask,
@@ -277,6 +278,36 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     // principal above cannot distinguish a dispatch continuing its own chain
     // from the person who started it. This can.
     viaRunToken: ctx.authUser!.isRunToken === true,
+  });
+});
+
+tasksRouter.post('/tasks/:task_id/migrate', async (ctx: Context) => {
+  requireAuth(ctx);
+  const task = await getTask({ id: ctx.params.task_id });
+
+  const allowed = await ctx.authUser!.isAllowed({
+    projectPublicId: task.project_id!,
+    action: 'tasks:MigrateTask',
+    resource: buildSrn({
+      projectPublicId: task.project_id!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
+  });
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  const body = ctx.request.body as {
+    to_version: number;
+    state_map?: Record<string, string>;
+  };
+
+  ctx.body = await migrateTask({
+    id: ctx.params.task_id,
+    toVersion: body.to_version,
+    stateMap: body.state_map,
+    principal: principalFromCtx(ctx),
   });
 });
 

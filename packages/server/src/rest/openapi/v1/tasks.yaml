@@ -347,6 +347,57 @@ paths:
             A concurrent transition made this one invalid, the task is closed,
             or the idempotency key names a different request
 
+  /api/v1/tasks/{task_id}/migrate:
+    post:
+      description: >-
+        Moves an open task onto a newer version of its workflow. A state the
+        target version also declares maps to itself; `state_map` maps a state
+        it lacks. The payload is re-validated against the target
+        `payload_schema`. The mapped state's `on_enter` is not fired: transition
+        the task when you want the target's automation. A task with a dispatch
+        in flight or a transition pending approval is refused, since both
+        belong to the version they started under. Recorded in history as a row
+        with `transition: null` and both versions.
+      tags:
+        - Tasks
+      summary: Migrate a task to a newer workflow version
+      operationId: migrateTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task to migrate.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrateTaskRequest'
+      responses:
+        '200':
+          description: The task on the target version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: >-
+            The version does not exist or is not newer than the task's, the
+            current state is unmapped, a mapped state is undeclared or
+            terminal, or the payload fails the target `payload_schema`
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+        '409':
+          description: >-
+            The task is closed, has a transition pending approval, or has a
+            dispatch in flight
+
   /api/v1/tasks/{task_id}/pause:
     post:
       description: >-
@@ -660,6 +711,16 @@ components:
         note:
           type: string
           nullable: true
+        from_workflow_version:
+          type: integer
+          nullable: true
+          description: >-
+            Set on a migration row only: the version the task left, or null for
+            a task that had no pinned version.
+        to_workflow_version:
+          type: integer
+          nullable: true
+          description: Set on a migration row only, the version the task moved onto.
         created_at:
           type: string
           format: date-time
@@ -792,6 +853,25 @@ components:
           type: string
           maxLength: 256
           description: Why the task is being paused, surfaced on `pause_reason`.
+      additionalProperties: false
+
+    MigrateTaskRequest:
+      type: object
+      required:
+        - to_version
+      properties:
+        to_version:
+          type: integer
+          minimum: 1
+          description: The workflow version to move the task onto; newer than its current one.
+        state_map:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Current state name to a state the target version declares. Required
+            only for a state the target lacks; an entry for a state both declare
+            overrides the identity mapping.
       additionalProperties: false
 
     TransitionTaskRequest:

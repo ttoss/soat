@@ -807,7 +807,22 @@ export const ERROR_CODES = {
   TASK_STATE_NOT_FOUND: {
     httpStatus: 400,
     description:
-      "A task create request's `state` does not name a declared state of the workflow.",
+      "A task create request's `state`, or a migration's `state_map` target, does not name a declared state of the workflow version. `meta.state` names it.",
+  },
+  TASK_MIGRATION_STATE_UNMAPPED: {
+    httpStatus: 400,
+    description:
+      "The task's current state is not declared by the target workflow version and the migration's `state_map` does not map it. `meta.state` names it.",
+  },
+  TASK_MIGRATION_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'The task cannot change workflow version now: it is closed, has a transition pending approval (`meta.pending_transition`), or has a dispatch in flight whose routing belongs to the version it was dispatched under.',
+  },
+  WORKFLOW_VERSION_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      'The workflow has no version with that number. `meta.version` names it; list the workflow versions to see which exist.',
   },
   MEMORY_ALREADY_INVALIDATED: {
     httpStatus: 409,
