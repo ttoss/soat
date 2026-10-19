@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { getEffectivePrice } from './priceBook';
 import { computeComponentCostUsd } from './priceCompute';
-import { insertUsageEvent } from './usageEventWrite';
+import { insertUsageEvent, reportLostUsageEvent } from './usageEventWrite';
 import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
@@ -52,21 +52,25 @@ const counterKey = (projectId: number, apiKeyPublicId: string): string => {
  * in-memory increment — no I/O — so it adds no latency to the request path. The
  * accumulated counts are persisted by {@link flushRequestCounters}.
  */
-export const incrementRequestCount = (args: {
+const addToCounter = (args: {
   projectId: number;
   apiKeyPublicId: string;
+  count: number;
 }): void => {
   const key = counterKey(args.projectId, args.apiKeyPublicId);
   const existing = counters.get(key);
   if (existing) {
-    existing.count += 1;
+    existing.count += args.count;
     return;
   }
-  counters.set(key, {
-    projectId: args.projectId,
-    apiKeyPublicId: args.apiKeyPublicId,
-    count: 1,
-  });
+  counters.set(key, { ...args });
+};
+
+export const incrementRequestCount = (args: {
+  projectId: number;
+  apiKeyPublicId: string;
+}): void => {
+  addToCounter({ ...args, count: 1 });
 };
 
 // Atomic + idempotent on the flush-window key: a re-flush of the same window
@@ -161,7 +165,8 @@ const writeCounter = async (
  * counter map out synchronously (before any await) so increments arriving
  * mid-flush land in the next window rather than being lost. Priced at write time
  * from a `soat`/`request` row (`cost_usd = null` otherwise). Returns the number
- * of events written. Never throws — a per-counter failure is logged and skipped.
+ * of events written. Never throws — a counter whose write fails is reported and
+ * folded back into the live window, so the next flush writes its count.
  * Scheduler tick and graceful shutdown are its only callers (no HTTP entry).
  */
 export const flushRequestCounters = async (args?: {
@@ -183,11 +188,12 @@ export const flushRequestCounters = async (args?: {
       const created = await writeCounter(counter, windowStartIso, now);
       if (created) written += 1;
     } catch (error) {
-      log(
-        'flushRequestCounters: project=%d failed %o',
-        counter.projectId,
-        error
-      );
+      reportLostUsageEvent({
+        recorder: 'flushRequestCounters',
+        detail: `project=${counter.projectId}`,
+        error,
+      });
+      addToCounter(counter);
     }
   }
   log('flushRequestCounters: counters=%d written=%d', batch.size, written);

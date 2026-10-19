@@ -139,7 +139,7 @@ Cache activity appears only for an agent that asked for it — see [Agents — P
 
 Idempotency keys: a generation's first segment is keyed by its id (`<generation_id>`), a segment resumed after `<n>` steps by `<generation_id>:step:<n>`, so a replayed segment is a no-op and a resume meters only the calls it makes. Inside a run the generation's part is the node execution **attempt** (`run:<orchestration_run_id>:node:<node_id>:attempt:<n>`), so a replayed node is a no-op while a **retry** meters for real; the same identity keys the `compute_execution` meter and the node-execution record. Standalone completions have no replay identity: `completion:<source>:<uuid>`. A **streamed** completion is metered when the stream finishes; one the client abandons is not.
 
-A `failed` turn is metered for every provider call it completed: the steps before the one that failed, an attempt abandoned for the retry without tools, an answer refused afterwards (`OUTPUT_SCHEMA_VALIDATION_FAILED`, `TEXT_ENCODED_TOOL_CALL`, a failed client-call gate), and the steps of a turn a newer session message preempted. A call that returned no usage (provider `4xx`/`5xx`, network fault, a model-route attempt aborted at its timeout, a stream the client abandoned) writes no event, so a failed generation with no usage row means no call completed. A usage event the server could not write is logged at error level, never dropped silently.
+A `failed` turn is metered for every provider call it completed: the steps before the one that failed, an attempt abandoned for the retry without tools, an answer refused afterwards (`OUTPUT_SCHEMA_VALIDATION_FAILED`, `TEXT_ENCODED_TOOL_CALL`, a failed client-call gate on the initial turn or a tool-outputs continuation), and the steps of a turn a newer session message preempted. A call that returned no usage (provider `4xx`/`5xx`, network fault, a model-route attempt aborted at its timeout, a stream the client abandoned) writes no event, so a failed generation with no usage row means no call completed. A usage event the server could not write is logged at error level, never dropped silently.
 
 ### Compute metering
 
@@ -151,7 +151,7 @@ Every outbound tool call writes one `tool_execution` event: one `tool_call` comp
 
 - **When the call went out, whatever it answered.** `outcome` is `ok`, `error` (a non-2xx answer, an MCP error result, a transport failure) or `timeout`, so failures are counted without a second meter.
 - **Not an execution:** a call refused before it was sent (a guardrail decision other than execute, an [egress](./tools.md) block, an approval pending, an unresolvable template), and a [client tool](./tools.md), which never runs server-side.
-- **A pipeline counts once for itself** and once per step: a step-less pipeline writes one event, a two-step one three. Its own event's `outcome` is the pipeline's.
+- **A pipeline counts once for itself** and once per step: a step-less pipeline writes one event, a two-step one three. Its own event's `outcome` is the pipeline's. A pipeline refused before it runs (an invalid definition, `PIPELINE_DEPTH_EXCEEDED`) writes none.
 - **Attribution** is what the call site holds: `tool_id` and `project_id` always; inside a generation its `generation_id`, `agent_id`, run, node, trigger, actor, session and `source` are read off the generation; an orchestration node sets `orchestration_run_id` and `node_id`; a trigger sets `trigger_id`; an eval `tool` scorer sets `source: eval_scorer`.
 - **No replay identity**: a retry is a second call on the wire, so the idempotency key is unique per execution (`tool:<uuid>`).
 
@@ -165,7 +165,7 @@ A turn of an agent another project [shares](./shares.md#using-a-shared-agent) wi
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project per UTC day with three components: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them), measured in one statement, and [`record_gb_day`](#records-of-work) (gigabytes of records of work done). No principal/agent/run attribution. Each is priced from the `soat`/`gb-day` SKU from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null.
+A daily snapshot writes one `storage` event per project per UTC day with three components: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them), measured in one statement, and [`record_gb_day`](#records-of-work) (gigabytes of records of work done). No principal/agent/run attribution. Each is priced from the `soat`/`gb-day` SKU from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null. A project whose snapshot cannot be written is logged at error level; only a later sweep inside the same UTC day writes that day.
 
 `gb_day` sums seven terms:
 
@@ -207,7 +207,7 @@ A daily snapshot writes one `storage` event per project per UTC day with three c
 
 ### API-request metering
 
-Requests are counted in memory per (project, API key); a periodic flush writes one `api_request` event per counter per window, never one row per request. Counting scope mirrors [quotas](./quotas.md#which-project-a-request-counts-against): only API-key-authenticated requests count, a project-scoped key against its bound project, an unscoped key against the project the route resolved and authorized, none when no single project resolves. Enforcement stays with quotas; this only prices (`soat`/`request` SKU). The flush-window idempotency key includes a per-instance id; the last open window is lost on an unclean shutdown (a bounded undercount).
+Requests are counted in memory per (project, API key); a periodic flush writes one `api_request` event per counter per window, never one row per request. Counting scope mirrors [quotas](./quotas.md#which-project-a-request-counts-against): only API-key-authenticated requests count, a project-scoped key against its bound project, an unscoped key against the project the route resolved and authorized, none when no single project resolves. Enforcement stays with quotas; this only prices (`soat`/`request` SKU). The flush-window idempotency key includes a per-instance id; the last open window is lost on an unclean shutdown (a bounded undercount). A counter whose write fails is logged at error level and stays buffered, so the next flush writes its count.
 
 ### Trigger and action attribution
 
@@ -231,7 +231,7 @@ Set by the platform at the metering choke point; a caller cannot bill eval spend
 
 ### Provider attribution
 
-An event bills against the provider that served it: the target a [model route](./model-routes.md) picked (read from what the turn did, so a failed-over generation meters against the target that answered), or the agent's pinned provider. An event with no provider resolves no price row and reports the `unknown` provider slug.
+An event bills against the provider that served it: the target a [model route](./model-routes.md) picked (read from what the turn did, so a failed-over generation meters against the target that answered), or the agent's pinned provider. Its `model` is the model that provider served — a routed target's own model, else the id the provider answered with (a versioned id included), else the configured one — because that pair is the price-book key, on success and failure alike. An event with no provider resolves no price row and reports the `unknown` provider slug.
 
 ### Attribution outlives deletion
 

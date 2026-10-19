@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { getEffectivePrice } from './priceBook';
 import { computeComponentCostUsd, sumComponentCostUsd } from './priceCompute';
-import { insertUsageEvent } from './usageEventWrite';
+import { insertUsageEvent, reportLostUsageEvent } from './usageEventWrite';
 import {
   projectRecordFootprint,
   type RecordFootprint,
@@ -441,8 +441,10 @@ export const snapshotProjectStorage = async (args: {
 /**
  * The daily snapshot sweep: writes one `storage` event per project for `now`'s
  * UTC day. Returns the number of projects newly metered this run. Never throws —
- * a per-project failure is logged and skipped so one bad project can't stall the
- * sweep. This is the scheduler tick's only caller (no HTTP entry point).
+ * a per-project failure is reported at error level and skipped, so one bad
+ * project can't stall the sweep. A snapshot measures the footprint as it stands,
+ * so a missed day is not backfilled later: a sweep inside the same UTC day
+ * (`USAGE_STORAGE_SNAPSHOT_INTERVAL_MS`) is what writes it. This is the scheduler tick's only caller (no HTTP entry point).
  */
 export const runStorageSnapshot = async (args?: {
   now?: Date;
@@ -460,7 +462,11 @@ export const runStorageSnapshot = async (args?: {
       });
       if (created) metered += 1;
     } catch (error) {
-      log('runStorageSnapshot: project=%s failed %o', project.publicId, error);
+      reportLostUsageEvent({
+        recorder: 'runStorageSnapshot',
+        detail: `project=${project.publicId}`,
+        error,
+      });
     }
   }
   log('runStorageSnapshot: projects=%d metered=%d', projects.length, metered);
