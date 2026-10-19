@@ -2,7 +2,6 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { evaluateLogic } from './jsonLogicMapping';
 import type { RequestPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import {
@@ -16,29 +15,12 @@ import {
   type TaskPrincipal,
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
+import { assertTransitionAllowed } from './tasksTransitionCheck';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContextUpdate } from './toolContextCarrier';
-import {
-  findValidTransition,
-  type WorkflowState,
-  type WorkflowTransition,
-} from './workflowsValidation';
+import type { WorkflowState, WorkflowTransition } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
-
-const buildTaskContext = (task: TaskInstance) => {
-  return {
-    id: task.publicId,
-    title: task.title,
-    state: task.state,
-    status: task.status,
-    payload: task.payload,
-    assignee: task.assignee,
-    // Server-owned, in its own namespace: a guard on `task.last_result` can
-    // only be satisfied by a value an automation wrote.
-    last_result: task.lastResult ?? null,
-  };
-};
 
 /** Best-effort cancellation of a still-running dispatch when a task leaves its state. */
 const cancelDispatchOnExit = async (args: {
@@ -98,28 +80,6 @@ const dispatchProvenance = (a: TransitionArgs) => {
     orchestrationRunId: a.orchestrationRunId ?? null,
     toolId: a.toolId ?? null,
   };
-};
-
-const evaluateGuard = (args: {
-  transition: WorkflowTransition;
-  task: TaskInstance;
-  principal: TaskPrincipal;
-}): void => {
-  if (args.transition.guard == null) return;
-  const ok = Boolean(
-    evaluateLogic(args.transition.guard, {
-      task: buildTaskContext(args.task),
-      transition: { name: args.transition.name },
-      principal: args.principal,
-    })
-  );
-  if (!ok) {
-    throw new DomainError(
-      'TASK_GUARD_REJECTED',
-      `The guard for transition '${args.transition.name}' rejected this move.`,
-      { transition: args.transition.name }
-    );
-  }
 };
 
 type TransitionArgs = {
@@ -209,44 +169,22 @@ const nextChainDepth = (args: {
   return next;
 };
 
-// Checks the locked task is open, not fenced behind a pending gate (unless this
-// is the `approval` resolution), and that the transition is valid from the
-// committed state with its guard passing.
+// Re-validates the move against the committed, locked state.
 const resolveLockedTransition = (args: {
   task: TaskInstance;
   transitionArgs: TransitionArgs;
   transitions: WorkflowTransition[];
 }): WorkflowTransition => {
   const { task, transitionArgs: a, transitions } = args;
-  if (task.status === 'closed') {
-    throw new DomainError(
-      'TASK_TRANSITION_CONFLICT',
-      `Task '${a.id}' is closed and can no longer transition.`
-    );
-  }
-  // While a transition is parked awaiting approval the task is a true park: no
-  // principal may move it out from under the pending gate. Only the `approval`
-  // principal (the resolution firing the gated transition) passes.
-  if (task.pendingTransition && a.principal.kind !== 'approval') {
-    throw new DomainError(
-      'TASK_TRANSITION_CONFLICT',
-      `Task '${a.id}' has transition '${task.pendingTransition}' pending approval.`,
-      { pendingTransition: task.pendingTransition }
-    );
-  }
-  const transition = findValidTransition({
+  const transition = transitions.find((t) => {
+    return t.name === a.transition;
+  })!;
+  assertTransitionAllowed({
+    task,
+    transition,
     transitions,
-    name: a.transition,
-    fromState: task.state,
+    principal: a.principal,
   });
-  if (!transition) {
-    throw new DomainError(
-      'TASK_TRANSITION_CONFLICT',
-      `Transition '${a.transition}' is not valid from state '${task.state}'.`,
-      { transition: a.transition, fromState: task.state }
-    );
-  }
-  evaluateGuard({ transition, task, principal: a.principal });
   return transition;
 };
 
@@ -432,6 +370,7 @@ export const transitionTask = async (args: TransitionArgs) => {
       // The gate re-checks validity against the same pinned machine this
       // transition was resolved from, never the live workflow row.
       transitions,
+      principal: args.principal,
       note: args.note ?? null,
       // A pause, not a cancellation: the requester's context is persisted so
       // the dispatch that runs on resolution — under the `approval` principal,

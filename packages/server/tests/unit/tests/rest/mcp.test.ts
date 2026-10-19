@@ -448,6 +448,26 @@ describe('MCP tools - happy path', () => {
     expect(task.state).toBe('todo');
     expect(task.status).toBe('open');
 
+    const options = parseResult(
+      await mcpCall('list-task-transitions', { task_id: task.id })
+    );
+    expect(options.data).toEqual([
+      {
+        name: 'start',
+        to: 'doing',
+        requires_approval: false,
+        allowed: true,
+        error_code: null,
+      },
+      {
+        name: 'finish',
+        to: 'done',
+        requires_approval: false,
+        allowed: false,
+        error_code: 'TASK_TRANSITION_CONFLICT',
+      },
+    ]);
+
     const moved = parseResult(
       await mcpCall('transition-task', {
         task_id: task.id,
