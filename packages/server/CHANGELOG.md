@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.89.0](https://github.com/ttoss/soat/compare/v0.88.0...v0.89.0) (2026-10-19)
+
+### Bug Fixes
+
+* **knowledge:** bill a search's query embedding only where the caller may spend ([#1693](https://github.com/ttoss/soat/issues/1693)) ([b428973](https://github.com/ttoss/soat/commit/b42897349262215ba76c2e0409aaa03842bf797b))
+
+### Features
+
+* **tasks:** migrate an open task to a newer workflow version ([#1691](https://github.com/ttoss/soat/issues/1691)) ([9351700](https://github.com/ttoss/soat/commit/935170092ec85cb2038a53bbc5bcea17537249d0)), closes [ttoss/soat#1680](https://github.com/ttoss/soat/issues/1680)
+
 # [0.88.0](https://github.com/ttoss/soat/compare/v0.87.0...v0.88.0) (2026-10-19)
 
 ### Bug Fixes
