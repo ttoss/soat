@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.90.0](https://github.com/ttoss/soat/compare/v0.89.0...v0.90.0) (2026-10-19)
+
+### Features
+
+* **workflows:** migrate every open task of a workflow in one run ([#1696](https://github.com/ttoss/soat/issues/1696)) ([3e0f602](https://github.com/ttoss/soat/commit/3e0f60253e927ebbcb0fd17391b124cd1441185c))
+
 # [0.89.0](https://github.com/ttoss/soat/compare/v0.88.0...v0.89.0) (2026-10-19)
 
 ### Features
