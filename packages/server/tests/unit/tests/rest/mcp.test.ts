@@ -574,6 +574,58 @@ describe('MCP tools - happy path', () => {
     expect(migrated.state).toBe('backlog');
   });
 
+  test('create-workflow-migration moves every open task and get-workflow-migration reads the run', async () => {
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        project_id: projectId,
+        name: 'mcp-batch-migration',
+        states: [
+          { name: 'todo', initial: true },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['todo'], to: 'done' }],
+      })
+    );
+    const task = parseResult(
+      await mcpCall('create-task', {
+        project_id: projectId,
+        workflow_id: workflow.id,
+        title: 'batch card',
+      })
+    );
+    parseResult(
+      await mcpCall('update-workflow', {
+        workflow_id: workflow.id,
+        states: [
+          { name: 'backlog', initial: true },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['backlog'], to: 'done' }],
+      })
+    );
+
+    const run = parseResult(
+      await mcpCall('create-workflow-migration', {
+        workflow_id: workflow.id,
+        to_version: 2,
+        state_map: { todo: 'backlog' },
+        wait: true,
+      })
+    );
+    expect(run.status).toBe('completed');
+    expect(run.tasks).toEqual([
+      { task_id: task.id, status: 'migrated', error: null },
+    ]);
+
+    const read = parseResult(
+      await mcpCall('get-workflow-migration', {
+        workflow_id: workflow.id,
+        migration_id: run.id,
+      })
+    );
+    expect(read.migrated_count).toBe(1);
+  });
+
   test('workflow version tools list, fetch and restore a definition', async () => {
     const states = [
       { name: 'todo', initial: true },

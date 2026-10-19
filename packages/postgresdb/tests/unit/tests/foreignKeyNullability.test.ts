@@ -111,6 +111,7 @@ const NOT_NULL_FOREIGN_KEYS = [
   'usage_thresholds.project_id',
   'webhook_deliveries.webhook_id',
   'webhooks.project_id',
+  'workflow_migrations.workflow_id',
   'workflow_versions.workflow_id',
   'workflows.project_id',
 ];

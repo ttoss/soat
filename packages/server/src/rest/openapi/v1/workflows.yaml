@@ -332,6 +332,89 @@ paths:
           description: Not found
         '409':
           $ref: './concurrency.yaml#/components/responses/VersionConflict'
+  /api/v1/workflows/{workflow_id}/migrations:
+    post:
+      description: >-
+        Moves every open task of the workflow that runs on an older version, or
+        on none, onto `to_version`. Each task is migrated as migrate-task
+        migrates one and needs `tasks:MigrateTask` on it; a task it would refuse
+        is reported as `refused` with the error, and the run goes on. The tasks
+        and the caller's permission on each are fixed when the run is recorded.
+        A `state_map` target the version lacks, or a terminal one, refuses the
+        request before any task moves. Runs in the background by default
+        (`status: queued`); `wait: true` answers once every task has settled.
+        See [Migrating every open task](/docs/modules/workflows#migrating-every-open-task).
+      tags:
+        - Workflows
+      summary: Migrate a workflow's open tasks to one of its versions
+      operationId: createWorkflowMigration
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          description: The workflow whose tasks migrate.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowMigrationRequest'
+      responses:
+        '201':
+          description: >-
+            The run, `queued` in the background or `completed` with `wait: true`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowMigration'
+        '400':
+          description: >-
+            The version does not exist, or a `state_map` target is undeclared
+            or terminal
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Workflow not found
+
+  /api/v1/workflows/{workflow_id}/migrations/{migration_id}:
+    get:
+      description: Returns a workflow migration with the outcome of each task.
+      tags:
+        - Workflows
+      summary: Get a workflow migration
+      operationId: getWorkflowMigration
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          description: The workflow whose tasks migrate.
+          schema:
+            type: string
+        - name: migration_id
+          in: path
+          required: true
+          description: The workflow migration to read.
+          schema:
+            type: string
+            example: 'wfl_mig_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: The workflow migration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowMigration'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Workflow or migration not found
+
 components:
   securitySchemes:
     bearerAuth:
@@ -684,6 +767,117 @@ components:
         created_at:
           type: string
           format: date-time
+    CreateWorkflowMigrationRequest:
+      type: object
+      required:
+        - to_version
+      additionalProperties: false
+      properties:
+        to_version:
+          type: integer
+          minimum: 1
+          description: The workflow version to move the open tasks onto.
+        state_map:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Current state name to a state the target version declares, applied
+            to every task as migrate-task applies it to one.
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            When omitted or `false` (default), the run is answered `queued` and
+            settles in the background; poll get-workflow-migration. Pass `true`
+            to answer once every task has settled.
+
+    WorkflowMigrationTask:
+      type: object
+      required:
+        - task_id
+        - status
+        - error
+      properties:
+        task_id:
+          type: string
+          example: 'task_V1StGXR8Z5jdHi6B'
+        status:
+          type: string
+          enum: [pending, migrated, refused]
+        error:
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
+          nullable: true
+          description: 'Why the task was refused: `{ code, message, meta? }`; null otherwise'
+
+    WorkflowMigration:
+      type: object
+      required:
+        - id
+        - workflow_id
+        - project_id
+        - to_version
+        - state_map
+        - status
+        - task_count
+        - migrated_count
+        - refused_count
+        - tasks
+        - created_by_principal_type
+        - created_by_principal_id
+        - created_at
+        - finished_at
+      properties:
+        id:
+          type: string
+          example: 'wfl_mig_V1StGXR8Z5jdHi6B'
+        workflow_id:
+          type: string
+          example: 'wfl_V1StGXR8Z5jdHi6B'
+        project_id:
+          type: string
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        to_version:
+          type: integer
+        state_map:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+        status:
+          type: string
+          enum: [queued, running, completed]
+          description: '`completed` once every task is `migrated` or `refused`.'
+        task_count:
+          type: integer
+        migrated_count:
+          type: integer
+        refused_count:
+          type: integer
+        tasks:
+          type: array
+          description: Every task the run covers, in the order it migrates them.
+          items:
+            $ref: '#/components/schemas/WorkflowMigrationTask'
+        created_by_principal_type:
+          nullable: true
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who started the migration.
+        created_by_principal_id:
+          type: string
+          nullable: true
+          description: Public id of who started the migration.
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the last task settled; null until then.
+
     RestoreWorkflowVersionRequest:
       type: object
       additionalProperties: false

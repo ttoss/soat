@@ -40,6 +40,16 @@
       "operationId": "restoreWorkflowVersion",
       "action": "workflows:RestoreWorkflowVersion",
       "description": "Restore an archived workflow state machine as a new version"
+    },
+    {
+      "operationId": "createWorkflowMigration",
+      "action": "workflows:MigrateWorkflowTasks",
+      "description": "Move a workflow's open tasks onto one of its versions; each task also needs tasks:MigrateTask"
+    },
+    {
+      "operationId": "getWorkflowMigration",
+      "action": "workflows:GetWorkflowMigration",
+      "description": "Get a workflow migration with its per-task results"
     }
   ]
 }

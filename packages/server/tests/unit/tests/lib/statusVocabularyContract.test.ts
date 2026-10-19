@@ -79,6 +79,8 @@ const DOMAIN_LIFECYCLES: Record<string, string> = {
   'exceptions.yaml#ExceptionItem.status': 'a filed exception is triaged',
   'exceptions.yaml#GET /api/v1/exceptions.status':
     'a filed exception is triaged',
+  'workflows.yaml#WorkflowMigrationTask.status':
+    'the verdict a migration reached on one task',
   'shares.yaml#ShareAcceptance.status': 'an acceptance is held or revoked',
   'shares.yaml#GET /api/v1/shares/{share_id}/acceptances.status':
     'an acceptance is held or revoked',

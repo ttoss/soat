@@ -93,6 +93,25 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
 | `updated_at`        | string           | ISO 8601 last-updated timestamp                                         |
 
+### Workflow migration
+
+| Field                       | Type           | Description |
+| --------------------------- | -------------- | ----------- |
+| `id`                        | string         | Public identifier (`wfl_mig_…`) |
+| `workflow_id`               | string         | The workflow whose tasks it moves |
+| `project_id`                | string         | Owning project |
+| `to_version`                | integer        | The version the tasks move onto |
+| `state_map`                 | object \| null | The `state_map` applied to every task |
+| `status`                    | string         | `queued`, `running` or `completed` |
+| `task_count`                | integer        | Tasks the run covers |
+| `migrated_count`            | integer        | Tasks now on `to_version` |
+| `refused_count`             | integer        | Tasks left where they were |
+| `tasks`                     | array          | `{ task_id, status, error }` per task, `status` one of `pending`, `migrated`, `refused`; `error` is the refusal as a `StoredError` |
+| `created_by_principal_type` | string \| null | Who started it |
+| `created_by_principal_id`   | string \| null | Public id of who started it |
+| `created_at`                | string         | ISO 8601 creation timestamp |
+| `finished_at`               | string \| null | When the last task settled |
+
 #### Transition history
 
 Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-history) returns them oldest-first, paged in the `{ data, total, limit, offset }` envelope.
@@ -281,6 +300,16 @@ Archive nothing: a metadata-only edit (`name`, `description`); re-writing the de
 | The payload fails the target schema | `TASK_PAYLOAD_INVALID` (400) |
 | The task is closed, has a transition pending approval, or a dispatch in flight | `TASK_MIGRATION_CONFLICT` (409) |
 
+### Migrating every open task
+
+[`POST /workflows/{workflow_id}/migrations`](/docs/api/workflows/create-workflow-migration) `{ to_version, state_map?, wait? }` moves every open task on an older version, or on none, onto `to_version`. Needs `workflows:MigrateWorkflowTasks` on the workflow and `tasks:MigrateTask` on each task.
+
+- Each task is migrated as [migrate-task](#migrating-a-task-to-a-newer-version) migrates one; a task it would refuse is recorded `refused` with the error, and the run goes on. A task the caller may not migrate is refused `FORBIDDEN`.
+- The tasks and the caller's permission on each are fixed when the run is recorded; a task opened later is not included.
+- A `state_map` target the version lacks (`TASK_STATE_NOT_FOUND`) or a terminal one (`VALIDATION_FAILED`) refuses the request before any task moves, as does an unknown version (`WORKFLOW_VERSION_NOT_FOUND`).
+- The run is the [`wait`](../advanced/sync-and-async.md) handle: `201` with `status: queued` by default, `completed` with `wait: true`. Poll [`GET /workflows/{workflow_id}/migrations/{migration_id}`](/docs/api/workflows/get-workflow-migration) (`workflows:GetWorkflowMigration`).
+- A run whose process stops is resumed by the task scheduler once its lease expires; a task it already moved counts as `migrated`.
+
 ### Alternate entry points
 
 [`POST /tasks`](/docs/api/tasks/create-task) accepts an optional `state` to create the task in instead of `initial`. Entry behaves like a transition (`entered_state_at` set, `on_enter` fires, the stall clock arms) with one history entry (`from_state: null`, `transition: null`). An unknown `state` is `TASK_STATE_NOT_FOUND` (400).
@@ -439,6 +468,7 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `TASK_MIGRATION_STATE_UNMAPPED` | 400 | The target version lacks the task's state and `state_map` does not map it. See [Migrating a task](#migrating-a-task-to-a-newer-version) |
 | `TASK_MIGRATION_CONFLICT`  | 409    | The task is closed, has a transition pending approval, or has a dispatch in flight |
 | `WORKFLOW_VERSION_NOT_FOUND` | 400  | A migration's `to_version` names no version of the workflow |
+| `WORKFLOW_MIGRATION_NOT_FOUND` | 404 | The workflow migration does not exist, or belongs to another workflow |
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
@@ -665,6 +695,43 @@ curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/pause" \
 
 curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/resume" \
   -H "Authorization: Bearer $TOKEN"
+```
+
+</TabItem>
+</Tabs>
+
+### Migrate every open task
+
+See [Migrating every open task](#migrating-every-open-task).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-workflow-migration --workflow-id "$WORKFLOW_ID" \
+  --to-version 3 --state-map '{"triage":"intake"}' --wait true
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: run, error } = await soat.workflows.createWorkflowMigration({
+  path: { workflow_id: WORKFLOW_ID },
+  body: { to_version: 3, state_map: { triage: 'intake' }, wait: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+// run.tasks lists each task as migrated or refused, with the refusal's error.
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/workflows/$WORKFLOW_ID/migrations" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"to_version":3,"state_map":{"triage":"intake"},"wait":true}'
 ```
 
 </TabItem>

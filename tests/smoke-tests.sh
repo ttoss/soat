@@ -6487,6 +6487,43 @@ fi
 $SOAT_CLI transition-task --task-id "$MIG_TASK_ID" --transition finish >/dev/null
 echo "Task migration: OK (v1 -> v2, todo -> backlog, unmapped state refused)"
 
+# Batch migration: every open task of a workflow moves in one background run,
+# polled until it settles.
+BATCH_WORKFLOW_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-batch-migration-workflow \
+  --states '[{"name":"todo","initial":true},{"name":"done","terminal":true}]' \
+  --transitions '[{"name":"finish","from":["todo"],"to":"done"}]' | jq -r '.id')
+for BATCH_TITLE in "batch card 1" "batch card 2"; do
+  $SOAT_CLI create-task \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --workflow-id "$BATCH_WORKFLOW_ID" \
+    --title "$BATCH_TITLE" >/dev/null
+done
+$SOAT_CLI update-workflow \
+  --workflow-id "$BATCH_WORKFLOW_ID" \
+  --states '[{"name":"backlog","initial":true},{"name":"done","terminal":true}]' \
+  --transitions '[{"name":"finish","from":["backlog"],"to":"done"}]' >/dev/null
+BATCH_RUN_ID=$($SOAT_CLI create-workflow-migration \
+  --workflow-id "$BATCH_WORKFLOW_ID" \
+  --to-version 2 \
+  --state-map '{"todo":"backlog"}' | jq -r '.id')
+BATCH_RESULT=""
+BATCH_POLL=0
+while [ "$BATCH_POLL" -lt 30 ]; do
+  BATCH_RESULT=$($SOAT_CLI get-workflow-migration \
+    --workflow-id "$BATCH_WORKFLOW_ID" \
+    --migration-id "$BATCH_RUN_ID" | jq -r '"\(.status) \(.migrated_count) \(.refused_count)"')
+  [ "$BATCH_RESULT" = "completed 2 0" ] && break
+  BATCH_POLL=$((BATCH_POLL + 1))
+  sleep 1
+done
+if [ "$BATCH_RESULT" != "completed 2 0" ]; then
+  echo "ERROR: create-workflow-migration expected 'completed 2 0', got '$BATCH_RESULT'" >&2
+  exit 1
+fi
+echo "Workflow migration: OK (2 open tasks v1 -> v2 in the background)"
+
 # Forward, then a backward move (review -> drafting) a DAG would reject.
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition start >/dev/null
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
