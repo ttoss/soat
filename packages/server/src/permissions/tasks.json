@@ -22,6 +22,11 @@
       "description": "Get a task's transition history"
     },
     {
+      "operationId": "listTaskTransitions",
+      "action": "tasks:GetTask",
+      "description": "List a task's transitions with the outcome firing each would have"
+    },
+    {
       "operationId": "updateTask",
       "action": "tasks:UpdateTask",
       "description": "Update a task's payload, title, or assignee"

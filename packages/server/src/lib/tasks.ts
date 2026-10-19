@@ -20,6 +20,7 @@ import {
 } from './workflowsValidation';
 
 export { transitionTask } from './tasksTransition';
+export { listTaskTransitions } from './tasksTransitionCheck';
 
 const log = createDebug('soat:tasks');
 

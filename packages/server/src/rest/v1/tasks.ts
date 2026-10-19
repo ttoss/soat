@@ -9,6 +9,7 @@ import {
   getTask,
   getTaskHistory,
   listTasks,
+  listTaskTransitions,
   type TaskPrincipal,
   transitionTask,
   updateTask,
@@ -126,6 +127,30 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
 
   ctx.body = await getTaskHistory({
     id: ctx.params.task_id,
+    ...parsePagination(ctx),
+  });
+});
+
+tasksRouter.get('/tasks/:task_id/transitions', async (ctx: Context) => {
+  requireAuth(ctx);
+  const task = await getTask({ id: ctx.params.task_id });
+
+  const allowed = await ctx.authUser!.isAllowed({
+    projectPublicId: task.project_id!,
+    action: 'tasks:GetTask',
+    resource: buildSrn({
+      projectPublicId: task.project_id!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
+  });
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  ctx.body = await listTaskTransitions({
+    id: ctx.params.task_id,
+    principal: principalFromCtx(ctx),
     ...parsePagination(ctx),
   });
 });
