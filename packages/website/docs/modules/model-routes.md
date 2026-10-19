@@ -259,7 +259,7 @@ Every routed call writes a `routing` object onto the generation:
 
 Internal completions (chats, memory extraction/consolidation) resolve metering attribution *before* the call, so they read the served target back from the routing record afterwards; a routed chat turn is metered on the answering `(ai_provider_id, model)`, never on the route.
 
-**Known gap:** a *failed* attempt that burned tokens is not metered; providers return no usage alongside an error. The attempt is still visible.
+A *failed* attempt writes no usage event: providers return no usage alongside an error. An attempt aborted at its `timeout_seconds` is still billed by the provider (input in full, output so far) and stays visible only in `routing.attempts`; see [Billed but unmetered](./usage.md#billed-but-unmetered).
 
 ### Deleting a route
 

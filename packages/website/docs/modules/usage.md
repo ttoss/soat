@@ -141,6 +141,17 @@ Idempotency keys: a generation's first segment is keyed by its id (`<generation_
 
 A `failed` turn is metered for every provider call it completed: the steps before the one that failed, an attempt abandoned for the retry without tools, an answer refused afterwards (`OUTPUT_SCHEMA_VALIDATION_FAILED`, `TEXT_ENCODED_TOOL_CALL`, a failed client-call gate), and the steps of a turn a newer session message preempted. A call that returned no usage (provider `4xx`/`5xx`, network fault, a model-route attempt aborted at its timeout, a stream the client abandoned) writes no event, so a failed generation with no usage row means no call completed. A usage event the server could not write is logged at error level, never dropped silently.
 
+#### Billed but unmetered
+
+Two calls are cut off before the provider reports usage. The provider still bills them, the input in full and the output generated so far, and neither writes a usage event or an estimate:
+
+| Call | What stays visible |
+| --- | --- |
+| A [model-route](./model-routes.md) attempt aborted at its [`timeout_seconds`](./model-routes.md#per-target-timeout) | The attempt in the generation's [`routing.attempts`](./model-routes.md#observability-and-metering), `error_class: timeout` |
+| The in-flight call of a [session](./sessions.md) turn a newer message preempted | The turn's completed steps, metered as above |
+
+A provider invoice therefore exceeds `/usage` by these calls; reconcile a route with frequent timeouts from its `routing.attempts`.
+
 ### Compute metering
 
 Every orchestration node execution that actively ran writes one `compute_execution` event with a `compute_second` component of wall-clock seconds (`completed_at − started_at`). Non-agent nodes meter compute too; an agent node produces both an `llm_tokens` and a `compute_execution` event. Attribution is run/node level (`generation_id`, `agent_id`, `trace_id` `null`). Priced from a `soat`/`compute-second` SKU when effective; idempotent on `compute:<orchestration_run_id>:node:<node_id>:attempt:<n>`. A skipped node is not metered.
