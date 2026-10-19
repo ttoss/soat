@@ -214,7 +214,7 @@ A `cost_usd` quota sums every priced meter by default, so a newly priced platfor
 
 An `actor` quota caps one **end user** ([Actors](./actors.md)) regardless of agent: *"no single user costs me more than $5/month"*.
 
-The end user is derived from the generation's [session](./sessions.md), never a separate argument, as in [usage attribution](./usage.md#end-user-attribution), so the actor enforced against is the actor billed. A generation with **no session** (a direct API call, a [trigger](./triggers.md), an [orchestration](./orchestrations.md) node) or a session without `actor_id` matches no actor quota; cap that traffic with a `project` or `agent` quota.
+The end user is the one the generation is metered against, as in [usage attribution](./usage.md#end-user-attribution): its [session](./sessions.md)'s actor, or the actor a [document ingest](./documents.md#ingesting-for-an-end-user) names with no session. So the actor enforced against is the actor billed. A generation with **no end user** (a direct API call, a [trigger](./triggers.md), an [orchestration](./orchestrations.md) node) or a session without `actor_id` matches no actor quota; cap that traffic with a `project` or `agent` quota.
 
 #### `scope_ref: null` means one budget per actor
 

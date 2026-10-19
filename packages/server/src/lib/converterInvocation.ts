@@ -5,6 +5,7 @@ import { createGeneration } from './agentGeneration';
 import type { SourcePage } from './chunking';
 import { buildFileDownloadUrl } from './fileDownloadToken';
 import { readFileBuffer } from './fileStorage';
+import type { GenerationEndUser } from './generationAttribution';
 import { buildIngestionCallbackBlock } from './ingestionCallbackToken';
 import type { MappedIngestionRule } from './ingestionRules';
 import { callTool } from './tools';
@@ -160,6 +161,7 @@ const invokeToolConverter = async (args: {
   projectId: number;
   documentId: string;
   attemptId: string;
+  endUser: GenerationEndUser;
 }): Promise<InvokeConverterResult> => {
   const input = await buildToolConverterInput(args);
   let raw: unknown;
@@ -171,7 +173,10 @@ const invokeToolConverter = async (args: {
       id: args.rule.tool_id!,
       action: args.rule.action ?? undefined,
       input,
-      attribution: {},
+      attribution: {
+        sessionId: args.endUser.sessionId,
+        actorId: args.endUser.actorId,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -214,6 +219,7 @@ const invokeAgentConverter = async (args: {
   file: ConverterFile;
   rule: MappedIngestionRule;
   projectId: number;
+  endUser: GenerationEndUser;
 }): Promise<InvokeConverterResult> => {
   let result: Awaited<ReturnType<typeof createGeneration>>;
   try {
@@ -221,6 +227,8 @@ const invokeAgentConverter = async (args: {
       projectIds: [args.projectId],
       runProjectId: args.projectId,
       agentId: args.rule.agent_id!,
+      sessionId: args.endUser.sessionId ?? undefined,
+      actorId: args.endUser.actorId ?? undefined,
       messages: [
         {
           role: 'user',
@@ -272,6 +280,8 @@ export const invokeConverter = async (args: {
   projectId: number;
   documentId: string;
   attemptId: string;
+  /** Who the ingest runs for, validated by its route. */
+  endUser: GenerationEndUser;
 }): Promise<InvokeConverterResult> => {
   log(
     'invokeConverter: file=%s glob=%s toolId=%s agentId=%s delivery=%s',

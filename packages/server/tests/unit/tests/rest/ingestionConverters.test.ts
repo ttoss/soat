@@ -96,12 +96,13 @@ describe('Converter ingestion', () => {
    * back with.
    */
   const ingestDeferred = async (
-    filename: string
+    filename: string,
+    body: Record<string, unknown> = {}
   ): Promise<{ documentId: string; token: string }> => {
     const fileId = await uploadFile({ filename, contentType: 'audio/ogg' });
     const ingest = await asAdmin()
       .post('/api/v1/documents/ingest')
-      .send({ project_id: projectId, file_id: fileId });
+      .send({ project_id: projectId, file_id: fileId, ...body });
     expect(ingest.status).toBe(202);
     const documentId = ingest.body.id as string;
 
@@ -277,6 +278,43 @@ describe('Converter ingestion', () => {
   });
 
   describe('POST /api/v1/documents/:document_id/ingestion-callback', () => {
+    test('the end user the ingest named is metered across the callback', async () => {
+      const actor = await asAdmin()
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'deferred end user' });
+      expect(actor.status).toBe(201);
+      const { documentId, token } = await ingestDeferred('attributed.ogg', {
+        actor_id: actor.body.id,
+      });
+
+      const res = await callBack({
+        documentId,
+        token,
+        body: { text: 'Transcribed for the end user.' },
+      });
+
+      expect(res.status).toBe(204);
+      const events = await asAdmin().get(
+        `/api/v1/usage/events?actor_id=${actor.body.id}&limit=100`
+      );
+      expect(events.status).toBe(200);
+      const rows = events.body.data as Array<{
+        meter_type: string;
+        source: string | null;
+        document_id: string | null;
+      }>;
+      expect(
+        rows.some((row) => {
+          return row.meter_type === 'tool_execution';
+        })
+      ).toBe(true);
+      expect(
+        rows.some((row) => {
+          return row.source === 'embedding' && row.document_id === documentId;
+        })
+      ).toBe(true);
+    });
+
     test('a token minted for one document is refused on another', async () => {
       const first = await ingestDeferred('first.ogg');
       const second = await ingestDeferred('second.ogg');

@@ -263,6 +263,16 @@ paths:
                   type: integer
                   description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
                   example: 200
+                session_id:
+                  x-soat-ref: sessions
+                  type: string
+                  description: Session the ingest runs for. The converter's generation and the chunk embeddings are metered against the session and its actor.
+                  example: 'sess_V1StGXR8Z5jdHi6B'
+                actor_id:
+                  x-soat-ref: actors
+                  type: string
+                  description: Actor the ingest runs for when there is no session; metered like `session_id`. Beside `session_id` it must be that session's actor, else `400 VALIDATION_FAILED`.
+                  example: 'actor_V1StGXR8Z5jdHi6B'
       responses:
         '201':
           description: Ingestion completed synchronously (only when `?wait=true`). The document is fully indexed and ready for search.
@@ -277,7 +287,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/IngestedDocumentRecord'
         '400':
-          description: Invalid request, file not found, or unsupported content type
+          description: Invalid request, file not found, unsupported content type, or an unknown `session_id` (`SESSION_NOT_FOUND`) or `actor_id` (`ACTOR_NOT_FOUND`) in the project
           content:
             application/json:
               schema:
@@ -1049,6 +1059,16 @@ paths:
                   type: integer
                   description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
                   example: 200
+                session_id:
+                  x-soat-ref: sessions
+                  type: string
+                  description: Session the ingest runs for. The converter's generation and the chunk embeddings are metered against the session and its actor.
+                  example: 'sess_V1StGXR8Z5jdHi6B'
+                actor_id:
+                  x-soat-ref: actors
+                  type: string
+                  description: Actor the ingest runs for when there is no session; metered like `session_id`. Beside `session_id` it must be that session's actor, else `400 VALIDATION_FAILED`.
+                  example: 'actor_V1StGXR8Z5jdHi6B'
       responses:
         '201':
           description: Re-ingestion completed synchronously (only when `?wait=true`).

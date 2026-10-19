@@ -17,6 +17,10 @@ import {
 import { mapDocument } from './documentMapper';
 import { assertFilePathFree } from './filePathConflict';
 import { normalizePath } from './filePaths';
+import {
+  assertCallerEndUser,
+  type GenerationEndUser,
+} from './generationAttribution';
 import { resolveIngestionRule } from './ingestionRules';
 import { assertStorageQuota } from './quotaStorage';
 import {
@@ -135,6 +139,7 @@ type IngestionPipelineArgs = ChunkConfigInput & {
   fileId: string;
   docPath: string;
   isAsync: boolean;
+  endUser: GenerationEndUser;
 };
 
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
@@ -158,7 +163,11 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     return;
   }
 
-  const resolved = await resolveSourcePages(file, doc.publicId, attemptId);
+  const resolved = await resolveSourcePages(file, {
+    documentId: doc.publicId,
+    attemptId,
+    endUser: args.endUser,
+  });
 
   if (resolved.status === 'pending') {
     if (!args.isAsync) {
@@ -176,6 +185,8 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     await doc.update({
       conversionAttemptId: attemptId,
       pendingDocPath: args.docPath,
+      pendingSessionId: args.endUser.sessionId ?? null,
+      pendingActorId: args.endUser.actorId ?? null,
       chunkStrategy: chunkConfig.strategy,
       chunkSize: chunkConfig.chunkSize ?? null,
       chunkOverlap: chunkConfig.chunkOverlap ?? null,
@@ -198,6 +209,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
+    endUser: args.endUser,
   });
 };
 
@@ -209,6 +221,7 @@ const processDocumentIngestion = async (args: {
   chunkSize?: number;
   chunkOverlap?: number;
   isAsync: boolean;
+  endUser: GenerationEndUser;
 }): Promise<void> => {
   log('processDocumentIngestion: docId=%d fileId=%s', args.docId, args.fileId);
 
@@ -258,8 +271,12 @@ export const enqueueDocumentIngestion = async (args: {
   chunkSize?: number;
   chunkOverlap?: number;
   wait?: boolean;
+  /** Who the ingest runs for, validated by the route (`assertCallerEndUser`). */
+  endUser: GenerationEndUser;
 }) => {
   const runAsync = args.wait !== true;
+
+  await assertCallerEndUser({ ...args.endUser, projectId: args.projectId });
 
   log(
     'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s wait=%s',
@@ -312,6 +329,7 @@ export const enqueueDocumentIngestion = async (args: {
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
     isAsync: runAsync,
+    endUser: args.endUser,
   };
 
   if (runAsync) {
@@ -360,6 +378,8 @@ export const reingestDocument = async (args: {
   chunkSize?: number;
   chunkOverlap?: number;
   wait?: boolean;
+  /** Who the re-ingest runs for, validated by the route. */
+  endUser: GenerationEndUser;
 }) => {
   const doc = (await db.Document.findOne({
     where: { publicId: args.id },
@@ -369,6 +389,7 @@ export const reingestDocument = async (args: {
   if (!doc) return null;
 
   const file = await ensureReingestibleFile({ id: args.id, file: doc.file });
+  await assertCallerEndUser({ ...args.endUser, projectId: file.projectId });
 
   const runAsync = args.wait !== true;
   if (!runAsync) {
@@ -407,6 +428,7 @@ export const reingestDocument = async (args: {
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
     isAsync: runAsync,
+    endUser: args.endUser,
   };
 
   if (runAsync) {

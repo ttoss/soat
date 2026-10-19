@@ -137,6 +137,19 @@ The prefix is a **path boundary, not a substring**: `/reports` matches `/reports
 
 `?wait=true` blocks until completion and returns `201 Created` with `status: ready` (or `failed`). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. A file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC`; ingest it in background mode instead.
 
+### Ingesting for an end user
+
+[`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) and [`POST /api/v1/documents/:id/ingest`](/docs/api/documents/reingest-document) accept `session_id` or `actor_id`. The [converter](./ingestion-rules.md)'s generation or tool call and every chunk embedding are then metered against that end user, as a session's turns are ([End-user attribution](./usage.md#end-user-attribution)):
+
+| Body | Metered against |
+| --- | --- |
+| `session_id` | the session and its actor |
+| `actor_id` | the actor, no session |
+| both | the session and its actor; `actor_id` must be that session's actor, else `400 VALIDATION_FAILED` |
+| neither | no end user |
+
+An id not in the document's project is `400 SESSION_NOT_FOUND` or `400 ACTOR_NOT_FOUND`. The end user is kept across an async converter's callback.
+
 ### Tags
 
 Key-value string pairs set at creation or ingestion, or via the tag sub-endpoints, and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/documents`](/docs/api/documents/list-documents) filters by pair with `?tags=key:value` (repeatable, all must match); [Knowledge search](./knowledge.md) applies the same pairs to chunks. See [IAM — Tags](iam.md#tags).

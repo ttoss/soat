@@ -103,6 +103,7 @@ type ResolveContextArgs = {
   nodeId?: string;
   nodeAttempt?: number;
   sessionId?: string;
+  actorId?: string;
   conversation?: GenerationConversation;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
@@ -133,6 +134,7 @@ const resolveContextAndRecord = async (
     // split on the actor behind this session, so the same end user keeps the
     // same agent version across calls.
     sessionId: args.sessionId,
+    actorId: args.actorId,
     pinnedAgentVersion: args.pinnedAgentVersion,
     outputSchemaOverride: args.outputSchemaOverride,
   });
@@ -160,6 +162,7 @@ const resolveContextAndRecord = async (
     // Typed FK columns, not metadata keys: this is identity the platform
     // enforces and caps spend on, so it must not live in a caller-writable bag.
     sessionId: args.sessionId ?? null,
+    actorId: args.actorId,
     // The conversation this turn served, so a memory assertion recorded against
     // the generation can be walked up to the conversation the fact was learned
     // in, and a turn resumed from a pause is stored where this one would have
@@ -230,6 +233,9 @@ export type CreateGenerationArgs = {
   // actor is derived. Set by the session path; absent for direct API
   // generations, triggers, and orchestration nodes — no end user behind them.
   sessionId?: string;
+  // An actor with no session, validated by the entry point that names it
+  // (`assertCallerEndUser`); ignored beside a session. Set by ingestion.
+  actorId?: string;
   // The conversation this turn answers, set by the conversation path only.
   conversation?: GenerationConversation;
   metadata?: Record<string, unknown> | null;
@@ -261,6 +267,29 @@ export type CreateGenerationArgs = {
 type GenerationPrep =
   | { kind: 'short_circuit'; result: GenerationResult }
   | ({ kind: 'ready'; ctx: GenerationContext; traceId: string } & ChainLineage);
+
+/**
+ * Before any context building or provider call, so a breached budget meters
+ * nothing. Fails open on an infrastructure error: a quota is cost control, not
+ * authorization, so one unmetered window beats blocking every generation.
+ */
+const admitWithinQuota = async (args: CreateGenerationArgs): Promise<void> => {
+  const quotaBreach = await checkGenerationQuota({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    runProjectId: args.runProjectId,
+    sessionId: args.sessionId,
+    actorId: args.actorId,
+  });
+  if (quotaBreach) throw quotaBreachError(quotaBreach);
+  if (args.runProjectId !== undefined) {
+    await admitSharedCall({
+      resourceType: 'agent',
+      resourceId: args.agentId,
+      projectId: args.runProjectId,
+    });
+  }
+};
 
 const prepareGeneration = async (
   args: CreateGenerationArgs
@@ -310,25 +339,7 @@ const prepareGeneration = async (
   }
   const { lineage } = chain;
 
-  // Before any context building or provider call, so a breached budget meters
-  // nothing. Fails open on an infrastructure error: a quota is cost control,
-  // not authorization, so one unmetered window beats blocking every generation.
-  const quotaBreach = await checkGenerationQuota({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    runProjectId: args.runProjectId,
-    // Carries the end user for `actor`-scope caps; the actor is derived from
-    // the session, so this is the same attribution the usage event will record.
-    sessionId: args.sessionId,
-  });
-  if (quotaBreach) throw quotaBreachError(quotaBreach);
-  if (args.runProjectId !== undefined) {
-    await admitSharedCall({
-      resourceType: 'agent',
-      resourceId: args.agentId,
-      projectId: args.runProjectId,
-    });
-  }
+  await admitWithinQuota(args);
 
   const ctx = await resolveContextAndRecord({
     agentId: args.agentId,
@@ -349,6 +360,7 @@ const prepareGeneration = async (
     nodeId: args.nodeId,
     nodeAttempt: args.nodeAttempt,
     sessionId: args.sessionId,
+    actorId: args.actorId,
     conversation: args.conversation,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,

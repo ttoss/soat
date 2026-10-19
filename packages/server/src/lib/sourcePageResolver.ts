@@ -3,6 +3,7 @@ import { DomainError } from '../errors';
 import type { SourcePage } from './chunking';
 import { invokeConverter } from './converterInvocation';
 import { readFileBuffer } from './fileStorage';
+import type { GenerationEndUser } from './generationAttribution';
 import {
   type MappedIngestionRule,
   resolveIngestionRule,
@@ -61,6 +62,7 @@ const convertWithRule = async (args: {
   rule: MappedIngestionRule;
   documentId: string;
   attemptId: string;
+  endUser: GenerationEndUser;
 }): Promise<ResolvedSourcePages> => {
   const outcome = await invokeConverter({
     file: args.file,
@@ -68,6 +70,7 @@ const convertWithRule = async (args: {
     projectId: args.file.projectId,
     documentId: args.documentId,
     attemptId: args.attemptId,
+    endUser: args.endUser,
   });
 
   if (outcome.status === 'pending') {
@@ -90,15 +93,18 @@ const convertWithRule = async (args: {
 const resolveNativeSourcePages = async (
   file: IngestedFile,
   rule: MappedIngestionRule | null,
-  documentId: string,
-  attemptId: string
+  conversion: {
+    documentId: string;
+    attemptId: string;
+    endUser: GenerationEndUser;
+  }
 ): Promise<ResolvedSourcePages> => {
   if (rule && rule.native_extraction === 'skip') {
-    return convertWithRule({ file, rule, documentId, attemptId });
+    return convertWithRule({ file, rule, ...conversion });
   }
   const pages = await extractNativePages(file);
   if (pages.length > 0) return { status: 'ready', pages, rule: null };
-  if (rule) return convertWithRule({ file, rule, documentId, attemptId });
+  if (rule) return convertWithRule({ file, rule, ...conversion });
   return { status: 'ready', pages: [], rule: null };
 };
 
@@ -113,8 +119,12 @@ const resolveNativeSourcePages = async (
  */
 export const resolveSourcePages = async (
   file: IngestedFile,
-  documentId: string,
-  attemptId: string
+  conversion: {
+    documentId: string;
+    attemptId: string;
+    /** Who the ingest runs for; a converter's spend is metered against them. */
+    endUser: GenerationEndUser;
+  }
 ): Promise<ResolvedSourcePages> => {
   const contentType = file.contentType ?? '';
   const rule = await resolveIngestionRule({
@@ -123,10 +133,10 @@ export const resolveSourcePages = async (
   });
 
   if (SUPPORTED_CONTENT_TYPES.includes(contentType)) {
-    return resolveNativeSourcePages(file, rule, documentId, attemptId);
+    return resolveNativeSourcePages(file, rule, conversion);
   }
 
-  if (rule) return convertWithRule({ file, rule, documentId, attemptId });
+  if (rule) return convertWithRule({ file, rule, ...conversion });
 
   throw new DomainError(
     'UNSUPPORTED_FILE_TYPE',

@@ -6,6 +6,10 @@ import { db } from '../db';
 import type { EmbeddingSubject } from './embedding';
 import { readEmbeddingInputTokenPriceUsd } from './embeddingPrice';
 import {
+  type GenerationEndUser,
+  resolveEndUserAttribution,
+} from './generationAttribution';
+import {
   buildEmbeddingComponents,
   computeComponentCostUsd,
   sumComponentCostUsd,
@@ -79,8 +83,19 @@ const UNATTRIBUTED: GenerationEventAttribution = {
 const resolveEmbeddingAttribution = async (args: {
   projectId: number;
   generationId: string | null;
+  endUser?: GenerationEndUser;
 }): Promise<GenerationEventAttribution> => {
-  if (!args.generationId) return UNATTRIBUTED;
+  if (!args.generationId) {
+    return args.endUser
+      ? {
+          ...UNATTRIBUTED,
+          ...(await resolveEndUserAttribution({
+            ...args.endUser,
+            projectId: args.projectId,
+          })),
+        }
+      : UNATTRIBUTED;
+  }
   const generation = await db.Generation.findOne({
     where: { publicId: args.generationId, projectId: args.projectId },
   });
@@ -113,6 +128,8 @@ const resolveEmbeddingAttribution = async (args: {
 export const recordEmbeddingUsage = async (args: {
   projectId: number;
   generationId: string | null;
+  /** The end user of work no generation runs; see `EmbeddingBilling`. */
+  endUser?: GenerationEndUser;
   subject: EmbeddingSubject;
   provider: string;
   model: string;

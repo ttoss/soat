@@ -168,7 +168,7 @@ export const RESERVED_TOOL_CONTEXT_KEYS = [
 ] as const;
 
 export type ServerToolContextIdentity = {
-  sessionId: string;
+  sessionId?: string;
   actorId?: string;
   actorExternalId?: string;
 };
@@ -185,10 +185,10 @@ const RESERVED_LOWER = new Set(
 /**
  * Makes the reserved identity keys unaddressable by a caller: every reserved
  * key (in any casing) is dropped from the caller bag, then the server-derived
- * identity — when the generation runs for a session — is stamped on top. A
- * generation with no session carries no identity keys at all, so a downstream
- * tool can trust that a `<prefix>session_id` context header is always
- * server-derived.
+ * identity — when the generation runs for a session or a named actor — is
+ * stamped on top. A generation with no end user carries no identity keys at
+ * all, so a downstream tool can trust that a `<prefix>session_id` or
+ * `<prefix>actor_id` context header is always server-derived.
  */
 export const pinServerIdentityToolContext = (args: {
   toolContext?: Record<string, string>;
@@ -204,9 +204,10 @@ export const pinServerIdentityToolContext = (args: {
 
   if (!args.identity) return stripped;
 
-  const identity: Record<string, string> = {
-    session_id: args.identity.sessionId,
-  };
+  const identity: Record<string, string> = {};
+  if (args.identity.sessionId) {
+    identity.session_id = args.identity.sessionId;
+  }
   if (args.identity.actorId) {
     identity.actor_id = args.identity.actorId;
   }

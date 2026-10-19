@@ -7,6 +7,7 @@ import {
   pricingCoverage,
   type UnpricedRow,
 } from './costEnforceability';
+import { resolveGenerationEndUser } from './generationAttribution';
 import type { WindowedQuotaBreach } from './quotaBreach';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
@@ -319,37 +320,6 @@ const aggregateGenerationMetric = async (args: {
 };
 
 /**
- * Resolves the end user an `actor`-scope quota is enforced against: the actor
- * on the generation's session, scoped to the agent's project so a session id
- * from another tenant can never pull an actor into this project's enforcement.
- *
- * Both ids are needed — the public one matches `scope_ref`, the internal one
- * filters the meter. Returns `null` when there is no session, the session does
- * not resolve, or it carries no actor; every one of those means "no end user
- * behind this generation", and actor quotas then match nothing.
- */
-const resolveSessionActor = async (args: {
-  projectId: number;
-  sessionId?: string | null;
-}): Promise<{ id: number; publicId: string } | null> => {
-  if (!args.sessionId) return null;
-
-  const session = await db.Session.findOne({
-    where: { publicId: args.sessionId, projectId: args.projectId },
-    attributes: ['actorId'],
-  });
-  if (!session?.actorId) return null;
-
-  const actor = await db.Actor.findOne({
-    where: { id: session.actorId },
-    attributes: ['id', 'publicId'],
-  });
-  if (!actor) return null;
-
-  return { id: actor.id as number, publicId: actor.publicId };
-};
-
-/**
  * What an `enforce` cost cap does over a window it cannot measure at all.
  *
  * Refusing is the point: a cap that cannot measure the spend it caps must not
@@ -458,10 +428,10 @@ const evaluateGenerationQuota = async (args: {
  * `api_key`-scope token/cost quotas are rejected at create time and skipped
  * defensively here, since usage events carry no api-key attribution.
  *
- * **Actor scope.** The end user is derived from `sessionId`, never accepted
- * directly, so a caller cannot spend one actor's budget under another's
- * session. A generation with no session matches no actor quota; cap that
- * traffic with a `project` quota.
+ * **Actor scope.** The end user is the session's actor, or an actor named
+ * with no session (`resolveGenerationEndUser`), so a caller cannot spend one
+ * actor's budget under another's session. A generation with no end user
+ * matches no actor quota; cap that traffic with a `project` quota.
  *
  * A null `scope_ref` here means **one budget per actor**, not "the whole
  * project" as it does for `agent` scope: a project-wide aggregate is already
@@ -473,6 +443,7 @@ export const evaluateGenerationQuotas = async (args: {
   projectIds?: number[];
   runProjectId?: number;
   sessionId?: string;
+  actorId?: string;
 }): Promise<WindowedQuotaBreach | null> => {
   const now = new Date();
 
@@ -490,9 +461,12 @@ export const evaluateGenerationQuotas = async (args: {
   const projectId = args.runProjectId ?? agent.projectId;
 
   const agentPublicId = agent.publicId;
-  const actor = await resolveSessionActor({
+  // Scoped to the agent's project so an id from another tenant can never pull
+  // an actor into this project's enforcement; no end user matches no actor quota.
+  const { actor } = await resolveGenerationEndUser({
     projectId,
     sessionId: args.sessionId,
+    actorId: args.actorId,
   });
 
   const quotas = (await db.Quota.findAll({
@@ -542,6 +516,7 @@ export const checkGenerationQuota = async (args: {
   projectIds?: number[];
   runProjectId?: number;
   sessionId?: string;
+  actorId?: string;
 }): Promise<WindowedQuotaBreach | null> => {
   try {
     return await evaluateGenerationQuotas(args);

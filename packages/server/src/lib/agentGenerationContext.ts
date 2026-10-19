@@ -169,11 +169,13 @@ const assembleContextMessages = async (args: {
 const resolvePinnedToolContext = async (args: {
   toolContext?: Record<string, string>;
   sessionId?: string | null;
+  actorId?: string | null;
 }): Promise<Record<string, string> | undefined> => {
   return pinServerIdentityToolContext({
     toolContext: args.toolContext,
     identity: await resolveServerToolContextIdentity({
       sessionId: args.sessionId,
+      actorId: args.actorId,
     }),
   });
 };
@@ -193,6 +195,8 @@ export type BuildGenerationContextArgs = {
   knowledgeConfig?: object;
   guardrailContext?: Record<string, unknown> | null;
   sessionId?: string | null;
+  /** An actor with no session — see `resolveGenerationEndUser`. */
+  actorId?: string | null;
   /** Forces one archived agent version — see `resolveServedAgentVersion`. */
   pinnedAgentVersion?: number | null;
   /** Replaces the served output schema — see `withOutputSchema`. */
@@ -221,6 +225,7 @@ export const buildGenerationContext = async (
   const served = await resolveServedAgentVersion({
     agent: liveAgent,
     sessionId: args.sessionId,
+    actorId: args.actorId,
     pinnedVersion: args.pinnedAgentVersion,
   });
   const { agentVersion } = served;

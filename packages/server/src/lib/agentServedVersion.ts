@@ -4,6 +4,10 @@ import { db } from '../db';
 import type { TypedAgent } from './agentGenerationTypes';
 import { configToolBindings } from './agentVersionSnapshot';
 import {
+  type GenerationEndUser,
+  resolveGenerationEndUser,
+} from './generationAttribution';
+import {
   type ActiveRelease,
   assignReleaseVersion,
   parseActiveRelease,
@@ -122,25 +126,19 @@ export const withOutputSchema = (args: {
 };
 
 /**
- * The identity a rollout split is sticky on: the actor behind the session where
- * there is one, else the session itself, else nothing (an anonymous one-shot,
+ * The identity a rollout split is sticky on: the generation's actor where there
+ * is one, else the session itself, else nothing (an anonymous one-shot,
  * which `assignReleaseVersion` splits randomly).
  *
  * Preferring the actor over the session means a returning end user keeps the
  * same prompt across separate conversations, not just within one.
  */
-const resolveAssignmentKey = async (args: {
-  projectId: number;
-  sessionId?: string | null;
-}): Promise<string | null> => {
-  if (!args.sessionId) return null;
-
-  const session = await db.Session.findOne({
-    where: { publicId: args.sessionId, projectId: args.projectId },
-    include: [{ model: db.Actor, as: 'actor' }],
-  });
-
-  return session?.actor?.publicId ?? args.sessionId;
+const resolveAssignmentKey = async (
+  args: GenerationEndUser & { projectId: number }
+): Promise<string | null> => {
+  if (!args.sessionId && !args.actorId) return null;
+  const { actor } = await resolveGenerationEndUser(args);
+  return actor?.publicId ?? args.sessionId ?? null;
 };
 
 const loadArchivedConfig = async (args: {
@@ -182,6 +180,7 @@ export type ServedAgentVersion = {
 export const resolveServedAgentVersion = async (args: {
   agent: TypedAgent;
   sessionId?: string | null;
+  actorId?: string | null;
   /**
    * Forces one archived version, bypassing release assignment entirely.
    *
@@ -235,6 +234,7 @@ export const resolveServedAgentVersion = async (args: {
   const key = await resolveAssignmentKey({
     projectId: args.agent.project.id as number,
     sessionId: args.sessionId,
+    actorId: args.actorId,
   });
 
   const assignment = assignReleaseVersion({ release, key });

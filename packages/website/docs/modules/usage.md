@@ -239,7 +239,7 @@ Every attribution id on an event — `agent_id`, `generation_id`, `trace_id`, `o
 
 ### End-user attribution
 
-An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen**; renaming or deleting either never rewrites spend. Set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never from the request (`tool_context` is caller-writable and not read).
+An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen**; renaming or deleting either never rewrites spend. Set on the session path and on a [document ingest](./documents.md#ingesting-for-an-end-user) that names `session_id` or `actor_id`; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. Where there is a session, the actor is **derived from the session**, never from the request (`tool_context` is caller-writable and not read); an ingest may name an actor alone only with no session.
 
 | Question | Read |
 | --- | --- |

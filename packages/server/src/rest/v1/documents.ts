@@ -394,6 +394,8 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunk_strategy?: 'page' | 'whole' | 'size';
     chunk_size?: number;
     chunk_overlap?: number;
+    session_id?: string;
+    actor_id?: string;
   };
 
   // Background by default; ?wait=true blocks and returns 201.
@@ -414,6 +416,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     wait,
+    endUser: { sessionId: body.session_id, actorId: body.actor_id },
   });
 
   ctx.status = wait ? 201 : 202;
@@ -436,6 +439,8 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
     chunk_strategy?: 'page' | 'whole' | 'size';
     chunk_size?: number;
     chunk_overlap?: number;
+    session_id?: string;
+    actor_id?: string;
   };
 
   // Background by default; ?wait=true blocks and returns 201.
@@ -447,6 +452,7 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     wait,
+    endUser: { sessionId: body.session_id, actorId: body.actor_id },
   });
 
   ctx.status = wait ? 201 : 202;
