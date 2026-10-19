@@ -53,6 +53,7 @@ export const PUBLIC_ID_PREFIXES = {
   approval: 'apr_',
   workflow: 'wfl_',
   workflowVersion: 'wfl_ver_',
+  workflowMigration: 'wfl_mig_',
   task: 'task_',
   taskTransition: 'task_tr_',
   guardrail: 'guard_',

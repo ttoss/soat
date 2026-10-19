@@ -21,6 +21,7 @@ import {
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
+import { workflowMigrationsRouter } from './workflowMigrations';
 import { workflowVersionsRouter } from './workflowVersions';
 
 const workflowsRouter = new Router<Context>();
@@ -169,5 +170,7 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
 // mirroring `orchestrationVersions.ts` under the orchestrations router.
 workflowsRouter.use(workflowVersionsRouter.routes());
 workflowsRouter.use(workflowVersionsRouter.allowedMethods());
+workflowsRouter.use(workflowMigrationsRouter.routes());
+workflowsRouter.use(workflowMigrationsRouter.allowedMethods());
 
 export { workflowsRouter };

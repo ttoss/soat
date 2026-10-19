@@ -35,6 +35,8 @@ const TOOL_CHOOSES_WAIT = {
     'the cascade runs as long as the executors of every node it reaches',
   UpgradePlaybookCaseRequest:
     'the cascade runs as long as the executors of every node it reaches',
+  CreateWorkflowMigrationRequest:
+    'a run migrates every open task of a workflow, however many there are',
 };
 
 /** The `wait` fields declared directly on `node`. */

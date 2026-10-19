@@ -687,6 +687,11 @@ export const ERROR_CODES = {
     httpStatus: 404,
     description: 'The workflow does not exist or is not accessible.',
   },
+  WORKFLOW_MIGRATION_NOT_FOUND: {
+    httpStatus: 404,
+    description:
+      'The workflow migration does not exist, or belongs to another workflow.',
+  },
   WORKFLOW_VALIDATION_FAILED: {
     httpStatus: 400,
     description:

@@ -11,6 +11,7 @@ import {
   findStaleDispatches,
   routeOrphanedDispatch,
 } from './tasksReconciliation';
+import { resumeWorkflowMigrations } from './workflowMigrations';
 
 const log = createDebug('soat:tasks');
 
@@ -104,11 +105,16 @@ const scheduler = createScheduler({
   log,
   defaultIntervalMs: 5000,
   envVar: 'TASKS_SCHEDULER_INTERVAL_MS',
-  sweeps: [sweepStalledTasks, reconcileOrphanedDispatches],
+  sweeps: [
+    sweepStalledTasks,
+    reconcileOrphanedDispatches,
+    resumeWorkflowMigrations,
+  ],
 });
 
 /**
- * Starts the task sweeper loop — stall deadlines and orphaned dispatches.
+ * Starts the task sweeper loop — stall deadlines, orphaned dispatches and
+ * interrupted workflow migrations.
  * Called once from `server.ts` at startup; unit tests drive
  * {@link sweepStalledTasks} and {@link reconcileOrphanedDispatches} directly
  * instead. The timer is unref'd and repeated calls are a no-op.

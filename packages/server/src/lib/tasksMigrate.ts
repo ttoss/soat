@@ -66,6 +66,47 @@ const migrationConflict = (args: {
   return null;
 };
 
+// Closing belongs to a transition, which emits `tasks.closed` and scrubs the
+// stored tool context; a migration that closed would do neither.
+const assertOpenTarget = (target: WorkflowState): void => {
+  if (target.terminal === true) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `State '${target.name}' is terminal; migrate to an open state and transition the task to close it.`,
+      { state: target.name }
+    );
+  }
+};
+
+const mapTarget = (args: {
+  states: WorkflowState[];
+  name: string;
+}): WorkflowState => {
+  const target = stateByName(args);
+  if (!target) {
+    throw new DomainError(
+      'TASK_STATE_NOT_FOUND',
+      `The target version has no state named '${args.name}'.`,
+      { state: args.name }
+    );
+  }
+  return target;
+};
+
+/**
+ * Every `state_map` target, checked once for a batch before any task moves:
+ * a target the version lacks or a terminal one would refuse each task it
+ * names, so it refuses the request instead.
+ */
+export const assertStateMapTargets = (args: {
+  definition: WorkflowDefinition;
+  stateMap?: Record<string, string>;
+}): void => {
+  for (const name of Object.values(args.stateMap ?? {})) {
+    assertOpenTarget(mapTarget({ states: args.definition.states, name }));
+  }
+};
+
 const resolveTargetState = (args: {
   task: TaskInstance;
   states: WorkflowState[];
@@ -84,15 +125,7 @@ const resolveTargetState = (args: {
     }
     return kept;
   }
-  const target = stateByName({ states: args.states, name: mapped });
-  if (!target) {
-    throw new DomainError(
-      'TASK_STATE_NOT_FOUND',
-      `The target version has no state named '${mapped}'.`,
-      { state: mapped }
-    );
-  }
-  return target;
+  return mapTarget({ states: args.states, name: mapped });
 };
 
 const assertMigratable = (args: {
@@ -107,15 +140,7 @@ const assertMigratable = (args: {
     states: args.definition.states,
     stateMap: args.stateMap,
   });
-  // Closing belongs to a transition, which emits `tasks.closed` and scrubs the
-  // stored tool context; a migration that closed would do neither.
-  if (target.terminal === true) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `State '${target.name}' is terminal; migrate to an open state and transition the task to close it.`,
-      { state: target.name }
-    );
-  }
+  assertOpenTarget(target);
   validatePayload({
     payloadSchema: args.definition.payloadSchema,
     payload: (args.task.payload ?? {}) as Record<string, unknown>,
@@ -137,23 +162,30 @@ const assertNewerVersion = (args: {
   }
 };
 
+export const loadVersionDefinition = async (args: {
+  workflowDbId: number;
+  version: number;
+}): Promise<WorkflowDefinition> => {
+  const definition = await findArchivedDefinition(args);
+  if (!definition) {
+    throw new DomainError(
+      'WORKFLOW_VERSION_NOT_FOUND',
+      `The workflow has no version ${args.version}.`,
+      { version: args.version }
+    );
+  }
+  return definition;
+};
+
 const loadTargetDefinition = async (args: {
   task: TaskInstance;
   toVersion: number;
 }): Promise<WorkflowDefinition> => {
   assertNewerVersion(args);
-  const definition = await findArchivedDefinition({
+  return loadVersionDefinition({
     workflowDbId: args.task.workflowId as number,
     version: args.toVersion,
   });
-  if (!definition) {
-    throw new DomainError(
-      'WORKFLOW_VERSION_NOT_FOUND',
-      `The workflow has no version ${args.toVersion}.`,
-      { version: args.toVersion }
-    );
-  }
-  return definition;
 };
 
 const performMigrationTxn = async (args: {
