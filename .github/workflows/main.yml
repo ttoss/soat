@@ -296,6 +296,9 @@ jobs:
     # skipped would skip this job too; the tag job has already judged them.
     if: "!cancelled() && needs.push-release-tag.result == 'success'"
     runs-on: ubuntu-latest
+    # A normal run takes about 10 minutes; the arm64 leg under QEMU can hang
+    # silently, so fail it fast for a re-run instead of the 6 h default.
+    timeout-minutes: 45
     permissions:
       id-token: write
       attestations: write

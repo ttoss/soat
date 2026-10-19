@@ -276,6 +276,20 @@ describe('main.yml wiring', () => {
       assert.match(block, /needs\.push-release-tag\.result == 'success'/, job);
     }
   });
+
+  /**
+   * The arm64 leg builds under QEMU and can stop producing output without
+   * exiting; unbounded, it holds the release for the runner's 6 h default.
+   * A normal run takes about 10 minutes.
+   */
+  test('the Docker publish is bounded well below the runner default', () => {
+    const match = jobBlock('publish-docker').match(
+      /\n {4}timeout-minutes: (\d+)\n/
+    );
+
+    assert.ok(match, 'publish-docker has no job-level timeout-minutes');
+    assert.ok(Number(match[1]) <= 60, `timeout-minutes is ${match[1]}`);
+  });
 });
 
 describe('pr.yml wiring', () => {
