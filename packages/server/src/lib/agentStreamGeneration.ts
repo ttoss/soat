@@ -22,14 +22,17 @@ import {
 } from './agentStepRules';
 import { resolveStopWhen } from './agentStopConditions';
 import { emitGenerationEvent } from './generationEvents';
-import { recordGenerationFailure } from './generationLifecycle';
+import {
+  recordGenerationFailure,
+  recordSegmentUsage,
+} from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
 import {
   collectSystemInstructions,
   withoutSystemMessages,
 } from './modelMessages';
-import { routedAiProviderId, routedMaxRetries } from './modelRouteExecutor';
+import { routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import {
   buildGenerationErrorPayload,
@@ -40,8 +43,7 @@ import {
   textEncodedToolCallError,
 } from './textEncodedToolCall';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
-import { carrySpentUsage, spentUsageOf } from './turnSpend';
-import { recordGenerationUsage } from './usage';
+import { carrySpentUsage, reportedModelOf, spentUsageOf } from './turnSpend';
 
 const log = createDebug('soat:generation');
 
@@ -91,8 +93,8 @@ const fireStreamEndSideEffects = (args: {
   finalText: string;
   finishReason: string;
   usage?: LanguageModelUsage;
-  /** The model the provider served, which is what a price matches. */
-  servedModel?: string;
+  /** The model id the provider answered with. */
+  reportedModelId?: string;
   /**
    * Whether `onError` already captured a provider failure. A stream that dies
    * *after* a step completed still reaches `onEnd`, and the terminal status
@@ -148,11 +150,11 @@ const fireStreamEndSideEffects = (args: {
     () => {}
   );
   // recordGenerationUsage never rejects (it catches internally).
-  const usageWrite = recordGenerationUsage({
+  const usageWrite = recordSegmentUsage({
     generationId: args.generationId,
-    model: args.servedModel || (args.typedAgent.model ?? ''),
+    model: args.model,
+    reportedModelId: args.reportedModelId,
     usage: args.usage,
-    aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: 0,
     turn: {
       steps: args.steps,
@@ -198,6 +200,7 @@ const recordStreamFailure = async (args: {
     error: toProviderDomainError(args.error) ?? args.error,
     // Read before the mapping, which builds a new error.
     usage: spentUsageOf(args.error),
+    reportedModelId: reportedModelOf(args.error),
     model: args.model,
     projectId: args.typedAgent.project.id,
     stepsAlreadySpent: 0,
@@ -315,7 +318,7 @@ const fireStreamEnd = (args: {
     finalText: end.text,
     finishReason: end.finishReason,
     usage: end.usage,
-    servedModel: end.response.modelId,
+    reportedModelId: end.response.modelId,
     failed: args.failed,
   });
 };
@@ -379,7 +382,11 @@ export const runStreamGeneration = async (
         } catch (error) {
           // The settle owns this turn's records; `recordFailure` writes the
           // terminal status, and meters the calls the turn already made.
-          streamError = carrySpentUsage({ error, usage: end.usage });
+          streamError = carrySpentUsage({
+            error,
+            usage: end.usage,
+            reportedModelId: end.response.modelId,
+          });
           return;
         }
         if (terminalGeneration) return;

@@ -127,6 +127,25 @@ export const routedModelName = (model: LanguageModel): string | null => {
 };
 
 /**
+ * The model a usage event records, which is what a price matches: the route's
+ * served target, else the id the provider answered with, else the model the
+ * call was built on. The route comes first because the SDK fills
+ * `response.modelId` from the composite's own id — the route id — when a
+ * target sends no response metadata.
+ */
+export const servedModelName = (args: {
+  model: LanguageModel | undefined;
+  reportedModelId: string | undefined;
+}): string => {
+  if (args.model === undefined) return args.reportedModelId ?? '';
+  const configured =
+    typeof args.model === 'string' ? args.model : args.model.modelId;
+  return (
+    routedModelName(args.model) ?? (args.reportedModelId || configured)
+  );
+};
+
+/**
  * A per-attempt signal: the target's own timeout composed with the caller's
  * signal. The generation paths already thread `abortSignal` end-to-end, so both
  * must be able to cancel the attempt — but only the timeout is a failover
