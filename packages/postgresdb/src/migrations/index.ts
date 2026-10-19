@@ -40,6 +40,7 @@ import { playbookNodeIds } from './2026-10-17-playbookNodeIds';
 import { principalPairs } from './2026-10-17-principalPairs';
 import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
 import { documentPendingEndUser } from './2026-10-19-documentPendingEndUser';
+import { taskTransitionIdempotencyKey } from './2026-10-19-taskTransitionIdempotencyKey';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -101,4 +102,5 @@ export const MIGRATIONS: Migration[] = [
   eventNames,
   playbookNodeIds,
   documentPendingEndUser,
+  taskTransitionIdempotencyKey,
 ];

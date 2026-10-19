@@ -1,8 +1,9 @@
 /**
- * At-most-once starts for the requests that spend model tokens: an orchestration
- * run and an agent generation. A key is claimed by the row the request writes
- * and stays claimed for as long as that row exists — a window that expired
- * would put back exactly the doubt the key removes.
+ * At-most-once writes for requests a retry must not repeat: an orchestration
+ * run, an agent generation, a session message, a task transition. A key is
+ * claimed by the row the request writes and stays claimed for as long as that
+ * row exists — a window that expired would put back exactly the doubt the key
+ * removes.
  */
 import { DomainError } from '../errors';
 import { isUniqueViolation } from './uniqueViolation';
@@ -38,7 +39,7 @@ export const claimIdempotencyKey = async <Created, Replayed>(args: {
  */
 export const idempotencyKeyReused = (args: {
   idempotencyKey: string;
-  claimedBy: 'run' | 'generation' | 'message';
+  claimedBy: 'run' | 'generation' | 'message' | 'transition';
 }): DomainError => {
   return new DomainError(
     'IDEMPOTENCY_KEY_REUSED',

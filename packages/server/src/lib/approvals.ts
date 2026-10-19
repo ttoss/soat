@@ -287,6 +287,9 @@ type EmitApprovalArgs = {
   agentId?: string | null;
   taskId?: string | null;
   taskTransition?: string | null;
+  /** A parked task transition's idempotency claim. */
+  idempotencyKey?: string | null;
+  idempotencyDigest?: string | null;
   policyVersion?: string | null;
   previousItemId?: string | null;
 };
@@ -315,6 +318,8 @@ const insertApprovalItem = async (
       agentId: args.agentId,
       taskId: args.taskId,
       taskTransition: args.taskTransition,
+      idempotencyKey: args.idempotencyKey ?? null,
+      idempotencyDigest: args.idempotencyDigest ?? null,
       policyVersion: args.policyVersion,
       previousItemId: args.previousItemId,
     });

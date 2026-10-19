@@ -36,6 +36,11 @@ import { Project } from './Project';
       where: { status: 'pending' },
       name: 'approval_items_dedup_key_pending_unique',
     },
+    {
+      name: 'approval_items_task_id_idempotency_key_unique',
+      unique: true,
+      fields: ['task_id', 'idempotency_key'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: ApprovalItem) => {
@@ -143,6 +148,14 @@ export class ApprovalItem extends Model {
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare taskTransition: string | null;
+
+  // A parked transition writes no `TaskTransition`, so the gate's item holds
+  // the move's idempotency key, unique per task, and its request digest.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare idempotencyKey: string | null;
+
+  @Column({ type: DataType.STRING(64), allowNull: true })
+  declare idempotencyDigest: string | null;
 
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare policyVersion: string | null;

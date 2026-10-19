@@ -472,9 +472,20 @@ describe('MCP tools - happy path', () => {
       await mcpCall('transition-task', {
         task_id: task.id,
         transition: 'start',
+        idempotency_key: 'mcp-start',
       })
     );
     expect(moved.state).toBe('doing');
+
+    // A retry under the same key replays instead of answering a conflict.
+    const replayed = parseResult(
+      await mcpCall('transition-task', {
+        task_id: task.id,
+        transition: 'start',
+        idempotency_key: 'mcp-start',
+      })
+    );
+    expect(replayed.state).toBe('doing');
 
     const closed = parseResult(
       await mcpCall('transition-task', {

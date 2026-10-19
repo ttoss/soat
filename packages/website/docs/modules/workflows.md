@@ -123,6 +123,10 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 
 [`GET /tasks/{task_id}/transitions`](/docs/api/tasks/list-task-transitions) lists every transition of the task's pinned version with `name`, `to`, `requires_approval`, `allowed`, and `error_code`: the code firing it now as the caller would answer (`TASK_TRANSITION_CONFLICT` for a closed task, a pending gate or a state outside `from`; `TASK_GUARD_REJECTED` for a failing guard), `null` when allowed. The guard runs with the caller as `principal`. A `requires_approval` transition is allowed before its guard passes, since the guard runs when the approval resolves. One check decides both this list and the fire, so it is the dry run; it is advisory, and firing re-validates under the lock. Needs `tasks:GetTask`.
 
+### Retrying a transition
+
+[`POST /tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) accepts an `Idempotency-Key` header or `idempotency_key` body field, unique within the task. The same key with the same body answers `200` with the task as it is now and moves nothing, whether the first request applied the move or parked an approval, so a retry after a timeout is safe even on a self-loop. A retry racing the original waits on the task's lock and replays. The same key with a different body is `IDEMPOTENCY_KEY_REUSED` (409). The key stays claimed for as long as the task exists.
+
 ### Per-state automation (`on_enter`)
 
 `on_enter` dispatches **at most one** agent generation, orchestration run or tool call on entry and routes the outcome into a transition:
