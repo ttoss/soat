@@ -248,6 +248,7 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     transition: string;
     note?: string | null;
     tool_context?: unknown;
+    payload?: Record<string, unknown>;
   };
   const toolContext = parseNullableToolContextBody(body.tool_context);
   const idempotencyKey = idempotencyKeyOf(ctx);
@@ -266,9 +267,11 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
             transition: body.transition,
             note: body.note,
             toolContext,
+            payload: body.payload,
           }),
         }
       : undefined,
+    payload: body.payload,
     principal: principalFromCtx(ctx),
     // A run-as token names a user or key like any other credential, so the
     // principal above cannot distinguish a dispatch continuing its own chain

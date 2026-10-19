@@ -18,10 +18,12 @@ export const transitionRequestDigest = (args: {
   transition: string;
   note?: string | null;
   toolContext?: Record<string, string> | null;
+  payload?: Record<string, unknown>;
 }): string => {
   return stableDigest({
     transition: args.transition,
     note: args.note ?? null,
+    ...(args.payload === undefined ? {} : { payload: args.payload }),
     ...(args.toolContext === undefined ? {} : { context: args.toolContext }),
   });
 };

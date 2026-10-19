@@ -367,6 +367,26 @@ export const createTask = async (args: {
 
 // ── Update (payload / title / assignee — never state) ─────────────────────────
 
+/**
+ * The payload a write leaves: shallow-merged over the stored one, so a caller
+ * setting one key keeps the others, `payload_writes` included, and validated
+ * against the schema the task entered on, so a schema tightened later never
+ * makes an in-flight task unwritable. The one rule for `PATCH` and a
+ * transition's `payload`.
+ */
+export const mergeTaskPayload = (args: {
+  stored: Record<string, unknown> | null;
+  patch: Record<string, unknown>;
+  payloadSchema: unknown;
+}): Record<string, unknown> => {
+  const merged = {
+    ...(args.stored ?? {}),
+    ...args.patch,
+  };
+  validatePayload({ payloadSchema: args.payloadSchema, payload: merged });
+  return merged;
+};
+
 export const updateTask = async (args: {
   id: string;
   title?: string;
@@ -381,22 +401,15 @@ export const updateTask = async (args: {
   }
 
   if (args.payload !== undefined) {
-    // PATCH semantics: a caller setting one key must not discard the others,
-    // including any `payload_writes` the workflow declared. The automation
-    // result lives in `last_result`, which no patch can reach.
-    const merged = {
-      ...((task.payload as Record<string, unknown> | null) ?? {}),
-      ...args.payload,
-    };
-    // Validated against the schema the task entered on, not the live one: a
-    // schema tightened after the task was created would otherwise make an
-    // in-flight task unpatchable.
     const { payloadSchema } = await resolveTaskDefinition({
       task,
       workflow: task.workflow!,
     });
-    validatePayload({ payloadSchema, payload: merged });
-    task.payload = merged;
+    task.payload = mergeTaskPayload({
+      stored: task.payload as Record<string, unknown> | null,
+      patch: args.payload,
+      payloadSchema,
+    });
   }
   if (args.title !== undefined) task.title = args.title;
   if (args.assignee !== undefined) task.assignee = args.assignee;

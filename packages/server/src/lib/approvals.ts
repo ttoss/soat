@@ -290,6 +290,8 @@ type EmitApprovalArgs = {
   /** A parked task transition's idempotency claim. */
   idempotencyKey?: string | null;
   idempotencyDigest?: string | null;
+  /** The payload a parked task transition applies when it fires. */
+  taskPayload?: Record<string, unknown> | null;
   policyVersion?: string | null;
   previousItemId?: string | null;
 };
@@ -320,6 +322,7 @@ const insertApprovalItem = async (
       taskTransition: args.taskTransition,
       idempotencyKey: args.idempotencyKey ?? null,
       idempotencyDigest: args.idempotencyDigest ?? null,
+      taskPayload: args.taskPayload ?? null,
       policyVersion: args.policyVersion,
       previousItemId: args.previousItemId,
     });
