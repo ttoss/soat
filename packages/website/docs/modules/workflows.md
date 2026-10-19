@@ -310,7 +310,44 @@ curl -X POST https://api.example.com/api/v1/tasks \
 </TabItem>
 </Tabs>
 
-Filtering tasks by a metadata key is not supported; filter client-side.
+[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) narrows by the bag with `?metadata=`, the grammar of [Documents — Metadata filters](./documents.md#metadata-filters): exact equality, `in`, and ordering by the operand's type. A client that keeps its own record id in `metadata` finds the task with it, no id map of its own:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-tasks \
+  --workflow-id "$WORKFLOW_ID" \
+  --metadata '{"source":"zendesk","external_id":"8123"}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.tasks.listTasks({
+  query: {
+    workflow_id: WORKFLOW_ID,
+    metadata: JSON.stringify({ source: 'zendesk', external_id: '8123' }),
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -G "$SOAT_BASE_URL/api/v1/tasks" \
+  -H "Authorization: Bearer $SOAT_TOKEN" \
+  --data-urlencode "workflow_id=$WORKFLOW_ID" \
+  --data-urlencode 'metadata={"source":"zendesk","external_id":"8123"}'
+```
+
+</TabItem>
+</Tabs>
+
+The filter ANDs with the other list filters (`state`, `status`, `assignee`, …) and narrows what the caller may already see.
 
 ### Dispatch tool context
 
