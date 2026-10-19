@@ -411,6 +411,8 @@ export const runPipeline = async (args: {
   input?: Record<string, unknown>;
   remainingDepth?: number;
   callStep: PipelineStepCaller;
+  /** Called once the pipeline is past every refusal and starts running. */
+  onStart?: () => void;
 }): Promise<unknown> => {
   const config = validatePipelineConfig(args.pipeline);
   const remainingDepth = args.remainingDepth ?? DEFAULT_PIPELINE_DEPTH;
@@ -421,6 +423,7 @@ export const runPipeline = async (args: {
     );
   }
 
+  args.onStart?.();
   const stepOutputs: Record<string, unknown> = {};
   const context: Record<string, unknown> = {
     input: mergePresetParameters({

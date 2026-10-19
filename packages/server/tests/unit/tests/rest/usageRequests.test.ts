@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 import { signRunToken } from 'src/lib/orchestrationRunToken';
+import * as usageEventWrite from 'src/lib/usageEventWrite';
 import {
   flushRequestCounters,
   resetRequestCounters,
@@ -90,6 +91,45 @@ describe('Usage — API-request metering', () => {
     // Exactly the three requests that arrived before the flush; the read-back
     // request below lands in the next (unflushed) window.
     expect(Number(comp!.quantity)).toBe(3);
+  });
+
+  // `debug` is off in production, so a lost write is reported where an operator
+  // reads — and the counts stay buffered for the next flush rather than lost.
+  test('a counter whose write fails is reported and written by the next flush', async () => {
+    resetRequestCounters();
+    for (let i = 0; i < 3; i += 1) {
+      await authenticatedTestClient(rawKey).get(
+        '/api/v1/usage/events?meter_type=api_request'
+      );
+    }
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {
+      return undefined;
+    });
+    const insert = jest
+      .spyOn(usageEventWrite, 'insertUsageEvent')
+      .mockRejectedValueOnce(new Error('usage table unavailable'));
+
+    try {
+      expect(await flushRequestCounters({ now: new Date() })).toBe(0);
+      expect(errorLog).toHaveBeenCalledWith(
+        expect.stringContaining('flushRequestCounters'),
+        expect.any(Error)
+      );
+      insert.mockRestore();
+      expect(await flushRequestCounters({ now: new Date() })).toBe(1);
+    } finally {
+      jest.restoreAllMocks();
+    }
+
+    const events = await apiRequestMeters();
+    const quantities = events.map((event) => {
+      return Number(
+        event.components.find((c) => {
+          return c.component === 'request';
+        })?.quantity
+      );
+    });
+    expect(quantities).toContain(3);
   });
 
   test('a re-flush of the same window writes nothing (idempotent)', async () => {

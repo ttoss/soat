@@ -82,7 +82,7 @@ describe('Usage — a provider that reports no usage', () => {
   });
 
   // The meter records the model the provider says it served; a provider that
-  // names none leaves no name to price against, and the event says so.
+  // names none is metered under the model the call asked it for.
   describe('a provider that names no model', () => {
     let namelessAgentId: string;
     let nameless: StubChatProvider;
@@ -118,7 +118,7 @@ describe('Usage — a provider that reports no usage', () => {
       await nameless.close();
     });
 
-    test('GET /api/v1/usage/events meters the call under `unknown`, unpriced', async () => {
+    test('GET /api/v1/usage/events meters the call under the model it called', async () => {
       const genRes = await authenticatedTestClient(adminToken)
         .post(`/api/v1/agents/${namelessAgentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
@@ -131,7 +131,7 @@ describe('Usage — a provider that reports no usage', () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0]).toMatchObject({
-        model: 'unknown',
+        model: 'stub-model',
         cost_usd: null,
       });
     });

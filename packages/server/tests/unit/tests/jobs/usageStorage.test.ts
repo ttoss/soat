@@ -1,5 +1,6 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
+import * as usageEventWrite from 'src/lib/usageEventWrite';
 import {
   runStorageSnapshot,
   snapshotProjectStorage,
@@ -151,6 +152,27 @@ describe('Usage — storage metering', () => {
     // A new day is a distinct idempotency key → exactly one more event for this
     // project (the run also meters other suites' projects, invisible to this user).
     expect((await storageMeters()).length).toBe(before + 1);
+  });
+
+  // `debug` is off in production, so a lost snapshot is reported where an
+  // operator reads; the next sweep of the same day writes it.
+  test('a project whose snapshot write fails is reported at error level', async () => {
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {
+      return undefined;
+    });
+    jest
+      .spyOn(usageEventWrite, 'insertUsageEvent')
+      .mockRejectedValueOnce(new Error('usage table unavailable'));
+
+    try {
+      await runStorageSnapshot({ now: new Date('2026-07-27T00:00:00.000Z') });
+      expect(errorLog).toHaveBeenCalledWith(
+        expect.stringContaining('runStorageSnapshot'),
+        expect.any(Error)
+      );
+    } finally {
+      jest.restoreAllMocks();
+    }
   });
 
   test("counts document chunks and memories on the next day's snapshot", async () => {

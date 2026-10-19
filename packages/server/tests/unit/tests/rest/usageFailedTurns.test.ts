@@ -377,6 +377,32 @@ describe('Usage — provider calls a failed turn completed', () => {
       const metered = await meteredTokens(listed.body.data[0].id);
       expect(metered).toEqual({ events: 1, input: 6, output: 4 });
     });
+
+    test('meters a tool-outputs continuation it refused, and fails it', async () => {
+      script = [
+        toolCall({ prompt_tokens: 2, completion_tokens: 1 }, CLIENT_TOOL),
+        toolCall({ prompt_tokens: 8, completion_tokens: 5 }, CLIENT_TOOL),
+      ];
+      const paused = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${clientAgentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'refund?' }] });
+      expect(paused.body.status).toBe('requires_action');
+      gateFails();
+
+      const resumed = await authenticatedTestClient(adminToken)
+        .post(
+          `/api/v1/agents/${clientAgentId}/generate/${paused.body.id}/tool-outputs`
+        )
+        .send({ tool_outputs: [{ tool_call_id: 'call_1', output: 'yes' }] });
+
+      expect(resumed.status).toBe(500);
+      const metered = await meteredTokens(paused.body.id);
+      expect(metered).toEqual({ events: 2, input: 10, output: 6 });
+      const record = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${paused.body.id}`
+      );
+      expect(record.body.status).toBe('failed');
+    });
   });
 
   // `debug` is off in production, so a usage event the meter could not write

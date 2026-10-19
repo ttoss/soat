@@ -42,7 +42,11 @@ import {
   type Instructions,
   withoutSystemMessages,
 } from './modelMessages';
-import { routedAiProviderId, routedMaxRetries } from './modelRouteExecutor';
+import {
+  routedAiProviderId,
+  routedMaxRetries,
+  servedModelName,
+} from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
 import {
@@ -50,7 +54,12 @@ import {
   textEncodedToolCallError,
 } from './textEncodedToolCall';
 import { saveTrace, serializeSteps } from './traces';
-import { addUsage, carrySpentUsage, sumStepUsage } from './turnSpend';
+import {
+  addUsage,
+  carrySpentUsage,
+  reportedModelOfSteps,
+  sumStepUsage,
+} from './turnSpend';
 
 // Bounds the auto-resume loop: a model re-proposing a blocked client tool every
 // turn would otherwise resume forever.
@@ -201,8 +210,7 @@ const settlePartition = async (args: {
   await meterTurnSegment({
     generationId: args.pending.generationId,
     model: args.save.model,
-    modelId:
-      args.save.result.response.modelId ?? args.save.typedAgent.model ?? '',
+    reportedModelId: args.save.result.response.modelId,
     usage: args.save.result.usage,
     stepsAlreadySpent: args.save.priorSteps?.length ?? 0,
     turn: {
@@ -280,6 +288,12 @@ const buildInitialResumePending = (args: {
     projectPublicId: args.typedAgent.project.publicId,
     toolContext: args.toolContext ?? undefined,
   };
+};
+
+type AbandonedSpend = {
+  abandoned?: LanguageModelUsage;
+  /** The model id the abandoned attempt's provider answered with. */
+  reportedModelId?: string;
 };
 
 /**
@@ -388,7 +402,7 @@ const callWithToolFallback = async (args: {
   resolvedTools: Record<string, Tool>;
   ranSteps: unknown[];
   /** What an attempt the fallback abandoned spent; the provider billed it. */
-  spend: { abandoned?: LanguageModelUsage };
+  spend: AbandonedSpend;
 }) => {
   try {
     return await callGenerateText({
@@ -416,6 +430,7 @@ const callWithToolFallback = async (args: {
     );
     // The retry replaces the abandoned attempt, as its result does on success.
     args.spend.abandoned = sumStepUsage(args.ranSteps);
+    args.spend.reportedModelId = reportedModelOfSteps(args.ranSteps);
     args.ranSteps.splice(0);
     return callGenerateText({ ...args.callArgs, resolvedTools: {} });
   }
@@ -452,7 +467,11 @@ const resolveSpentGenerationResult = async (
       },
     });
   } catch (error) {
-    throw carrySpentUsage({ error, usage });
+    throw carrySpentUsage({
+      error,
+      usage,
+      reportedModelId: result.response.modelId,
+    });
   }
 };
 
@@ -503,7 +522,7 @@ export const runNonStreamGeneration = async (args: {
     },
   };
 
-  const spend: { abandoned?: LanguageModelUsage } = {};
+  const spend: AbandonedSpend = {};
   let result;
   try {
     result = await callWithToolFallback({
@@ -530,6 +549,7 @@ export const runNonStreamGeneration = async (args: {
     throw carrySpentUsage({
       error,
       usage: addUsage(spend.abandoned, sumStepUsage(ranSteps)),
+      reportedModelId: reportedModelOfSteps(ranSteps) ?? spend.reportedModelId,
     });
   }
 
@@ -666,7 +686,10 @@ const completeContinuation = async (args: {
       args.pending.aiProviderId ??
       null,
     output: {
-      model: args.result.response.modelId,
+      model: servedModelName({
+        model: args.pending.resolvedModel,
+        reportedModelId: args.result.response.modelId,
+      }),
       content: args.result.text,
       finishReason: args.result.finishReason,
       responseMessages: args.turnMessages,
@@ -712,10 +735,21 @@ export const resolveToolOutputsResult = async (args: {
   const resumeCount = args.resumeCount ?? 0;
   const priorSteps = args.pending.steps ?? [];
   const priorMessages = priorTurnMessages(args);
-  const partition = await partitionClientCalls({
-    steps: args.result.steps,
-    resolvedTools: args.pending.resolvedTools,
-  });
+  let partition: ClientCallPartition | null;
+  try {
+    partition = await partitionClientCalls({
+      steps: args.result.steps,
+      resolvedTools: args.pending.resolvedTools,
+    });
+  } catch (error) {
+    // The calls the gate refused were already billed, as on the initial turn.
+    throw await recordContinuationFailure({
+      generationId: args.generationId,
+      pending: args.pending,
+      steps: args.result.steps,
+      error,
+    });
+  }
 
   // All-gated with the resume budget spent → stop looping and complete.
   const capReached =

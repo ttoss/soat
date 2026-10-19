@@ -288,13 +288,15 @@ const runResolvedTool = async (
   });
 
   if (type === 'pipeline') {
-    // In-process, so the call is under way once the gate released it: it is
-    // metered as an execution of its own, beside each step's.
+    // In-process: metered as an execution of its own, beside each step's, once
+    // it starts running — a pipeline its own config or depth refuses never ran.
     return meterToolExecution({
       meter: { ...meter, attribution },
       send: async (markSent) => {
-        markSent();
         const rawResult = await runPipeline({
+          onStart: () => {
+            markSent();
+          },
           pipeline: args.tool.pipeline,
           presetParameters,
           input,

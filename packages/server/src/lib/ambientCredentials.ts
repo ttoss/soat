@@ -60,9 +60,9 @@ export const assertAmbientCredentialsAllowed = (args: {
  * The write-time half, so the caller is refused where they can still fix the
  * record rather than at the generation it would otherwise sign.
  *
- * A linked secret is taken at face value here: whether its value parses into a
- * usable credential is only knowable when the credential is resolved, and that
- * is what the build-time half above answers.
+ * This answers only whether the record carries a credential at all; whether a
+ * linked secret's value parses into a usable one is `assertLinkedSecretUsable`,
+ * which the write runs beside it.
  */
 export const assertAiProviderCarriesCredential = (args: {
   provider: AiProviderSlug;

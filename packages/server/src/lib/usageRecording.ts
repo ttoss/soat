@@ -220,7 +220,7 @@ const writeGenerationEvent = async (args: {
       servedAiProviderId: args.aiProviderId,
     }),
   });
-  const model = args.model || 'unknown';
+  const { model } = args;
   const { priced, costUsd, invalid } = await priceGenerationEvent({
     generation,
     agentProjectId,

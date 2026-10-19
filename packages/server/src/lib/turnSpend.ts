@@ -66,28 +66,61 @@ export const sumStepUsage = (
   }, undefined);
 };
 
-/**
- * The provider calls a turn completed before it threw, carried on the error to
- * `recordGenerationFailure` — the one place a failed segment is metered, a frame
- * or more above the run that knows its steps.
- */
-const spentBeforeFailure = new WeakMap<object, LanguageModelUsage>();
+/** The model id the last of `steps` reports its provider answered with. */
+export const reportedModelOfSteps = (
+  steps: readonly unknown[]
+): string | undefined => {
+  const last = steps.at(-1);
+  if (!last || typeof last !== 'object' || !('response' in last)) {
+    return undefined;
+  }
+  const { response } = last;
+  if (!response || typeof response !== 'object' || !('modelId' in response)) {
+    return undefined;
+  }
+  return typeof response.modelId === 'string' ? response.modelId : undefined;
+};
 
-/** Returns `error`, carrying `usage` when there is any to carry. */
+type SpentBeforeFailure = {
+  usage: LanguageModelUsage | undefined;
+  reportedModelId: string | undefined;
+};
+
+/**
+ * The provider calls a turn completed before it threw, and the model the
+ * provider said served them, carried on the error to `recordGenerationFailure`
+ * — the one place a failed segment is metered, a frame or more above the run
+ * that knows its steps.
+ */
+const spentBeforeFailure = new WeakMap<object, SpentBeforeFailure>();
+
+/** Returns `error`, carrying what the turn spent when there is any to carry. */
 export const carrySpentUsage = (args: {
   error: unknown;
   usage: LanguageModelUsage | undefined;
+  reportedModelId: string | undefined;
 }): unknown => {
   if (args.usage && typeof args.error === 'object' && args.error !== null) {
-    spentBeforeFailure.set(args.error, args.usage);
+    spentBeforeFailure.set(args.error, {
+      usage: args.usage,
+      reportedModelId: args.reportedModelId,
+    });
   }
   return args.error;
+};
+
+const spentOf = (error: unknown): SpentBeforeFailure | undefined => {
+  return typeof error === 'object' && error !== null
+    ? spentBeforeFailure.get(error)
+    : undefined;
 };
 
 export const spentUsageOf = (
   error: unknown
 ): LanguageModelUsage | undefined => {
-  return typeof error === 'object' && error !== null
-    ? spentBeforeFailure.get(error)
-    : undefined;
+  return spentOf(error)?.usage;
+};
+
+export const reportedModelOf = (error: unknown): string | undefined => {
+  return spentOf(error)?.reportedModelId;
 };

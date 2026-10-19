@@ -287,6 +287,27 @@ describe('tool_execution usage', () => {
       expect(events[0].outcome).toBe('error');
     });
 
+    // Each nesting level runs, and is metered, until the depth limit refuses
+    // the next one before it starts.
+    test('a pipeline the depth limit refuses before running is not recorded', async () => {
+      const pipelineId = await createTool({
+        type: 'pipeline',
+        pipeline: { steps: [], output: { total: 1 } },
+      });
+      const update = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${pipelineId}`)
+        .send({
+          pipeline: { steps: [{ id: 'self', tool_id: pipelineId, input: {} }] },
+        });
+      expect(update.status).toBe(200);
+
+      const res = await call(pipelineId);
+      expect(res.body.error.code).toBe('PIPELINE_DEPTH_EXCEEDED');
+
+      const events = await toolEvents(pipelineId);
+      expect(events).toHaveLength(5);
+    });
+
     test('a client tool is never recorded', async () => {
       const toolId = await createTool({ type: 'client' });
 

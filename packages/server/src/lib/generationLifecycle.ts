@@ -6,11 +6,16 @@ import type { PendingGeneration } from './agentGenerationTypes';
 import { emitGenerationEvent } from './generationEvents';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
-import { routedAiProviderId, routedModelName } from './modelRouteExecutor';
+import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
-import { spentUsageOf, sumStepUsage } from './turnSpend';
+import {
+  reportedModelOf,
+  reportedModelOfSteps,
+  spentUsageOf,
+  sumStepUsage,
+} from './turnSpend';
 import { recordGenerationUsage } from './usage';
 import type { GenerationTurnFacts } from './usageAgentPricing';
 
@@ -24,11 +29,43 @@ const FAILED_TURN: GenerationTurnFacts = {
 
 const log = createDebug('soat:generation');
 
-// `LanguageModel` is either the id itself or a routed instance carrying one. An
-// absent model meters as the empty string, as the completion path does.
-const modelIdOf = (model: LanguageModel | undefined): string => {
-  if (model === undefined) return '';
-  return typeof model === 'string' ? model : model.modelId;
+/**
+ * The one ingress for a generation segment's usage event: the model name and
+ * provider it is billed to are both read off the model the segment ran on, so
+ * no path answers either question for itself.
+ */
+export const recordSegmentUsage = (args: {
+  generationId: string;
+  model: LanguageModel;
+  /** The id the provider answered with; absent when it reported none. */
+  reportedModelId: string | undefined;
+  usage: LanguageModelUsage | undefined;
+  stepsAlreadySpent: number;
+  turn: GenerationTurnFacts;
+}): Promise<void> => {
+  return recordGenerationUsage({
+    generationId: args.generationId,
+    model: servedModelName({
+      model: args.model,
+      reportedModelId: args.reportedModelId,
+    }),
+    usage: args.usage,
+    aiProviderId: routedAiProviderId(args.model),
+    stepsAlreadySpent: args.stepsAlreadySpent,
+    turn: args.turn,
+  });
+};
+
+// The tokens a failed segment spent, when the provider reported any.
+const meterFailedSegment = (args: {
+  generationId: string;
+  model: LanguageModel;
+  reportedModelId: string | undefined;
+  usage: LanguageModelUsage | undefined;
+  stepsAlreadySpent: number;
+}): Promise<void>[] => {
+  if (!args.usage) return [];
+  return [recordSegmentUsage({ ...args, turn: FAILED_TURN })];
 };
 
 /**
@@ -37,33 +74,12 @@ const modelIdOf = (model: LanguageModel | undefined): string => {
  * rethrow. DomainErrors are enriched with the generation and trace IDs so
  * callers can debug the failure post-mortem.
  */
-// The tokens a failed segment spent, when the provider reported any.
-const meterFailedSegment = (args: {
-  generationId: string;
-  model?: LanguageModel;
-  usage: LanguageModelUsage | undefined;
-  stepsAlreadySpent: number;
-}): Promise<void>[] => {
-  if (!args.usage) return [];
-  return [
-    recordGenerationUsage({
-      generationId: args.generationId,
-      model:
-        (args.model && routedModelName(args.model)) ?? modelIdOf(args.model),
-      usage: args.usage,
-      aiProviderId: args.model ? routedAiProviderId(args.model) : null,
-      stepsAlreadySpent: args.stepsAlreadySpent,
-      turn: FAILED_TURN,
-    }),
-  ];
-};
-
 export const recordGenerationFailure = async (args: {
   generationId: string;
   traceId: string;
   error: unknown;
   /** The model the failed turn ran on — a routed one stamps its attempts. */
-  model?: LanguageModel;
+  model: LanguageModel;
   /**
    * The project the turn belongs to, where the failure is announced — the only
    * channel a background caller has (it already got its `202` and went away).
@@ -77,6 +93,11 @@ export const recordGenerationFailure = async (args: {
    * caller that records the same failure twice still writes one event.
    */
   usage?: LanguageModelUsage;
+  /**
+   * The model id the provider answered the segment's completed calls with,
+   * when a caller mapped the error and so lost what it carried.
+   */
+  reportedModelId?: string;
   /** Steps the turn spent before the failed segment — keys its usage event. */
   stepsAlreadySpent: number;
 }): Promise<unknown> => {
@@ -113,7 +134,11 @@ export const recordGenerationFailure = async (args: {
     saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
     // The provider billed for the tokens whether or not the answer could be
     // used, so omitting them understates every roll-up that reads them.
-    ...meterFailedSegment({ ...args, usage }),
+    ...meterFailedSegment({
+      ...args,
+      reportedModelId: args.reportedModelId ?? reportedModelOf(args.error),
+      usage,
+    }),
   ]);
 
   // Without this, the only way to learn a background generation died is to poll
@@ -190,6 +215,7 @@ export const recordContinuationFailure = async (args: {
     // Every call the segment completed was billed, the one whose answer
     // failed `output_schema` included.
     usage: sumStepUsage(args.steps) ?? usageFromFailure(args.error),
+    reportedModelId: reportedModelOfSteps(args.steps),
     stepsAlreadySpent: priorStepsOf(args.pending).length,
   });
 };
@@ -211,23 +237,11 @@ type CompletionSideEffectsArgs = {
  * its step budget already spent) would file a zero-token event against an
  * unknown model, on the same generation as the calls that did consume tokens.
  */
-export const meterTurnSegment = (args: {
-  generationId: string;
-  model: LanguageModel;
-  modelId: string;
-  usage: LanguageModelUsage | undefined;
-  stepsAlreadySpent: number;
-  turn: GenerationTurnFacts;
-}): Promise<void> => {
+export const meterTurnSegment = (
+  args: Parameters<typeof recordSegmentUsage>[0]
+): Promise<void> => {
   if (args.usage === undefined) return Promise.resolve();
-  return recordGenerationUsage({
-    generationId: args.generationId,
-    model: args.modelId,
-    usage: args.usage,
-    aiProviderId: routedAiProviderId(args.model),
-    stepsAlreadySpent: args.stepsAlreadySpent,
-    turn: args.turn,
-  });
+  return recordSegmentUsage(args);
 };
 
 /** Meters the segment that finishes a continuation turn. */
@@ -244,7 +258,7 @@ export const meterContinuationSegment = (args: {
   return meterTurnSegment({
     generationId: args.generationId,
     model: args.pending.resolvedModel,
-    modelId: args.result.response?.modelId ?? '',
+    reportedModelId: args.result.response?.modelId,
     usage: args.result.usage,
     stepsAlreadySpent: priorStepsOf(args.pending).length,
     turn: {

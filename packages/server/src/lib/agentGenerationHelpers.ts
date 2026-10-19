@@ -9,9 +9,10 @@ import {
   type TypedAgent,
 } from './agentGenerationTypes';
 import { emitGenerationEvent } from './generationEvents';
+import { recordSegmentUsage } from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
-import { routedAiProviderId } from './modelRouteExecutor';
+import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { assertNoTextEncodedToolCall } from './textEncodedToolCall';
 import {
@@ -19,7 +20,6 @@ import {
   readClientToolPresets,
 } from './toolPresetParameters';
 import { saveTrace, serializeSteps } from './traces';
-import { recordGenerationUsage } from './usage';
 
 // ── Wire Mappers ──────────────────────────────────────────────────────────
 
@@ -313,7 +313,7 @@ const markGenerationCompleted = async (args: {
 // A turn that completed in one `generateText` call is one metered segment.
 const meterCompletedTurn = (args: {
   generationId: string;
-  modelId: string;
+  reportedModelId: string | undefined;
   model: LanguageModel;
   typedAgent: TypedAgent;
   result: {
@@ -322,11 +322,11 @@ const meterCompletedTurn = (args: {
     usage?: LanguageModelUsage;
   };
 }): Promise<void> => {
-  return recordGenerationUsage({
+  return recordSegmentUsage({
     generationId: args.generationId,
-    model: args.modelId,
+    model: args.model,
+    reportedModelId: args.reportedModelId,
     usage: args.result.usage,
-    aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: 0,
     turn: {
       steps: args.result.steps,
@@ -391,7 +391,8 @@ export const buildCompletedGenerationResult = async (args: {
     maxSteps: args.typedAgent.maxSteps,
   });
 
-  const model = args.result.response.modelId;
+  const reportedModelId = args.result.response.modelId;
+  const model = servedModelName({ model: args.model, reportedModelId });
 
   const completedResult: GenerationResult = {
     id: args.generationId,
@@ -409,7 +410,7 @@ export const buildCompletedGenerationResult = async (args: {
     },
   };
 
-  await meterCompletedTurn({ ...args, modelId: model });
+  await meterCompletedTurn({ ...args, reportedModelId });
 
   await emitGenerationEvent({
     type: 'generations.completed',

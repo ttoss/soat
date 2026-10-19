@@ -409,10 +409,10 @@ export const streamChatCompletion = async (
     // Token counts only arrive once the provider closes the stream, so a
     // streamed completion meters at the end rather than up front. A stream the
     // client abandons never reaches `onEnd` and is not metered.
-    onEnd: ({ usage }) => {
+    onEnd: ({ usage, response }) => {
       meterChatCompletion({
         resolved: resolvedModel,
-        model: fallbackModel,
+        model: response.modelId || fallbackModel,
         usage,
       });
     },
