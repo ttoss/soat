@@ -12,6 +12,7 @@ import {
   dispatchOnEnter,
   findTaskInstance,
   mapTask,
+  mergeTaskPayload,
   stateByName,
   type TaskInstance,
   type TaskPrincipal,
@@ -123,6 +124,11 @@ type TransitionArgs = {
    * names on this task replays the task instead of moving it again.
    */
   idempotency?: TransitionIdempotency;
+  /**
+   * Keys merged over the payload under the transition's lock before the guard
+   * reads it, as `PATCH` merges them. A refused move writes none of it.
+   */
+  payload?: Record<string, unknown>;
 };
 
 /** How far a task may travel on automation alone before the engine refuses. */
@@ -180,16 +186,25 @@ const nextChainDepth = (args: {
   return next;
 };
 
-// Re-validates the move against the committed, locked state.
+// Re-validates the move against the committed, locked state, with the move's
+// payload merged in first so the guard reads what the caller sent.
 const resolveLockedTransition = (args: {
   task: TaskInstance;
   transitionArgs: TransitionArgs;
   transitions: WorkflowTransition[];
+  payloadSchema: unknown;
 }): WorkflowTransition => {
   const { task, transitionArgs: a, transitions } = args;
   const transition = transitions.find((t) => {
     return t.name === a.transition;
   })!;
+  if (a.payload) {
+    task.payload = mergeTaskPayload({
+      stored: task.payload as Record<string, unknown> | null,
+      patch: a.payload,
+      payloadSchema: args.payloadSchema,
+    });
+  }
   assertTransitionAllowed({
     task,
     transition,
@@ -252,6 +267,7 @@ const performTransitionTxn = async (args: {
   transitionArgs: TransitionArgs;
   transitions: WorkflowTransition[];
   states: WorkflowState[];
+  payloadSchema: unknown;
   /**
    * The already-sanitized bag to persist, or `undefined` to leave the stored one
    * alone. Sanitized by the caller so an invalid key is a rejected write rather
@@ -283,6 +299,7 @@ const performTransitionTxn = async (args: {
       task,
       transitionArgs: a,
       transitions,
+      payloadSchema: args.payloadSchema,
     });
 
     // Before any mutation: a refused chain hop must leave the task exactly where
@@ -380,8 +397,10 @@ const applyTransition = async (input: {
   definition: WorkflowTransition;
   states: WorkflowState[];
   transitions: WorkflowTransition[];
+  payloadSchema: unknown;
 }) => {
-  const { args, loaded, definition, states, transitions } = input;
+  const { args, loaded, definition, states, transitions, payloadSchema } =
+    input;
   const projectId = loaded.projectId as number;
 
   // Accepted before anything is claimed or locked: a key that could not become
@@ -412,6 +431,8 @@ const applyTransition = async (input: {
       // which supplies none — still carries the credential the move used.
       toolContext,
       idempotency: args.idempotency,
+      payload: args.payload,
+      payloadSchema,
     });
   }
 
@@ -419,6 +440,7 @@ const applyTransition = async (input: {
     transitionArgs: args,
     transitions,
     states,
+    payloadSchema,
     toolContext,
   });
   if (result.replayed) return currentTask(args.id);
@@ -474,7 +496,7 @@ export const transitionTask = async (args: TransitionArgs) => {
     throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
   }
   // The machine the task entered on, not the one the workflow holds now.
-  const { states, transitions } = await resolveTaskDefinition({
+  const { states, transitions, payloadSchema } = await resolveTaskDefinition({
     task: loaded,
     workflow: loaded.workflow!,
   });
@@ -498,6 +520,7 @@ export const transitionTask = async (args: TransitionArgs) => {
       definition,
       states,
       transitions,
+      payloadSchema,
     });
   };
   const claim = args.idempotency;

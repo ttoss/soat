@@ -13,6 +13,7 @@ import { emitTaskEvent } from './taskEvents';
 import {
   findTaskInstance,
   mapTask,
+  mergeTaskPayload,
   type TaskInstance,
   type TaskPrincipal,
   transitionTask,
@@ -31,6 +32,7 @@ const DEFAULT_APPROVAL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 // concurrent change invalidated it. Both are surfaced, never silently dropped.
 const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
+  'TASK_PAYLOAD_INVALID',
   'TASK_TRANSITION_CONFLICT',
 ]);
 
@@ -49,6 +51,7 @@ const emitGateApproval = async (args: {
    */
   previousToolContext: Record<string, string> | null;
   idempotency?: TransitionIdempotency;
+  payload?: Record<string, unknown>;
 }): Promise<MappedApproval> => {
   const base = `Transition '${args.transition.name}' on task '${args.taskPublicId}' requires approval before it can move to '${args.transition.to}'.`;
   try {
@@ -62,6 +65,7 @@ const emitGateApproval = async (args: {
       taskTransition: args.transition.name,
       idempotencyKey: args.idempotency?.key ?? null,
       idempotencyDigest: args.idempotency?.digest ?? null,
+      taskPayload: args.payload ?? null,
     });
   } catch (error) {
     await db.Task.update(
@@ -109,6 +113,12 @@ export const parkTransitionForApproval = async (args: {
   toolContext?: Record<string, string> | null;
   /** Held by the gate's item, since a park writes no history row. */
   idempotency?: TransitionIdempotency;
+  /**
+   * Held by the gate's item and merged when the approval fires the move, so a
+   * rejected or expired gate writes none of it.
+   */
+  payload?: Record<string, unknown>;
+  payloadSchema: unknown;
 }): Promise<ReturnType<typeof mapTask>> => {
   const { task, transition, transitions } = args;
   const taskPublicId = task.publicId;
@@ -126,6 +136,15 @@ export const parkTransitionForApproval = async (args: {
     transitions,
     principal: args.principal,
   });
+  // Refused before parking; re-validated against the payload committed when
+  // the approval fires.
+  if (args.payload) {
+    mergeTaskPayload({
+      stored: task.payload as Record<string, unknown> | null,
+      patch: args.payload,
+      payloadSchema: args.payloadSchema,
+    });
+  }
 
   // Atomically claim the gate: at most one pending transition per task, and only
   // while it is still open and in the from-state we validated. A concurrent park
@@ -160,6 +179,7 @@ export const parkTransitionForApproval = async (args: {
     note: args.note,
     previousToolContext: task.toolContext,
     idempotency: args.idempotency,
+    payload: args.payload,
   });
 
   await db.Task.update(
@@ -224,6 +244,16 @@ const appendResolutionNote = async (args: {
   });
 };
 
+const parkedPayload = async (args: {
+  approvalId: string;
+}): Promise<Record<string, unknown> | undefined> => {
+  const item = await db.ApprovalItem.findOne({
+    where: { publicId: args.approvalId },
+    attributes: ['taskPayload'],
+  });
+  return item?.taskPayload ?? undefined;
+};
+
 // Guards re-run against the committed state, and a now-invalid move is
 // surfaced rather than leaving the task parked against a resolved approval.
 const applyApprovedTransition = async (args: {
@@ -238,12 +268,15 @@ const applyApprovedTransition = async (args: {
   const task = await db.Task.findOne({ where: { publicId: item.task_id } });
   if (!task || task.pendingApprovalId !== item.id) return;
 
+  const payload = await parkedPayload({ approvalId: item.id });
+
   try {
     await transitionTask({
       id: item.task_id,
       transition: item.task_transition,
       principal: { kind: 'approval', id: decision.resolvedByPrincipalId },
       note: `Approved via approval ${item.id}.`,
+      payload,
     });
   } catch (error) {
     if (error instanceof DomainError && REJECTION_CODES.has(error.code)) {

@@ -805,6 +805,16 @@ components:
         note:
           type: string
           nullable: true
+        payload:
+          type: object
+          description: >-
+            Keys shallow-merged over the task's payload under the transition's
+            lock, before the guard reads it, exactly as `PATCH` merges them; the
+            result must satisfy the payload schema of the version the task is
+            pinned to (`TASK_PAYLOAD_INVALID`). A refused move writes none of
+            it. On a `requires_approval` transition the payload is held with the
+            gate and merged when the approval fires the move, so a rejected or
+            expired gate writes nothing.
         idempotency_key:
           type: string
           maxLength: 255

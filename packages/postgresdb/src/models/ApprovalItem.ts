@@ -157,6 +157,11 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare idempotencyDigest: string | null;
 
+  // The payload a parked transition carries, merged into the task under the
+  // transition's lock when the approval fires it, so a rejection writes none.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare taskPayload: Record<string, unknown> | null;
+
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare policyVersion: string | null;
 

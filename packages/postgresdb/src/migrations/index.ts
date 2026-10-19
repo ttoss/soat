@@ -39,6 +39,7 @@ import { onBehalfOf } from './2026-10-17-onBehalfOf';
 import { playbookNodeIds } from './2026-10-17-playbookNodeIds';
 import { principalPairs } from './2026-10-17-principalPairs';
 import { runStatusVocabulary } from './2026-10-17-runStatusVocabulary';
+import { approvalItemTaskPayload } from './2026-10-19-approvalItemTaskPayload';
 import { documentPendingEndUser } from './2026-10-19-documentPendingEndUser';
 import { taskTransitionIdempotencyKey } from './2026-10-19-taskTransitionIdempotencyKey';
 
@@ -103,4 +104,5 @@ export const MIGRATIONS: Migration[] = [
   playbookNodeIds,
   documentPendingEndUser,
   taskTransitionIdempotencyKey,
+  approvalItemTaskPayload,
 ];
