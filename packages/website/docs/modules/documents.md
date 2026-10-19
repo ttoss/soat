@@ -312,7 +312,7 @@ The export is not an MCP tool (an unbounded stream has no JSON projection); tool
 
 ### Metadata filters
 
-[`GET /api/v1/documents`](/docs/api/documents/list-documents) narrows by the bag with `?metadata=`, a JSON object url-encoded into one parameter. [Knowledge search](./knowledge.md) reads the same object in its request body, so a filter written for one holds for the other.
+[`GET /api/v1/documents`](/docs/api/documents/list-documents) narrows by the bag with `?metadata=`, a JSON object url-encoded into one parameter. [Knowledge search](./knowledge.md) reads the same object in its request body, and [`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) the same parameter, so a filter written for one holds for the others.
 
 ```
 ?metadata={"quarter":"Q1","revision":{"gte":3,"lt":11},"status":{"in":["draft","final"]}}

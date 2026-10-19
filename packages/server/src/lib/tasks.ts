@@ -7,10 +7,6 @@ import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { runStateAutomation } from './tasksAutomation';
-import {
-  automationStatusWhere,
-  type TaskAutomationStatus,
-} from './tasksAutomationStatus';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import {
@@ -131,62 +127,6 @@ export const getTask = async (args: { id: string }) => {
     throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
   }
   return task;
-};
-
-export const listTasks = async (args: {
-  projectIds: number[];
-  workflowId?: string;
-  state?: string;
-  statuses?: readonly ('open' | 'closed')[];
-  // ORed, `null` included. `status=open` narrows a board; it does not say which
-  // of those cards has an automation still dispatching.
-  automationStatuses?: (TaskAutomationStatus | null)[];
-  assignee?: string;
-  limit?: number;
-  offset?: number;
-}) => {
-  log(
-    'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o',
-    args.projectIds,
-    args.workflowId,
-    args.state,
-    args.statuses
-  );
-  const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.state) where.state = args.state;
-  if (args.statuses?.length) where.status = args.statuses;
-  if (args.assignee) where.assignee = args.assignee;
-
-  if (args.automationStatuses?.length) {
-    where.automationStatus = automationStatusWhere(args.automationStatuses);
-  }
-
-  if (args.workflowId) {
-    const workflow = await db.Workflow.findOne({
-      where: { publicId: args.workflowId },
-    });
-    // An unknown workflow filter yields an empty page rather than every task.
-    where.workflowId = workflow ? (workflow.id as number) : -1;
-  }
-
-  return paginatedList({
-    limit: args.limit,
-    offset: args.offset,
-    order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Task.findAndCountAll({
-        where,
-        include: taskIncludes(),
-        distinct: true,
-        order,
-        limit,
-        offset,
-      });
-    },
-    map: (t) => {
-      return mapTask(t);
-    },
-  });
 };
 
 // ── Definition helpers ────────────────────────────────────────────────────────

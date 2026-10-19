@@ -3,12 +3,12 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
+import { readMetadataQuery } from 'src/lib/structuredFilter';
 import {
   createTask,
   deleteTask,
   getTask,
   getTaskHistory,
-  listTasks,
   listTaskTransitions,
   type TaskPrincipal,
   transitionTask,
@@ -19,6 +19,7 @@ import {
   TASK_AUTOMATION_STATUSES,
   type TaskAutomationStatus,
 } from 'src/lib/tasksAutomationStatus';
+import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 
 import {
@@ -55,6 +56,7 @@ const principalFromCtx = (ctx: Context): TaskPrincipal => {
 tasksRouter.get('/tasks', async (ctx: Context) => {
   requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
+  const metadata = readMetadataQuery(ctx.query.metadata);
   const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
@@ -84,6 +86,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     }),
     automationStatuses,
     assignee: ctx.query.assignee as string | undefined,
+    metadata,
     ...parsePagination(ctx),
   });
 });
