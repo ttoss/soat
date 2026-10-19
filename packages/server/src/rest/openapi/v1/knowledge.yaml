@@ -184,7 +184,9 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden
+          description: >-
+            Forbidden, or a `query` and no project in scope the caller holds
+            `embeddings:CreateEmbeddings` on to bill its embedding to
           content:
             application/json:
               schema:

@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { createEmbeddings } from 'src/lib/embeddings';
+import { EMBEDDING_SPEND } from 'src/lib/embeddingSpend';
 import { MAX_EMBEDDINGS_INPUTS } from 'src/lib/requestBounds';
 
 import {
@@ -62,8 +63,7 @@ embeddingsRouter.post('/embeddings', async (ctx: Context) => {
     await resolveWriteProjectId({
       ctx,
       projectPublicId: body.project_id,
-      action: 'embeddings:CreateEmbeddings',
-      resourceType: 'embedding',
+      ...EMBEDDING_SPEND,
     });
   }
 
