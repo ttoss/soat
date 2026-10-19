@@ -1,6 +1,6 @@
 {
   "name": "@soat/sdk",
-  "version": "0.89.0",
+  "version": "0.90.0",
   "description": "TypeScript SDK for SOAT — open-source infrastructure for production-ready AI agents.",
   "keywords": [
     "ai-agents",
