@@ -14,22 +14,19 @@ export const EMBEDDING_SPEND = {
 } as const;
 
 /**
- * The first of `projectIds` by public id in code-unit order, compared here
- * rather than in SQL so the database collation cannot reorder mixed case.
+ * The first of `projectIds` (never empty) by public id in code-unit order,
+ * compared here rather than in SQL so the collation cannot reorder mixed case.
  */
 export const firstProjectByPublicId = async (args: {
   projectIds: number[];
-}): Promise<number | null> => {
+}): Promise<number> => {
   log('firstProjectByPublicId: candidates=%d', args.projectIds.length);
   const projects = await db.Project.findAll({
     where: { id: args.projectIds },
     attributes: ['id', 'publicId'],
   });
-  const first = projects.reduce<(typeof projects)[number] | null>(
-    (best, project) => {
-      return best === null || project.publicId < best.publicId ? project : best;
-    },
-    null
-  );
-  return (first?.id as number | undefined) ?? null;
+  const first = projects.reduce((best, project) => {
+    return project.publicId < best.publicId ? project : best;
+  });
+  return first.id as number;
 };
