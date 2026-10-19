@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.91.0](https://github.com/ttoss/soat/compare/v0.90.0...v0.91.0) (2026-10-19)
+
+### Features
+
+* **tasks:** accept an Idempotency-Key on task create ([#1699](https://github.com/ttoss/soat/issues/1699)) ([a2fb4f6](https://github.com/ttoss/soat/commit/a2fb4f6844d83f3008b62ce232713803db434e28))
+
 # [0.90.0](https://github.com/ttoss/soat/compare/v0.89.0...v0.90.0) (2026-10-19)
 
 ### Features
