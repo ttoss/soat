@@ -36,7 +36,7 @@ const log = createDebug('soat:generation');
  */
 export const recordSegmentUsage = (args: {
   generationId: string;
-  model: LanguageModel | undefined;
+  model: LanguageModel;
   /** The id the provider answered with; absent when it reported none. */
   reportedModelId: string | undefined;
   usage: LanguageModelUsage | undefined;
@@ -50,7 +50,7 @@ export const recordSegmentUsage = (args: {
       reportedModelId: args.reportedModelId,
     }),
     usage: args.usage,
-    aiProviderId: args.model ? routedAiProviderId(args.model) : null,
+    aiProviderId: routedAiProviderId(args.model),
     stepsAlreadySpent: args.stepsAlreadySpent,
     turn: args.turn,
   });
@@ -59,7 +59,7 @@ export const recordSegmentUsage = (args: {
 // The tokens a failed segment spent, when the provider reported any.
 const meterFailedSegment = (args: {
   generationId: string;
-  model: LanguageModel | undefined;
+  model: LanguageModel;
   reportedModelId: string | undefined;
   usage: LanguageModelUsage | undefined;
   stepsAlreadySpent: number;
@@ -79,7 +79,7 @@ export const recordGenerationFailure = async (args: {
   traceId: string;
   error: unknown;
   /** The model the failed turn ran on — a routed one stamps its attempts. */
-  model?: LanguageModel;
+  model: LanguageModel;
   /**
    * The project the turn belongs to, where the failure is announced — the only
    * channel a background caller has (it already got its `202` and went away).
@@ -136,7 +136,6 @@ export const recordGenerationFailure = async (args: {
     // used, so omitting them understates every roll-up that reads them.
     ...meterFailedSegment({
       ...args,
-      model: args.model,
       reportedModelId: args.reportedModelId ?? reportedModelOf(args.error),
       usage,
     }),

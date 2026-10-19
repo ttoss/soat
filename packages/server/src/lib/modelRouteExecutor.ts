@@ -134,10 +134,9 @@ export const routedModelName = (model: LanguageModel): string | null => {
  * target sends no response metadata.
  */
 export const servedModelName = (args: {
-  model: LanguageModel | undefined;
+  model: LanguageModel;
   reportedModelId: string | undefined;
 }): string => {
-  if (args.model === undefined) return args.reportedModelId ?? '';
   const configured =
     typeof args.model === 'string' ? args.model : args.model.modelId;
   return routedModelName(args.model) ?? (args.reportedModelId || configured);
