@@ -284,7 +284,7 @@ A statement matches a request when **all** of the following are true:
 
 ## Tags
 
-Tags are key-value pairs on resources, enabling ABAC via conditions. One mechanism serves every tagged resource — actors, conversations, documents, files, sessions, memories and memory entries — so a tag is written, filtered and matched the same way everywhere:
+Tags are key-value pairs on resources, enabling ABAC via conditions. One mechanism serves every resource that carries `tags` ([which ones](#which-resources-carry-which-bag)), so a tag is written, filtered and matched the same way everywhere:
 
 | Surface | Rule |
 |---|---|
@@ -294,9 +294,9 @@ Tags are key-value pairs on resources, enabling ABAC via conditions. One mechani
 | Knowledge search (`tags` in the body) | Same containment rule across documents and memory entries |
 | Policy condition (`soat:ResourceTag/<key>`) | Same pairs, read from the same column |
 
-Every tagged resource honors `soat:ResourceTag/<key>` in a policy condition: actors, conversations, documents, files, sessions, memories and memory entries.
+Every resource that carries `tags` honors `soat:ResourceTag/<key>` in a policy condition.
 
-A memory entry is the one resource governed by two tag bags — its own, and its memory's. Both are evaluated, so an entry is never more visible than the memory holding it; see [Memories — Tag Conditions](memories.md#tag-conditions).
+A memory is the one resource governed by two tag bags — its own, and its memory store's. Both are evaluated, so a memory is never more visible than the store holding it; see [Memories — Tag Conditions](memories.md#tag-conditions).
 
 [Tag-Based Access Control](../tutorials/tag-based-access-control.md) walks the whole mechanism: tag two documents, condition a policy on the tag, and watch the listing and knowledge search narrow.
 
@@ -357,6 +357,38 @@ A record whose bag is unset leaves the field out of its response rather than ans
 A `metadata` bag is refused unless it is a JSON object, with `400 VALIDATION_FAILED`, at every endpoint that stores one — the column is JSONB and would keep a bare string as readily as an object, and a stored string then answers no structured filter, so an accepted bad write reads back as a row that simply matches nothing. The two endpoints that take a bag without storing one are not bound by this: knowledge search reads a filter over bags, and the metadata-schema validator answers with a verdict on a bag rather than keeping it.
 
 Which bag a rule may read follows from who writes it. Any caller who may write a resource may put any JSON in its `metadata`, so a policy condition on that bag would let that caller decide what their own rows match — including out of a `Deny`. `tags` are bounded and their `system.*` keys are refused on a caller write, which is what makes them safe to condition on. A policy therefore names `soat:ResourceTag/<key>` and has no spelling for the other bag.
+
+### Choosing a bag
+
+| A field that… | Goes in |
+| --- | --- |
+| a policy scopes rows by, through `soat:ResourceTag/<key>` | `tags` |
+| identifies the row, matched by `?tags=` or knowledge search | `tags` |
+| holds a typed value: a number, a date, a list, a nested object | `metadata` |
+| is ordered or compared (`gt`, `lte`, `in`) | `metadata` |
+
+The table assumes both bags. A resource that carries one takes every field there: a task's identifier lives in its `metadata` and is found with [`?metadata=`](/docs/api/tasks/list-tasks), and no policy can condition on it.
+
+### Which resources carry which bag
+
+| Resource             | `tags` | `metadata` |
+| -------------------- | ------ | ---------- |
+| Actor                | ✓      |            |
+| Conversation         | ✓      |            |
+| Conversation message |        | ✓          |
+| Dataset item         |        | ✓          |
+| Decision             |        | ✓          |
+| Document             | ✓      | ✓          |
+| Eval run             |        | ✓          |
+| File                 | ✓      | ✓          |
+| Formation            |        | ✓          |
+| Generation           |        | ✓          |
+| Ingestion rule       |        | ✓          |
+| Memory               | ✓      | ✓          |
+| Memory store         | ✓      |            |
+| Orchestration run    |        | ✓          |
+| Session              | ✓      |            |
+| Task                 |        | ✓          |
 
 ## Examples
 
