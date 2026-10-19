@@ -31,6 +31,10 @@ boundaries. A clear winner → choose it.
 Forward in trade format: each option, what it worsens, the open premise, a
 recommendation with its activation condition (`worth doing when <pain>`).
 
+A choice the task, a standing decision or a rule already makes is not an open
+question: implement it. Forwarding blocks only that task, as a Flow `decision`
+waiting on the user; other work continues.
+
 ## Record
 
 Every self-answered question goes in the final response and/or PR description:
