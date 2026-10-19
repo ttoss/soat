@@ -1,4 +1,8 @@
-FROM node:24-slim AS builder
+# The build runs natively on the runner's platform: under QEMU emulation a
+# tsdown build can hang without output. Its dist/ output is platform-
+# independent, so only dist/ leaves this stage
+# (tests/harness/dockerfileBuildPlatform.test.mjs).
+FROM --platform=$BUILDPLATFORM node:24-slim AS builder
 
 WORKDIR /app
 
