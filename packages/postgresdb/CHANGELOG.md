@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.88.0](https://github.com/ttoss/soat/compare/v0.87.0...v0.88.0) (2026-10-19)
+
+### Features
+
+* **tasks:** accept an idempotency key on transitions ([#1688](https://github.com/ttoss/soat/issues/1688)) ([b67940a](https://github.com/ttoss/soat/commit/b67940a6ec6154405833fd4ea12ed979e4dc8eee))
+* **tasks:** accept payload on a transition, applied under its lock ([#1689](https://github.com/ttoss/soat/issues/1689)) ([cf75c84](https://github.com/ttoss/soat/commit/cf75c8438042cc729ca45244b59f6e28746e7bfa))
+
 # [0.87.0](https://github.com/ttoss/soat/compare/v0.86.4...v0.87.0) (2026-10-19)
 
 ### Features

@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.88.0](https://github.com/ttoss/soat/compare/v0.87.0...v0.88.0) (2026-10-19)
+
+### Bug Fixes
+
+* **usage:** meter what [#1673](https://github.com/ttoss/soat/issues/1673) left unmetered, mispriced or misattributed ([#1687](https://github.com/ttoss/soat/issues/1687)) ([b1600a6](https://github.com/ttoss/soat/commit/b1600a6fc5ddde5863eca4f26b50231db7a61f56))
+
+### Features
+
+* **tasks:** accept an idempotency key on transitions ([#1688](https://github.com/ttoss/soat/issues/1688)) ([b67940a](https://github.com/ttoss/soat/commit/b67940a6ec6154405833fd4ea12ed979e4dc8eee))
+* **tasks:** accept payload on a transition, applied under its lock ([#1689](https://github.com/ttoss/soat/issues/1689)) ([cf75c84](https://github.com/ttoss/soat/commit/cf75c8438042cc729ca45244b59f6e28746e7bfa))
+* **tasks:** filter the task list by metadata ([#1685](https://github.com/ttoss/soat/issues/1685)) ([90f0a2f](https://github.com/ttoss/soat/commit/90f0a2f7a1b61b99b8aeaff24e65367f17e7b118))
+* **tasks:** list a task's transitions with the outcome firing each would have ([#1686](https://github.com/ttoss/soat/issues/1686)) ([33e5a33](https://github.com/ttoss/soat/commit/33e5a3301fe4ccf7f69f8289c9938ada57c0a594))
+
 # [0.87.0](https://github.com/ttoss/soat/compare/v0.86.4...v0.87.0) (2026-10-19)
 
 ### Features
