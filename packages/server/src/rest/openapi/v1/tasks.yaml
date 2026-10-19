@@ -319,6 +319,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -341,7 +342,9 @@ paths:
         '404':
           description: Task not found
         '409':
-          description: A concurrent transition made this one invalid, or the task is closed
+          description: >-
+            A concurrent transition made this one invalid, the task is closed,
+            or the idempotency key names a different request
 
   /api/v1/tasks/{task_id}/pause:
     post:
@@ -801,6 +804,16 @@ components:
         note:
           type: string
           nullable: true
+        idempotency_key:
+          type: string
+          maxLength: 255
+          description: >-
+            The move's deduplication key, unique within the task and claimed
+            for as long as the task exists. The same key with the same body
+            replays the task as it is now instead of moving it again, whether
+            the move applied or parked an approval; with a different body it is
+            `409 IDEMPOTENCY_KEY_REUSED`. Equivalent to the `Idempotency-Key`
+            header.
         tool_context:
           type: object
           additionalProperties:

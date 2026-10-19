@@ -18,6 +18,7 @@ import {
   transitionTask,
 } from './tasks';
 import { assertTransitionAllowed } from './tasksTransitionCheck';
+import type { TransitionIdempotency } from './tasksTransitionIdempotency';
 import type { WorkflowTransition } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -47,6 +48,7 @@ const emitGateApproval = async (args: {
    * would run a later, unrelated move's work with this requester's credential.
    */
   previousToolContext: Record<string, string> | null;
+  idempotency?: TransitionIdempotency;
 }): Promise<MappedApproval> => {
   const base = `Transition '${args.transition.name}' on task '${args.taskPublicId}' requires approval before it can move to '${args.transition.to}'.`;
   try {
@@ -58,6 +60,8 @@ const emitGateApproval = async (args: {
       expiresInSeconds: DEFAULT_APPROVAL_EXPIRES_IN_SECONDS,
       taskId: args.taskPublicId,
       taskTransition: args.transition.name,
+      idempotencyKey: args.idempotency?.key ?? null,
+      idempotencyDigest: args.idempotency?.digest ?? null,
     });
   } catch (error) {
     await db.Task.update(
@@ -103,6 +107,8 @@ export const parkTransitionForApproval = async (args: {
    * never half-applied.
    */
   toolContext?: Record<string, string> | null;
+  /** Held by the gate's item, since a park writes no history row. */
+  idempotency?: TransitionIdempotency;
 }): Promise<ReturnType<typeof mapTask>> => {
   const { task, transition, transitions } = args;
   const taskPublicId = task.publicId;
@@ -153,6 +159,7 @@ export const parkTransitionForApproval = async (args: {
     transition,
     note: args.note,
     previousToolContext: task.toolContext,
+    idempotency: args.idempotency,
   });
 
   await db.Task.update(

@@ -20,6 +20,7 @@ import {
   type TaskAutomationStatus,
 } from 'src/lib/tasksAutomationStatus';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
+import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
 
 import {
   parseEnumListQuery,
@@ -30,6 +31,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { idempotencyKeyOf } from './idempotencyKey';
 
 const tasksRouter = new Router<Context>();
 
@@ -244,6 +246,8 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     note?: string | null;
     tool_context?: unknown;
   };
+  const toolContext = parseNullableToolContextBody(body.tool_context);
+  const idempotencyKey = idempotencyKeyOf(ctx);
 
   ctx.body = await transitionTask({
     id: ctx.params.task_id,
@@ -251,7 +255,17 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     note: body.note,
     // Passed straight through, `undefined` included: omitting the field keeps
     // the task's stored bag, which is not the same as sending `{}`.
-    toolContext: parseNullableToolContextBody(body.tool_context),
+    toolContext,
+    idempotency: idempotencyKey
+      ? {
+          key: idempotencyKey,
+          digest: transitionRequestDigest({
+            transition: body.transition,
+            note: body.note,
+            toolContext,
+          }),
+        }
+      : undefined,
     principal: principalFromCtx(ctx),
     // A run-as token names a user or key like any other credential, so the
     // principal above cannot distinguish a dispatch continuing its own chain

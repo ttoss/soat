@@ -2,6 +2,8 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import type { Transaction } from './dbTransaction';
+import { claimIdempotencyKey } from './idempotencyClaim';
 import type { RequestPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import {
@@ -16,6 +18,10 @@ import {
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
 import { assertTransitionAllowed } from './tasksTransitionCheck';
+import {
+  findTransitionClaim,
+  type TransitionIdempotency,
+} from './tasksTransitionIdempotency';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContextUpdate } from './toolContextCarrier';
 import type { WorkflowState, WorkflowTransition } from './workflowsValidation';
@@ -112,6 +118,11 @@ type TransitionArgs = {
    * An explicit `{}` clears it.
    */
   toolContext?: Record<string, string> | null;
+  /**
+   * The caller's deduplication key and request digest. A move the key already
+   * names on this task replays the task instead of moving it again.
+   */
+  idempotency?: TransitionIdempotency;
 };
 
 /** How far a task may travel on automation alone before the engine refuses. */
@@ -188,6 +199,52 @@ const resolveLockedTransition = (args: {
   return transition;
 };
 
+// Under the lock, so a retry racing its original waits for it and replays
+// rather than being refused by the state the original moved to.
+const claimedUnderLock = async (args: {
+  task: TaskInstance;
+  transitionArgs: TransitionArgs;
+  transaction: Transaction;
+}): Promise<boolean> => {
+  const claim = args.transitionArgs.idempotency;
+  if (!claim) return false;
+  return findTransitionClaim({
+    taskId: args.task.id as number,
+    taskPublicId: args.task.publicId,
+    claim,
+    transaction: args.transaction,
+  });
+};
+
+const appendHistory = async (args: {
+  taskId: number;
+  fromState: string;
+  transition: WorkflowTransition;
+  transitionArgs: TransitionArgs;
+  transaction: Transaction;
+}): Promise<void> => {
+  const a = args.transitionArgs;
+  assertAutomationHasProvenance({
+    transitionArgs: a,
+    transitionName: args.transition.name,
+  });
+  await db.TaskTransition.create(
+    {
+      taskId: args.taskId,
+      fromState: args.fromState,
+      toState: args.transition.to,
+      transition: args.transition.name,
+      principalType: a.principal.kind,
+      principalId: a.principal.id,
+      ...dispatchProvenance(a),
+      note: a.note ?? null,
+      idempotencyKey: a.idempotency?.key ?? null,
+      idempotencyDigest: a.idempotency?.digest ?? null,
+    },
+    { transaction: args.transaction }
+  );
+};
+
 // Runs the atomic state change under a row lock: re-reads the committed state,
 // re-validates the transition against it, evaluates the guard, applies the move,
 // and appends the history record. Returns what the post-commit steps need.
@@ -201,11 +258,15 @@ const performTransitionTxn = async (args: {
    * than a throw from inside the locked transaction.
    */
   toolContext: Record<string, string> | null | undefined;
-}): Promise<{
-  previousDispatch: ActiveDispatch | null;
-  toState: string;
-  closed: boolean;
-}> => {
+}): Promise<
+  | { replayed: true }
+  | {
+      replayed: false;
+      previousDispatch: ActiveDispatch | null;
+      toState: string;
+      closed: boolean;
+    }
+> => {
   const { transitionArgs: a, transitions, states } = args;
   return db.sequelize.transaction(async (t) => {
     const task = (await db.Task.findOne({
@@ -213,6 +274,10 @@ const performTransitionTxn = async (args: {
       transaction: t,
       lock: t.LOCK.UPDATE,
     })) as TaskInstance;
+
+    if (await claimedUnderLock({ task, transitionArgs: a, transaction: t })) {
+      return { replayed: true as const };
+    }
 
     const transition = resolveLockedTransition({
       task,
@@ -258,36 +323,23 @@ const performTransitionTxn = async (args: {
         : computeStallDeadline({ state: toStateDef, enteredStateAt });
     await task.save({ transaction: t });
 
-    assertAutomationHasProvenance({
+    await appendHistory({
+      taskId: task.id as number,
+      fromState,
+      transition,
       transitionArgs: a,
-      transitionName: transition.name,
+      transaction: t,
     });
 
-    await db.TaskTransition.create(
-      {
-        taskId: task.id as number,
-        fromState,
-        toState: transition.to,
-        transition: transition.name,
-        principalType: a.principal.kind,
-        principalId: a.principal.id,
-        ...dispatchProvenance(a),
-        note: a.note ?? null,
-      },
-      { transaction: t }
-    );
-
-    return { previousDispatch, toState: transition.to, closed };
+    return {
+      replayed: false as const,
+      previousDispatch,
+      toState: transition.to,
+      closed,
+    };
   });
 };
 
-/**
- * The single path every task state change routes through — human, API,
- * automation outcome, approval resolution. Validates the transition exists,
- * applies it atomically under a row lock (guards enforced, history appended),
- * cancels any dispatch the task is leaving, emits events, and fires the new
- * state's on_enter automation.
- */
 /**
  * The identity the *next* state's automation runs as.
  *
@@ -318,36 +370,19 @@ const resolveDispatchPrincipal = async (
   return { principalType: runKind, principalId: runId };
 };
 
-export const transitionTask = async (args: TransitionArgs) => {
-  log(
-    'transitionTask: id=%s transition=%s principal=%s',
-    args.id,
-    args.transition,
-    args.principal.kind
-  );
+const currentTask = async (id: string) => {
+  return mapTask((await findTaskInstance({ id }))!);
+};
 
-  const loaded = await findTaskInstance({ id: args.id });
-  if (!loaded) {
-    throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
-  }
-  // The machine the task entered on, not the one the workflow holds now.
-  const { states, transitions } = await resolveTaskDefinition({
-    task: loaded,
-    workflow: loaded.workflow!,
-  });
+const applyTransition = async (input: {
+  args: TransitionArgs;
+  loaded: TaskInstance;
+  definition: WorkflowTransition;
+  states: WorkflowState[];
+  transitions: WorkflowTransition[];
+}) => {
+  const { args, loaded, definition, states, transitions } = input;
   const projectId = loaded.projectId as number;
-
-  // The transition must exist in the definition at all (else 400 NOT_FOUND).
-  const definition = transitions.find((t) => {
-    return t.name === args.transition;
-  });
-  if (!definition) {
-    throw new DomainError(
-      'TASK_TRANSITION_NOT_FOUND',
-      `Transition '${args.transition}' does not exist in this workflow.`,
-      { transition: args.transition }
-    );
-  }
 
   // Accepted before anything is claimed or locked: a key that could not become
   // a header must be a rejected write the caller is still listening for, not a
@@ -376,6 +411,7 @@ export const transitionTask = async (args: TransitionArgs) => {
       // the dispatch that runs on resolution — under the `approval` principal,
       // which supplies none — still carries the credential the move used.
       toolContext,
+      idempotency: args.idempotency,
     });
   }
 
@@ -385,6 +421,7 @@ export const transitionTask = async (args: TransitionArgs) => {
     states,
     toolContext,
   });
+  if (result.replayed) return currentTask(args.id);
 
   await cancelDispatchOnExit({
     previous: result.previousDispatch,
@@ -415,4 +452,67 @@ export const transitionTask = async (args: TransitionArgs) => {
   }
 
   return mapped;
+};
+
+/**
+ * The single path every task state change routes through — human, API,
+ * automation outcome, approval resolution. Validates the transition exists,
+ * applies it atomically under a row lock (guards enforced, history appended),
+ * cancels any dispatch the task is leaving, emits events, and fires the new
+ * state's on_enter automation.
+ */
+export const transitionTask = async (args: TransitionArgs) => {
+  log(
+    'transitionTask: id=%s transition=%s principal=%s',
+    args.id,
+    args.transition,
+    args.principal.kind
+  );
+
+  const loaded = await findTaskInstance({ id: args.id });
+  if (!loaded) {
+    throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
+  }
+  // The machine the task entered on, not the one the workflow holds now.
+  const { states, transitions } = await resolveTaskDefinition({
+    task: loaded,
+    workflow: loaded.workflow!,
+  });
+
+  // The transition must exist in the definition at all (else 400 NOT_FOUND).
+  const definition = transitions.find((t) => {
+    return t.name === args.transition;
+  });
+  if (!definition) {
+    throw new DomainError(
+      'TASK_TRANSITION_NOT_FOUND',
+      `Transition '${args.transition}' does not exist in this workflow.`,
+      { transition: args.transition }
+    );
+  }
+
+  const apply = () => {
+    return applyTransition({
+      args,
+      loaded,
+      definition,
+      states,
+      transitions,
+    });
+  };
+  const claim = args.idempotency;
+  if (!claim) return apply();
+
+  const claimed = await claimIdempotencyKey({
+    replay: async () => {
+      const found = await findTransitionClaim({
+        taskId: loaded.id as number,
+        taskPublicId: args.id,
+        claim,
+      });
+      return found ? currentTask(args.id) : null;
+    },
+    create: apply,
+  });
+  return 'created' in claimed ? claimed.created : claimed.replayed;
 };

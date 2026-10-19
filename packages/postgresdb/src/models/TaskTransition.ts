@@ -28,6 +28,11 @@ import { Task } from './Task';
       name: 'task_transitions_task_id_created_at_idx',
       fields: ['task_id', 'created_at'],
     },
+    {
+      name: 'task_transitions_task_id_idempotency_key_unique',
+      unique: true,
+      fields: ['task_id', 'idempotency_key'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: TaskTransition) => {
@@ -95,4 +100,14 @@ export class TaskTransition extends Model {
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
+
+  // The caller's deduplication key, unique per task: a retried move replays
+  // instead of applying twice.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare idempotencyKey: string | null;
+
+  // Digest of the request the key names; a different request under it is
+  // refused rather than replayed.
+  @Column({ type: DataType.STRING(64), allowNull: true })
+  declare idempotencyDigest: string | null;
 }
