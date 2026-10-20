@@ -37,5 +37,7 @@ ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
 4. Tests in `packages/server/tests/unit/tests/rest/<module>.test.ts`: happy
    path, `401`, `403`, edge cases, for every new route and changed lib function.
 5. New user-facing flow: a tutorial that runs it, or steps in
-   `tests/smoke-tests.sh` when no tutorial can (`tests.md` §Smoke tests); run
-   `pnpm run -w smoke-tests`.
+   `tests/smoke-tests.sh` when no tutorial can (`e2e-tests.md` §Smoke tests);
+   run `pnpm run -w smoke-tests`.
+
+Cutting or merging a release: read `.claude/rules/release.md` first.

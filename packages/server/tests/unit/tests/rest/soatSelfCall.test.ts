@@ -687,7 +687,7 @@ describe('SOAT self-call', () => {
     let completionBodies: Record<string, unknown>[] = [];
 
     // The one tool call the stub asks for, set per test. Ollama's OpenAI
-    // endpoint ignores `tool_choice` (see tests.md — Deterministic model
+    // endpoint ignores `tool_choice` (see e2e-tests.md — Deterministic model
     // behavior), and here the "model" is ours, so the forcing lives in the stub.
     let toolCall: { name: string; args: Record<string, unknown> };
 

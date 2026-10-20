@@ -1,3 +1,10 @@
+---
+paths:
+  - "lerna.json"
+  - "CHANGELOG.md"
+  - ".github/workflows/**"
+---
+
 # Release Process
 
 ## Flow
