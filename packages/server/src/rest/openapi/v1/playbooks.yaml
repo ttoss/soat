@@ -537,7 +537,8 @@ paths:
         every execution queued, and every one those queue, has settled or
         parked. A write made with a credential the case's own work runs as — the
         case, one of its executions in flight, or the task or run one started —
-        is `403 PLAYBOOK_SELF_WRITE`.
+        or the work of a case reading it as an upstream, at any depth, is `403
+        PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
       x-soat-resource:
         kind: playbook_case
@@ -979,7 +980,8 @@ paths:
 
         An execution running is `409 PLAYBOOK_CASE_BUSY`; one queued but not
         started settles `superseded`. An upgrade made with a credential the
-        case's own work runs as is `403 PLAYBOOK_SELF_WRITE`.
+        case's own work, or that of a case reading it as an upstream, runs as
+        is `403 PLAYBOOK_SELF_WRITE`.
       operationId: upgradePlaybookCase
       x-soat-resource:
         kind: playbook_case
@@ -1140,7 +1142,8 @@ paths:
         change or it is approved. Another node, or a `confirm` node with a
         required input unset or reading a node that is not `done`, is `409
         PLAYBOOK_NODE_NOT_CONFIRMABLE`. A confirmation made with a credential the
-        case's own work runs as is `403 PLAYBOOK_SELF_WRITE`.
+        case's own work, or that of a case reading it as an upstream, runs as
+        is `403 PLAYBOOK_SELF_WRITE`.
       operationId: confirmPlaybookCaseNode
       x-soat-resource:
         kind: playbook_case

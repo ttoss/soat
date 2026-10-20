@@ -189,6 +189,29 @@ export const dependentCases = async (args: {
   });
 };
 
+/** `caseDbIds` and every case upstream of one of them, at any depth. */
+export const casesWithUpstreams = async (args: {
+  caseDbIds: number[];
+}): Promise<Set<number>> => {
+  const seen = new Set<number>();
+  let frontier = args.caseDbIds;
+  while (frontier.length > 0) {
+    for (const id of frontier) seen.add(id);
+    const bindings = await db.PlaybookCaseUpstream.findAll({
+      where: { caseId: frontier },
+      attributes: ['upstreamCaseId'],
+    });
+    frontier = bindings
+      .map((binding) => {
+        return binding.upstreamCaseId;
+      })
+      .filter((id) => {
+        return !seen.has(id);
+      });
+  }
+  return seen;
+};
+
 /** Refuses deleting a case another case reads as its upstream. */
 export const assertNoDependentCases = async (args: {
   caseDbId: number;
