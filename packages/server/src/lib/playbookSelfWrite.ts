@@ -2,11 +2,34 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { casesWithUpstreams } from './playbookCaseUpstreams';
+
+/** The cases `work` runs for: the case it names, or that of each execution in flight it names. */
+const casesOfWork = async (args: { work: string }): Promise<number[]> => {
+  const named = await db.PlaybookCase.findOne({
+    where: { publicId: args.work },
+    attributes: ['id'],
+  });
+  const executions = await db.PlaybookExecution.findAll({
+    where: {
+      status: ['queued', 'running'],
+      [Op.or]: [{ publicId: args.work }, { runId: args.work }],
+    },
+    attributes: ['caseId'],
+  });
+  return [
+    ...(named ? [named.id as number] : []),
+    ...executions.map((execution) => {
+      return execution.caseId;
+    }),
+  ];
+};
 
 /**
- * Refuses a write into a case from the work it is running: a run-as token
- * minted for the case, for one of its executions in flight, or for the task or
- * run one started. An executor feeding its own case would re-trigger itself.
+ * Refuses a write into a case from the work it is running or from the work of
+ * a case downstream of it: a run-as token minted for such a case, for one of
+ * its executions in flight, or for the task or run one started. An executor
+ * feeding its own case, or a case its case reads, would re-trigger itself.
  */
 export const assertNotOwnWork = async (args: {
   caseDbId: number;
@@ -15,19 +38,13 @@ export const assertNotOwnWork = async (args: {
 }): Promise<void> => {
   const work = args.runWorkPublicId;
   if (!work) return;
-  const own =
-    work === args.casePublicId ||
-    (await db.PlaybookExecution.count({
-      where: {
-        caseId: args.caseDbId,
-        status: ['queued', 'running'],
-        [Op.or]: [{ publicId: work }, { runId: work }],
-      },
-    })) > 0;
-  if (own) {
+  const reached = await casesWithUpstreams({
+    caseDbIds: await casesOfWork({ work }),
+  });
+  if (reached.has(args.caseDbId)) {
     throw new DomainError(
       'PLAYBOOK_SELF_WRITE',
-      `Case '${args.casePublicId}' cannot be written by work it is running.`,
+      `Case '${args.casePublicId}' cannot be written by work it, or a case reading it, is running.`,
       { work }
     );
   }
