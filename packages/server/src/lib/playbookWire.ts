@@ -13,8 +13,10 @@ import {
   type PlaybookNode,
   type PlaybookNodeKind,
   type PlaybookTransformation,
+  type PlaybookUpstream,
+  type PlaybookUpstreamRef,
 } from './playbookDefinition';
-import { validatePlaybookDefinition } from './playbookValidation';
+import type { PlaybookDefinitionProblem } from './playbookValidation';
 import { throwValidationProblems } from './validationProblems';
 
 /**
@@ -27,10 +29,13 @@ const MAX_NODES = 200;
 
 const MAX_INPUTS = 50;
 
+const MAX_UPSTREAMS = 20;
+
 const NODE_KINDS: ReadonlySet<string> = new Set([
   'collect',
   'execute',
   'confirm',
+  'upstream',
 ]);
 
 const EXECUTOR_TYPES: ReadonlySet<string> = new Set([
@@ -180,7 +185,9 @@ const readNodeHeader = (args: {
     throw invalid(`${path}.title must be a non-empty string.`);
   }
   if (typeof node.kind !== 'string' || !NODE_KINDS.has(node.kind)) {
-    throw invalid(`${path}.kind must be one of collect, execute or confirm.`);
+    throw invalid(
+      `${path}.kind must be one of collect, execute, confirm or upstream.`
+    );
   }
   if (node.final !== undefined && typeof node.final !== 'boolean') {
     throw invalid(`${path}.final must be a boolean.`);
@@ -193,9 +200,65 @@ const readNodeHeader = (args: {
   return { ...node, title: node.title, kind: node.kind, inputs: node.inputs };
 };
 
+/** An `upstream` node pulls one node of a bound case and reads nothing else. */
+const readUpstreamRef = (args: {
+  path: string;
+  node: ReturnType<typeof readNodeHeader>;
+}): PlaybookUpstreamRef | undefined => {
+  const { path, node } = args;
+  if (node.kind !== 'upstream') {
+    if (node.upstream !== undefined) {
+      throw invalid(`${path}.upstream is only read on an upstream node.`);
+    }
+    return undefined;
+  }
+  if (!isPlainObject(node.upstream)) {
+    throw invalid(`${path}.upstream must name an upstream and a node_id.`);
+  }
+  if (node.inputs.length > 0) {
+    throw invalid(`${path}.inputs must be empty on an upstream node.`);
+  }
+  return {
+    name: readIdentifier({
+      path: `${path}.upstream.name`,
+      value: node.upstream.name,
+    }),
+    node_id: readIdentifier({
+      path: `${path}.upstream.node_id`,
+      value: node.upstream.node_id,
+    }),
+  };
+};
+
+const readUpstreams = (
+  upstreams: unknown
+): { upstreams?: PlaybookUpstream[] } => {
+  if (upstreams === undefined) return {};
+  if (!Array.isArray(upstreams) || upstreams.length > MAX_UPSTREAMS) {
+    throw invalid(
+      `definition.upstreams must be an array of at most ${MAX_UPSTREAMS} upstreams.`
+    );
+  }
+  if (upstreams.length === 0) return {};
+  return {
+    upstreams: upstreams.map((item, index) => {
+      const at = `definition.upstreams[${index}]`;
+      if (!isPlainObject(item)) throw invalid(`${at} must be an object.`);
+      if (!isNonEmptyString(item.playbook_id)) {
+        throw invalid(`${at}.playbook_id must be a non-empty string.`);
+      }
+      return {
+        name: readIdentifier({ path: `${at}.name`, value: item.name }),
+        playbook_id: item.playbook_id,
+      };
+    }),
+  };
+};
+
 const readNode = (args: { path: string; node: unknown }): PlaybookNode => {
   const { path } = args;
   const node = readNodeHeader(args);
+  const upstream = readUpstreamRef({ path, node });
   const description = readOptionalString({
     path: `${path}.description`,
     value: node.description,
@@ -218,6 +281,7 @@ const readNode = (args: { path: string; node: unknown }): PlaybookNode => {
       return readInput({ path: `${path}.inputs[${index}]`, input });
     }),
     ...(executor && { executor }),
+    ...(upstream && { upstream }),
     ...(transformations && { transformations }),
   };
 };
@@ -241,16 +305,16 @@ export const parsePlaybookDefinition = (args: {
     );
   }
   return {
+    ...readUpstreams(definition.upstreams),
     nodes: definition.nodes.map((node, index) => {
       return readNode({ path: `definition.nodes[${index}]`, node });
     }),
   };
 };
 
-export const assertPlaybookDefinitionValid = (args: {
-  definition: PlaybookDefinition;
-}): void => {
-  const problems = validatePlaybookDefinition(args);
+export const throwPlaybookDefinitionProblems = (
+  problems: PlaybookDefinitionProblem[]
+): void => {
   if (problems.length > 0) {
     throwValidationProblems({
       code: 'PLAYBOOK_VALIDATION_FAILED',

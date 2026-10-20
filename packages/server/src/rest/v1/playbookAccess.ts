@@ -5,7 +5,7 @@ import type { PlaybookAuthor } from 'src/lib/playbookAuthor';
 import { assertCaseActorPin, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
-import { makeItemRouteAuthorizer } from './resourceAccess';
+import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
 
 /** Every `/playbooks/:playbook_id` route authorizes against the playbook's SRN. */
 export const playbookAccess = makeItemRouteAuthorizer({
@@ -69,5 +69,31 @@ export const playbookAuthorOf = (ctx: Context): PlaybookAuthor => {
   return {
     principal: resolveStartingPrincipal({ authUser: ctx.authUser }),
     isAllowed: ctx.authUser!.isAllowed,
+  };
+};
+
+/**
+ * Whether the caller may read a case, by the same check `GET` of it makes; a
+ * case the caller cannot read is one it cannot bind.
+ */
+export const caseReadableBy = (ctx: Context) => {
+  return async (casePublicId: string): Promise<boolean> => {
+    return authorizeResource({
+      ctx,
+      scope: await playbookCases.findScope({ id: casePublicId }),
+      resourceType: 'playbook_case',
+      resourceId: casePublicId,
+      action: 'playbooks:GetPlaybookCase',
+      onDenied: 'hide',
+      label: 'Playbook case',
+    }).then(
+      () => {
+        return true;
+      },
+      (error: unknown) => {
+        if (error instanceof DomainError) return false;
+        throw error;
+      }
+    );
   };
 };

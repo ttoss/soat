@@ -23,13 +23,18 @@ const anyValue: PlaybookConforms = () => {
   return true;
 };
 
+/** No upstream is bound: every case here stands alone. */
+const noUpstream = () => {
+  return undefined;
+};
+
 /** The states with every value conforming, unless a test says otherwise. */
 const nodeStates = (args: {
   definition: PlaybookDefinition;
   snapshot: PlaybookCaseSnapshot;
   conforms?: PlaybookConforms;
 }) => {
-  return playbookNodeStates({ conforms: anyValue, ...args });
+  return playbookNodeStates({ conforms: anyValue, pull: noUpstream, ...args });
 };
 
 const missingFor = (args: {
@@ -655,6 +660,7 @@ describe('missingFor', () => {
         node: 'costs',
         views: playbookNodeStates({
           definition,
+          pull: noUpstream,
           snapshot: {
             costs: {
               inputs: {

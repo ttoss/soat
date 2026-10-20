@@ -3568,6 +3568,41 @@ describe('MCP tools - happy path', () => {
       caseId = parseResult(caseRes).id;
     });
 
+    test('create-playbook-case binds a case of a declared upstream', async () => {
+      const dependent = await mcpCall('create-playbook', {
+        project_id: projectId,
+        name: 'mcp-pricing-monthly',
+        definition: {
+          upstreams: [{ name: 'pricing', playbook_id: playbookId }],
+          nodes: [
+            {
+              id: 'pricing',
+              title: 'Pricing',
+              kind: 'upstream',
+              upstream: { name: 'pricing', node_id: 'pricing' },
+              inputs: [],
+            },
+          ],
+        },
+      });
+      expect(dependent.status).toBe(200);
+
+      const res = await mcpCall('create-playbook-case', {
+        playbook_id: parseResult(dependent).id,
+        subject: 'ACME Ltda · 2026-08',
+        upstreams: { pricing: caseId },
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).upstreams).toEqual({ pricing: caseId });
+
+      // The bound case is deleted by a later test, so the binding goes first.
+      await mcpCall('delete-playbook-case', { case_id: parseResult(res).id });
+      await mcpCall('delete-playbook', {
+        playbook_id: parseResult(dependent).id,
+      });
+    });
+
     test('create-playbook returns the playbook at version 1', async () => {
       const res = await mcpCall('get-playbook', { playbook_id: playbookId });
 
@@ -3855,6 +3890,7 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(res).waves).toEqual([
         [
           {
+            case_id: caseId,
             node_id: 'revenue',
             input: 'amount',
             schema: { type: 'number' },
@@ -3863,6 +3899,7 @@ describe('MCP tools - happy path', () => {
         ],
         [
           {
+            case_id: caseId,
             node_id: 'pricing',
             input: 'margin',
             schema: { type: 'number' },

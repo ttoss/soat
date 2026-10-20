@@ -36,13 +36,13 @@ const filesMatching = (pattern, prefix = '') => {
  * A case answers three questions the same way for every reader and writer:
  * which values count as set (each input's schema), which lock orders writes
  * (the case's, before any of its rows), and which revision an entry takes (the
- * case's one counter). `playbookCases.ts` answers each once; a new site doing
+ * case's one counter). `playbookCaseStore.ts` answers each once; a new site doing
  * the work by hand is the one that would answer differently.
  */
 describe('playbook case chokepoints', () => {
   test('node states are computed only by caseNodeStates', () => {
     assert.deepEqual(filesMatching(/\bplaybookNodeStates\(/), [
-      'playbookCases.ts',
+      'playbookCaseStore.ts',
     ]);
   });
 
@@ -50,7 +50,7 @@ describe('playbook case chokepoints', () => {
     assert.deepEqual(filesMatching(/\bLOCK\.UPDATE\b/, 'playbook'), [
       // `lockCase` itself, and the settle's lock on the execution row it
       // takes after the case.
-      'playbookCases.ts',
+      'playbookCaseStore.ts',
       'playbookExecutionSettle.ts',
     ]);
     assert.doesNotMatch(
@@ -61,7 +61,7 @@ describe('playbook case chokepoints', () => {
 
   test('an entry is written only by appendEntries', () => {
     assert.deepEqual(filesMatching(/PlaybookEntry\.(create|bulkCreate)\(/), [
-      'playbookCases.ts',
+      'playbookCaseStore.ts',
     ]);
   });
 });

@@ -52,6 +52,7 @@ export { OrchestrationRunTask } from './OrchestrationRunTask';
 export { OrchestrationVersion } from './OrchestrationVersion';
 export { Playbook } from './Playbook';
 export { PlaybookCase } from './PlaybookCase';
+export { PlaybookCaseUpstream } from './PlaybookCaseUpstream';
 export { PlaybookEntry } from './PlaybookEntry';
 export { PlaybookExecution } from './PlaybookExecution';
 export { PlaybookExport } from './PlaybookExport';

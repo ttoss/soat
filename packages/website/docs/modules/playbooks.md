@@ -21,16 +21,16 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 ### Playbook
 
-| Field         | Type           | Description                                         |
-| ------------- | -------------- | --------------------------------------------------- |
-| `id`          | string         | Public identifier (`pbk_…`)                         |
-| `project_id`  | string         | Owning project                                      |
-| `name`        | string         | Human-readable name, unique per project             |
-| `description` | string \| null | Optional                                            |
-| `version`     | integer        | The definition's version; see [Versions](#versions) |
-| `definition`  | object         | `{ nodes }`, 1 to 200 [nodes](#node)                |
-| `created_at`  | string         | ISO 8601 creation timestamp                         |
-| `updated_at`  | string         | ISO 8601 last-update timestamp                      |
+| Field         | Type           | Description                                                                          |
+| ------------- | -------------- | ------------------------------------------------------------------------------------ |
+| `id`          | string         | Public identifier (`pbk_…`)                                                          |
+| `project_id`  | string         | Owning project                                                                       |
+| `name`        | string         | Human-readable name, unique per project                                              |
+| `description` | string \| null | Optional                                                                             |
+| `version`     | integer        | The definition's version; see [Versions](#versions)                                  |
+| `definition`  | object         | `{ upstreams?, nodes }`: up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node) |
+| `created_at`  | string         | ISO 8601 creation timestamp                                                          |
+| `updated_at`  | string         | ISO 8601 last-update timestamp                                                       |
 
 ### Node
 
@@ -39,21 +39,29 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `id`              | string  | Stable across versions. Letters, digits and underscores, starting with a letter or underscore                                                                                                                                            |
 | `title`           | string  | Human-readable label                                                                                                                                                                                                                     |
 | `description`     | string  | Optional                                                                                                                                                                                                                                 |
-| `kind`            | string  | `collect` (its output is its inputs), `execute` (its executor produces the output), `confirm` (a person confirms its inputs)                                                                                                             |
+| `kind`            | string  | `collect` (its output is its inputs), `execute` (its executor produces the output), `confirm` (a person confirms its inputs), `upstream` (its output is a node of a bound [upstream case](#upstream-cases))                              |
 | `final`           | boolean | A goal of the playbook. Default `false`                                                                                                                                                                                                  |
 | `inputs`          | array   | Up to 50 [inputs](#input)                                                                                                                                                                                                                |
 | `executor`        | object  | Required on an `execute` node, refused on any other: `{ type, id, input? }`, `type` one of `agent`, `tool`, `decider`, `workflow`, `orchestration`; `input` maps each field of the executor's input to JSON Logic over the node's inputs |
+| `upstream`        | object  | Required on an `upstream` node, refused on any other: `{ name, node_id }`, the declared upstream and the node of its playbook it pulls. An `upstream` node has no inputs and no executor                                                 |
 | `transformations` | array   | Final nodes only: `{ name, format, tool }`, a tool that renders the node's output as a file of `format`; see [Exports](#exports)                                                                                                         |
 
 ### Input
 
-| Field         | Type             | Description                                                                                             |
-| ------------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`        | string           | Unique in its node; same character rules as `id`                                                        |
-| `schema`      | object           | The JSON Schema a value must satisfy                                                                    |
-| `required`    | boolean          | The node cannot be reached while a required input is unset                                              |
-| `description` | string           | What to ask for; returned with the input when it is [missing](#what-a-node-still-needs)                 |
+| Field         | Type             | Description                                                                                                |
+| ------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `name`        | string           | Unique in its node; same character rules as `id`                                                           |
+| `schema`      | object           | The JSON Schema a value must satisfy                                                                       |
+| `required`    | boolean          | The node cannot be reached while a required input is unset                                                 |
+| `description` | string           | What to ask for; returned with the input when it is [missing](#what-a-node-still-needs)                    |
 | `source`      | string \| object | `manual`, or `{ node_id, field }` with `field` `output[.path]` or `input.<name>[.path]` of an earlier node |
+
+### Upstream
+
+| Field         | Type   | Description                                                                                                |
+| ------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| `name`        | string | Unique in the definition; same character rules as a node `id`                                              |
+| `playbook_id` | string | A playbook of the same project; in a [formation](./formations.md), a `{ "ref": … }` to one in the template |
 
 ### Case
 
@@ -65,106 +73,107 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `playbook_version`   | integer        | The version the case was created on and is evaluated against                                                                                                                                                                                                     |
 | `subject`            | string         | Who or what the case is about                                                                                                                                                                                                                                    |
 | `actor_id`           | string \| null | The [actor](./actors.md) the case belongs to; see [Cases of an end user](#cases-of-an-end-user)                                                                                                                                                                  |
+| `upstreams`          | object         | The case bound to each declared upstream, by name; `{}` for a playbook that declares none. See [Upstream cases](#upstream-cases)                                                                                                                                 |
 | `revision`           | integer        | The case's counter; every entry takes the next value                                                                                                                                                                                                             |
 | `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) of the case or of its [project](./projects.md) stands, else `running` while an execution is queued or runs its executor, else `waiting` while every execution in flight waits on a task or run it started, else `idle` |
 | `pause_requested_at` | string \| null | When the case was paused                                                                                                                                                                                                                                         |
-| `nodes`              | array          | On a single-case read: every node's `id`, `state`, `missing`, `blocked_by`, `run`, `inputs` and `output`                                                                                                                                                               |
+| `nodes`              | array          | On a single-case read: every node's `id`, `state`, `missing`, `blocked_by`, `run`, `inputs` and `output`                                                                                                                                                         |
 
 ### Entry
 
-| Field              | Type           | Description                                                                    |
-| ------------------ | -------------- | ------------------------------------------------------------------------------ |
-| `id`               | string         | Public identifier (`pbk_ent_…`)                                                |
-| `revision`         | integer        | The case revision it took                                                      |
-| `node_id`          | string         | The node's ID                                                                  |
-| `kind`             | string         | `input`, `output`, `confirmation` or `rejection`                               |
-| `input`            | string \| null | The input written, on an `input` entry                                         |
-| `value`            | any            | The value written                                                              |
-| `basis`            | object \| null | The revision of each input an output, confirmation or rejection was decided on |
-| `playbook_version` | integer        | The version the case was on when it was written                                |
-| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who wrote it: `user` or `api_key` and its id; null for an output the case wrote |
-| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
+| Field                                                   | Type           | Description                                                                                    |
+| ------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `id`                                                    | string         | Public identifier (`pbk_ent_…`)                                                                |
+| `revision`                                              | integer        | The case revision it took                                                                      |
+| `node_id`                                               | string         | The node's ID                                                                                  |
+| `kind`                                                  | string         | `input`, `output`, `confirmation` or `rejection`                                               |
+| `input`                                                 | string \| null | The input written, on an `input` entry                                                         |
+| `value`                                                 | any            | The value written                                                                              |
+| `basis`                                                 | object \| null | The revision of each input an output, confirmation or rejection was decided on                 |
+| `playbook_version`                                      | integer        | The version the case was on when it was written                                                |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who wrote it: `user` or `api_key` and its id; null for an output the case wrote                |
+| `on_behalf_of`                                          | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ### Execution
 
-| Field              | Type            | Description                                                                          |
-| ------------------ | --------------- | ------------------------------------------------------------------------------------ |
-| `id`               | string          | Public identifier (`pbk_exe_…`)                                                      |
-| `case_id`          | string          | The case                                                                             |
-| `node_id`          | string          | The node that ran                                                                    |
-| `playbook_version` | integer         | The version the case runs on                                                         |
-| `executor`         | object \| null  | `{ type, id }`; null for a `collect` node                                            |
-| `status`           | string          | `queued` until a worker claims it, `running`, then `completed` or `failed`           |
-| `result`           | string \| null  | Once settled: `current`, or `superseded` when the node's inputs changed while it ran |
-| `run_id`           | string \| null  | The generation, decision, task or orchestration run it started                       |
-| `input`            | any             | What the executor was given                                                          |
-| `output`           | any             | What the executor answered; null until it succeeds                                   |
-| `output_revision`  | integer \| null | The revision of the output entry it wrote; null when it wrote none                   |
-| `error`            | object \| null  | Why it failed                                                                        |
-| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the run; null when the case started it |
-| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
-| `finished_at`      | string \| null  | ISO 8601 settle timestamp                                                            |
+| Field                                                   | Type            | Description                                                                                    |
+| ------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
+| `id`                                                    | string          | Public identifier (`pbk_exe_…`)                                                                |
+| `case_id`                                               | string          | The case                                                                                       |
+| `node_id`                                               | string          | The node that ran                                                                              |
+| `playbook_version`                                      | integer         | The version the case runs on                                                                   |
+| `executor`                                              | object \| null  | `{ type, id }`; null for a `collect` node                                                      |
+| `status`                                                | string          | `queued` until a worker claims it, `running`, then `completed` or `failed`                     |
+| `result`                                                | string \| null  | Once settled: `current`, or `superseded` when the node's inputs changed while it ran           |
+| `run_id`                                                | string \| null  | The generation, decision, task or orchestration run it started                                 |
+| `input`                                                 | any             | What the executor was given                                                                    |
+| `output`                                                | any             | What the executor answered; null until it succeeds                                             |
+| `output_revision`                                       | integer \| null | The revision of the output entry it wrote; null when it wrote none                             |
+| `error`                                                 | object \| null  | Why it failed                                                                                  |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null  | Who asked for the run; null when the case started it                                           |
+| `on_behalf_of`                                          | object \| null  | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
+| `finished_at`                                           | string \| null  | ISO 8601 settle timestamp                                                                      |
 
 ### Export
 
-| Field              | Type           | Description                                                                        |
-| ------------------ | -------------- | ---------------------------------------------------------------------------------- |
-| `id`               | string         | Public identifier (`pbk_exp_…`)                                                    |
-| `case_id`          | string         | The case                                                                           |
-| `node_id`          | string         | The final node rendered                                                            |
-| `revision`         | integer        | The output or confirmation entry rendered                                          |
-| `playbook_version` | integer        | The version whose transformation rendered it                                       |
-| `transformation`   | string         | The transformation's `name`                                                        |
-| `format`           | string         | The transformation's `format`                                                      |
-| `tool_id`          | string         | The tool called                                                                    |
-| `status`           | string         | `running`, then `completed` or `failed`                                            |
-| `stale`            | boolean        | `revision` is no longer the node's current output, or the node is no longer `done` |
-| `file_id`          | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted       |
-| `error`            | object \| null | Why it failed                                                                      |
-| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the export |
-| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
-| `finished_at`      | string \| null | ISO 8601 settle timestamp                                                          |
+| Field                                                   | Type           | Description                                                                                    |
+| ------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `id`                                                    | string         | Public identifier (`pbk_exp_…`)                                                                |
+| `case_id`                                               | string         | The case                                                                                       |
+| `node_id`                                               | string         | The final node rendered                                                                        |
+| `revision`                                              | integer        | The output or confirmation entry rendered                                                      |
+| `playbook_version`                                      | integer        | The version whose transformation rendered it                                                   |
+| `transformation`                                        | string         | The transformation's `name`                                                                    |
+| `format`                                                | string         | The transformation's `format`                                                                  |
+| `tool_id`                                               | string         | The tool called                                                                                |
+| `status`                                                | string         | `running`, then `completed` or `failed`                                                        |
+| `stale`                                                 | boolean        | `revision` is no longer the node's current output, or the node is no longer `done`             |
+| `file_id`                                               | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted                   |
+| `error`                                                 | object \| null | Why it failed                                                                                  |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the export                                                                       |
+| `on_behalf_of`                                          | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
+| `finished_at`                                           | string \| null | ISO 8601 settle timestamp                                                                      |
 
 ### Upgrade
 
-| Field          | Type           | Description                                                                                                                                                                                      |
-| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`           | string         | Public identifier (`pbk_upg_…`)                                                                                                                                                                  |
-| `case_id`      | string         | The case                                                                                                                                                                                         |
-| `from_version` | integer        | The version the case was on                                                                                                                                                                      |
-| `to_version`   | integer        | The version it moved to                                                                                                                                                                          |
-| `diff`         | object         | `{ added, removed, changed }`: node IDs added and removed, and each node, by `node_id`, whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
-| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case |
-| `on_behalf_of` | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
+| Field                                                   | Type           | Description                                                                                                                                                                                                    |
+| ------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                    | string         | Public identifier (`pbk_upg_…`)                                                                                                                                                                                |
+| `case_id`                                               | string         | The case                                                                                                                                                                                                       |
+| `from_version`                                          | integer        | The version the case was on                                                                                                                                                                                    |
+| `to_version`                                            | integer        | The version it moved to                                                                                                                                                                                        |
+| `diff`                                                  | object         | `{ added, removed, changed }`: node IDs added and removed, and each node, by `node_id`, whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
+| `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case                                                                                                                                                                                          |
+| `on_behalf_of`                                          | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call))                                                                                                                 |
 
 ## Key Concepts
 
 ### Definition checks
 
-A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one as a [validation problem](/docs/api#validation-problems) `{ code, path, message }`: `DUPLICATE_NODE`, `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`, `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`, `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`, with `path` naming the node, input or transformation (`definition.nodes[0].inputs[1].source.node_id`). A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing.
+A create or update is refused with `400 PLAYBOOK_VALIDATION_FAILED` when the definition holds a duplicate node or input, an input reading a missing node or a field that node does not declare, an `execute` node without an executor or another kind with one, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one as a [validation problem](/docs/api#validation-problems) `{ code, path, message }`: `DUPLICATE_NODE`, `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`, `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`, `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION`, `CYCLE`, `DUPLICATE_UPSTREAM`, `UNKNOWN_UPSTREAM` (an upstream naming no playbook of the project, or an `upstream` node naming an undeclared upstream) or `UPSTREAM_CYCLE` (an upstream that reads the playbook back through its own upstreams), with `path` naming the node, input or transformation (`definition.nodes[0].inputs[1].source.node_id`). A transformation `format` outside the [export formats](#exports) is `400 VALIDATION_FAILED`. An `upstream` node's `node_id`, and every field read from that node, are checked against the upstream playbook's current version (`MISSING_NODE`, `UNKNOWN_FIELD`). [`POST /api/v1/playbooks/validate`](/docs/api/playbooks/validate-playbook) answers the same check without writing, except the checks against the project's other playbooks.
 
 ### Versions
 
 `version` starts at 1 and increments on every write that changes `definition`; each version's definition is archived. A rename, a new description or a rewrite of the definition the playbook already holds leaves it alone. A case runs on the version it was created on, so editing a playbook never reshapes a case in flight until it is [upgraded](#upgrading-a-case).
 
-[`PATCH /api/v1/playbooks/{playbook_id}`](/docs/api/playbooks/update-playbook) takes `expected_version` (or `If-Match`) and answers `409 VERSION_CONFLICT` on a stale one. [`POST /api/v1/playbooks/{playbook_id}/versions/{version}/restore`](/docs/api/playbooks/restore-playbook-version) writes an archived definition back as a new version. A playbook with cases cannot be deleted (`409 PLAYBOOK_HAS_CASES`).
+[`PATCH /api/v1/playbooks/{playbook_id}`](/docs/api/playbooks/update-playbook) takes `expected_version` (or `If-Match`) and answers `409 VERSION_CONFLICT` on a stale one. [`POST /api/v1/playbooks/{playbook_id}/versions/{version}/restore`](/docs/api/playbooks/restore-playbook-version) writes an archived definition back as a new version. A playbook with cases cannot be deleted (`409 PLAYBOOK_HAS_CASES`), nor one another playbook's current definition declares as an upstream (`409 PLAYBOOK_HAS_DEPENDENTS`, `meta.playbooks` naming them).
 
 ### Node states
 
 Computed from the case's entries and executions on each read, never stored:
 
-| State      | When                                                                                   |
-| ---------- | -------------------------------------------------------------------------------------- |
-| `blocked`  | A required input is unset or refused by its schema, or reads a node that is not `done` |
-| `ready`    | Every required input is set and current, and there is no output yet                    |
-| `running`  | An execution is queued or runs its executor                                            |
-| `waiting`  | Its execution waits on the workflow task or orchestration run it started               |
-| `done`     | The output exists and every input still has the revision it was produced from          |
-| `stale`    | The output exists and an input changed since                                           |
-| `failed`   | The last execution failed on the current inputs                                        |
-| `rejected` | A `confirm` node's inputs were rejected and have not changed since                     |
+| State      | When                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `blocked`  | A required input is unset or refused by its schema, or reads a node that is not `done`; an `upstream` node whose pulled node is not `done`, or missing from the bound case's version |
+| `ready`    | Every required input is set and current, and there is no output yet                                                                                                                  |
+| `running`  | An execution is queued or runs its executor                                                                                                                                          |
+| `waiting`  | Its execution waits on the workflow task or orchestration run it started                                                                                                             |
+| `done`     | The output exists and every input still has the revision it was produced from                                                                                                        |
+| `stale`    | The output exists and an input changed since                                                                                                                                         |
+| `failed`   | The last execution failed on the current inputs                                                                                                                                      |
+| `rejected` | A `confirm` node's inputs were rejected and have not changed since                                                                                                                   |
 
-`missing` names the required inputs a node lacks; `blocked_by` names the nodes it reads that are not `done`.
+`missing` names the required inputs a node lacks; `blocked_by` names the nodes it reads that are not `done`, and on an `upstream` node the `<upstream>.<node_id>` it pulls.
 
 A `waiting` node names what it waits on in `run`, read live on every case read and null in every other state: `{ "type": "task", "id", "state", "automation_status" }` for a workflow task, `{ "type": "orchestration_run", "id", "status" }` for a run. A task whose state's dispatch failed with no `on_failure` reads `automation_status: "failed"`: it waits on a person to move it, and the node settles when it closes.
 
@@ -179,7 +188,7 @@ A `waiting` node names what it waits on in `run`, read live on every case read a
 
 ### What a node still needs
 
-[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one's required inputs are filled. Each carries its `schema` and `description`, which is what an agent asks for, and `required`: an optional input is listed so the agent asks for it too, but it never blocks a node.
+[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one's required inputs are filled. Each carries its `schema` and `description`, which is what an agent asks for, and `required`: an optional input is listed so the agent asks for it too, but it never blocks a node. Every item names the `case_id` to write it to: an `upstream` node before `node_id` adds the missing inputs of its bound case, so one read lists everything to ask.
 
 ### The cascade
 
@@ -227,12 +236,27 @@ Every operation on one case also takes `actor_id` as a query parameter: given, t
 ```json
 {
   "type": "builtin",
-  "actions": ["list-playbook-cases", "get-playbook-case", "get-playbook-case-missing", "write-playbook-case-inputs"],
+  "actions": [
+    "list-playbook-cases",
+    "get-playbook-case",
+    "get-playbook-case-missing",
+    "write-playbook-case-inputs"
+  ],
   "preset_parameters": { "actor_id": "{{context:actor_id}}" }
 }
 ```
 
 The pin reaches the create, the listing and every case operation alike, and the model cannot override it. `actor_id` in `tool_context` is server-set from the [session](./sessions.md)'s actor, so a turn with no actor fails the call with `400 MISSING_TOOL_CONTEXT_KEY` rather than reaching every case. Deleting an actor leaves its cases with `actor_id: null`.
+
+### Upstream cases
+
+A playbook declares `upstreams`, other playbooks of its project, and reads one of their nodes through an `upstream` node; later nodes read its output with an ordinary `{ node_id, field }` source. One `company` case (CNPJ, regime) can feed one DRE case per month this way, without copying a value.
+
+- **Binding.** A case of such a playbook is created with `upstreams: { <name>: <case_id> }`, every declared name and no other, each a case of the declared playbook in the same project, of the same `actor_id`, that the caller may read (`playbooks:GetPlaybookCase`). Anything else is `400 PLAYBOOK_CASE_UPSTREAM_INVALID`, with a case the caller cannot read refused as one that does not exist. The binding is fixed for the life of the case; many cases may share one upstream case.
+- **Pull.** The `upstream` node's first pull is automatic: at create, or when the pulled node first reaches `done`. It runs as an execution with no executor, and its output is the pulled node's output.
+- **Refresh.** After that, a change upstream makes the node `stale` and the [cascade](#the-cascade) never runs it, so a closed month is never rewritten by a later profile change. [Running the node](#running-a-node) pulls the current value; the dependent case's own cascade then proceeds.
+- **Versions.** A case reads its bound case's own version, and follows it when that case is [upgraded](#upgrading-a-case); a pulled node the new version lacks reads `blocked`. An `upstream` node naming an upstream the case has no binding for, after an upgrade of the dependent case to a version declaring a new one, reads `blocked` too.
+- **Deleting.** A case other cases are bound to is `409 PLAYBOOK_CASE_HAS_DEPENDENTS`, `meta.cases` naming them; delete those first.
 
 ### Confirming a node
 
@@ -440,6 +464,43 @@ curl -X POST https://api.example.com/api/v1/playbooks/pbk_…/cases \
 </TabItem>
 </Tabs>
 
+### Bind an upstream case
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-playbook-case --playbook-id pbk_… --subject 'ACME Ltda · 2026-08' \
+  --upstreams '{ "company": "pbk_case_…" }'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.playbooks.createPlaybookCase({
+  path: { playbook_id: 'pbk_…' },
+  body: {
+    subject: 'ACME Ltda · 2026-08',
+    upstreams: { company: 'pbk_case_…' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/playbooks/pbk_…/cases \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "subject": "ACME Ltda · 2026-08", "upstreams": { "company": "pbk_case_…" } }'
+```
+
+</TabItem>
+</Tabs>
+
 ### Ask what a node still needs
 
 <Tabs groupId="client">
@@ -476,8 +537,20 @@ curl "https://api.example.com/api/v1/playbook-cases/pbk_case_…/missing?node_id
   "case_id": "pbk_case_…",
   "node_id": "pricing",
   "waves": [
-    [{ "node_id": "revenue", "input": "amount", "schema": { "type": "number" } }],
-    [{ "node_id": "pricing", "input": "margin", "schema": { "type": "number" } }]
+    [
+      {
+        "node_id": "revenue",
+        "input": "amount",
+        "schema": { "type": "number" }
+      }
+    ],
+    [
+      {
+        "node_id": "pricing",
+        "input": "margin",
+        "schema": { "type": "number" }
+      }
+    ]
   ]
 }
 ```
@@ -510,7 +583,12 @@ const { data, error } = await soat.playbooks.writePlaybookCaseInputs({
         value: 4000000,
         expected_revision: null,
       },
-      { node_id: 'pricing', name: 'margin', value: 0.3, expected_revision: null },
+      {
+        node_id: 'pricing',
+        name: 'margin',
+        value: 0.3,
+        expected_revision: null,
+      },
     ],
   },
 });
@@ -745,26 +823,29 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 
 ## Errors
 
-| Code                              | Status | When                                                                                                                                                                                                                           |
-| --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Code                              | Status | When                                                                                                                                                                                                                                        |
+| --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `VALIDATION_FAILED`               | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node_id` on `missing` or `node` on a run; on an export, a node without transformations, an undeclared transformation or a revision that is no output of the node |
 | `ACTOR_NOT_FOUND`                 | 400    | An `actor_id` on a case create that names no actor of the playbook's project                                                                                                                                                                |
-| `PLAYBOOK_VALIDATION_FAILED`      | 400    | The definition has graph problems; `meta.problems` lists them                                                                                                                                                                  |
-| `PLAYBOOK_INPUT_INVALID`          | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                                                                                                                                          |
-| `NAME_CONFLICT`                   | 409    | Another playbook in the project has the name                                                                                                                                                                                   |
-| `VERSION_CONFLICT`                | 409    | `expected_version` is stale                                                                                                                                                                                                    |
-| `PLAYBOOK_HAS_CASES`              | 409    | A delete of a playbook that has cases                                                                                                                                                                                          |
-| `PLAYBOOK_INPUT_CONFLICT`         | 409    | An input write's `expected_revision` is not the field's current one                                                                                                                                                            |
-| `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | The version's author may not start an executor the definition names                                                                                                                                                            |
-| `PLAYBOOK_AUTHOR_UNAVAILABLE`     | 409    | The version has no author a node can run as                                                                                                                                                                                    |
-| `PLAYBOOK_NODE_NOT_RUNNABLE`      | 409    | The node is a `confirm` node, blocked, `running` or `waiting`                                                                                                                                                                  |
-| `PLAYBOOK_CASE_PAUSED`            | 409    | A run of a node in a paused case                                                                                                                                                                                               |
-| `PLAYBOOK_CASE_NOT_PAUSED`        | 409    | A resume of a case that is not paused                                                                                                                                                                                          |
-| `PROJECT_PAUSED`                  | 409    | A run, an export or a case resume while the case's [project](./projects.md) is paused                                                                                                                                          |
-| `PLAYBOOK_NODE_NOT_CONFIRMABLE`   | 409    | A confirmation of a node that is not a `confirm` node, or is blocked                                                                                                                                                           |
-| `PLAYBOOK_SELF_WRITE`             | 403    | An input write, confirmation or upgrade from the case's own work                                                                                                                                                               |
-| `PLAYBOOK_NODE_NOT_EXPORTABLE`    | 409    | An export of the latest revision of a node that is not `done`                                                                                                                                                                  |
-| `PLAYBOOK_EXPORT_FAILED`          | 422    | On an export's `error`: its tool failed or answered no file                                                                                                                                                                    |
-| `PLAYBOOK_EXPORT_FORMAT_MISMATCH` | 422    | On an export's `error`: its file is not of the transformation's `format`                                                                                                                                                       |
-| `PLAYBOOK_EXPORT_INTERRUPTED`     | 500    | On an export's `error`: the server stopped while rendering it                                                                                                                                                                  |
-| `PLAYBOOK_CASE_BUSY`              | 409    | An upgrade while one of the case's executions is running                                                                                                                                                                       |
+| `PLAYBOOK_VALIDATION_FAILED`      | 400    | The definition has graph problems; `meta.problems` lists them                                                                                                                                                                               |
+| `PLAYBOOK_INPUT_INVALID`          | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                                                                                                                                                       |
+| `NAME_CONFLICT`                   | 409    | Another playbook in the project has the name                                                                                                                                                                                                |
+| `VERSION_CONFLICT`                | 409    | `expected_version` is stale                                                                                                                                                                                                                 |
+| `PLAYBOOK_HAS_CASES`              | 409    | A delete of a playbook that has cases                                                                                                                                                                                                       |
+| `PLAYBOOK_HAS_DEPENDENTS`         | 409    | A delete of a playbook another playbook declares as an upstream                                                                                                                                                                             |
+| `PLAYBOOK_CASE_UPSTREAM_INVALID`  | 400    | A case create whose `upstreams` leaves a declared upstream unbound, names an undeclared one, or binds a case of another playbook, project or actor, or one the caller may not read                                                          |
+| `PLAYBOOK_CASE_HAS_DEPENDENTS`    | 409    | A delete of a case other cases are bound to as their upstream                                                                                                                                                                               |
+| `PLAYBOOK_INPUT_CONFLICT`         | 409    | An input write's `expected_revision` is not the field's current one                                                                                                                                                                         |
+| `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | The version's author may not start an executor the definition names                                                                                                                                                                         |
+| `PLAYBOOK_AUTHOR_UNAVAILABLE`     | 409    | The version has no author a node can run as                                                                                                                                                                                                 |
+| `PLAYBOOK_NODE_NOT_RUNNABLE`      | 409    | The node is a `confirm` node, blocked, `running` or `waiting`                                                                                                                                                                               |
+| `PLAYBOOK_CASE_PAUSED`            | 409    | A run of a node in a paused case                                                                                                                                                                                                            |
+| `PLAYBOOK_CASE_NOT_PAUSED`        | 409    | A resume of a case that is not paused                                                                                                                                                                                                       |
+| `PROJECT_PAUSED`                  | 409    | A run, an export or a case resume while the case's [project](./projects.md) is paused                                                                                                                                                       |
+| `PLAYBOOK_NODE_NOT_CONFIRMABLE`   | 409    | A confirmation of a node that is not a `confirm` node, or is blocked                                                                                                                                                                        |
+| `PLAYBOOK_SELF_WRITE`             | 403    | An input write, confirmation or upgrade from the case's own work                                                                                                                                                                            |
+| `PLAYBOOK_NODE_NOT_EXPORTABLE`    | 409    | An export of the latest revision of a node that is not `done`                                                                                                                                                                               |
+| `PLAYBOOK_EXPORT_FAILED`          | 422    | On an export's `error`: its tool failed or answered no file                                                                                                                                                                                 |
+| `PLAYBOOK_EXPORT_FORMAT_MISMATCH` | 422    | On an export's `error`: its file is not of the transformation's `format`                                                                                                                                                                    |
+| `PLAYBOOK_EXPORT_INTERRUPTED`     | 500    | On an export's `error`: the server stopped while rendering it                                                                                                                                                                               |
+| `PLAYBOOK_CASE_BUSY`              | 409    | An upgrade while one of the case's executions is running                                                                                                                                                                                    |
