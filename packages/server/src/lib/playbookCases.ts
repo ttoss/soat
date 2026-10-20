@@ -2,206 +2,44 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { Transaction } from './dbTransaction';
-import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import { automationWhere, caseAutomation } from './playbookCaseAutomation';
 import {
-  conformsToInputSchema,
-  snapshotFromRecords,
-} from './playbookCaseState';
-import type { JsonValue, PlaybookDefinition } from './playbookDefinition';
+  caseDefinition,
+  caseIncludes,
+  caseNodeStates,
+  type PlaybookCaseRow,
+  playbookCases,
+} from './playbookCaseStore';
+import {
+  assertNoDependentCases,
+  caseUpstreamIds,
+  readCaseBindings,
+  writeCaseBindings,
+} from './playbookCaseUpstreams';
+import type { PlaybookDefinition } from './playbookDefinition';
 import { type PlaybookNodeRun, playbookNodeRuns } from './playbookNodeRuns';
 import { playbooks } from './playbooks';
-import {
-  type PlaybookBasis,
-  type PlaybookCaseSnapshot,
-  playbookNodeStates,
-  type PlaybookNodeView,
-} from './playbookState';
-import { playbookVersionStore } from './playbookVersionSnapshot';
+import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
 import { parsePlaybookDefinition } from './playbookWire';
-import { createdByColumns, type RequestPrincipal } from './principals';
-import { makeResourceAccessor } from './resourceAccessor';
-import { toResourceRef } from './resourceVersions';
+
+export {
+  appendEntries,
+  assertCaseAcceptsWork,
+  caseDefinition,
+  caseNodeStates,
+  caseSnapshot,
+  caseStates,
+  lockCase,
+  type PlaybookCaseRow,
+  playbookCases,
+  type PlaybookEntryWrite,
+  versionDefinition,
+  withLockedCase,
+} from './playbookCaseStore';
 
 const log = createDebug('soat:playbookCases');
-
-export type PlaybookCaseRow = InstanceType<(typeof db)['PlaybookCase']> & {
-  project: { publicId: string };
-  playbook: InstanceType<(typeof db)['Playbook']>;
-  actor: { publicId: string } | null;
-};
-
-const caseIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.Playbook, as: 'playbook' },
-    { model: db.Actor, as: 'actor', attributes: ['publicId'] },
-  ];
-};
-
-export const playbookCases = makeResourceAccessor<PlaybookCaseRow>({
-  model: () => {
-    return db.PlaybookCase;
-  },
-  includes: caseIncludes,
-  label: 'Playbook case',
-});
-
-/** The definition a version of the case's playbook holds. */
-export const versionDefinition = async (args: {
-  row: PlaybookCaseRow;
-  version: number;
-}): Promise<PlaybookDefinition> => {
-  const version = await playbookVersionStore.findVersionRow({
-    resource: toResourceRef(args.row.playbook),
-    version: args.version,
-  });
-  const config = playbookVersionStore.readArchivedConfig(version);
-  return parsePlaybookDefinition({ definition: config.definition });
-};
-
-/** The definition of the version a case is pinned to. */
-export const caseDefinition = (args: {
-  row: PlaybookCaseRow;
-}): Promise<PlaybookDefinition> => {
-  return versionDefinition({
-    row: args.row,
-    version: args.row.playbookVersion,
-  });
-};
-
-export const caseSnapshot = async (args: {
-  caseDbId: number;
-  transaction?: Transaction;
-}): Promise<PlaybookCaseSnapshot> => {
-  const [entries, executions] = await Promise.all([
-    db.PlaybookEntry.findAll({
-      where: { caseId: args.caseDbId },
-      order: [['revision', 'ASC']],
-      transaction: args.transaction,
-    }),
-    db.PlaybookExecution.findAll({
-      where: { caseId: args.caseDbId },
-      order: [['id', 'ASC']],
-      transaction: args.transaction,
-    }),
-  ]);
-  return snapshotFromRecords({ entries, executions });
-};
-
-/**
- * Every node's state in a case, with each input's schema deciding what counts
- * as set. The one read of node states, so no reader can count a value its
- * schema refuses.
- */
-export const caseNodeStates = async (args: {
-  caseDbId: number;
-  definition: PlaybookDefinition;
-  transaction?: Transaction;
-}): Promise<{
-  snapshot: PlaybookCaseSnapshot;
-  views: Map<string, PlaybookNodeView>;
-}> => {
-  const snapshot = await caseSnapshot(args);
-  return {
-    snapshot,
-    views: playbookNodeStates({
-      definition: args.definition,
-      snapshot,
-      conforms: conformsToInputSchema,
-    }),
-  };
-};
-
-type CaseRow = InstanceType<(typeof db)['PlaybookCase']>;
-
-/** The case row under its update lock; null once the case is deleted. */
-export const lockCase = (args: {
-  caseDbId: number;
-  transaction: Transaction;
-}): Promise<CaseRow | null> => {
-  return db.PlaybookCase.findByPk(args.caseDbId, {
-    lock: args.transaction.LOCK.UPDATE,
-    transaction: args.transaction,
-  });
-};
-
-/**
- * Runs `work` holding the case's lock. Every write to a case locks the case
- * before any of its rows, so the revision counter and every state check read
- * what the previous writer committed.
- */
-export const withLockedCase = <T>(args: {
-  row: { id?: unknown; publicId: string };
-  work: (locked: { locked: CaseRow; transaction: Transaction }) => Promise<T>;
-}): Promise<T> => {
-  return db.sequelize.transaction(async (transaction) => {
-    const locked = await lockCase({
-      caseDbId: args.row.id as number,
-      transaction,
-    });
-    if (!locked) throw playbookCases.notFound(args.row.publicId);
-    return args.work({ locked, transaction });
-  });
-};
-
-/** Refuses to start work in a paused case. */
-export const assertCaseAcceptsWork = (args: {
-  locked: CaseRow;
-  publicId: string;
-}): void => {
-  if (args.locked.pauseRequestedAt) {
-    throw new DomainError(
-      'PLAYBOOK_CASE_PAUSED',
-      `Case '${args.publicId}' is paused.`
-    );
-  }
-};
-
-export type PlaybookEntryWrite = {
-  node: string;
-  kind: 'input' | 'output' | 'confirmation' | 'rejection';
-  field: string | null;
-  value: JsonValue | Record<string, unknown>;
-  basis: PlaybookBasis | null;
-  playbookVersion: number;
-  createdBy: RequestPrincipal | null;
-  onBehalfOf: OnBehalfOf | null;
-};
-
-/**
- * Appends entries to a locked case, each at the next revision of the case's
- * one counter; answers the revisions written.
- */
-export const appendEntries = async (args: {
-  locked: CaseRow;
-  entries: PlaybookEntryWrite[];
-  transaction: Transaction;
-}): Promise<number[]> => {
-  const { locked, transaction } = args;
-  const revisions: number[] = [];
-  for (const { createdBy, ...entry } of args.entries) {
-    const revision = locked.revision + revisions.length + 1;
-    await db.PlaybookEntry.create(
-      {
-        ...entry,
-        ...createdByColumns(createdBy),
-        caseId: locked.id as number,
-        revision,
-      },
-      { transaction }
-    );
-    revisions.push(revision);
-  }
-  if (revisions.length > 0) {
-    locked.revision += revisions.length;
-    await locked.save({ transaction });
-  }
-  return revisions;
-};
 
 const mapNodes = (args: {
   definition: PlaybookDefinition;
@@ -250,6 +88,9 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
     playbook_version: row.playbookVersion,
     subject: row.subject,
     actor_id: row.actor?.publicId ?? null,
+    upstreams: (await caseUpstreamIds({ caseDbIds: [row.id as number] }))(
+      row.id as number
+    ),
     revision: row.revision,
     ...(await caseAutomation({ rows: [row] }))(row),
     nodes: mapNodes({
@@ -266,10 +107,12 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
 export type MappedPlaybookCase = Awaited<ReturnType<typeof mapPlaybookCase>>;
 
 /** A case outside a list: the listing carries no node states. */
-const mapCaseSummary = (
-  row: PlaybookCaseRow,
-  automation: Awaited<ReturnType<typeof caseAutomation>>
-) => {
+const mapCaseSummary = (args: {
+  row: PlaybookCaseRow;
+  automation: Awaited<ReturnType<typeof caseAutomation>>;
+  upstreams: Awaited<ReturnType<typeof caseUpstreamIds>>;
+}) => {
+  const { row, automation } = args;
   return {
     id: row.publicId,
     project_id: row.project.publicId,
@@ -277,6 +120,7 @@ const mapCaseSummary = (
     playbook_version: row.playbookVersion,
     subject: row.subject,
     actor_id: row.actor?.publicId ?? null,
+    upstreams: args.upstreams(row.id as number),
     revision: row.revision,
     ...automation(row),
     created_at: row.createdAt,
@@ -310,6 +154,9 @@ export const createPlaybookCase = async (args: {
   playbookId: string;
   subject: unknown;
   actorId?: unknown;
+  upstreams?: unknown;
+  /** Whether the caller may read a case it binds as an upstream. */
+  canReadCase: (casePublicId: string) => Promise<boolean>;
 }): Promise<MappedPlaybookCase> => {
   log('createPlaybookCase: playbookId=%s', args.playbookId);
   if (typeof args.subject !== 'string' || args.subject.trim() === '') {
@@ -327,14 +174,33 @@ export const createPlaybookCase = async (args: {
     actorId: args.actorId,
     projectId: playbook.projectId,
   });
+  const bindings = await readCaseBindings({
+    definition: parsePlaybookDefinition({ definition: playbook.definition }),
+    raw: args.upstreams,
+    projectId: playbook.projectId,
+    actorDbId,
+    canRead: args.canReadCase,
+  });
+  const subject = args.subject;
   // A case runs on the version it was created on; editing the playbook later
   // never reshapes it.
-  const created = await db.PlaybookCase.create({
-    projectId: playbook.projectId,
-    playbookId: playbook.id as number,
-    playbookVersion: playbook.version,
-    subject: args.subject,
-    actorId: actorDbId,
+  const created = await db.sequelize.transaction(async (transaction) => {
+    const row = await db.PlaybookCase.create(
+      {
+        projectId: playbook.projectId,
+        playbookId: playbook.id as number,
+        playbookVersion: playbook.version,
+        subject,
+        actorId: actorDbId,
+      },
+      { transaction }
+    );
+    await writeCaseBindings({
+      caseDbId: row.id as number,
+      bindings,
+      transaction,
+    });
+    return row;
   });
 
   log('createPlaybookCase: created id=%s', created.publicId);
@@ -395,10 +261,15 @@ export const listPlaybookCases = async (args: {
     },
   });
   const automation = await caseAutomation({ rows: page.data });
+  const upstreams = await caseUpstreamIds({
+    caseDbIds: page.data.map((row) => {
+      return row.id as number;
+    }),
+  });
   return {
     ...page,
     data: page.data.map((row) => {
-      return mapCaseSummary(row, automation);
+      return mapCaseSummary({ row, automation, upstreams });
     }),
   };
 };
@@ -433,6 +304,10 @@ export const deletePlaybookCase = async (args: {
 }): Promise<void> => {
   log('deletePlaybookCase: id=%s', args.id);
   const row = await playbookCases.getByPublicId(args);
-  // Entries cascade with the case.
+  await assertNoDependentCases({
+    caseDbId: row.id as number,
+    publicId: row.publicId,
+  });
+  // Entries and the case's own bindings cascade with the case.
   await row.destroy();
 };

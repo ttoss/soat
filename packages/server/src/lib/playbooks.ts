@@ -10,6 +10,10 @@ import {
 } from './playbookAuthor';
 import type { PlaybookDefinition } from './playbookDefinition';
 import {
+  playbookDependents,
+  playbookUpstreamProblems,
+} from './playbookUpstreams';
+import {
   type PlaybookDefinitionProblem,
   validatePlaybookDefinition,
 } from './playbookValidation';
@@ -18,8 +22,8 @@ import {
   playbookVersionStore,
 } from './playbookVersionSnapshot';
 import {
-  assertPlaybookDefinitionValid,
   parsePlaybookDefinition,
+  throwPlaybookDefinitionProblems,
 } from './playbookWire';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
@@ -91,10 +95,20 @@ const assertNameAvailable = async (args: {
   );
 };
 
-/** Parses and validates a definition from the wire; throws on any problem. */
-const readDefinition = (definition: unknown): PlaybookDefinition => {
-  const parsed = parsePlaybookDefinition({ definition });
-  assertPlaybookDefinitionValid({ definition: parsed });
+/**
+ * Parses and validates a definition from the wire, its upstreams against the
+ * project's playbooks; throws on any problem.
+ */
+const readDefinition = async (args: {
+  definition: unknown;
+  projectId: number;
+  playbookId?: string;
+}): Promise<PlaybookDefinition> => {
+  const parsed = parsePlaybookDefinition({ definition: args.definition });
+  throwPlaybookDefinitionProblems([
+    ...validatePlaybookDefinition({ definition: parsed }),
+    ...(await playbookUpstreamProblems({ ...args, definition: parsed })),
+  ]);
   return parsed;
 };
 
@@ -124,7 +138,10 @@ export const createPlaybook = async (
 
   const name = validateName(args.name);
   const description = readDescription(args.description);
-  const definition = readDefinition(args.definition);
+  const definition = await readDefinition({
+    definition: args.definition,
+    projectId: args.projectId,
+  });
   await assertNameAvailable({ projectId: args.projectId, name });
   const project = await db.Project.findByPk(args.projectId, {
     attributes: ['publicId'],
@@ -213,7 +230,13 @@ export const updatePlaybook = async (
     id: args.id,
   });
   const definition =
-    args.definition === undefined ? undefined : readDefinition(args.definition);
+    args.definition === undefined
+      ? undefined
+      : await readDefinition({
+          definition: args.definition,
+          projectId: playbook.projectId,
+          playbookId: playbook.publicId,
+        });
   if (definition !== undefined) {
     await assertAuthorCanRun({
       definition,
@@ -266,22 +289,40 @@ const casesOf = (playbook: PlaybookRow): Promise<number> => {
   });
 };
 
-const hasCasesMessage = (args: { id: string; cases: number }): string => {
-  return `Playbook '${args.id}' has ${args.cases} case(s) and cannot be deleted.`;
+/**
+ * Why deleting the playbook would refuse, or `null` when it would not: it has
+ * cases, or another playbook's current definition declares it an upstream.
+ */
+const deletionBlocker = async (
+  playbook: PlaybookRow
+): Promise<StoredError | null> => {
+  const cases = await casesOf(playbook);
+  if (cases > 0) {
+    return {
+      code: 'PLAYBOOK_HAS_CASES',
+      message: `Playbook '${playbook.publicId}' has ${cases} case(s) and cannot be deleted.`,
+      meta: { cases },
+    };
+  }
+  const dependents = await playbookDependents({
+    projectId: playbook.projectId,
+    publicId: playbook.publicId,
+  });
+  if (dependents.length > 0) {
+    return {
+      code: 'PLAYBOOK_HAS_DEPENDENTS',
+      message: `Playbook '${playbook.publicId}' is an upstream of ${dependents.length} playbook(s) and cannot be deleted.`,
+      meta: { playbooks: dependents },
+    };
+  }
+  return null;
 };
 
-/** Why deleting the playbook would refuse, or `null` when it would not. */
 export const findPlaybookDeletionBlocker = async (args: {
   id: string;
 }): Promise<StoredError | null> => {
   log('findPlaybookDeletionBlocker: id=%s', args.id);
-  const cases = await casesOf(await playbooks.getByPublicId(args));
-  if (cases === 0) return null;
-  return {
-    code: 'PLAYBOOK_HAS_CASES',
-    message: hasCasesMessage({ id: args.id, cases }),
-    meta: { cases },
-  };
+  return deletionBlocker(await playbooks.getByPublicId(args));
 };
 
 export const deletePlaybook = async (args: {
@@ -291,13 +332,9 @@ export const deletePlaybook = async (args: {
   log('deletePlaybook: id=%s', args.id);
   const playbook = await playbooks.getByPublicId(args);
 
-  const cases = await casesOf(playbook);
-  if (cases > 0) {
-    throw new DomainError(
-      'PLAYBOOK_HAS_CASES',
-      hasCasesMessage({ id: args.id, cases }),
-      { cases }
-    );
+  const blocker = await deletionBlocker(playbook);
+  if (blocker) {
+    throw new DomainError(blocker.code, blocker.message, blocker.meta);
   }
 
   await db.sequelize.transaction(async (transaction) => {

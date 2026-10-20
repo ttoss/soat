@@ -41,6 +41,7 @@ import {
   resolveReadProjectIds,
 } from './helpers';
 import {
+  caseReadableBy,
   playbookAccess,
   playbookCaseAccess,
   readActorPin,
@@ -73,6 +74,8 @@ playbookCasesRouter.post(
       playbookId: ctx.params.playbook_id,
       subject: body.subject,
       actorId: body.actor_id,
+      upstreams: body.upstreams,
+      canReadCase: caseReadableBy(ctx),
     });
   }
 );

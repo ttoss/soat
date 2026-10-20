@@ -208,7 +208,9 @@ paths:
       summary: Delete a playbook
       description: >-
         Deletes a playbook and its version archive. A playbook with cases is
-        refused with `409 PLAYBOOK_HAS_CASES`.
+        refused with `409 PLAYBOOK_HAS_CASES`, and one another playbook's
+        current definition declares as an upstream with
+        `409 PLAYBOOK_HAS_DEPENDENTS`.
       operationId: deletePlaybook
       x-soat-resource:
         kind: playbook
@@ -225,7 +227,7 @@ paths:
         '404':
           description: Playbook not found
         '409':
-          description: The playbook has cases
+          description: The playbook has cases, or another playbook declares it as an upstream
 
   /api/v1/playbooks/{playbook_id}/versions:
     get:
@@ -348,7 +350,12 @@ paths:
       summary: Create a case
       description: >-
         Creates a case for one subject on the playbook's current version. The
-        case stays on that version however the playbook changes later.
+        case stays on that version however the playbook changes later. A
+        playbook that declares `upstreams` needs each bound to a case of the
+        declared playbook, in the same project, of the same `actor_id`, that the
+        caller may read (`playbooks:GetPlaybookCase`); anything else is
+        `400 PLAYBOOK_CASE_UPSTREAM_INVALID`. The binding is fixed for the
+        life of the case.
       operationId: createPlaybookCase
       x-soat-resource:
         kind: playbook
@@ -369,7 +376,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PlaybookCase'
         '400':
-          description: Bad request — subject is missing
+          description: Bad request — subject is missing, or an upstream is unbound or bound to a case it may not be
         '401':
           description: Unauthorized
         '403':
@@ -489,7 +496,10 @@ paths:
       tags:
         - Playbooks
       summary: Delete a case
-      description: Deletes a case and every entry written to it.
+      description: >-
+        Deletes a case and every entry written to it. A case other cases are
+        bound to as their upstream is refused with
+        `409 PLAYBOOK_CASE_HAS_DEPENDENTS`.
       operationId: deletePlaybookCase
       x-soat-resource:
         kind: playbook_case
@@ -506,6 +516,8 @@ paths:
           description: Forbidden
         '404':
           description: Case not found
+        '409':
+          description: Other cases are bound to this case as their upstream
 
   /api/v1/playbook-cases/{case_id}/inputs:
     post:
@@ -566,7 +578,10 @@ paths:
         Returns the manual inputs still unset, or refused by their schema,
         upstream of `node_id`, grouped in waves: nothing in a later wave can run
         before the earlier ones' required inputs are filled. Optional inputs are
-        listed with `required: false`; they never block a node.
+        listed with `required: false`; they never block a node. An `upstream`
+        node before `node_id` adds the missing inputs of the case it is bound
+        to, each with that case's `case_id`, so one read lists everything to
+        ask and each answer is written to its own case.
       operationId: getPlaybookCaseMissing
       x-soat-resource:
         kind: playbook_case
@@ -667,6 +682,11 @@ paths:
         anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
         PROJECT_PAUSED`.
+
+
+        An `upstream` node has no executor: running it pulls the current output
+        of the node it names in the bound case, which must be `done`. This is
+        the only way to refresh one that an upstream change left `stale`.
 
 
         The output is written as an entry when the execution settles. A value
@@ -1359,9 +1379,12 @@ components:
             - collect
             - execute
             - confirm
+            - upstream
           description: >-
             `collect` outputs its inputs, `execute` runs its executor, `confirm`
-            waits for a person to confirm its inputs.
+            waits for a person to confirm its inputs, `upstream` outputs the
+            node it names in the case bound to one of the definition's
+            `upstreams`.
         final:
           type: boolean
           description: A goal of the playbook; only a final node carries transformations
@@ -1373,16 +1396,67 @@ components:
             $ref: '#/components/schemas/PlaybookInput'
         executor:
           $ref: '#/components/schemas/PlaybookExecutor'
+        upstream:
+          $ref: '#/components/schemas/PlaybookUpstreamRef'
         transformations:
           type: array
           items:
             $ref: '#/components/schemas/PlaybookTransformation'
+    PlaybookUpstreamRef:
+      type: object
+      additionalProperties: false
+      description: >-
+        On an `upstream` node, required there and refused elsewhere; the node
+        then has no inputs. It pulls `node_id` of the case bound under `name`:
+        the first pull is automatic once that node is `done`, and afterwards a
+        change upstream leaves this node `stale` until it is run. Later nodes
+        read its output with an ordinary `{ node_id, field }` source.
+      required:
+        - name
+        - node_id
+      properties:
+        name:
+          type: string
+          description: One of the definition's `upstreams`
+          example: company
+        node_id:
+          type: string
+          description: A node of the upstream playbook's current version
+          example: profile
+    PlaybookUpstream:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - playbook_id
+      properties:
+        name:
+          type: string
+          description: >-
+            Letters, digits and underscores, starting with a letter or
+            underscore; unique in the definition
+          example: company
+        playbook_id:
+          x-soat-ref: playbooks
+          type: string
+          description: >-
+            A playbook of the same project that does not read this one back
+            through its own upstreams
+          example: pbk_V1StGXR8Z5jdHi6B
     PlaybookDefinition:
       type: object
       additionalProperties: false
       required:
         - nodes
       properties:
+        upstreams:
+          type: array
+          maxItems: 20
+          description: >-
+            Playbooks whose cases a case of this one binds at create, one per
+            name; many cases may share one upstream case.
+          items:
+            $ref: '#/components/schemas/PlaybookUpstream'
         nodes:
           type: array
           minItems: 1
@@ -1567,6 +1641,8 @@ components:
             project; an unknown one is `400 ACTOR_NOT_FOUND`. Omitted, the
             case belongs to no actor.
           example: actor_V1StGXR8Z5jdHi6B
+        upstreams:
+          $ref: '#/components/schemas/PlaybookCaseUpstreams'
     PlaybookNodeState:
       type: string
       enum:
@@ -1580,6 +1656,7 @@ components:
         - rejected
       description: >-
         `blocked` while a required input is unset or reads a node that is not
+        `done`, or, on an `upstream` node, while the node it pulls is not
         `done`; `ready` when it can run; `running` while its execution is
         queued or runs its executor; `waiting` while it waits on the workflow
         task or orchestration run it started, named by `run`; `done` when its
@@ -1635,7 +1712,9 @@ components:
             type: string
         blocked_by:
           type: array
-          description: Nodes it reads that must be `done` first
+          description: >-
+            Nodes it reads that must be `done` first; on an `upstream` node, the
+            `<upstream>.<node_id>` it pulls
           items:
             type: string
         run:
@@ -1692,6 +1771,8 @@ components:
           nullable: true
           description: The end user the case belongs to; null for none
           example: actor_V1StGXR8Z5jdHi6B
+        upstreams:
+          $ref: '#/components/schemas/PlaybookCaseUpstreams'
         revision:
           type: integer
           description: The case's revision counter; every entry takes the next value
@@ -1709,6 +1790,16 @@ components:
         updated_at:
           type: string
           format: date-time
+    PlaybookCaseUpstreams:
+      type: object
+      description: >-
+        The case bound to each of the playbook's declared `upstreams`, by name:
+        every declared name and no other, each a case of the declared playbook.
+        Fixed at create; empty when the playbook declares none.
+      additionalProperties:
+        type: string
+      example:
+        company: pbk_case_V1StGXR8Z5jdHi6B
     PlaybookAutomationStatus:
       type: string
       description: >-
@@ -1779,6 +1870,11 @@ components:
     PlaybookMissingInput:
       type: object
       properties:
+        case_id:
+          type: string
+          description: >-
+            The case to write it to: this one, or a case bound as an upstream
+          example: pbk_case_V1StGXR8Z5jdHi6B
         node_id:
           type: string
         input:

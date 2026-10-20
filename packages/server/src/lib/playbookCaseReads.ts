@@ -3,15 +3,83 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { paginatedList } from './pagination';
-import { caseDefinition, caseNodeStates, playbookCases } from './playbookCases';
-import { nodesByKey } from './playbookGraph';
-import { playbookMissingInputs } from './playbookMissing';
+import { caseDefinition, caseStates, playbookCases } from './playbookCases';
+import {
+  type PlaybookCaseStatesOf,
+  upstreamCaseStates,
+} from './playbookCaseUpstreams';
+import { nodesByKey, upstreamOf } from './playbookGraph';
+import {
+  type PlaybookMissingInput,
+  playbookMissingInputs,
+} from './playbookMissing';
 
 const log = createDebug('soat:playbookCases');
+
+type CaseStates = Awaited<ReturnType<PlaybookCaseStatesOf>>;
+type MissingWaves = (PlaybookMissingInput & { case_id: string })[][];
+
+/** Wave `i` of every list, together. */
+const mergeWaves = (lists: MissingWaves[]): MissingWaves => {
+  const merged: MissingWaves = [];
+  for (const waves of lists) {
+    for (const [index, wave] of waves.entries()) {
+      merged[index] = [...(merged[index] ?? []), ...wave];
+    }
+  }
+  return merged;
+};
+
+/**
+ * A case's missing inputs before `node`, and those of every bound case an
+ * upstream node before it pulls from, each with the case that holds it: one
+ * read lists everything to ask, and each answer is written to its own case.
+ */
+const missingAcrossCases = async (args: {
+  states: CaseStates;
+  node: string;
+}): Promise<MissingWaves> => {
+  const { states } = args;
+  const own = playbookMissingInputs({
+    definition: states.definition,
+    views: states.views,
+    node: args.node,
+  }).map((wave) => {
+    return wave.map((input) => {
+      return { case_id: states.publicId, ...input };
+    });
+  });
+
+  const pulls = [
+    ...upstreamOf({ definition: states.definition, node: args.node }),
+  ]
+    .map((key) => {
+      return nodesByKey({ definition: states.definition }).get(key)?.upstream;
+    })
+    .filter((ref) => {
+      return ref !== undefined;
+    });
+  if (pulls.length === 0) return own;
+
+  const bound = await upstreamCaseStates({
+    caseDbId: states.caseDbId,
+    statesOf: caseStates,
+  });
+  const upstream = await Promise.all(
+    pulls.map((ref) => {
+      const upstreamStates = bound.get(ref.name);
+      return upstreamStates?.views.has(ref.node_id)
+        ? missingAcrossCases({ states: upstreamStates, node: ref.node_id })
+        : [];
+    })
+  );
+  return mergeWaves([...upstream, own]);
+};
 
 /**
  * The manual inputs still to fill before `node` can be reached, in waves: an
  * agent asks for the first wave first, since nothing later can run before it.
+ * Each names its case: a bound upstream case's inputs are listed too.
  */
 export const getPlaybookCaseMissing = async (args: {
   projectIds?: number[];
@@ -33,11 +101,10 @@ export const getPlaybookCaseMissing = async (args: {
     );
   }
 
-  const { views } = await caseNodeStates({
-    caseDbId: row.id as number,
-    definition,
+  const waves = await missingAcrossCases({
+    states: await caseStates({ caseDbId: row.id as number }),
+    node: args.node,
   });
-  const waves = playbookMissingInputs({ definition, views, node: args.node });
 
   return { case_id: row.publicId, node_id: args.node, waves };
 };

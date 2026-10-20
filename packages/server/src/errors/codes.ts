@@ -705,12 +705,27 @@ export const ERROR_CODES = {
   PLAYBOOK_VALIDATION_FAILED: {
     httpStatus: 400,
     description:
-      'The playbook definition is invalid: a duplicate node or input, an input reading a missing node or field, an executor on a node that may not have one or missing from one that must, transformations on a non-final node, two transformations of one name on a node, or a cycle. `meta.problems` lists every one.',
+      'The playbook definition is invalid: a duplicate node or input, an input reading a missing node or field, an executor on a node that may not have one or missing from one that must, transformations on a non-final node, two transformations of one name on a node, a cycle, or an upstream that is declared twice, names no playbook of the project, reads the playbook back, or lacks the node or field pulled from it. `meta.problems` lists every one.',
   },
   PLAYBOOK_HAS_CASES: {
     httpStatus: 409,
     description:
       'The playbook has cases and cannot be deleted; a case is the record of what was filled against it.',
+  },
+  PLAYBOOK_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'Another playbook declares this one as an upstream and cannot be deleted while it does. `meta.playbooks` lists them.',
+  },
+  PLAYBOOK_CASE_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'Other cases are bound to this case as their upstream and read what it holds, so it cannot be deleted while they exist. `meta.cases` lists them.',
+  },
+  PLAYBOOK_CASE_UPSTREAM_INVALID: {
+    httpStatus: 400,
+    description:
+      "A case's `upstreams` must bind every upstream its playbook version declares, and only those, each to a case of the declared playbook in the same project, with the same `actor_id`, that the caller may read.",
   },
   PLAYBOOK_INPUT_INVALID: {
     httpStatus: 400,

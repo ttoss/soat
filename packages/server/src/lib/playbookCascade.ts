@@ -8,6 +8,7 @@ import {
   lockCase,
   playbookCases,
 } from './playbookCases';
+import { dependentCases } from './playbookCaseUpstreams';
 import {
   EXECUTION_LEASE_MS,
   PARKED_RECHECK_MS,
@@ -168,6 +169,13 @@ export const advancePlaybookCase = async (args: {
 
   log('advancePlaybookCase: case=%d queued=%d', args.caseDbId, queued);
   if (queued > 0) kickPlaybookWorker();
+
+  // A dependent's first pull waits on this case's node reaching `done`, so
+  // every write here wakes the cases bound to it. A pulled node it already
+  // holds is never runnable, so this queues only first pulls.
+  for (const dependent of await dependentCases(args)) {
+    await advancePlaybookCase({ caseDbId: dependent.id });
+  }
 };
 
 /**

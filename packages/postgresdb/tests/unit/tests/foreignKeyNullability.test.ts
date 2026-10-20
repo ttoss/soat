@@ -80,6 +80,8 @@ const NOT_NULL_FOREIGN_KEYS = [
   'orchestration_runs.project_id',
   'orchestration_versions.orchestration_id',
   'orchestrations.project_id',
+  'playbook_case_upstreams.case_id',
+  'playbook_case_upstreams.upstream_case_id',
   'playbook_cases.playbook_id',
   'playbook_cases.project_id',
   'playbook_entries.case_id',

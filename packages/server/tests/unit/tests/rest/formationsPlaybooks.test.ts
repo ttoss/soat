@@ -172,6 +172,42 @@ describe('Formations — playbook resources', () => {
       });
     });
 
+    test('an upstream names a playbook of the same template by ref', async () => {
+      const template = {
+        resources: {
+          ...resources(),
+          Monthly: {
+            type: 'playbook',
+            properties: {
+              name: unique('monthly'),
+              definition: {
+                upstreams: [
+                  { name: 'pricing', playbook_id: { ref: 'Pricing' } },
+                ],
+                nodes: [
+                  {
+                    id: 'price',
+                    title: 'Price',
+                    kind: 'upstream',
+                    upstream: { name: 'pricing', node_id: 'pricing' },
+                    inputs: [],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      };
+
+      const res = await deploy(userToken, template);
+
+      expect(res.status).toBe(201);
+      const monthly = await getPlaybook(physicalId(res.body, 'Monthly'));
+      expect(monthly.body.definition.upstreams).toEqual([
+        { name: 'pricing', playbook_id: physicalId(res.body, 'Pricing') },
+      ]);
+    });
+
     test('its nodes run as the credential that deployed it', async () => {
       const formation = await deploy(userToken, { resources: resources() });
       const playbookId = physicalId(formation.body, 'Pricing');

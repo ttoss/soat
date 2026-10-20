@@ -406,12 +406,14 @@ describe('Playbook cases', () => {
       expect(res.body.waves).toEqual([
         [
           {
+            case_id: playbookCase.id,
             node_id: 'pricing',
             input: 'margin',
             schema: { type: 'number' },
             required: true,
           },
           {
+            case_id: playbookCase.id,
             node_id: 'pricing',
             input: 'competitor_price',
             schema: { type: 'number' },

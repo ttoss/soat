@@ -87,6 +87,10 @@ export const executeClaimed = async (args: {
   await settleFromOutcome({
     execution,
     outcome: async () => {
+      if (node.upstream) {
+        // The basis matched, so the pulled node is still `done` on it.
+        return { kind: 'settled', output: view.pulled ?? null, runId: null };
+      }
       if (!executor) {
         return { kind: 'settled', output: view.values, runId: null };
       }

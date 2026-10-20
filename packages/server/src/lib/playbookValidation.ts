@@ -13,8 +13,12 @@ const nodePath = (index: number): string => {
   return `definition.nodes[${index}]`;
 };
 
-/** A collect or confirm node's output is its inputs, so its fields are known. */
-const fieldExists = (args: {
+/**
+ * A collect or confirm node's output is its inputs, so its fields are known.
+ * An upstream node's output is the node it pulls, checked against the upstream
+ * playbook by `playbookUpstreams.ts`.
+ */
+export const fieldExists = (args: {
   source: PlaybookNode;
   field: PlaybookFieldRef;
 }): boolean => {
@@ -32,6 +36,7 @@ const fieldExists = (args: {
 
   return (
     source.kind === 'execute' ||
+    source.kind === 'upstream' ||
     field.path === '' ||
     names.has(field.path.split('.')[0] ?? '')
   );
@@ -143,6 +148,38 @@ const inputProblems = (args: {
   return problems;
 };
 
+/** Upstream names are unique, and every upstream node names a declared one. */
+const upstreamNameProblems = (args: {
+  definition: PlaybookDefinition;
+}): PlaybookDefinitionProblem[] => {
+  const { definition } = args;
+  const problems: PlaybookDefinitionProblem[] = [];
+  const names = new Set<string>();
+
+  for (const [index, { name }] of (definition.upstreams ?? []).entries()) {
+    if (names.has(name)) {
+      problems.push({
+        code: 'DUPLICATE_UPSTREAM',
+        path: `definition.upstreams[${index}].name`,
+        message: `Upstream '${name}' is declared more than once.`,
+      });
+    }
+    names.add(name);
+  }
+
+  for (const [index, node] of definition.nodes.entries()) {
+    if (node.upstream && !names.has(node.upstream.name)) {
+      problems.push({
+        code: 'UNKNOWN_UPSTREAM',
+        path: `${nodePath(index)}.upstream.name`,
+        message: `Node '${node.id}' pulls upstream '${node.upstream.name}', which the definition does not declare.`,
+      });
+    }
+  }
+
+  return problems;
+};
+
 /**
  * Every reason a definition cannot be stored. The write that creates a version
  * and `validate` both answer from here, so the two cannot disagree.
@@ -167,6 +204,8 @@ export const validatePlaybookDefinition = (args: {
 
     keys.add(node.id);
   }
+
+  problems.push(...upstreamNameProblems({ definition }));
 
   for (const [index, node] of definition.nodes.entries()) {
     const path = nodePath(index);

@@ -1,7 +1,7 @@
 export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
-export type PlaybookNodeKind = 'collect' | 'execute' | 'confirm';
+export type PlaybookNodeKind = 'collect' | 'execute' | 'confirm' | 'upstream';
 
 export type PlaybookExecutorType =
   'agent' | 'tool' | 'decider' | 'workflow' | 'orchestration';
@@ -57,6 +57,12 @@ export type PlaybookTransformation = {
   tool: string;
 };
 
+/** Another playbook of the project a case of this one binds a case of. */
+export type PlaybookUpstream = { name: string; playbook_id: string };
+
+/** The node of the bound upstream case an `upstream` node pulls. */
+export type PlaybookUpstreamRef = { name: string; node_id: string };
+
 export type PlaybookNode = {
   /** Stable across versions: a case's values carry over by id. */
   id: string;
@@ -66,10 +72,16 @@ export type PlaybookNode = {
   final: boolean;
   inputs: PlaybookInput[];
   executor?: PlaybookExecutor;
+  /** Only on an `upstream` node, which has no inputs and no executor. */
+  upstream?: PlaybookUpstreamRef;
   transformations?: PlaybookTransformation[];
 };
 
-export type PlaybookDefinition = { nodes: PlaybookNode[] };
+/** `upstreams` is absent, never empty, so a definition without one is unchanged. */
+export type PlaybookDefinition = {
+  upstreams?: PlaybookUpstream[];
+  nodes: PlaybookNode[];
+};
 
 export type PlaybookFieldRef =
   | { root: 'output'; path: string }
