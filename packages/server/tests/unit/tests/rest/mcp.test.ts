@@ -3933,6 +3933,46 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(restored).version).toBe(3);
     });
 
+    test('a case tool pinned to actor_id reaches that actor’s cases only', async () => {
+      const actor = async (name: string) => {
+        return parseResult(
+          await mcpCall('create-actor', { project_id: projectId, name })
+        ).id as string;
+      };
+      const mine = await actor('MCP case owner');
+      const theirs = await actor('MCP case stranger');
+      const created = await mcpCall('create-playbook-case', {
+        playbook_id: playbookId,
+        subject: 'Pinned Ltda',
+        actor_id: mine,
+      });
+      const pinnedCaseId = parseResult(created).id;
+
+      const listed = await mcpCall('list-playbook-cases', {
+        project_id: projectId,
+        actor_id: mine,
+      });
+      expect(
+        parseResult(listed).data.map((row: { id: string }) => {
+          return row.id;
+        })
+      ).toEqual([pinnedCaseId]);
+
+      const own = await mcpCall('get-playbook-case', {
+        case_id: pinnedCaseId,
+        actor_id: mine,
+      });
+      expect(parseResult(own).actor_id).toBe(mine);
+
+      const other = await mcpCall('get-playbook-case', {
+        case_id: pinnedCaseId,
+        actor_id: theirs,
+      });
+      expect(other.body.result.isError).toBe(true);
+
+      await mcpCall('delete-playbook-case', { case_id: pinnedCaseId });
+    });
+
     test('delete-playbook-case then delete-playbook remove them', async () => {
       const caseRes = await mcpCall('delete-playbook-case', {
         case_id: caseId,

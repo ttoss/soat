@@ -399,6 +399,23 @@ paths:
           schema:
             type: string
             example: pbk_V1StGXR8Z5jdHi6B
+        - name: actor_id
+          in: query
+          required: false
+          description: >-
+            Only the cases that belong to this actor. Pin it in a tool's
+            `preset_parameters` as `{{context:actor_id}}` so an agent lists
+            the cases of the end user it serves only.
+          schema:
+            type: string
+            example: actor_V1StGXR8Z5jdHi6B
+        - name: subject
+          in: query
+          required: false
+          description: Only the cases whose `subject` is exactly this
+          schema:
+            type: string
+            example: ACME Ltda (CNPJ 12.345.678/0001-90)
         - name: automation_status
           in: query
           required: false
@@ -456,6 +473,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
       responses:
         '200':
           description: The case
@@ -478,6 +496,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
       responses:
         '204':
           description: Case deleted
@@ -513,6 +532,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
       requestBody:
         required: true
         content:
@@ -553,6 +573,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - name: node_id
           in: query
           required: true
@@ -588,6 +609,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - name: node_id
           in: query
           description: Only the entries of this node
@@ -664,6 +686,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/NodeKey'
       requestBody:
         required: false
@@ -701,6 +724,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - name: node_id
           in: query
           description: Only the executions of this node
@@ -749,6 +773,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/ExecutionId'
       responses:
         '200':
@@ -794,6 +819,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/NodeKey'
       requestBody:
         required: false
@@ -843,6 +869,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - name: node_id
           in: query
           description: Only the exports of this node
@@ -897,6 +924,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/ExportId'
       responses:
         '200':
@@ -938,6 +966,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
       requestBody:
         required: false
         content:
@@ -974,6 +1003,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Offset'
       responses:
@@ -1020,6 +1050,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
       responses:
         '200':
           description: The paused case
@@ -1050,6 +1081,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
       responses:
         '200':
           description: The resumed case
@@ -1095,6 +1127,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/NodeKey'
       requestBody:
         required: true
@@ -1143,6 +1176,19 @@ components:
       schema:
         type: string
         example: pbk_case_V1StGXR8Z5jdHi6B
+    ActorPin:
+      name: actor_id
+      in: query
+      required: false
+      description: >-
+        Acts only on a case that belongs to this actor: any other case,
+        one that belongs to no actor included, is `404` as if it did not
+        exist. Pin it in a tool's `preset_parameters` as
+        `{{context:actor_id}}` so an agent serving an end user reaches that
+        user's cases only.
+      schema:
+        type: string
+        example: actor_V1StGXR8Z5jdHi6B
     NodeKey:
       name: node
       in: path
@@ -1513,6 +1559,14 @@ components:
           type: string
           description: Who or what the case is about, as you name it
           example: ACME Ltda (CNPJ 12.345.678/0001-90)
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          description: >-
+            The end user the case belongs to, an actor of the playbook's
+            project; an unknown one is `400 ACTOR_NOT_FOUND`. Omitted, the
+            case belongs to no actor.
+          example: actor_V1StGXR8Z5jdHi6B
     PlaybookNodeState:
       type: string
       enum:
@@ -1632,6 +1686,12 @@ components:
           example: 1
         subject:
           type: string
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: The end user the case belongs to; null for none
+          example: actor_V1StGXR8Z5jdHi6B
         revision:
           type: integer
           description: The case's revision counter; every entry takes the next value

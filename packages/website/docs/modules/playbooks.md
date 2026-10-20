@@ -64,6 +64,7 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 | `playbook_id`        | string         | The playbook                                                                                                                                                                                                                                                     |
 | `playbook_version`   | integer        | The version the case was created on and is evaluated against                                                                                                                                                                                                     |
 | `subject`            | string         | Who or what the case is about                                                                                                                                                                                                                                    |
+| `actor_id`           | string \| null | The [actor](./actors.md) the case belongs to; see [Cases of an end user](#cases-of-an-end-user)                                                                                                                                                                  |
 | `revision`           | integer        | The case's counter; every entry takes the next value                                                                                                                                                                                                             |
 | `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) of the case or of its [project](./projects.md) stands, else `running` while an execution is queued or runs its executor, else `waiting` while every execution in flight waits on a task or run it started, else `idle` |
 | `pause_requested_at` | string \| null | When the case was paused                                                                                                                                                                                                                                         |
@@ -216,6 +217,22 @@ Without `wait` the request answers `201` with the execution `running` and it set
 ### Pausing a case
 
 [`POST /api/v1/playbook-cases/{case_id}/pause`](/docs/api/playbooks/pause-playbook-case) stops a case starting anything: nothing is queued, and nothing already queued starts. Executions already running settle, and input writes are still accepted. [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case) lifts the pause and runs what became runnable meanwhile; a case that is not paused answers `409 PLAYBOOK_CASE_NOT_PAUSED`. A paused [project](./projects.md) holds its cases' queued executions the same way: each case reads `automation_status: paused` with its own `pause_requested_at` unchanged, and running a node, exporting one or resuming a case answers `409 PROJECT_PAUSED` until the project resumes. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `automation_status` to list the cases `running`, `waiting`, `paused` or `idle`; repeat it to OR values. A case `waiting` spends nothing of its own: what runs is the task or run it started, which may wait on a person indefinitely.
+
+### Cases of an end user
+
+A case created with `actor_id` belongs to that [actor](./actors.md), one of the playbook's project (`400 ACTOR_NOT_FOUND` otherwise); an actor may hold many cases. [`GET /api/v1/playbook-cases`](/docs/api/playbooks/list-playbook-cases) takes `actor_id` and `subject` (exact match) to find them.
+
+Every operation on one case also takes `actor_id` as a query parameter: given, the call reaches only a case that belongs to that actor, and any other case, one with no actor included, is `404` as if it did not exist. A repeated `actor_id` is `400`. So an agent serving an end user is confined to that user's cases by a [builtin tool](./tools.md#builtin) whose [`preset_parameters`](./tools.md#pinning-to-a-per-run-value-context) pin it to the run's actor:
+
+```json
+{
+  "type": "builtin",
+  "actions": ["list-playbook-cases", "get-playbook-case", "get-playbook-case-missing", "write-playbook-case-inputs"],
+  "preset_parameters": { "actor_id": "{{context:actor_id}}" }
+}
+```
+
+The pin reaches the create, the listing and every case operation alike, and the model cannot override it. `actor_id` in `tool_context` is server-set from the [session](./sessions.md)'s actor, so a turn with no actor fails the call with `400 MISSING_TOOL_CONTEXT_KEY` rather than reaching every case. Deleting an actor leaves its cases with `actor_id: null`.
 
 ### Confirming a node
 
@@ -731,6 +748,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 | Code                              | Status | When                                                                                                                                                                                                                           |
 | --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `VALIDATION_FAILED`               | 400    | The definition's shape cannot be read, a missing `subject`, or an unknown `node_id` on `missing` or `node` on a run; on an export, a node without transformations, an undeclared transformation or a revision that is no output of the node |
+| `ACTOR_NOT_FOUND`                 | 400    | An `actor_id` on a case create that names no actor of the playbook's project                                                                                                                                                                |
 | `PLAYBOOK_VALIDATION_FAILED`      | 400    | The definition has graph problems; `meta.problems` lists them                                                                                                                                                                  |
 | `PLAYBOOK_INPUT_INVALID`          | 400    | An input write names an undeclared or non-manual input, or a value its schema refuses                                                                                                                                          |
 | `NAME_CONFLICT`                   | 409    | Another playbook in the project has the name                                                                                                                                                                                   |

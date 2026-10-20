@@ -40,7 +40,11 @@ import {
   requireAuth,
   resolveReadProjectIds,
 } from './helpers';
-import { playbookAccess, playbookCaseAccess } from './playbookAccess';
+import {
+  playbookAccess,
+  playbookCaseAccess,
+  readActorPin,
+} from './playbookAccess';
 
 const playbookCasesRouter = new Router<Context>();
 
@@ -68,6 +72,7 @@ playbookCasesRouter.post(
       projectIds,
       playbookId: ctx.params.playbook_id,
       subject: body.subject,
+      actorId: body.actor_id,
     });
   }
 );
@@ -90,6 +95,8 @@ playbookCasesRouter.get('/playbook-cases', async (ctx: Context) => {
   ctx.body = await listPlaybookCases({
     projectIds,
     playbookId: parseString(ctx.query.playbook_id),
+    actorId: readActorPin(ctx),
+    subject: parseString(ctx.query.subject),
     automationStatuses: parseEnumListQuery({
       ctx,
       name: 'automation_status',

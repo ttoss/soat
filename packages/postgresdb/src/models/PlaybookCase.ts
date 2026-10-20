@@ -9,6 +9,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Actor } from './Actor';
 import { Playbook } from './Playbook';
 import { PlaybookEntry } from './PlaybookEntry';
 import { Project } from './Project';
@@ -33,6 +34,10 @@ import { Project } from './Project';
     {
       name: 'playbook_cases_playbook_id_created_at_idx',
       fields: ['playbook_id', 'created_at'],
+    },
+    {
+      name: 'playbook_cases_actor_id_idx',
+      fields: ['actor_id'],
     },
   ],
   hooks: {
@@ -85,6 +90,24 @@ export class PlaybookCase extends Model {
   /** Who or what the case is about, as the caller names it. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare subject: string;
+
+  /**
+   * The end user the case belongs to. SET NULL: a case outlives its actor, and
+   * a call pinned to an actor then reaches it no more.
+   */
+  @ForeignKey(() => {
+    return Actor;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare actorId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Actor;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare actor: Actor | null;
 
   /**
    * The case's revision counter: every entry takes the next value, so a

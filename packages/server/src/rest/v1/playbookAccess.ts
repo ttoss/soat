@@ -1,7 +1,8 @@
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import type { PlaybookAuthor } from 'src/lib/playbookAuthor';
-import { playbookCases } from 'src/lib/playbookCases';
+import { assertCaseActorPin, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
 import { makeItemRouteAuthorizer } from './resourceAccess';
@@ -14,13 +15,51 @@ export const playbookAccess = makeItemRouteAuthorizer({
   label: 'Playbook',
 });
 
-/** Every `/playbook-cases/:case_id` route authorizes against the case's SRN. */
-export const playbookCaseAccess = makeItemRouteAuthorizer({
+const caseAuthorizer = makeItemRouteAuthorizer({
   findScope: playbookCases.findScope,
   resourceType: 'playbook_case',
   param: 'case_id',
   label: 'Playbook case',
 });
+
+type CaseAuthorize = typeof caseAuthorizer.authorizeRead;
+
+/**
+ * The `actor_id` a call is pinned to. A repeated parameter is refused rather
+ * than read as absent, which would drop the pin.
+ */
+export const readActorPin = (ctx: Context): string | undefined => {
+  const value = ctx.query.actor_id;
+  if (value === undefined || typeof value === 'string') return value;
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    'actor_id must be given at most once.'
+  );
+};
+
+/**
+ * The actor pin rides on authorization, so no case route can act without it:
+ * a call naming `?actor_id` reaches that actor's cases only.
+ */
+const pinnedToActor = (authorize: CaseAuthorize): CaseAuthorize => {
+  return async (args) => {
+    const access = await authorize(args);
+    const actorId = readActorPin(args.ctx);
+    if (actorId !== undefined) {
+      await assertCaseActorPin({ id: args.ctx.params.case_id, actorId });
+    }
+    return access;
+  };
+};
+
+/**
+ * Every `/playbook-cases/:case_id` route authorizes against the case's SRN and
+ * honours the `actor_id` pin.
+ */
+export const playbookCaseAccess = {
+  authorizeRead: pinnedToActor(caseAuthorizer.authorizeRead),
+  authorizeWrite: pinnedToActor(caseAuthorizer.authorizeWrite),
+};
 
 /**
  * The caller as the author of a version it writes, by the same rule a run
