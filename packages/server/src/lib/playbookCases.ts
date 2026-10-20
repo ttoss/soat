@@ -31,12 +31,14 @@ const log = createDebug('soat:playbookCases');
 export type PlaybookCaseRow = InstanceType<(typeof db)['PlaybookCase']> & {
   project: { publicId: string };
   playbook: InstanceType<(typeof db)['Playbook']>;
+  actor: { publicId: string } | null;
 };
 
 const caseIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.Playbook, as: 'playbook' },
+    { model: db.Actor, as: 'actor', attributes: ['publicId'] },
   ];
 };
 
@@ -247,6 +249,7 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
     playbook_id: row.playbook.publicId,
     playbook_version: row.playbookVersion,
     subject: row.subject,
+    actor_id: row.actor?.publicId ?? null,
     revision: row.revision,
     ...(await caseAutomation({ rows: [row] }))(row),
     nodes: mapNodes({
@@ -273,6 +276,7 @@ const mapCaseSummary = (
     playbook_id: row.playbook.publicId,
     playbook_version: row.playbookVersion,
     subject: row.subject,
+    actor_id: row.actor?.publicId ?? null,
     revision: row.revision,
     ...automation(row),
     created_at: row.createdAt,
@@ -280,10 +284,32 @@ const mapCaseSummary = (
   };
 };
 
+/** The actor a case is created for, held to the playbook's project. */
+const resolveCaseActorDbId = async (args: {
+  actorId: unknown;
+  projectId: number;
+}): Promise<number | null> => {
+  if (args.actorId === undefined || args.actorId === null) return null;
+  const actor =
+    typeof args.actorId === 'string'
+      ? await db.Actor.findOne({
+          where: { publicId: args.actorId, projectId: args.projectId },
+        })
+      : null;
+  if (!actor) {
+    throw new DomainError(
+      'ACTOR_NOT_FOUND',
+      `Actor '${String(args.actorId)}' not found in the playbook's project.`
+    );
+  }
+  return actor.id as number;
+};
+
 export const createPlaybookCase = async (args: {
   projectIds?: number[];
   playbookId: string;
   subject: unknown;
+  actorId?: unknown;
 }): Promise<MappedPlaybookCase> => {
   log('createPlaybookCase: playbookId=%s', args.playbookId);
   if (typeof args.subject !== 'string' || args.subject.trim() === '') {
@@ -297,6 +323,10 @@ export const createPlaybookCase = async (args: {
     projectIds: args.projectIds,
     id: args.playbookId,
   });
+  const actorDbId = await resolveCaseActorDbId({
+    actorId: args.actorId,
+    projectId: playbook.projectId,
+  });
   // A case runs on the version it was created on; editing the playbook later
   // never reshapes it.
   const created = await db.PlaybookCase.create({
@@ -304,6 +334,7 @@ export const createPlaybookCase = async (args: {
     playbookId: playbook.id as number,
     playbookVersion: playbook.version,
     subject: args.subject,
+    actorId: actorDbId,
   });
 
   log('createPlaybookCase: created id=%s', created.publicId);
@@ -314,6 +345,8 @@ export const createPlaybookCase = async (args: {
 export const listPlaybookCases = async (args: {
   projectIds?: number[];
   playbookId?: string;
+  actorId?: string;
+  subject?: string;
   automationStatuses?: Parameters<typeof automationWhere>[0];
   limit?: number;
   offset?: number;
@@ -331,6 +364,17 @@ export const listPlaybookCases = async (args: {
     // An unknown or unreachable playbook filters to nothing, never to all.
     where.playbookId = (playbook?.id as number | undefined) ?? -1;
   }
+  if (args.actorId !== undefined) {
+    const actor = await db.Actor.findOne({
+      where: {
+        publicId: args.actorId,
+        ...(args.projectIds !== undefined && { projectId: args.projectIds }),
+      },
+    });
+    // An unknown or unreachable actor filters to nothing, never to all.
+    where.actorId = (actor?.id as number | undefined) ?? -1;
+  }
+  if (args.subject !== undefined) where.subject = args.subject;
 
   const page = await paginatedList({
     limit: args.limit,
@@ -365,6 +409,22 @@ export const getPlaybookCase = async (args: {
 }): Promise<MappedPlaybookCase> => {
   log('getPlaybookCase: id=%s', args.id);
   return mapPlaybookCase(await playbookCases.getByPublicId(args));
+};
+
+/**
+ * Refuses a call pinned to an actor on a case that is not that actor's, as if
+ * the case did not exist, so a pinned caller learns nothing of other actors'
+ * cases.
+ */
+export const assertCaseActorPin = async (args: {
+  id: string;
+  actorId: string;
+}): Promise<void> => {
+  log('assertCaseActorPin: id=%s actorId=%s', args.id, args.actorId);
+  const row = await playbookCases.findByPublicId({ id: args.id });
+  if (row?.actor?.publicId !== args.actorId) {
+    throw playbookCases.notFound(args.id);
+  }
 };
 
 export const deletePlaybookCase = async (args: {
