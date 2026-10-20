@@ -10,7 +10,7 @@
 #
 # Command annotations in the tutorial markdown — `# → 403` / `# → expect-fail`
 # (non-zero exit required), `# → ignore`, `# → retry N` — are specified in
-# .claude/rules/tests.md (semantics, placement, budgeting) and pinned by
+# .claude/rules/e2e-tests.md (semantics, placement, budgeting) and pinned by
 # tests/harness/tutorialsRetryAnnotation.test.mjs.
 #
 # Non-interactive profile handling: "soat login-user" output is captured and its
