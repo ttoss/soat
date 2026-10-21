@@ -56,7 +56,37 @@ const parseVersionParam = (raw: string): number => {
 playbooksRouter.post('/playbooks/validate', async (ctx: Context) => {
   requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
-  ctx.body = validatePlaybook({ definition: body.definition });
+  const projectPublicId = parseString(body.project_id);
+  const playbookId = parseString(body.playbook_id);
+  if (playbookId !== undefined && projectPublicId === undefined) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'playbook_id requires project_id.'
+    );
+  }
+
+  // Reading the project's playbooks reveals their ids, nodes and fields, so
+  // the project path holds the listing grant as well as the validate one.
+  let projectId: number | undefined;
+  if (projectPublicId !== undefined) {
+    for (const action of [
+      'playbooks:ValidatePlaybook',
+      'playbooks:ListPlaybooks',
+    ]) {
+      projectId = await resolveWriteProjectId({
+        ctx,
+        projectPublicId,
+        action,
+        resourceType: 'playbook',
+      });
+    }
+  }
+
+  ctx.body = await validatePlaybook({
+    definition: body.definition,
+    projectId,
+    playbookId,
+  });
 });
 
 /**
