@@ -17,8 +17,10 @@ export type RecordedRequest = {
   body: Record<string, unknown>;
 };
 
-/** A reply chosen from the request it answers. */
-export type StubResponder = (request: RecordedRequest) => StubReply;
+/** A reply chosen from the request it answers; a promise holds the turn open until it settles. */
+export type StubResponder = (
+  request: RecordedRequest
+) => StubReply | Promise<StubReply>;
 
 export type ChatCompletionsStub = {
   /** The `base_url` an `ollama` AI provider points at. */
@@ -149,7 +151,7 @@ export const startChatCompletionsStub = async (
     req.on('data', (chunk) => {
       raw += chunk;
     });
-    req.on('end', () => {
+    req.on('end', async () => {
       const recorded: RecordedRequest = {
         url: req.url ?? '',
         headers: req.headers,
@@ -162,11 +164,11 @@ export const startChatCompletionsStub = async (
       let reply: StubReply;
       if (route) {
         routeRequests.push(recorded);
-        reply = route[1](recorded);
+        reply = await route[1](recorded);
       } else {
         completions.push(recorded);
         const next = queue.length > 1 ? (queue.shift() ?? queue[0]) : queue[0];
-        reply = typeof next === 'function' ? next(recorded) : next;
+        reply = typeof next === 'function' ? await next(recorded) : next;
       }
 
       res.writeHead(reply.status ?? 200, {

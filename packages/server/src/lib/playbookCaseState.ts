@@ -1,4 +1,5 @@
 import { compileJsonSchema } from './jsonSchemaValidator';
+import type { PARKING_EXECUTOR_TYPES } from './playbookCaseAutomation';
 import type { JsonValue } from './playbookDefinition';
 import type {
   PlaybookBasis,
@@ -29,7 +30,10 @@ export type PlaybookExecutionFields = {
   runId: string | null;
 };
 
-const RUN_TYPES: Record<string, PlaybookRunRef['type']> = {
+const RUN_TYPES: Record<
+  (typeof PARKING_EXECUTOR_TYPES)[number],
+  PlaybookRunRef['type']
+> = {
   workflow: 'task',
   orchestration: 'orchestration_run',
 };
@@ -38,7 +42,9 @@ const RUN_TYPES: Record<string, PlaybookRunRef['type']> = {
 const runOf = (
   execution: PlaybookExecutionFields
 ): PlaybookRunRef | undefined => {
-  const type = RUN_TYPES[execution.executorType ?? ''];
+  const type = Object.entries(RUN_TYPES).find(([executorType]) => {
+    return executorType === execution.executorType;
+  })?.[1];
   return execution.status === 'running' && type && execution.runId
     ? { type, id: execution.runId }
     : undefined;
