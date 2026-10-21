@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.92.2](https://github.com/ttoss/soat/compare/v0.92.1...v0.92.2) (2026-10-21)
+
+### Bug Fixes
+
+* **playbooks:** a case reads automation_status running while an agent node runs its turn ([#1708](https://github.com/ttoss/soat/issues/1708)) ([02c20fb](https://github.com/ttoss/soat/commit/02c20fb413ab840d927dbec38e8ad8cf1c5d6ecd))
+* **playbooks:** a tool executor names an mcp action with operation_id ([#1709](https://github.com/ttoss/soat/issues/1709)) ([2fae4f0](https://github.com/ttoss/soat/commit/2fae4f083c61fbd085393cda4300c97ed733f6c5))
+
 ## [0.92.1](https://github.com/ttoss/soat/compare/v0.92.0...v0.92.1) (2026-10-21)
 
 ### Bug Fixes
