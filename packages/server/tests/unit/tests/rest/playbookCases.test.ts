@@ -1,4 +1,5 @@
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { createPlaybookTool } from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const CASE_ACTIONS = [
@@ -15,67 +16,70 @@ const CASE_ACTIONS = [
  * Revenue and the CNAE are filled by a person; pricing reads the revenue and
  * may read a competitor's price.
  */
-const DEFINITION = {
-  nodes: [
-    {
-      id: 'revenue',
-      title: 'Annual revenue',
-      kind: 'collect',
-      inputs: [
-        {
-          name: 'annual_revenue',
-          schema: { type: 'number', minimum: 0 },
-          required: true,
-          description: 'Gross revenue over the last twelve months, in BRL',
-          source: 'manual',
-        },
-      ],
-    },
-    {
-      id: 'activity',
-      title: 'Activity',
-      kind: 'collect',
-      inputs: [
-        {
-          name: 'cnae',
-          schema: { type: 'string', pattern: '^\\d{7}$' },
-          required: true,
-          source: 'manual',
-        },
-      ],
-    },
-    {
-      id: 'pricing',
-      title: 'Pricing',
-      kind: 'execute',
-      final: true,
-      inputs: [
-        {
-          name: 'revenue',
-          schema: { type: 'number' },
-          required: true,
-          source: { node_id: 'revenue', field: 'output.annual_revenue' },
-        },
-        {
-          name: 'margin',
-          schema: { type: 'number' },
-          required: true,
-          source: 'manual',
-        },
-        {
-          name: 'competitor_price',
-          schema: { type: 'number' },
-          required: false,
-          description: 'What a competitor charges, in BRL',
-          source: 'manual',
-        },
-      ],
-      executor: { type: 'tool', id: 'tool_V1StGXR8Z5jdHi6B' },
-    },
-  ],
+const definitionOf = (toolId: string) => {
+  return {
+    nodes: [
+      {
+        id: 'revenue',
+        title: 'Annual revenue',
+        kind: 'collect',
+        inputs: [
+          {
+            name: 'annual_revenue',
+            schema: { type: 'number', minimum: 0 },
+            required: true,
+            description: 'Gross revenue over the last twelve months, in BRL',
+            source: 'manual',
+          },
+        ],
+      },
+      {
+        id: 'activity',
+        title: 'Activity',
+        kind: 'collect',
+        inputs: [
+          {
+            name: 'cnae',
+            schema: { type: 'string', pattern: '^\\d{7}$' },
+            required: true,
+            source: 'manual',
+          },
+        ],
+      },
+      {
+        id: 'pricing',
+        title: 'Pricing',
+        kind: 'execute',
+        final: true,
+        inputs: [
+          {
+            name: 'revenue',
+            schema: { type: 'number' },
+            required: true,
+            source: { node_id: 'revenue', field: 'output.annual_revenue' },
+          },
+          {
+            name: 'margin',
+            schema: { type: 'number' },
+            required: true,
+            source: 'manual',
+          },
+          {
+            name: 'competitor_price',
+            schema: { type: 'number' },
+            required: false,
+            description: 'What a competitor charges, in BRL',
+            source: 'manual',
+          },
+        ],
+        executor: { type: 'tool', id: toolId },
+      },
+    ],
+  };
 };
 
 describe('Playbook cases', () => {
+  let DEFINITION: ReturnType<typeof definitionOf>;
   let adminToken: string;
   let userToken: string;
   let projectId: string;
@@ -127,6 +131,13 @@ describe('Playbook cases', () => {
     userToken = setup.userToken;
     projectId = setup.projectId;
     noPermToken = setup.noPermToken!;
+    DEFINITION = definitionOf(
+      await createPlaybookTool({
+        token: adminToken,
+        projectId,
+        name: 'pricing-tool',
+      })
+    );
 
     const playbook = await authenticatedTestClient(adminToken)
       .post('/api/v1/playbooks')

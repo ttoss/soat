@@ -80,8 +80,10 @@ paths:
 
         The caller becomes the version's author, whom its executors run as, so
         it must be allowed to start every executor the definition names
-        (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A definition with executors
-        written with a trigger or OAuth token is `409
+        (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`), and each must exist in the
+        project, or be an agent or tool shared with it (`400
+        PLAYBOOK_VALIDATION_FAILED`, an `EXECUTOR_NOT_FOUND` problem). A
+        definition with executors written with a trigger or OAuth token is `409
         PLAYBOOK_AUTHOR_UNAVAILABLE`: those carry their boundary in the token,
         so no run can act as them.
       operationId: createPlaybook
@@ -118,10 +120,12 @@ paths:
         whose shape cannot be read is `400 VALIDATION_FAILED`, as on a write.
 
 
-        With `project_id`, the upstreams are also read against that project's
-        playbooks, as a write there would read them, and the caller needs both
-        `playbooks:ValidatePlaybook` and `playbooks:ListPlaybooks` on the
-        project. Without it, only the definition's own graph is checked.
+        With `project_id`, the references are checked too, as a write there
+        would check them: the upstreams against that project's playbooks, and
+        each executor the caller may start must exist (`EXECUTOR_NOT_FOUND`).
+        The caller needs both `playbooks:ValidatePlaybook` and
+        `playbooks:ListPlaybooks` on the project. Without it, only the
+        definition's own graph is checked.
       operationId: validatePlaybook
       requestBody:
         required: true
@@ -182,7 +186,8 @@ paths:
 
 
         A new version is authored by the caller, checked as on create: `403
-        PLAYBOOK_EXECUTOR_FORBIDDEN` for an executor it may not start, `409
+        PLAYBOOK_EXECUTOR_FORBIDDEN` for an executor it may not start, an
+        `EXECUTOR_NOT_FOUND` problem for one that does not exist, `409
         PLAYBOOK_AUTHOR_UNAVAILABLE` for a trigger or OAuth token.
       operationId: updatePlaybook
       x-soat-resource:
@@ -1588,9 +1593,10 @@ components:
         project_id:
           type: string
           description: >-
-            Also check the upstreams against this project's playbooks:
-            `UNKNOWN_UPSTREAM`, and the `MISSING_NODE` and `UNKNOWN_FIELD` of
-            what an upstream node pulls.
+            Also check the references against this project: the upstreams
+            (`UNKNOWN_UPSTREAM`, and the `MISSING_NODE` and `UNKNOWN_FIELD` of
+            what an upstream node pulls) and the executors
+            (`EXECUTOR_NOT_FOUND`).
           example: proj_V1StGXR8Z5jdHi6B
         playbook_id:
           type: string
@@ -1617,8 +1623,9 @@ components:
             `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`,
             `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`,
             `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION`, `CYCLE`,
-            and, with `project_id`, `UNKNOWN_UPSTREAM` or `UPSTREAM_CYCLE`.
-            The same items a refused write lists under `meta.problems`.
+            and, with `project_id`, `UNKNOWN_UPSTREAM`, `UPSTREAM_CYCLE` or
+            `EXECUTOR_NOT_FOUND`. The same items a refused write lists under
+            `meta.problems`.
           items:
             $ref: './errors.yaml#/components/schemas/ValidationProblem'
     PlaybookVersion:

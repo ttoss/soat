@@ -11,8 +11,11 @@ import type {
   PlaybookExecutor,
   PlaybookNode,
 } from './playbookDefinition';
+import { executorResolves } from './playbookExecutorReferences';
+import { throwPlaybookDefinitionProblems } from './playbookWire';
 import type { RequestPrincipal } from './principals';
 import { mayStart, START_ACTIONS } from './startActions';
+import type { ValidationProblem } from './validationProblems';
 
 const log = createDebug('soat:playbooks');
 
@@ -37,14 +40,30 @@ export const assertExecutorStartable = async (args: {
   }
 };
 
-/** What a node starts as its author: its executor and each export's tool. */
-export const executorsOf = (node: PlaybookNode): PlaybookExecutor[] => {
+/**
+ * What a node starts as its author: its executor and each export's tool, with
+ * the field of the node that names it.
+ */
+const startsOf = (
+  node: PlaybookNode
+): { executor: PlaybookExecutor; field: string }[] => {
   return [
-    ...(node.executor ? [node.executor] : []),
-    ...(node.transformations ?? []).map((transformation) => {
-      return { type: 'tool' as const, id: transformation.tool };
+    ...(node.executor
+      ? [{ executor: node.executor, field: 'executor.id' }]
+      : []),
+    ...(node.transformations ?? []).map((transformation, index) => {
+      return {
+        executor: { type: 'tool' as const, id: transformation.tool },
+        field: `transformations[${index}].tool`,
+      };
     }),
   ];
+};
+
+export const executorsOf = (node: PlaybookNode): PlaybookExecutor[] => {
+  return startsOf(node).map(({ executor }) => {
+    return executor;
+  });
 };
 
 /**
@@ -65,6 +84,41 @@ export const assertExecutorsStartable = async (args: {
 };
 
 /**
+ * Every executor `isAllowed` may start that names nothing a run in the project
+ * could start. One it may not start is left to the permission check, so the
+ * answer never tells a caller whether a resource it cannot start exists.
+ */
+export const executorReferenceProblems = async (args: {
+  definition: PlaybookDefinition;
+  projectId: number;
+  projectPublicId: string;
+  isAllowed: IsAllowedFn;
+}): Promise<ValidationProblem[]> => {
+  const problems: ValidationProblem[] = [];
+  for (const [index, node] of args.definition.nodes.entries()) {
+    for (const { executor, field } of startsOf(node)) {
+      const allowed = await mayStart({
+        isAllowed: args.isAllowed,
+        projectPublicId: args.projectPublicId,
+        type: executor.type,
+        id: executor.id,
+      });
+      if (
+        allowed &&
+        !(await executorResolves({ executor, projectId: args.projectId }))
+      ) {
+        problems.push({
+          code: 'EXECUTOR_NOT_FOUND',
+          path: `definition.nodes[${index}].${field}`,
+          message: `Node '${node.id}' starts ${executor.type} '${executor.id}', which does not exist in the project.`,
+        });
+      }
+    }
+  }
+  return problems;
+};
+
+/**
  * The credential writing a version, which its executors run as. `principal`
  * is null for a credential carrying its boundary in the token (a trigger or
  * OAuth token): no run can be minted from it.
@@ -74,9 +128,13 @@ export type PlaybookAuthor = {
   isAllowed: IsAllowedFn;
 };
 
-/** Refuses a definition its writer could not run as the version's author. */
+/**
+ * Refuses a definition its writer could not run as the version's author: one
+ * naming an executor it may not start, or one that does not exist.
+ */
 export const assertAuthorCanRun = async (args: {
   definition: PlaybookDefinition;
+  projectId: number;
   projectPublicId: string;
   author: PlaybookAuthor;
 }): Promise<void> => {
@@ -95,6 +153,14 @@ export const assertAuthorCanRun = async (args: {
     projectPublicId: args.projectPublicId,
     isAllowed: author.isAllowed,
   });
+  throwPlaybookDefinitionProblems(
+    await executorReferenceProblems({
+      definition,
+      projectId: args.projectId,
+      projectPublicId: args.projectPublicId,
+      isAllowed: author.isAllowed,
+    })
+  );
 };
 
 /** The version row's author columns. */

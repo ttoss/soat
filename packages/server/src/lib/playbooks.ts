@@ -2,10 +2,12 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { paginatedList, type PaginatedResult } from './pagination';
 import {
   assertAuthorCanRun,
   authorColumns,
+  executorReferenceProblems,
   type PlaybookAuthor,
 } from './playbookAuthor';
 import type { PlaybookDefinition } from './playbookDefinition';
@@ -115,29 +117,37 @@ const readDefinition = async (args: {
 /**
  * What a write of `definition` would be told, without writing. A shape error
  * still throws: there is no graph to report on until the shape is read. The
- * upstreams are read only against a `projectId`; `playbookId`, the playbook an
- * update would rewrite, must be one of its playbooks.
+ * upstreams and executors are checked only in a named `project`, as the
+ * caller would author them there; `playbookId`, the playbook an update would
+ * rewrite, must be one of its playbooks.
  */
 export const validatePlaybook = async (args: {
   definition: unknown;
-  projectId?: number;
+  project?: { id: number; publicId: string; isAllowed: IsAllowedFn };
   playbookId?: string;
 }): Promise<{ valid: boolean; problems: PlaybookDefinitionProblem[] }> => {
-  log('validatePlaybook: projectId=%d', args.projectId);
+  const { project } = args;
+  log('validatePlaybook: projectId=%s', project?.publicId);
   const definition = parsePlaybookDefinition({ definition: args.definition });
   const problems = validatePlaybookDefinition({ definition });
-  if (args.projectId !== undefined) {
+  if (project !== undefined) {
     if (args.playbookId !== undefined) {
       await playbooks.getByPublicId({
         id: args.playbookId,
-        projectIds: [args.projectId],
+        projectIds: [project.id],
       });
     }
     problems.push(
       ...(await playbookUpstreamProblems({
         definition,
-        projectId: args.projectId,
+        projectId: project.id,
         playbookId: args.playbookId,
+      })),
+      ...(await executorReferenceProblems({
+        definition,
+        projectId: project.id,
+        projectPublicId: project.publicId,
+        isAllowed: project.isAllowed,
       }))
     );
   }
@@ -167,6 +177,7 @@ export const createPlaybook = async (
   });
   await assertAuthorCanRun({
     definition,
+    projectId: args.projectId,
     projectPublicId: project!.publicId as string,
     author: args.author,
   });
@@ -259,6 +270,7 @@ export const updatePlaybook = async (
   if (definition !== undefined) {
     await assertAuthorCanRun({
       definition,
+      projectId: playbook.projectId,
       projectPublicId: playbook.project.publicId,
       author: args.author,
     });

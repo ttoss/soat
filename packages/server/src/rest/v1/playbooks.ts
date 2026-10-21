@@ -84,7 +84,14 @@ playbooksRouter.post('/playbooks/validate', async (ctx: Context) => {
 
   ctx.body = await validatePlaybook({
     definition: body.definition,
-    projectId,
+    project:
+      projectId === undefined || projectPublicId === undefined
+        ? undefined
+        : {
+            id: projectId,
+            publicId: projectPublicId,
+            isAllowed: ctx.authUser.isAllowed,
+          },
     playbookId,
   });
 });
