@@ -2,6 +2,10 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import {
+  createPlaybookDecider,
+  createPlaybookTool,
+} from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const PLAYBOOK_ACTIONS = [
@@ -20,70 +24,73 @@ const PLAYBOOK_ACTIONS = [
 ];
 
 /** Revenue is filled by a person; the regime reads it; pricing reads both. */
-const DEFINITION = {
-  nodes: [
-    {
-      id: 'revenue',
-      title: 'Annual revenue',
-      kind: 'collect',
-      inputs: [
-        {
-          name: 'annual_revenue',
-          schema: { type: 'number', minimum: 0 },
-          required: true,
-          description: 'Gross revenue over the last twelve months, in BRL',
-          source: 'manual',
-        },
-      ],
-    },
-    {
-      id: 'tax_regime',
-      title: 'Tax regime',
-      kind: 'execute',
-      inputs: [
-        {
-          name: 'annual_revenue',
-          schema: { type: 'number' },
-          required: true,
-          source: { node_id: 'revenue', field: 'output.annual_revenue' },
-        },
-        {
-          name: 'cnae',
-          schema: { type: 'string', pattern: '^\\d{7}$' },
-          required: true,
-          source: 'manual',
-        },
-      ],
-      executor: { type: 'decider', id: 'dcd_V1StGXR8Z5jdHi6B' },
-    },
-    {
-      id: 'pricing',
-      title: 'Pricing',
-      kind: 'execute',
-      final: true,
-      inputs: [
-        {
-          name: 'regime',
-          schema: { type: 'string' },
-          required: true,
-          source: { node_id: 'tax_regime', field: 'output' },
-        },
-        {
-          name: 'margin',
-          schema: { type: 'number' },
-          required: false,
-          source: 'manual',
-        },
-      ],
-      executor: { type: 'tool', id: 'tool_V1StGXR8Z5jdHi6B' },
-      transformations: [
-        { name: 'proposal', format: 'pdf', tool: 'tool_V1StGXR8Z5jdHi6B' },
-      ],
-    },
-  ],
+const definitionOf = (ids: { deciderId: string; toolId: string }) => {
+  return {
+    nodes: [
+      {
+        id: 'revenue',
+        title: 'Annual revenue',
+        kind: 'collect',
+        inputs: [
+          {
+            name: 'annual_revenue',
+            schema: { type: 'number', minimum: 0 },
+            required: true,
+            description: 'Gross revenue over the last twelve months, in BRL',
+            source: 'manual',
+          },
+        ],
+      },
+      {
+        id: 'tax_regime',
+        title: 'Tax regime',
+        kind: 'execute',
+        inputs: [
+          {
+            name: 'annual_revenue',
+            schema: { type: 'number' },
+            required: true,
+            source: { node_id: 'revenue', field: 'output.annual_revenue' },
+          },
+          {
+            name: 'cnae',
+            schema: { type: 'string', pattern: '^\\d{7}$' },
+            required: true,
+            source: 'manual',
+          },
+        ],
+        executor: { type: 'decider', id: ids.deciderId },
+      },
+      {
+        id: 'pricing',
+        title: 'Pricing',
+        kind: 'execute',
+        final: true,
+        inputs: [
+          {
+            name: 'regime',
+            schema: { type: 'string' },
+            required: true,
+            source: { node_id: 'tax_regime', field: 'output' },
+          },
+          {
+            name: 'margin',
+            schema: { type: 'number' },
+            required: false,
+            source: 'manual',
+          },
+        ],
+        executor: { type: 'tool', id: ids.toolId },
+        transformations: [
+          { name: 'proposal', format: 'pdf', tool: ids.toolId },
+        ],
+      },
+    ],
+  };
 };
 
 describe('Playbooks', () => {
+  let DEFINITION: ReturnType<typeof definitionOf>;
   let adminToken: string;
   let userToken: string;
   let projectId: string;
@@ -132,6 +139,20 @@ describe('Playbooks', () => {
     userToken = setup.userToken;
     projectId = setup.projectId;
     noPermToken = setup.noPermToken!;
+    const toolId = await createPlaybookTool({
+      token: adminToken,
+      projectId,
+      name: 'pricing-tool',
+    });
+    DEFINITION = definitionOf({
+      toolId,
+      deciderId: await createPlaybookDecider({
+        token: adminToken,
+        projectId,
+        name: 'regime-decider',
+        toolId,
+      }),
+    });
   });
 
   describe('POST /api/v1/playbooks', () => {

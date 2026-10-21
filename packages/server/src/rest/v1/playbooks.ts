@@ -56,7 +56,21 @@ const parseVersionParam = (raw: string): number => {
 playbooksRouter.post('/playbooks/validate', async (ctx: Context) => {
   requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
-  ctx.body = validatePlaybook({ definition: body.definition });
+  const projectPublicId = parseString(body.project_id);
+  const project =
+    projectPublicId === undefined
+      ? undefined
+      : {
+          id: await resolveWriteProjectId({
+            ctx,
+            projectPublicId,
+            action: 'playbooks:ValidatePlaybook',
+            resourceType: 'playbook',
+          }),
+          publicId: projectPublicId,
+          isAllowed: ctx.authUser.isAllowed,
+        };
+  ctx.body = await validatePlaybook({ definition: body.definition, project });
 });
 
 /**

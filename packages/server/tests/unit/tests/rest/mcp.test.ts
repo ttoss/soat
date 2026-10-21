@@ -3550,8 +3550,21 @@ describe('MCP tools - happy path', () => {
     };
     let playbookId: string;
     let caseId: string;
+    // A client tool never runs server-side, so a node or an export naming it
+    // fails without a request leaving the process.
+    let clientToolId: string;
 
     beforeAll(async () => {
+      const toolRes = await mcpCall('create-tool', {
+        project_id: projectId,
+        name: 'mcp-playbook-client-tool',
+        type: 'client',
+        description: 'Answered by the caller',
+        parameters: { type: 'object', properties: {} },
+      });
+      expect(toolRes.status).toBe(200);
+      clientToolId = parseResult(toolRes).id;
+
       const playbookRes = await mcpCall('create-playbook', {
         project_id: projectId,
         name: 'mcp-pricing',
@@ -3636,6 +3649,31 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(res).valid).toBe(false);
     });
 
+    test('validate-playbook reports an executor the project does not hold', async () => {
+      const res = await mcpCall('validate-playbook', {
+        project_id: projectId,
+        definition: {
+          nodes: [
+            {
+              id: 'run',
+              title: 'Run',
+              kind: 'execute',
+              inputs: [],
+              executor: { type: 'agent', id: 'agt_doesnotexist0000' },
+            },
+          ],
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).problems).toEqual([
+        expect.objectContaining({
+          code: 'EXECUTOR_NOT_FOUND',
+          path: 'definition.nodes[0].executor.id',
+        }),
+      ]);
+    });
+
     test('list-playbooks and list-playbook-versions page the playbook', async () => {
       const list = await mcpCall('list-playbooks', { project_id: projectId });
       expect(parseResult(list).total).toBeGreaterThan(0);
@@ -3648,7 +3686,7 @@ describe('MCP tools - happy path', () => {
 
     test('run-playbook-case-node retries a failed node and the executions read it back', async () => {
       // Its own playbook, so the shared one keeps the single case the tests
-      // below count and delete. Its tool does not exist, so the node fails.
+      // below count and delete. Its tool is a client tool, so the node fails.
       const runPlaybook = await mcpCall('create-playbook', {
         project_id: projectId,
         name: 'mcp-runs',
@@ -3666,7 +3704,7 @@ describe('MCP tools - happy path', () => {
                   source: 'manual',
                 },
               ],
-              executor: { type: 'tool', id: 'tool_V1StGXR8Z5jdHi6B' },
+              executor: { type: 'tool', id: clientToolId },
             },
           ],
         },
@@ -3713,7 +3751,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('export-playbook-case-node waits for the file and the exports read it back', async () => {
-      // Its tool does not exist, so the export settles failed.
+      // Its tool is a client tool, so the export settles failed.
       const exportPlaybook = await mcpCall('create-playbook', {
         project_id: projectId,
         name: 'mcp-exports',
@@ -3736,7 +3774,7 @@ describe('MCP tools - happy path', () => {
                 {
                   name: 'proposal',
                   format: 'pdf',
-                  tool: 'tool_V1StGXR8Z5jdHi6B',
+                  tool: clientToolId,
                 },
               ],
             },

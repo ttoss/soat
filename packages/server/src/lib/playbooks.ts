@@ -2,10 +2,12 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { paginatedList, type PaginatedResult } from './pagination';
 import {
   assertAuthorCanRun,
   authorColumns,
+  executorReferenceProblems,
   type PlaybookAuthor,
 } from './playbookAuthor';
 import type { PlaybookDefinition } from './playbookDefinition';
@@ -114,14 +116,34 @@ const readDefinition = async (args: {
 
 /**
  * What a write of `definition` would be told, without writing. A shape error
- * still throws: there is no graph to report on until the shape is read.
+ * still throws: there is no graph to report on until the shape is read. The
+ * references a definition makes are checked only in a named `project`, the
+ * one a write would land in, as the caller would author it there.
  */
-export const validatePlaybook = (args: {
+export const validatePlaybook = async (args: {
   definition: unknown;
-}): { valid: boolean; problems: PlaybookDefinitionProblem[] } => {
-  const problems = validatePlaybookDefinition({
-    definition: parsePlaybookDefinition({ definition: args.definition }),
-  });
+  project?: { id: number; publicId: string; isAllowed: IsAllowedFn };
+}): Promise<{ valid: boolean; problems: PlaybookDefinitionProblem[] }> => {
+  const definition = parsePlaybookDefinition({ definition: args.definition });
+  const { project } = args;
+  log('validatePlaybook: projectId=%s', project?.publicId);
+  const problems = [
+    ...validatePlaybookDefinition({ definition }),
+    ...(project
+      ? [
+          ...(await playbookUpstreamProblems({
+            definition,
+            projectId: project.id,
+          })),
+          ...(await executorReferenceProblems({
+            definition,
+            projectId: project.id,
+            projectPublicId: project.publicId,
+            isAllowed: project.isAllowed,
+          })),
+        ]
+      : []),
+  ];
   return { valid: problems.length === 0, problems };
 };
 
@@ -148,6 +170,7 @@ export const createPlaybook = async (
   });
   await assertAuthorCanRun({
     definition,
+    projectId: args.projectId,
     projectPublicId: project!.publicId as string,
     author: args.author,
   });
@@ -240,6 +263,7 @@ export const updatePlaybook = async (
   if (definition !== undefined) {
     await assertAuthorCanRun({
       definition,
+      projectId: playbook.projectId,
       projectPublicId: playbook.project.publicId,
       author: args.author,
     });

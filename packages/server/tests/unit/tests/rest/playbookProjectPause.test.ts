@@ -2,29 +2,30 @@ import { db } from 'src/db';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { createPlaybookTool } from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient } from '../../testClient';
 
 /** One final collect node_id: written, it settles on its own input. */
-const DEFINITION = {
-  nodes: [
-    {
-      id: 'answer',
-      title: 'Answer',
-      kind: 'collect',
-      final: true,
-      inputs: [
-        {
-          name: 'value',
-          schema: { type: 'number' },
-          required: true,
-          source: 'manual',
-        },
-      ],
-      transformations: [
-        { name: 'sheet', format: 'csv', tool: 'tool_V1StGXR8Z5jdHi6B' },
-      ],
-    },
-  ],
+const definitionOf = (toolId: string) => {
+  return {
+    nodes: [
+      {
+        id: 'answer',
+        title: 'Answer',
+        kind: 'collect',
+        final: true,
+        inputs: [
+          {
+            name: 'value',
+            schema: { type: 'number' },
+            required: true,
+            source: 'manual',
+          },
+        ],
+        transformations: [{ name: 'sheet', format: 'csv', tool: toolId }],
+      },
+    ],
+  };
 };
 
 describe('Playbook cases under a project pause', () => {
@@ -93,11 +94,18 @@ describe('Playbook cases under a project pause', () => {
     });
     adminToken = setup.adminToken;
     projectId = setup.projectId;
-    const res = await asAdmin().post('/api/v1/playbooks').send({
-      project_id: projectId,
-      name: 'paused-project',
-      definition: DEFINITION,
+    const toolId = await createPlaybookTool({
+      token: adminToken,
+      projectId,
+      name: 'sheet-tool',
     });
+    const res = await asAdmin()
+      .post('/api/v1/playbooks')
+      .send({
+        project_id: projectId,
+        name: 'paused-project',
+        definition: definitionOf(toolId),
+      });
     expect(res.status).toBe(201);
     playbookId = res.body.id;
   });
