@@ -363,6 +363,8 @@ playbookCasesRouter.post(
       projectIds,
       id: ctx.params.case_id,
       version: body.version,
+      upstreams: body.upstreams,
+      canReadCase: caseReadableBy(ctx),
       createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
       runWorkPublicId: ctx.authUser.runWorkPublicId,
