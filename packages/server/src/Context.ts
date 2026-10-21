@@ -82,7 +82,8 @@ export type AuthUser = {
   runWorkPublicId?: string;
   /**
    * The tool call the request writes on behalf of, from a verified
-   * `On-Behalf-Of` assertion (`lib/onBehalfOf.ts`). Recorded, never authorizing.
+   * `On-Behalf-Of` assertion (`lib/onBehalfOf.ts`). Recorded, and read only to
+   * refuse a write back into the work whose generation made the call.
    */
   onBehalfOf?: OnBehalfOf;
 };

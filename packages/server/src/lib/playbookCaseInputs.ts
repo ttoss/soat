@@ -187,6 +187,7 @@ export const writePlaybookCaseInputs = async (args: {
     caseDbId: found.id as number,
     casePublicId: found.publicId,
     runWorkPublicId: args.runWorkPublicId,
+    onBehalfOf: args.onBehalfOf,
   });
   const definition = await caseDefinition({ row: found });
   assertWritesValid({ definition, writes: args.writes });

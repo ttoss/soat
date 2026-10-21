@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import { db } from '../db';
 import { DomainError } from '../errors';
 import { createDecision } from './decisions';
 import { applyInputMapping } from './jsonLogicMapping';
@@ -58,6 +59,14 @@ const startAgent = async (args: StartArgs): Promise<ExecutorOutcome> => {
     inputs: args.input,
     taskContext: args.values,
     principal: args.runAs.principal,
+    // Named while the turn runs, so a write its tools make back through
+    // another credential is still traced to this execution.
+    onDispatchStarted: async ({ generationId }) => {
+      await db.PlaybookExecution.update(
+        { runId: generationId },
+        { where: { publicId: args.executionPublicId } }
+      );
+    },
   });
   const result = isPlainObject(dispatched.result) ? dispatched.result : {};
   const output = isPlainObject(result.object) ? result.object : result.content;

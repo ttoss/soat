@@ -537,8 +537,9 @@ paths:
         every execution queued, and every one those queue, has settled or
         parked. A write made with a credential the case's own work runs as — the
         case, one of its executions in flight, or the task or run one started —
-        or the work of a case reading it as an upstream, at any depth, is `403
-        PLAYBOOK_SELF_WRITE`.
+        or on a project key with the `On-Behalf-Of` of a tool call that work's
+        generation made, or by the work of a case reading it as an upstream, at
+        any depth, is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
       x-soat-resource:
         kind: playbook_case

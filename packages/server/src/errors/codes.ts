@@ -774,7 +774,7 @@ export const ERROR_CODES = {
   PLAYBOOK_SELF_WRITE: {
     httpStatus: 403,
     description:
-      "A write into a case from the work it, or a case reading it as an upstream, is running: a run-as credential minted for such a case, for one of its executions in flight, or for the task or orchestration run one started. An executor's output reaches its case only as the node's output.",
+      "A write into a case from the work it, or a case reading it as an upstream, is running: a run-as credential minted for such a case, for one of its executions in flight, or for the task or orchestration run one started, or a project key sending the `On-Behalf-Of` of a tool call such an execution's generation made. An executor's output reaches its case only as the node's output.",
   },
   PLAYBOOK_NODE_NOT_CONFIRMABLE: {
     httpStatus: 409,
