@@ -120,12 +120,12 @@ paths:
         whose shape cannot be read is `400 VALIDATION_FAILED`, as on a write.
 
 
-        With `project_id`, the references are checked too, as the caller
-        would author them in that project: each upstream names a playbook of
-        the project and the nodes and fields it pulls (`UNKNOWN_UPSTREAM`,
-        `MISSING_NODE`, `UNKNOWN_FIELD`), and each executor the caller may
-        start exists (`EXECUTOR_NOT_FOUND`).
-        Without it, only the graph is checked.
+        With `project_id`, the references are checked too, as a write there
+        would check them: the upstreams against that project's playbooks, and
+        each executor the caller may start must exist (`EXECUTOR_NOT_FOUND`).
+        The caller needs both `playbooks:ValidatePlaybook` and
+        `playbooks:ListPlaybooks` on the project. Without it, only the
+        definition's own graph is checked.
       operationId: validatePlaybook
       requestBody:
         required: true
@@ -141,11 +141,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/PlaybookValidationResult'
         '400':
-          description: Bad request — the definition's shape cannot be read
+          description: >-
+            Bad request — the definition's shape cannot be read, or
+            `playbook_id` is given without `project_id`
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden — the caller may not validate in `project_id`
+          description: Forbidden
+        '404':
+          description: '`playbook_id` names no playbook of the project'
 
   /api/v1/playbooks/{playbook_id}:
     get:
@@ -1587,12 +1591,19 @@ components:
         - definition
       properties:
         project_id:
-          x-soat-ref: projects
           type: string
           description: >-
-            The project a write would land in; its upstreams and executors are
-            checked there. Omitted, only the graph is checked.
+            Also check the references against this project: the upstreams
+            (`UNKNOWN_UPSTREAM`, and the `MISSING_NODE` and `UNKNOWN_FIELD` of
+            what an upstream node pulls) and the executors
+            (`EXECUTOR_NOT_FOUND`).
           example: proj_V1StGXR8Z5jdHi6B
+        playbook_id:
+          type: string
+          description: >-
+            The playbook the definition would update, so an upstream reading it
+            back is `UPSTREAM_CYCLE`. Requires `project_id`.
+          example: pbk_V1StGXR8Z5jdHi6B
         definition:
           description: The definition to check
           allOf:
@@ -1611,8 +1622,8 @@ components:
             Every reason the definition cannot be stored: `DUPLICATE_NODE`,
             `DUPLICATE_INPUT`, `MISSING_NODE`, `UNKNOWN_FIELD`,
             `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`,
-            `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION` or `CYCLE`;
-            with `project_id`, also `UNKNOWN_UPSTREAM` and
+            `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION`, `CYCLE`,
+            and, with `project_id`, `UNKNOWN_UPSTREAM`, `UPSTREAM_CYCLE` or
             `EXECUTOR_NOT_FOUND`. The same items a refused write lists under
             `meta.problems`.
           items:

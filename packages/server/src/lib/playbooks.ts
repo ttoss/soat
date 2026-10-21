@@ -117,33 +117,40 @@ const readDefinition = async (args: {
 /**
  * What a write of `definition` would be told, without writing. A shape error
  * still throws: there is no graph to report on until the shape is read. The
- * references a definition makes are checked only in a named `project`, the
- * one a write would land in, as the caller would author it there.
+ * upstreams and executors are checked only in a named `project`, as the
+ * caller would author them there; `playbookId`, the playbook an update would
+ * rewrite, must be one of its playbooks.
  */
 export const validatePlaybook = async (args: {
   definition: unknown;
   project?: { id: number; publicId: string; isAllowed: IsAllowedFn };
+  playbookId?: string;
 }): Promise<{ valid: boolean; problems: PlaybookDefinitionProblem[] }> => {
-  const definition = parsePlaybookDefinition({ definition: args.definition });
   const { project } = args;
   log('validatePlaybook: projectId=%s', project?.publicId);
-  const problems = [
-    ...validatePlaybookDefinition({ definition }),
-    ...(project
-      ? [
-          ...(await playbookUpstreamProblems({
-            definition,
-            projectId: project.id,
-          })),
-          ...(await executorReferenceProblems({
-            definition,
-            projectId: project.id,
-            projectPublicId: project.publicId,
-            isAllowed: project.isAllowed,
-          })),
-        ]
-      : []),
-  ];
+  const definition = parsePlaybookDefinition({ definition: args.definition });
+  const problems = validatePlaybookDefinition({ definition });
+  if (project !== undefined) {
+    if (args.playbookId !== undefined) {
+      await playbooks.getByPublicId({
+        id: args.playbookId,
+        projectIds: [project.id],
+      });
+    }
+    problems.push(
+      ...(await playbookUpstreamProblems({
+        definition,
+        projectId: project.id,
+        playbookId: args.playbookId,
+      })),
+      ...(await executorReferenceProblems({
+        definition,
+        projectId: project.id,
+        projectPublicId: project.publicId,
+        isAllowed: project.isAllowed,
+      }))
+    );
+  }
   return { valid: problems.length === 0, problems };
 };
 
