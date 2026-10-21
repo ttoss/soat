@@ -118,6 +118,7 @@ export const confirmPlaybookCaseNode = async (args: {
     caseDbId: row.id as number,
     casePublicId: row.publicId,
     runWorkPublicId: args.runWorkPublicId,
+    onBehalfOf: args.onBehalfOf,
   });
   const definition = await caseDefinition({ row });
   const node = readCaseNode({ definition, node: args.node });

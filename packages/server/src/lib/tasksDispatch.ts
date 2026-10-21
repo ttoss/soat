@@ -86,6 +86,11 @@ export type DispatchResult = {
   toolId: string | null;
 };
 
+type DispatchStarted = (ids: {
+  generationId: string | null;
+  orchestrationRunId: string | null;
+}) => Promise<void> | void;
+
 /**
  * Shapes a dispatch `input_mapping` result into agent messages: an explicit
  * `messages` array is passed through, a `prompt` string becomes a single user
@@ -122,6 +127,7 @@ const runAgentDispatch = async (args: {
   inputs: Record<string, unknown>;
   principal?: RequestPrincipal;
   toolContext?: Record<string, string>;
+  onDispatchStarted?: DispatchStarted;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
     principalKind: args.principal?.principalType ?? null,
@@ -137,6 +143,14 @@ const runAgentDispatch = async (args: {
     authHeader,
     toolContext: args.toolContext,
     stream: false,
+    onRecorded: args.onDispatchStarted
+      ? ({ generationId }) => {
+          return args.onDispatchStarted!({
+            generationId,
+            orchestrationRunId: null,
+          });
+        }
+      : undefined,
   })) as GenerationResult;
 
   // `output.model` alone does not identify its provider, so the serving one is
@@ -248,12 +262,9 @@ export const runDispatch = async (args: {
    */
   toolContext?: Record<string, string>;
   // Called as soon as a dispatch id is known but before the (blocking) wait
-  // completes. For orchestration dispatches this fires at run creation, so the
-  // run id can be persisted while the run is still in flight.
-  onDispatchStarted?: (ids: {
-    generationId: string | null;
-    orchestrationRunId: string | null;
-  }) => Promise<void> | void;
+  // completes: at run creation for an orchestration, once its record exists
+  // for an agent's generation, so the id can be persisted while it is in flight.
+  onDispatchStarted?: DispatchStarted;
 }): Promise<DispatchResult> => {
   if (args.dispatch.kind === 'agent') {
     return runAgentDispatch({
@@ -263,6 +274,7 @@ export const runDispatch = async (args: {
       inputs: args.inputs,
       principal: args.principal,
       toolContext: args.toolContext,
+      onDispatchStarted: args.onDispatchStarted,
     });
   }
 

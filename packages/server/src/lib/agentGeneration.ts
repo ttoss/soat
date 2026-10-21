@@ -254,6 +254,9 @@ export type CreateGenerationArgs = {
   // The schema a decider's question set compiles to. Internal only: no route
   // reads a per-call schema, so a call site cannot widen what an agent answers.
   outputSchemaOverride?: Record<string, unknown>;
+  // Called once the record exists and before the provider is, so a caller
+  // blocked on the turn can name it while it runs. Internal only.
+  onRecorded?: (args: { generationId: string }) => Promise<void> | void;
 };
 
 /**
@@ -406,6 +409,7 @@ const runPreparedGeneration = async (args: {
   );
 
   try {
+    await request.onRecorded?.({ generationId: ctx.generationId });
     return await dispatchGeneration({
       stream: request.stream,
       ctx,

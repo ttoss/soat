@@ -206,7 +206,10 @@ type TargetReply = {
   destroy?: boolean;
 };
 
-type TargetResponder = (body: Record<string, unknown>) => TargetReply;
+type TargetResponder = (
+  body: Record<string, unknown>,
+  request: RecordedRequest
+) => TargetReply | Promise<TargetReply>;
 
 export type ToolTarget = {
   baseUrl: string;
@@ -246,17 +249,20 @@ export const startToolTarget = async (): Promise<ToolTarget> => {
     const url = req.url ?? '/';
     const path = url.split('?')[0];
     const body = parseObject(raw);
-    requests.push({
+    const request = {
       path,
       url,
       method: req.method ?? '',
       headers: req.headers,
       body,
       raw,
-    });
+    };
+    requests.push(request);
     const configured = replies.get(path) ?? {};
     const reply =
-      typeof configured === 'function' ? configured(body) : configured;
+      typeof configured === 'function'
+        ? await configured(body, request)
+        : configured;
     if (reply.destroy) {
       req.socket.destroy();
       return;

@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { OnBehalfOf } from './onBehalfOf';
 import { casesWithUpstreams } from './playbookCaseUpstreams';
 
 /** The cases `work` runs for: the case it names, or that of each execution in flight it names. */
@@ -28,15 +29,19 @@ const casesOfWork = async (args: { work: string }): Promise<number[]> => {
 /**
  * Refuses a write into a case from the work it is running or from the work of
  * a case downstream of it: a run-as token minted for such a case, for one of
- * its executions in flight, or for the task or run one started. An executor
- * feeding its own case, or a case its case reads, would re-trigger itself.
+ * its executions in flight, or for the task or run one started; or a tool
+ * call such a generation made, written back on a project key with its
+ * `On-Behalf-Of`. An executor feeding its own case, or a case its case reads,
+ * would re-trigger itself.
  */
 export const assertNotOwnWork = async (args: {
   caseDbId: number;
   casePublicId: string;
   runWorkPublicId?: string;
+  onBehalfOf: OnBehalfOf | null;
 }): Promise<void> => {
-  const work = args.runWorkPublicId;
+  // Exclusive: an assertion is accepted only beside a project key.
+  const work = args.runWorkPublicId ?? args.onBehalfOf?.generation_id;
   if (!work) return;
   const reached = await casesWithUpstreams({
     caseDbIds: await casesOfWork({ work }),

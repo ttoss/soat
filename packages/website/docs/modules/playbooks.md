@@ -271,7 +271,7 @@ A confirmed node whose inputs change is `stale`, and holds everything reading it
 
 ### Writes from a case's own work
 
-A case refuses input writes, confirmations and upgrades made with the run-as credential of its own work — the case, one of its executions in flight, or the task or orchestration run one started — with `403 PLAYBOOK_SELF_WRITE`. An executor's result reaches its case only as the node's output.
+A case refuses input writes, confirmations and upgrades made with the run-as credential of its own work — the case, one of its executions in flight, or the task or orchestration run one started — with `403 PLAYBOOK_SELF_WRITE`. So does a write on a project key carrying the [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a tool call an `agent` executor's generation made while its execution runs. An executor's result reaches its case only as the node's output.
 
 The same holds for the work of every case that reads it as an [upstream](#upstream-cases), at any depth: a monthly DRE case's executor cannot write the `company` case it reads. A sibling bound to the same upstream case is not upstream of it and takes the write.
 

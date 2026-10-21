@@ -82,6 +82,7 @@ export const upgradePlaybookCase = async (args: {
     caseDbId: row.id as number,
     casePublicId: row.publicId,
     runWorkPublicId: args.runWorkPublicId,
+    onBehalfOf: args.onBehalfOf,
   });
   const target = await readTargetVersion({
     playbookId: row.playbookId,
