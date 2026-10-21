@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.92.1](https://github.com/ttoss/soat/compare/v0.92.0...v0.92.1) (2026-10-21)
+
+### Bug Fixes
+
+* **playbooks:** PLAYBOOK_SELF_WRITE refuses a case's own work written back through a tool's On-Behalf-Of ([#1706](https://github.com/ttoss/soat/issues/1706)) ([6d456eb](https://github.com/ttoss/soat/commit/6d456ebaddee0623b8281b645ed30cd3235b139b))
+
 # [0.92.0](https://github.com/ttoss/soat/compare/v0.91.0...v0.92.0) (2026-10-21)
 
 ### Features
