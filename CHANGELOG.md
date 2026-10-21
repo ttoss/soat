@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.92.0](https://github.com/ttoss/soat/compare/v0.91.0...v0.92.0) (2026-10-21)
+
+### Features
+
+* **playbooks:** cases carry an actor_id, list by actor and subject, pin every case action ([#1701](https://github.com/ttoss/soat/issues/1701)) ([1009225](https://github.com/ttoss/soat/commit/10092256802250cbb5a677c4f3b868989566be6e))
+* **playbooks:** PLAYBOOK_SELF_WRITE refuses writes to an upstream case from a dependent case's own work ([#1704](https://github.com/ttoss/soat/issues/1704)) ([90777fb](https://github.com/ttoss/soat/commit/90777fbef0f3427e47c6784d066065e09bb7effc))
+* **playbooks:** upstreams bind a case to another playbook's case ([#1703](https://github.com/ttoss/soat/issues/1703)) ([8420108](https://github.com/ttoss/soat/commit/842010885e0961f47ff9f773999dce9ffbf5e0c2))
+
 # [0.91.0](https://github.com/ttoss/soat/compare/v0.90.0...v0.91.0) (2026-10-19)
 
 ### Features
