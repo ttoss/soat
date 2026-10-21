@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.93.0](https://github.com/ttoss/soat/compare/v0.92.2...v0.93.0) (2026-10-21)
+
+### Features
+
+* **playbooks:** a case upgrade binds the upstreams its target version declares ([#1711](https://github.com/ttoss/soat/issues/1711)) ([50adbf7](https://github.com/ttoss/soat/commit/50adbf741b8545f9b921d8a949f79996098a2811))
+* **playbooks:** POST /playbooks/validate checks upstreams against a project_id ([#1713](https://github.com/ttoss/soat/issues/1713)) ([83556ff](https://github.com/ttoss/soat/commit/83556ff57e6806ddc55d435e79839c0028d1313c))
+
 ## [0.92.2](https://github.com/ttoss/soat/compare/v0.92.1...v0.92.2) (2026-10-21)
 
 ### Bug Fixes
