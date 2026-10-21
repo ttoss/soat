@@ -12,11 +12,21 @@ export const AUTOMATION_STATUSES = [
 
 type AutomationStatus = (typeof AUTOMATION_STATUSES)[number];
 
-// The case's own work: an execution queued, or running its executor itself.
-// One running with a `run_id` is parked on the task or run it started, which
-// is what spends and may wait on a person for as long as it takes.
-const OWN_WORK = "status = 'queued' OR (status = 'running' AND run_id IS NULL)";
-const PARKED = "status = 'running' AND run_id IS NOT NULL";
+/**
+ * The executors whose execution, once it names its `run_id`, waits on the task
+ * or orchestration run it started. An agent names its generation while the
+ * turn runs, so its `run_id` is the work itself, not a park.
+ */
+export const PARKING_EXECUTOR_TYPES = ['workflow', 'orchestration'] as const;
+
+// A parked execution may wait on a person for as long as it takes; every other
+// execution queued or running is the case's own work, the work that spends.
+const PARKED = `status = 'running' AND run_id IS NOT NULL AND COALESCE(executor_type IN (${PARKING_EXECUTOR_TYPES.map(
+  (type) => {
+    return `'${type}'`;
+  }
+).join(', ')}), false)`;
+const OWN_WORK = `status = 'queued' OR (status = 'running' AND NOT (${PARKED}))`;
 
 const PAUSED_PROJECTS = () => {
   return db.sequelize.literal(
