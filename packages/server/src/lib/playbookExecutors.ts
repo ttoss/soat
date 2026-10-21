@@ -89,6 +89,7 @@ const startTool = async (args: StartArgs): Promise<ExecutorOutcome> => {
     dispatch: {
       kind: 'tool',
       toolId: args.executor.id,
+      operationId: args.executor.operation_id,
       inputMapping:
         mapping ??
         Object.fromEntries(

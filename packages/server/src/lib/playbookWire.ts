@@ -114,6 +114,22 @@ const readInput = (args: { path: string; input: unknown }): PlaybookInput => {
   };
 };
 
+/** Only a `tool` executor selects an action; any other ignoring it would hide a typo. */
+const readOperationId = (args: {
+  path: string;
+  executor: Record<string, unknown>;
+}): string | undefined => {
+  const { path, executor } = args;
+  if (executor.operation_id === undefined) return undefined;
+  if (!isNonEmptyString(executor.operation_id)) {
+    throw invalid(`${path}.operation_id must be a non-empty string.`);
+  }
+  if (executor.type !== 'tool') {
+    throw invalid(`${path}.operation_id is only read on a tool executor.`);
+  }
+  return executor.operation_id;
+};
+
 const readExecutor = (args: {
   path: string;
   executor: unknown;
@@ -129,12 +145,14 @@ const readExecutor = (args: {
   if (!isNonEmptyString(executor.id)) {
     throw invalid(`${path}.id must be a non-empty string.`);
   }
+  const operationId = readOperationId({ path, executor });
   if (executor.input !== undefined && !isPlainObject(executor.input)) {
     throw invalid(`${path}.input must be an object of JSON Logic expressions.`);
   }
   return {
     type: executor.type as PlaybookExecutorType,
     id: executor.id,
+    ...(operationId !== undefined && { operation_id: operationId }),
     ...(executor.input !== undefined && {
       // Read off a JSON body, so already a JSON value.
       input: executor.input as Record<string, JsonValue>,
