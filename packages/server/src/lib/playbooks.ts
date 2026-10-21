@@ -114,14 +114,33 @@ const readDefinition = async (args: {
 
 /**
  * What a write of `definition` would be told, without writing. A shape error
- * still throws: there is no graph to report on until the shape is read.
+ * still throws: there is no graph to report on until the shape is read. The
+ * upstreams are read only against a `projectId`; `playbookId`, the playbook an
+ * update would rewrite, must be one of its playbooks.
  */
-export const validatePlaybook = (args: {
+export const validatePlaybook = async (args: {
   definition: unknown;
-}): { valid: boolean; problems: PlaybookDefinitionProblem[] } => {
-  const problems = validatePlaybookDefinition({
-    definition: parsePlaybookDefinition({ definition: args.definition }),
-  });
+  projectId?: number;
+  playbookId?: string;
+}): Promise<{ valid: boolean; problems: PlaybookDefinitionProblem[] }> => {
+  log('validatePlaybook: projectId=%d', args.projectId);
+  const definition = parsePlaybookDefinition({ definition: args.definition });
+  const problems = validatePlaybookDefinition({ definition });
+  if (args.projectId !== undefined) {
+    if (args.playbookId !== undefined) {
+      await playbooks.getByPublicId({
+        id: args.playbookId,
+        projectIds: [args.projectId],
+      });
+    }
+    problems.push(
+      ...(await playbookUpstreamProblems({
+        definition,
+        projectId: args.projectId,
+        playbookId: args.playbookId,
+      }))
+    );
+  }
   return { valid: problems.length === 0, problems };
 };
 
