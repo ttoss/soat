@@ -1313,6 +1313,13 @@ components:
           type: string
           description: The ID of the agent, tool, decider, workflow or orchestration
           example: dcd_V1StGXR8Z5jdHi6B
+        operation_id:
+          type: string
+          minLength: 1
+          description: >-
+            Only on a `tool` executor: which action of a multi-action (`mcp`,
+            `soat`) tool to call — the same selector an orchestration `tool`
+            node's `operation_id` is. Required by an `mcp` tool.
         input:
           type: object
           description: >-
