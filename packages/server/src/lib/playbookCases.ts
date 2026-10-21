@@ -177,6 +177,7 @@ export const createPlaybookCase = async (args: {
   const bindings = await readCaseBindings({
     definition: parsePlaybookDefinition({ definition: playbook.definition }),
     raw: args.upstreams,
+    bound: [],
     projectId: playbook.projectId,
     actorDbId,
     canRead: args.canReadCase,

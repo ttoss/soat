@@ -252,10 +252,10 @@ The pin reaches the create, the listing and every case operation alike, and the 
 
 A playbook declares `upstreams`, other playbooks of its project, and reads one of their nodes through an `upstream` node; later nodes read its output with an ordinary `{ node_id, field }` source. One `company` case (CNPJ, regime) can feed one DRE case per month this way, without copying a value.
 
-- **Binding.** A case of such a playbook is created with `upstreams: { <name>: <case_id> }`, every declared name and no other, each a case of the declared playbook in the same project, of the same `actor_id`, that the caller may read (`playbooks:GetPlaybookCase`). Anything else is `400 PLAYBOOK_CASE_UPSTREAM_INVALID`, with a case the caller cannot read refused as one that does not exist. The binding is fixed for the life of the case; many cases may share one upstream case.
+- **Binding.** A case of such a playbook is created with `upstreams: { <name>: <case_id> }`, every declared name and no other, each a case of the declared playbook in the same project, of the same `actor_id`, that the caller may read (`playbooks:GetPlaybookCase`). Anything else is `400 PLAYBOOK_CASE_UPSTREAM_INVALID`, with a case the caller cannot read refused as one that does not exist. A binding is never replaced; an [upgrade](#upgrading-a-case) keeps it, drops it, or binds a newly declared name. Many cases may share one upstream case.
 - **Pull.** The `upstream` node's first pull is automatic: at create, or when the pulled node first reaches `done`. It runs as an execution with no executor, and its output is the pulled node's output.
 - **Refresh.** After that, a change upstream makes the node `stale` and the [cascade](#the-cascade) never runs it, so a closed month is never rewritten by a later profile change. [Running the node](#running-a-node) pulls the current value; the dependent case's own cascade then proceeds.
-- **Versions.** A case reads its bound case's own version, and follows it when that case is [upgraded](#upgrading-a-case); a pulled node the new version lacks reads `blocked`. An `upstream` node naming an upstream the case has no binding for, after an upgrade of the dependent case to a version declaring a new one, reads `blocked` too.
+- **Versions.** A case reads its bound case's own version, and follows it when that case is [upgraded](#upgrading-a-case); a pulled node the new version lacks reads `blocked`. An upgrade of the dependent case fits its bindings to the target version (see [Upgrading a case](#upgrading-a-case)).
 - **Deleting.** A case other cases are bound to is `409 PLAYBOOK_CASE_HAS_DEPENDENTS`, `meta.cases` naming them; delete those first.
 
 ### Confirming a node
@@ -321,6 +321,16 @@ Without `wait` the request answers `201` with every export `running`; poll [`GET
 | Executor, title or description   | None; [run the node](#running-a-node) to recompute it |
 
 The cascade then runs what became runnable, unless the case is [paused](#pausing-a-case). An execution running answers `409 PLAYBOOK_CASE_BUSY`, `meta.executions` naming each; one queued but not started settles `superseded`. Each upgrade is recorded as an [upgrade](#upgrade), listed by [`GET /api/v1/playbook-cases/{case_id}/upgrades`](/docs/api/playbooks/list-playbook-case-upgrades), newest first; the version the case is already on records nothing. A version the playbook does not have is `400 VALIDATION_FAILED`, and an upgrade from the case's own work is `403 PLAYBOOK_SELF_WRITE`.
+
+The case's [upstream](#upstream-cases) bindings follow the target version:
+
+| Binding                                                        | At upgrade                                                          |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Name the target declares on the same playbook                  | Kept; naming it in `upstreams` is refused                           |
+| Name the target no longer declares, or declares on another one | Dropped                                                             |
+| Name the target declares that the case does not bind           | Bound from `upstreams: { <name>: <case_id> }`, checked as at create |
+
+A declared name left unbound, or any other `upstreams` the create rules refuse, is `400 PLAYBOOK_CASE_UPSTREAM_INVALID` and moves nothing.
 
 ### Entries
 
@@ -835,7 +845,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 | `VERSION_CONFLICT`                | 409    | `expected_version` is stale                                                                                                                                                                                                                 |
 | `PLAYBOOK_HAS_CASES`              | 409    | A delete of a playbook that has cases                                                                                                                                                                                                       |
 | `PLAYBOOK_HAS_DEPENDENTS`         | 409    | A delete of a playbook another playbook declares as an upstream                                                                                                                                                                             |
-| `PLAYBOOK_CASE_UPSTREAM_INVALID`  | 400    | A case create whose `upstreams` leaves a declared upstream unbound, names an undeclared one, or binds a case of another playbook, project or actor, or one the caller may not read                                                          |
+| `PLAYBOOK_CASE_UPSTREAM_INVALID`  | 400    | A case create or upgrade whose `upstreams` leaves a declared upstream unbound, names an undeclared or already bound one, or binds a case of another playbook, project or actor, or one the caller may not read                              |
 | `PLAYBOOK_CASE_HAS_DEPENDENTS`    | 409    | A delete of a case other cases are bound to as their upstream                                                                                                                                                                               |
 | `PLAYBOOK_INPUT_CONFLICT`         | 409    | An input write's `expected_revision` is not the field's current one                                                                                                                                                                         |
 | `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | The version's author may not start an executor the definition names                                                                                                                                                                         |

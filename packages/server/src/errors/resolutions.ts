@@ -146,7 +146,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_CASE_HAS_DEPENDENTS:
     'Delete the cases `meta.cases` lists first; a binding is fixed for the life of the dependent case.',
   PLAYBOOK_CASE_UPSTREAM_INVALID:
-    "Read the playbook's `definition.upstreams` and pass `upstreams` with one case id per declared name, each a case of that playbook belonging to the same actor.",
+    "Read the target version's `definition.upstreams` and pass `upstreams` with one case id per declared name the case does not already bind (all of them at create), each a case of that playbook belonging to the same actor.",
   PLAYBOOK_INPUT_INVALID:
     "Read the case's `nodes` for the inputs its version declares and which of them are filled by a person; correct the value to its input's schema.",
   PLAYBOOK_INPUT_CONFLICT:

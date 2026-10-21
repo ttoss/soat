@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { Transaction } from './dbTransaction';
 import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
@@ -10,6 +11,7 @@ import {
   versionDefinition,
   withLockedCase,
 } from './playbookCases';
+import { rebindCaseUpstreams } from './playbookCaseUpstreams';
 import { answerPlaybookCase } from './playbookCaseWait';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import { playbookUpgradeDiff } from './playbookUpgrade';
@@ -60,17 +62,53 @@ const readTargetVersion = async (args: {
 };
 
 /**
+ * Refused while an execution runs: it would settle against nodes the new
+ * version may not have. One queued but not started settles `superseded`.
+ */
+const clearExecutions = async (args: {
+  caseDbId: number;
+  publicId: string;
+  transaction: Transaction;
+}): Promise<void> => {
+  const running = await db.PlaybookExecution.findAll({
+    where: { caseId: args.caseDbId, status: 'running' },
+    attributes: ['publicId', 'node'],
+    transaction: args.transaction,
+  });
+  if (running.length > 0) {
+    throw new DomainError(
+      'PLAYBOOK_CASE_BUSY',
+      `Case '${args.publicId}' has ${running.length} execution(s) running.`,
+      {
+        executions: running.map((execution) => {
+          return { id: execution.publicId, node_id: execution.node };
+        }),
+      }
+    );
+  }
+  await db.PlaybookExecution.update(
+    { status: 'completed', result: 'superseded', finishedAt: new Date() },
+    {
+      where: { caseId: args.caseDbId, status: 'queued' },
+      transaction: args.transaction,
+    }
+  );
+};
+
+/**
  * Moves a case to another version of its playbook, its current one unless one
  * is named, and records what moved. Values carry over by node id and the node
- * states are read against the new version. Refused while an execution runs: it
- * would settle against nodes the new version may not have. An execution queued
- * but not started settles `superseded`, and the cascade then queues what the
- * new version makes runnable.
+ * states are read against the new version, and the bindings are fitted to the
+ * upstreams it declares (`rebindCaseUpstreams`). The cascade then queues what
+ * the new version makes runnable.
  */
 export const upgradePlaybookCase = async (args: {
   projectIds?: number[];
   id: string;
   version: unknown;
+  upstreams?: unknown;
+  /** Whether the caller may read a case it binds as an upstream. */
+  canReadCase: (casePublicId: string) => Promise<boolean>;
   createdBy: RequestPrincipal | null;
   onBehalfOf: OnBehalfOf | null;
   runWorkPublicId?: string;
@@ -95,31 +133,20 @@ export const upgradePlaybookCase = async (args: {
     row,
     work: async ({ locked, transaction }) => {
       const from = locked.playbookVersion;
-      if (from === target) return false;
-
-      const running = await db.PlaybookExecution.findAll({
-        where: { caseId: locked.id as number, status: 'running' },
-        attributes: ['publicId', 'node'],
+      const rebound = await rebindCaseUpstreams({
+        caseRow: locked,
+        definition: to,
+        raw: args.upstreams,
+        canRead: args.canReadCase,
         transaction,
       });
-      if (running.length > 0) {
-        throw new DomainError(
-          'PLAYBOOK_CASE_BUSY',
-          `Case '${row.publicId}' has ${running.length} execution(s) running.`,
-          {
-            executions: running.map((execution) => {
-              return { id: execution.publicId, node_id: execution.node };
-            }),
-          }
-        );
-      }
-      await db.PlaybookExecution.update(
-        { status: 'completed', result: 'superseded', finishedAt: new Date() },
-        {
-          where: { caseId: locked.id as number, status: 'queued' },
-          transaction,
-        }
-      );
+      if (from === target) return rebound;
+
+      await clearExecutions({
+        caseDbId: locked.id as number,
+        publicId: row.publicId,
+        transaction,
+      });
 
       await db.PlaybookUpgrade.create(
         {

@@ -725,7 +725,7 @@ export const ERROR_CODES = {
   PLAYBOOK_CASE_UPSTREAM_INVALID: {
     httpStatus: 400,
     description:
-      "A case's `upstreams` must bind every upstream its playbook version declares, and only those, each to a case of the declared playbook in the same project, with the same `actor_id`, that the caller may read.",
+      "A case's `upstreams`, at create or upgrade, must bind every upstream its playbook version declares that the case does not already bind, and only those, each to a case of the declared playbook in the same project, with the same `actor_id`, that the caller may read.",
   },
   PLAYBOOK_INPUT_INVALID: {
     httpStatus: 400,

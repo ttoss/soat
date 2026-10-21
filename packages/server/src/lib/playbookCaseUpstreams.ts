@@ -41,10 +41,14 @@ const invalid = (args: {
   });
 };
 
-/** The names a write binds, each declared once and every declared one bound. */
+/**
+ * The names a write binds: every declared name the case does not already
+ * bind, each once, and no other.
+ */
 const boundIds = (args: {
   definition: PlaybookDefinition;
   raw: unknown;
+  bound: string[];
 }): Map<string, unknown> => {
   const raw = args.raw ?? {};
   const declared = (args.definition.upstreams ?? []).map((upstream) => {
@@ -60,9 +64,18 @@ const boundIds = (args: {
         name,
       });
     }
+    if (args.bound.includes(name)) {
+      throw invalid({
+        message: `Upstream '${name}' is already bound; a binding is never replaced.`,
+        name,
+      });
+    }
   }
+  const unbound = declared.filter((name) => {
+    return !args.bound.includes(name);
+  });
   return new Map(
-    declared.map((name) => {
+    unbound.map((name) => {
       if (!Object.hasOwn(raw, name)) {
         throw invalid({
           message: `Upstream '${name}' must be bound to a case.`,
@@ -75,14 +88,16 @@ const boundIds = (args: {
 };
 
 /**
- * Reads the cases a new case binds, one per upstream its playbook declares:
- * each a case of the declared playbook, in the project, of the same actor,
- * and readable by the caller. A case the caller may not read is refused as
- * one that does not exist.
+ * Reads the cases a case binds, one per upstream its playbook declares and
+ * `bound` does not name: each a case of the declared playbook, in the
+ * project, of the same actor, and readable by the caller. A case the caller
+ * may not read is refused as one that does not exist.
  */
 export const readCaseBindings = async (args: {
   definition: PlaybookDefinition;
   raw: unknown;
+  /** The names the case already binds and keeps. */
+  bound: string[];
   projectId: number;
   actorDbId: number | null;
   canRead: (casePublicId: string) => Promise<boolean>;
@@ -92,6 +107,7 @@ export const readCaseBindings = async (args: {
 
   for (const upstream of args.definition.upstreams ?? []) {
     const { name } = upstream;
+    if (!ids.has(name)) continue;
     const caseId = ids.get(name);
     const found =
       typeof caseId === 'string' && (await args.canRead(caseId))
@@ -140,6 +156,74 @@ export const writeCaseBindings = async (args: {
       { transaction: args.transaction }
     );
   }
+};
+
+/**
+ * Fits a case's bindings to the version it moves to: a binding whose name
+ * that version declares on the same playbook is kept, every other one is
+ * dropped, and each declared name left unbound is bound from `raw` by the
+ * rules of create. Answers whether a binding changed.
+ */
+export const rebindCaseUpstreams = async (args: {
+  caseRow: { id?: unknown; projectId: number; actorId: number | null };
+  definition: PlaybookDefinition;
+  raw: unknown;
+  canRead: (casePublicId: string) => Promise<boolean>;
+  transaction: Transaction;
+}): Promise<boolean> => {
+  const caseDbId = args.caseRow.id as number;
+  const existing = await db.PlaybookCaseUpstream.findAll({
+    where: { caseId: caseDbId },
+    include: [
+      {
+        model: db.PlaybookCase,
+        as: 'upstreamCase',
+        attributes: ['id'],
+        include: [
+          { model: db.Playbook, as: 'playbook', attributes: ['publicId'] },
+        ],
+      },
+    ],
+    transaction: args.transaction,
+  });
+  const declared = args.definition.upstreams ?? [];
+  const kept = existing.filter((row) => {
+    return declared.some((upstream) => {
+      return (
+        upstream.name === row.name &&
+        upstream.playbook_id === row.upstreamCase.playbook.publicId
+      );
+    });
+  });
+  const bindings = await readCaseBindings({
+    definition: args.definition,
+    raw: args.raw,
+    bound: kept.map((row) => {
+      return row.name;
+    }),
+    projectId: args.caseRow.projectId,
+    actorDbId: args.caseRow.actorId,
+    canRead: args.canRead,
+  });
+  const dropped = existing.filter((row) => {
+    return !kept.includes(row);
+  });
+  log(
+    'rebindCaseUpstreams: case=%d kept=%d dropped=%d bound=%d',
+    caseDbId,
+    kept.length,
+    dropped.length,
+    bindings.length
+  );
+  for (const row of dropped) {
+    await row.destroy({ transaction: args.transaction });
+  }
+  await writeCaseBindings({
+    caseDbId,
+    bindings,
+    transaction: args.transaction,
+  });
+  return dropped.length > 0 || bindings.length > 0;
 };
 
 /** Each case's bindings as the wire names them: upstream name to case id. */

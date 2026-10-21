@@ -189,7 +189,10 @@ describe('Playbook upstreams', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'playbookupstreams',
-      policyActions: ['playbooks:CreatePlaybookCase'],
+      policyActions: [
+        'playbooks:CreatePlaybookCase',
+        'playbooks:UpgradePlaybookCase',
+      ],
       createOtherProject: true,
     });
     adminToken = setup.adminToken;
@@ -662,6 +665,234 @@ describe('Playbook upstreams', () => {
         state: 'blocked',
         blocked_by: ['company.profile'],
       });
+    });
+  });
+
+  describe('POST /api/v1/playbook-cases/{case_id}/upgrade', () => {
+    /** The DRE's own nodes, with no upstream. */
+    const STANDALONE = {
+      nodes: [dreDefinition('').nodes[1]],
+    };
+
+    const patchTo = async (
+      playbookId: string,
+      definition: unknown
+    ): Promise<void> => {
+      const res = await admin()
+        .patch(`/api/v1/playbooks/${playbookId}`)
+        .send({ definition });
+      expect(res.status).toBe(200);
+    };
+
+    const upgrade = (caseId: string, body: Record<string, unknown>) => {
+      return admin()
+        .post(`/api/v1/playbook-cases/${caseId}/upgrade`)
+        .send(body);
+    };
+
+    /** A case on a version with no upstream, its playbook now declaring one. */
+    const caseGainingUpstream = async (): Promise<CaseBody> => {
+      const playbook = await newPlaybook(STANDALONE);
+      const dre = await newCase(playbook);
+      await patchTo(playbook, dreDefinition(companyId));
+      return dre;
+    };
+
+    test('binds an upstream the target version declares and pulls it', async () => {
+      const company = await filledCompany();
+      const dre = await caseGainingUpstream();
+
+      const res = await upgrade(dre.id, {
+        version: 2,
+        upstreams: { company: company.id },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.upstreams).toEqual({ company: company.id });
+      await flushPlaybookExecutions();
+
+      expect(nodeOf(await getCase(dre.id), 'company')).toMatchObject({
+        state: 'done',
+        output: { value: { cnpj: '12345678000190', regime: 'simples' } },
+      });
+    });
+
+    test('an upgrade leaving a declared upstream unbound is 400 and moves nothing', async () => {
+      const dre = await caseGainingUpstream();
+
+      const res = await upgrade(dre.id, { version: 2 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+      expect(res.body.error.meta).toEqual({ upstream: 'company' });
+
+      const read = await admin().get(`/api/v1/playbook-cases/${dre.id}`);
+      expect(read.body.playbook_version).toBe(1);
+      expect(read.body.upstreams).toEqual({});
+    });
+
+    test.each([
+      [
+        'an undeclared name',
+        (id: string) => {
+          return { company: id, supplier: id };
+        },
+      ],
+      [
+        'an unknown case',
+        () => {
+          return { company: 'pbk_case_doesNotExist0000' };
+        },
+      ],
+      [
+        'upstreams that are not an object',
+        () => {
+          return 'company';
+        },
+      ],
+    ])('%s is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async (_label, bind) => {
+      const company = await filledCompany();
+      const dre = await caseGainingUpstream();
+
+      const res = await upgrade(dre.id, {
+        version: 2,
+        upstreams: bind(company.id),
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+    });
+
+    test('naming an upstream the case already binds is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async () => {
+      const company = await filledCompany();
+      const playbook = await newPlaybook(dreDefinition(companyId));
+      const dre = await newCase(playbook, {
+        upstreams: { company: company.id },
+      });
+      await patchTo(playbook, {
+        ...dreDefinition(companyId),
+        nodes: [...dreDefinition(companyId).nodes].reverse(),
+      });
+
+      const res = await upgrade(dre.id, {
+        version: 2,
+        upstreams: { company: company.id },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+      expect(res.body.error.meta).toEqual({ upstream: 'company' });
+    });
+
+    test('a binding the target version still declares is kept', async () => {
+      const company = await filledCompany();
+      const playbook = await newPlaybook(dreDefinition(companyId));
+      const dre = await newCase(playbook, {
+        upstreams: { company: company.id },
+      });
+      await patchTo(playbook, {
+        ...dreDefinition(companyId),
+        nodes: [...dreDefinition(companyId).nodes].reverse(),
+      });
+
+      const res = await upgrade(dre.id, { version: 2 });
+      expect(res.status).toBe(200);
+      expect(res.body.upstreams).toEqual({ company: company.id });
+    });
+
+    test('a binding the target version no longer declares is dropped', async () => {
+      const company = await filledCompany();
+      const playbook = await newPlaybook(dreDefinition(companyId));
+      const dre = await newCase(playbook, {
+        upstreams: { company: company.id },
+      });
+      await patchTo(playbook, STANDALONE);
+
+      const res = await upgrade(dre.id, { version: 2 });
+      expect(res.status).toBe(200);
+      expect(res.body.upstreams).toEqual({});
+
+      const deleted = await admin().delete(
+        `/api/v1/playbook-cases/${company.id}`
+      );
+      expect(deleted.status).toBe(204);
+    });
+
+    test('a name the target declares on another playbook is bound again', async () => {
+      const company = await filledCompany();
+      const playbook = await newPlaybook(dreDefinition(companyId));
+      const dre = await newCase(playbook, {
+        upstreams: { company: company.id },
+      });
+      const otherCompany = await newPlaybook(COMPANY);
+      await patchTo(playbook, dreDefinition(otherCompany));
+
+      const unbound = await upgrade(dre.id, { version: 2 });
+      expect(unbound.status).toBe(400);
+      expect(unbound.body.error.meta).toEqual({ upstream: 'company' });
+
+      const rebound = await newCase(otherCompany);
+      const res = await upgrade(dre.id, {
+        version: 2,
+        upstreams: { company: rebound.id },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.upstreams).toEqual({ company: rebound.id });
+    });
+
+    test('a case of another playbook is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async () => {
+      const wrong = await newCase(await newPlaybook(COMPANY));
+      const dre = await caseGainingUpstream();
+
+      const res = await upgrade(dre.id, {
+        version: 2,
+        upstreams: { company: wrong.id },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta).toEqual({
+        upstream: 'company',
+        case_id: wrong.id,
+      });
+    });
+
+    test('a case of another actor is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async () => {
+      const actor = await admin()
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: unique('actor') });
+      expect(actor.status).toBe(201);
+      const company = await newCase(companyId, { actor_id: actor.body.id });
+      const dre = await caseGainingUpstream();
+
+      const res = await upgrade(dre.id, {
+        version: 2,
+        upstreams: { company: company.id },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+    });
+
+    test('a caller who may not read the upstream case is 400, as if it did not exist', async () => {
+      const company = await filledCompany();
+      const dre = await caseGainingUpstream();
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/playbook-cases/${dre.id}/upgrade`)
+        .send({ version: 2, upstreams: { company: company.id } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+    });
+
+    test('a caller without UpgradePlaybookCase is 403', async () => {
+      const company = await filledCompany();
+      const dre = await caseGainingUpstream();
+
+      const res = await authenticatedTestClient(readerToken)
+        .post(`/api/v1/playbook-cases/${dre.id}/upgrade`)
+        .send({ version: 2, upstreams: { company: company.id } });
+      expect(res.status).toBe(403);
+    });
+
+    test('no credential is 401', async () => {
+      const res = await testClient
+        .post('/api/v1/playbook-cases/pbk_case_doesNotExist0000/upgrade')
+        .send({ upstreams: {} });
+      expect(res.status).toBe(401);
     });
   });
 
