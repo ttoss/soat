@@ -1,16 +1,24 @@
 # Open Questions Gate
 
 Run every open question (design choice, option A vs B, ambiguity) through two
-tests before forwarding it to the user. Criteria come from
-`.claude/skills/guardian/` (`SKILL.md` **Fix classification**,
-`reference/methodology.md`); running `/guardian` itself is not required.
+tests before forwarding it to the user.
 
 ## Test 1 — Pareto optimum
 
-An option is dominant when it improves at least one of the 8 methodology
-dimensions and you checked in this session that it worsens nothing (name what
-was checked; an unverified premise is a cost). Exactly one dominant option →
-choose it. Uncertain → Test 2.
+An option is dominant when it improves at least one of these dimensions and you
+checked in this session that it worsens nothing (name what was checked; an
+unverified premise is a cost). Exactly one dominant option → choose it. Uncertain → Test 2.
+
+| Dimension | Asks |
+| --- | --- |
+| Context compressibility | Can the change be explained through a small, bounded context? |
+| Executable specification | Is the intent in tests, types, schemas or validators, not only prose? |
+| Co-located specs | Where code cannot express intent, is it in a spec beside the artifact? |
+| Verification loop | Can a future agent run a fast, faithful check of it? |
+| Boundary integrity | Are package, layer, ownership and public-API boundaries kept and enforced? |
+| Pattern hygiene | Does it avoid copying or strengthening a bad local pattern? |
+| Debt containment | Is any debt modular, visible, observable and cheap to repay? |
+| Instruction hygiene | Do instruction surfaces stay defined once, consistent and accurate? |
 
 ## Test 2 — Long-term health
 
