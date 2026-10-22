@@ -146,6 +146,24 @@ export const readRunTokenPrincipal = (
 };
 
 /**
+ * The work a run-as token acts for (its `orn`), or null for any other
+ * credential. Signed into the tool assertion of every call that work makes,
+ * so a write the tool sends back can be traced to it.
+ */
+export const readRunTokenWork = (
+  authHeader: string | undefined
+): string | null => {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  try {
+    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+    if (typeof payload === 'string') return null;
+    return typeof payload.orn === 'string' ? payload.orn : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * The principal to persist as having *started* a piece of work, from whichever
  * credential reached it: the authenticated caller when a request started the
  * work, otherwise the run-as token an internal caller was handed. That is what

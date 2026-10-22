@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
+import { readRunTokenWork } from './orchestrationRunToken';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { admitSharedCall } from './shareCaps';
@@ -265,6 +266,7 @@ const runResolvedTool = async (
     projectId: args.toolProjectId,
     callerProjectId: args.callerProjectId,
     toolId: args.toolPublicId ?? null,
+    workId: readRunTokenWork(args.authHeader),
     attribution: args.attribution,
   };
   const { presetParameters, mcp } = await resolveCallPresets({

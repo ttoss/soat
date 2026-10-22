@@ -6,7 +6,7 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
 
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
-const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
 
 /**
  * A builtin action runs under the caller's bearer with an LLM choosing the

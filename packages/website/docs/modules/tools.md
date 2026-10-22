@@ -456,6 +456,7 @@ curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 | `tool_id` | The tool's ID; absent for an inline definition |
 | `project_id` | The tool's own project |
 | `agent_id`, `generation_id` | The agent and generation whose turn made the call, when one did |
+| `work_id` | The run-as work that made the call, when one did: a playbook case or execution, a task, or an orchestration run |
 | `calling_project_id` | The caller's project, on a call through a [share](./shares.md) |
 | `session_id`, `actor_id`, `actor_external_id` | The [server-derived identity](../advanced/tool-context.md#auto-populated-keys-sessions), when the call runs in a session |
 | `body_sha256` | Base64url SHA-256 of the request body |
@@ -464,7 +465,7 @@ A receiver checks the signature against the key set, `aud` against its own URL, 
 
 ### Writing on behalf of a tool call
 
-A tool server that writes back into SOAT with its project's API key can send the assertion of the call it is serving, unchanged, in `X-Soat-On-Behalf-Of` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)). The write then records the call beside `created_by_principal_type` / `created_by_principal_id` as `on_behalf_of` (`tool_id`, `agent_id`, `generation_id`, `session_id`, `actor_id`): on [playbook](./playbooks.md) entries, executions, exports and upgrades, and on every [audit log](./audit-log.md) entry of the request. It never widens a write: the principal (`api_key` and the key's own id) and every permission checked stay the key's. It can narrow one: a playbook case refuses a write carrying the assertion of its own work's generation ([own work](./playbooks.md#writes-from-a-cases-own-work)).
+A tool server that writes back into SOAT with its project's API key can send the assertion of the call it is serving, unchanged, in `X-Soat-On-Behalf-Of` (prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)). The write then records the call beside `created_by_principal_type` / `created_by_principal_id` as `on_behalf_of` (`tool_id`, `agent_id`, `generation_id`, `work_id`, `session_id`, `actor_id`): on [playbook](./playbooks.md) entries, executions, exports and upgrades, and on every [audit log](./audit-log.md) entry of the request. It never widens a write: the principal (`api_key` and the key's own id) and every permission checked stay the key's. It can narrow one: a playbook case refuses a write carrying the assertion of a call its own work made ([own work](./playbooks.md#writes-from-a-cases-own-work)).
 
 SOAT verifies the assertion against its own key, `iss` and `exp`, and requires an API key scoped to the project the assertion names. Anything else is `400 ON_BEHALF_OF_INVALID`, `meta.reason` `unverified` or `project`, and nothing is written. A deployment that configures no [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration) signs nothing, so it verifies nothing.
 

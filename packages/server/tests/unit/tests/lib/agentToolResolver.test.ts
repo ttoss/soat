@@ -737,7 +737,7 @@ describe('buildSoatRequestBody - trace field injection scoping', () => {
 describe('resolveSoatTools', () => {
   test('skips a stored action the registry no longer knows', () => {
     const result = resolveSoatTools({
-      meter: { projectId: 0, toolId: null, attribution: {} },
+      meter: { projectId: 0, toolId: null, workId: null, attribution: {} },
       typedTool: {
         name: 'myTool',
         description: null,

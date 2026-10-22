@@ -8,7 +8,7 @@ import { soatTools } from 'src/lib/soatTools';
 
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
-const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
 
 /**
  * The exclusions are declared in the OpenAPI specs, so these assert against the

@@ -175,6 +175,9 @@ const startOrchestration = async (
       projectIds: [args.projectId],
       input: args.input,
       principal: args.runAs.principal,
+      // Driven inline with the case's run-as credential, so every call the run
+      // makes names the case as its work.
+      authHeader: args.runAs.authHeader,
       wait: true,
     })
   );
