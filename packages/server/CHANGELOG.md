@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.93.2](https://github.com/ttoss/soat/compare/v0.93.1...v0.93.2) (2026-10-22)
+
+### Bug Fixes
+
+* **playbooks:** refuse a write-back from a case's own tool and orchestration executors ([#1718](https://github.com/ttoss/soat/issues/1718)) ([2fd46bd](https://github.com/ttoss/soat/commit/2fd46bd68ccb536fc8c92f6e4d9f9b17b25b6644))
+
 ## [0.93.1](https://github.com/ttoss/soat/compare/v0.93.0...v0.93.1) (2026-10-22)
 
 ### Bug Fixes
