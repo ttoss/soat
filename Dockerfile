@@ -2,7 +2,7 @@
 # tsdown build can hang without output. Its dist/ output is platform-
 # independent, so only dist/ leaves this stage
 # (tests/harness/dockerfileBuildPlatform.test.mjs).
-FROM --platform=$BUILDPLATFORM node:24-slim AS builder
+FROM --platform=$BUILDPLATFORM node:24.22.1-slim AS builder
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ RUN pnpm --filter @soat/app build
 RUN pnpm --filter @soat/server build
 
 # ---- Smoke-test image ----
-FROM node:24-slim AS smoke-test
+FROM node:24.22.1-slim AS smoke-test
 
 WORKDIR /app
 
@@ -72,7 +72,7 @@ COPY tests/smoke-tests.sh /smoke-tests.sh
 CMD ["sh", "/smoke-tests.sh"]
 
 # ---- Production image ----
-FROM node:24-slim AS production
+FROM node:24.22.1-slim AS production
 
 WORKDIR /app
 
