@@ -209,6 +209,7 @@ describe('On-Behalf-Of', () => {
         tool_id: toolId,
         agent_id: agentId,
         generation_id: generationId,
+        work_id: null,
         session_id: null,
         actor_id: null,
       });

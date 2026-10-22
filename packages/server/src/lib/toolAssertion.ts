@@ -111,6 +111,8 @@ export type ToolAssertionIdentity = {
   /** Public ids of the agent and generation whose turn made the call. */
   agentId?: string | null;
   generationId?: string | null;
+  /** Public id of the run-as work making the call (`readRunTokenWork`). */
+  workId?: string | null;
   context?: Record<string, string>;
 };
 
@@ -166,6 +168,7 @@ export const toolAssertionHeaders = (args: {
     ...(args.identity.generationId
       ? { generation_id: args.identity.generationId }
       : {}),
+    ...(args.identity.workId ? { work_id: args.identity.workId } : {}),
     ...identityClaims(args.identity.context),
     body_sha256: crypto
       .createHash('sha256')

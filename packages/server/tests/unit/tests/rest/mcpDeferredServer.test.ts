@@ -21,7 +21,7 @@ import { authenticatedTestClient } from '../../testClient';
  * is what reached it.
  */
 
-const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
 
 const MCP_HEADERS = {
   'Content-Type': 'application/json',

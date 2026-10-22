@@ -15,6 +15,7 @@ export type OnBehalfOf = {
   tool_id: string | null;
   agent_id: string | null;
   generation_id: string | null;
+  work_id: string | null;
   session_id: string | null;
   actor_id: string | null;
 };
@@ -60,6 +61,7 @@ const readOnBehalfOf = (args: {
     tool_id: claim(claims, 'tool_id'),
     agent_id: claim(claims, 'agent_id'),
     generation_id: claim(claims, 'generation_id'),
+    work_id: claim(claims, 'work_id'),
     session_id: claim(claims, 'session_id'),
     actor_id: claim(claims, 'actor_id'),
   };

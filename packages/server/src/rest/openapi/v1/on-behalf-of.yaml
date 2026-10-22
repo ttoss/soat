@@ -37,6 +37,13 @@ components:
           nullable: true
           description: The generation that called the tool
           example: gen_V1StGXR8Z5jdHi6B
+        work_id:
+          type: string
+          nullable: true
+          description: >-
+            The run-as work that called the tool: a playbook case or
+            execution, a task, or an orchestration run
+          example: pbk_case_V1StGXR8Z5jdHi6B
         session_id:
           type: string
           nullable: true

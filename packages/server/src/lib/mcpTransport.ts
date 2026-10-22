@@ -45,6 +45,7 @@ const identityOf = async (args: {
     projectId: project.publicId,
     agentId: args.meter.attribution.agentId,
     generationId: args.meter.attribution.generationId,
+    workId: args.meter.workId,
     context: args.toolContext,
   };
 };

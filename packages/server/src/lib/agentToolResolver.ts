@@ -30,6 +30,7 @@ import {
 } from './httpToolResponse';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import { openMcpTransport } from './mcpTransport';
+import { readRunTokenWork } from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { withRequestIdHeader } from './requestCorrelation';
 import { toolReferences } from './resourceReferences';
@@ -1065,6 +1066,7 @@ const resolveToolByType = async (
     projectId: typedTool.projectId,
     callerProjectId: args.callerProjectId,
     toolId: typedTool.publicId || null,
+    workId: readRunTokenWork(args.authHeader),
     attribution: args.attribution,
   };
 

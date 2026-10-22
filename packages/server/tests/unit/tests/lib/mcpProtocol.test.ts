@@ -4,7 +4,7 @@ import { McpToolError } from 'src/lib/mcpProtocol';
 
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
-const UNMETERED = { projectId: 0, toolId: null, attribution: {} };
+const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
 
 /**
  * How much of the MCP protocol an `mcp` binding actually reads.

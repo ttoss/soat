@@ -64,6 +64,11 @@ export type ToolExecutionMeter = {
   callerProjectId?: number;
   // Public id; null for an inline (unpersisted) definition.
   toolId: string | null;
+  /**
+   * The run-as work making the call (`readRunTokenWork`), signed as the
+   * assertion's `work_id`; null for a call no run-as token makes.
+   */
+  workId: string | null;
   attribution: ToolCallAttribution;
 };
 
