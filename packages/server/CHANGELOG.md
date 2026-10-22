@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.93.1](https://github.com/ttoss/soat/compare/v0.93.0...v0.93.1) (2026-10-22)
+
+### Bug Fixes
+
+* **playbooks:** create, update and validate refuse an executor that does not exist ([#1715](https://github.com/ttoss/soat/issues/1715)) ([b9006ba](https://github.com/ttoss/soat/commit/b9006ba1986c52d460af2c42370651adc588ad5a))
+
 # [0.93.0](https://github.com/ttoss/soat/compare/v0.92.2...v0.93.0) (2026-10-21)
 
 ### Features
