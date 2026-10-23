@@ -55,6 +55,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/Memory'
         '401':
@@ -426,6 +427,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: './memory-assertions.yaml#/components/schemas/MemoryAssertion'
         '401':
