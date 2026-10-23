@@ -250,6 +250,81 @@ describe('POST /api/v1/memories — the write algorithm', () => {
       ).toEqual(['Spacing  varies   here']);
     });
 
+    // The embedder scores case and punctuation as content: a lowercased copy
+    // of a sentence can land below `supersede_threshold` and be created again.
+    describe('a restatement differing only in case and punctuation', () => {
+      const ORIGINAL =
+        'Não anunciar aos domingos, porque a clínica não atende.';
+      const VARIANT = 'NÃO ANUNCIAR AOS DOMINGOS porque a clínica não atende';
+
+      const restate = async () => {
+        const memoryStoreId = await createMemoryStore();
+        const first = await seedAt({
+          memoryStoreId,
+          content: ORIGINAL,
+          similarity: 0.5,
+        });
+        // Down, so a skip proves the stored vector was reused, not re-embedded.
+        embedderDown = true;
+        const res = await write({
+          memory_store_id: memoryStoreId,
+          content: VARIANT,
+        });
+        return { memoryStoreId, first, res };
+      };
+
+      test('is skipped against the original without an embedding call', async () => {
+        const { first, res } = await restate();
+
+        expect(res.body.action).toBe('skipped');
+        expect(res.body.id).toBe(first.id);
+        expect(res.body.content).toBe(ORIGINAL);
+      });
+
+      test('keeps its own spelling on its own content row', async () => {
+        const { memoryStoreId } = await restate();
+
+        const rows = await contentRowsOf(memoryStoreId);
+        expect(
+          rows
+            .map((row) => {
+              return row.content;
+            })
+            .sort()
+        ).toEqual([ORIGINAL, VARIANT].sort());
+      });
+
+      test('is recorded with the text that was sent', async () => {
+        const { first } = await restate();
+
+        const res = await asAdmin().get(
+          `/api/v1/memories/${first.id}/assertions`
+        );
+        expect(res.status).toBe(200);
+        const skipped = res.body.data.find((assertion: { outcome: string }) => {
+          return assertion.outcome === 'skipped';
+        });
+        expect(skipped.content).toBe(VARIANT);
+      });
+    });
+
+    test('punctuation between digits is part of the content', async () => {
+      const memoryStoreId = await createMemoryStore();
+      await seedAt({
+        memoryStoreId,
+        content: 'The upload limit is 1.5 GB.',
+        similarity: 0.5,
+      });
+
+      const res = await write({
+        memory_store_id: memoryStoreId,
+        content: 'The upload limit is 15 GB.',
+      });
+
+      expect(res.body.action).toBe('created');
+      expect(await contentRowsOf(memoryStoreId)).toHaveLength(2);
+    });
+
     test('a text known to one store is new to another', async () => {
       const first = await createMemoryStore();
       const second = await createMemoryStore();

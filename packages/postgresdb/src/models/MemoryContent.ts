@@ -35,6 +35,12 @@ import { MemoryStore } from './MemoryStore';
       fields: ['memory_store_id', 'content_hash'],
     },
     {
+      // Not unique: each spelling keeps its own row, and a new one reuses the
+      // vector of a row it shares this key with instead of re-embedding.
+      name: 'memory_contents_store_normalized_hash_idx',
+      fields: ['memory_store_id', 'normalized_hash'],
+    },
+    {
       // Moved here from `memories` with the vector itself: the read pattern is
       // still `ORDER BY embedding <=> $query LIMIT n`, now reached
       // through the memory's `content_id` so the validity filter stays on the
@@ -63,9 +69,13 @@ export class MemoryContent extends Model {
   @Column({ type: DataType.TEXT, allowNull: false })
   declare content: string;
 
-  /** sha256 of the normalized content; see `hashMemoryContent`. */
+  /** One spelling's key; see `hashMemoryContent`. */
   @Column({ type: DataType.STRING(64), allowNull: false })
   declare contentHash: string;
+
+  /** The key spellings of one text share; see `hashNormalizedMemoryContent`. */
+  @Column({ type: DataType.STRING(64), allowNull: false })
+  declare normalizedHash: string;
 
   @Column({
     type: DataType.VECTOR(getEmbeddingDimensions()),

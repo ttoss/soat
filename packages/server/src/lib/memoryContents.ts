@@ -1,23 +1,13 @@
-import { createHash } from 'node:crypto';
-
+import {
+  hashMemoryContent,
+  hashNormalizedMemoryContent,
+} from '@soat/postgresdb';
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
 
 const log = createDebug('soat:memories');
-
-/**
- * The dedup key for a store's text. Trimmed and whitespace-collapsed first, so
- * the same sentence typed with different spacing is the same content and costs
- * one embedding rather than two.
- *
- * The migration reproduces this exactly in SQL; changing the normalization
- * means rehashing `memory_contents`.
- */
-export const hashMemoryContent = (args: { content: string }): string => {
-  const normalized = args.content.trim().replace(/\s+/g, ' ');
-  return createHash('sha256').update(normalized).digest('hex');
-};
 
 const embedOrNull = async (args: {
   content: string;
@@ -91,7 +81,19 @@ export const resolveMemoryContent = async (args: {
     return existing;
   }
 
-  const embedding = await embedOrNull(args);
+  // A spelling differing only in case or punctuation reuses its sibling's
+  // vector, so it scores 1.0 against it instead of being re-embedded below
+  // `supersede_threshold`, while keeping its own text on its own row.
+  const normalizedHash = hashNormalizedMemoryContent({ content: args.content });
+  const sibling = await db.MemoryContent.findOne({
+    where: {
+      memoryStoreId: args.memoryStoreId,
+      normalizedHash,
+      embedding: { [Op.ne]: null },
+    },
+    order: [['id', 'ASC']],
+  });
+  const embedding = sibling?.embedding ?? (await embedOrNull(args));
 
   // `findOrCreate`, not `create`: two concurrent writes of the same new text
   // both miss the lookup above, and the unique index decides between them. The
@@ -104,6 +106,7 @@ export const resolveMemoryContent = async (args: {
       memoryStoreId: args.memoryStoreId,
       content: args.content,
       contentHash,
+      normalizedHash,
       embedding,
     },
   });
