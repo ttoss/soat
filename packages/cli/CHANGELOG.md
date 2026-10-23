@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.94.0](https://github.com/ttoss/soat/compare/v0.93.2...v0.94.0) (2026-10-23)
+
+### Features
+
+* **api:** cursor pagination on every list ([#1721](https://github.com/ttoss/soat/issues/1721)) ([b325f56](https://github.com/ttoss/soat/commit/b325f569583985402ddda28c53659654c8d160c0))
+
+### BREAKING CHANGES
+
+* **api:** every list answers `{ data, next_cursor }` and takes `limit` and `cursor`; `offset` and `total` are gone, and `ACTIVITY_INVALID_CURSOR` is now `INVALID_CURSOR`.
+
 ## [0.93.2](https://github.com/ttoss/soat/compare/v0.93.1...v0.93.2) (2026-10-22)
 
 **Note:** Version bump only for package @soat/cli
