@@ -3006,21 +3006,18 @@ TOOL_ID=$(printf '%s\n' "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 
 # 19b. A pipeline chaining one HTTP tool twice and mapping both step outputs.
-# Step `b`'s input and the pipeline `output` nest a `var` marker inside a plain
-# object, to exercise recursive JSON Logic resolution at depth, not just at the
-# top level.
-#
-# The marker rides on `cursor` because an `http` tool with no body turns every
-# leftover input key into a query parameter, and the target here is this API,
-# where an undeclared parameter is a 400. `cursor` is declared on the projects
-# listing; nothing here asserts what step `b` answers, only the nesting.
+# The pipeline `output` nests a `var` marker inside a plain object, to exercise
+# recursive JSON Logic resolution at depth. Step inputs stay empty: an `http`
+# tool with no body turns every input key into a query parameter, and the
+# projects listing declares none a nested marker could ride on (step-input
+# nesting is `pipelineTools.test.ts`).
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name compute-and-list \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"cursor\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
 PIPELINE_TOOL_ID=$(printf '%s\n' "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
@@ -3031,8 +3028,8 @@ echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 
 # 19c. Call the pipeline — both steps hit GET /projects on the live server and
 # the output mapping returns from_a / from_b / echoed.container (the latter
-# resolved from a `var` nested inside a plain object, at both the step-input
-# and pipeline-output level).
+# resolved from a `var` nested inside a plain object at the pipeline-output
+# level).
 echo "--- Calling pipeline tool ---"
 STEP_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 100 | sanitize_json | jq -r '.data | length')
 PIPELINE_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 100 | sanitize_json | jq -r '.data | length')
