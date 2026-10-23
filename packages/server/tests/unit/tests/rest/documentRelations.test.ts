@@ -229,7 +229,7 @@ describe('Document relations', () => {
         const response = await list();
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({ total: 3, limit: 50, offset: 0 });
+        expect(response.body.next_cursor).toBeNull();
         expect(
           response.body.data.map((r: { to_document_id: string }) => {
             return r.to_document_id;
@@ -238,19 +238,27 @@ describe('Document relations', () => {
       });
 
       test('an explicit page answers that slice, oldest first', async () => {
-        const response = await list({ limit: 1, offset: 1 });
+        const first = await list({ limit: 1 });
+        const response = await list({
+          limit: 1,
+          cursor: first.body.next_cursor,
+        });
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({ total: 3, limit: 1, offset: 1 });
+        expect(typeof response.body.next_cursor).toBe('string');
         expect(response.body.data).toHaveLength(1);
         expect(response.body.data[0].to_document_id).toBe(targets[1]);
       });
 
       test('the last page holds the remainder', async () => {
-        const response = await list({ limit: 2, offset: 2 });
+        const first = await list({ limit: 2 });
+        const response = await list({
+          limit: 2,
+          cursor: first.body.next_cursor,
+        });
 
         expect(response.status).toBe(200);
-        expect(response.body.total).toBe(3);
+        expect(response.body.next_cursor).toBeNull();
         expect(response.body.data).toHaveLength(1);
         expect(response.body.data[0].to_document_id).toBe(targets[2]);
       });
@@ -259,7 +267,7 @@ describe('Document relations', () => {
         const response = await list({ limit: 1000 });
 
         expect(response.status).toBe(200);
-        expect(response.body.limit).toBe(100);
+        expect(response.body.data.length).toBeLessThanOrEqual(100);
       });
 
       test('a non-numeric limit is refused', async () => {

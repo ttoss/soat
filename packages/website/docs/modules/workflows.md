@@ -114,7 +114,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 
 #### Transition history
 
-Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-history) returns them oldest-first, paged in the `{ data, total, limit, offset }` envelope.
+Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-history) returns them oldest-first, paged in the [list envelope](../api/index.md#pagination).
 
 | Field           | Type            | Description                                                        |
 | --------------- | --------------- | ----------------------------------------------------------------- |

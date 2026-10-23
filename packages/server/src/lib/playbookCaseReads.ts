@@ -132,7 +132,7 @@ export const listPlaybookCaseEntries = async (args: {
   id: string;
   node?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listPlaybookCaseEntries: id=%s node=%s', args.id, args.node);
   const row = await playbookCases.getByPublicId(args);
@@ -141,14 +141,17 @@ export const listPlaybookCaseEntries = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, id: args.id, node: args.node },
+    where,
     order: [['revision', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.PlaybookEntry.findAndCountAll({
-        where,
+    // A revision names one entry within a case.
+    tiebreak: [],
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.PlaybookEntry.findAll({
+        where: pageWhere,
         order,
         limit,
-        offset,
       });
     },
     map: (entry) => {

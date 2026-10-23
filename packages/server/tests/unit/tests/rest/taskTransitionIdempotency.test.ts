@@ -63,7 +63,7 @@ describe('Task transition idempotency', () => {
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/${taskId}/history`
     );
-    return res.body.total as number;
+    return res.body.data.length as number;
   };
 
   const fire = (args: {

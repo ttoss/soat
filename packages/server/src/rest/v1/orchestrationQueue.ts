@@ -96,6 +96,7 @@ orchestrationQueueRouter.get(
         };
       }),
       ...parsePagination(ctx),
+      filters: {},
     });
   }
 );

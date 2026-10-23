@@ -48,20 +48,20 @@ const mapAiProvider = (instance: AiProviderRow) => {
 export const listAiProviders = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where: { projectId: args.projectIds },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.AiProvider.findAndCountAll({
-        where: { projectId: args.projectIds },
+    query: ({ where, limit, order }) => {
+      return db.AiProvider.findAll({
+        where,
         include: getAiProviderIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapAiProvider,

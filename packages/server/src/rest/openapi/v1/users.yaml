@@ -51,30 +51,19 @@ paths:
       x-soat-agent-exclude: true
       parameters:
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: List of users returned successfully
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - total
-                  - limit
-                  - offset
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserRecord'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/UserRecord'
         '500':
           description: Internal server error
           content:

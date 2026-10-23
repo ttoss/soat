@@ -667,7 +667,7 @@ AUDIT_READ_ATTEMPTS=0
 while [ "$AUDIT_READ_COUNT" -lt 1 ] && [ "$AUDIT_READ_ATTEMPTS" -lt 10 ]; do
   AUDIT_READ_COUNT=$($SOAT_CLI list-audit-entries \
     --project_id "$PROJECT_PUBLIC_ID" --action secrets:ListSecrets \
-    | jq -r '.total')
+    | jq -r '.data | length')
   AUDIT_READ_ATTEMPTS=$((AUDIT_READ_ATTEMPTS + 1))
   # Guarded with `if` rather than `&&`: under `set -e` a false `[ ]` as the
   # last command of the loop body would abort the script on the success path.
@@ -939,7 +939,7 @@ if [ "$EDIT_V" != "2" ]; then
 fi
 
 VERSIONS_RESP=$($SOAT_CLI list-document-versions --document-id "$VER_DOC_ID")
-VERSIONS_TOTAL=$(printf '%s\n' "$VERSIONS_RESP" | jq -r '.total')
+VERSIONS_TOTAL=$(printf '%s\n' "$VERSIONS_RESP" | jq -r '.data | length')
 if [ "$VERSIONS_TOTAL" != "2" ]; then
   echo "ERROR: expected 2 archived versions, got $VERSIONS_TOTAL" >&2
   exit 1
@@ -964,7 +964,7 @@ fi
 HIDDEN_LIST=$($SOAT_CLI list-documents \
   --project-id "$PROJECT_PUBLIC_ID" \
   --path-prefix /versioned/)
-HIDDEN_TOTAL=$(printf '%s\n' "$HIDDEN_LIST" | jq -r '.total')
+HIDDEN_TOTAL=$(printf '%s\n' "$HIDDEN_LIST" | jq -r '.data | length')
 if [ "$HIDDEN_TOTAL" != "0" ]; then
   echo "ERROR: withdrawn document still listed, total=$HIDDEN_TOTAL" >&2
   exit 1
@@ -974,7 +974,7 @@ SHOWN_LIST=$($SOAT_CLI list-documents \
   --project-id "$PROJECT_PUBLIC_ID" \
   --path-prefix /versioned/ \
   --include-withdrawn true)
-SHOWN_TOTAL=$(printf '%s\n' "$SHOWN_LIST" | jq -r '.total')
+SHOWN_TOTAL=$(printf '%s\n' "$SHOWN_LIST" | jq -r '.data | length')
 if [ "$SHOWN_TOTAL" != "1" ]; then
   echo "ERROR: include_withdrawn expected 1 document, got $SHOWN_TOTAL" >&2
   exit 1
@@ -1747,8 +1747,8 @@ if [ "$ME_RET_INVAL" = "null" ] || [ "$ME_RET_LINK" != "null" ]; then
   echo "ERROR: a retraction invalidates with no successor, got invalidated_at=$ME_RET_INVAL link=$ME_RET_LINK" >&2
   exit 1
 fi
-ME_RET_LISTED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" | jq -r '.total')
-ME_RET_AUDITED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" --include_invalidated true | jq -r '.total')
+ME_RET_LISTED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" | jq -r '.data | length')
+ME_RET_AUDITED=$($SOAT_CLI list-memories --memory-store-id "$ME_RET_STORE" --include_invalidated true | jq -r '.data | length')
 if [ "$ME_RET_LISTED" != "0" ] || [ "$ME_RET_AUDITED" != "1" ]; then
   echo "ERROR: retracted memory should leave the listing and stay auditable, got $ME_RET_LISTED and $ME_RET_AUDITED" >&2
   exit 1
@@ -2042,7 +2042,7 @@ echo "--- Listing orchestration versions ---"
 ORCH_VER_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-versions --orchestration-id "$ORCH_ID")
 # The description-only update above changed no graph field, so the
 # orchestration is still at version 1 with exactly one archived version.
-if ! printf '%s\n' "$ORCH_VER_LIST_RESP" | jq -e '.total == 1 and .data[0].version == 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_VER_LIST_RESP" | jq -e '(.data | length) == 1 and .data[0].version == 1' >/dev/null 2>&1; then
   echo "list-orchestration-versions did not report the create-time version"
   printf '%s\n' "$ORCH_VER_LIST_RESP"
   exit 1
@@ -2329,7 +2329,7 @@ fi
 # and each carries the dispatch count that makes a redelivered execution visible.
 ORCH_RUN_EXECS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-run-node-executions \
   --orchestration-run-id "$ORCH_RUN_ID")
-if ! printf '%s\n' "$ORCH_RUN_EXECS" | jq -e '.total >= 1 and (.data | all(.status == "completed")) and (.data | all(.dispatches == 1))' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_EXECS" | jq -e '(.data | length) >= 1 and (.data | all(.status == "completed")) and (.data | all(.dispatches == 1))' >/dev/null 2>&1; then
   echo "list-orchestration-run-node-executions did not list completed executions"
   printf '%s\n' "$ORCH_RUN_EXECS"
   exit 1
@@ -3010,19 +3010,17 @@ echo "Agent Tool id: $TOOL_ID"
 # object, to exercise recursive JSON Logic resolution at depth, not just at the
 # top level.
 #
-# The marker rides on `offset` because an `http` tool with no body turns every
+# The marker rides on `cursor` because an `http` tool with no body turns every
 # leftover input key into a query parameter, and the target here is this API,
-# where an undeclared parameter is a 400. `offset` is declared on
-# the projects listing and parses a non-numeric value back to its default, so
-# the call still exercises the nesting without asserting anything about
-# pagination.
+# where an undeclared parameter is a 400. `cursor` is declared on the projects
+# listing; nothing here asserts what step `b` answers, only the nesting.
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name compute-and-list \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"offset\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"cursor\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
 PIPELINE_TOOL_ID=$(printf '%s\n' "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
@@ -3036,8 +3034,8 @@ echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 # resolved from a `var` nested inside a plain object, at both the step-input
 # and pipeline-output level).
 echo "--- Calling pipeline tool ---"
-STEP_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-PIPELINE_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
+STEP_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 100 | sanitize_json | jq -r '.data | length')
+PIPELINE_CALLS_BEFORE=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 100 | sanitize_json | jq -r '.data | length')
 PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{"tag":"hello-nested"}')
 printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
 if ! printf '%s\n' "$PIPELINE_CALL_RESP" | jq -e 'has("from_a") and has("from_b")' > /dev/null; then
@@ -3054,8 +3052,8 @@ echo "Pipeline call OK (nested JSON Logic resolution verified)"
 
 # Each step is one tool_execution event against the step's tool, and the
 # pipeline's own call is one more against the pipeline.
-STEP_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
-PIPELINE_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 1 | sanitize_json | jq -r '.total')
+STEP_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$TOOL_ID" --limit 100 | sanitize_json | jq -r '.data | length')
+PIPELINE_CALLS_AFTER=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$PIPELINE_TOOL_ID" --limit 100 | sanitize_json | jq -r '.data | length')
 if [ "$((STEP_CALLS_AFTER - STEP_CALLS_BEFORE))" != "2" ] || [ "$((PIPELINE_CALLS_AFTER - PIPELINE_CALLS_BEFORE))" != "1" ]; then
   echo "FAIL: expected 2 tool_execution events for the steps and 1 for the pipeline, got $((STEP_CALLS_AFTER - STEP_CALLS_BEFORE)) and $((PIPELINE_CALLS_AFTER - PIPELINE_CALLS_BEFORE))"
   exit 1
@@ -3398,7 +3396,7 @@ fi
 echo "Agent id: $VER_AGENT_ID (version 1)"
 
 VER_LIST=$($SOAT_CLI list-agent-versions --agent-id "$VER_AGENT_ID")
-if [ "$(printf '%s\n' "$VER_LIST" | jq -r '.total')" != "1" ]; then
+if [ "$(printf '%s\n' "$VER_LIST" | jq -r '.data | length')" != "1" ]; then
   echo "ERROR: create did not archive exactly one version" >&2
   printf '%s\n' "$VER_LIST" >&2
   exit 1
@@ -3684,7 +3682,7 @@ $SOAT_CLI update-guardrail \
   --description "renamed, same policy" >/dev/null
 GUARD_VERSIONS=$($SOAT_CLI list-guardrail-versions \
   --guardrail-id "$GATED_GUARDRAIL_ID")
-if [ "$(printf '%s\n' "$GUARD_VERSIONS" | jq -r '.total')" != "1" ]; then
+if [ "$(printf '%s\n' "$GUARD_VERSIONS" | jq -r '.data | length')" != "1" ]; then
   echo "ERROR: a metadata-only edit archived a guardrail version" >&2
   echo "$GUARD_VERSIONS" >&2
   exit 1
@@ -3787,7 +3785,7 @@ if [ -n "$ACT_EXEC_ENTRY" ]; then
     exit 1
   fi
   echo "Agent tool-call activity recording: OK"
-  ACT_TOOL_CALLS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$ACT_TOOL_ID" --agent-id "$ACT_AGENT_ID" --limit 1 | sanitize_json | jq -r '.total')
+  ACT_TOOL_CALLS=$($SOAT_CLI list-usage-events --meter-type tool_execution --tool-id "$ACT_TOOL_ID" --agent-id "$ACT_AGENT_ID" --limit 100 | sanitize_json | jq -r '.data | length')
   if [ "$ACT_TOOL_CALLS" -lt 1 ]; then
     echo "ERROR: the executed agent tool call wrote no tool_execution event" >&2
     exit 1
@@ -4181,13 +4179,13 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   # generation that is not part of a chain reports `chain_id: null` rather than
   # omitting the field. A chain's own lifecycle is covered by the unit suite.
   CHAINS_RESP=$($SOAT_CLI list-chains --project-id "$PROJECT_PUBLIC_ID" | sanitize_json)
-  CHAINS_TOTAL=$(printf '%s\n' "$CHAINS_RESP" | jq -r 'if (.data | type) == "array" then .total else empty end')
+  CHAINS_TOTAL=$(printf '%s\n' "$CHAINS_RESP" | jq -r 'if (.data | type) == "array" and has("next_cursor") then (.data | length) else empty end')
   if [ -z "$CHAINS_TOTAL" ]; then
     echo "ERROR: list-chains did not return a paginated page" >&2
     printf '%s\n' "$CHAINS_RESP" >&2
     exit 1
   fi
-  echo "List chains endpoint: OK (total: $CHAINS_TOTAL)"
+  echo "List chains endpoint: OK (page: $CHAINS_TOTAL)"
 
   GENERATION_CHAIN_ID=$(printf '%s\n' "$GENERATION_GET_RESP" | jq -r 'if has("chain_id") then (.chain_id // "null") else empty end')
   if [ -z "$GENERATION_CHAIN_ID" ]; then
@@ -4429,8 +4427,8 @@ if [ "$USAGE_IS_ARRAY" != "yes" ]; then
   echo "$USAGE_EVENTS_RESP" >&2
   exit 1
 fi
-USAGE_TOTAL=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.total // 0')
-echo "List usage meters endpoint: OK (total: $USAGE_TOTAL)"
+USAGE_TOTAL=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.data | length')
+echo "List usage meters endpoint: OK (page: $USAGE_TOTAL)"
 
 # When at least one generation has completed, its token event must carry
 # token components (values depend on the live provider, so only their shape is
@@ -4498,7 +4496,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   USAGE_AGG_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
     --group-by meter_type | sanitize_json)
-  USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups.data | type == "array") and (.groups.total | type == "number") and (.totals.input_tokens | type == "number") and (.totals.event_count | type == "number") and ([.groups.data[] | select(.key == "llm_tokens")] | length >= 1))')
+  USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups.data | type == "array") and (.groups | has("next_cursor")) and (.totals.input_tokens | type == "number") and (.totals.event_count | type == "number") and ([.groups.data[] | select(.key == "llm_tokens")] | length >= 1))')
   if [ "$USAGE_AGG_OK" != "true" ]; then
     echo "ERROR: get-usage-aggregate did not return a well-formed aggregate rollup" >&2
     echo "$USAGE_AGG_RESP" >&2
@@ -4542,19 +4540,16 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   fi
   echo "Usage aggregate meter_type filter: OK"
 
-  # 34b-iii-d. Counting without materializing: `groups.total` is the number of
-  # buckets, so a count is one small response however many there are. The page
-  # is bounded by --limit while `total` and `totals` keep describing the whole
-  # window — a page-scoped total read against an allowance would understate it.
+  # 34b-iii-d. The page is bounded by --limit while `totals` keeps describing
+  # the whole window — a page-scoped total read against an allowance would
+  # understate it.
   USAGE_COUNT_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
     --group-by meter_type \
     --limit 1 | sanitize_json)
   USAGE_COUNT_OK=$(printf '%s\n' "$USAGE_COUNT_RESP" | jq -r --argjson full "$USAGE_AGG_RESP" '
-    (.groups.limit == 1)
-      and (.groups.offset == 0)
-      and ((.groups.data | length) <= 1)
-      and (.groups.total == ($full.groups.total))
+    ((.groups.data | length) <= 1)
+      and (((.groups.next_cursor | type) == "string") == (($full.groups.data | length) > 1))
       and (.totals == ($full.totals))')
   if [ "$USAGE_COUNT_OK" != "true" ]; then
     echo "ERROR: get-usage-aggregate --limit did not bound the page while keeping totals whole-window" >&2
@@ -4563,7 +4558,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   fi
   echo "Usage aggregate counting and paging: OK"
 
-  # 34b-iii-e. Counting entities, which `groups.total` does not answer: it is
+  # 34b-iii-e. Counting entities, which the bucket count does not answer: it is
   # bucket cardinality, and a null key is a real bucket, so a project whose
   # traffic is standalone generations reports one `orchestration_run` bucket
   # whatever its volume. `include=distinct` is the counter, and it is
@@ -5353,7 +5348,7 @@ GRANTEE_KEY=$($SOAT_CLI create-api-key --name smoke-share-grantee-key \
 SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI call-tool --tool-id "$CALLED_TOOL_ID" --input '{}' >/dev/null
 SHARED_CALLS=$(SOAT_TOKEN="$GRANTEE_KEY" $SOAT_CLI list-usage-events \
   --meter-type tool_execution --publisher-project-id "$PROJECT_PUBLIC_ID" --limit 1 \
-  | sanitize_json | jq -r '.total')
+  | sanitize_json | jq -r '.data | length')
 if [ "$SHARED_CALLS" -lt 1 ]; then
   echo "ERROR: The grantee's call through the share was not metered in the grantee" >&2
   exit 1
@@ -5930,7 +5925,7 @@ if ! $SOAT_CLI get-eval --eval_id "$EVAL_FORM_EVAL_ID" | jq -e --arg ds "$EVAL_F
   echo "ERROR: the formation eval did not resolve its dataset ref" >&2
   exit 1
 fi
-if ! $SOAT_CLI list-dataset-items --dataset_id "$EVAL_FORM_DATASET_ID" | jq -e '.total == 1' >/dev/null 2>&1; then
+if ! $SOAT_CLI list-dataset-items --dataset_id "$EVAL_FORM_DATASET_ID" | jq -e '(.data | length) == 1' >/dev/null 2>&1; then
   echo "ERROR: the formation dataset_item was not created in its parent dataset" >&2
   exit 1
 fi
@@ -6736,7 +6731,7 @@ echo "Workflow tool dispatch: OK (task routed, tool_id recorded as the cause)"
 # ── Definition versioning and task pinning ──
 echo "--- Workflow versions ---"
 WF_VER_LIST=$($SOAT_CLI list-workflow-versions --workflow-id "$WORKFLOW_ID")
-if ! printf '%s\n' "$WF_VER_LIST" | jq -e '.total == 1 and .data[0].version == 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$WF_VER_LIST" | jq -e '(.data | length) == 1 and .data[0].version == 1' >/dev/null 2>&1; then
   echo "ERROR: list-workflow-versions did not report the create-time version" >&2
   printf '%s\n' "$WF_VER_LIST" >&2
   exit 1
@@ -7622,7 +7617,7 @@ if ! printf '%s\n' "$EVAL_ASYNC_GET" | jq -e \
   exit 1
 fi
 EVAL_ASYNC_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID")
-if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e '.total == 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e '(.data | length) == 1' >/dev/null 2>&1; then
   echo "ERROR: expected exactly one result row for the queued run" >&2
   printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
   exit 1
@@ -7780,7 +7775,7 @@ fi
 # failed to answer errored the item instead of scoring it 0.
 EVAL_JUDGE_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_JUDGE_ID" --eval_run_id "$EVAL_JUDGE_RUN_ID")
 if ! printf '%s\n' "$EVAL_JUDGE_RESULTS" | jq -e \
-  '.total == 1
+  '(.data | length) == 1
    and (.data[0]
         | (.error != null and (.scores | length) == 0)
           or (.error == null and .scores[0].scorer == "llm_judge"
@@ -7861,7 +7856,7 @@ fi
 # scorer's NAME — and the aggregate bucket must key on the same name.
 EVAL_TOOL_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_TOOL_ID" --eval_run_id "$EVAL_TOOL_RUN_ID")
 if ! printf '%s\n' "$EVAL_TOOL_RESULTS" | jq -e \
-  '.total == 1
+  '(.data | length) == 1
    and (.data[0]
         | (.error != null and (.scores | length) == 0)
           or (.error == null and .scores[0].scorer == "non_empty"
@@ -7901,7 +7896,7 @@ echo "Custom tool scorer verified."
 
 echo "--- Listing and getting eval runs ---"
 EVAL_RUNS_RESP=$($SOAT_CLI list-eval-runs --eval_id "$EVAL_ID")
-if ! printf '%s\n' "$EVAL_RUNS_RESP" | jq -e '.total >= 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$EVAL_RUNS_RESP" | jq -e '(.data | length) >= 1' >/dev/null 2>&1; then
   echo "ERROR: expected at least one eval run" >&2
   printf '%s\n' "$EVAL_RUNS_RESP" >&2
   exit 1
@@ -8049,7 +8044,7 @@ echo "--- Deleting the dataset item leaves the run results readable ---"
 $SOAT_CLI delete-dataset-item --dataset_id "$DATASET_ID" --item_id "$DATASET_ITEM_ID"
 EVAL_RESULTS_AFTER=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_RUN_ID")
 if ! printf '%s\n' "$EVAL_RESULTS_AFTER" | jq -e \
-  '.total == 1 and .data[0].dataset_item_id == null and (.data[0].input | length) == 1' \
+  '(.data | length) == 1 and .data[0].dataset_item_id == null and (.data[0].input | length) == 1' \
   >/dev/null 2>&1; then
   echo "ERROR: eval results lost their frozen snapshot after the item was deleted" >&2
   printf '%s\n' "$EVAL_RESULTS_AFTER" >&2

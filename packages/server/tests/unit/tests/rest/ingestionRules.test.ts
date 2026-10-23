@@ -277,7 +277,7 @@ describe('IngestionRules', () => {
       expect(res.body.data.length).toBeGreaterThan(0);
     });
 
-    test('list honors limit and offset', async () => {
+    test('list honors limit and cursor', async () => {
       const full = await authenticatedTestClient(adminToken).get(
         `/api/v1/ingestion-rules?project_id=${projectId}`
       );
@@ -288,9 +288,10 @@ describe('IngestionRules', () => {
       );
       expect(limited.status).toBe(200);
       expect(limited.body.data.length).toBe(1);
+      expect(typeof limited.body.next_cursor).toBe('string');
 
       const paged = await authenticatedTestClient(adminToken).get(
-        `/api/v1/ingestion-rules?project_id=${projectId}&limit=1&offset=1`
+        `/api/v1/ingestion-rules?project_id=${projectId}&limit=1&cursor=${limited.body.next_cursor}`
       );
       expect(paged.status).toBe(200);
       expect(paged.body.data.length).toBe(1);

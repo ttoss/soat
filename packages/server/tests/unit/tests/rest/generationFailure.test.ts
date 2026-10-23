@@ -123,7 +123,7 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
         `/api/v1/generations?agent_id=${agentId}`
       );
       expect(listRes.status).toBe(200);
-      expect(listRes.body.total).toBe(0);
+      expect(listRes.body.data).toEqual([]);
 
       // An orphaned Trace would make this a 409 though no Generation exists.
       const deleteRes = await authenticatedTestClient(adminToken).delete(

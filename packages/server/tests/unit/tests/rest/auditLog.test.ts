@@ -589,15 +589,24 @@ describe('Audit Log — retention sweep', () => {
 });
 
 describe('Audit Log — pagination and queue metrics', () => {
-  test('limit/offset are applied to the list response', async () => {
+  test('limit and cursor page the list', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log')
-      .query({ limit: '1', offset: '0' });
+      .query({ project_id: projectId, limit: '1' });
     expect(res.status).toBe(200);
-    expect(res.body.limit).toBe(1);
-    expect(res.body.offset).toBe(0);
-    expect(res.body.data.length).toBeLessThanOrEqual(1);
-    expect(typeof res.body.total).toBe('number');
+    expect(res.body.data).toHaveLength(1);
+    expect(typeof res.body.next_cursor).toBe('string');
+
+    const next = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({
+        project_id: projectId,
+        limit: '1',
+        cursor: res.body.next_cursor,
+      });
+    expect(next.status).toBe(200);
+    expect(next.body.data).toHaveLength(1);
+    expect(next.body.data[0].id).not.toBe(res.body.data[0].id);
   });
 
   test('the dropped-entry counter is exposed as a number', async () => {
@@ -605,7 +614,7 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(getDroppedAuditCount()).toBeGreaterThanOrEqual(0);
   });
 
-  // A non-numeric `limit`/`offset` must fail loudly like the `from`/`to` date
+  // A non-numeric `limit` must fail loudly like the `from`/`to` date
   // params do, rather than reach Sequelize as `NaN` and crash with a bare 500.
   test('a non-numeric ?limit= is rejected with 400, not a 500', async () => {
     const res = await authenticatedTestClient(adminToken)
@@ -615,10 +624,10 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
 
-  test('a non-numeric ?offset= is rejected with 400, not a 500', async () => {
+  test('an ?offset= is rejected with 400', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log')
-      .query({ project_id: projectId, offset: 'abc' });
+      .query({ project_id: projectId, offset: '0' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
@@ -631,19 +640,21 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
 
-  test('an absent ?limit=/?offset= still falls back to the default, not an error', async () => {
+  test('an absent ?limit= falls back to the default page of 25', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log')
       .query({ project_id: projectId });
     expect(res.status).toBe(200);
-    expect(res.body.limit).toBe(25);
-    expect(res.body.offset).toBe(0);
+    expect(res.body.data.length).toBeLessThanOrEqual(25);
+    if (res.body.next_cursor !== null) {
+      expect(res.body.data).toHaveLength(25);
+    }
   });
 
-  test('a limit below 1 or a negative offset is refused', async () => {
+  test('a limit below 1 is refused', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log')
-      .query({ project_id: projectId, limit: '0', offset: '-10' });
+      .query({ project_id: projectId, limit: '0' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
@@ -653,7 +664,7 @@ describe('Audit Log — pagination and queue metrics', () => {
       .get('/api/v1/audit-log')
       .query({ project_id: projectId, limit: '1000' });
     expect(res.status).toBe(200);
-    expect(res.body.limit).toBe(200);
+    expect(res.body.data.length).toBeLessThanOrEqual(200);
   });
 });
 
@@ -1107,11 +1118,16 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
 
   test('paginates past the internal batch size without dropping or duplicating rows', async () => {
     // The exporter pages the table internally; assert every id is unique and
-    // the count matches what the list endpoint reports as the total.
-    const listRes = await authenticatedTestClient(adminToken)
-      .get('/api/v1/audit-log')
-      .query({ project_id: projectId, limit: '1' });
-    const total = listRes.body.total as number;
+    // the count matches every page of the list endpoint.
+    let total = 0;
+    let cursor: string | undefined;
+    do {
+      const listRes = await authenticatedTestClient(adminToken)
+        .get('/api/v1/audit-log')
+        .query({ project_id: projectId, limit: '200', cursor });
+      total += listRes.body.data.length;
+      cursor = listRes.body.next_cursor ?? undefined;
+    } while (cursor);
 
     const res = await exportNdjson({
       token: adminToken,

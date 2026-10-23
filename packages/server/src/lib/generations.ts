@@ -394,7 +394,7 @@ export const listGenerations = async (args: {
   nodeId?: string;
   statuses?: readonly (typeof GENERATION_STATUSES)[number][];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
@@ -424,18 +424,20 @@ export const listGenerations = async (args: {
 
   if (args.statuses?.length) where.status = args.statuses;
 
+  // Every argument but the page itself narrows the list.
+  const { limit: _limit, cursor: _cursor, ...filters } = args;
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters,
+    where: Object.keys(where).length > 0 ? where : undefined,
     order: [['startedAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Generation.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Generation.findAll({
+        where: pageWhere,
         include: generationIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapGeneration,
@@ -477,7 +479,7 @@ export const getGenerationMemoryAssertions = async (args: {
   publicId: string;
   projectIds?: number[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const gen = await generations.findByPublicId({
     id: args.publicId,
@@ -487,7 +489,7 @@ export const getGenerationMemoryAssertions = async (args: {
   return listGenerationMemoryAssertions({
     generationDbId: gen.id as number,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

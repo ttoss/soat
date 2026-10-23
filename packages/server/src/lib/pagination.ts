@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
@@ -16,68 +19,163 @@ export const DEFAULT_LIST_LIMIT = LIST_BOUNDS.defaultLimit;
 /** Hard upper bound on a single page, regardless of the requested limit. */
 export const MAX_LIST_LIMIT = LIST_BOUNDS.maxLimit;
 
-/** The single, canonical envelope every list endpoint returns. */
-export type PaginatedResult<T> = {
-  data: T[];
-  total: number;
-  limit: number;
-  offset: number;
+/**
+ * The one list envelope, as `pagination.yaml#/components/schemas/Page` is the
+ * one list response. Only this module builds it (`paginationChokepoints`).
+ */
+export type Page<T> = { data: T[]; next_cursor: string | null };
+
+/** A list's `where`, as every list function already builds it. */
+export type ListWhere = Record<string, unknown>;
+
+/** What a caller sends to page a list. */
+export type PageRequest = { limit?: number; cursor?: string };
+
+/**
+ * What narrows a list: every caller-supplied filter and the parent a list is
+ * nested under. Hashed into the cursor, so a cursor answers only the list it
+ * was minted for.
+ */
+export type ListFilters = Record<string, unknown>;
+
+/**
+ * The bounded `limit`. An absent one is the list's default; one that is not an
+ * integer of at least 1 is `VALIDATION_FAILED`; one above the ceiling is
+ * clamped to it.
+ */
+export const resolveLimit = (args: {
+  limit?: number;
+  bounds?: PageBounds;
+}): number => {
+  const bounds = args.bounds ?? LIST_BOUNDS;
+  const limit = args.limit ?? bounds.defaultLimit;
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `limit must be an integer of at least 1; got ${limit}.`,
+      { field: 'limit' }
+    );
+  }
+  return Math.min(limit, bounds.maxLimit);
 };
 
-const refuse = (args: { field: string; value: number; rule: string }) => {
-  return new DomainError(
-    'VALIDATION_FAILED',
-    `${args.field} must be ${args.rule}; got ${args.value}.`,
-    { field: args.field }
+/** A plain-data rendering of `value` whose output does not depend on key order. */
+const canonical = (value: unknown): unknown => {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    return value.map(canonical);
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.keys(value)
+      .sort()
+      .flatMap((key) => {
+        const member: unknown = Reflect.get(value, key);
+        return member === undefined ? [] : [[key, canonical(member)]];
+      });
+  }
+  return value;
+};
+
+const fingerprint = (filters: ListFilters): string => {
+  return createHash('sha256')
+    .update(JSON.stringify(canonical(filters)))
+    .digest('base64url')
+    .slice(0, 16);
+};
+
+/** A sort-key value as a cursor carries it. */
+type CursorValue = string | number | boolean | { d: string };
+
+type CursorPayload = { k: CursorValue[]; f: string } | { o: number; f: string };
+
+const invalidCursor = (reason: string): DomainError => {
+  return new DomainError('INVALID_CURSOR', `The cursor ${reason}.`, {
+    field: 'cursor',
+  });
+};
+
+const encodeCursor = (payload: CursorPayload): string => {
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+};
+
+const isCursorValue = (value: unknown): value is CursorValue => {
+  if (['string', 'number', 'boolean'].includes(typeof value)) return true;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const iso: unknown = Reflect.get(value, 'd');
+  return (
+    Object.keys(value).length === 1 &&
+    typeof iso === 'string' &&
+    !Number.isNaN(Date.parse(iso))
   );
 };
 
-/**
- * The one pagination rule. An absent `limit` is the list's default and an
- * absent `offset` is `0`; a `limit` that is not an integer of at least 1, or an
- * `offset` that is not a non-negative integer, is `VALIDATION_FAILED`. A limit
- * above the ceiling is clamped to it, and the envelope reports the page served.
- */
-export const resolvePagination = (args: {
-  limit?: number;
-  offset?: number;
-  bounds?: PageBounds;
-}): { limit: number; offset: number } => {
-  const bounds = args.bounds ?? LIST_BOUNDS;
-  const limit = args.limit ?? bounds.defaultLimit;
-  const offset = args.offset ?? 0;
-
-  if (!Number.isInteger(limit) || limit < 1) {
-    throw refuse({
-      field: 'limit',
-      value: limit,
-      rule: 'an integer of at least 1',
-    });
+const parseCursor = (cursor: string): unknown => {
+  try {
+    return JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+  } catch {
+    throw invalidCursor('is malformed');
   }
-  if (!Number.isInteger(offset) || offset < 0) {
-    throw refuse({
-      field: 'offset',
-      value: offset,
-      rule: 'a non-negative integer',
-    });
-  }
-
-  return { limit: Math.min(limit, bounds.maxLimit), offset };
 };
 
 /**
- * The empty page for a list that can answer without querying — no accessible
- * projects, a filter that resolved to nothing. It still reports the *resolved*
- * `limit`/`offset`, so an early return and a real query describe the page the
- * same way; hardcoding `limit: 50` here would make an early return disagree
- * with {@link paginatedList} about a request it clamped.
+ * The position `cursor` carries under `key`, checked against the list it is
+ * used on: a cursor that does not decode, or was minted under other filters,
+ * is `INVALID_CURSOR`.
  */
-export const emptyPage = <T = never>(args: {
-  limit?: number;
-  offset?: number;
-}): PaginatedResult<T> => {
-  const { limit, offset } = resolvePagination(args);
-  return { data: [], total: 0, limit, offset };
+const decodeCursor = (args: {
+  cursor: string;
+  key: 'k' | 'o';
+  filters: ListFilters;
+}): unknown => {
+  const payload = parseCursor(args.cursor);
+  if (typeof payload !== 'object' || payload === null) {
+    throw invalidCursor('is malformed');
+  }
+  if (Reflect.get(payload, 'f') !== fingerprint(args.filters)) {
+    throw invalidCursor(
+      'was issued for other filters; send the same filters, or drop the cursor to start over'
+    );
+  }
+  return Reflect.get(payload, args.key);
+};
+
+const decodeKeyset = (args: {
+  cursor: string;
+  filters: ListFilters;
+  length: number;
+}): CursorValue[] => {
+  const values = decodeCursor({ ...args, key: 'k' });
+  if (
+    !Array.isArray(values) ||
+    values.length !== args.length ||
+    !values.every(isCursorValue)
+  ) {
+    throw invalidCursor('is malformed');
+  }
+  return values;
+};
+
+const decodeOffset = (args: {
+  cursor: string;
+  filters: ListFilters;
+}): number => {
+  const offset = decodeCursor({ ...args, key: 'o' });
+  if (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0) {
+    throw invalidCursor('is malformed');
+  }
+  return offset;
+};
+
+const toCursorValue = (value: unknown): CursorValue => {
+  if (value instanceof Date) return { d: value.toISOString() };
+  if (isCursorValue(value)) return value;
+  return String(value);
+};
+
+const fromCursorValue = (value: CursorValue): unknown => {
+  return typeof value === 'object' ? new Date(value.d) : value;
 };
 
 /** One sort key of a list: a column of the listed model and its direction. */
@@ -87,75 +185,201 @@ export type ListOrderItem = [column: string, direction: 'ASC' | 'DESC'];
 export type ListOrder = [ListOrderItem, ...ListOrderItem[]];
 
 /**
- * `order` made total by appending the primary key in the direction of the last
- * key. Rows that tie on the caller's keys otherwise come back in scan order,
- * which two queries need not share, so a page boundary between them repeats
- * one row and drops another.
+ * `order` made total by appending `tiebreak` in the direction of the last key.
+ * Rows that tie on the caller's keys otherwise come back in scan order, which
+ * two queries need not share, so a page boundary between them repeats one row
+ * and drops another. The tiebreak is a public column, never the internal `id`,
+ * because the cursor carries its value.
  */
-export const totalListOrder = (order: ListOrder): ListOrderItem[] => {
-  const direction = order.reduce<ListOrderItem[1]>((_, item) => {
-    return item[1];
-  }, order[0][1]);
-  return [...order, ['id', direction]];
+export const totalListOrder = (args: {
+  order: ListOrder;
+  tiebreak?: string[];
+}): ListOrderItem[] => {
+  const direction = args.order[args.order.length - 1][1];
+  return [
+    ...args.order,
+    ...(args.tiebreak ?? ['publicId']).map((column): ListOrderItem => {
+      return [column, direction];
+    }),
+  ];
 };
 
 /**
- * The single place the paginated list envelope is produced. `query` performs
- * the `findAndCountAll` with the bounded `limit`/`offset` resolved here and the
- * total `order` built from the caller's (see {@link totalListOrder}), so the
- * fully-typed model call stays at the call site; `map` turns each row into a
- * plain response object. `order` is required: a list that states none is
- * sorted by nothing. `paginatedListOrderContract.test.ts` holds every `query`
- * to the order it is handed.
- *
- * Call sites that `include` associations should pass `distinct: true` so `count`
- * reflects top-level rows rather than the inflated join cardinality.
+ * The rows strictly after `values` in `order`. Sort keys are `NOT NULL`
+ * columns, so the comparison needs no null placement.
  */
-export const paginatedList = async <M, T>(args: {
+const afterPosition = (args: {
+  order: ListOrderItem[];
+  values: unknown[];
+}): ListWhere => {
+  const [[column, direction], ...restOrder] = args.order;
+  const [value, ...restValues] = args.values;
+  const beyond = { [column]: { [direction === 'ASC' ? Op.gt : Op.lt]: value } };
+  if (restOrder.length === 0) return beyond;
+  return {
+    [Op.or]: [
+      beyond,
+      {
+        [Op.and]: [
+          { [column]: value },
+          afterPosition({ order: restOrder, values: restValues }),
+        ],
+      },
+    ],
+  };
+};
+
+const andWhere = (
+  base: ListWhere | undefined,
+  extra: ListWhere | null
+): ListWhere | undefined => {
+  if (!extra) return base;
+  return base ? { [Op.and]: [base, extra] } : extra;
+};
+
+/**
+ * The empty page for a list that can answer without querying — no accessible
+ * projects, a filter that resolved to nothing. It still validates the request,
+ * so an early return and a real query refuse the same bad `limit`.
+ */
+export const emptyPage = <T = never>(args: PageRequest): Page<T> => {
+  resolveLimit(args);
+  if (args.cursor !== undefined) parseCursor(args.cursor);
+  return { data: [], next_cursor: null };
+};
+
+/**
+ * The single place a database list is paged. Keyset, never offset: the cursor
+ * carries the last row's sort-key values, so a row inserted or removed between
+ * two calls neither repeats nor skips one.
+ *
+ * `query` performs a `findAll` with the `where` (the caller's `where` ANDed
+ * with the position after the cursor), `limit` and total `order` built here;
+ * it must not add a `where` of its own at the top level. `map` turns each row
+ * into a plain response object. `filters` is what the caller narrowed the list
+ * by (see {@link ListFilters}). `paginatedListOrderContract.test.ts` holds
+ * every `query` to the `where` and `order` it is handed.
+ */
+export const paginatedList = async <M extends object, T>(args: {
   limit?: number;
-  offset?: number;
+  cursor?: string;
+  bounds?: PageBounds;
+  filters: ListFilters;
+  where: ListWhere | undefined;
   order: ListOrder;
-  query: (pagination: {
+  /** Columns that make `order` total; `publicId` unless the model has none. */
+  tiebreak?: string[];
+  query: (page: {
+    where: ListWhere | undefined;
     limit: number;
-    offset: number;
     order: ListOrderItem[];
-  }) => Promise<{ count: number; rows: M[] }>;
+  }) => Promise<M[]>;
   map: (row: M) => T | Promise<T>;
-}): Promise<PaginatedResult<T>> => {
-  const { limit, offset } = resolvePagination(args);
+}): Promise<Page<T>> => {
+  const limit = resolveLimit(args);
+  const order = totalListOrder(args);
+  const values = args.cursor
+    ? decodeKeyset({
+        cursor: args.cursor,
+        filters: args.filters,
+        length: order.length,
+      })
+    : null;
 
-  log('paginatedList: limit=%d offset=%d', limit, offset);
+  log('paginatedList: limit=%d cursor=%s', limit, args.cursor ? 'yes' : 'no');
 
-  const { count, rows } = await args.query({
-    limit,
-    offset,
-    order: totalListOrder(args.order),
+  const rows = await args.query({
+    where: andWhere(
+      args.where,
+      values
+        ? afterPosition({ order, values: values.map(fromCursorValue) })
+        : null
+    ),
+    limit: limit + 1,
+    order,
   });
-  // `Promise.all` handles both sync and async row mappers uniformly.
+  const pageRows = rows.slice(0, limit);
+  const last = pageRows[pageRows.length - 1];
   const data = await Promise.all(
-    rows.map((row) => {
+    pageRows.map((row) => {
       return args.map(row);
     })
   );
 
-  return { data, total: count, limit, offset };
+  return {
+    data,
+    next_cursor:
+      rows.length > limit && last
+        ? encodeCursor({
+            k: order.map(([column]) => {
+              return toCursorValue(Reflect.get(last, column));
+            }),
+            f: fingerprint(args.filters),
+          })
+        : null,
+  };
 };
 
 /**
- * The paginated envelope over a set already held in memory — one assembled
- * from several queries, or answered by a vendor API rather than the database.
+ * The page over a set that is not a keyset scan — held in memory, answered by
+ * a vendor API, or ordered by a computed value. The cursor carries an offset.
  * `items` must arrive in a stable order, or two pages can overlap.
  */
 export const pageOf = <T>(args: {
   items: T[];
   limit?: number;
-  offset?: number;
-}): PaginatedResult<T> => {
-  const { limit, offset } = resolvePagination(args);
+  cursor?: string;
+  bounds?: PageBounds;
+  filters: ListFilters;
+}): Page<T> => {
+  const limit = resolveLimit(args);
+  const offset = args.cursor
+    ? decodeOffset({ cursor: args.cursor, filters: args.filters })
+    : 0;
+  const end = offset + limit;
   return {
-    data: args.items.slice(offset, offset + limit),
-    total: args.items.length,
-    limit,
-    offset,
+    data: args.items.slice(offset, end),
+    next_cursor:
+      end < args.items.length
+        ? encodeCursor({ o: end, f: fingerprint(args.filters) })
+        : null,
+  };
+};
+
+/**
+ * The offset a {@link pageOf}-style cursor names, for a list whose query
+ * pages by `OFFSET` itself (an aggregate ordered by a computed value). Read
+ * `limit + 1` rows and hand them to {@link offsetPage}.
+ */
+export const resolveOffsetPage = (args: {
+  limit?: number;
+  cursor?: string;
+  bounds?: PageBounds;
+  filters: ListFilters;
+}): { limit: number; offset: number } => {
+  return {
+    limit: resolveLimit(args),
+    offset: args.cursor
+      ? decodeOffset({ cursor: args.cursor, filters: args.filters })
+      : 0,
+  };
+};
+
+/** The page over rows read at {@link resolveOffsetPage}'s offset, `limit + 1` of them. */
+export const offsetPage = <T>(args: {
+  rows: T[];
+  limit: number;
+  offset: number;
+  filters: ListFilters;
+}): Page<T> => {
+  return {
+    data: args.rows.slice(0, args.limit),
+    next_cursor:
+      args.rows.length > args.limit
+        ? encodeCursor({
+            o: args.offset + args.limit,
+            f: fingerprint(args.filters),
+          })
+        : null,
   };
 };

@@ -2,7 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { pageOf, type PaginatedResult } from './pagination';
+import { type Page, pageOf } from './pagination';
 import { shares } from './shares';
 
 const log = createDebug('soat:shares');
@@ -156,8 +156,8 @@ export const listShareReferences = async (args: {
   id: string;
   projectId: number;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ShareReference>> => {
+  cursor?: string;
+}): Promise<Page<ShareReference>> => {
   const share = await shares.getByPublicId({ id: args.id });
   return pageOf({
     items: await findShareReferences({
@@ -166,6 +166,7 @@ export const listShareReferences = async (args: {
       projectId: args.projectId,
     }),
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { id: args.id, projectId: args.projectId },
   });
 };

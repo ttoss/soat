@@ -70,30 +70,19 @@ paths:
             type: string
             format: date-time
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: List of approval items
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - total
-                  - limit
-                  - offset
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalItem'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/ApprovalItem'
         '400':
           description: >-
             Invalid `status` or `origin` filter value, or an `expires_from` /
@@ -147,30 +136,19 @@ paths:
             default: 2
             minimum: 1
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: List of recurrence groups
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - total
-                  - limit
-                  - offset
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalRecurrenceGroup'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/ApprovalRecurrenceGroup'
         '400':
           description: Invalid `status` filter value
         '401':

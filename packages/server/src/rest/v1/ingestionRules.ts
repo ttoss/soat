@@ -58,7 +58,7 @@ type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
 ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
   requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const { limit, offset } = parsePagination(ctx);
+  const { limit, cursor } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -66,7 +66,7 @@ ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
     action: 'ingestion-rules:ListIngestionRules',
     resourceType: 'ingestionRule',
   });
-  ctx.body = await listIngestionRules({ projectIds, limit, offset });
+  ctx.body = await listIngestionRules({ projectIds, limit, cursor });
 });
 
 ingestionRulesRouter.get(

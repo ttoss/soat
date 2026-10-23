@@ -356,9 +356,7 @@ One bucket per end user:
         "reasoning_tokens": 0
       }
     ],
-    "total": 1,
-    "limit": 50,
-    "offset": 0
+    "next_cursor": null
   },
   "totals": {
     "cost_usd": null,
@@ -403,7 +401,7 @@ soat list-usage-events --actor-id "$ADA_ID" \
 const { data: byActor } = await adminSoat.usage.getUsageAggregate({
   params: { query: { project_id: PROJECT_ID, group_by: 'actor' } },
 });
-console.log(byActor.groups.data, byActor.groups.total);
+console.log(byActor.groups.data, byActor.groups.next_cursor);
 
 const { data: meters } = await adminSoat.usage.listUsageEvents({
   params: { query: { actor_id: ada.id } },

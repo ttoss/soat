@@ -638,6 +638,66 @@ describe('Triggers', () => {
     });
   });
 
+  describe('GET /api/v1/triggers/count', () => {
+    const walkList = async (query: string): Promise<number> => {
+      let seen = 0;
+      let cursor: string | null = null;
+      do {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/triggers?${query}&limit=1${cursor ? `&cursor=${cursor}` : ''}`
+        );
+        expect(res.status).toBe(200);
+        seen += res.body.data.length;
+        cursor = res.body.next_cursor;
+      } while (cursor);
+      return seen;
+    };
+
+    test('counts the triggers the list returns', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/count?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.count).toBeGreaterThan(0);
+      expect(res.body.count).toBe(await walkList(`project_id=${projectId}`));
+    });
+
+    test('a filter narrows the count as it narrows the list', async () => {
+      const all = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/count?project_id=${projectId}`
+      );
+      const webhooks = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/count?project_id=${projectId}&type=webhook`
+      );
+      expect(webhooks.status).toBe(200);
+      expect(webhooks.body.count).toBeGreaterThan(0);
+      expect(webhooks.body.count).toBeLessThan(all.body.count);
+      expect(webhooks.body.count).toBe(
+        await walkList(`project_id=${projectId}&type=webhook`)
+      );
+    });
+
+    test('admin without project scoping counts nothing', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/triggers/count'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ count: 0 });
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get('/api/v1/triggers/count');
+      expect(res.status).toBe(401);
+    });
+
+    test('user without permission scoped to project_id returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/triggers/count?project_id=${projectId}`
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
   describe('GET /api/v1/triggers/:trigger_id', () => {
     let triggerId: string;
 
@@ -1930,7 +1990,8 @@ describe('Triggers', () => {
       );
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(res.body.next_cursor).toBeNull();
       expect(res.body.data[0].trigger_id).toBe(firedTriggerId);
     });
 
@@ -1954,15 +2015,26 @@ describe('Triggers', () => {
         `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1000000`
       );
       expect(res.status).toBe(200);
-      expect(res.body.limit).toBe(100);
+      expect(res.body.data.length).toBeLessThanOrEqual(100);
     });
 
-    test('accepts limit and offset query params', async () => {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1&offset=0`
+    test('pages with limit and cursor', async () => {
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${firedTriggerId}/fire`)
+        .send({});
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1`
       );
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken).get(
+        `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
     });
 
     test('gets a firing by id', async () => {

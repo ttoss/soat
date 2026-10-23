@@ -17,6 +17,7 @@ export type OpenApiSchema = {
   description?: string;
   default?: JsonValue;
   $ref?: string;
+  allOf?: OpenApiSchema[];
   /**
    * Vendor extension marking a field as a reference to another REST resource,
    * named by its path segment (e.g. `projects`, `ai-providers`). The generic

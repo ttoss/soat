@@ -113,7 +113,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const { limit, offset } = parsePagination(ctx);
+  const { limit, cursor } = parsePagination(ctx);
   const pathPrefix = ctx.query.path_prefix as string | undefined;
   const relatedTo = ctx.query.related_to as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
@@ -144,7 +144,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       projectPublicId,
     });
     if (!hasAccess) {
-      ctx.body = emptyPage({ limit, offset });
+      ctx.body = emptyPage({ limit, cursor });
       return;
     }
     ctx.body = await listDocuments({
@@ -156,7 +156,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       metadata,
       includeWithdrawn,
       limit,
-      offset,
+      cursor,
     });
     return;
   }
@@ -169,7 +169,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     metadata,
     includeWithdrawn,
     limit,
-    offset,
+    cursor,
   });
 });
 

@@ -52,9 +52,8 @@ const readQueryNames = (source: string): Set<string> => {
   }
   if (source.includes('parsePagination(ctx)')) {
     names.add('limit');
-    names.add('offset');
+    names.add('cursor');
   }
-  if (source.includes('parsePageLimit(ctx)')) names.add('limit');
   return names;
 };
 

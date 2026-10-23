@@ -382,7 +382,7 @@ The **ten naming a resource** match the id the event recorded, so they still sel
 
 `orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started (metered against the child orchestration), so summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
 
-Every narrowing is echoed under `filters` on the response, `null` when unset, so a rollup of zeros is distinguishable from a project that spent nothing. The same filters (plus `limit`/`offset`) narrow the raw event listing at [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events).
+Every narrowing is echoed under `filters` on the response, `null` when unset, so a rollup of zeros is distinguishable from a project that spent nothing. The same filters (plus `limit`/`cursor`) narrow the raw event listing at [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events).
 
 **An unrecognised query parameter is a `400`**, not ignored (`?group_by=day&model=…` once returned the project-wide total as if it were one model's). The accepted names are in the error message.
 
@@ -390,7 +390,7 @@ The rollup is grouped and summed in SQL with one join for the chosen dimension, 
 
 #### Counting entities
 
-**`groups.total` counts buckets, not entities.** The `null`-keyed bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent`, `source` and `tool` carry the same null bucket.
+**Buckets are not entities.** The `null`-keyed bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent`, `source` and `tool` carry the same null bucket.
 
 To count entities, send `include=distinct` and read `totals.distinct`, one `COUNT(DISTINCT …)` per attribution column:
 
@@ -431,9 +431,9 @@ Any `include` value other than `distinct` is a `400`.
 
 #### Paging the groups
 
-`groups` is the standard paginated envelope (`data`, `total`, `limit`, `offset`), where `total` is the bucket count described above.
+`groups` is the standard [list envelope](../api/index.md#pagination) (`data`, `next_cursor`), ranked by cost, so a bucket whose cost moves between two calls can move across a page boundary.
 
-- **`totals` and `groups.total` always describe the whole `[from, to]` window**, never the page.
+- **`totals` always describes the whole `[from, to]` window**, never the page.
 - **Groups are ordered by `cost_usd` descending**, ties by `key` then `ai_provider_id` ascending, nulls last: the first page is the biggest spenders, and paging never repeats or skips a bucket, even in a window nothing has priced.
 
 `limit` defaults to 50 and is clamped to 100, as everywhere in the API.
@@ -613,7 +613,7 @@ curl "https://api.example.com/api/v1/usage/aggregate?project_id=proj_V1StGXR8Z5j
 </TabItem>
 </Tabs>
 
-Count the runs in a billing cycle without listing them: `totals.distinct` is the answer (`groups.total` counts buckets, not runs), and `limit=1` keeps the response small:
+Count the runs in a billing cycle without listing them: `totals.distinct` is the answer (the buckets in `groups` are not runs), and `limit=1` keeps the response small:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

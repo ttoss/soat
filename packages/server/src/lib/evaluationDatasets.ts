@@ -21,7 +21,7 @@ import {
 } from './evaluationValidation';
 import { getGenerationTurn } from './generationTurn';
 import type { ResourceIncludes } from './modelIncludes';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { assertStorageQuota, contentBytes, jsonBytes } from './quotaStorage';
 import { makeResourceAccessor } from './resourceAccessor';
 import { rethrowAsConflict } from './uniqueViolation';
@@ -115,8 +115,8 @@ export const createDataset = async (args: {
 export const listDatasets = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapDataset>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapDataset>>> => {
   log('listDatasets: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -124,16 +124,18 @@ export const listDatasets = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Dataset.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Dataset.findAll({
+        where: pageWhere,
         include: datasetIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {
@@ -413,8 +415,8 @@ export const listDatasetItems = async (args: {
   projectIds?: number[];
   datasetId: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapDatasetItem>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapDatasetItem>>> => {
   log('listDatasetItems: datasetId=%s', args.datasetId);
 
   const dataset = await datasets.getByPublicId({
@@ -424,16 +426,19 @@ export const listDatasetItems = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      datasetId: args.datasetId,
+    },
+    where: { datasetId: dataset.id as number },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.DatasetItem.findAndCountAll({
-        where: { datasetId: dataset.id as number },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.DatasetItem.findAll({
+        where: pageWhere,
         include: datasetItemIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

@@ -8,7 +8,7 @@ import {
 } from './ingestionRuleMatching';
 import { resolveConverterToolType } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -232,8 +232,8 @@ export const createIngestionRule = async (args: {
 export const listIngestionRules = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedIngestionRule>> => {
+  cursor?: string;
+}): Promise<Page<MappedIngestionRule>> => {
   log('listIngestionRules: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -243,16 +243,16 @@ export const listIngestionRules = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.IngestionRule.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.IngestionRule.findAll({
+        where: pageWhere,
         include: ingestionRuleIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (rule) => {

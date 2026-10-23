@@ -5,7 +5,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * A vendor answers its whole catalogue in one call; `q`, `limit` and `offset`
+ * A vendor answers its whole catalogue in one call; `q`, `limit` and `cursor`
  * narrow and page what it returned. A local server stands in for the vendor's
  * `GET /models`.
  */
@@ -85,13 +85,8 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
     const response = await list();
 
     expect(response.status).toBe(200);
-    expect(Object.keys(response.body).sort()).toEqual([
-      'data',
-      'limit',
-      'offset',
-      'total',
-    ]);
-    expect(response.body).toMatchObject({ total: 4, limit: 50, offset: 0 });
+    expect(Object.keys(response.body).sort()).toEqual(['data', 'next_cursor']);
+    expect(response.body.next_cursor).toBeNull();
     expect(ids(response.body)).toEqual(
       catalogue.map((model) => {
         return model.id;
@@ -100,26 +95,43 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
   });
 
   test('an explicit page answers that slice', async () => {
-    const response = await list({ limit: 2, offset: 1 });
+    const response = await list({ limit: 2 });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ total: 4, limit: 2, offset: 1 });
-    expect(ids(response.body)).toEqual(['claude-opus-4-1', 'claude-haiku-4-5']);
+    expect(ids(response.body)).toEqual([
+      'claude-sonnet-4-5',
+      'claude-opus-4-1',
+    ]);
+    expect(typeof response.body.next_cursor).toBe('string');
   });
 
   test('the last page holds the remainder', async () => {
-    const response = await list({ limit: 3, offset: 3 });
+    const first = await list({ limit: 3 });
+    const response = await list({ limit: 3, cursor: first.body.next_cursor });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(4);
     expect(ids(response.body)).toEqual(['claude-3-7-sonnet']);
+    expect(response.body.next_cursor).toBeNull();
+  });
+
+  test('a cursor reused with another q is refused', async () => {
+    const first = await list({ limit: 1 });
+    const response = await list({
+      q: 'sonnet',
+      limit: 1,
+      cursor: first.body.next_cursor,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('INVALID_CURSOR');
   });
 
   test('a limit above the ceiling is clamped to it', async () => {
     const response = await list({ limit: 1000 });
 
     expect(response.status).toBe(200);
-    expect(response.body.limit).toBe(100);
+    expect(response.body.data.length).toBeLessThanOrEqual(100);
+    expect(response.body.next_cursor).toBeNull();
   });
 
   test('a non-numeric limit is refused', async () => {
@@ -133,7 +145,6 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
     const response = await list({ q: 'SONNET' });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(2);
     expect(ids(response.body)).toEqual([
       'claude-sonnet-4-5',
       'claude-3-7-sonnet',
@@ -148,17 +159,22 @@ describe('GET /api/v1/ai-providers/:ai_provider_id/models paging', () => {
   });
 
   test('q filters before paging', async () => {
-    const response = await list({ q: 'sonnet', limit: 1, offset: 1 });
+    const first = await list({ q: 'sonnet', limit: 1 });
+    const response = await list({
+      q: 'sonnet',
+      limit: 1,
+      cursor: first.body.next_cursor,
+    });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(2);
     expect(ids(response.body)).toEqual(['claude-3-7-sonnet']);
+    expect(response.body.next_cursor).toBeNull();
   });
 
   test('a q nothing matches answers an empty page', async () => {
     const response = await list({ q: 'gpt' });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ data: [], total: 0 });
+    expect(response.body).toEqual({ data: [], next_cursor: null });
   });
 });

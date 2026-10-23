@@ -233,7 +233,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?generation_id=${generationId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
 
       const event = response.body.data[0];
       expect(event.id).toMatch(/^ue_/);
@@ -296,14 +296,14 @@ describe('Usage', () => {
         '/api/v1/usage/events?source=memory_extraction'
       );
       expect(match.status).toBe(200);
-      expect(match.body.total).toBe(1);
+      expect(match.body.data).toHaveLength(1);
       expect(match.body.data[0].source).toBe('memory_extraction');
 
       const none = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/events?source=eval'
       );
       expect(none.status).toBe(200);
-      expect(none.body.total).toBe(0);
+      expect(none.body.data).toHaveLength(0);
     });
 
     test('filters by meter_type', async () => {
@@ -311,13 +311,13 @@ describe('Usage', () => {
         `/api/v1/usage/events?generation_id=${generationId}&meter_type=llm_tokens`
       );
       expect(match.status).toBe(200);
-      expect(match.body.total).toBe(1);
+      expect(match.body.data).toHaveLength(1);
 
       const none = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/events?generation_id=${generationId}&meter_type=storage`
       );
       expect(none.status).toBe(200);
-      expect(none.body.total).toBe(0);
+      expect(none.body.data).toHaveLength(0);
     });
 
     test('does not expose internal numeric IDs', async () => {
@@ -336,7 +336,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?agent_id=${agentId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
       for (const event of response.body.data) {
         expect(event.agent_id).toBe(agentId);
       }
@@ -348,7 +348,7 @@ describe('Usage', () => {
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body.data).toHaveLength(0);
     });
 
     test('filters by trace_id', async () => {
@@ -356,7 +356,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?trace_id=${traceId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].trace_id).toBe(traceId);
     });
 
@@ -366,7 +366,7 @@ describe('Usage', () => {
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body.data).toHaveLength(0);
     });
   });
 
@@ -376,7 +376,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?generation_id=${sessionGenerationId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
 
       const event = response.body.data[0];
       expect(event.actor_id).toBe(actorId);
@@ -412,7 +412,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?generation_id=${genRes.body.generation_id}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].session_id).toBe(actorlessSessionId);
       expect(response.body.data[0].actor_id).toBeNull();
     });
@@ -436,7 +436,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?actor_id=${actorId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
       for (const event of response.body.data) {
         expect(event.actor_id).toBe(actorId);
       }
@@ -447,7 +447,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?session_id=${sessionId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
       for (const event of response.body.data) {
         expect(event.session_id).toBe(sessionId);
       }
@@ -459,7 +459,7 @@ describe('Usage', () => {
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body.data).toHaveLength(0);
     });
 
     test('unknown session_id filter returns an empty page', async () => {
@@ -468,7 +468,7 @@ describe('Usage', () => {
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body.data).toHaveLength(0);
     });
 
     test('groups usage by actor', async () => {
@@ -791,12 +791,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBeNull();
-      expect(res.body.groups).toEqual({
-        data: [],
-        total: 0,
-        limit: expect.any(Number),
-        offset: expect.any(Number),
-      });
+      expect(res.body.groups).toEqual({ data: [], next_cursor: null });
 
       const bucketed = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day&agent_id=${agentId}`
@@ -832,7 +827,7 @@ describe('Usage', () => {
         `/api/v1/generations?session_id=${sessionId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
       for (const generation of res.body.data) {
         expect(generation.session_id).toBe(sessionId);
       }
@@ -843,7 +838,7 @@ describe('Usage', () => {
         `/api/v1/generations?actor_id=${actorId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
       for (const generation of res.body.data) {
         expect(generation.actor_id).toBe(actorId);
       }
@@ -855,7 +850,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
   });
 
@@ -869,7 +864,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?ai_provider_id=${aiProviderId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBeGreaterThanOrEqual(2);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(2);
       for (const event of res.body.data) {
         expect(event.ai_provider_id).toBe(aiProviderId);
       }
@@ -880,7 +875,7 @@ describe('Usage', () => {
         '/api/v1/usage/events?model=stub-model'
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
       for (const event of res.body.data) {
         expect(event.model).toBe('stub-model');
       }
@@ -892,7 +887,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
   });
 
@@ -923,7 +918,7 @@ describe('Usage', () => {
     test('every documented parameter is still accepted', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model` +
-          `&meter_type=llm_tokens&include=distinct&limit=5&offset=0` +
+          `&meter_type=llm_tokens&include=distinct&limit=5` +
           `&session_id=${sessionId}&actor_id=${actorId}&agent_id=${agentId}` +
           `&ai_provider_id=${aiProviderId}&generation_id=${sessionGenerationId}` +
           `&trace_id=${traceId}&model=stub-model&source=eval&trigger_id=trg_x` +
@@ -948,7 +943,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?generation_id=${actionGenerationId}`
       );
       expect(byGeneration.status).toBe(200);
-      expect(byGeneration.body.total).toBe(1);
+      expect(byGeneration.body.data).toHaveLength(1);
       expect(byGeneration.body.data[0].action_id).toBe('action-A');
       expect(byGeneration.body.data[0].trigger_id).toBeNull();
 
@@ -956,7 +951,7 @@ describe('Usage', () => {
         '/api/v1/usage/events?action_id=action-A'
       );
       expect(byAction.status).toBe(200);
-      expect(byAction.body.total).toBe(1);
+      expect(byAction.body.data).toHaveLength(1);
       expect(byAction.body.data[0].action_id).toBe('action-A');
     });
 
@@ -978,7 +973,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?trigger_id=${triggerPublicId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].generation_id).toBe(generation.id);
       expect(response.body.data[0].trigger_id).toBe(triggerPublicId);
     });
@@ -1064,7 +1059,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?generation_id=${generationId}`
       );
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
     });
 
     test('recording usage for an unknown generation is a no-op', async () => {
@@ -1793,10 +1788,9 @@ describe('Usage', () => {
   });
 
   /**
-   * The rollup answers "how many" and "the top N" without materializing the
-   * whole window. `groups` is the canonical paginated envelope, so `total` is
-   * the group count — the figure a run-per-cycle question actually wants —
-   * and `totals` stays whole-window whatever page is being read.
+   * The rollup answers "the top N" without materializing the whole window.
+   * `groups` is the canonical paginated envelope, and `totals` stays
+   * whole-window whatever page is being read.
    */
   describe('GET /api/v1/usage (aggregate) — counting and pagination', () => {
     let pagedProjectId: string;
@@ -1872,9 +1866,7 @@ describe('Usage', () => {
     const readGroups = (body: {
       groups: {
         data: Array<{ key: string | null; cost_usd: number | null }>;
-        total: number;
-        limit: number;
-        offset: number;
+        next_cursor: string | null;
       };
     }) => {
       return body.groups;
@@ -1887,12 +1879,8 @@ describe('Usage', () => {
       expect(res.status).toBe(200);
 
       const groups = readGroups(res.body);
-      expect(Array.isArray(groups.data)).toBe(true);
-      // The group count is what "how many runs this cycle" reads, and it is
-      // answered without the caller walking a single page.
-      expect(groups.total).toBe(4);
-      expect(groups.limit).toBe(50);
-      expect(groups.offset).toBe(0);
+      expect(groups.data).toHaveLength(4);
+      expect(groups.next_cursor).toBeNull();
     });
 
     test('totals carries the number of events in the window', async () => {
@@ -1915,7 +1903,7 @@ describe('Usage', () => {
       expect(keys).toEqual(['costly', 'tie-a', 'tie-b', 'cheap']);
     });
 
-    test('limit bounds the page while total still counts every group', async () => {
+    test('limit bounds the page and a cursor names the next one', async () => {
       const res = await authenticatedTestClient(adminToken).get(
         `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=2`
       );
@@ -1923,8 +1911,7 @@ describe('Usage', () => {
 
       const groups = readGroups(res.body);
       expect(groups.data).toHaveLength(2);
-      expect(groups.limit).toBe(2);
-      expect(groups.total).toBe(4);
+      expect(typeof groups.next_cursor).toBe('string');
       expect(
         groups.data.map((group) => {
           return group.key;
@@ -1932,20 +1919,37 @@ describe('Usage', () => {
       ).toEqual(['costly', 'tie-a']);
     });
 
-    test('offset walks the groups without repeating or skipping one', async () => {
-      const page = async (offset: number) => {
+    test('the cursor walks the groups without repeating or skipping one', async () => {
+      const page = async (cursor?: string) => {
         const res = await authenticatedTestClient(adminToken).get(
-          `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=2&offset=${offset}`
+          `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=2${cursor ? `&cursor=${cursor}` : ''}`
         );
         expect(res.status).toBe(200);
-        return readGroups(res.body).data.map((group) => {
-          return group.key;
-        });
+        const groups = readGroups(res.body);
+        return {
+          keys: groups.data.map((group) => {
+            return group.key;
+          }),
+          next: groups.next_cursor,
+        };
       };
 
-      expect(await page(0)).toEqual(['costly', 'tie-a']);
-      expect(await page(2)).toEqual(['tie-b', 'cheap']);
-      expect(await page(4)).toEqual([]);
+      const first = await page();
+      expect(first.keys).toEqual(['costly', 'tie-a']);
+      const second = await page(first.next as string);
+      expect(second.keys).toEqual(['tie-b', 'cheap']);
+      expect(second.next).toBeNull();
+    });
+
+    test('a cursor reused under another group_by is refused', async () => {
+      const first = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=2`
+      );
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=day&limit=2&cursor=${first.body.groups.next_cursor}`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CURSOR');
     });
 
     /**
@@ -1962,9 +1966,19 @@ describe('Usage', () => {
         return res.body.totals;
       };
 
+      let cursor: string | null = null;
+      let lastPage: unknown;
+      do {
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=1${cursor ? `&cursor=${cursor}` : ''}`
+        );
+        expect(res.status).toBe(200);
+        lastPage = res.body.totals;
+        cursor = res.body.groups.next_cursor;
+      } while (cursor);
+
       const whole = await readTotals('');
       const firstPage = await readTotals('&limit=1');
-      const lastPage = await readTotals('&limit=1&offset=3');
 
       expect(whole.cost_usd).toBe(8);
       expect(whole.input_tokens).toBe(80);
@@ -1977,7 +1991,7 @@ describe('Usage', () => {
         `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=5000`
       );
       expect(res.status).toBe(200);
-      expect(readGroups(res.body).limit).toBe(100);
+      expect(readGroups(res.body).data.length).toBeLessThanOrEqual(100);
     });
 
     /**
@@ -3012,7 +3026,7 @@ describe('Usage', () => {
       // setup's standalone generations, so the two figures differ by exactly
       // the one bucket that counts nothing.
       const buckets = res.body.groups.data as Array<{ key: string | null }>;
-      expect(res.body.groups.total).toBe(buckets.length);
+      expect(res.body.groups.next_cursor).toBeNull();
       const namedRuns = buckets.filter((bucket) => {
         return bucket.key !== null;
       });
@@ -3020,7 +3034,7 @@ describe('Usage', () => {
       expect(res.body.totals.distinct.orchestration_runs).toBe(
         namedRuns.length
       );
-      expect(res.body.groups.total).toBe(namedRuns.length + 1);
+      expect(buckets).toHaveLength(namedRuns.length + 1);
 
       // The standalone generations the null bucket holds are counted here and
       // nowhere in the run figure.
@@ -3142,7 +3156,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?orchestration_run_id=${orchestrationRunId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
       for (const event of res.body.data) {
         expect(event.orchestration_run_id).toBe(orchestrationRunId);
       }
@@ -3153,7 +3167,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?orchestration_id=${orchestrationId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
       for (const event of res.body.data) {
         expect(event.orchestration_run_id).toBe(orchestrationRunId);
       }
@@ -3165,7 +3179,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
 
     test('groups usage by orchestration_run', async () => {
@@ -3436,7 +3450,7 @@ describe('Usage', () => {
         `/api/v1/usage/events?trigger_id=${triggerPublicId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].orchestration_run_id).toBe(run.id);
       expect(res.body.data[0].node_id).toBe('triggered-agent');
       expect(res.body.data[0].trigger_id).toBe(triggerPublicId);
@@ -3668,8 +3682,8 @@ describe('Usage', () => {
   /**
    * `totals.distinct` — the counters a "how many X this cycle" question reads.
    *
-   * `groups.total` under `group_by=orchestration_run` counts *buckets*, and a
-   * null key is a real bucket, so a project whose traffic is standalone
+   * `groups` under `group_by=orchestration_run` holds one entry per *bucket*,
+   * and a null key is a real bucket, so a project whose traffic is standalone
    * generations reports 1 whatever the volume. These pin the distinction: the
    * bucket count stays what it is, and the entity counts live on `totals`
    * behind `include=distinct`.
@@ -3764,7 +3778,7 @@ describe('Usage', () => {
         `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=orchestration_run`
       );
       expect(res.status).toBe(200);
-      expect(res.body.groups.total).toBe(1);
+      expect(res.body.groups.data).toHaveLength(1);
       expect(res.body.groups.data[0].key).toBeNull();
     });
 

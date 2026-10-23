@@ -217,7 +217,7 @@ describe('Task transition list', () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/tasks/${taskId}/history`
       );
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
     });
 
     test('returns 401 without a token', async () => {
@@ -234,18 +234,23 @@ describe('Task transition list', () => {
       expect(res.status).toBe(403);
     });
 
-    test('pages with limit and offset', async () => {
+    test('pages with limit and cursor', async () => {
       const taskId = await createTask();
+      const first = await authenticatedTestClient(userToken)
+        .get(`/api/v1/tasks/${taskId}/transitions`)
+        .query({ limit: 2 });
       const res = await authenticatedTestClient(userToken)
         .get(`/api/v1/tasks/${taskId}/transitions`)
-        .query({ limit: 2, offset: 1 });
+        .query({ limit: 2, cursor: first.body.next_cursor });
+      expect(first.status).toBe(200);
+      expect(typeof first.body.next_cursor).toBe('string');
       expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ total: 5, limit: 2, offset: 1 });
+      expect(typeof res.body.next_cursor).toBe('string');
       expect(
         res.body.data.map((r: TransitionOption) => {
           return r.name;
         })
-      ).toEqual(['back', 'publish']);
+      ).toEqual(['publish', 'escalate']);
     });
 
     test('returns 404 for an unknown task', async () => {

@@ -25,7 +25,7 @@ export type ProvisionResult =
 const GUIDE_UNAVAILABLE =
   'The guide is unavailable for you. Ask an admin to grant agent and tool permissions in this project.';
 
-// List endpoints return the paginated envelope `{ data, total, limit, offset }`;
+// List endpoints return the paginated envelope `{ data, next_cursor }`;
 // unwrap it to the item array (still tolerating a bare array).
 const unwrapList = (data: unknown): unknown[] => {
   if (Array.isArray(data)) return data;

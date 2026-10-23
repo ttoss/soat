@@ -215,10 +215,6 @@ describe('Exceptions', () => {
       expect(res.body.error.code).toBe('EXCEPTION_NOT_FOUND');
     });
 
-    // parsePagination's toInt (rest/v1/helpers.ts) falls back to `undefined`
-    // (the shared lib default) when a query param doesn't parse to a finite
-    // number — every list route shares this helper, but nothing in this
-    // codebase sent a malformed limit/offset before.
     test('a non-numeric limit is refused', async () => {
       const res = await listExceptions('&limit=not-a-number');
       expect(res.status).toBe(400);

@@ -161,7 +161,7 @@ describe('Orchestration versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestrations/${orch.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('re-writing the graph the orchestration already holds archives no version', async () => {
@@ -176,7 +176,7 @@ describe('Orchestration versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestrations/${orch.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('a JSON Logic expression round-trips through the archive verbatim', async () => {
@@ -243,7 +243,7 @@ describe('Orchestration versions', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(3);
+      expect(res.body.data).toHaveLength(3);
       expect(
         res.body.data.map((row: { version: number }) => {
           return row.version;
@@ -252,17 +252,21 @@ describe('Orchestration versions', () => {
       expect(res.body.data[0].config.nodes[0].expression).toBe('third');
     });
 
-    test('honors limit and offset', async () => {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestrations/${listedId}/versions?limit=1&offset=1`
+    test('honors limit and cursor', async () => {
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestrations/${listedId}/versions?limit=1`
       );
+      expect(first.body.data[0].version).toBe(3);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const res = await authenticatedTestClient(userToken)
+        .get(`/api/v1/orchestrations/${listedId}/versions`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(3);
-      expect(res.body.limit).toBe(1);
-      expect(res.body.offset).toBe(1);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].version).toBe(2);
+      expect(typeof res.body.next_cursor).toBe('string');
     });
 
     test('unknown orchestration returns 404', async () => {
@@ -384,7 +388,7 @@ describe('Orchestration versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestrations/${orch.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('restore leaves metadata untouched — only the graph rolls back', async () => {

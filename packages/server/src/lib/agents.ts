@@ -35,7 +35,7 @@ import {
 import { emitResourceEvent } from './eventBus';
 import { resolveModelRouteDbId } from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { assertValidPromptCaching } from './promptCaching';
 import { parseActiveRelease } from './releaseAssignment';
 import { toResourceRef } from './resourceVersions';
@@ -275,23 +275,23 @@ export const createAgent = async (
 export const listAgents = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedAgent>> => {
-  const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
+  cursor?: string;
+}): Promise<Page<MappedAgent>> => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where:
+      args.projectIds !== undefined
+        ? { projectId: args.projectIds }
+        : undefined,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Agent.findAndCountAll({
+    query: ({ where, limit, order }) => {
+      return db.Agent.findAll({
         where,
         include: getAgentIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (a) => {

@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emptyPage, paginatedList } from './pagination';
+import { emptyPage, type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 // The write path lives in its own module; re-exported here so `saveTrace` and
@@ -80,15 +80,9 @@ export const listTraces = async (args: {
   projectIds?: number[];
   parentTraceId?: string;
   limit?: number;
-  offset?: number;
-}): Promise<{
-  data: Trace[];
-  total: number;
-  limit: number;
-  offset: number;
-}> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = {};
+  cursor?: string;
+}): Promise<Page<Trace>> => {
+  const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
     if (args.projectIds.length === 0) return emptyPage(args);
     where.projectId = args.projectIds;
@@ -106,11 +100,13 @@ export const listTraces = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, parentTraceId: args.parentTraceId },
+    where: Object.keys(where).length > 0 ? where : undefined,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Trace.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Trace.findAll({
+        where: pageWhere,
         include: [
           { model: db.Project, as: 'project' },
           { model: db.Agent, as: 'agent' },
@@ -118,10 +114,8 @@ export const listTraces = async (args: {
           { model: db.Trace, as: 'parentTrace' },
           { model: db.Trace, as: 'rootTrace' },
         ],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapTrace,

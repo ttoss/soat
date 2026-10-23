@@ -9,17 +9,17 @@ import { LIST_BOUNDS, type PageBounds } from '../../../../src/lib/pagination';
 /**
  * Drift guardrail — pure validation with no REST entry point.
  *
- * `limit` and `offset` are declared once, in `pagination.yaml`, and every list
- * `$ref`s them; a list with other bounds declares its own inline and is named
- * in {@link OWN_BOUNDS}. Each declaration states the bounds `resolvePagination`
- * applies, which is how an SDK, the CLI and the MCP tools learn them. Any
- * response that is a collection is an envelope that takes `limit` or `cursor`.
+ * `limit` and `cursor` are declared once, in `pagination.yaml`, and every list
+ * `$ref`s them; a list with other bounds declares its own `limit` inline and is
+ * named in {@link OWN_BOUNDS}. Each declaration states the bounds
+ * `resolveLimit` applies, which is how an SDK, the CLI and the MCP tools learn
+ * them. Any response that is a collection is a `Page` that takes both.
  */
 
 const SPEC_DIR = path.resolve(__dirname, '../../../../src/rest/openapi/v1');
 
 const SHARED = './pagination.yaml#/components/parameters/';
-const PAGE_KEYS = 'data,limit,offset,total';
+const PAGE_REF = './pagination.yaml#/components/schemas/Page';
 
 /** Lists whose page is not {@link LIST_BOUNDS}. */
 const OWN_BOUNDS: Record<string, PageBounds> = {
@@ -64,16 +64,16 @@ const operationsOf = (spec: unknown) => {
     });
 };
 
-/** A `limit`/`offset` query parameter, inline or a `$ref` to the shared one. */
-const pagingName = (parameter: unknown): 'limit' | 'offset' | undefined => {
+/** A `limit`/`cursor` query parameter, inline or a `$ref` to the shared one. */
+const pagingName = (parameter: unknown): 'limit' | 'cursor' | undefined => {
   if (!isNode(parameter)) return undefined;
   if (typeof parameter.$ref === 'string') {
     if (parameter.$ref === `${SHARED}Limit`) return 'limit';
-    if (parameter.$ref === `${SHARED}Offset`) return 'offset';
+    if (parameter.$ref === `${SHARED}Cursor`) return 'cursor';
     return undefined;
   }
   if (parameter.in !== 'query') return undefined;
-  return parameter.name === 'limit' || parameter.name === 'offset'
+  return parameter.name === 'limit' || parameter.name === 'cursor'
     ? parameter.name
     : undefined;
 };
@@ -97,7 +97,7 @@ const pagingParameters = () => {
     });
 };
 
-const sharedParameter = (name: 'Limit' | 'Offset'): unknown => {
+const sharedParameter = (name: 'Limit' | 'Cursor'): unknown => {
   const spec = loadSpec('pagination.yaml');
   const components = isNode(spec) ? spec.components : undefined;
   const parameters = isNode(components) ? components.parameters : undefined;
@@ -125,9 +125,17 @@ const resolveLocal = (spec: unknown, node: unknown): unknown => {
     }, spec);
 };
 
+/** `allOf` led by `Page`: the one list envelope. */
+const isPage = (spec: unknown, node: unknown): boolean => {
+  const resolved = resolveLocal(spec, node);
+  if (!isNode(resolved)) return false;
+  const [first] = listOf(resolved.allOf);
+  return isNode(first) && first.$ref === PAGE_REF;
+};
+
 /**
- * Operations answering a collection — a JSON array, an object whose `data` is
- * one, or any operation taking `offset` — with how they page.
+ * Operations answering a collection — a JSON array, a `Page`, or an object
+ * whose `data` is an array — with how they page.
  */
 const collectionOperations = () => {
   return fs
@@ -159,40 +167,26 @@ const collectionOperations = () => {
                 isNode(json) ? json.schema : undefined
               );
               if (!isNode(schema)) return [];
-              const data = isNode(schema.properties)
-                ? resolveLocal(spec, schema.properties.data)
-                : undefined;
+              const properties = isNode(schema.properties)
+                ? schema.properties
+                : {};
+              const data = resolveLocal(spec, properties.data);
               const bareArray = schema.type === 'array';
-              const enveloped = isNode(data) && data.type === 'array';
+              const inlineEnvelope = isNode(data) && data.type === 'array';
+              // A report may carry its page under one property (`groups`).
+              const page =
+                isPage(spec, schema) ||
+                Object.values(properties).some((property) => {
+                  return isPage(spec, property);
+                });
+              if (!bareArray && !inlineEnvelope && !page) return [];
               const parameters = [
                 ...listOf(item.parameters),
                 ...listOf(operation.parameters),
               ];
-              const paged = parameters.some((parameter) => {
-                return (
-                  pagingName(parameter) === 'limit' ||
-                  (isNode(parameter) && parameter.name === 'cursor')
-                );
-              });
-              const offsetPaged = parameters.some((parameter) => {
-                return pagingName(parameter) === 'offset';
-              });
-              if (!bareArray && !enveloped && !offsetPaged) return [];
-              const keysOf = (node: unknown) => {
-                const resolved = resolveLocal(spec, node);
-                return isNode(resolved) && isNode(resolved.properties)
-                  ? Object.keys(resolved.properties).sort().join()
-                  : '';
-              };
-              // A report may carry its page under one property (`groups`).
-              const pages = [
-                keysOf(schema),
-                ...Object.values(
-                  isNode(schema.properties) ? schema.properties : {}
-                ).map(keysOf),
-              ];
-              const keys = pages.includes(PAGE_KEYS) ? PAGE_KEYS : pages[0];
-              return [{ operationId, bareArray, paged, offsetPaged, keys }];
+              const names = new Set(parameters.map(pagingName));
+              const paged = names.has('limit') && names.has('cursor');
+              return [{ operationId, bareArray, inlineEnvelope, paged }];
             });
         });
     });
@@ -217,23 +211,19 @@ describe('OpenAPI collection responses', () => {
     ).toEqual([]);
   });
 
-  test('an offset page is exactly data, total, limit and offset', () => {
-    const offsetPages = operations.filter(({ offsetPaged }) => {
-      return offsetPaged;
-    });
-    expect(offsetPages.length).toBeGreaterThan(50);
+  test('no collection spells its own envelope', () => {
     expect(
-      offsetPages
-        .filter(({ keys }) => {
-          return keys !== PAGE_KEYS;
+      operations
+        .filter(({ inlineEnvelope }) => {
+          return inlineEnvelope;
         })
-        .map(({ operationId, keys }) => {
-          return `${operationId}: ${keys}`;
+        .map(({ operationId }) => {
+          return operationId;
         })
     ).toEqual([]);
   });
 
-  test('every collection takes limit or cursor', () => {
+  test('every collection takes limit and cursor', () => {
     expect(
       operations
         .filter(({ paged }) => {
@@ -259,10 +249,10 @@ describe('OpenAPI list pagination', () => {
       in: 'query',
       schema: limitSchema(LIST_BOUNDS),
     });
-    expect(sharedParameter('Offset')).toMatchObject({
-      name: 'offset',
+    expect(sharedParameter('Cursor')).toMatchObject({
+      name: 'cursor',
       in: 'query',
-      schema: { type: 'integer', minimum: 0, default: 0 },
+      schema: { type: 'string' },
     });
   });
 

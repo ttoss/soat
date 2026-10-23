@@ -90,7 +90,7 @@ Deleting an actor deletes nothing in any memory store.
 
 ### Filtering
 
-[`GET /actors`](/docs/api/actors/list-actors) filters by `project_id`, `external_id` (exact match — use it to resolve an external identifier to an `actor_` ID), and `name` (partial, case-insensitive), with `limit`/`offset` pagination in a `{ data, total, limit, offset }` envelope.
+[`GET /actors`](/docs/api/actors/list-actors) filters by `project_id`, `external_id` (exact match — use it to resolve an external identifier to an `actor_` ID), and `name` (partial, case-insensitive), paged with `limit`/`cursor` in the [list envelope](../api/index.md#pagination).
 
 ### Project Scope
 

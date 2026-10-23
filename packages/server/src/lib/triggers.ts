@@ -107,41 +107,62 @@ const findTriggerOrThrow = async (args: { id: string }) => {
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
 
-export const listTriggers = async (args: {
+type TriggerListFilters = {
   projectIds: number[];
   type?: string;
   targetType?: string;
-  limit?: number;
-  offset?: number;
-}) => {
+};
+
+const buildTriggerListWhere = (
+  args: TriggerListFilters
+): Record<string, unknown> => {
+  const where: Record<string, unknown> = { projectId: args.projectIds };
+  if (args.type) where.type = args.type;
+  if (args.targetType) where.targetType = args.targetType;
+  return where;
+};
+
+export const listTriggers = async (
+  args: TriggerListFilters & { limit?: number; cursor?: string }
+) => {
   log(
     'listTriggers: projectIds=%o type=%s targetType=%s',
     args.projectIds,
     args.type,
     args.targetType
   );
-  const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.type) where.type = args.type;
-  if (args.targetType) where.targetType = args.targetType;
-
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      type: args.type,
+      targetType: args.targetType,
+    },
+    where: buildTriggerListWhere(args),
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Trigger.findAndCountAll({
+    query: ({ where, limit, order }) => {
+      return db.Trigger.findAll({
         where,
         include: triggerIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (t) => {
       return mapTrigger(t);
     },
   });
+};
+
+/** How many triggers {@link listTriggers} pages through under the same filters. */
+export const countTriggers = async (
+  args: TriggerListFilters
+): Promise<{ count: number }> => {
+  log('countTriggers: projectIds=%o', args.projectIds);
+  return {
+    count: await db.Trigger.count({ where: buildTriggerListWhere(args) }),
+  };
 };
 
 export const findTrigger = async (args: { id: string }) => {

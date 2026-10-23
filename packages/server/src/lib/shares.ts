@@ -315,7 +315,7 @@ export const listPublishedShares = async (args: {
   projectIds: number[];
   resource?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
   // The scope already confines the project, so the SRN's type and id are all
@@ -327,16 +327,16 @@ export const listPublishedShares = async (args: {
   }
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, resource: args.resource },
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Share.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Share.findAll({
+        where: pageWhere,
         include: [{ model: db.Project, as: 'project' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {
@@ -354,7 +354,7 @@ export const listReceivedShares = async (args: {
   projectId: number;
   projectPublicId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const accepted = await db.ShareAcceptance.findAll({
     where: { projectId: args.projectId },
@@ -367,22 +367,22 @@ export const listReceivedShares = async (args: {
   );
   const page = await paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectId: args.projectId },
+    where: {
+      projectId: { [Op.ne]: args.projectId },
+      [Op.or]: [
+        { grantee: args.projectPublicId },
+        { id: [...acceptanceByShare.keys()] },
+      ],
+    },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Share.findAndCountAll({
-        where: {
-          projectId: { [Op.ne]: args.projectId },
-          [Op.or]: [
-            { grantee: args.projectPublicId },
-            { id: [...acceptanceByShare.keys()] },
-          ],
-        },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Share.findAll({
+        where: pageWhere,
         include: [{ model: db.Project, as: 'project' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {
@@ -403,23 +403,23 @@ export const listShareAcceptances = async (args: {
   shareId: string;
   statuses?: readonly ('active' | 'revoked')[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const share = await shares.getByPublicId({ id: args.shareId });
   const where: Record<string, unknown> = { shareId: share.id };
   if (args.statuses?.length) where.status = args.statuses;
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { shareId: args.shareId, statuses: args.statuses },
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.ShareAcceptance.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.ShareAcceptance.findAll({
+        where: pageWhere,
         include: acceptanceIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

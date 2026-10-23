@@ -395,7 +395,7 @@ Restoring any content version brings it back. The tombstone itself holds no cont
 ```bash
 soat withdraw-document --document-id "$Q1_ID" | jq '{id, status, version}'
 
-soat list-documents --project-id "$PROJECT_ID" --path-prefix /reports | jq '.total'
+soat list-documents --project-id "$PROJECT_ID" --path-prefix /reports | jq '.data | length'
 
 soat list-documents --project-id "$PROJECT_ID" --path-prefix /reports --include-withdrawn true \
   | jq '[.data[] | {path, status}]'
@@ -421,7 +421,7 @@ const { data: live } = await adminSoat.documents.listDocuments({
   query: { project_id: PROJECT_ID, path_prefix: '/reports' },
 });
 
-console.log(live!.total); // 0
+console.log(live!.data.length); // 0
 
 const { data: all } = await adminSoat.documents.listDocuments({
   query: {
@@ -451,7 +451,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/$Q1_ID/withdraw" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, status, version}'
 
 curl -s "$SOAT_BASE_URL/api/v1/documents?project_id=$PROJECT_ID&path_prefix=/reports" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.total'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | length'
 
 curl -s "$SOAT_BASE_URL/api/v1/documents?project_id=$PROJECT_ID&path_prefix=/reports&include_withdrawn=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.data[] | {path, status}]'
@@ -565,9 +565,9 @@ FACT_ID=$(soat create-memory \
 soat retract-memory --memory-id "$FACT_ID" --expected-version 1 \
   | jq '{id, invalidated_at, superseded_by_memory_id, version}'
 
-soat list-memories --memory-store-id "$STORE_ID" | jq '.total'
+soat list-memories --memory-store-id "$STORE_ID" | jq '.data | length'
 
-soat list-memories --memory-store-id "$STORE_ID" --include-invalidated true | jq '.total'
+soat list-memories --memory-store-id "$STORE_ID" --include-invalidated true | jq '.data | length'
 
 soat list-memory-assertions --memory-id "$FACT_ID" | jq '[.data[] | {outcome, mechanism, principal_type}]'
 ```

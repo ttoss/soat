@@ -321,22 +321,20 @@ describe('Activity', () => {
       expect(pages).toBeLessThan(50);
     });
 
-    test('a cursor with no separator returns 400', async () => {
+    test('a malformed cursor returns 400', async () => {
       const res = await listActivity('&cursor=not-a-real-cursor');
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('ACTIVITY_INVALID_CURSOR');
+      expect(res.body.error.code).toBe('INVALID_CURSOR');
     });
 
-    test('a cursor with a separator but an invalid timestamp returns 400', async () => {
-      const malformed = Buffer.from(
-        'not-a-date|acte_something',
-        'utf8'
-      ).toString('base64url');
+    test('a cursor sent with another filter returns 400', async () => {
+      const first = await listActivity('&limit=1');
+      expect(first.body.next_cursor).toEqual(expect.any(String));
       const res = await listActivity(
-        `&cursor=${encodeURIComponent(malformed)}`
+        `&limit=1&severity=error&cursor=${encodeURIComponent(first.body.next_cursor)}`
       );
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('ACTIVITY_INVALID_CURSOR');
+      expect(res.body.error.code).toBe('INVALID_CURSOR');
     });
 
     // Force-failure stub for the swallow branch: `emitActivityEntry`'s write

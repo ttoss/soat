@@ -4,7 +4,7 @@ import { DomainError } from 'src/errors';
 import { listActivity } from 'src/lib/activity';
 import { streamActivityNdjson } from 'src/lib/activityExport';
 
-import { parsePageLimit, requireAuth, resolveReadProjectIds } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 import { sendNdjson } from './ndjsonResponse';
 
 const activityRouter = new Router<Context>();
@@ -21,8 +21,6 @@ activityRouter.get('/activity', async (ctx: Context) => {
     resourceType: 'activity',
   });
 
-  const limit = parsePageLimit(ctx);
-
   ctx.body = await listActivity({
     projectIds: projectIds ?? [],
     kind: ctx.query.kind as string | undefined,
@@ -30,8 +28,7 @@ activityRouter.get('/activity', async (ctx: Context) => {
     agentId: ctx.query.agent_id as string | undefined,
     generationId: ctx.query.generation_id as string | undefined,
     orchestrationRunId: ctx.query.orchestration_run_id as string | undefined,
-    cursor: ctx.query.cursor as string | undefined,
-    limit,
+    ...parsePagination(ctx),
   });
 });
 

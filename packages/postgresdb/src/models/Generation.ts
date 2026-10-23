@@ -28,6 +28,11 @@ import { Trace } from './Trace';
       name: 'generations_project_id_status_started_at_idx',
       fields: ['project_id', 'status', 'started_at'],
     },
+    // The list's keyset: its scope, sort key and `public_id` tiebreak.
+    {
+      name: 'generations_project_id_started_at_public_id_idx',
+      fields: ['project_id', 'started_at', 'public_id'],
+    },
     {
       name: 'generations_agent_id_status_started_at_idx',
       fields: ['agent_id', 'status', 'started_at'],

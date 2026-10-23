@@ -2044,7 +2044,7 @@ describe('Orchestrations', () => {
           `/api/v1/orchestration-runs?orchestration_id=${orchId}`
         );
         expect(list.status).toBe(200);
-        expect(list.body.total).toBe(0);
+        expect(list.body.data).toEqual([]);
       };
 
       test('a key that cannot become a header returns 400 and creates no run', async () => {
@@ -2506,7 +2506,7 @@ describe('Orchestrations', () => {
           `/api/v1/orchestration-runs?orchestration_id=${createRes.body.id}`
         );
         expect(list.status).toBe(200);
-        expect(list.body.total).toBe(0);
+        expect(list.body.data).toEqual([]);
       });
     });
 

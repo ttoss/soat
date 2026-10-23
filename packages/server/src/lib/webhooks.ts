@@ -59,20 +59,20 @@ const webhooks = makeResourceAccessor<WebhookRow>({
 export const listWebhooks = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where: { projectId: args.projectIds },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Webhook.findAndCountAll({
-        where: { projectId: args.projectIds },
+    query: ({ where, limit, order }) => {
+      return db.Webhook.findAll({
+        where,
         include: webhookIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (w) => {
@@ -201,20 +201,20 @@ const mapWebhookDelivery = (
 export const listWebhookDeliveries = async (args: {
   webhookId: number;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { webhookId: args.webhookId },
+    where: { webhookId: args.webhookId },
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.WebhookDelivery.findAndCountAll({
-        where: { webhookId: args.webhookId },
+    query: ({ where, limit, order }) => {
+      return db.WebhookDelivery.findAll({
+        where,
         include: [{ model: db.Webhook, as: 'webhook' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapWebhookDelivery,

@@ -17,13 +17,15 @@ const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   };
 };
 
-export const listUsers = async (args?: { limit?: number; offset?: number }) => {
+export const listUsers = async (args?: { limit?: number; cursor?: string }) => {
   return paginatedList({
     limit: args?.limit,
-    offset: args?.offset,
+    cursor: args?.cursor,
+    filters: {},
+    where: undefined,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.User.findAndCountAll({ order, limit, offset });
+    query: ({ where, limit, order }) => {
+      return db.User.findAll({ where, order, limit });
     },
     map: mapUser,
   });

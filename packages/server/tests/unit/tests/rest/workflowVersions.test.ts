@@ -179,7 +179,7 @@ describe('Workflow versions', () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/workflows/${workflow.id}/versions`
       );
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
     });
 
     test('re-writing the definition the workflow already holds archives no version', async () => {
@@ -228,7 +228,7 @@ describe('Workflow versions', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(3);
+      expect(res.body.data).toHaveLength(3);
       expect(
         res.body.data.map((v: { version: number }) => {
           return v.version;
@@ -237,15 +237,21 @@ describe('Workflow versions', () => {
       expect(res.body.data[0].workflow_id).toBe(workflowId);
     });
 
-    test('honors limit and offset', async () => {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/workflows/${workflowId}/versions?limit=1&offset=1`
+    test('honors limit and cursor', async () => {
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/workflows/${workflowId}/versions?limit=1`
       );
+      expect(first.body.data[0].version).toBe(3);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const res = await authenticatedTestClient(userToken)
+        .get(`/api/v1/workflows/${workflowId}/versions`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].version).toBe(2);
-      expect(res.body.total).toBe(3);
+      expect(typeof res.body.next_cursor).toBe('string');
     });
 
     test('unknown workflow returns 404', async () => {
@@ -359,7 +365,7 @@ describe('Workflow versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/workflows/${workflow.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('restore leaves metadata untouched — only the definition rolls back', async () => {

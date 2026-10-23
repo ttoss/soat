@@ -20,7 +20,7 @@ import {
   validatePassThreshold,
 } from './evaluationValidation';
 import type { ResourceIncludes } from './modelIncludes';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
@@ -197,8 +197,8 @@ export const createEval = async (args: {
 export const listEvals = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapEval>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapEval>>> => {
   log('listEvals: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -206,16 +206,18 @@ export const listEvals = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Eval.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Eval.findAll({
+        where: pageWhere,
         include: evalIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

@@ -80,37 +80,30 @@ paths:
         - name: limit
           in: query
           description: >-
-            Results per page. Above 200 it is clamped, and `limit` in the
-            response reports the page served; below 1 or not an integer it is
-            `400 VALIDATION_FAILED`.
+            Results per page. Above 200 it is clamped; below 1 or not an
+            integer it is `400 VALIDATION_FAILED`.
           schema:
             type: integer
             minimum: 1
             maximum: 200
             default: 25
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: A page of audit entries
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AuditEntry'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/AuditEntry'
         '400':
           description: >-
-            `from` or `to` is not a valid ISO 8601 date, or `limit` / `offset`
-            is not a valid page
+            `from` or `to` is not a valid ISO 8601 date, `limit` is not a valid
+            page size, or `cursor` is malformed or was issued for other filters
         '401':
           description: Unauthorized
         '403':

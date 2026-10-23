@@ -189,13 +189,36 @@ describe('Conversations', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
-    test('accepts limit and offset query params', async () => {
+    test('pages with limit and cursor', async () => {
+      await Promise.all(
+        [0, 1].map(() => {
+          return authenticatedTestClient(userToken)
+            .post('/api/v1/conversations')
+            .send({ project_id: projectId });
+        })
+      );
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations?project_id=${projectId}&limit=1`
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations?project_id=${projectId}&limit=1&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
+    });
+
+    test('offset query param returns 400', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/conversations?project_id=${projectId}&limit=1&offset=0`
       );
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('user without permission scoped to project_id returns 403', async () => {
@@ -387,6 +410,84 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(403);
+    });
+
+    describe('order', () => {
+      let orderedConversationId: string;
+
+      beforeAll(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/conversations')
+          .send({ project_id: projectId });
+        orderedConversationId = res.body.id;
+        for (const message of ['first', 'second', 'third']) {
+          await authenticatedTestClient(userToken)
+            .post(`/api/v1/conversations/${orderedConversationId}/messages`)
+            .send({ message, role: 'user' });
+        }
+      });
+
+      const positions = (body: { data: Array<{ position: number }> }) => {
+        return body.data.map((m) => {
+          return m.position;
+        });
+      };
+
+      test('defaults to ascending position', async () => {
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/conversations/${orderedConversationId}/messages`
+        );
+
+        expect(response.status).toBe(200);
+        expect(positions(response.body)).toEqual([0, 1, 2]);
+        expect(response.body.next_cursor).toBeNull();
+      });
+
+      test('desc returns the last message first', async () => {
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/conversations/${orderedConversationId}/messages?order=desc`
+        );
+
+        expect(response.status).toBe(200);
+        expect(positions(response.body)).toEqual([2, 1, 0]);
+      });
+
+      test('desc with limit=1 walks backwards through next_cursor', async () => {
+        const seen: number[] = [];
+        let cursor: string | null = null;
+        do {
+          const query: string = cursor ? `&cursor=${cursor}` : '';
+          const response = await authenticatedTestClient(userToken).get(
+            `/api/v1/conversations/${orderedConversationId}/messages?order=desc&limit=1${query}`
+          );
+          expect(response.status).toBe(200);
+          seen.push(...positions(response.body));
+          cursor = response.body.next_cursor;
+        } while (cursor);
+
+        expect(seen).toEqual([2, 1, 0]);
+      });
+
+      test('a cursor minted for desc is refused for asc', async () => {
+        const first = await authenticatedTestClient(userToken).get(
+          `/api/v1/conversations/${orderedConversationId}/messages?order=desc&limit=1`
+        );
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/conversations/${orderedConversationId}/messages?limit=1&cursor=${first.body.next_cursor}`
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('INVALID_CURSOR');
+      });
+
+      test('an invalid order returns 400', async () => {
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/conversations/${orderedConversationId}/messages?order=sideways`
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      });
     });
   });
 
@@ -788,7 +889,7 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(2);
+      expect(response.body.data).toHaveLength(2);
       const ids = response.body.data.map((a: { id: string }) => {
         return a.id;
       });
@@ -811,7 +912,7 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body.next_cursor).toBeNull();
     });
   });
 

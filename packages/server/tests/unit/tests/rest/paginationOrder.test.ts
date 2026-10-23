@@ -7,9 +7,10 @@ import { authenticatedTestClient } from '../../testClient';
 /**
  * A page boundary is only stable over a total order: rows that tie on the sort
  * key come back in scan order, which two queries need not share, so walking the
- * pages repeats one row and never returns another. `paginatedList` appends the
- * primary key to every list's order, so a tie is broken the same way on every
- * page. Actors stand in for every list: the order is decided in one place.
+ * pages repeats one row and never returns another. `paginatedList` appends
+ * `public_id` to every list's order and carries it in the cursor, so a tie is
+ * broken the same way on every page. Actors stand in for every list: the order
+ * is decided in one place.
  */
 describe('Pagination order', () => {
   let adminToken: string;
@@ -50,8 +51,32 @@ describe('Pagination order', () => {
     );
   };
 
+  /** Every row of a list, one-row page by one-row page. */
+  const walk = async (args: {
+    token: string;
+    path: string;
+    query: Record<string, string>;
+  }): Promise<string[]> => {
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const res = await authenticatedTestClient(args.token)
+        .get(args.path)
+        .query({ ...args.query, limit: 1, ...(cursor ? { cursor } : {}) });
+      expect(res.status).toBe(200);
+      ids.push(
+        ...res.body.data.map((row: { id: string }) => {
+          return row.id;
+        })
+      );
+      if (res.body.next_cursor === null) return ids;
+      cursor = res.body.next_cursor as string;
+    }
+    throw new Error(`${args.path} did not reach next_cursor: null`);
+  };
+
   describe('GET /api/v1/actors', () => {
-    test('one-row pages over tied rows return every row once, in insertion order', async () => {
+    test('one-row pages over tied rows return every row once, by id', async () => {
       const created: string[] = [];
       for (const name of ['first', 'second', 'third']) {
         const res = await authenticatedTestClient(userToken)
@@ -68,22 +93,18 @@ describe('Pagination order', () => {
         }),
       });
 
-      const paged: string[] = [];
-      for (let offset = 0; offset < created.length; offset += 1) {
-        const res = await authenticatedTestClient(userToken).get(
-          `/api/v1/actors?project_id=${projectId}&limit=1&offset=${offset}`
-        );
-        expect(res.status).toBe(200);
-        expect(res.body.total).toBe(created.length);
-        paged.push(res.body.data[0].id as string);
-      }
+      const paged = await walk({
+        token: userToken,
+        path: '/api/v1/actors',
+        query: { project_id: projectId },
+      });
 
-      expect(paged).toEqual(created);
+      expect(paged).toEqual([...created].sort());
     });
   });
 
-  // Not a `paginatedList` caller (its own 25/200 clamp), and the NDJSON export
-  // pages through it, so a tie here drops or repeats entries in an export.
+  // Its own 25/200 bounds, and the NDJSON export pages through it, so a tie
+  // here drops or repeats entries in an export.
   describe('GET /api/v1/audit-log', () => {
     test('one-row pages over tied entries return every entry once, newest first', async () => {
       for (const name of ['audit_tie_a', 'audit_tie_b', 'audit_tie_c']) {
@@ -102,25 +123,19 @@ describe('Pagination order', () => {
       });
       await tieAndReverse({ table: 'audit_entries', ids });
 
-      const paged: string[] = [];
-      for (let offset = 0; offset < ids.length; offset += 1) {
-        const res = await authenticatedTestClient(adminToken)
-          .get('/api/v1/audit-log')
-          .query({
-            project_id: projectId,
-            action: 'secrets:CreateSecret',
-            limit: 1,
-            offset,
-          });
-        expect(res.status).toBe(200);
-        expect(res.body.total).toBe(ids.length);
-        paged.push(res.body.data[0].id as string);
-      }
+      const paged = await walk({
+        token: adminToken,
+        path: '/api/v1/audit-log',
+        query: { project_id: projectId, action: 'secrets:CreateSecret' },
+      });
 
       expect(paged).toEqual(
-        [...rows].reverse().map((row) => {
-          return row.publicId as string;
-        })
+        rows
+          .map((row) => {
+            return row.publicId as string;
+          })
+          .sort()
+          .reverse()
       );
     });
   });

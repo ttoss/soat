@@ -1007,7 +1007,7 @@ describe('MCP tools - happy path', () => {
         outcome: 'skipped',
       })
     );
-    expect(ledger.total).toBe(1);
+    expect(ledger.data).toHaveLength(1);
     expect(ledger.data[0].outcome).toBe('skipped');
   });
 
@@ -1095,7 +1095,7 @@ describe('MCP tools - happy path', () => {
     const listed = parseResult(
       await mcpCall('list-memories', { memory_store_id: store.id })
     );
-    expect(listed.total).toBe(0);
+    expect(listed.data).toHaveLength(0);
 
     const history = parseResult(
       await mcpCall('list-memory-assertions', { memory_id: written.id })
@@ -1151,7 +1151,7 @@ describe('MCP tools - happy path', () => {
     const afterDelete = parseResult(
       await mcpCall('list-memory-rules', { memory_store_id: store.id })
     );
-    expect(afterDelete.total).toBe(0);
+    expect(afterDelete.data).toHaveLength(0);
   });
 
   test('create-memory-rule refuses the built-in extractor on the message event', async () => {
@@ -1361,7 +1361,7 @@ describe('MCP tools - happy path', () => {
       expect(deleted.status).toBe(200);
     });
 
-    test('list-document-relations pages with limit and offset', async () => {
+    test('list-document-relations pages with limit and cursor', async () => {
       const createDoc = async (filename: string) => {
         const res = await mcpCall('create-document', {
           project_id: projectId,
@@ -1383,15 +1383,21 @@ describe('MCP tools - happy path', () => {
         });
       }
 
+      const first = parseResult(
+        await mcpCall('list-document-relations', {
+          document_id: from,
+          limit: 1,
+        })
+      );
       const listed = await mcpCall('list-document-relations', {
         document_id: from,
         limit: 1,
-        offset: 1,
+        cursor: first.next_cursor,
       });
 
       expect(listed.status).toBe(200);
       const page = parseResult(listed);
-      expect(page).toMatchObject({ total: 2, limit: 1, offset: 1 });
+      expect(page.next_cursor).toBeNull();
       expect(
         (page.data as Array<{ to_document_id: string }>).map((row) => {
           return row.to_document_id;
@@ -1676,7 +1682,7 @@ describe('MCP tools - happy path', () => {
       const listed = parseResult(
         await mcpCall('list-share-acceptances', { share_id: shareId })
       );
-      expect(listed.total).toBe(1);
+      expect(listed.data).toHaveLength(1);
 
       expect(
         parseResult(await mcpCall('suspend-share', { share_id: shareId }))
@@ -2627,7 +2633,7 @@ describe('MCP tools - happy path', () => {
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(result.total).toBe(1);
+      expect(result.data).toHaveLength(1);
       expect(result.data[0].id).toBe(mcpChildTraceId);
     });
 
@@ -2792,15 +2798,21 @@ describe('MCP tools - happy path', () => {
         .send({ wait: true, orchestration_id: orchestration.body.id });
       expect(run.body.status).toBe('completed');
 
+      const first = parseResult(
+        await mcpCall('list-orchestration-run-node-executions', {
+          orchestration_run_id: run.body.id,
+          limit: 1,
+        })
+      );
       const res = await mcpCall('list-orchestration-run-node-executions', {
         orchestration_run_id: run.body.id,
         limit: 1,
-        offset: 1,
+        cursor: first.next_cursor,
       });
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(result).toMatchObject({ total: 2, limit: 1, offset: 1 });
+      expect(result.next_cursor).toBeNull();
       expect(result.data[0].node_id).toBe('two');
     });
 
@@ -2998,7 +3010,7 @@ describe('MCP tools - happy path', () => {
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(result.total).toBeGreaterThanOrEqual(1);
+      expect(result.data.length).toBeGreaterThanOrEqual(1);
       expect(result.data[0].guardrail_id).toBe(guardrailId);
       // The archived config carries the document as a value — its contract keys
       // survive the MCP round trip uncased, same as the live read above.
@@ -3113,13 +3125,13 @@ describe('MCP tools - happy path', () => {
         project_id: projectId,
       });
       expect(datasets.status).toBe(200);
-      expect(parseResult(datasets).total).toBeGreaterThan(0);
+      expect(parseResult(datasets).data.length).toBeGreaterThan(0);
 
       const items = await mcpCall('list-dataset-items', {
         dataset_id: datasetId,
       });
       expect(items.status).toBe(200);
-      expect(parseResult(items).total).toBe(1);
+      expect(parseResult(items).data).toHaveLength(1);
     });
 
     test('create-dataset-item-from-generation curates a completed turn', async () => {
@@ -3220,7 +3232,7 @@ describe('MCP tools - happy path', () => {
 
       const runs = await mcpCall('list-eval-runs', { eval_id: evalId });
       expect(runs.status).toBe(200);
-      expect(parseResult(runs).total).toBe(0);
+      expect(parseResult(runs).data).toHaveLength(0);
     });
 
     test('start-eval-run queues a run through the MCP surface', async () => {
@@ -3375,7 +3387,7 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('list-deciders', { project_id: projectId });
 
       expect(res.status).toBe(200);
-      expect(parseResult(res).total).toBeGreaterThan(0);
+      expect(parseResult(res).data.length).toBeGreaterThan(0);
     });
 
     test('update-decider archives a changed question set', async () => {
@@ -3396,7 +3408,7 @@ describe('MCP tools - happy path', () => {
       const versions = await mcpCall('list-decider-versions', {
         decider_id: deciderId,
       });
-      expect(parseResult(versions).total).toBe(2);
+      expect(parseResult(versions).data).toHaveLength(2);
 
       const first = await mcpCall('get-decider-version', {
         decider_id: deciderId,
@@ -3433,7 +3445,7 @@ describe('MCP tools - happy path', () => {
         project_id: projectId,
         decider_id: deciderId,
       });
-      expect(parseResult(listed).total).toBe(1);
+      expect(parseResult(listed).data).toHaveLength(1);
     });
 
     test('create-decision always waits, returning the settled decision', async () => {
@@ -3676,7 +3688,7 @@ describe('MCP tools - happy path', () => {
 
     test('list-playbooks and list-playbook-versions page the playbook', async () => {
       const list = await mcpCall('list-playbooks', { project_id: projectId });
-      expect(parseResult(list).total).toBeGreaterThan(0);
+      expect(parseResult(list).data.length).toBeGreaterThan(0);
 
       const versions = await mcpCall('list-playbook-versions', {
         playbook_id: playbookId,
@@ -3740,7 +3752,7 @@ describe('MCP tools - happy path', () => {
       const list = await mcpCall('list-playbook-case-executions', {
         case_id: runCaseId,
       });
-      expect(parseResult(list).total).toBe(2);
+      expect(parseResult(list).data).toHaveLength(2);
       expect(parseResult(list).data[0].id).toBe(execution.id);
 
       const one = await mcpCall('get-playbook-case-execution', {
@@ -3814,7 +3826,7 @@ describe('MCP tools - happy path', () => {
       const list = await mcpCall('list-playbook-case-exports', {
         case_id: exportCaseId,
       });
-      expect(parseResult(list).total).toBe(1);
+      expect(parseResult(list).data).toHaveLength(1);
 
       const one = await mcpCall('get-playbook-case-export', {
         case_id: exportCaseId,
@@ -3982,7 +3994,7 @@ describe('MCP tools - happy path', () => {
         project_id: projectId,
         playbook_id: playbookId,
       });
-      expect(parseResult(cases).total).toBe(1);
+      expect(parseResult(cases).data).toHaveLength(1);
 
       const read = await mcpCall('get-playbook-case', { case_id: caseId });
       expect(parseResult(read).revision).toBe(2);

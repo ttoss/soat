@@ -17,7 +17,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { requireAdmin, requireAuth } from './helpers';
+import { parsePagination, requireAdmin, requireAuth } from './helpers';
 
 const projectsRouter = new Router<Context>();
 
@@ -74,8 +74,10 @@ projectsRouter.post('/projects', async (ctx: Context) => {
 projectsRouter.get('/projects', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projects = await listProjects({ authUser: ctx.authUser });
-  ctx.body = projects;
+  ctx.body = await listProjects({
+    authUser: ctx.authUser,
+    ...parsePagination(ctx),
+  });
 });
 
 projectsRouter.get('/projects/:project_id', async (ctx: Context) => {

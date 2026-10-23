@@ -120,22 +120,26 @@ describe('Document versions', () => {
       expect(response.status).toBe(401);
     });
 
-    test('limit and offset page the history', async () => {
+    test('limit and cursor page the history', async () => {
       const id = await createDocument({ content: 'First state.' });
       await authenticatedTestClient(userToken)
         .patch(`/api/v1/documents/${id}`)
         .send({ content: 'Second state.' });
 
-      const page = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents/${id}/versions?limit=1&offset=1`
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}/versions?limit=1`
       );
+      expect(first.body.data[0].version).toBe(2);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const page = await authenticatedTestClient(userToken)
+        .get(`/api/v1/documents/${id}/versions`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
 
       expect(page.status).toBe(200);
-      expect(page.body.total).toBe(2);
-      expect(page.body.limit).toBe(1);
-      expect(page.body.offset).toBe(1);
       expect(page.body.data).toHaveLength(1);
       expect(page.body.data[0].version).toBe(1);
+      expect(page.body.next_cursor).toBeNull();
     });
   });
 

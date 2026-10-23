@@ -405,16 +405,37 @@ describe('Webhooks', () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toBeDefined();
       expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.total).toBeDefined();
+      expect(response.body).toHaveProperty('next_cursor');
     });
 
-    test('accepts limit and offset query params', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/webhook-deliveries?webhook_id=${webhookId}&limit=1&offset=0`
-      );
+    test('pages with limit and cursor', async () => {
+      const webhook = await db.Webhook.findOne({
+        where: { publicId: webhookId },
+      });
+      for (const eventType of ['files.created', 'files.deleted']) {
+        await db.WebhookDelivery.create({
+          webhookId: webhook!.id as number,
+          eventType,
+          payload: {},
+          status: 'completed',
+          statusCode: 200,
+          attempts: 1,
+        });
+      }
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhook-deliveries?webhook_id=${webhookId}&limit=1`
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhook-deliveries?webhook_id=${webhookId}&limit=1&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
     });
 
     test('lists a delivery with its mapped fields', async () => {

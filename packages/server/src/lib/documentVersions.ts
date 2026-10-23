@@ -158,12 +158,12 @@ const documentVersionArchive = makeVersionArchive({
 export const listDocumentVersions = async (args: {
   documentId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return documentVersionArchive.listVersions({
     resourceId: args.documentId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

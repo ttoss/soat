@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
-import { emptyPage, paginatedList, type PaginatedResult } from './pagination';
+import { emptyPage, type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:usage:thresholds');
@@ -95,8 +95,8 @@ export const listThresholds = async (args: {
   projectIds?: number[];
   projectId?: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<PersistedUsageThreshold>> => {
+  cursor?: string;
+}): Promise<Page<PersistedUsageThreshold>> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
     if (args.projectIds.length === 0) return emptyPage(args);
@@ -120,16 +120,16 @@ export const listThresholds = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, projectId: args.projectId },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.UsageThreshold.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.UsageThreshold.findAll({
+        where: pageWhere,
         include: [{ model: db.Project, as: 'project' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapThreshold,

@@ -49,14 +49,14 @@ export const listDeciderVersions = async (args: {
   projectIds?: number[];
   deciderId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listDeciderVersions: id=%s', args.deciderId);
   return deciderVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.deciderId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

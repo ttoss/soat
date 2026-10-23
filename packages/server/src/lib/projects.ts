@@ -135,7 +135,7 @@ export const findProjectPublicId = async (args: {
 export const listProjects = async (args: {
   authUser: AuthUser;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const listWhere = async (): Promise<
     Record<string, unknown> | undefined | null
@@ -165,10 +165,12 @@ export const listProjects = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {},
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Project.findAndCountAll({ where, order, limit, offset });
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Project.findAll({ where: pageWhere, order, limit });
     },
     map: mapProject,
   });

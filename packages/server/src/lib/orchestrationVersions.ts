@@ -109,13 +109,13 @@ export const listOrchestrationVersions = async (args: {
   projectIds?: number[];
   orchestrationId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return orchestrationVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.orchestrationId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

@@ -1,8 +1,13 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import type { PaginatedResult } from './pagination';
-import { resolvePagination } from './pagination';
+import {
+  emptyPage,
+  type ListFilters,
+  offsetPage,
+  type Page,
+  resolveOffsetPage,
+} from './pagination';
 import { sumComponentCostUsd, sumQuantities } from './priceCompute';
 import type {
   ComponentSum,
@@ -12,7 +17,6 @@ import type {
 } from './usageAggregateSql';
 import {
   bucketKeyOf,
-  countGroups,
   loadGroupPage,
   loadPageComponents,
   loadWindowComponents,
@@ -98,9 +102,7 @@ export type UsageAggregate = {
   filters: UsageAggregateFilters;
   // Paginated: a dimension like `orchestration_run` has one entry per run in
   // the window, so the collection is walked rather than returned whole.
-  // `total` is the number of distinct buckets — bucket cardinality, never an
-  // entity count: read `totals.distinct` for that.
-  groups: PaginatedResult<UsageAggregateGroup>;
+  groups: Page<UsageAggregateGroup>;
   // Always the whole `[from, to]` window, never the page above it. A
   // page-scoped total read against an allowance would understate spend by
   // whatever the caller did not page through.
@@ -223,7 +225,6 @@ const emptyAggregate = (args: {
   groupBy: UsageGroupBy | null;
   filters: UsageAggregateFilters;
   limit: number;
-  offset: number;
 }): UsageAggregate => {
   return {
     project_id: args.projectPublicId,
@@ -231,14 +232,14 @@ const emptyAggregate = (args: {
     to: args.to ? args.to.toISOString() : null,
     group_by: args.groupBy,
     filters: args.filters,
-    groups: { data: [], total: 0, limit: args.limit, offset: args.offset },
+    groups: emptyPage({ limit: args.limit }),
     totals: totalsFrom({ costUsd: null, eventCount: 0, components: [] }),
   };
 };
 
 /**
- * The bucketed page of a rollup: its buckets, their component sums, and how
- * many buckets the window holds in total.
+ * The bucketed page of a rollup: its buckets and their component sums. Paged
+ * by `OFFSET`, since buckets are ordered by their computed cost.
  *
  * Three of the five reads behind a rollup, and the three a dimensionless
  * request skips entirely — `group_by` is what they are all keyed on.
@@ -248,16 +249,16 @@ const loadGroups = async (args: {
   groupBy: UsageGroupBy | null;
   limit: number;
   offset: number;
-}): Promise<PaginatedResult<UsageAggregateGroup>> => {
+  pageFilters: ListFilters;
+}): Promise<Page<UsageAggregateGroup>> => {
   const { filter, groupBy, limit, offset } = args;
   if (groupBy === null) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage({ limit });
   }
 
-  const [groupCount, groupRows, pageComponents] = await Promise.all([
-    countGroups({ filter, groupBy }),
-    loadGroupPage({ filter, groupBy, limit, offset }),
-    loadPageComponents({ filter, groupBy, limit, offset }),
+  const [groupRows, pageComponents] = await Promise.all([
+    loadGroupPage({ filter, groupBy, limit: limit + 1, offset }),
+    loadPageComponents({ filter, groupBy, limit: limit + 1, offset }),
   ]);
 
   const data: UsageAggregateGroup[] = groupRows.map((row) => {
@@ -272,7 +273,7 @@ const loadGroups = async (args: {
     };
   });
 
-  return { data, total: groupCount, limit, offset };
+  return offsetPage({ rows: data, limit, offset, filters: args.pageFilters });
 };
 
 /**
@@ -289,13 +290,14 @@ const buildAggregate = async (args: {
   filters: UsageAggregateFilters;
   limit: number;
   offset: number;
+  pageFilters: ListFilters;
 }): Promise<UsageAggregate> => {
-  const { filter, groupBy, limit, offset } = args;
+  const { filter, groupBy, limit, offset, pageFilters } = args;
 
   const [windowTotals, windowComponents, groups] = await Promise.all([
     loadWindowTotals(filter, { distinct: args.includeDistinct }),
     loadWindowComponents(filter),
-    loadGroups({ filter, groupBy, limit, offset }),
+    loadGroups({ filter, groupBy, limit, offset, pageFilters }),
   ]);
 
   return {
@@ -368,8 +370,8 @@ export const rollUpUsageTotals = async (
  *
  * Aggregated by Postgres, not in memory: the window is grouped and summed in
  * SQL with one join for the chosen dimension, and only the requested page of
- * buckets is materialized. `totals` and `groups.total` describe the whole
- * window regardless of the page. `projectId` is the internal id the caller has
+ * buckets is materialized. `totals` describes the whole window regardless of
+ * the page. `projectId` is the internal id the caller has
  * already resolved (and authorized).
  */
 export const aggregateUsage = async (
@@ -381,19 +383,26 @@ export const aggregateUsage = async (
     groupBy?: string;
     include?: string;
     limit?: number;
-    offset?: number;
+    cursor?: string;
   }
 ): Promise<UsageAggregate> => {
   const groupBy = parseGroupBy(args.groupBy);
   const includeDistinct = parseInclude(args.include);
   const from = parseBound(args.from, 'from');
   const to = parseBound(args.to, 'to');
-  const { limit, offset } = resolvePagination({
-    limit: args.limit,
-    offset: args.offset,
-  });
-
   const filters = echoedFilters(args);
+  const pageFilters = {
+    projectId: args.projectId,
+    from,
+    to,
+    groupBy,
+    filters,
+  };
+  const { limit, offset } = resolveOffsetPage({
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: pageFilters,
+  });
 
   log(
     'aggregateUsage: projectId=%d groupBy=%s from=%s to=%s filters=%o limit=%d offset=%d',
@@ -419,7 +428,6 @@ export const aggregateUsage = async (
       groupBy,
       filters,
       limit,
-      offset,
     });
   }
 
@@ -438,5 +446,6 @@ export const aggregateUsage = async (
     filters,
     limit,
     offset,
+    pageFilters,
   });
 };

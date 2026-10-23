@@ -1027,14 +1027,17 @@ describe('Agent Generation Routes', () => {
         '/api/v1/usage/events?generation_id=gen_usage_metered'
       );
       const startedAt = Date.now();
-      while (metersRes.body.total === 0 && Date.now() - startedAt < 5000) {
+      while (
+        metersRes.body.data.length === 0 &&
+        Date.now() - startedAt < 5000
+      ) {
         await sleep(50);
         metersRes = await authenticatedTestClient(userToken).get(
           '/api/v1/usage/events?generation_id=gen_usage_metered'
         );
       }
       expect(metersRes.status).toBe(200);
-      expect(metersRes.body.total).toBe(1);
+      expect(metersRes.body.data).toHaveLength(1);
       const components: Array<{ component: string; quantity: number }> =
         metersRes.body.data[0].components;
       const quantityOf = (name: string) => {

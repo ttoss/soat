@@ -13,7 +13,7 @@ A cursor-paginated feed of every autonomously executed action.
 
 One entry per autonomous execution: a tool call, an approval resolution, an exception filing, a schedule firing. The [audit log](./audit-log.md) is **principal-centric** (who authorized a request: a `user` or `api_key`); activity is **agent/run-centric**. Security-relevant events (a policy `deny`, a decision-changing guardrail evaluation) stay on the audit log.
 
-No public create endpoint; entries are platform-written. The feed is read-only, append-only, and paginated with an opaque cursor, because offset pages shift under a fast-moving feed.
+No public create endpoint; entries are platform-written. The feed is read-only and append-only, and pages by cursor like every list.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -60,7 +60,7 @@ Field-level contrast with the audit log:
 | Request forensics | none | `request_id`, `ip`, `user_agent` |
 | Written by | four [producers](#producers) — two event subscriptions, two direct hooks | middleware, once per mutating `/api/v1` request that authorizes |
 | Immutability | no update path exists, but it is a convention — not enforced by model hooks | [hard-enforced append-only, with a retention sweep](./audit-log.md#append-only--retention) |
-| Reading | keyset [cursor pagination](#cursor-pagination), no export | offset pagination plus [NDJSON export](./audit-log.md#ndjson-export) |
+| Reading | [cursor pagination](#cursor-pagination), no export | cursor pagination plus [NDJSON export](./audit-log.md#ndjson-export) |
 
 Security-relevant events stay on the audit log even when activity-shaped: a [guardrail](./guardrails.md) evaluation that *changed* a call's outcome is mirrored as a [system-originated entry](./audit-log.md#system-originated-entries) (`detail.kind: guardrail_evaluation`); see [Evaluation Audit Record](./guardrails.md#evaluation-audit-record).
 
@@ -94,7 +94,7 @@ Severity defaults per kind, and a producer may override it:
 
 ### Cursor pagination
 
-[`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor`; pass it back as `cursor`. `null` means no more data. The cursor is an opaque keyset token over `(created_at, id)`, so a page never shifts as entries arrive.
+[`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor`; pass it back as `cursor`. `null` means no more data. As on every list ([Pagination](../api/index.md#pagination)), a page never shifts as entries arrive, and a cursor sent with other filters is `400 INVALID_CURSOR`.
 
 ### NDJSON export
 

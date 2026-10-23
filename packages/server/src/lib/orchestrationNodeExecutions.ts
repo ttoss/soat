@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 
 const log = createDebug('soat:orchestrations');
 
@@ -45,15 +45,21 @@ export const listOrchestrationRunNodeExecutions = async (args: {
   runId: string;
   projectIds: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedNodeExecution>> => {
+  cursor?: string;
+}): Promise<Page<MappedNodeExecution>> => {
   log('listOrchestrationRunNodeExecutions: run=%s', args.runId);
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { runId: args.runId, projectIds: args.projectIds },
+    where: undefined,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.OrchestrationNodeExecution.findAndCountAll({
+    // No public id on this model. Two records of one node attempt in a run come
+    // from two dispatches, which never share a `createdAt`.
+    tiebreak: ['nodeId', 'attempt'],
+    query: ({ where, limit, order }) => {
+      return db.OrchestrationNodeExecution.findAll({
+        where,
         include: [
           {
             model: db.OrchestrationRun,
@@ -67,7 +73,6 @@ export const listOrchestrationRunNodeExecutions = async (args: {
           },
         ],
         limit,
-        offset,
         order,
       });
     },

@@ -4,11 +4,11 @@ import type {
 } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
-import type { PaginatedResult } from 'src/lib/pagination';
 import {
   emptyPage,
-  resolvePagination,
-  totalListOrder,
+  type ListFilters,
+  type Page,
+  paginatedList,
 } from 'src/lib/pagination';
 import type { PrincipalType } from 'src/lib/principals';
 import { timeRangeWhere } from 'src/lib/timeRange';
@@ -136,32 +136,37 @@ const mapAssertions = async (
 };
 
 /**
- * One page of assertions. Not `paginatedList`: the retired-memory reverse join
- * is resolved once for the whole page, and a per-row `map` would make it one
- * query per assertion.
+ * One page of assertions. The retired-memory reverse join is resolved once for
+ * the whole page after paging, since a per-row `map` would make it one query
+ * per assertion.
  */
 const assertionPage = async (args: {
   where: Record<string, unknown>;
-  order: 'ASC' | 'DESC';
+  filters: ListFilters;
+  direction: 'ASC' | 'DESC';
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedMemoryAssertion>> => {
-  const { limit, offset } = resolvePagination(args);
-  const { count, rows } = await db.MemoryAssertion.findAndCountAll({
+  cursor?: string;
+}): Promise<Page<MappedMemoryAssertion>> => {
+  const page = await paginatedList({
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: args.filters,
     where: args.where,
-    include: assertionIncludes(),
-    order: totalListOrder([['createdAt', args.order]]),
-    distinct: true,
-    limit,
-    offset,
+    order: [['createdAt', args.direction]],
+    query: ({ where, limit, order }) => {
+      return db.MemoryAssertion.findAll({
+        where,
+        include: assertionIncludes(),
+        order,
+        limit,
+      });
+    },
+    map: (row) => {
+      return row as AssertionRow;
+    },
   });
 
-  return {
-    data: await mapAssertions(rows as AssertionRow[]),
-    total: count,
-    limit,
-    offset,
-  };
+  return { ...page, data: await mapAssertions(page.data) };
 };
 
 const resolveGenerationDbId = async (
@@ -222,14 +227,15 @@ export const recordMemoryAssertion = async (args: {
 export const listMemoryAssertions = async (args: {
   memoryId: number;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedMemoryAssertion>> => {
+  cursor?: string;
+}): Promise<Page<MappedMemoryAssertion>> => {
   log('listMemoryAssertions: memoryId=%d', args.memoryId);
   return assertionPage({
     where: { memoryId: args.memoryId },
-    order: 'ASC',
+    filters: { memoryId: args.memoryId },
+    direction: 'ASC',
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 
@@ -245,8 +251,8 @@ export const listMemoryStoreAssertions = async (args: {
   from?: Date;
   to?: Date;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedMemoryAssertion>> => {
+  cursor?: string;
+}): Promise<Page<MappedMemoryAssertion>> => {
   log(
     'listMemoryStoreAssertions: memoryStoreId=%d mechanism=%s outcome=%s',
     args.memoryStoreId,
@@ -272,9 +278,17 @@ export const listMemoryStoreAssertions = async (args: {
 
   return assertionPage({
     where,
-    order: 'DESC',
+    filters: {
+      memoryStoreId: args.memoryStoreId,
+      mechanism: args.mechanism,
+      outcome: args.outcome,
+      generationId: args.generationId,
+      from: args.from,
+      to: args.to,
+    },
+    direction: 'DESC',
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 
@@ -285,13 +299,14 @@ export const listMemoryStoreAssertions = async (args: {
 export const listGenerationMemoryAssertions = async (args: {
   generationDbId: number;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedMemoryAssertion>> => {
+  cursor?: string;
+}): Promise<Page<MappedMemoryAssertion>> => {
   log('listGenerationMemoryAssertions: generation=%d', args.generationDbId);
   return assertionPage({
     where: { generationId: args.generationDbId },
-    order: 'ASC',
+    filters: { generationDbId: args.generationDbId },
+    direction: 'ASC',
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };

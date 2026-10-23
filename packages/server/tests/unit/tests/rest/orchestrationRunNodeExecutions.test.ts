@@ -47,7 +47,10 @@ describe('GET /api/v1/orchestration-runs/:orchestration_run_id/node-executions',
     runId = run.body.id;
   });
 
-  const list = (query: Record<string, number> = {}, token = userToken) => {
+  const list = (
+    query: Record<string, number | string> = {},
+    token = userToken
+  ) => {
     return authenticatedTestClient(token)
       .get(`/api/v1/orchestration-runs/${runId}/node-executions`)
       .query(query);
@@ -63,7 +66,7 @@ describe('GET /api/v1/orchestration-runs/:orchestration_run_id/node-executions',
     const response = await list();
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ total: 3, limit: 50, offset: 0 });
+    expect(response.body.next_cursor).toBeNull();
     expect(nodeIds(response.body)).toEqual(['first', 'second', 'third']);
     expect(response.body.data[0]).toMatchObject({
       node_type: 'transform',
@@ -72,12 +75,19 @@ describe('GET /api/v1/orchestration-runs/:orchestration_run_id/node-executions',
     });
   });
 
-  test('an explicit page answers that slice', async () => {
-    const response = await list({ limit: 1, offset: 1 });
+  test('pages with limit and cursor', async () => {
+    const first = await list({ limit: 1 });
+    expect(first.status).toBe(200);
+    expect(nodeIds(first.body)).toEqual(['first']);
+    expect(typeof first.body.next_cursor).toBe('string');
 
-    expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ total: 3, limit: 1, offset: 1 });
-    expect(nodeIds(response.body)).toEqual(['second']);
+    const second = await list({ limit: 1, cursor: first.body.next_cursor });
+    expect(second.status).toBe(200);
+    expect(nodeIds(second.body)).toEqual(['second']);
+
+    const last = await list({ limit: 2, cursor: second.body.next_cursor });
+    expect(nodeIds(last.body)).toEqual(['third']);
+    expect(last.body.next_cursor).toBeNull();
   });
 
   test('the run itself carries no node executions', async () => {

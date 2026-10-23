@@ -8,9 +8,8 @@ info:
     principal-centric (who did what to the platform); this feed is
     agent/run-centric (what an agent did during a run). There is no public
     create endpoint — entries are platform-written by producers (approval
-    resolution, exception filing, schedule firing, tool execution). Cursor
-    (keyset) paginated, not offset, because the feed is append-only and
-    high-volume.
+    resolution, exception filing, schedule firing, tool execution). Paged by
+    cursor, like every list.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -35,9 +34,9 @@ paths:
       description: >-
         Returns activity entries for a project, newest first, filterable by
         kind, severity, agent, generation and orchestration run — every filter
-        composable with the rest. Paginated with an opaque cursor rather than
-        offset/limit — pass the previous page's `next_cursor` to fetch the
-        next one; a `null` `next_cursor` means there is no more data.
+        composable with the rest. Pass the previous page's `next_cursor` as
+        `cursor` to fetch the next one; a `null` `next_cursor` means there is
+        no more data.
       operationId: listActivity
       parameters:
         - name: project_id
@@ -96,33 +95,26 @@ paths:
           schema:
             type: string
             example: orch_run_V1StGXR8Z5jdHi
-        - name: cursor
-          in: query
-          description: Opaque cursor from a previous page's `next_cursor`
-          schema:
-            type: string
         - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: Page of activity entries
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - next_cursor
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ActivityEntry'
-                  next_cursor:
-                    type: string
-                    nullable: true
-                    description: Pass as `cursor` to fetch the next page; `null` when this is the last page
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/ActivityEntry'
         '400':
-          description: Malformed cursor
+          description: Malformed cursor, or one sent with other filters
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
         '403':

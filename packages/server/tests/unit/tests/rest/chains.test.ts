@@ -98,7 +98,8 @@ describe('Chains', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(2);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.next_cursor).toBeNull();
       const ids = res.body.data.map((chain: { id: string }) => {
         return chain.id;
       });
@@ -115,7 +116,7 @@ describe('Chains', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0]).toMatchObject({
         id: exhaustedChainId,
         project_id: projectId,
@@ -154,7 +155,7 @@ describe('Chains', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].id).toBe(activeChainId);
     });
 
@@ -178,8 +179,7 @@ describe('Chains', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/chains');
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(0);
-      expect(res.body.data).toEqual([]);
+      expect(res.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('unauthenticated request returns 401', async () => {

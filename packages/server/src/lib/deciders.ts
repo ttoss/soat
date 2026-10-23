@@ -20,7 +20,7 @@ import {
   buildDeciderConfigSnapshot,
   deciderVersionStore,
 } from './deciderVersionSnapshot';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 import type { VersionedWrite } from './writePrecondition';
@@ -207,24 +207,26 @@ export const createDecider = async (
 export const listDeciders = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedDecider>> => {
+  cursor?: string;
+}): Promise<Page<MappedDecider>> => {
   log('listDeciders: projectIds=%o', args.projectIds);
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Decider.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Decider.findAll({
+        where: pageWhere,
         include: deciderIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

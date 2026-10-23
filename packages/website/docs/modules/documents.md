@@ -127,7 +127,7 @@ curl "https://api.example.com/api/v1/documents?project_id=proj_ABC&path_prefix=/
 </TabItem>
 </Tabs>
 
-The prefix is a **path boundary, not a substring**: `/reports` matches `/reports/q1.txt`, never `/reports-archive/q1.txt`. `reports`, `/reports` and `/reports/` are the same filter; `%` and `_` are literal. `/` selects the whole project apart from the reserved root, which only a prefix naming it returns. The filter runs in SQL with the policy filter, so `total` and pagination stay accurate per group.
+The prefix is a **path boundary, not a substring**: `/reports` matches `/reports/q1.txt`, never `/reports-archive/q1.txt`. `reports`, `/reports` and `/reports/` are the same filter; `%` and `_` are literal. `/` selects the whole project apart from the reserved root, which only a prefix naming it returns. The filter runs in SQL with the policy filter, so pagination stays accurate per group.
 
 ## Key Concepts
 
@@ -296,7 +296,7 @@ The kinds are a declared set, not free text: a corpus many agents write into is 
 - **Both documents live in one project.** An edge that left the project would be visible from one end and invisible from the other, since every surface that reads it is project-scoped.
 - **Asserting the same edge twice is `409`.** An edge is a fact; the second assertion is the same fact.
 - **`?related_to=doc_…` finds neighbours on either side** — what a document points at, and what points at it. A document with no relations narrows the listing to nothing.
-- [`GET /api/v1/documents/{document_id}/relations`](/docs/api/documents/list-document-relations) lists the edges a document asserts, oldest first, in a `{ data, total, limit, offset }` envelope (`limit` default 50, max 100). A single-document read carries no edges.
+- [`GET /api/v1/documents/{document_id}/relations`](/docs/api/documents/list-document-relations) lists the edges a document asserts, oldest first, in the [list envelope](../api/index.md#pagination) (`limit` default 50, max 100). A single-document read carries no edges.
 - [`DELETE /api/v1/documents/{document_id}/relations/{relation_id}`](/docs/api/documents/delete-document-relation) retracts an edge; both documents stay as they are.
 
 ### NDJSON export

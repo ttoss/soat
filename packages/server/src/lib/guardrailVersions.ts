@@ -79,13 +79,13 @@ export const listGuardrailVersions = async (args: {
   projectIds?: number[];
   guardrailId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return guardrailVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.guardrailId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

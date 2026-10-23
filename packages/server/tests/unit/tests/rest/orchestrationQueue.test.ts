@@ -1178,8 +1178,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         '/api/v1/orchestrations/queue/stats/projects'
       );
       expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ limit: 50, offset: 0 });
-      expect(res.body.total).toBe(res.body.data.length);
+      expect(res.body.next_cursor).toBeNull();
       const row = res.body.data.find((r: { project_id: string }) => {
         return r.project_id === projectId;
       });
@@ -1187,16 +1186,33 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(typeof row.claimed).toBe('number');
     });
 
-    test('an explicit page answers that slice', async () => {
+    test('paging with limit=1 walks every project once', async () => {
       await seedQueuedTask('Stats Projects Page');
+      const statsProjects = (query: Record<string, string | number>) => {
+        return authenticatedTestClient(adminToken)
+          .get('/api/v1/orchestrations/queue/stats/projects')
+          .query(query);
+      };
 
-      const res = await authenticatedTestClient(adminToken)
-        .get('/api/v1/orchestrations/queue/stats/projects')
-        .query({ limit: 1, offset: 0 });
-      expect(res.status).toBe(200);
-      expect(res.body.limit).toBe(1);
-      expect(res.body.data).toHaveLength(1);
-      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      const whole = await statsProjects({});
+      const walked: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const res = await statsProjects({
+          limit: 1,
+          ...(cursor !== null && { cursor }),
+        });
+        expect(res.status).toBe(200);
+        expect(res.body.data).toHaveLength(1);
+        walked.push(res.body.data[0].project_id);
+        cursor = res.body.next_cursor;
+      } while (cursor !== null);
+
+      expect(walked).toEqual(
+        whole.body.data.map((r: { project_id: string }) => {
+          return r.project_id;
+        })
+      );
     });
 
     test('getQueueStats reports queued and claimed counts for a project', async () => {

@@ -69,7 +69,7 @@ export const listMemoryStores = async (args: {
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   if (args.projectIds.length === 0) return emptyPage(args);
 
@@ -80,16 +80,16 @@ export const listMemoryStores = async (args: {
   }
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, tags: args.tags },
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.MemoryStore.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.MemoryStore.findAll({
+        where: pageWhere,
         include: [{ model: db.Project, as: 'project' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapMemoryStore,

@@ -4,7 +4,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { validateMemoryRule } from './memoryRuleValidation';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:memoryRules');
@@ -169,8 +169,8 @@ export const listMemoryRules = async (args: {
   projectIds?: number[];
   memoryStoreId?: number;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedMemoryRule>> => {
+  cursor?: string;
+}): Promise<Page<MappedMemoryRule>> => {
   log(
     'listMemoryRules: projectIds=%o memoryStoreId=%s',
     args.projectIds,
@@ -184,16 +184,16 @@ export const listMemoryRules = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, memoryStoreId: args.memoryStoreId },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.MemoryRule.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.MemoryRule.findAll({
+        where: pageWhere,
         include: memoryRuleIncludes(args.projectIds),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (rule) => {

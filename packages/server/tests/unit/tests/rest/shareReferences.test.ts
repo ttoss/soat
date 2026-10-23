@@ -185,39 +185,41 @@ describe('Share references', () => {
         const response = await list();
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({
-          total: toolReferences.length,
-          limit: 50,
-          offset: 0,
-        });
+        expect(response.body.data).toHaveLength(toolReferences.length);
+        expect(response.body.next_cursor).toBeNull();
       });
 
       test('pages walk the same order without repeats', async () => {
         const all = (await list()).body.data;
 
-        const first = await list({ limit: 2, offset: 0 });
-        const second = await list({ limit: 2, offset: 2 });
+        const first = await list({ limit: 2 });
+        const second = await list({ limit: 2, cursor: first.body.next_cursor });
 
         expect(first.status).toBe(200);
-        expect(first.body).toMatchObject({ total: 5, limit: 2, offset: 0 });
+        expect(typeof first.body.next_cursor).toBe('string');
         expect([...first.body.data, ...second.body.data]).toEqual(
           all.slice(0, 4)
         );
       });
 
       test('the last page holds the remainder', async () => {
-        const response = await list({ limit: 2, offset: 4 });
+        const first = await list({ limit: 2 });
+        const second = await list({ limit: 2, cursor: first.body.next_cursor });
+        const response = await list({
+          limit: 2,
+          cursor: second.body.next_cursor,
+        });
 
         expect(response.status).toBe(200);
-        expect(response.body.total).toBe(5);
         expect(response.body.data).toHaveLength(1);
+        expect(response.body.next_cursor).toBeNull();
       });
 
       test('a limit above the ceiling is clamped to it', async () => {
         const response = await list({ limit: 1000 });
 
         expect(response.status).toBe(200);
-        expect(response.body.limit).toBe(100);
+        expect(response.body.data.length).toBeLessThanOrEqual(100);
       });
 
       test('a non-numeric limit is refused', async () => {

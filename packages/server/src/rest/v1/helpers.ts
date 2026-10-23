@@ -123,39 +123,31 @@ export const parseToolContextBody = (
 export type ProjectOwned = { project_id: string | undefined };
 
 /**
- * The only reader of a paging parameter off a query string. Absent or empty is
- * `undefined`, so the list's default applies; anything but an integer literal
- * is `VALIDATION_FAILED`. Range and ceiling are `resolvePagination`'s.
+ * The only reader of the paging parameters off a query string. An absent or
+ * empty `limit` is `undefined`, so the list's default applies; anything but an
+ * integer literal is `VALIDATION_FAILED`. Range and ceiling are
+ * `resolveLimit`'s, the cursor's meaning `paginatedList`'s.
  */
-const readPagingParam = (args: {
-  ctx: Context;
-  field: 'limit' | 'offset';
-}): number | undefined => {
-  const value = args.ctx.query[args.field];
-  if (value === undefined || value === '') return undefined;
-  if (typeof value !== 'string' || !/^-?\d+$/.test(value.trim())) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `${args.field} must be an integer; got ${JSON.stringify(value)}.`,
-      { field: args.field }
-    );
-  }
-  return Number(value);
-};
-
-/** `limit` / `offset` of an offset-paged list. */
 export const parsePagination = (
   ctx: Context
-): { limit?: number; offset?: number } => {
-  return {
-    limit: readPagingParam({ ctx, field: 'limit' }),
-    offset: readPagingParam({ ctx, field: 'offset' }),
-  };
-};
-
-/** `limit` of a cursor-paged list, which takes no `offset`. */
-export const parsePageLimit = (ctx: Context): number | undefined => {
-  return readPagingParam({ ctx, field: 'limit' });
+): { limit?: number; cursor?: string } => {
+  const { limit, cursor } = ctx.query;
+  if (Array.isArray(cursor)) {
+    throw new DomainError('VALIDATION_FAILED', 'cursor must be one string.', {
+      field: 'cursor',
+    });
+  }
+  if (limit === undefined || limit === '') {
+    return { cursor: cursor || undefined };
+  }
+  if (typeof limit !== 'string' || !/^-?\d+$/.test(limit.trim())) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `limit must be an integer; got ${JSON.stringify(limit)}.`,
+      { field: 'limit' }
+    );
+  }
+  return { limit: Number(limit), cursor: cursor || undefined };
 };
 
 /**

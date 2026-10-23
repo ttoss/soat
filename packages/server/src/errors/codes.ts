@@ -678,10 +678,10 @@ export const ERROR_CODES = {
     description:
       "The edited arguments supplied on edit-then-approve must be a JSON object, and must satisfy the tool's own `parameters` schema.",
   },
-  ACTIVITY_INVALID_CURSOR: {
+  INVALID_CURSOR: {
     httpStatus: 400,
     description:
-      'The activity feed cursor is malformed or does not decode to a valid (created_at, id) position.',
+      'The list cursor is malformed, or was issued for a list with other filters.',
   },
   WORKFLOW_NOT_FOUND: {
     httpStatus: 404,

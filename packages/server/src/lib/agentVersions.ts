@@ -179,13 +179,13 @@ export const listAgentVersions = async (args: {
   projectIds?: number[];
   agentId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return agentVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.agentId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

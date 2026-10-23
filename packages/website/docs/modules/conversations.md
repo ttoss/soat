@@ -66,7 +66,7 @@ Messages are ordered Document references with a `role` and optional `actor_id`. 
 
 `role: "system"` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`: stored history feeds [agent generations](./agents.md#instructions), so a system entry would let conversation data rewrite the agent's prompt. System content belongs in the agent's `instructions` or the [actor persona](./actors.md).
 
-Listed messages carry the document's full `content`, `role`, `actor_id`, `idempotency_key`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
+Listed messages carry the document's full `content`, `role`, `actor_id`, `idempotency_key`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). They come in `position` order, ascending by default; `?order=desc` reads the transcript from its end. Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
 Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds.
 

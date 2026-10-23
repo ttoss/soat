@@ -131,12 +131,12 @@ const workflowVersionArchive = makeVersionArchive({
 export const listWorkflowVersions = async (args: {
   workflowId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return workflowVersionArchive.listVersions({
     resourceId: args.workflowId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

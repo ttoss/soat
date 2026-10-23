@@ -53,7 +53,7 @@ const listFilesWithPolicy = async (args: {
   pathPrefix?: string;
   tags?: Record<string, string>;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const {
     authUser,
@@ -62,7 +62,7 @@ const listFilesWithPolicy = async (args: {
     pathPrefix,
     tags,
     limit,
-    offset,
+    cursor,
   } = args;
   const policies = await authUser.getPolicies(projectPublicId);
   const { where: policyWhere, hasAccess } = compilePolicy({
@@ -73,7 +73,7 @@ const listFilesWithPolicy = async (args: {
   });
 
   if (!hasAccess) {
-    return emptyPage({ limit, offset });
+    return emptyPage({ limit, cursor });
   }
 
   return listFiles({
@@ -82,7 +82,7 @@ const listFilesWithPolicy = async (args: {
     pathPrefix,
     tags,
     limit,
-    offset,
+    cursor,
   });
 };
 
@@ -92,7 +92,7 @@ filesRouter.get('/files', async (ctx: Context) => {
   const projectPublicId = (ctx.query as Record<string, string>).project_id;
   const pathPrefix = (ctx.query as Record<string, string>).path_prefix;
   const tags = readTagQuery(ctx.query.tags);
-  const { limit, offset } = parsePagination(ctx);
+  const { limit, cursor } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -109,7 +109,7 @@ filesRouter.get('/files', async (ctx: Context) => {
       pathPrefix,
       tags,
       limit,
-      offset,
+      cursor,
     });
     return;
   }
@@ -119,7 +119,7 @@ filesRouter.get('/files', async (ctx: Context) => {
     pathPrefix,
     tags,
     limit,
-    offset,
+    cursor,
   });
 });
 

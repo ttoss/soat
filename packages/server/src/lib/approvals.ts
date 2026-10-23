@@ -9,11 +9,7 @@ import {
 } from './approvalFilters';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
-import {
-  paginatedList,
-  type PaginatedResult,
-  resolvePagination,
-} from './pagination';
+import { emptyPage, type Page, pageOf, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import type { RequestPrincipal } from './principals';
 import { toolReferences } from './resourceReferences';
@@ -402,8 +398,8 @@ export const listApprovals = async (args: {
   expiresFrom?: Date;
   expiresTo?: Date;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedApproval>> => {
+  cursor?: string;
+}): Promise<Page<MappedApproval>> => {
   assertValidApprovalFilters(args);
 
   const where: Record<string, unknown> = { projectId: args.projectIds };
@@ -417,16 +413,22 @@ export const listApprovals = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      statuses: args.statuses,
+      origin: args.origin,
+      expiresFrom: args.expiresFrom,
+      expiresTo: args.expiresTo,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.ApprovalItem.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.ApprovalItem.findAll({
+        where: pageWhere,
         include: buildIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapApproval,
@@ -511,14 +513,13 @@ export const listApprovalRecurrences = async (args: {
   statuses?: readonly ApprovalStatus[];
   minCount?: number;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ApprovalRecurrenceGroup>> => {
+  cursor?: string;
+}): Promise<Page<ApprovalRecurrenceGroup>> => {
   const statuses = args.statuses?.length
     ? args.statuses
     : RECURRENCE_DEFAULT_STATUSES;
 
   const minCount = normalizeMinCount(args.minCount);
-  const { limit, offset } = resolvePagination(args);
 
   log(
     'listApprovalRecurrences: projects=%d statuses=%o minCount=%d',
@@ -528,7 +529,7 @@ export const listApprovalRecurrences = async (args: {
   );
 
   if (args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   // In memory rather than a GROUP BY + HAVING, whose aggregate-alias ordering
@@ -560,20 +561,22 @@ export const listApprovalRecurrences = async (args: {
       return mapRecurrenceGroup({ dedupKey, chain });
     })
     // Most-recurrent first; ties broken by most-recent activity so a freshly
-    // recurring pattern surfaces above a stale one with the same count.
+    // recurring pattern surfaces above a stale one with the same count, then
+    // by key so pages over the same set never overlap.
     .sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
       const aLast = a.chain[a.chain.length - 1].created_at.getTime();
       const bLast = b.chain[b.chain.length - 1].created_at.getTime();
-      return bLast - aLast;
+      if (bLast !== aLast) return bLast - aLast;
+      return a.dedup_key < b.dedup_key ? -1 : 1;
     });
 
-  return {
-    data: groups.slice(offset, offset + limit),
-    total: groups.length,
-    limit,
-    offset,
-  };
+  return pageOf({
+    items: groups,
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, statuses, minCount },
+  });
 };
 
 export const getApproval = async (args: {

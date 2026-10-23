@@ -555,6 +555,69 @@ describe('getListItemSchema — record from list responses', () => {
     expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
   });
 
+  test('reads a Page list response (allOf with a file-qualified $ref)', () => {
+    const spec: OpenApiSpec = JSON.parse(
+      JSON.stringify({
+        paths: {
+          '/api/v1/actors': {
+            get: {
+              operationId: 'listActors',
+              tags: ['Actors'],
+              responses: {
+                '200': {
+                  content: {
+                    'application/json': {
+                      schema: {
+                        allOf: [
+                          {
+                            $ref: './pagination.yaml#/components/schemas/Page',
+                          },
+                          {
+                            properties: {
+                              data: {
+                                items: {
+                                  $ref: '#/components/schemas/ActorRecord',
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Page: {
+              type: 'object',
+              properties: {
+                data: { type: 'array', items: {} },
+                next_cursor: { type: 'string' },
+              },
+            },
+            ActorRecord: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                project_id: { type: 'string', 'x-soat-ref': 'projects' },
+              },
+            },
+          },
+        },
+      })
+    );
+    const actors = parseModules(spec).find((m) => {
+      return m.tag === 'Actors';
+    })!;
+    const item = getListItemSchema(actors.listOp, spec);
+
+    expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
+  });
+
   test('a bare-array list returns the record, not an inner array field', () => {
     // testSpec Agents is a bare array of Agent; the record must be returned as
     // a whole (its own array fields must not be mistaken for the list).
