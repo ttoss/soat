@@ -435,7 +435,7 @@ describe('Deciders', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(typeof res.body.total).toBe('number');
+      expect(res.body).toHaveProperty('next_cursor');
       expect(
         res.body.data.some((decider: { id: string }) => {
           return decider.id === created.body.id;

@@ -165,7 +165,7 @@ export const listDocumentRelations = async (args: {
   documentId: string;
   projectIds?: number[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listDocumentRelations: document=%s', args.documentId);
 
@@ -176,15 +176,15 @@ export const listDocumentRelations = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { documentId: args.documentId, projectIds: args.projectIds },
+    where: { fromDocumentId: document.id as number },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.DocumentRelation.findAndCountAll({
-        where: { fromDocumentId: document.id as number },
+    query: ({ where, limit, order }) => {
+      return db.DocumentRelation.findAll({
+        where,
         include: relationIncludes(),
-        distinct: true,
         limit,
-        offset,
         order,
       });
     },

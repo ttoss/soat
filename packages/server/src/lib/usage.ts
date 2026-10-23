@@ -204,8 +204,9 @@ export const listUsageEvents = async (args: {
   model?: string;
   source?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
+  const { limit: _limit, cursor: _cursor, ...filters } = args;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
 
@@ -235,16 +236,16 @@ export const listUsageEvents = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters,
+    where: Object.keys(where).length > 0 ? where : undefined,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.UsageEvent.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.UsageEvent.findAll({
+        where: pageWhere,
         include: eventIncludes({ orchestrationId }),
         order,
         limit,
-        offset,
-        distinct: true,
       });
     },
     map: mapUsageEvent,

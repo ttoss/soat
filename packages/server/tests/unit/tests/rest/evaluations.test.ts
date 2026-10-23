@@ -410,7 +410,8 @@ describe('Evaluations', () => {
       const res = await asUser().get(`/api/v1/datasets/${listDataset}/items`);
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(2);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.next_cursor).toBeNull();
       expect(res.body.data[0].input[0].content).toBe('one');
     });
 
@@ -1006,7 +1007,7 @@ describe('Evaluations', () => {
       // header must not reach the queue.
       test('a key that cannot become a header returns 400 and creates no run', async () => {
         const before = await asUser().get(`/api/v1/evals/${evalId}/runs`);
-        const countBefore = before.body.total;
+        const newestBefore = before.body.data[0]?.id;
 
         const res = await asUser()
           .post(`/api/v1/evals/${evalId}/runs`)
@@ -1016,7 +1017,7 @@ describe('Evaluations', () => {
         expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
 
         const after = await asUser().get(`/api/v1/evals/${evalId}/runs`);
-        expect(after.body.total).toBe(countBefore);
+        expect(after.body.data[0]?.id).toBe(newestBefore);
       });
 
       test('two keys colliding on one header name return 400', async () => {
@@ -1152,11 +1153,18 @@ describe('Evaluations', () => {
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
       expect(results.status).toBe(200);
-      expect(results.body.total).toBe(3);
+      expect(results.body.data).toHaveLength(3);
+      expect(results.body.next_cursor).toBeNull();
 
-      const [first] = results.body.data;
+      // Results written in one millisecond tie on `created_at`, so read each by
+      // its item rather than its position.
+      const byItem = (itemId: string) => {
+        return results.body.data.find((result: { dataset_item_id: string }) => {
+          return result.dataset_item_id === itemId;
+        });
+      };
+      const first = byItem(itemIds[0]);
       expect(first.id).toMatch(/^evres_/);
-      expect(first.dataset_item_id).toBe(itemIds[0]);
       expect(first.output).toBe('Paris');
       expect(first.passed).toBe(true);
       expect(first.error).toBeNull();
@@ -1166,7 +1174,7 @@ describe('Evaluations', () => {
         { scorer: 'json_logic', score: 1, passed: true },
       ]);
 
-      const failing = results.body.data[2];
+      const failing = byItem(itemIds[2]);
       expect(failing.passed).toBe(false);
       expect(failing.scores[0]).toEqual({
         scorer: 'exact_match',
@@ -1281,7 +1289,11 @@ describe('Evaluations', () => {
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
-      const errored = results.body.data[1];
+      const errored = results.body.data.find(
+        (result: { dataset_item_id: string }) => {
+          return result.dataset_item_id === itemIds[1];
+        }
+      );
       expect(errored.error).toEqual({
         code: 'GENERATION_NOT_COMPLETED',
         message: expect.stringMatching(/requires_action/),
@@ -1308,11 +1320,35 @@ describe('Evaluations', () => {
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
       );
-      expect(results.body.data[0].error).toEqual({
+      const thrown = results.body.data.find(
+        (result: { dataset_item_id: string }) => {
+          return result.dataset_item_id === itemIds[0];
+        }
+      );
+      expect(thrown.error).toEqual({
         code: 'GENERATION_FAILED',
         message: 'provider exploded',
       });
     });
+
+    /** Every id `path` lists, read one-row page by one-row page. */
+    const pageIds = async (path: string): Promise<string[]> => {
+      const ids: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = await asUser()
+          .get(path)
+          .query({ limit: 1, ...(cursor ? { cursor } : {}) });
+        expect(page.status).toBe(200);
+        ids.push(
+          ...page.body.data.map((row: { id: string }) => {
+            return row.id;
+          })
+        );
+        cursor = page.body.next_cursor;
+      } while (cursor);
+      return ids;
+    };
 
     // Rows written in one millisecond tie on `created_at`, and Postgres returns
     // tied rows in scan order. Re-inserting them in reverse id order makes both
@@ -1334,7 +1370,7 @@ describe('Evaluations', () => {
       );
     };
 
-    test('results tied on created_at still list in run order', async () => {
+    test('results tied on created_at page each row once, in one order', async () => {
       mockCreateGeneration
         .mockResolvedValueOnce(completedGeneration('gen_t1', 'Paris'))
         .mockResolvedValueOnce(completedGeneration('gen_t2', 'Paris'))
@@ -1357,14 +1393,20 @@ describe('Evaluations', () => {
         }),
       });
 
-      const results = await asUser().get(
-        `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
-      );
+      const path = `/api/v1/evals/${evalId}/runs/${res.body.id}/results`;
+      const results = await asUser().get(path);
       expect(
-        results.body.data.map((result: { dataset_item_id: string }) => {
-          return result.dataset_item_id;
+        results.body.data
+          .map((result: { dataset_item_id: string }) => {
+            return result.dataset_item_id;
+          })
+          .sort()
+      ).toEqual([...itemIds].sort());
+      expect(await pageIds(path)).toEqual(
+        results.body.data.map((result: { id: string }) => {
+          return result.id;
         })
-      ).toEqual(itemIds);
+      );
     });
 
     test('items tied on created_at run in insertion order', async () => {
@@ -1410,7 +1452,7 @@ describe('Evaluations', () => {
       expect(prompts).toEqual(['t1', 't2', 't3']);
     });
 
-    test('runs tied on created_at list newest first', async () => {
+    test('runs tied on created_at page each row once, in one order', async () => {
       const started: string[] = [];
       for (let index = 0; index < 3; index += 1) {
         const res = await asUser()
@@ -1427,21 +1469,26 @@ describe('Evaluations', () => {
         }),
       });
 
-      const list = await asUser().get(`/api/v1/evals/${evalId}/runs`);
-      const listed = list.body.data
-        .map((run: { id: string }) => {
-          return run.id;
-        })
-        .filter((id: string) => {
-          return started.includes(id);
-        });
-      expect(listed).toEqual([...started].reverse());
+      const path = `/api/v1/evals/${evalId}/runs`;
+      const list = await asUser().get(path).query({ limit: 100 });
+      const listed = list.body.data.map((run: { id: string }) => {
+        return run.id;
+      });
+      expect(
+        listed
+          .filter((id: string) => {
+            return started.includes(id);
+          })
+          .sort()
+      ).toEqual([...started].sort());
+      expect(list.body.next_cursor).toBeNull();
+      expect(await pageIds(path)).toEqual(listed);
     });
 
     test('lists runs newest first and gets one by id', async () => {
       const list = await asUser().get(`/api/v1/evals/${evalId}/runs`);
       expect(list.status).toBe(200);
-      expect(list.body.total).toBeGreaterThan(0);
+      expect(list.body.data.length).toBeGreaterThan(0);
 
       const get = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${list.body.data[0].id}`
@@ -1634,7 +1681,8 @@ describe('Evaluations', () => {
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${run.id}/results`
       );
-      expect(results.body.total).toBe(2);
+      expect(results.body.data).toHaveLength(2);
+      expect(results.body.next_cursor).toBeNull();
       expect(
         results.body.data.map((result: { dataset_item_id: string }) => {
           return result.dataset_item_id;

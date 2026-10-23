@@ -507,7 +507,7 @@ const { data, error } = await soat.generations.listGenerationMemoryAssertions({
   path: { generation_id: 'gen_abc123' },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data.data is oldest first; data.total counts every write
+// data.data is oldest first; follow data.next_cursor for the rest
 ```
 
 </TabItem>

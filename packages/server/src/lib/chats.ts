@@ -20,7 +20,7 @@ import {
   routedMaxRetries,
   validateModelRouteExclusivity,
 } from './modelRoutes';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { assertProjectAcceptsWork } from './projectPause';
 import { makeResourceAccessor } from './resourceAccessor';
 import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
@@ -161,20 +161,20 @@ export const getChat = async (args: { id: string }): Promise<MappedChat> => {
 export const listChats = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedChat>> => {
+  cursor?: string;
+}): Promise<Page<MappedChat>> => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where: { projectId: args.projectIds },
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Chat.findAndCountAll({
-        where: { projectId: args.projectIds },
+    query: ({ where, limit, order }) => {
+      return db.Chat.findAll({
+        where,
         include: getChatIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (chat) => {

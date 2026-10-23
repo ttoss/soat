@@ -962,7 +962,7 @@ describe('MemoryStores', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toHaveLength(0);
-        expect(response.body.total).toBe(0);
+        expect(response.body.next_cursor).toBeNull();
       });
 
       // The state here is produced by the write path itself rather than seeded:
@@ -989,7 +989,7 @@ describe('MemoryStores', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(response.body.total).toBe(2);
+        expect(response.body.data).toHaveLength(2);
         const retired = response.body.data.find((e: { id: string }) => {
           return e.id === oldEntry.body.id;
         });

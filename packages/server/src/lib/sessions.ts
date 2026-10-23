@@ -194,7 +194,7 @@ export const listSessions = async (args: {
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return emptyPage(args);
@@ -223,21 +223,27 @@ export const listSessions = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      agentId: args.agentId,
+      actorId: args.actorId,
+      statuses: args.statuses,
+      tags: args.tags,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: async ({ limit, offset, order }) => {
-      const page = await db.Session.findAndCountAll({
-        where,
+    query: async ({ where: pageWhere, limit, order }) => {
+      const rows = await db.Session.findAll({
+        where: pageWhere,
         include: sessionIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
       // Expiry is applied to the rows this page returns before they are mapped,
       // so a session that timed out is reported as expired rather than active.
-      await Promise.all(page.rows.map(checkAndExpireSession));
-      return page;
+      await Promise.all(rows.map(checkAndExpireSession));
+      return rows;
     },
     map: mapSession,
   });

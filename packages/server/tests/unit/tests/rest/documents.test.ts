@@ -118,13 +118,31 @@ describe('Documents', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
-    test('accepts limit and offset query params', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents?project_id=${projectId}&limit=1&offset=0`
-      );
+    test('pages with limit and cursor', async () => {
+      for (const name of ['page-a', 'page-b']) {
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/documents')
+          .send({
+            project_id: projectId,
+            content: name,
+            path: `/kcol_paging/${name}.md`,
+            filename: `${name}.md`,
+          });
+      }
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=/kcol_paging/&limit=1`
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=/kcol_paging/&limit=1&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
     });
 
     test('admin with OAuth project-scoped token can list documents by project_id', async () => {
@@ -215,8 +233,8 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
       expect(response.body.data).toHaveLength(1);
+      expect(response.body.next_cursor).toBeNull();
       expect(response.body.data[0].id).toBe(insideId);
       expect(response.body.data[0].path).toBe('/kcol_alpha/refunds.md');
     });
@@ -227,8 +245,8 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(0);
       expect(response.body.data).toEqual([]);
+      expect(response.body.next_cursor).toBeNull();
     });
 
     test('the prefix is a path boundary, not a substring match', async () => {
@@ -238,13 +256,13 @@ describe('Documents', () => {
         `/api/v1/documents?project_id=${projectId}&path_prefix=/kcol_alph`
       );
       expect(partial.status).toBe(200);
-      expect(partial.body.total).toBe(0);
+      expect(partial.body.data).toHaveLength(0);
 
       const wildcard = await authenticatedTestClient(userToken).get(
         `/api/v1/documents?project_id=${projectId}&path_prefix=${encodeURIComponent('/%')}`
       );
       expect(wildcard.status).toBe(200);
-      expect(wildcard.body.total).toBe(0);
+      expect(wildcard.body.data).toHaveLength(0);
     });
 
     test('normalizes a prefix that omits the leading slash', async () => {
@@ -253,7 +271,7 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].id).toBe(insideId);
     });
 
@@ -263,7 +281,7 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].id).toBe(insideId);
     });
   });

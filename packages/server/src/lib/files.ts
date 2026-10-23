@@ -91,7 +91,7 @@ export const listFiles = async (args: {
   pathPrefix?: string;
   tags?: Record<string, string>;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return emptyPage(args);
@@ -117,14 +117,19 @@ export const listFiles = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      pathPrefix: args.pathPrefix,
+      tags: args.tags,
+    },
+    where: hasPolicyConstraints(where) ? where : undefined,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.File.findAndCountAll({
-        where: hasPolicyConstraints(where) ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.File.findAll({
+        where: pageWhere,
         order,
         limit,
-        offset,
       });
     },
     map: mapFile,

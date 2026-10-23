@@ -16,7 +16,7 @@ import {
   failedOutcome,
 } from './decisionBackends';
 import { emitResourceEvent } from './eventBus';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:decisions');
@@ -327,8 +327,8 @@ export const listDecisions = async (args: {
   deciderId?: string;
   statuses?: readonly DecisionStatus[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedDecision>> => {
+  cursor?: string;
+}): Promise<Page<MappedDecision>> => {
   log('listDecisions: projectIds=%o', args.projectIds);
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
@@ -337,16 +337,20 @@ export const listDecisions = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      deciderId: args.deciderId,
+      statuses: args.statuses,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Decision.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Decision.findAll({
+        where: pageWhere,
         include: decisionIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

@@ -21,14 +21,16 @@ export const nodeExecutionsOf = async (args: {
   runId: string;
 }): Promise<NodeExecutionRow[]> => {
   const rows: NodeExecutionRow[] = [];
-  for (;;) {
+  let cursor: string | null = null;
+  do {
     const res = await authenticatedTestClient(args.token)
       .get(`/api/v1/orchestration-runs/${args.runId}/node-executions`)
-      .query({ limit: 100, offset: rows.length });
+      .query({ limit: 100, ...(cursor !== null && { cursor }) });
     if (res.status !== 200) {
       throw new Error(`node-executions answered ${res.status}`);
     }
     rows.push(...(res.body.data as NodeExecutionRow[]));
-    if (rows.length >= res.body.total) return rows;
-  }
+    cursor = res.body.next_cursor;
+  } while (cursor !== null);
+  return rows;
 };

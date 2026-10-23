@@ -35,8 +35,6 @@ export const streamDocumentsNdjson = (args: {
         policyWhere: args.policyWhere,
         pathPrefix: args.pathPrefix,
         metadataWhere: [],
-        limit,
-        offset: 0,
       });
 
       return db.Document.findAll({

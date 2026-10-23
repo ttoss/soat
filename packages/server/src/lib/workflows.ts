@@ -85,21 +85,23 @@ const findWorkflowInstance = async (args: { id: string }) => {
 export const listWorkflows = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listWorkflows: projectIds=%o', args.projectIds);
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where: { projectId: args.projectIds },
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Workflow.findAndCountAll({
-        where: { projectId: args.projectIds },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Workflow.findAll({
+        where: pageWhere,
         include: workflowIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (w) => {

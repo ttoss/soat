@@ -25,6 +25,11 @@ import { Project } from './Project';
       name: 'traces_project_id_created_at_idx',
       fields: ['project_id', 'created_at'],
     },
+    // The list's keyset: its scope, sort key and `public_id` tiebreak.
+    {
+      name: 'traces_project_id_created_at_public_id_idx',
+      fields: ['project_id', 'created_at', 'public_id'],
+    },
     { name: 'traces_agent_id_idx', fields: ['agent_id'] },
     // Walked by the trace-tree read: a node's children are found by
     // `parent_trace_id`, and a whole tree by `root_trace_id`.

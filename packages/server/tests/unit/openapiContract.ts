@@ -22,9 +22,6 @@ const AUDIT_FILE = process.env.OPENAPI_DRIFT_AUDIT_FILE;
  *   introduces drift fails the suite with the field named.
  *   `additionalProperties: false` (rejecting undeclared response keys) is not
  *   enforced.
- * - **List endpoints** are additionally validated against the synthesized
- *   envelope contract `{ data: [], total, limit, offset }`, which asserts
- *   `required` — the list schemas themselves do not.
  * - Only `application/json` responses under `/api/v1` are considered;
  *   `/openapi.json` and `/mcp` (which bypass caseTransform) are excluded.
  * - With `OPENAPI_DRIFT_AUDIT_FILE` set, violations are appended as JSONL
@@ -158,50 +155,10 @@ const getRawResponseSchema = (args: {
   return json.schema;
 };
 
-// The synthesized schema that enforces the list envelope contract at the top
-// level. Item shapes are intentionally NOT validated here — per-endpoint tests
-// already assert item fields, and the wider API's pre-existing spec drift is a
-// separate burn-down. See the module doc comment.
-const ENVELOPE_SCHEMA = {
-  type: 'object',
-  required: ['data', 'total', 'limit', 'offset'],
-  properties: {
-    data: { type: 'array' },
-    total: { type: 'integer' },
-    limit: { type: 'integer' },
-    offset: { type: 'integer' },
-  },
-} as const;
-
-/** A list-envelope response schema: an object with data/total/limit/offset. */
-const isEnvelopeSchema = (schema: Record<string, unknown>): boolean => {
-  if (schema.type !== 'object' || !isRecord(schema.properties)) return false;
-  const p = schema.properties;
-  return (
-    isRecord(p.data) &&
-    p.data.type === 'array' &&
-    'total' in p &&
-    'limit' in p &&
-    'offset' in p
-  );
-};
-
-let envelopeValidator: ValidateFunction | null = null;
-const getEnvelopeValidator = (): ValidateFunction => {
-  if (!envelopeValidator) {
-    envelopeValidator = getAjv().compile(ENVELOPE_SCHEMA);
-  }
-  return envelopeValidator;
-};
-
 /**
  * Returns the validators for a `(path, method, status)`: the full documented
- * response schema (full-surface enforcement — every documented JSON response
- * is validated since the 2026-08 drift burn-down), plus, for list endpoints,
- * the synthesized envelope contract. The envelope check is kept alongside the
- * full schema because it asserts `required` on data/total/limit/offset, which
- * the list schemas themselves do not declare — dropping it would weaken the
- * guarantee.
+ * response schema. A list's schema refs `Page`, which declares the envelope's
+ * `required`.
  */
 const getResponseValidators = (args: {
   template: string;
@@ -229,10 +186,6 @@ const getResponseValidators = (args: {
       'schema',
     ].join('/');
     validators.push(getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` }));
-
-    if (isEnvelopeSchema(schema)) {
-      validators.push(getEnvelopeValidator());
-    }
   }
 
   validatorCache.set(cacheKey, validators);

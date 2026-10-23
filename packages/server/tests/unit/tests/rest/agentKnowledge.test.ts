@@ -569,7 +569,7 @@ describe('Agent knowledge', () => {
         `/api/v1/generations/${generationId}/memory-assertions`
       );
       expect(page.status).toBe(200);
-      expect(page.body).toMatchObject({ total: 1, limit: 50, offset: 0 });
+      expect(page.body.next_cursor).toBeNull();
       expect(page.body.data).toEqual([
         expect.objectContaining({
           mechanism: 'tool',

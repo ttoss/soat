@@ -142,7 +142,7 @@ export const listApiKeys = async (args: {
   userId?: number;
   projectId?: number;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const where: Record<string, unknown> = {};
 
@@ -156,19 +156,19 @@ export const listApiKeys = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { userId: args.userId, projectId: args.projectId },
+    where: Object.keys(where).length > 0 ? where : undefined,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.ApiKey.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.ApiKey.findAll({
+        where: pageWhere,
         include: [
           { model: db.User, as: 'user' },
           { model: db.Project, as: 'project' },
         ],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (apiKey) => {

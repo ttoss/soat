@@ -33,7 +33,7 @@ export const listTasks = async (args: {
   /** Structured question about the bag; see {@link compileMetadataWhere}. */
   metadata?: MetadataFilter;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log(
     'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o metadata=%o',
@@ -70,16 +70,24 @@ export const listTasks = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      workflowId: args.workflowId,
+      state: args.state,
+      statuses: args.statuses,
+      automationStatuses: args.automationStatuses,
+      assignee: args.assignee,
+      metadata: args.metadata,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Task.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Task.findAll({
+        where: pageWhere,
         include: taskIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (t) => {

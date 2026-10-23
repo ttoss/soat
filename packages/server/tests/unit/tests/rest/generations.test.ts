@@ -221,7 +221,7 @@ describe('Generations', () => {
       );
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
       for (const gen of response.body.data) {
         expect(gen.agent_id).toBe(agentId);
       }
@@ -232,16 +232,47 @@ describe('Generations', () => {
         '/api/v1/generations?agent_id=agent_doesnotexist0'
       );
       expect(response.status).toBe(200);
-      expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body).toEqual({ data: [], next_cursor: null });
     });
 
-    test('accepts limit and offset query params', async () => {
+    test('pages with limit and cursor, newest first, to the same rows', async () => {
+      const client = authenticatedTestClient(userToken);
+      const full = await client.get(
+        `/api/v1/generations?agent_id=${agentId}&limit=100`
+      );
+      expect(full.status).toBe(200);
+
+      const paged: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = await client.get('/api/v1/generations').query({
+          agent_id: agentId,
+          limit: 1,
+          ...(cursor ? { cursor } : {}),
+        });
+        expect(page.status).toBe(200);
+        expect(page.body.data.length).toBeLessThanOrEqual(1);
+        paged.push(
+          ...page.body.data.map((gen: { id: string }) => {
+            return gen.id;
+          })
+        );
+        cursor = page.body.next_cursor;
+      } while (cursor);
+
+      expect(paged).toEqual(
+        full.body.data.map((gen: { id: string }) => {
+          return gen.id;
+        })
+      );
+    });
+
+    test('an offset query param is refused', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/generations?agent_id=${agentId}&limit=1&offset=0`
       );
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('a repeated status filter ORs its values', async () => {
@@ -437,12 +468,7 @@ describe('Generations', () => {
         .query({ limit: 10 });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({
-        data: [],
-        total: 0,
-        limit: 10,
-        offset: 0,
-      });
+      expect(response.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('the single read carries no memory assertions', async () => {

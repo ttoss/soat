@@ -306,7 +306,7 @@ describe('Playbook case upgrades', () => {
       const entries = await asAdmin().get(
         `/api/v1/playbook-cases/${caseId}/entries?node_id=pricing`
       );
-      expect(entries.body.total).toBeGreaterThan(0);
+      expect(entries.body.data.length).toBeGreaterThan(0);
     });
 
     test('moves the case to the version named, an earlier one included', async () => {
@@ -332,7 +332,8 @@ describe('Playbook case upgrades', () => {
       const upgrades = await asAdmin().get(
         `/api/v1/playbook-cases/${caseId}/upgrades`
       );
-      expect(upgrades.body.total).toBe(0);
+      expect(upgrades.body.data).toEqual([]);
+      expect(upgrades.body.next_cursor).toBeNull();
     });
 
     test('supersedes an execution queued but not started', async () => {
@@ -487,11 +488,21 @@ describe('Playbook case upgrades', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(2);
+      expect(res.body.next_cursor).toBeNull();
       expect(res.body.data).toMatchObject([
         { from_version: 2, to_version: 1 },
         { from_version: 1, to_version: 2 },
       ]);
+
+      const first = await authenticatedTestClient(userToken)
+        .get(`/api/v1/playbook-cases/${caseId}/upgrades`)
+        .query({ limit: 1 });
+      expect(first.body.data).toMatchObject([{ from_version: 2 }]);
+      const second = await authenticatedTestClient(userToken)
+        .get(`/api/v1/playbook-cases/${caseId}/upgrades`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
+      expect(second.body.data).toMatchObject([{ from_version: 1 }]);
+      expect(second.body.next_cursor).toBeNull();
     });
 
     test('returns 401 without a token', async () => {

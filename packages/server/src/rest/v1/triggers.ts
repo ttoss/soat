@@ -7,6 +7,7 @@ import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { fireTriggerNow } from 'src/lib/triggerDispatch';
 import { getTriggerFiring, listTriggerFirings } from 'src/lib/triggerFirings';
 import {
+  countTriggers,
   createTrigger,
   deleteTrigger,
   getTrigger,
@@ -62,6 +63,22 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
     type,
     targetType,
     ...parsePagination(ctx),
+  });
+});
+
+triggersRouter.get('/triggers/count', async (ctx: Context) => {
+  requireAuth(ctx);
+
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    projectPublicId: ctx.query.project_id as string | undefined,
+    action: 'triggers:ListTriggers',
+    resourceType: 'trigger',
+  });
+  ctx.body = await countTriggers({
+    projectIds: projectIds ?? [],
+    type: ctx.query.type as string | undefined,
+    targetType: ctx.query.target_type as string | undefined,
   });
 });
 
@@ -338,12 +355,9 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const { limit, offset } = parsePagination(ctx);
-
   ctx.body = await listTriggerFirings({
     triggerPublicId,
-    limit,
-    offset,
+    ...parsePagination(ctx),
   });
 });
 

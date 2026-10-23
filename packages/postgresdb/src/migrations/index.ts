@@ -45,6 +45,7 @@ import { taskIdempotencyKey } from './2026-10-19-taskIdempotencyKey';
 import { taskTransitionIdempotencyKey } from './2026-10-19-taskTransitionIdempotencyKey';
 import { taskTransitionWorkflowVersions } from './2026-10-19-taskTransitionWorkflowVersions';
 import { playbookCaseActor } from './2026-10-20-playbookCaseActor';
+import { listKeysetIndexes } from './2026-10-23-listKeysetIndexes';
 import { memoryContentNormalizedHash } from './2026-10-23-memoryContentNormalizedHash';
 
 /**
@@ -113,4 +114,5 @@ export const MIGRATIONS: Migration[] = [
   taskIdempotencyKey,
   playbookCaseActor,
   memoryContentNormalizedHash,
+  listKeysetIndexes,
 ];

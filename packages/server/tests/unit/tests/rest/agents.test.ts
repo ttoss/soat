@@ -2056,7 +2056,7 @@ describe('Agents', () => {
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
-      expect(response.body.total).toBe(0);
+      expect(response.body.next_cursor).toBeNull();
     });
   });
 

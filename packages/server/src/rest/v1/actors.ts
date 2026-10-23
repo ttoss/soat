@@ -62,7 +62,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const chatId = ctx.query.chat_id as string | undefined;
   const conversationId = ctx.query.conversation_id as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
-  const { limit, offset } = parsePagination(ctx);
+  const { limit, cursor } = parsePagination(ctx);
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -81,7 +81,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
       projectPublicId,
     });
     if (!compiled.hasAccess) {
-      ctx.body = emptyPage({ limit, offset });
+      ctx.body = emptyPage({ limit, cursor });
       return;
     }
     policyWhere = compiled.where;
@@ -97,7 +97,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     tags,
     policyWhere,
     limit,
-    offset,
+    cursor,
   });
 });
 

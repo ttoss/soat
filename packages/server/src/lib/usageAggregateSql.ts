@@ -390,31 +390,6 @@ export const loadWindowComponents = async (
 };
 
 /**
- * The number of distinct buckets in the window — `groups.total`.
- *
- * Bucket cardinality, not an entity count: every dimension that admits nulls
- * has a null bucket of its own, and it is a real bucket. "How many" is
- * `totals.distinct`.
- */
-export const countGroups = async (args: {
-  filter: EventFilter;
-  groupBy: UsageGroupBy;
-}): Promise<number> => {
-  const where = eventFilter(args.filter);
-  const rows = await runQuery({
-    sql: `SELECT COUNT(*) AS group_count
-            FROM (SELECT ${GROUP_KEYS[args.groupBy]} AS group_key,
-                         ${providerExpr(args.groupBy)} AS ai_provider_id
-                    FROM "${EVENT_TABLE}" e
-                   WHERE ${where.sql}
-                   GROUP BY 1, 2) buckets`,
-    replacements: where.replacements,
-  });
-  const row = rows[0];
-  return row ? readSqlCount(row, 'group_count') : 0;
-};
-
-/**
  * The page's buckets, as a CTE both the page query and its component query
  * select from.
  *

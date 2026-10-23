@@ -22,7 +22,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:generation');
@@ -80,8 +80,8 @@ export const listChains = async (args: {
   statuses?: readonly ChainStatus[];
   agentId?: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedChain>> => {
+  cursor?: string;
+}): Promise<Page<MappedChain>> => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.statuses?.length) where.status = args.statuses;
   // A plain public-id string, not an FK: an unknown value matches no row, which
@@ -90,16 +90,20 @@ export const listChains = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      statuses: args.statuses,
+      agentId: args.agentId,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.GenerationChain.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.GenerationChain.findAll({
+        where: pageWhere,
         include: buildIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapChain,

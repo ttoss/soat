@@ -228,7 +228,8 @@ describe('Orchestration → generation attribution', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(3);
+      expect(res.body.data).toHaveLength(3);
+      expect(res.body.next_cursor).toBeNull();
       const runIds = res.body.data.map(
         (g: { orchestration_run_id: string }) => {
           return g.orchestration_run_id;
@@ -243,7 +244,7 @@ describe('Orchestration → generation attribution', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(2);
+      expect(res.body.data).toHaveLength(2);
       expect(
         res.body.data
           .map((g: { node_attempt: number }) => {
@@ -271,8 +272,8 @@ describe('Orchestration → generation attribution', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(0);
       expect(res.body.data).toEqual([]);
+      expect(res.body.next_cursor).toBeNull();
     });
 
     test('unauthenticated request returns 401', async () => {

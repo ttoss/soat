@@ -102,7 +102,7 @@ describe('Agent versions', () => {
       );
 
       expect(versions.status).toBe(200);
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
       expect(versions.body.data).toHaveLength(1);
       expect(versions.body.data[0].version).toBe(1);
       expect(versions.body.data[0].id).toMatch(/^agver_/);
@@ -211,7 +211,7 @@ describe('Agent versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agent.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('version_label tags the version an update creates', async () => {
@@ -253,19 +253,25 @@ describe('Agent versions', () => {
       const all = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agent.id}/versions`
       );
-      expect(all.body.total).toBe(3);
+      expect(all.body.data).toHaveLength(3);
       expect(
         all.body.data.map((v: { version: number }) => {
           return v.version;
         })
       ).toEqual([3, 2, 1]);
 
-      const page = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agent.id}/versions?limit=1&offset=1`
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agent.id}/versions?limit=1`
       );
-      expect(page.body.total).toBe(3);
+      expect(first.body.data[0].version).toBe(3);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const page = await authenticatedTestClient(userToken)
+        .get(`/api/v1/agents/${agent.id}/versions`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
       expect(page.body.data).toHaveLength(1);
       expect(page.body.data[0].version).toBe(2);
+      expect(typeof page.body.next_cursor).toBe('string');
     });
   });
 
@@ -337,7 +343,7 @@ describe('Agent versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agent.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('restore fully replaces config, clearing fields the old version did not set', async () => {
@@ -536,7 +542,7 @@ describe('Agent versions', () => {
       const afterCreate = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}/versions`
       );
-      expect(afterCreate.body.total).toBe(1);
+      expect(afterCreate.body.data).toHaveLength(1);
       expect(afterCreate.body.data[0].config.instructions).toBe('formation v1');
 
       const updated = await authenticatedTestClient(userToken)
@@ -547,7 +553,7 @@ describe('Agent versions', () => {
       const afterUpdate = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}/versions`
       );
-      expect(afterUpdate.body.total).toBe(2);
+      expect(afterUpdate.body.data).toHaveLength(2);
       expect(afterUpdate.body.data[0].version).toBe(2);
       expect(afterUpdate.body.data[0].config.instructions).toBe('formation v2');
       // Same shape as a REST-created version, attributed to the applying
@@ -607,7 +613,7 @@ describe('Agent versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}/versions`
       );
-      expect(versions.body.total).toBe(2);
+      expect(versions.body.data).toHaveLength(2);
 
       const agent = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}`

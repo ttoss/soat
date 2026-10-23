@@ -9,7 +9,7 @@ import {
   buildGuardrailConfigSnapshot,
   guardrailVersionStore,
 } from './guardrailVersionSnapshot';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toolReferences } from './resourceReferences';
 import { toResourceRef } from './resourceVersions';
@@ -242,8 +242,8 @@ export const createGuardrail = async (
 export const listGuardrails = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapGuardrail>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapGuardrail>>> => {
   log('listGuardrails: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -253,16 +253,18 @@ export const listGuardrails = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Guardrail.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Guardrail.findAll({
+        where: pageWhere,
         include: getGuardrailIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (guardrail) => {

@@ -312,7 +312,7 @@ soat list-conversation-messages \
 const { data: messagePage } =
   await adminSoat.conversations.listConversationMessages({
     path: { conversation_id: session.conversation_id },
-    query: { limit: 50, offset: 0 },
+    query: { limit: 50 },
   });
 
 const timeline = messagePage.data.map((m) => ({
@@ -326,7 +326,7 @@ const timeline = messagePage.data.map((m) => ({
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/conversations/$CONV_ID/messages?limit=50&offset=0" \
+curl -s "$SOAT_URL/api/v1/conversations/$CONV_ID/messages?limit=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {position, role, content}'
 ```
 

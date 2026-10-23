@@ -129,7 +129,7 @@ describe('usage reads across deletions', () => {
 
   const readEvents = async (): Promise<Map<string, UsageEvent>> => {
     const page = await get('/api/v1/usage/events?limit=100');
-    expect(page.total).toBeLessThanOrEqual(100);
+    expect(page.next_cursor).toBeNull();
     return new Map(
       (page.data as UsageEvent[]).map((event) => {
         return [event.id, event];
@@ -142,7 +142,7 @@ describe('usage reads across deletions', () => {
       `/api/v1/usage/aggregate?project_id=${projectId}` +
         `&group_by=${groupBy}&limit=100`
     );
-    expect(body.groups.total).toBeLessThanOrEqual(100);
+    expect(body.groups.next_cursor).toBeNull();
     return (body.groups.data as Bucket[]).map((group) => {
       return {
         key: group.key,
@@ -159,7 +159,11 @@ describe('usage reads across deletions', () => {
     const aggregated = await get(
       `/api/v1/usage/aggregate?project_id=${projectId}&${query}`
     );
-    return { listed: listed.total, aggregated: aggregated.totals.event_count };
+    expect(listed.next_cursor).toBeNull();
+    return {
+      listed: listed.data.length,
+      aggregated: aggregated.totals.event_count,
+    };
   };
 
   const snapshot = async (): Promise<Snapshot> => {

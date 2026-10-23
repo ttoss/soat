@@ -5,7 +5,7 @@ import { DomainError } from '../errors';
 import { assertGuardrailsExist } from './guardrails';
 import { validateHttpExecute } from './httpToolResponse';
 import type { ResourceIncludes } from './modelIncludes';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
@@ -228,8 +228,8 @@ export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
 export const listTools = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedTool>> => {
+  cursor?: string;
+}): Promise<Page<MappedTool>> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -237,16 +237,16 @@ export const listTools = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Tool.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Tool.findAll({
+        where: pageWhere,
         include: getToolIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (t) => {

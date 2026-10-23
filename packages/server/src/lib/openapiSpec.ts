@@ -282,6 +282,33 @@ const resolveJsonContentSchema = (container: unknown): unknown => {
 };
 
 /**
+ * A list response's `allOf: [Page, { properties: { data: { items } } }]` read
+ * as the one object schema it describes: members' properties merged key by
+ * key, so `data` carries both `type: array` and its item schema.
+ */
+const mergeAllOf = (
+  schema: Record<string, unknown> | null
+): Record<string, unknown> | null => {
+  if (!schema || !Array.isArray(schema.allOf)) return schema;
+  const properties: Record<string, Record<string, unknown>> = {};
+  const required = new Set<unknown>();
+  for (const member of schema.allOf.map(resolveSchemaRef)) {
+    if (!member) return schema;
+    if (Array.isArray(member.required)) {
+      for (const name of member.required) required.add(name);
+    }
+    if (!isObjectRecord(member.properties)) continue;
+    for (const [key, value] of Object.entries(member.properties)) {
+      properties[key] = {
+        ...properties[key],
+        ...(isObjectRecord(value) ? value : {}),
+      };
+    }
+  }
+  return { type: 'object', required: [...required], properties };
+};
+
+/**
  * Resolves the `application/json` response schema an operation declares for a
  * given status code — following a top-level `$ref` to its named component
  * schema. Returns `null` when the operation declares no JSON body for that
@@ -309,7 +336,7 @@ export const getRouteResponseSchema = (args: {
   const schema = resolveJsonContentSchema(responses[String(args.status)]);
   if (!isObjectRecord(schema)) return null;
 
-  return resolveSchemaRef(schema);
+  return mergeAllOf(resolveSchemaRef(schema));
 };
 
 // Follows a `$ref` into `components.parameters`, or returns an inline parameter

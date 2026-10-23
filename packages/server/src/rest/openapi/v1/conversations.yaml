@@ -43,25 +43,19 @@ paths:
             example: 'actor_V1StGXR8Z5jdHi6B'
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: List of conversations
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ConversationRecord'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/ConversationRecord'
         '401':
           description: Unauthorized
           content:
@@ -309,26 +303,28 @@ paths:
           schema:
             type: string
             example: 'conv_V1StGXR8Z5jdHi6B'
+        - name: order
+          in: query
+          required: false
+          description: Sort direction by position; `desc` reads the transcript from its end.
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: List of messages
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ConversationMessageRecord'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/ConversationMessageRecord'
         '401':
           description: Unauthorized
           content:

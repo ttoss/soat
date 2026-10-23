@@ -176,7 +176,7 @@ export const listPlaybookCaseUpgrades = async (args: {
   projectIds?: number[];
   caseId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listPlaybookCaseUpgrades: case=%s', args.caseId);
   const row = await playbookCases.getByPublicId({
@@ -186,15 +186,12 @@ export const listPlaybookCaseUpgrades = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
-    order: [['id', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.PlaybookUpgrade.findAndCountAll({
-        where: { caseId: row.id as number },
-        order,
-        limit,
-        offset,
-      });
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, caseId: args.caseId },
+    where: { caseId: row.id as number },
+    order: [['createdAt', 'DESC']],
+    query: ({ where, limit, order }) => {
+      return db.PlaybookUpgrade.findAll({ where, order, limit });
     },
     map: (upgrade) => {
       return mapPlaybookUpgrade({

@@ -10,11 +10,7 @@ import {
 import { emitResourceEvent } from './eventBus';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
 import type { OnBehalfOf } from './onBehalfOf';
-import {
-  type PageBounds,
-  resolvePagination,
-  totalListOrder,
-} from './pagination';
+import { type Page, type PageBounds, paginatedList } from './pagination';
 import type { PrincipalType } from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
 import { timeRangeWhere } from './timeRange';
@@ -335,48 +331,46 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
   return where;
 };
 
+/** The audit log's page: smaller by default than a list, wider at most. */
+export const AUDIT_LOG_BOUNDS: PageBounds = { defaultLimit: 25, maxLimit: 200 };
+
 /**
  * Lists audit entries visible to the caller (scoped to `projectIds`; `undefined`
  * means no project filter — every project, admin only), newest first. Filters
  * are all optional and combine with AND. `resourceSrn` is a prefix match (e.g.
  * `srn:{project}:secret:` for every secret action); every other filter is
- * exact. Offset/limit pagination; export-before-expiry is paginating this
- * endpoint into NDJSON.
+ * exact. Export-before-expiry is paging this endpoint into NDJSON.
  */
-/** The audit log's page: smaller by default than a list, wider at most. */
-export const AUDIT_LOG_BOUNDS: PageBounds = { defaultLimit: 25, maxLimit: 200 };
-
 export const listAuditEntries = async (
-  args: AuditListFilters & { limit?: number; offset?: number }
-): Promise<{
-  data: ReturnType<typeof mapAuditEntry>[];
-  total: number;
-  limit: number;
-  offset: number;
-}> => {
-  const { limit, offset } = resolvePagination({
+  args: AuditListFilters & { limit?: number; cursor?: string }
+): Promise<Page<ReturnType<typeof mapAuditEntry>>> => {
+  return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
     bounds: AUDIT_LOG_BOUNDS,
+    filters: {
+      projectIds: args.projectIds,
+      action: args.action,
+      principalId: args.principalId,
+      resourcePublicId: args.resourcePublicId,
+      resourceSrn: args.resourceSrn,
+      from: args.from,
+      to: args.to,
+    },
+    where: buildListWhere(args),
+    order: [['createdAt', 'DESC']],
+    query: ({ where, limit, order }) => {
+      return db.AuditEntry.findAll({
+        where,
+        include: [{ model: db.Project, as: 'project' }],
+        order,
+        limit,
+      });
+    },
+    map: (row) => {
+      return mapAuditEntry(row);
+    },
   });
-
-  const where = buildListWhere(args);
-
-  const { rows, count } = await db.AuditEntry.findAndCountAll({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
-    order: totalListOrder([['createdAt', 'DESC']]),
-    limit,
-    offset,
-  });
-
-  // Wrapped rather than passed by reference: `Array#map` supplies the index as
-  // the second argument, which `mapAuditEntry` reads as a project override.
-  const data = rows.map((row) => {
-    return mapAuditEntry(row);
-  });
-
-  return { data, total: count, limit, offset };
 };
 
 /**

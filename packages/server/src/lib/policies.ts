@@ -28,7 +28,7 @@ export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
 export const listPolicies = async (args?: {
   userId?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   let where: Record<string, unknown> | undefined;
 
@@ -43,10 +43,12 @@ export const listPolicies = async (args?: {
 
   return paginatedList({
     limit: args?.limit,
-    offset: args?.offset,
+    cursor: args?.cursor,
+    filters: { userId: args?.userId },
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Policy.findAndCountAll({ where, order, limit, offset });
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Policy.findAll({ where: pageWhere, order, limit });
     },
     map: (p: InstanceType<(typeof db)['Policy']>) => {
       return mapPolicy(p);

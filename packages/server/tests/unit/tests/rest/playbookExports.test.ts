@@ -607,7 +607,8 @@ describe('Playbook exports', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(2);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.next_cursor).toBeNull();
       expect(res.body.data).toMatchObject([
         { transformation: 'sheet', stale: false },
         { transformation: 'proposal', stale: true },

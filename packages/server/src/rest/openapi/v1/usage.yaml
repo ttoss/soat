@@ -175,7 +175,7 @@ paths:
             type: string
             example: eval
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '400':
           description: >-
@@ -191,18 +191,12 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UsageEvent'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/UsageEvent'
         '401':
           description: Unauthorized
           content:
@@ -248,10 +242,9 @@ paths:
         The other six are matched against the value the event recorded.
 
 
-        `groups` is paginated. Its `total` is the number of distinct buckets in
-        the window — bucket cardinality, including a null bucket for the events
-        the dimension does not apply to, and never a count of entities. To
-        count entities, send `include=distinct` and read `totals.distinct`.
+        `groups` is paginated. Its buckets include a null bucket for the events
+        the dimension does not apply to, so they are never a count of entities.
+        To count entities, send `include=distinct` and read `totals.distinct`.
         `totals` always describes the whole window — never the page above it,
         and never the bucketing: omit `group_by` and `totals` is unchanged
         while `groups` is empty.
@@ -464,7 +457,7 @@ paths:
           schema:
             type: string
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: The aggregated usage rollup
@@ -515,30 +508,19 @@ paths:
           schema:
             type: string
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: The usage thresholds
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - total
-                  - limit
-                  - offset
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UsageThreshold'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/UsageThreshold'
         '401':
           description: Unauthorized
           content:
@@ -1196,32 +1178,19 @@ components:
         filters:
           $ref: '#/components/schemas/UsageAggregateFilters'
         groups:
-          type: object
           description: >
             One entry per distinct value in the chosen dimension, paginated.
             Ordered by `cost_usd` descending, ties broken by `key` then
             `ai_provider_id` ascending, with nulls last — so the first page is
-            the biggest spenders and paging never repeats or skips a bucket.
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/UsageAggregateGroup'
-            total:
-              type: integer
-              description: >
-                Distinct buckets in the window, independent of `limit`,
-                including a null bucket for the events the dimension does not
-                apply to. Bucket cardinality is not an entity count on any
-                dimension that admits nulls: a project whose traffic is
-                standalone generations has exactly one
-                `group_by=orchestration_run` bucket whatever its volume. Read
-                `totals.distinct` (under `include=distinct`) to count
-                entities.
-            limit:
-              type: integer
-            offset:
-              type: integer
+            the biggest spenders. A bucket's cost can change between two
+            calls, so a walk across pages reads a moving ranking; read
+            `totals.distinct` (under `include=distinct`) to count entities.
+          allOf:
+            - $ref: './pagination.yaml#/components/schemas/Page'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/components/schemas/UsageAggregateGroup'
         totals:
           allOf:
             - $ref: '#/components/schemas/UsageAggregateTotals'

@@ -1070,13 +1070,28 @@ describe('Files', () => {
       expect(response.status).toBe(401);
     });
 
-    test('accepts limit and offset query params', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/files?project_id=${secondProjectId}&limit=1&offset=0`
-      );
+    test('pages with limit and cursor', async () => {
+      const project = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Files Paging Project' });
+      for (const filename of ['a.txt', 'b.txt']) {
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/files/upload')
+          .attach('file', Buffer.from(filename), { filename })
+          .field('project_id', project.body.id);
+      }
+      const url = `/api/v1/files?project_id=${project.body.id}&limit=1`;
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      const first = await authenticatedTestClient(userToken).get(url);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken).get(
+        `${url}&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
+      expect(second.body.next_cursor).toBeNull();
     });
   });
 

@@ -34,73 +34,62 @@ paths:
             type: string
             example: proj_V1StGXR8Z5jdHi6B
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: List of AI providers
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - data
-                  - total
-                  - limit
-                  - offset
-                properties:
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        name:
-                          type: string
-                        provider:
-                          type: string
-                          enum:
-                            [
-                              openai,
-                              anthropic,
-                              google,
-                              xai,
-                              groq,
-                              ollama,
-                              azure,
-                              bedrock,
-                              vertex,
-                              gateway,
-                              custom,
-                            ]
-                        default_model:
-                          type: string
-                        secret_id:
-                          x-soat-ref: secrets
-                          type: string
-                          nullable: true
-                          description: Secret ID containing API credentials, or null when the record links none.
-                        base_url:
-                          type: string
-                          description: Custom base URL for the provider. Absent when the record sets none.
-                        config:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        items:
                           type: object
-                          description: Additional provider-specific configuration. Absent when the record sets none.
-                        project_id:
-                          x-soat-ref: projects
-                          type: string
-                        created_at:
-                          type: string
-                          format: date-time
-                        updated_at:
-                          type: string
-                          format: date-time
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            provider:
+                              type: string
+                              enum:
+                                [
+                                  openai,
+                                  anthropic,
+                                  google,
+                                  xai,
+                                  groq,
+                                  ollama,
+                                  azure,
+                                  bedrock,
+                                  vertex,
+                                  gateway,
+                                  custom,
+                                ]
+                            default_model:
+                              type: string
+                            secret_id:
+                              x-soat-ref: secrets
+                              type: string
+                              nullable: true
+                              description: Secret ID containing API credentials, or null when the record links none.
+                            base_url:
+                              type: string
+                              description: Custom base URL for the provider. Absent when the record sets none.
+                            config:
+                              type: object
+                              description: Additional provider-specific configuration. Absent when the record sets none.
+                            project_id:
+                              x-soat-ref: projects
+                              type: string
+                            created_at:
+                              type: string
+                              format: date-time
+                            updated_at:
+                              type: string
+                              format: date-time
         '401':
           description: Unauthorized
         '403':
@@ -419,7 +408,7 @@ paths:
         time.
 
         The provider answers its whole catalogue in one call; `q`, `limit` and
-        `offset` narrow and page what it returned. A request without `limit`
+        `cursor` narrow and page what it returned. A request without `limit`
         gets the first 50 models.
       operationId: listAiProviderModels
       parameters:
@@ -434,12 +423,12 @@ paths:
           in: query
           description: >
             Keeps the models whose `id` or `display_name` contains this text,
-            ignoring case. Applied before paging, so `total` counts the matches.
+            ignoring case. Applied before paging.
           schema:
             type: string
             example: sonnet
         - $ref: './pagination.yaml#/components/parameters/Limit'
-        - $ref: './pagination.yaml#/components/parameters/Offset'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: The models this provider can run
@@ -625,81 +614,69 @@ components:
                 description: Must be in the future; past prices are immutable
 
     ProviderModelsResponse:
-      type: object
-      required:
-        - data
-        - total
-        - limit
-        - offset
-      properties:
-        total:
-          type: integer
-          description: Models matching `q` across every page
-        limit:
-          type: integer
-        offset:
-          type: integer
-        data:
-          type: array
-          items:
-            type: object
-            required:
-              - id
-            properties:
-              id:
-                type: string
-                description: >
-                  The provider-native model id, ready to use as `default_model`
-                  or an agent's `model`
-                example: gemini-2.5-flash
-              display_name:
-                type: string
-                description: The provider's own human-readable name, when it reports one
-                example: Gemini 2.5 Flash
-              vendor:
-                type: string
-                description: Who makes the model, when the provider reports it
-                example: google
-              input_modalities:
-                type: array
-                description: Lowercased input modalities, when the provider reports them
-                items:
-                  type: string
-                example:
-                  - text
-                  - image
-              output_modalities:
-                type: array
-                description: Lowercased output modalities, when the provider reports them
-                items:
-                  type: string
-                example:
-                  - text
-              streaming:
-                type: boolean
-                description: Whether the model supports streaming responses
-              lifecycle:
-                type: string
-                description: >
-                  `active`, `legacy` or `deprecated`, as the provider reports it.
-                  A model that is not `active` still serves today but should not
-                  be pinned by anything new.
-                enum:
-                  - active
-                  - legacy
-                  - deprecated
-              inference_types:
-                type: array
-                description: >
-                  Lowercased inference types the model supports, when reported.
-                  A Bedrock model offering only `inference_profile` must be
-                  invoked through a cross-region profile id rather than the bare
-                  model id.
-                items:
-                  type: string
-                example:
-                  - on_demand
-                  - inference_profile
+      allOf:
+        - $ref: './pagination.yaml#/components/schemas/Page'
+        - properties:
+            data:
+              items:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: string
+                    description: >
+                      The provider-native model id, ready to use as `default_model`
+                      or an agent's `model`
+                    example: gemini-2.5-flash
+                  display_name:
+                    type: string
+                    description: The provider's own human-readable name, when it reports one
+                    example: Gemini 2.5 Flash
+                  vendor:
+                    type: string
+                    description: Who makes the model, when the provider reports it
+                    example: google
+                  input_modalities:
+                    type: array
+                    description: Lowercased input modalities, when the provider reports them
+                    items:
+                      type: string
+                    example:
+                      - text
+                      - image
+                  output_modalities:
+                    type: array
+                    description: Lowercased output modalities, when the provider reports them
+                    items:
+                      type: string
+                    example:
+                      - text
+                  streaming:
+                    type: boolean
+                    description: Whether the model supports streaming responses
+                  lifecycle:
+                    type: string
+                    description: >
+                      `active`, `legacy` or `deprecated`, as the provider reports it.
+                      A model that is not `active` still serves today but should not
+                      be pinned by anything new.
+                    enum:
+                      - active
+                      - legacy
+                      - deprecated
+                  inference_types:
+                    type: array
+                    description: >
+                      Lowercased inference types the model supports, when reported.
+                      A Bedrock model offering only `inference_profile` must be
+                      invoked through a cross-region profile id rather than the bare
+                      model id.
+                    items:
+                      type: string
+                    example:
+                      - on_demand
+                      - inference_profile
 
   securitySchemes:
     bearerAuth:

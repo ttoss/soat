@@ -19,6 +19,10 @@ target; any starter can activate any target. Every activation is recorded as a
 firing; webhook, schedule, and event fires are **fire-and-forget** and the
 firing record holds the outcome.
 
+[`GET /api/v1/triggers/count`](/docs/api/triggers/count-triggers) returns `{ "count": n }` for the same project and
+filters (`type`, `target_type`) the list takes, under the same
+`triggers:ListTriggers` permission.
+
 > See the [Permissions Reference](../permissions.md#triggers) for the IAM action
 > strings for this module.
 

@@ -5016,7 +5016,7 @@ resources:
       const items = await authenticatedTestClient(userToken).get(
         `/api/v1/datasets/${datasetId}/items`
       );
-      expect(items.body.total).toBe(1);
+      expect(items.body.data).toHaveLength(1);
       expect(items.body.data[0].expected_output).toBe('Paris');
 
       // Changing the gate updates the eval in place — same physical id.

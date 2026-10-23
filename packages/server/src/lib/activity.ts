@@ -1,13 +1,11 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 
-import { DomainError } from '../errors';
 import { APPROVAL_EVENT_TYPES } from './approvals';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { EXCEPTION_EVENT_TYPES } from './exceptions';
-import { resolvePagination } from './pagination';
+import { type Page, type PageRequest, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { isSoatEventType, type SoatEventType } from './soatEvents';
@@ -151,57 +149,6 @@ export const emitActivityEntry = async (
   }
 };
 
-type ActivityCursor = { createdAt: string; publicId: string };
-
-/**
- * Opaque `base64url(createdAt|publicId)` keyset cursor. Only ever encodes
- * public, already-exposed fields (never the internal integer PK — see the
- * postgresdb "Public ID" rule), so the token is safe to hand back to a caller
- * verbatim.
- */
-const encodeCursor = (entry: { createdAt: Date; publicId: string }): string => {
-  return Buffer.from(
-    `${entry.createdAt.toISOString()}|${entry.publicId}`,
-    'utf8'
-  ).toString('base64url');
-};
-
-const decodeCursor = (cursor: string): ActivityCursor => {
-  const invalid = (): never => {
-    throw new DomainError(
-      'ACTIVITY_INVALID_CURSOR',
-      `Cursor '${cursor}' is invalid.`
-    );
-  };
-
-  // `Buffer.from(..., 'base64url')` never throws for any input string — it
-  // decodes whatever bytes it can, so validity is checked structurally below
-  // rather than by catching a decode error that can't occur.
-  const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-
-  const separatorIndex = decoded.indexOf('|');
-  if (separatorIndex < 0) return invalid();
-
-  const createdAt = decoded.slice(0, separatorIndex);
-  const publicId = decoded.slice(separatorIndex + 1);
-  if (!createdAt || !publicId || Number.isNaN(Date.parse(createdAt))) {
-    return invalid();
-  }
-
-  return { createdAt, publicId };
-};
-
-export type ListActivityResult = {
-  data: MappedActivityEntry[];
-  next_cursor: string | null;
-};
-
-/**
- * Cursor-paginated (keyset, not offset) — the PRD calls for cursor pagination
- * specifically, unlike this codebase's other list endpoints, because the feed
- * is append-only and high-volume: an offset page shifts under a fast-moving
- * feed, a keyset cursor never does.
- */
 /**
  * Every filter is a conjunction, matching what `kind` and `severity` already
  * mean together: an entry carries one agent, one generation and one run, so a
@@ -235,53 +182,35 @@ export const buildActivityWhere = (
   return where;
 };
 
+/** The feed, newest first. */
 export const listActivity = async (
-  args: ActivityFilters & { cursor?: string; limit?: number }
-): Promise<ListActivityResult> => {
-  const { limit } = resolvePagination({ limit: args.limit });
-  const where = buildActivityWhere(args);
-
-  let finalWhere: Record<string, unknown> = where;
-  if (args.cursor) {
-    const { createdAt, publicId } = decodeCursor(args.cursor);
-    finalWhere = {
-      [Op.and]: [
+  args: ActivityFilters & PageRequest
+): Promise<Page<MappedActivityEntry>> => {
+  return paginatedList({
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      kind: args.kind,
+      severity: args.severity,
+      agentId: args.agentId,
+      generationId: args.generationId,
+      orchestrationRunId: args.orchestrationRunId,
+    },
+    where: buildActivityWhere(args),
+    order: [['createdAt', 'DESC']],
+    query: ({ where, limit, order }) => {
+      return db.ActivityEntry.findAll({
         where,
-        {
-          [Op.or]: [
-            { createdAt: { [Op.lt]: new Date(createdAt) } },
-            {
-              createdAt: new Date(createdAt),
-              publicId: { [Op.lt]: publicId },
-            },
-          ],
-        },
-      ],
-    };
-  }
-
-  const rows = await db.ActivityEntry.findAll({
-    where: finalWhere,
-    include: buildIncludes(),
-    order: [
-      ['createdAt', 'DESC'],
-      ['publicId', 'DESC'],
-    ],
-    limit: limit + 1,
+        include: buildIncludes(),
+        order,
+        limit,
+      });
+    },
+    map: (row) => {
+      return mapActivityEntry(row as ActivityInstance);
+    },
   });
-
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  const data = pageRows.map((row) => {
-    return mapActivityEntry(row as ActivityInstance);
-  });
-  const last = pageRows[pageRows.length - 1] as ActivityInstance | undefined;
-  const nextCursor =
-    hasMore && last
-      ? encodeCursor({ createdAt: last.createdAt, publicId: last.publicId })
-      : null;
-
-  return { data, next_cursor: nextCursor };
 };
 
 // Every handler here is fire-and-forget: a recording failure must never disturb

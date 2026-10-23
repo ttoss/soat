@@ -87,17 +87,24 @@ const jsonResponses = (): Operation[] => {
   });
 };
 
-/** The `$ref` key of a list operation's `data` items, if it is one. */
+/**
+ * The `$ref` key of a list operation's `data` items, if it is one: a list is
+ * `allOf: [Page, { properties: { data: { items } } }]`.
+ */
 const listedItem = (operation: Operation): string | undefined => {
   const schema = follow({ node: operation.schema, file: operation.file });
-  const properties = isNode(schema.node) ? schema.node.properties : undefined;
-  const data = isNode(properties) ? properties.data : undefined;
-  if (!isNode(data) || data.type !== 'array' || !isNode(data.items)) {
-    return undefined;
-  }
-  return typeof data.items.$ref === 'string'
-    ? refKey({ ref: data.items.$ref, file: schema.file })
-    : undefined;
+  const members =
+    isNode(schema.node) && Array.isArray(schema.node.allOf)
+      ? schema.node.allOf
+      : [];
+  return members.flatMap((member) => {
+    const properties = isNode(member) ? member.properties : undefined;
+    const data = isNode(properties) ? properties.data : undefined;
+    const items = isNode(data) ? data.items : undefined;
+    return isNode(items) && typeof items.$ref === 'string'
+      ? [refKey({ ref: items.$ref, file: schema.file })]
+      : [];
+  })[0];
 };
 
 /**

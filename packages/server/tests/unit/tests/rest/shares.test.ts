@@ -452,7 +452,7 @@ describe('Shares', () => {
         .query({ resource: srn({ type: 'tool', id: toolId }) });
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].id).toBe(shareId);
     });
 
@@ -480,7 +480,7 @@ describe('Shares', () => {
         .query({ role: 'grantee', project_id: thirdId });
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
 
     test('role=grantee with no project is 400', async () => {
@@ -515,7 +515,7 @@ describe('Shares', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
 
     test('the grantee accepts, idempotently', async () => {
@@ -536,7 +536,7 @@ describe('Shares', () => {
       const list = await authenticatedTestClient(adminToken).get(
         `/api/v1/shares/${shareId}/acceptances`
       );
-      expect(list.body.total).toBe(1);
+      expect(list.body.data).toHaveLength(1);
     });
 
     test('concurrent accepts converge on one acceptance', async () => {
@@ -872,8 +872,8 @@ describe('Shares', () => {
         .get(`/api/v1/shares/${shareId}/acceptances`)
         .query({ status: 'revoked' });
 
-      expect(active.body.total).toBe(1);
-      expect(revoked.body.total).toBe(0);
+      expect(active.body.data).toHaveLength(1);
+      expect(revoked.body.data).toHaveLength(0);
     });
 
     test('a repeated status filter ORs its values', async () => {

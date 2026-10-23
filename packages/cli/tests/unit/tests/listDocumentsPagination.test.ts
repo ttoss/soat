@@ -11,15 +11,15 @@ describe('list-documents pagination flags are sent as query params', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
-  test('--limit and --offset are serialized as query params, not body', async () => {
+  test('--limit and --cursor are serialized as query params, not body', async () => {
     const requests = await cli.call([
       'list-documents',
       '--project_id',
       'proj_1',
       '--limit',
       '50',
-      '--offset',
-      '0',
+      '--cursor',
+      'eyJrIjpbXX0',
     ]);
 
     expect(requests).toHaveLength(1);
@@ -27,7 +27,7 @@ describe('list-documents pagination flags are sent as query params', () => {
     expect(requests[0]?.query).toMatchObject({
       project_id: 'proj_1',
       limit: '50',
-      offset: '0',
+      cursor: 'eyJrIjpbXX0',
     });
     expect(requests[0]?.body).toBeUndefined();
   });

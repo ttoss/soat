@@ -12,7 +12,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { getEvalRow } from './evaluations';
 import type { ResourceIncludes } from './modelIncludes';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { RUN_STATUSES } from './runStatus';
 
@@ -137,8 +137,8 @@ export const listEvalRuns = async (args: {
   projectIds?: number[];
   evalId: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapEvalRun>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapEvalRun>>> => {
   log('listEvalRuns: evalId=%s', args.evalId);
 
   const evaluation = await getEvalRow({
@@ -148,16 +148,19 @@ export const listEvalRuns = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      evalId: args.evalId,
+    },
+    where: { evalId: evaluation.id as number },
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.EvalRun.findAndCountAll({
-        where: { evalId: evaluation.id as number },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.EvalRun.findAll({
+        where: pageWhere,
         include: evalRunIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {
@@ -180,8 +183,8 @@ export const listEvalResults = async (args: {
   evalId: string;
   runId: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapEvalResult>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapEvalResult>>> => {
   log('listEvalResults: evalId=%s runId=%s', args.evalId, args.runId);
 
   const run = await findRun({
@@ -192,16 +195,20 @@ export const listEvalResults = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      evalId: args.evalId,
+      runId: args.runId,
+    },
+    where: { evalRunId: run.id as number },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.EvalResult.findAndCountAll({
-        where: { evalRunId: run.id as number },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.EvalResult.findAll({
+        where: pageWhere,
         include: evalResultIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

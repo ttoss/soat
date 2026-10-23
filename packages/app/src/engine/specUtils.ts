@@ -1,3 +1,4 @@
+import { resolveSchema } from './schemaRefs';
 import type {
   JsonObject,
   JsonValue,
@@ -9,6 +10,8 @@ import type {
   ViewDescriptor,
 } from './types';
 import { findUploadCreatePath } from './uploadCreateOp';
+
+export { resolveSchema };
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -234,39 +237,6 @@ export const getIdParamName = (getPath: string, listPath: string): string => {
     return p !== listParts[i] && p.startsWith('{');
   });
   return extra ? extra.slice(1, -1) : 'id';
-};
-
-// The served spec snake_cases component keys while leaving $ref strings on the
-// original name, so an absent exact key falls back to the snake_cased one.
-const lookupRefKey = (obj: Record<string, unknown>, part: string): string => {
-  if (part in obj) return part;
-  const snake = part.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-  return snake in obj ? snake : part;
-};
-
-const resolveRef = (
-  ref: string,
-  spec: OpenApiSpec
-): OpenApiSchema | undefined => {
-  const parts = ref.replace(/^#\//, '').split('/');
-  let current: Record<string, unknown> = spec as Record<string, unknown>;
-  for (const part of parts) {
-    if (typeof current !== 'object') return undefined;
-    current = current[lookupRefKey(current, part)] as Record<string, unknown>;
-    if (!current) return undefined;
-  }
-  return current as OpenApiSchema;
-};
-
-export const resolveSchema = (
-  schema: OpenApiSchema | undefined,
-  spec: OpenApiSpec
-): OpenApiSchema | undefined => {
-  if (!schema) return undefined;
-  if (schema.$ref) return resolveRef(schema.$ref, spec);
-  return schema;
 };
 
 // ─── Cross-resource references (x-soat-ref) ─────────────────────────────────

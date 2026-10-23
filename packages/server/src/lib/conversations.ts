@@ -64,7 +64,7 @@ export const listConversations = async (args: {
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return emptyPage(args);
@@ -101,19 +101,23 @@ export const listConversations = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      actorId: args.actorId,
+      tags: args.tags,
+    },
+    where: hasPolicyConstraints(where) ? where : undefined,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Conversation.findAndCountAll({
-        where: hasPolicyConstraints(where) ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Conversation.findAll({
+        where: pageWhere,
         include: [
           { model: db.Project, as: 'project' },
           { model: db.Actor, as: 'actor' },
         ],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapConversation,
@@ -346,8 +350,9 @@ export const updateConversationTags = async (args: {
 
 export const listConversationMessages = async (args: {
   conversationId: string;
+  order?: 'asc' | 'desc';
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
@@ -357,13 +362,18 @@ export const listConversationMessages = async (args: {
     return null;
   }
 
+  const direction = args.order ?? 'asc';
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
-    order: [['position', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.ConversationMessage.findAndCountAll({
-        where: { conversationId: conversation.id },
+    cursor: args.cursor,
+    filters: { conversationId: args.conversationId, order: direction },
+    where: { conversationId: conversation.id },
+    order: [['position', direction === 'desc' ? 'DESC' : 'ASC']],
+    // `position` is unique within one conversation.
+    tiebreak: [],
+    query: ({ where, limit, order }) => {
+      return db.ConversationMessage.findAll({
+        where,
         include: [
           {
             model: db.Document,
@@ -373,10 +383,8 @@ export const listConversationMessages = async (args: {
           { model: db.Actor, as: 'actor' },
           { model: db.Agent, as: 'agent' },
         ],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapMessage,

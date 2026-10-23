@@ -131,14 +131,17 @@ export const reloadFiring = async (args: {
 export const listTriggerFirings = async (args: {
   triggerPublicId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { triggerPublicId: args.triggerPublicId },
+    where: undefined,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.TriggerFiring.findAndCountAll({
+    query: ({ where, limit, order }) => {
+      return db.TriggerFiring.findAll({
+        where,
         include: [
           {
             model: db.Trigger,
@@ -148,10 +151,8 @@ export const listTriggerFirings = async (args: {
           },
           { model: db.Project, as: 'project' },
         ],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

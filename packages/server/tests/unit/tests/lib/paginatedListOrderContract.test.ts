@@ -2,12 +2,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Every page is cut from the order `paginatedList` hands its `query` — the
- * caller's `order` with the primary key appended, so a tie on the caller's key
- * breaks the same way on every page. A `query` that writes its own `order:`
- * sorts without that tie-breaker, and one that writes none sorts nothing at
- * all; both repeat and drop rows across page boundaries. Static, so the list
- * function nobody has written yet is held to it too.
+ * Every page is cut from the `where` and `order` `paginatedList` hands its
+ * `query`: the caller's `where` ANDed with the position after the cursor, and
+ * the caller's `order` made total by the tiebreak. A `query` that writes its
+ * own `order:` or `where:` sorts or filters without them, so pages repeat or
+ * skip rows. Static, so the list function nobody has written yet is held to it
+ * too.
  */
 
 const SRC_DIR = join(__dirname, '../../../../src');
@@ -59,7 +59,7 @@ const queryCallback = (body: string): string => {
   const start = body.indexOf('query:');
   if (start === -1) return '';
   const rest = body.slice(start);
-  const next = rest.search(/\n\s{4}(?:map|limit|offset|order):/);
+  const next = rest.search(/\n\s{4}(?:map|limit|cursor|order|tiebreak):/);
   return next === -1 ? rest : rest.slice(0, next);
 };
 
@@ -81,11 +81,32 @@ describe('paginatedList order', () => {
     expect(calls.length).toBeGreaterThan(40);
   });
 
-  test('every call states its order to paginatedList', () => {
+  test('every call states its order, where and filters to paginatedList', () => {
     const offenders = calls
       .filter((call) => {
-        return !/\n\s*order:/.test(
-          call.body.replace(queryCallback(call.body), '')
+        const own = call.body.replace(queryCallback(call.body), '');
+        return !['order', 'where', 'filters'].every((key) => {
+          return new RegExp(`\\n\\s*${key}[:,]`).test(own);
+        });
+      })
+      .map((call) => {
+        return call.at;
+      });
+    expect(offenders).toEqual([]);
+  });
+
+  test('every query reads the where and order it is handed, never its own', () => {
+    const offenders = calls
+      .filter((call) => {
+        const query = queryCallback(call.body);
+        const params = /query:\s*(?:async\s*)?\(\{([^}]*)\}/.exec(query);
+        return (
+          !params ||
+          !/\bwhere\b/.test(params[1]) ||
+          !/\border\b/.test(params[1]) ||
+          /\border:/.test(query) ||
+          /\boffset\b/.test(query) ||
+          /\bfindAndCountAll\(/.test(query)
         );
       })
       .map((call) => {
@@ -94,43 +115,11 @@ describe('paginatedList order', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('every query sorts by the order it is handed, never its own', () => {
-    const offenders = calls
-      .filter((call) => {
-        const query = queryCallback(call.body);
-        return /\border:/.test(query) || !/\border\b/.test(query);
-      })
-      .map((call) => {
-        return call.at;
-      });
-    expect(offenders).toEqual([]);
-  });
-
-  // A list that pages itself — its own clamp, or a batched mapper — still cuts
-  // its pages from a total order, so it sorts through `totalListOrder` too.
-  test('every findAndCountAll outside paginatedList sorts by totalListOrder', () => {
-    const offenders = collectSourceFiles(SRC_DIR)
-      .filter((file) => {
-        return !file.endsWith(join('lib', 'pagination.ts'));
-      })
-      .flatMap((file) => {
-        const source = readFileSync(file, 'utf-8');
-        const calls = paginatedListCalls(source);
-        return [...source.matchAll(/\bfindAndCountAll\(\{/g)]
-          .filter((match) => {
-            return !calls.some((call) => {
-              return match.index > call.start && match.index < call.end;
-            });
-          })
-          .filter((match) => {
-            const call = source.slice(match.index, match.index + 600);
-            return !/\border:\s*totalListOrder\(/.test(call);
-          })
-          .map((match) => {
-            const line = source.slice(0, match.index).split('\n').length;
-            return `${file.slice(SRC_DIR.length + 1)}:${line}`;
-          });
-      });
+  // A count per page is what keyset paging exists to drop.
+  test('nothing in src counts and lists in one call', () => {
+    const offenders = collectSourceFiles(SRC_DIR).filter((file) => {
+      return /\bfindAndCountAll\(/.test(readFileSync(file, 'utf-8'));
+    });
     expect(offenders).toEqual([]);
   });
 });

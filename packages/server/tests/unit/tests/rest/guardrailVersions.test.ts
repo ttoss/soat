@@ -150,7 +150,7 @@ describe('Guardrail versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/guardrails/${guardrail.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('re-writing the document the guardrail already holds archives no version', async () => {
@@ -168,7 +168,7 @@ describe('Guardrail versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/guardrails/${guardrail.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
   });
 
@@ -191,7 +191,7 @@ describe('Guardrail versions', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(3);
+      expect(res.body.data).toHaveLength(3);
       expect(
         res.body.data.map((row: { version: number }) => {
           return row.version;
@@ -200,17 +200,21 @@ describe('Guardrail versions', () => {
       expect(res.body.data[0].config.document.class).toBe('C');
     });
 
-    test('honors limit and offset', async () => {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/guardrails/${listedId}/versions?limit=1&offset=1`
+    test('honors limit and cursor', async () => {
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/guardrails/${listedId}/versions?limit=1`
       );
+      expect(first.body.data[0].version).toBe(3);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const res = await authenticatedTestClient(userToken)
+        .get(`/api/v1/guardrails/${listedId}/versions`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(3);
-      expect(res.body.limit).toBe(1);
-      expect(res.body.offset).toBe(1);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].version).toBe(2);
+      expect(typeof res.body.next_cursor).toBe('string');
     });
 
     test('unknown guardrail returns 404', async () => {
@@ -313,7 +317,7 @@ describe('Guardrail versions', () => {
       const versions = await authenticatedTestClient(userToken).get(
         `/api/v1/guardrails/${guardrail.id}/versions`
       );
-      expect(versions.body.total).toBe(1);
+      expect(versions.body.data).toHaveLength(1);
     });
 
     test('restore leaves metadata untouched — only the policy rolls back', async () => {

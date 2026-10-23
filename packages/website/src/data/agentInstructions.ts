@@ -157,7 +157,7 @@ export const CALLING_RULES: CallingRule[] = [
   },
   {
     topic: 'Pagination',
-    rule: 'Every list endpoint takes `limit` and `offset` and returns the same envelope, so one paging loop works for all of them.',
+    rule: 'Every list endpoint takes `limit` and `cursor` and returns the same envelope, so one paging loop (follow `next_cursor` until it is null) works for all of them.',
   },
 ];
 

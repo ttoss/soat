@@ -3,9 +3,9 @@ import { join } from 'node:path';
 
 /**
  * Pagination has one parser and one resolver. `parsePagination`
- * (`rest/v1/helpers.ts`) is the only reader of `limit`/`offset` off a query
- * string, and `resolvePagination` (`lib/pagination.ts`) the only place a
- * default, the ceiling or the `400` is applied. A route or lib function that
+ * (`rest/v1/helpers.ts`) is the only reader of `limit`/`cursor` off a query
+ * string, and `lib/pagination.ts` the only place a default, the ceiling or
+ * the `400` is applied. A route or lib function that
  * does either itself answers the same request differently from every other
  * list. Static, so it also holds the list nobody has written yet.
  */
@@ -58,21 +58,21 @@ const offendersOf = (args: { pattern: RegExp; owner: string }): string[] => {
 };
 
 describe('list pagination', () => {
-  test('no route reads limit or offset off the query itself', () => {
+  test('no route reads limit or cursor off the query itself', () => {
     expect(
       offendersOf({
-        pattern: /query\s*(\.\s*|\[\s*['"])(limit|offset)\b/,
+        pattern: /query\s*(\.\s*|\[\s*['"])(limit|cursor)\b/,
         owner: join('rest', 'v1', 'helpers.ts'),
       })
     ).toEqual([]);
   });
 
-  test('no route destructures limit or offset off the query', () => {
+  test('no route destructures limit or cursor off the query', () => {
     const destructure = /\{([^}]*)\}\s*=\s*ctx\.query\b/g;
     const offenders = sourceLinesExcept(join('rest', 'v1', 'helpers.ts'))
       .filter(([, lines]) => {
         return [...lines.join('\n').matchAll(destructure)].some((match) => {
-          return /\b(limit|offset)\b/.test(match[1]);
+          return /\b(limit|cursor)\b/.test(match[1]);
         });
       })
       .map(([file]) => {
@@ -84,8 +84,7 @@ describe('list pagination', () => {
   test('no module applies a page default or ceiling of its own', () => {
     expect(
       offendersOf({
-        pattern:
-          /\b(DEFAULT_LIST_LIMIT|MAX_LIST_LIMIT)\b|\b(limit|offset)\s*\?\?\s*\d/,
+        pattern: /\b(DEFAULT_LIST_LIMIT|MAX_LIST_LIMIT)\b|\blimit\s*\?\?\s*\d/,
         owner: join('lib', 'pagination.ts'),
       })
     ).toEqual([]);
@@ -101,25 +100,6 @@ describe('list pagination', () => {
       const source = readFileSync(file, 'utf-8');
       for (const [index, line] of source.split('\n').entries()) {
         if (UNCLAMPED_LIMIT.test(line)) {
-          offenders.push(`${file.slice(SRC_DIR.length + 1)}:${index + 1}`);
-        }
-      }
-    }
-
-    expect(offenders).toEqual([]);
-  });
-
-  test('every list function returning a page uses the shared envelope', () => {
-    // A hardcoded `limit`/`offset` in a returned envelope is the early-return
-    // twin of the bug: it reports a page size the request never asked for.
-    const offenders: string[] = [];
-
-    for (const file of collectSourceFiles(join(SRC_DIR, 'lib'))) {
-      if (file.endsWith(join('lib', 'pagination.ts'))) continue;
-
-      const source = readFileSync(file, 'utf-8');
-      for (const [index, line] of source.split('\n').entries()) {
-        if (/data: \[\],\s*total: 0,\s*limit: \d/.test(line)) {
           offenders.push(`${file.slice(SRC_DIR.length + 1)}:${index + 1}`);
         }
       }

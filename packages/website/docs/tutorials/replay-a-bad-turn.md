@@ -512,7 +512,7 @@ console.log(retry.message?.content);
 const { data: forks } = await adminSoat.sessions.listSessionForks({
   path: { session_id: session.id },
 });
-console.log(forks.total);
+console.log(forks.data.length);
 ```
 
 </TabItem>

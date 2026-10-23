@@ -155,27 +155,29 @@ Common status codes:
 ### Pagination
 
 **Every** `GET` list endpoint returns the same envelope and accepts
-`limit`/`offset`:
+`limit`/`cursor`:
 
 ```jsonc
 {
   "data": [/* the page of resources */],
-  "total": 128, // total rows matching the query, across all pages
-  "limit": 50, // the effective page size applied
-  "offset": 0, // the offset this page started at
+  "next_cursor": "eyJrIjpb…", // pass as `cursor` for the next page; null on the last
 }
 ```
 
 ```bash
-curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&offset=0' \
+curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25' \
+  -H "Authorization: Bearer <token>"
+# then the next page
+curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&cursor=eyJrIjpb…' \
   -H "Authorization: Bearer <token>"
 ```
 
-- `limit` — results per page. Default `50`, clamped to `100`: a larger value is capped, and `limit` in the response reports the page served. The [audit log](../modules/audit-log.md) defaults to `25` and caps at `200`.
-- `offset` — results to skip (default `0`).
-- A `limit` that is not an integer of at least `1`, or an `offset` that is not a non-negative integer (`abc`, `1.5`, `0`, `-1`), is `400 VALIDATION_FAILED`.
+- `limit` — results per page. Default `50`, clamped to `100`. The [audit log](../modules/audit-log.md) defaults to `25` and caps at `200`. A `limit` that is not an integer of at least `1` (`abc`, `1.5`, `0`, `-1`) is `400 VALIDATION_FAILED`.
+- `cursor` — the previous page's `next_cursor`, opaque. Send it with the same filters as the request that returned it: a malformed cursor, or one sent with other filters, is `400 INVALID_CURSOR`. `limit` may change between pages.
+- Paging is by position, not by count: a row created or deleted between two calls neither repeats nor skips a row on the next page. Lists report no `total`; follow `next_cursor` until it is `null`.
 - Items are in `response.data`, never the top-level body.
-- No `cursor`, `page`, or `sort`/`order` parameter. Sort order is fixed per endpoint (see the module doc), and rows that tie on it are broken by creation order, so a tie never reorders between pages.
+- Sort order is fixed per endpoint (see the module doc); rows that tie on it are broken by `id`, so a tie never reorders between pages. [`GET /api/v1/conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages) also takes `order=asc|desc`.
+- There is no `offset` or `page` parameter; sending `offset` is `400 VALIDATION_FAILED`.
 
 The server enforces no per-project or per-API-key request-rate limits or throttling; every authenticated request is processed immediately, bounded only by the limits above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 

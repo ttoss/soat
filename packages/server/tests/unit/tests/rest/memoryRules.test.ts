@@ -280,7 +280,7 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].memory_store_id).toBe(storeRes.body.id);
-      expect(res.body.total).toBe(1);
+      expect(res.body.next_cursor).toBeNull();
     });
 
     test('lists a project’s rules across its stores', async () => {

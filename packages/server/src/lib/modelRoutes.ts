@@ -16,7 +16,7 @@ import {
   validateModelRouteRetryOn,
   validateModelRouteTargets,
 } from './modelRouteValidation';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:model-routes');
@@ -226,23 +226,25 @@ export const createModelRoute = async (args: {
 export const listModelRoutes = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedModelRoute>> => {
+  cursor?: string;
+}): Promise<Page<MappedModelRoute>> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.ModelRoute.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.ModelRoute.findAll({
+        where: pageWhere,
         include: getModelRouteIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (route) => {

@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import { automationWhere, caseAutomation } from './playbookCaseAutomation';
 import {
@@ -216,8 +216,8 @@ export const listPlaybookCases = async (args: {
   subject?: string;
   automationStatuses?: Parameters<typeof automationWhere>[0];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapCaseSummary>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapCaseSummary>>> => {
   log('listPlaybookCases: projectIds=%o', args.projectIds);
   const where: Record<string | symbol, unknown> = automationWhere(
     args.automationStatuses
@@ -245,16 +245,22 @@ export const listPlaybookCases = async (args: {
 
   const page = await paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      playbookId: args.playbookId,
+      actorId: args.actorId,
+      subject: args.subject,
+      automationStatuses: args.automationStatuses,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.PlaybookCase.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.PlaybookCase.findAll({
+        where: pageWhere,
         include: caseIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {

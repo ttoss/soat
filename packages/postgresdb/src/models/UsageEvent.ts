@@ -92,6 +92,11 @@ export const USAGE_EVENT_DURABLE_IDS = [
       name: 'usage_events_project_id_created_at_idx',
       fields: ['project_id', 'created_at'],
     },
+    // The list's keyset: its scope, sort key and `public_id` tiebreak.
+    {
+      name: 'usage_events_project_id_created_at_public_id_idx',
+      fields: ['project_id', 'created_at', 'public_id'],
+    },
     {
       name: 'usage_events_orchestration_run_id_idx',
       fields: ['orchestration_run_id'],

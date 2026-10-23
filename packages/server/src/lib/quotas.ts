@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { validateQuotaImmutableFields } from './quotaImmutability';
 import { resolveOnUnpriced, validateOnUnpriced } from './quotaPricingPosture';
 import {
@@ -321,8 +321,8 @@ export const createQuota = async (args: {
 export const listQuotas = async (args: {
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapQuota>>> => {
+  cursor?: string;
+}): Promise<Page<ReturnType<typeof mapQuota>>> => {
   log('listQuotas: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -332,16 +332,16 @@ export const listQuotas = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Quota.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Quota.findAll({
+        where: pageWhere,
         include: getQuotaIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (quota) => {

@@ -4,7 +4,9 @@ info:
   version: 1.0.0
   description: >-
     Shared components for list pagination. This file declares no paths: it
-    exists so `limit` and `offset` are defined once rather than once per list.
+    exists so the list envelope and its query parameters are defined once
+    rather than once per list. Every list `200` is
+    `allOf: [Page, { properties: { data: { items: <Item> } } }]`.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -16,22 +18,39 @@ components:
       in: query
       required: false
       description: >-
-        Results per page. Above the maximum it is clamped, and `limit` in the
-        response reports the page served; below 1 or not an integer it is
-        `400 VALIDATION_FAILED`.
+        Results per page. Above the maximum it is clamped; below 1 or not an
+        integer it is `400 VALIDATION_FAILED`.
       schema:
         type: integer
         minimum: 1
         maximum: 100
         default: 50
-    Offset:
-      name: offset
+    Cursor:
+      name: cursor
       in: query
       required: false
       description: >-
-        Results to skip. Negative or not an integer it is
-        `400 VALIDATION_FAILED`.
+        The previous page's `next_cursor`; omit it for the first page. Send it
+        with the same filters as the request that returned it: a malformed
+        cursor, or one sent with other filters, is `400 INVALID_CURSOR`.
       schema:
-        type: integer
-        minimum: 0
-        default: 0
+        type: string
+  schemas:
+    Page:
+      type: object
+      description: >-
+        One page of a list. Rows inserted or removed between two calls neither
+        repeat nor skip a row on the next page.
+      required:
+        - data
+        - next_cursor
+      properties:
+        data:
+          type: array
+          description: This page's items, in the list's order.
+          items: {}
+        next_cursor:
+          type: string
+          nullable: true
+          description: >-
+            Pass as `cursor` to fetch the next page; `null` on the last page.

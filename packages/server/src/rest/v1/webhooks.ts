@@ -228,12 +228,9 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
     where: { publicId: webhookPublicId },
   });
 
-  const { limit, offset } = parsePagination(ctx);
-
   ctx.body = await listWebhookDeliveries({
     webhookId: webhookRecord!.id,
-    limit,
-    offset,
+    ...parsePagination(ctx),
   });
 });
 

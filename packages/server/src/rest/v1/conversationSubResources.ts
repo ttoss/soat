@@ -53,12 +53,21 @@ conversationSubResourcesRouter.get(
       throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
-    const { limit, offset } = parsePagination(ctx);
+    const { limit, cursor } = parsePagination(ctx);
+    const { order } = ctx.query;
+    if (order !== undefined && order !== 'asc' && order !== 'desc') {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `order must be asc or desc; got ${JSON.stringify(order)}.`,
+        { field: 'order' }
+      );
+    }
 
     const messages = await listConversationMessages({
       conversationId: ctx.params.conversation_id,
+      order,
       limit,
-      offset,
+      cursor,
     });
 
     ctx.body = messages;

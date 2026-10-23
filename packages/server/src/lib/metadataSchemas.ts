@@ -224,7 +224,7 @@ export const listMetadataSchemas = async (args: {
   projectIds?: number[];
   resourceType?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
@@ -232,16 +232,16 @@ export const listMetadataSchemas = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds, resourceType: args.resourceType },
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.MetadataSchema.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.MetadataSchema.findAll({
+        where: pageWhere,
         include: metadataSchemaIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapMetadataSchema,

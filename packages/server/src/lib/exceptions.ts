@@ -3,7 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import type { RequestPrincipal } from './principals';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
@@ -289,8 +289,8 @@ export const listExceptions = async (args: {
   severity?: string;
   kind?: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedException>> => {
+  cursor?: string;
+}): Promise<Page<MappedException>> => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.statuses?.length) where.status = args.statuses;
   if (args.severity) where.severity = args.severity;
@@ -298,16 +298,21 @@ export const listExceptions = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      statuses: args.statuses,
+      severity: args.severity,
+      kind: args.kind,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.ExceptionItem.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.ExceptionItem.findAll({
+        where: pageWhere,
         include: buildIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapException,

@@ -118,20 +118,20 @@ const mapSecret = (instance: SecretRow) => {
 export const listSecrets = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where: { projectId: args.projectIds },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Secret.findAndCountAll({
-        where: { projectId: args.projectIds },
+    query: ({ where, limit, order }) => {
+      return db.Secret.findAll({
+        where,
         include: [{ model: db.Project, as: 'project' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapSecret,

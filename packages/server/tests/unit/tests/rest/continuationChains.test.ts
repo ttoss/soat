@@ -436,7 +436,7 @@ describe('Continuation chains', () => {
         .get('/api/v1/generations')
         .query({ chain_id: chainId });
       expect(listed.status).toBe(200);
-      expect(listed.body.total).toBe(2);
+      expect(listed.body.data).toHaveLength(2);
       expect(
         (listed.body.data as ListedGeneration[]).map((generation) => {
           return generation.id;

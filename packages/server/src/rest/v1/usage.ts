@@ -132,9 +132,8 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
  * source, trigger_id, action_id, outcome) match the value the event recorded.
  * orchestration_id selects that orchestration's own runs, not the subtree its
  * nodes started. Omitting group_by returns totals with an empty groups page.
- * groups is paginated with limit/offset;
- * its total is the number of distinct buckets, while totals always describes
- * the whole window. include=distinct adds totals.distinct, the distinct-entity
+ * groups is paginated with limit/cursor, while totals always describes the
+ * whole window. include=distinct adds totals.distinct, the distinct-entity
  * counters a "how many" question reads. Requires usage:GetAggregate on the
  * project.
  */

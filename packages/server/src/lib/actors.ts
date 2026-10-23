@@ -164,7 +164,7 @@ export const listActors = async (args: {
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return emptyPage(args);
@@ -194,16 +194,24 @@ export const listActors = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      externalId: args.externalId,
+      name: args.name,
+      agentId: args.agentId,
+      chatId: args.chatId,
+      conversationId: args.conversationId,
+      tags: args.tags,
+    },
+    where: hasPolicyConstraints(where) ? where : undefined,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Actor.findAndCountAll({
-        where: hasPolicyConstraints(where) ? where : undefined,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Actor.findAll({
+        where: pageWhere,
         include: actorIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapActor,

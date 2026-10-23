@@ -84,8 +84,6 @@ export const buildDocumentQueryOptions = (args: {
   tags?: Record<string, string>;
   metadataWhere: unknown[];
   includeWithdrawn?: boolean;
-  limit: number;
-  offset: number;
 }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const topLevelWhere: Record<string, any> = hasPolicyConstraints(
@@ -127,7 +125,7 @@ export const listDocuments = async (args: {
   /** Withdrawn documents are left out unless the request asks for them. */
   includeWithdrawn?: boolean;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return emptyPage(args);
@@ -138,27 +136,33 @@ export const listDocuments = async (args: {
     column: DOCUMENT_METADATA_COLUMN,
   });
 
+  const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
+    projectIds: args.projectIds,
+    policyWhere: args.policyWhere,
+    pathPrefix: args.pathPrefix,
+    relatedRowIds: args.relatedRowIds,
+    tags: args.tags,
+    metadataWhere,
+    includeWithdrawn: args.includeWithdrawn,
+  });
+
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      pathPrefix: args.pathPrefix,
+      relatedRowIds: args.relatedRowIds,
+      tags: args.tags,
+      metadata: args.metadata,
+      includeWithdrawn: args.includeWithdrawn,
+    },
+    where:
+      Reflect.ownKeys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
-        projectIds: args.projectIds,
-        policyWhere: args.policyWhere,
-        pathPrefix: args.pathPrefix,
-        relatedRowIds: args.relatedRowIds,
-        tags: args.tags,
-        metadataWhere,
-        includeWithdrawn: args.includeWithdrawn,
-        limit,
-        offset,
-      });
-
-      return db.Document.findAndCountAll({
-        distinct: true,
-        where:
-          Reflect.ownKeys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
+    query: ({ where, limit, order }) => {
+      return db.Document.findAll({
+        where,
         include: [
           {
             model: db.File,
@@ -170,7 +174,6 @@ export const listDocuments = async (args: {
         subQuery,
         order,
         limit,
-        offset,
       });
     },
     map: mapDocument,

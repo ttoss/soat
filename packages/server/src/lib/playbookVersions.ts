@@ -54,14 +54,14 @@ export const listPlaybookVersions = async (args: {
   projectIds?: number[];
   playbookId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listPlaybookVersions: id=%s', args.playbookId);
   return playbookVersionArchive().listVersions({
     projectIds: args.projectIds,
     resourceId: args.playbookId,
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
   });
 };
 

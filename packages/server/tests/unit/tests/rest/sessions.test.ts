@@ -110,11 +110,15 @@ describe('Sessions', () => {
     // caller links one. Without it there is no end-user attribution, so its
     // generations match no actor-scoped quota.
     test('creates no actors — the caller links one via actor_id', async () => {
-      const before = await authenticatedTestClient(adminToken).get(
-        `/api/v1/actors?project_id=${projectId}`
-      );
-      expect(before.status).toBe(200);
-      expect(typeof before.body.total).toBe('number');
+      const listActors = async () => {
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/actors?project_id=${projectId}&limit=100`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.next_cursor).toBeNull();
+        return res.body.data.length;
+      };
+      const before = await listActors();
 
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/sessions')
@@ -123,11 +127,7 @@ describe('Sessions', () => {
       expect(response.status).toBe(201);
       expect(response.body.actor_id).toBeNull();
 
-      const after = await authenticatedTestClient(adminToken).get(
-        `/api/v1/actors?project_id=${projectId}`
-      );
-      expect(after.status).toBe(200);
-      expect(after.body.total).toBe(before.body.total);
+      expect(await listActors()).toBe(before);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -381,13 +381,40 @@ describe('Sessions', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('accepts limit and offset query params', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions?agent_id=${agentId}&limit=1&offset=0`
+    test('pages with limit and cursor', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}&limit=1`
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken)
+        .get(`/api/v1/sessions?agent_id=${agentId}`)
+        .query({ limit: 1, cursor: first.body.next_cursor });
+      expect(second.status).toBe(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
+    });
+
+    test('a cursor reused under another filter returns 400', async () => {
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}&limit=1`
       );
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/sessions')
+        .query({ limit: 1, cursor: first.body.next_cursor });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_CURSOR');
     });
 
     test('can filter by actorId', async () => {

@@ -855,7 +855,7 @@ describe('Approvals', () => {
       expect(keys).toEqual(expect.arrayContaining([rejectedKey, approvedKey]));
     });
 
-    test('paginates groups and reports the total', async () => {
+    test('pages groups with a cursor', async () => {
       await seedRejectedChain('recurrences:page:a', ['a1', 'a2']);
       await seedRejectedChain('recurrences:page:b', ['b1', 'b2', 'b3']);
 
@@ -864,8 +864,18 @@ describe('Approvals', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
-      expect(res.body.limit).toBe(1);
-      expect(res.body.total).toBeGreaterThanOrEqual(2);
+      expect(typeof res.body.next_cursor).toBe('string');
+
+      const next = await authenticatedTestClient(userToken)
+        .get('/api/v1/approvals/recurrences')
+        .query({
+          project_id: projectId,
+          limit: 1,
+          cursor: res.body.next_cursor,
+        });
+      expect(next.status).toBe(200);
+      expect(next.body.data.length).toBe(1);
+      expect(next.body.data[0].dedup_key).not.toBe(res.body.data[0].dedup_key);
     });
 
     test('an unknown status filter returns 400 instead of 500', async () => {

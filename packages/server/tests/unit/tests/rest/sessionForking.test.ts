@@ -521,7 +521,8 @@ describe('Session forking', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(2);
+      expect(response.body.data).toHaveLength(2);
+      expect(response.body.next_cursor).toBeNull();
       const ids = (response.body.data as Array<{ id: string }>).map((s) => {
         return s.id;
       });
@@ -544,8 +545,8 @@ describe('Session forking', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(0);
       expect(response.body.data).toEqual([]);
+      expect(response.body.next_cursor).toBeNull();
     });
 
     test('unknown session returns 404', async () => {

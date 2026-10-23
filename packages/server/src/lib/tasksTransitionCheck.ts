@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { evaluateLogic } from './jsonLogicMapping';
-import { type PaginatedResult, resolvePagination } from './pagination';
+import { type Page, pageOf } from './pagination';
 import {
   findTaskInstance,
   type TaskInstance,
@@ -125,8 +125,8 @@ export const listTaskTransitions = async (args: {
   id: string;
   principal: TaskPrincipal;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<TransitionOption>> => {
+  cursor?: string;
+}): Promise<Page<TransitionOption>> => {
   log('listTaskTransitions: id=%s principal=%s', args.id, args.principal.kind);
   const task = await findTaskInstance({ id: args.id });
   if (!task) {
@@ -136,9 +136,13 @@ export const listTaskTransitions = async (args: {
     task,
     workflow: task.workflow!,
   });
-  const { limit, offset } = resolvePagination(args);
-  const page = transitions.slice(offset, offset + limit);
-  const data = page.map((transition) => {
+  const page = pageOf({
+    items: transitions,
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: { id: args.id },
+  });
+  const data = page.data.map((transition) => {
     const refusal = transitionRefusal({
       task,
       transition,
@@ -153,10 +157,5 @@ export const listTaskTransitions = async (args: {
       error_code: refusal?.code ?? null,
     };
   });
-  return {
-    data,
-    total: transitions.length,
-    limit,
-    offset,
-  };
+  return { ...page, data };
 };

@@ -310,7 +310,7 @@ describe('Model Routes', () => {
           return route.name === 'listed-route';
         })
       ).toBe(true);
-      expect(typeof res.body.total).toBe('number');
+      expect(res.body).toHaveProperty('next_cursor');
     });
 
     test('unauthenticated request returns 401', async () => {

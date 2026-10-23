@@ -570,17 +570,23 @@ describe('Tasks', () => {
       await transition(task.id, 'to_draft');
       await transition(task.id, 'to_review');
 
-      const page = await authenticatedTestClient(userToken)
+      const first = await authenticatedTestClient(userToken)
         .get(`/api/v1/tasks/${task.id}/history`)
-        .query({ limit: 2, offset: 1 });
+        .query({ limit: 2 });
+      const second = await authenticatedTestClient(userToken)
+        .get(`/api/v1/tasks/${task.id}/history`)
+        .query({ limit: 2, cursor: first.body.next_cursor });
 
-      expect(page.status).toBe(200);
-      expect(page.body).toMatchObject({ total: 4, limit: 2, offset: 1 });
+      expect(first.status).toBe(200);
+      expect(typeof first.body.next_cursor).toBe('string');
+      expect(second.body.next_cursor).toBeNull();
       expect(
-        page.body.data.map((h: { to_state: string }) => {
-          return h.to_state;
-        })
-      ).toEqual(['review', 'draft']);
+        [...first.body.data, ...second.body.data].map(
+          (h: { to_state: string }) => {
+            return h.to_state;
+          }
+        )
+      ).toEqual(['triage', 'review', 'draft', 'review']);
     });
 
     test('a false guard rejects the move before any state change', async () => {

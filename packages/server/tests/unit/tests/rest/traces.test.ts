@@ -210,9 +210,7 @@ describe('Traces REST API', () => {
         .query({ project_id: projectId });
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(typeof res.body.total).toBe('number');
-      expect(typeof res.body.limit).toBe('number');
-      expect(typeof res.body.offset).toBe('number');
+      expect(res.body.next_cursor).toBeNull();
     });
 
     test('returns seeded trace in results', async () => {
@@ -233,12 +231,24 @@ describe('Traces REST API', () => {
       expect(res.status).toBe(403);
     });
 
-    test('accepts limit and offset query params', async () => {
-      const res = await authenticatedTestClient(userToken)
+    test('pages with limit and cursor', async () => {
+      const first = await authenticatedTestClient(userToken)
         .get('/api/v1/traces')
-        .query({ project_id: projectId, limit: 1, offset: 0 });
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+        .query({ project_id: projectId, limit: 1 });
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken)
+        .get('/api/v1/traces')
+        .query({
+          project_id: projectId,
+          limit: 1,
+          cursor: first.body.next_cursor,
+        });
+      expect(second.status).toBe(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
     });
 
     test('an admin listing with no project_id spans every project', async () => {
@@ -256,7 +266,7 @@ describe('Traces REST API', () => {
       const res =
         await authenticatedTestClient(noPermToken).get('/api/v1/traces');
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ data: [], total: 0, limit: 50, offset: 0 });
+      expect(res.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('parent_trace_id lists the direct children of a trace', async () => {
@@ -264,7 +274,7 @@ describe('Traces REST API', () => {
         .get('/api/v1/traces')
         .query({ project_id: projectId, parent_trace_id: traceId });
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].id).toBe(childTraceId);
       expect(res.body.data[0].parent_trace_id).toBe(traceId);
     });
@@ -274,7 +284,7 @@ describe('Traces REST API', () => {
         .get('/api/v1/traces')
         .query({ project_id: projectId, parent_trace_id: childTraceId });
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
 
     test('a parent naming nothing matches nothing, rather than widening', async () => {
@@ -282,7 +292,7 @@ describe('Traces REST API', () => {
         .get('/api/v1/traces')
         .query({ project_id: projectId, parent_trace_id: 'trc_nonexistent' });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ data: [], total: 0, limit: 50, offset: 0 });
+      expect(res.body).toEqual({ data: [], next_cursor: null });
     });
   });
 
@@ -439,7 +449,7 @@ describe('Traces REST API', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
 
     test('user without permission cannot list generations', async () => {
@@ -469,7 +479,7 @@ describe('Traces REST API', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
-      expect(res.body.total).toBe(0);
+      expect(res.body.data).toHaveLength(0);
     });
 
     test('can combine initiator_generation_id with trace_id', async () => {

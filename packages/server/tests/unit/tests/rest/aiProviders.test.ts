@@ -36,6 +36,8 @@ const listedRowProperties = (): Record<string, unknown> => {
     'content',
     'application/json',
     'schema',
+    'allOf',
+    '1',
     'properties',
     'data',
     'items',

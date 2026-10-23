@@ -41,6 +41,11 @@ const APPEND_ONLY_MESSAGE =
       name: 'audit_entries_project_id_created_at_idx',
       fields: ['project_id', 'created_at'],
     },
+    // The list's keyset: its scope, sort key and `public_id` tiebreak.
+    {
+      name: 'audit_entries_project_id_created_at_public_id_idx',
+      fields: ['project_id', 'created_at', 'public_id'],
+    },
     {
       name: 'audit_entries_principal_id_created_at_idx',
       fields: ['principal_id', 'created_at'],

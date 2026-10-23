@@ -1,11 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
-import {
-  paginatedList,
-  type PaginatedResult,
-  resolvePagination,
-} from 'src/lib/pagination';
+import { emptyPage, type Page, paginatedList } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
 import { applyFormationTemplate } from './formationsApply';
@@ -252,20 +248,22 @@ export const createFormation = async (args: {
 export const listFormations = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedFormation>> => {
+  cursor?: string;
+}): Promise<Page<MappedFormation>> => {
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+    },
+    where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Formation.findAndCountAll({
-        where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Formation.findAll({
+        where: pageWhere,
         include: getFormationIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (f) => {
@@ -359,25 +357,26 @@ export const updateFormation = async (args: {
 export const listFormationEvents = async (args: {
   formationId: string;
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedFormationOperation>> => {
-  const { limit, offset } = resolvePagination(args);
-
+  cursor?: string;
+}): Promise<Page<MappedFormationOperation>> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.formationId },
   });
-  if (!formation) return { data: [], total: 0, limit, offset };
+  if (!formation) return emptyPage(args);
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      formationId: args.formationId,
+    },
+    where: { formationId: formation.id as number },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.FormationOperation.findAndCountAll({
-        where: { formationId: formation.id as number },
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.FormationOperation.findAll({
+        where: pageWhere,
         order,
         limit,
-        offset,
       });
     },
     map: (op) => {

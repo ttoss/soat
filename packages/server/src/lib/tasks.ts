@@ -477,7 +477,7 @@ export const deleteTask = async (args: { id: string }) => {
 export const getTaskHistory = async (args: {
   id: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const task = await db.Task.findOne({ where: { publicId: args.id } });
   if (!task) {
@@ -485,15 +485,12 @@ export const getTaskHistory = async (args: {
   }
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { id: args.id },
+    where: { taskId: task.id as number },
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.TaskTransition.findAndCountAll({
-        where: { taskId: task.id as number },
-        limit,
-        offset,
-        order,
-      });
+    query: ({ where, limit, order }) => {
+      return db.TaskTransition.findAll({ where, limit, order });
     },
     map: (row) => {
       return {

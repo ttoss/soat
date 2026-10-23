@@ -119,7 +119,7 @@ export const createMemory = async (args: {
 export const listMemories = async (args: {
   memoryStoreId: number;
   limit?: number;
-  offset?: number;
+  cursor?: string;
   /** Invalidated (superseded) memories are excluded unless this is set. */
   includeInvalidated?: boolean;
   tags?: Record<string, string>;
@@ -135,16 +135,20 @@ export const listMemories = async (args: {
   }
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      memoryStoreId: args.memoryStoreId,
+      includeInvalidated: args.includeInvalidated,
+      tags: args.tags,
+    },
+    where,
     order: [['createdAt', 'ASC']],
-    query: ({ limit, offset, order }) => {
-      return db.Memory.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.Memory.findAll({
+        where: pageWhere,
         include: memoryIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: mapMemory,

@@ -1,7 +1,7 @@
 import type { Model } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
-import { paginatedList, type PaginatedResult } from './pagination';
+import { type Page, paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import type { VersionStore } from './resourceVersionStore';
 
@@ -207,7 +207,7 @@ type ListVersionsArgs = {
   projectIds?: number[];
   resourceId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 };
 
 type GetVersionArgs = {
@@ -229,7 +229,7 @@ const makeVersionReads = <TMappedVersion, TMappedResource>(
 
   const listVersions = async (
     a: ListVersionsArgs
-  ): Promise<PaginatedResult<TMappedVersion>> => {
+  ): Promise<Page<TMappedVersion>> => {
     log('listVersions: id=%s', a.resourceId);
 
     const resource = await args.loadResource({
@@ -239,19 +239,19 @@ const makeVersionReads = <TMappedVersion, TMappedResource>(
 
     return paginatedList({
       limit: a.limit,
-      offset: a.offset,
+      cursor: a.cursor,
+      filters: { resourceId: a.resourceId },
+      where: { [store.foreignKey]: resource.dbId },
       // Ordered by the version counter, not a timestamp: two versions can
       // share a `createdAt`, and a non-deterministic page boundary in
       // history is worse than useless.
       order: [['version', 'DESC']],
-      query: ({ limit, offset, order }) => {
-        return store.versionModel().findAndCountAll({
-          where: { [store.foreignKey]: resource.dbId },
+      query: ({ where, limit, order }) => {
+        return store.versionModel().findAll({
+          where,
           include: store.versionInclude(),
-          distinct: true,
           order,
           limit,
-          offset,
         });
       },
       map: (row) => {

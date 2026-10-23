@@ -326,7 +326,7 @@ export const listPlaybookCaseExports = async (args: {
   node?: string;
   transformation?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   log('listPlaybookCaseExports: case=%s', args.caseId);
   const row = await playbookCases.getByPublicId({
@@ -342,16 +342,21 @@ export const listPlaybookCaseExports = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
-    order: [['id', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.PlaybookExport.findAndCountAll({
-        where,
+    cursor: args.cursor,
+    filters: {
+      projectIds: args.projectIds,
+      caseId: args.caseId,
+      node: args.node,
+      transformation: args.transformation,
+    },
+    where,
+    order: [['createdAt', 'DESC']],
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.PlaybookExport.findAll({
+        where: pageWhere,
         include: EXPORT_INCLUDES(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (exported) => {

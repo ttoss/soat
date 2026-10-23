@@ -156,16 +156,30 @@ describe('Actors', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.data.length).toBeGreaterThanOrEqual(2);
-      expect(response.body.total).toBeGreaterThanOrEqual(2);
+      expect(response.body.next_cursor).toBeNull();
     });
 
-    test('accepts limit and offset query params', async () => {
+    test('a limit pages by cursor', async () => {
+      const first = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?project_id=${projectId}&limit=1`
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.data).toHaveLength(1);
+
+      const second = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?project_id=${projectId}&limit=1&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
+    });
+
+    test('offset is not a parameter', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?project_id=${projectId}&limit=1&offset=0`
+        `/api/v1/actors?project_id=${projectId}&offset=0`
       );
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     // An unclamped limit here is a full-table read with the `include` fan-out
@@ -176,24 +190,16 @@ describe('Actors', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.limit).toBe(100);
       expect(response.body.data.length).toBeLessThanOrEqual(100);
     });
 
-    test('an empty accessible-project set reports the clamped limit too', async () => {
-      // The early-return page must describe the request the same way a real
-      // query would, never by hardcoding the default.
+    test('an empty accessible-project set is the empty page', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         '/api/v1/actors?limit=1000000'
       );
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({
-        data: [],
-        total: 0,
-        limit: 100,
-        offset: 0,
-      });
+      expect(response.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('listing without projectId returns all accessible actors', async () => {

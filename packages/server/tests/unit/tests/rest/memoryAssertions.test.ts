@@ -61,7 +61,7 @@ describe('MemoryAssertions', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(2);
+      expect(response.body.data).toHaveLength(2);
       expect(
         response.body.data.map((assertion: { outcome: string }) => {
           return assertion.outcome;
@@ -171,13 +171,37 @@ describe('MemoryAssertions', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(2);
+      expect(response.body.data).toHaveLength(2);
       expect(
         response.body.data.map((assertion: { outcome: string }) => {
           return assertion.outcome;
         })
       ).toEqual(['skipped', 'created']);
       expect(response.body.data[0].memory_store_id).toBe(memoryStoreId);
+    });
+
+    test('pages newest first with limit and cursor', async () => {
+      const memoryStoreId = await createMemoryStore('Ledger Paging');
+      await writeMemory({ memoryStoreId, content: 'Paging first fact' });
+      await writeMemory({ memoryStoreId, content: 'Paging second fact' });
+      const url = `/api/v1/memory-stores/${memoryStoreId}/assertions?limit=1`;
+
+      const first = await authenticatedTestClient(userToken).get(url);
+      expect(first.status).toBe(200);
+      expect(typeof first.body.next_cursor).toBe('string');
+
+      const second = await authenticatedTestClient(userToken).get(
+        `${url}&cursor=${first.body.next_cursor}`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.next_cursor).toBeNull();
+      expect(
+        [...first.body.data, ...second.body.data].map(
+          (assertion: { outcome: string }) => {
+            return assertion.outcome;
+          }
+        )
+      ).toEqual(['skipped', 'created']);
     });
 
     test('filters by outcome', async () => {
@@ -190,7 +214,7 @@ describe('MemoryAssertions', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].outcome).toBe('skipped');
     });
 
@@ -205,8 +229,8 @@ describe('MemoryAssertions', () => {
         `/api/v1/memory-stores/${memoryStoreId}/assertions?mechanism=tool`
       );
 
-      expect(viaApi.body.total).toBe(1);
-      expect(viaTool.body.total).toBe(0);
+      expect(viaApi.body.data).toHaveLength(1);
+      expect(viaTool.body.data).toHaveLength(0);
     });
 
     // A generation that does not exist must select nothing, rather than
@@ -220,7 +244,7 @@ describe('MemoryAssertions', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.total).toBe(0);
+      expect(response.body.data).toHaveLength(0);
       expect(response.body.data).toEqual([]);
     });
 
@@ -239,11 +263,11 @@ describe('MemoryAssertions', () => {
       const all = await list('');
       const at = encodeURIComponent(all.body.data[0].created_at);
 
-      expect((await list(`from=${future}`)).body.total).toBe(0);
-      expect((await list(`from=${past}`)).body.total).toBe(1);
-      expect((await list(`to=${past}`)).body.total).toBe(0);
-      expect((await list(`to=${future}`)).body.total).toBe(1);
-      expect((await list(`from=${at}&to=${at}`)).body.total).toBe(1);
+      expect((await list(`from=${future}`)).body.data).toHaveLength(0);
+      expect((await list(`from=${past}`)).body.data).toHaveLength(1);
+      expect((await list(`to=${past}`)).body.data).toHaveLength(0);
+      expect((await list(`to=${future}`)).body.data).toHaveLength(1);
+      expect((await list(`from=${at}&to=${at}`)).body.data).toHaveLength(1);
     });
 
     test('an unknown mechanism returns 400', async () => {

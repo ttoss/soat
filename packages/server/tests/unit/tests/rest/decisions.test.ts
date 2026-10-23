@@ -829,7 +829,8 @@ describe('Decisions', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(1);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.next_cursor).toBeNull();
       expect(res.body.data[0].id).toBe(made.body.id);
     });
 
@@ -863,7 +864,7 @@ describe('Decisions', () => {
         })
       ).toEqual([made.body.id]);
       expect(missing.status).toBe(200);
-      expect(missing.body.total).toBe(0);
+      expect(missing.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('a status filter outside the vocabulary is refused with 400', async () => {

@@ -289,7 +289,7 @@ export const listSessionForks = async (args: {
   agentId: number;
   sessionId: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }) => {
   const parent = await loadParentSession({
     agentId: args.agentId,
@@ -298,16 +298,16 @@ export const listSessionForks = async (args: {
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { agentId: args.agentId, sessionId: args.sessionId },
+    where: { forkedFromSessionId: parent.id },
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Session.findAndCountAll({
-        where: { forkedFromSessionId: parent.id },
+    query: ({ where, limit, order }) => {
+      return db.Session.findAll({
+        where,
         include: sessionIncludes(),
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (session: SessionRow) => {

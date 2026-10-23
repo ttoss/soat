@@ -21,11 +21,7 @@ import {
   buildOrchestrationConfigSnapshot,
   orchestrationVersionStore,
 } from './orchestrationVersionSnapshot';
-import {
-  paginatedList,
-  type PaginatedResult,
-  resolvePagination,
-} from './pagination';
+import { emptyPage, type Page, paginatedList } from './pagination';
 import { toResourceRef } from './resourceVersions';
 import { getOrchestrationRunUsageRollups } from './usageReceipt';
 import type { UsageTotals } from './usageTotals';
@@ -403,22 +399,22 @@ export const createOrchestration = async (
 export const listOrchestrations = async (args: {
   projectIds: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedOrchestration>> => {
+  cursor?: string;
+}): Promise<Page<MappedOrchestration>> => {
   log('listOrchestrations %o', { projectIds: args.projectIds });
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: { projectIds: args.projectIds },
+    where: { projectId: args.projectIds },
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.Orchestration.findAndCountAll({
-        where: { projectId: args.projectIds },
+    query: ({ where, limit, order }) => {
+      return db.Orchestration.findAll({
+        where,
         include: [{ model: db.Project, as: 'project' }],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {
@@ -639,8 +635,8 @@ export const listOrchestrationRuns = async (args: {
   statuses?: OrchestrationRunStatus[];
   projectIds?: number[];
   limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<MappedOrchestrationRun>> => {
+  cursor?: string;
+}): Promise<Page<MappedOrchestrationRun>> => {
   log('listOrchestrationRuns %o', {
     orchestrationPublicId: args.orchestrationPublicId,
   });
@@ -663,27 +659,32 @@ export const listOrchestrationRuns = async (args: {
     if (args.projectIds) orchWhere['projectId'] = args.projectIds;
     const orch = await db.Orchestration.findOne({ where: orchWhere });
     if (!orch) {
-      const { limit, offset } = resolvePagination(args);
-      return { data: [], total: 0, limit, offset };
+      return emptyPage(args);
     }
     where['orchestrationId'] = orch.id as number;
   }
 
   return paginatedList({
     limit: args.limit,
-    offset: args.offset,
+    cursor: args.cursor,
+    filters: {
+      orchestrationPublicId: args.orchestrationPublicId,
+      parentRunId: args.parentRunId,
+      nested: args.nested,
+      statuses: args.statuses,
+      projectIds: args.projectIds,
+    },
+    where,
     order: [['createdAt', 'DESC']],
-    query: ({ limit, offset, order }) => {
-      return db.OrchestrationRun.findAndCountAll({
-        where,
+    query: ({ where: pageWhere, limit, order }) => {
+      return db.OrchestrationRun.findAll({
+        where: pageWhere,
         include: [
           { model: db.Project, as: 'project' },
           { model: db.Orchestration, as: 'orchestration' },
         ],
-        distinct: true,
         order,
         limit,
-        offset,
       });
     },
     map: (row) => {
