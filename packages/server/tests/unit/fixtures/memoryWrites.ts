@@ -1,4 +1,7 @@
-import { hashMemoryContent } from '@soat/postgresdb';
+import {
+  hashMemoryContent,
+  hashNormalizedMemoryContent,
+} from '@soat/postgresdb';
 import { db } from 'src/db';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 
@@ -74,6 +77,7 @@ export const seedMemory = async (args: {
     memoryStoreId: args.memoryStoreId,
     content: args.content,
     contentHash: hashMemoryContent({ content: args.content }),
+    normalizedHash: hashNormalizedMemoryContent({ content: args.content }),
     embedding: args.embedding,
   });
 

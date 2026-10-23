@@ -1,10 +1,12 @@
+import { createHash } from 'node:crypto';
+
 import type { Sequelize } from '@ttoss/postgresdb';
 import { createMigrationRunner, initialize } from '@ttoss/postgresdb';
 
 // `dist`, not `src`: the models carry decorated `declare` fields Babel's
 // TypeScript transform rejects, and importing the package entry is also what
 // proves the migrations are exported from it.
-import { hashMemoryContent, MIGRATIONS, models } from '../../../dist/index.cjs';
+import { MIGRATIONS, models } from '../../../dist/index.cjs';
 import {
   columnType,
   countRows,
@@ -397,9 +399,9 @@ describe('2026-09-16-memory-assertions-and-shared-content', () => {
     ]);
   });
 
-  // The chain must end on `hashMemoryContent`, or a text written before the
-  // cutover and restated after it would be two rows.
-  test('the hash is the shared normalized hash', async () => {
+  // The migration's hash must agree with `hashMemoryContent` in the server, or
+  // a text written before the cutover and restated after it would be two rows.
+  test('the hash is over trimmed, whitespace-collapsed content', async () => {
     const [row] = await selectRows<{ content_hash: string }>({
       client,
       sql: `SELECT content_hash FROM memory_contents
@@ -407,7 +409,7 @@ describe('2026-09-16-memory-assertions-and-shared-content', () => {
     });
 
     expect(row.content_hash).toBe(
-      hashMemoryContent({ content: 'Customer prefers email' })
+      createHash('sha256').update('Customer prefers email').digest('hex')
     );
   });
 

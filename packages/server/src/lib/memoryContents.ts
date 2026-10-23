@@ -1,4 +1,8 @@
-import { hashMemoryContent } from '@soat/postgresdb';
+import {
+  hashMemoryContent,
+  hashNormalizedMemoryContent,
+} from '@soat/postgresdb';
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
@@ -77,7 +81,19 @@ export const resolveMemoryContent = async (args: {
     return existing;
   }
 
-  const embedding = await embedOrNull(args);
+  // A spelling differing only in case or punctuation reuses its sibling's
+  // vector, so it scores 1.0 against it instead of being re-embedded below
+  // `supersede_threshold`, while keeping its own text on its own row.
+  const normalizedHash = hashNormalizedMemoryContent({ content: args.content });
+  const sibling = await db.MemoryContent.findOne({
+    where: {
+      memoryStoreId: args.memoryStoreId,
+      normalizedHash,
+      embedding: { [Op.ne]: null },
+    },
+    order: [['id', 'ASC']],
+  });
+  const embedding = sibling?.embedding ?? (await embedOrNull(args));
 
   // `findOrCreate`, not `create`: two concurrent writes of the same new text
   // both miss the lookup above, and the unique index decides between them. The
@@ -90,6 +106,7 @@ export const resolveMemoryContent = async (args: {
       memoryStoreId: args.memoryStoreId,
       content: args.content,
       contentHash,
+      normalizedHash,
       embedding,
     },
   });

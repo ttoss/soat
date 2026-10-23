@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 
+const sha256 = (text: string) => {
+  return createHash('sha256').update(text).digest('hex');
+};
+
 /**
  * Punctuation is dropped unless it sits between two digits, so `1.5` and `15`
  * stay distinct while a trailing period or a comma before a clause does not.
@@ -7,26 +11,27 @@ import { createHash } from 'node:crypto';
 const PUNCTUATION = /(?<!\d)\p{P}+|\p{P}+(?!\d)/gu;
 
 /**
- * The form two texts must share to be the same content: NFKC, lowercased,
- * punctuation dropped, whitespace collapsed. The embedder scores case and
- * punctuation as content, so without this a lowercased restatement of a fact
- * can land below `supersede_threshold` and be stored twice.
+ * The key of one stored spelling, `content_hash`, unique per store: trimmed and
+ * whitespace-collapsed only, so every distinct spelling keeps its own row.
  */
-export const normalizeMemoryContent = (args: { content: string }): string => {
-  return args.content
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(PUNCTUATION, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
+export const hashMemoryContent = (args: { content: string }): string => {
+  return sha256(args.content.trim().replace(/\s+/g, ' '));
 };
 
 /**
- * The dedup key of a store's text. Changing `normalizeMemoryContent` means a
- * migration that rehashes `memory_contents` and merges the rows that collide.
+ * The key spellings of one text share, `normalized_hash`: NFKC, lowercased,
+ * punctuation dropped. The embedder scores case and punctuation as content, so
+ * a lowercased restatement re-embedded can land below `supersede_threshold`.
  */
-export const hashMemoryContent = (args: { content: string }): string => {
-  return createHash('sha256')
-    .update(normalizeMemoryContent(args))
-    .digest('hex');
+export const hashNormalizedMemoryContent = (args: {
+  content: string;
+}): string => {
+  return sha256(
+    args.content
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(PUNCTUATION, ' ')
+      .trim()
+      .replace(/\s+/g, ' ')
+  );
 };
