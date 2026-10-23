@@ -3652,7 +3652,7 @@ echo "--- Approval recurrence view (read-only rollup) ---"
 RECURRENCES_RESP=$($SOAT_CLI list-approval-recurrences \
   --project-id "$PROJECT_PUBLIC_ID" --min-count 2 | sanitize_json)
 if ! printf '%s\n' "$RECURRENCES_RESP" \
-  | jq -e 'has("data") and (.data | type == "array") and has("total")' >/dev/null 2>&1; then
+  | jq -e 'has("data") and (.data | type == "array") and has("next_cursor")' >/dev/null 2>&1; then
   echo "ERROR: list-approval-recurrences did not return a paginated envelope" >&2
   echo "$RECURRENCES_RESP" >&2
   exit 1
@@ -4980,8 +4980,8 @@ echo "SOAT Agent Tool id: $SOAT_TOOL_ID"
 
 # 37b. A soat action's query string must reach the route: the path was
 # once built from path parameters alone, so every `in: query` parameter was
-# dropped and a `list-*` action always answered the default page. `limit` is
-# echoed back, so both a caller-supplied and a preset value are observable.
+# dropped and a `list-*` action always answered the default page. The project
+# holds several agents by now, so `limit=1` shows as one row and a next page.
 echo "--- Calling a soat list action with a query parameter ---"
 SOAT_QUERY_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -4994,7 +4994,7 @@ SOAT_QUERY_CALL_RESP=$($SOAT_CLI call-tool \
   --tool-id "$SOAT_QUERY_TOOL_ID" \
   --action list-agents \
   --input '{"limit":1}')
-if ! printf '%s\n' "$SOAT_QUERY_CALL_RESP" | jq -e '.limit == 1 and (.data | length) <= 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$SOAT_QUERY_CALL_RESP" | jq -e '(.data | length) == 1 and (.next_cursor | type) == "string"' >/dev/null 2>&1; then
   echo "ERROR: soat list-agents ignored the caller-supplied limit query parameter" >&2
   echo "$SOAT_QUERY_CALL_RESP" >&2
   exit 1
@@ -5013,7 +5013,7 @@ SOAT_PRESET_CALL_RESP=$($SOAT_CLI call-tool \
   --tool-id "$SOAT_PRESET_TOOL_ID" \
   --action list-agents \
   --input '{}')
-if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | length) <= 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '(.data | length) == 1 and (.next_cursor | type) == "string"' >/dev/null 2>&1; then
   echo "ERROR: soat list-agents ignored a preset_parameters query parameter" >&2
   echo "$SOAT_PRESET_CALL_RESP" >&2
   exit 1
@@ -5021,13 +5021,13 @@ fi
 echo "Preset query parameter: OK"
 
 # 37b-ii. A preset is a pin, not a default: a caller that supplies the same key
-# does not get to override it. `limit` is echoed back, so the losing value is
-# directly observable — the tool pins 1, the call asks for 50, the answer is 1.
+# does not get to override it: the tool pins 1, the call asks for 50, the page
+# holds one row.
 SOAT_PRESET_OVERRIDE_RESP=$($SOAT_CLI call-tool \
   --tool-id "$SOAT_PRESET_TOOL_ID" \
   --action list-agents \
   --input '{"limit":50}')
-if ! printf '%s\n' "$SOAT_PRESET_OVERRIDE_RESP" | jq -e '.limit == 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$SOAT_PRESET_OVERRIDE_RESP" | jq -e '(.data | length) == 1 and (.next_cursor | type) == "string"' >/dev/null 2>&1; then
   echo "ERROR: caller input overrode a preset_parameters value" >&2
   echo "$SOAT_PRESET_OVERRIDE_RESP" >&2
   exit 1
