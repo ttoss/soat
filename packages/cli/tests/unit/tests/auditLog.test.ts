@@ -77,7 +77,7 @@ describe('audit-log commands', () => {
 
   test('a JSON body is still pretty-printed as an object', async () => {
     cliTestClient.setResponse({
-      body: '{"total":2,"data":[]}',
+      body: '{"data":[],"next_cursor":"c2"}',
       contentType: 'application/json',
     });
 
@@ -88,7 +88,7 @@ describe('audit-log commands', () => {
     ]);
 
     const printed = String(logSpy.mock.calls.at(-1)?.[0]);
-    expect(JSON.parse(printed).total).toBe(2);
+    expect(JSON.parse(printed).next_cursor).toBe('c2');
     expect(printed).toContain('\n  ');
   });
 });
