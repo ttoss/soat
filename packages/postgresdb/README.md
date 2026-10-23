@@ -100,6 +100,7 @@ The flow they follow is
 | `2026-10-19-task-transition-workflow-versions` | `task_transitions.from_workflow_version` and `to_workflow_version`, the versions a task migration moves a task between |
 | `2026-10-19-task-idempotency-key` | `tasks.idempotency_key`, unique per project, and `tasks.idempotency_digest`, the key and request digest of the create that wrote the task |
 | `2026-10-20-playbook-case-actor` | `playbook_cases.actor_id` (`SET NULL`), the end user a case belongs to, and its index |
+| `2026-10-23-memory-content-normalized-hash` | `memory_contents.normalized_hash` (`hashNormalizedMemoryContent`), the case- and punctuation-insensitive key spellings of one text share, backfilled, `NOT NULL` and indexed per store; no row is merged or rewritten |
 | `2026-10-23-list-keyset-indexes` | a `(project_id, sort key, public_id)` index on `generations`, `traces`, `audit_entries` and `usage_events`, the keyset a list page reads |
 
 Run them from the server package, which owns the entrypoint:
