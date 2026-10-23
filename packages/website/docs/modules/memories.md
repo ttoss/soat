@@ -115,7 +115,7 @@ When the same correction keeps being made by hand, the
 
 Every write to a memory store — REST, the agent tool, a post-turn rule, a formation — goes through the same three-outcome algorithm. There is **no model call** anywhere in it.
 
-1. **Resolve the content.** The text is matched against what the store already holds, by a hash of its trimmed, whitespace-collapsed form. A hit reuses the stored row and its vector and reaches no embedder; a miss embeds once and stores the pair.
+1. **Resolve the content.** The text is matched against what the store already holds, by a hash of its normalized form: NFKC, lowercased, punctuation dropped unless it sits between two digits (`1.5` stays distinct from `15`), whitespace collapsed. A hit reuses the stored row, its vector and the first writer's spelling, and reaches no embedder; a miss embeds the text as written and stores the pair. The embedder scores case and punctuation as content, so without this step a lowercased restatement of a fact can score below `supersede_threshold` and be stored twice.
 2. **Find the top match** — the most similar **currently-valid** memory in that store, by cosine. [Invalidated memories](#temporal-invalidation) are never candidates.
 3. **Resolve to one outcome:**
 

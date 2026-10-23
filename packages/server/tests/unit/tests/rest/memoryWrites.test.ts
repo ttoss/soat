@@ -250,6 +250,43 @@ describe('POST /api/v1/memories — the write algorithm', () => {
       ).toEqual(['Spacing  varies   here']);
     });
 
+    // The embedder scores case and punctuation as content: a lowercased copy
+    // of a sentence can land below `supersede_threshold` and be created again.
+    test('the same sentence cased and punctuated differently is the same content', async () => {
+      const memoryStoreId = await createMemoryStore();
+      const first = await seedAt({
+        memoryStoreId,
+        content: 'Não anunciar aos domingos, porque a clínica não atende.',
+        similarity: 0.5,
+      });
+
+      const res = await write({
+        memory_store_id: memoryStoreId,
+        content: 'NÃO ANUNCIAR AOS DOMINGOS porque a clínica não atende',
+      });
+
+      expect(res.body.action).toBe('skipped');
+      expect(res.body.id).toBe(first.id);
+      expect(await contentRowsOf(memoryStoreId)).toHaveLength(1);
+    });
+
+    test('punctuation between digits is part of the content', async () => {
+      const memoryStoreId = await createMemoryStore();
+      await seedAt({
+        memoryStoreId,
+        content: 'The upload limit is 1.5 GB.',
+        similarity: 0.5,
+      });
+
+      const res = await write({
+        memory_store_id: memoryStoreId,
+        content: 'The upload limit is 15 GB.',
+      });
+
+      expect(res.body.action).toBe('created');
+      expect(await contentRowsOf(memoryStoreId)).toHaveLength(2);
+    });
+
     test('a text known to one store is new to another', async () => {
       const first = await createMemoryStore();
       const second = await createMemoryStore();

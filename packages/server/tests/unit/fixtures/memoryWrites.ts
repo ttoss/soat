@@ -1,6 +1,6 @@
+import { hashMemoryContent } from '@soat/postgresdb';
 import { db } from 'src/db';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
-import { hashMemoryContent } from 'src/lib/memoryContents';
 
 /**
  * The asserter for memories a suite seeds to have something to read or search.

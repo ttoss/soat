@@ -100,6 +100,7 @@ The flow they follow is
 | `2026-10-19-task-transition-workflow-versions` | `task_transitions.from_workflow_version` and `to_workflow_version`, the versions a task migration moves a task between |
 | `2026-10-19-task-idempotency-key` | `tasks.idempotency_key`, unique per project, and `tasks.idempotency_digest`, the key and request digest of the create that wrote the task |
 | `2026-10-20-playbook-case-actor` | `playbook_cases.actor_id` (`SET NULL`), the end user a case belongs to, and its index |
+| `2026-10-23-memory-content-normalized-hash` | `memory_contents.content_hash` recomputed over case- and punctuation-insensitive text (`hashMemoryContent`); rows that now share a hash in one store merge onto the oldest, which keeps its text and takes a merged row's vector if it had none |
 
 Run them from the server package, which owns the entrypoint:
 

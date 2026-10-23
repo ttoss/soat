@@ -1,23 +1,9 @@
-import { createHash } from 'node:crypto';
-
+import { hashMemoryContent } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
 
 const log = createDebug('soat:memories');
-
-/**
- * The dedup key for a store's text. Trimmed and whitespace-collapsed first, so
- * the same sentence typed with different spacing is the same content and costs
- * one embedding rather than two.
- *
- * The migration reproduces this exactly in SQL; changing the normalization
- * means rehashing `memory_contents`.
- */
-export const hashMemoryContent = (args: { content: string }): string => {
-  const normalized = args.content.trim().replace(/\s+/g, ' ');
-  return createHash('sha256').update(normalized).digest('hex');
-};
 
 const embedOrNull = async (args: {
   content: string;
