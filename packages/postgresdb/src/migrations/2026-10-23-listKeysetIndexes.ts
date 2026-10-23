@@ -15,8 +15,29 @@ const LIST_INDEXES = [
   { table: 'usage_events', sortKey: 'created_at' },
 ] as const;
 
-const indexName = (index: (typeof LIST_INDEXES)[number]) => {
+type ListIndex = (typeof LIST_INDEXES)[number];
+
+const indexName = (index: ListIndex) => {
   return `${index.table}_project_id_${index.sortKey}_public_id_idx`;
+};
+
+type Context = {
+  columnExists: (args: { table: string; column: string }) => Promise<boolean>;
+};
+
+/**
+ * A table holding the three columns. One missing a column is one `sync` has
+ * not reached yet, and `sync` builds the index from the model with it.
+ */
+const indexable = async (args: { context: Context; index: ListIndex }) => {
+  for (const column of ['project_id', args.index.sortKey, 'public_id']) {
+    const exists = await args.context.columnExists({
+      table: args.index.table,
+      column,
+    });
+    if (!exists) return false;
+  }
+  return true;
 };
 
 export const listKeysetIndexes = defineMigration({
@@ -34,14 +55,14 @@ export const listKeysetIndexes = defineMigration({
       })
     );
     for (const index of LIST_INDEXES) {
-      if (!(await context.tableExists({ table: index.table }))) continue;
+      if (!(await indexable({ context, index }))) continue;
       if (!names.has(indexName(index))) return false;
     }
     return true;
   },
   up: async (context) => {
     for (const index of LIST_INDEXES) {
-      if (!(await context.tableExists({ table: index.table }))) continue;
+      if (!(await indexable({ context, index }))) continue;
       context.say(`indexing ${index.table}`);
       await context.run({
         sql: `CREATE INDEX IF NOT EXISTS ${indexName(index)}
