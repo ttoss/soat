@@ -78,6 +78,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/Chain'
         '401':

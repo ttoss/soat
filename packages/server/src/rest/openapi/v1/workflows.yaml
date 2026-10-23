@@ -48,6 +48,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/Workflow'
         '401':
@@ -202,6 +203,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/WorkflowVersion'
         '401':

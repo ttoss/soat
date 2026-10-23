@@ -180,6 +180,26 @@ describe('pagination chokepoints', () => {
     assert.deepEqual(offenders, []);
   });
 
+  // The SDK generator types `data` from the override alone: one without
+  // `type: array` leaves every row of the list `unknown`.
+  test('every Page override types data as an array of its rows', () => {
+    const offenders = specs
+      .flatMap(({ file, spec }) => {
+        return [...walk(spec, file)];
+      })
+      .filter(({ node }) => {
+        return node.allOf?.[0]?.$ref === PAGE_REF;
+      })
+      .filter(({ node }) => {
+        const data = node.allOf[1]?.properties?.data;
+        return data?.type !== 'array' || !data.items;
+      })
+      .map(({ at }) => {
+        return at;
+      });
+    assert.deepEqual(offenders, []);
+  });
+
   test('only lib/pagination.ts writes next_cursor', () => {
     assert.deepEqual(sourceFilesMatching(/\bnext_cursor\b/), [
       'lib/pagination.ts',

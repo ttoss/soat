@@ -130,6 +130,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/SessionRecord'
         '401':
@@ -514,6 +515,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/SessionRecord'
         '401':

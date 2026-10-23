@@ -106,6 +106,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/Chat'
         '401':

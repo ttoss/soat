@@ -45,6 +45,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           type: object
                           properties:
@@ -618,6 +619,7 @@ components:
         - $ref: './pagination.yaml#/components/schemas/Page'
         - properties:
             data:
+              type: array
               items:
                 type: object
                 required:

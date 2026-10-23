@@ -107,6 +107,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/Task'
         '401':
@@ -288,6 +289,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/TaskTransitionOption'
         '401':
@@ -506,6 +508,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/TaskTransition'
         '401':

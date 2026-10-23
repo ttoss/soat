@@ -64,6 +64,7 @@ paths:
                   - $ref: './pagination.yaml#/components/schemas/Page'
                   - properties:
                       data:
+                        type: array
                         items:
                           $ref: '#/components/schemas/Trigger'
         '401':
@@ -709,5 +710,6 @@ components:
         - $ref: './pagination.yaml#/components/schemas/Page'
         - properties:
             data:
+              type: array
               items:
                 $ref: '#/components/schemas/TriggerFiring'
