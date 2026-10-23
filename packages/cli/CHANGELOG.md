@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.94.1](https://github.com/ttoss/soat/compare/v0.94.0...v0.94.1) (2026-10-23)
+
+### Bug Fixes
+
+* **sdk:** type every list's rows ([#1723](https://github.com/ttoss/soat/issues/1723)) ([9709718](https://github.com/ttoss/soat/commit/97097184c3348071b5920c5b3e7fcfba86bae1e0))
+
 # [0.94.0](https://github.com/ttoss/soat/compare/v0.93.2...v0.94.0) (2026-10-23)
 
 ### Features
