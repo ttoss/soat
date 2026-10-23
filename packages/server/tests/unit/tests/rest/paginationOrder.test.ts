@@ -99,7 +99,17 @@ describe('Pagination order', () => {
         query: { project_id: projectId },
       });
 
-      expect(paged).toEqual([...created].sort());
+      // `public_id` order as the database collates it, which is what breaks
+      // the tie; JavaScript's code-unit sort need not agree.
+      const byPublicId = await db.Actor.findAll({
+        where: { publicId: created },
+        order: [['publicId', 'ASC']],
+      });
+      expect(paged).toEqual(
+        byPublicId.map((row) => {
+          return row.publicId as string;
+        })
+      );
     });
   });
 
@@ -129,13 +139,14 @@ describe('Pagination order', () => {
         query: { project_id: projectId, action: 'secrets:CreateSecret' },
       });
 
+      const byPublicId = await db.AuditEntry.findAll({
+        where: { id: ids },
+        order: [['publicId', 'DESC']],
+      });
       expect(paged).toEqual(
-        rows
-          .map((row) => {
-            return row.publicId as string;
-          })
-          .sort()
-          .reverse()
+        byPublicId.map((row) => {
+          return row.publicId as string;
+        })
       );
     });
   });
