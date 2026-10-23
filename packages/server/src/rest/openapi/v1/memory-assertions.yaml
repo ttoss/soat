@@ -62,7 +62,9 @@ components:
             `write_memory` call mid-turn; `rule` is a post-turn pass over the
             finished turn; `api` is `POST /api/v1/memories`; `formation` is a
             `memory` resource in an applied template. It answers *how*, never
-            *who* — the principal fields answer that.
+            *who* — the principal fields answer that. Open set — new
+            mechanisms may be added in minor releases; clients must tolerate
+            unknown values.
           example: tool
         rule_id:
           x-soat-ref: memory-rules
@@ -101,7 +103,8 @@ components:
             `superseded` is the same fact changed (the top match was
             invalidated and replaced), `skipped` is a fact already known,
             `retracted` is a fact that stopped holding with nothing replacing
-            it.
+            it. Open set — new outcomes may be added in minor releases;
+            clients must tolerate unknown values.
           example: created
         similarity:
           type: number

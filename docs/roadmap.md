@@ -22,24 +22,8 @@ Only items that fail that test block the RC. Everything additive — new
 endpoints, new optional parameters, internal ranking or pipeline changes —
 ships after.
 
-**One open item fails that test:** the values pending memory work adds to
-shipped response enums, below. Everything else listed here is additive. Keep
-the test to hand for judging new proposals.
-
-### Open contract decision — new enum values
-
-Memories 5a adds assertion `outcome: restored`; memories Phase 8 adds assertion
-`mechanism: retention | compaction`. A client that switches over a frozen enum
-breaks on a value it has never seen, so one of these must hold at the RC:
-
-| Option       | Contract at the RC                                                                                                                      | Cost                                                                                                             |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Reserve**  | The three values join the enums now, documented as not yet emitted                                                                      | The spec lists values no response carries until the phase ships, and fixes names before Phase 8's design settles |
-| **Open set** | Both enums documented as an open set — clients must tolerate unknown values — as `orchestrations.yaml` does for node types and statuses | No value is promised ahead of time; every client handles one it does not know                                    |
-
-Recommendation: open set. The ledger records which door a write came through,
-and every new door is a new `mechanism`; reserving is worth it only when a
-client must switch over the enum exhaustively. Waiting on a human decision.
+**No open item fails that test.** Everything below is additive. Keep the test
+to hand for judging new proposals, not for the list that remains.
 
 ## Legend
 
@@ -69,8 +53,9 @@ is held to memories the agent was shown in that turn.
       `generations.completed`; neither path has a test.
 - [ ] **5a — restore, and declared supersede for agents.**
       `POST /memories/{memory_id}/restore`; optional `supersedes` on the
-      `write_memory` tool and on the rule handler contract. A new endpoint and
-      new optional fields; the `restored` outcome is the open decision above.
+      `write_memory` tool and on the rule handler contract. A new endpoint,
+      new optional fields and a `restored` outcome — additive, since the
+      assertion enums are open sets.
 - [ ] **5b — LLM-arbitrated write decision.** Top-K shortlist +
       add/update/supersede/skip arbitration, with the arbiter set on the
       memory store; `update` lands as a supersede carrying the consolidated
@@ -145,8 +130,8 @@ first.
 Importance, use and reaffirmation tracking; retention (`max_memories`,
 `ttl_days`) that retracts instead of deleting; a purge window for invalidated
 memories, which keep counting toward storage until purged; compaction through
-the 5b arbiter. Additive columns and endpoints, plus the `retention` and
-`compaction` mechanisms in the open decision above.
+the 5b arbiter. Additive columns, endpoints and the `retention` and
+`compaction` mechanisms (the assertion enums are open sets).
 
 ### Memories Phase 9 — profile memory
 
@@ -183,9 +168,6 @@ that already ship. Gated on the knowledge Phase 7 point-in-time scenario.
 ## Dependency graph (pending nodes only)
 
 ```
-before the RC ──────────────────────────────────────────────────
-  enum decision: reserve | open set (restored, retention, compaction)
-
 v1.x ───────────────────────────────────────────────────────────
   memories P7 (rule-firing tests) — first
   memories 5a (restore, declared supersede) ──► memories 5b (arbitration)

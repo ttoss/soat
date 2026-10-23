@@ -405,11 +405,10 @@ turn never injects another actor's block.
 
 ## Contract Additions
 
-Pending phases add values to shipped response enums: assertion `outcome` gains `restored` (5a),
-and assertion `mechanism` gains `retention` and `compaction` (Phase 8). Whether those values are
-reserved before the v1 RC or the two enums are declared open is an open decision in
-[roadmap.md](./roadmap.md#open-contract-decision--new-enum-values). Every other addition — routes,
-request fields, response fields — is additive.
+Pending phases add values to two response enums: assertion `outcome` gains `restored` (5a), and
+assertion `mechanism` gains `retention` and `compaction` (Phase 8). Both enums are open sets —
+clients must tolerate unknown values — so these values are additive, like every other addition
+here: routes, request fields, response fields.
 
 ## Key Concepts (Pending Work)
 
