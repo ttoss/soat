@@ -343,8 +343,8 @@ importers:
         specifier: ^1.41.0
         version: 1.41.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.10.0
+        version: 0.10.0
       '@ttoss/test-utils':
         specifier: ^4.4.0
         version: 4.4.0(@types/jest@30.0.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(encoding@0.1.13)(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)
@@ -413,8 +413,8 @@ importers:
         specifier: ^1.41.0
         version: 1.41.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.10.0
+        version: 0.10.0
       '@types/node':
         specifier: ^26.6.4
         version: 26.6.4
@@ -631,8 +631,8 @@ importers:
         specifier: 3.10.2
         version: 3.10.2(@swc/core@1.16.2)(@swc/html@1.16.2)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.28))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.28)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)(svgo@3.3.5)(uglify-js@3.19.3)
       '@ttoss/openapi-codegen':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.10.0
+        version: 0.10.0
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -4791,8 +4791,8 @@ packages:
     resolution: {integrity: sha512-brpHOKKEjK5plef0X2FyfNUMlNOXDVKdJZIvWvSAXB6opsov2faaH1Wt/dfOxIde06dnl5WA4wKFsdq1CSBOdA==}
     hasBin: true
 
-  '@ttoss/openapi-codegen@0.6.1':
-    resolution: {integrity: sha512-Mb9NH4XH9nVqFGdg908GiAdk4NBnpkbTfOcBOdOlrtj4ct933E8jvSSEEncxqsXPNxm8SAeWEnVpsyzZ63AwNw==}
+  '@ttoss/openapi-codegen@0.10.0':
+    resolution: {integrity: sha512-mKmEf7CVgsevH0NOzjxRwIBDMVc75a2Bx7F5gRvAh4NNXmZWS4VN8Z7/ARpATnwQvds/OkYnaHNH5sTpPKORkw==}
 
   '@ttoss/postgresdb-cli@0.5.1':
     resolution: {integrity: sha512-S47tWhtqtefBrxv5M1Vw7/33lOzJPSkJcM7e84ZlFkyVlJr/IthvPytcu87C+TdSE8HtY56Txqf5tT1WSn/N+A==}
@@ -5830,6 +5830,9 @@ packages:
 
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
+
+  argparse@3.0.3:
+    resolution: {integrity: sha512-Sn98ftV3KfsO8xfLPHG6oT8y+b0yvbrLgZjgPDXsharNY15tTAjqIsIju4S32nl6/iEUNNE4v+yL2Zhm8ooP3w==}
 
   argue-cli@3.2.0:
     resolution: {integrity: sha512-VipTB0gXgGIFO2Rg9yEVN5wLt2AurJcZqDbgmYSwPwsykhLrQhs240/bfceev4w68lI8JshoOJIk9uW7tFzROw==}
@@ -9175,6 +9178,10 @@ packages:
 
   js-yaml@5.4.2:
     resolution: {integrity: sha512-m+aqu+LwO1O6sIopafj8HUVl5aawITwZQe/yHpMCKjaWBaA/d07B/QdMb3529REftiU+RMMHL3Vlsw3hON7vWg==}
+    hasBin: true
+
+  js-yaml@5.5.0:
+    resolution: {integrity: sha512-paNr4LFIFPjeeSmwNYdrb8FafLLG/Cr2Af3GjbsHJ5CxIjH4r0c2emlmRdAtpPAieP1gRVzk6buBbVP5gBMGAg==}
     hasBin: true
 
   jsdom@26.1.0:
@@ -19272,9 +19279,9 @@ snapshots:
     dependencies:
       commander: 14.0.3
 
-  '@ttoss/openapi-codegen@0.6.1':
+  '@ttoss/openapi-codegen@0.10.0':
     dependencies:
-      js-yaml: 4.3.2
+      js-yaml: 5.5.0
 
   '@ttoss/postgresdb-cli@0.5.1(@types/node@26.6.4)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)':
     dependencies:
@@ -20382,6 +20389,8 @@ snapshots:
       sprintf-js: 1.0.3
 
   argparse@2.0.1: {}
+
+  argparse@3.0.3: {}
 
   argue-cli@3.2.0: {}
 
@@ -24508,6 +24517,10 @@ snapshots:
   js-yaml@5.4.2:
     dependencies:
       argparse: 2.0.1
+
+  js-yaml@5.5.0:
+    dependencies:
+      argparse: 3.0.3
 
   jsdom@26.1.0(supports-color@8.1.1):
     dependencies:
