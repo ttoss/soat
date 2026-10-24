@@ -74,15 +74,17 @@ One row per write attempt, append-only, whatever the write resolved to.
 | `memory_id`  | `string \| null` | The memory the write resolved into: the new memory for `created` and `superseded`, the memory that matched for `skipped`, the memory withdrawn for `retracted` |
 | `superseded_memory_id` | `string \| null` | The memory this assertion retired, on a `superseded` outcome |
 | `content`    | `string` | The text **as asserted**, which is not always the memory's text — a `skipped` assertion records what was claimed |
-| `mechanism`  | `string` | Which door the write came through: `tool`, `rule`, `api` or `formation` — see [Mechanism](#mechanism) |
+| `mechanism`  | `string` | Which door the write came through: `tool`, `rule`, `api` or `formation` (open set) — see [Mechanism](#mechanism) |
 | `rule_id`    | `string \| null` | The [memory rule](#memory-rules) whose firing wrote this (`mrule_` prefix); set only for `rule`. `null` once that rule is deleted |
 | `generation_id` | `string \| null` | The turn that asserted the fact; `null` on the `api` and `formation` doors |
 | `principal_type` | `string` | [Principal](./audit-log.md#principals) that claimed it: `user` or `api_key` on the `api` and `formation` doors, `agent` on the agent doors |
 | `principal_id` | `string` | The principal's public ID                             |
-| `outcome`    | `string` | `created`, `superseded`, `skipped` or `retracted`        |
+| `outcome`    | `string` | `created`, `superseded`, `skipped` or `retracted` (open set) |
 | `similarity` | `number \| null` | The cosine the outcome was decided against — the top match's, or the declared target's when `declared` is true; `null` when there was nothing to compare against, and on a retraction, which compares nothing |
 | `declared`   | `boolean` | Whether the caller named the memory this write replaced (`supersedes`) instead of the thresholds choosing one |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
+
+`mechanism` and `outcome` are open sets: a minor release may add a value, so a client must tolerate one it does not know.
 
 ## Key Concepts
 
