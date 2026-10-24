@@ -218,6 +218,27 @@ describe('MemoryAssertions', () => {
       expect(response.body.data[0].outcome).toBe('skipped');
     });
 
+    test('filters retractions by outcome', async () => {
+      const memoryStoreId = await createMemoryStore('Ledger Retraction');
+      const written = await writeMemory({
+        memoryStoreId,
+        content: 'The Lisbon office takes walk-ins',
+      });
+      const retract = await authenticatedTestClient(adminToken).post(
+        `/api/v1/memories/${written.id}/retract`
+      );
+      expect(retract.status).toBe(200);
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/memory-stores/${memoryStoreId}/assertions?outcome=retracted`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].outcome).toBe('retracted');
+      expect(response.body.data[0].memory_id).toBe(written.id);
+    });
+
     test('filters by mechanism', async () => {
       const memoryStoreId = await createMemoryStore('Ledger Mechanism');
       await writeMemory({ memoryStoreId, content: 'Mechanism fact' });

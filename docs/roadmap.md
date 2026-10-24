@@ -38,47 +38,40 @@ to hand for judging new proposals, not for the list that remains.
 
 All additive; none changes a frozen field or loses data by waiting.
 
-**Suggested v1.x order:** memories P7 (streaming extraction) → knowledge P7
-(eval harness) → memories 5a (arbitration) → knowledge P5 (ranking). Memories
-P7 goes first because 5a improves write quality for traffic that is already
-captured, while P7 makes passive memory exist at all for the dominant
-transport — a user who enables extraction and sees nothing captured concludes
-the feature is broken. P7 has no dependency on 5a; the trade-off (streaming
-traffic captured before 5a lands goes through the v1 merge path) is acceptable
-because the invalidation schema is already in place and 5a changes behavior,
-not stored data.
+**Suggested v1.x order:** memories P7 (rule-firing tests) → memories 5a
+(restore, declared supersede for agents) → knowledge P7 (memory-pipeline
+evals) → memories 5b (arbitration) → knowledge P5 (rerank). 5a precedes 5b
+because 5b is the first step where a model retires facts unprompted: restore
+is what undoes a wrong call, and the memory-pipeline evals measure how often
+one happens. 5a's own model-driven path — an agent declaring `supersedes` —
+is held to memories the agent was shown in that turn.
 
 ### Memories
 
-- [ ] **Phase 7 — extraction coverage for streaming, `requires_action`, and
-      background (`wait=false`) direct completions.** No API change, but the
-      passive-memory pipeline currently misses streaming (the dominant
-      production transport) and the direct-generation background path — the
-      highest-value post-RC item. Until it lands, the docs must not claim
-      extraction covers streaming.
-- [ ] **5a — LLM-arbitrated write decision.** Top-K shortlist +
-      add/update/supersede/skip arbitration; v1 fallback semantics on LLM
-      failure; consolidation for the manual REST write path. Internal write
-      behavior on top of the shipped invalidation schema — the `action` enum
-      already includes `superseded`, so no contract change.
+- [ ] **Phase 7 — rule-firing tests.** `requires_action` and background
+      (`wait=false`) direct generations fire memory rules through
+      `generations.completed`; neither path has a test.
+- [ ] **5a — restore, and declared supersede for agents.**
+      `POST /memories/{memory_id}/restore`; optional `supersedes` on the
+      `write_memory` tool and on the rule handler contract. A new endpoint,
+      new optional fields and a `restored` outcome — additive, since the
+      assertion enums are open sets.
+- [ ] **5b — LLM-arbitrated write decision.** Top-K shortlist +
+      add/update/supersede/skip arbitration, with the arbiter set on the
+      memory store; `update` lands as a supersede carrying the consolidated
+      fact, so `action` keeps its three values. Threshold semantics on
+      arbiter failure.
 
 ### Knowledge
 
-- [ ] **Phase 7 — evaluation harness & observability.** Golden query set
-      (≥ 50 pairs), recall@k / MRR, memory-pipeline benchmarks,
-      injected-context tracing. Baselines measured against the shipped
-      non-system injection format. **Sequenced before Phase 5**, which needs it
-      as a regression gate. The golden set must include exact-term and
-      entity-style structural queries ("everything about <actor>", exact-name
-      lookups) so Phase 5's before/after numbers double as the entity graph's
-      evidence gate — without them, "does hybrid retrieval cover structural
-      lookups?" stays unanswered by construction.
-- [ ] **Phase 5 — hybrid retrieval & ranking.** `tsvector` lexical + pgvector
-      per source, RRF fusion (replaces the raw-score interleave), optional
-      rerank stage, recency blend. Additive parameters only; `score` already
-      ships as an implementation-defined ranking, so refilling it with a fused
-      value is not a contract change. Must land with before/after Phase 7
-      golden-set numbers and no recall@10 regression.
+- [ ] **Phase 7 — memory-pipeline evals.** Multi-session recall,
+      contradiction handling and point-in-time recall, end to end through a
+      memory rule, deterministic in CI. **Sequenced before memories 5b**,
+      which needs the contradiction numbers as its gate.
+- [ ] **Phase 5 — rerank.** Optional rerank stage over the fused candidates;
+      an additive parameter. Must land with before/after golden-set numbers
+      and no recall@10 regression. The importance blend waits on memories
+      Phase 8.
 
 ### G5 — usage metering refinement
 
@@ -106,41 +99,52 @@ the most.
 
 **Gates (both must fire before anything is built):**
 
-1. **Evidence gate** — the Knowledge Phase 7 golden set includes structural
-   queries ("everything about <actor>", exact-name lookups), and Phase 5
-   hybrid retrieval (lexical + RRF) measurably fails them. If `tsvector`
-   rescues exact-term recall, most of the graph's pitch is already served.
+1. **Evidence gate** — the knowledge golden set includes structural queries
+   ("everything about <actor>", exact-name lookups), and hybrid retrieval
+   (lexical + RRF) measurably fails them. **Not firing:** the retrieval
+   baseline scores `entity` (12 queries) at recall@10 1.0 and MRR 0.958, and
+   `exact_name` (15 queries) at recall@10 1.0. The golden set is synthetic and
+   small; a structural query from real traffic that hybrid retrieval misses
+   is evidence too.
 2. **Demand gate** — an actual user asking for relational queries, not an
    anticipated one.
 
-**Cheaper fallback to try first:** actor-scoped entry filtering on existing
+**Cheaper fallback to try first:** actor-scoped memory filtering on existing
 metadata — no triple extraction, no predicate normalization, no entity dedup
 thresholds.
 
 *Why gated, not just sequenced:* Phase 6's embedding-threshold entity dedup
-reintroduces the exact failure mode Phase 5 (arbitration) exists to remove —
-fixed cosine cutoffs making the decision — and its headline query ("how are X
-and Y related?") is already out of scope (single-hop only). It is also the only
+reintroduces the exact failure mode memories 5b (arbitration) exists to remove
+— fixed cosine cutoffs making the decision — and its headline query ("how are
+X and Y related?") is out of scope (single-hop only). It is also the only
 pending initiative that ships public API surface with unproven payoff, i.e. the
 only real deprecation exposure on the roadmap. The go/no-go must rest on
 measured retrieval gaps, not on the design being finished.
 
-Technical dependencies (unchanged): memories 5a (supersede must invalidate
-edges; the schema it populates already ships) and Knowledge Phase 7 (the
-evidence gate's measurement) landing first.
+Technical dependencies: memories 5b (an arbitrated supersede must invalidate
+edges) and the knowledge golden set (the evidence gate's measurement) land
+first.
 
 ### Memories Phase 8 — forgetting
 
-Importance scoring, access tracking, retrieval-time recency blend (delivered
-through Knowledge Phase 5's ranking layer), retention policies with the
-deterministic eviction order, and compaction. Additive columns and endpoints.
+Importance, use and reaffirmation tracking; retention (`max_memories`,
+`ttl_days`) that retracts instead of deleting; a purge window for invalidated
+memories, which keep counting toward storage until purged; compaction through
+the 5b arbiter. Additive columns, endpoints and the `retention` and
+`compaction` mechanisms (the assertion enums are open sets).
 
 ### Memories Phase 9 — profile memory
 
-Always-injected bounded profile blocks, agent-editable. Still an explicit
-sketch — requirements to be written before implementation.
+Always-injected bounded profile blocks, one per actor, agent-editable. Still an
+explicit sketch — requirements to be written before implementation.
 
-### Deferred by design (demand-gated) — carried over unchanged
+### Knowledge Phase 8 — point-in-time retrieval
+
+`as_of` on `POST /knowledge/search` and `GET /memories`: what a store held at
+T, by ingestion time. An additive parameter over validity columns and a ledger
+that already ship. Gated on the knowledge Phase 7 point-in-time scenario.
+
+### Deferred by design (demand-gated)
 
 - [ ] ⏭️ **G3 Phase 5** — approver targeting & assignment (`approver_policy` /
       `assignees`); no demand signal yet
@@ -150,7 +154,9 @@ sketch — requirements to be written before implementation.
 - [ ] ⏭️ **G6 learned rules** — semantic clustering, promotion lifecycle,
       scoped rule listing. Gates: sustained demand on the approvals recurrence
       view (open) **and** evaluations P1 (satisfied). Design record recoverable
-      from git history (`docs/prd-learned-rules.md`)
+      from git history (`docs/prd-learned-rules.md`). A promoted rule spends
+      the always-loaded instruction budget on every turn, so promotion needs a
+      cap and a demotion path
 - [ ] ⏭️ **Model routing** — per-consumer `model_route_id` on Chat (build only
       when two routes in one project is actually requested)
 - [ ] **Model routing (accepted gap)** — failed attempts that burned tokens are
@@ -163,15 +169,18 @@ sketch — requirements to be written before implementation.
 
 ```
 v1.x ───────────────────────────────────────────────────────────
-  memories P7 (streaming extraction) — first
-  knowledge P7 (eval harness) ──► knowledge P5 (ranking; needs the gate)
-  memories 5a (arbitration)  ◄── invalidation schema (already in place)
+  memories P7 (rule-firing tests) — first
+  memories 5a (restore, declared supersede) ──► memories 5b (arbitration)
+  knowledge P7 (memory-pipeline evals) ──► memories 5b (needs the gate)
+  knowledge P5 (rerank)
 
 post-v1 ────────────────────────────────────────────────────────
   memories P6 (entity data) ◄──► knowledge P3 (entity queries)
-      ▲ needs 5a (supersede invalidates edges)
-      ⏭️ gates: hybrid-retrieval gap on P7 golden set (open) + demand (open)
-  memories P8 (forgetting) ──► knowledge P5 recency/importance blend
+      ▲ needs 5b (an arbitrated supersede invalidates edges)
+      ⏭️ gates: hybrid-retrieval gap on the golden set (not firing) + demand (open)
+  memories P8 (forgetting) ──► knowledge P5 importance blend
+      ▲ compaction needs 5b
+  knowledge P8 (as_of) ◄── knowledge P7 point-in-time scenario
   memories P9 (profile) — sketch
   learned rules ⏭️ ◄── recurrence-view demand (open) + evals P1 ✔
 ```
