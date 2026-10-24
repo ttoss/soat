@@ -1103,6 +1103,33 @@ describe('MCP tools - happy path', () => {
     expect(history.data[1].outcome).toBe('retracted');
   });
 
+  test('list-memory-store-assertions filters retractions by outcome', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Retraction Ledger',
+      })
+    );
+    const written = parseResult(
+      await mcpCall('create-memory', {
+        memory_store_id: store.id,
+        content: 'The MCP depot opens on Sundays.',
+      })
+    );
+    parseResult(await mcpCall('retract-memory', { memory_id: written.id }));
+
+    const ledger = parseResult(
+      await mcpCall('list-memory-store-assertions', {
+        memory_store_id: store.id,
+        outcome: 'retracted',
+      })
+    );
+
+    expect(ledger.data).toHaveLength(1);
+    expect(ledger.data[0].outcome).toBe('retracted');
+    expect(ledger.data[0].memory_id).toBe(written.id);
+  });
+
   test('the memory-rule tools drive a store\u2019s ingestion policy', async () => {
     const store = parseResult(
       await mcpCall('create-memory-store', {

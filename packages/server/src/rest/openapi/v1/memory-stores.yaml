@@ -311,7 +311,7 @@ paths:
           description: Only assertions that resolved this way.
           schema:
             type: string
-            enum: [created, superseded, skipped]
+            enum: [created, superseded, skipped, retracted]
         - name: generation_id
           in: query
           required: false
