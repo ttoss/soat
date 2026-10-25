@@ -224,14 +224,35 @@ type CreateTriggerArgs = {
   active?: boolean;
 };
 
-/** Derives the type-dependent fields: a secret for webhooks, next fire for schedules. */
-const deriveTypeFields = (args: { type: string; cron?: string | null }) => {
+/**
+ * An inactive trigger never fires, so it has no next fire; activating one
+ * computes it from now rather than resuming an occurrence that fell due while
+ * it was off.
+ */
+const deriveNextFireAt = (args: {
+  type: string;
+  cron?: string | null;
+  active: boolean;
+}): Date | null => {
+  return args.type === 'schedule' && args.cron && args.active
+    ? computeNextFireAt(args.cron)
+    : null;
+};
+
+/**
+ * Derives the state-dependent fields: a trigger is active unless created
+ * otherwise, a webhook gets a secret, an active schedule its next fire.
+ */
+const deriveCreateState = (args: {
+  type: string;
+  cron?: string | null;
+  active?: boolean;
+}) => {
+  const active = args.active ?? true;
   return {
+    active,
     secret: args.type === 'webhook' ? encryptValue(generateSecret()) : null,
-    nextFireAt:
-      args.type === 'schedule' && args.cron
-        ? computeNextFireAt(args.cron)
-        : null,
+    nextFireAt: deriveNextFireAt({ type: args.type, cron: args.cron, active }),
   };
 };
 
@@ -250,8 +271,11 @@ const buildCreateAttributes = (args: CreateTriggerArgs) => {
     toolContext: args.toolContext ?? null,
     cron: args.cron ?? null,
     eventPattern: args.eventPattern ?? null,
-    active: args.active ?? true,
-    ...deriveTypeFields({ type: args.type, cron: args.cron }),
+    ...deriveCreateState({
+      type: args.type,
+      cron: args.cron,
+      active: args.active,
+    }),
   };
 };
 
@@ -307,19 +331,10 @@ type UpdateTriggerArgs = {
   active?: boolean;
 };
 
-const applyCronUpdate = (
-  trigger: InstanceType<(typeof db)['Trigger']>,
-  cron: string | null
-): void => {
-  trigger.cron = cron;
-  trigger.nextFireAt =
-    trigger.type === 'schedule' && cron ? computeNextFireAt(cron) : null;
-};
-
 /**
  * The update fields that are copied straight onto the column of the same name,
- * paired one to one. `cron` is deliberately absent: it also derives
- * `nextFireAt`, so it goes through {@link applyCronUpdate}.
+ * paired one to one. `cron` and `active` also derive `nextFireAt`, which
+ * {@link applyUpdateFields} recomputes when either changes.
  *
  * A pair list rather than a chain of `if`s because the chain grew past the
  * complexity ceiling as fields were added — and every name still appears
@@ -350,7 +365,14 @@ const applyUpdateFields = (
     const value = args[argKey];
     if (value !== undefined) trigger.set(column, value);
   }
-  if (args.cron !== undefined) applyCronUpdate(trigger, args.cron);
+  if (args.cron !== undefined) trigger.cron = args.cron;
+  if (args.cron !== undefined || trigger.changed('active')) {
+    trigger.nextFireAt = deriveNextFireAt({
+      type: trigger.type as string,
+      cron: trigger.cron,
+      active: trigger.active as boolean,
+    });
+  }
 };
 
 export const updateTrigger = async (args: UpdateTriggerArgs) => {

@@ -210,6 +210,7 @@ paths:
                     Editing composes a new call, so it additionally requires
                     permission to make that call: `tools:CallTool` on the tool,
                     and for a `builtin` proposal the action's own IAM action.
+                    Refused on an item with no `proposed_action`.
                 tool_context:
                   type: object
                   additionalProperties:
@@ -233,8 +234,9 @@ paths:
                 $ref: '#/components/schemas/ApprovalItem'
         '400':
           description: >-
-            Edited arguments are not a JSON object, or do not satisfy the tool's
-            parameters schema; or a `tool_context` key is not a valid header
+            Edited arguments are not a JSON object, do not satisfy the tool's
+            parameters schema, or are sent for an item with no
+            `proposed_action`; or a `tool_context` key is not a valid header
             name
         '401':
           description: Unauthorized

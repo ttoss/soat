@@ -465,7 +465,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Read-only, schedule triggers only. Server-computed next fire time
+          description: Read-only, schedule triggers only. Server-computed next fire time; null while the trigger is inactive, recomputed from now when it is re-activated
         created_at:
           type: string
           format: date-time
