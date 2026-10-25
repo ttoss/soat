@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.95.0](https://github.com/ttoss/soat/compare/v0.94.1...v0.95.0) (2026-10-25)
+
+### Bug Fixes
+
+* **api:** settle ten runtime inconsistencies found in live QA ([#1733](https://github.com/ttoss/soat/issues/1733)) ([f553f08](https://github.com/ttoss/soat/commit/f553f08931c178271748f5cbe27c650b018320ea))
+
 ## [0.94.1](https://github.com/ttoss/soat/compare/v0.94.0...v0.94.1) (2026-10-23)
 
 **Note:** Version bump only for package @soat/postgresdb

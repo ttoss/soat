@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.95.0](https://github.com/ttoss/soat/compare/v0.94.1...v0.95.0) (2026-10-25)
+
+* fix(iam)!: answer 404 for a by-id resource outside the caller's project (#1735) ([80238ec](https://github.com/ttoss/soat/commit/80238ec442d8c3af046ae1b3d87871e069c07389)), closes [#1735](https://github.com/ttoss/soat/issues/1735)
+
+### Bug Fixes
+
+* **agents:** send no cache point to a Bedrock model that does not cache ([#1731](https://github.com/ttoss/soat/issues/1731)) ([70c53e2](https://github.com/ttoss/soat/commit/70c53e20f625dd39c3a66eefaf49431e1a3080b9))
+* **api:** declare every status, error body and field the routes answer with ([#1734](https://github.com/ttoss/soat/issues/1734)) ([7194123](https://github.com/ttoss/soat/commit/7194123b497d2306a856b67698890dc039349f7f))
+* **api:** refuse out-of-enum activity, exception and trigger list filters with 400 ([#1729](https://github.com/ttoss/soat/issues/1729)) ([f514e5d](https://github.com/ttoss/soat/commit/f514e5d72f179b3196bcfab3528dae28724d6ebf))
+* **api:** settle ten runtime inconsistencies found in live QA ([#1733](https://github.com/ttoss/soat/issues/1733)) ([f553f08](https://github.com/ttoss/soat/commit/f553f08931c178271748f5cbe27c650b018320ea))
+* **embeddings:** refuse an empty input with 400 VALIDATION_FAILED ([#1732](https://github.com/ttoss/soat/issues/1732)) ([4353570](https://github.com/ttoss/soat/commit/4353570df9250d4145ee8114f041d2951abe990a))
+* **formations:** refuse an output that cannot resolve to a string ([#1727](https://github.com/ttoss/soat/issues/1727)) ([a743ef7](https://github.com/ttoss/soat/commit/a743ef77e8a219dbb0bd322da4fa6d21aa271853))
+* **formations:** scope the plan's formation_id lookup to the plan's project ([#1726](https://github.com/ttoss/soat/issues/1726)) ([680512e](https://github.com/ttoss/soat/commit/680512ea129bef9576db5d2b769fb6d5dcf5f0e0))
+* **memories:** accept retracted in the assertion outcome filter and realign the PRDs ([#1725](https://github.com/ttoss/soat/issues/1725)) ([307ff5a](https://github.com/ttoss/soat/commit/307ff5aa891b7bebf964e964e545ffc0dee53972))
+* **server:** refuse a session or conversation status and a message role outside their enums ([#1730](https://github.com/ttoss/soat/issues/1730)) ([ea48c95](https://github.com/ttoss/soat/commit/ea48c95245b92fb1837c8608dc6e4218dc908b3d))
+
+### BREAKING CHANGES
+
+* a caller whose credential or policies do not reach the resource's project now gets the module's 404 instead of 403 on by-id routes, including a caller with no policies at all.
+
 ## [0.94.1](https://github.com/ttoss/soat/compare/v0.94.0...v0.94.1) (2026-10-23)
 
 ### Bug Fixes
