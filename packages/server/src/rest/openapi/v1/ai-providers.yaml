@@ -91,12 +91,26 @@ paths:
                             updated_at:
                               type: string
                               format: date-time
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     post:
       tags:
         - AI Providers
@@ -191,12 +205,28 @@ paths:
                     format: date-time
         '400':
           description: Bad request (invalid provider or missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/ai-providers/{ai_provider_id}:
     get:
       tags:
@@ -245,12 +275,28 @@ paths:
                   updated_at:
                     type: string
                     format: date-time
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - AI Providers
@@ -307,12 +353,30 @@ paths:
           description: AI provider updated successfully
         '400':
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - AI Providers
@@ -354,17 +418,37 @@ paths:
       responses:
         '204':
           description: AI provider deleted successfully
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >
             The AI provider still has dependents. Live references always block;
             soft dependents block unless force=true. See error.meta for counts,
             offending IDs, and the forcible flag.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/ai-providers/{ai_provider_id}/models:
     get:
       tags:
@@ -444,14 +528,36 @@ paths:
             configuration the listing needs (a Vertex project from either
             `config.project` or the service-account key file, a Bedrock region,
             or — for the API-key provider types — a linked secret).
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           description: The provider rejected the listing request
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/ai-providers/{ai_provider_id}/prices:
     get:
       tags:
@@ -479,12 +585,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderPricesResponse'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - AI Providers
@@ -524,12 +646,30 @@ paths:
                 $ref: '#/components/schemas/ProviderPricesResponse'
         '400':
           description: Bad Request (e.g. non-future effective_from)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   schemas:
     ProviderPrice:

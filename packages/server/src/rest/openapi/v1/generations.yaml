@@ -139,6 +139,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Generation'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -151,6 +153,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/generations/{generation_id}:
     get:
@@ -179,6 +183,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Generation'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -197,6 +203,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Generations
@@ -265,6 +273,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/generations/{generation_id}/content:
     delete:
@@ -310,6 +320,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Generation'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -328,6 +340,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/generations/{generation_id}/memory-assertions:
     get:
@@ -365,6 +379,8 @@ paths:
                         type: array
                         items:
                           $ref: './memory-assertions.yaml#/components/schemas/MemoryAssertion'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -377,6 +393,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/generations/{generation_id}/transcript:
     get:
       tags:
@@ -421,6 +439,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenerationTranscript'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -439,6 +459,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
 components:
   securitySchemes:

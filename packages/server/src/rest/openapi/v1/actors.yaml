@@ -87,6 +87,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/ActorRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -99,6 +101,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     post:
       tags:
         - Actors
@@ -172,6 +176,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/actors/{actor_id}:
     get:
       tags:
@@ -197,6 +203,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActorRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -215,6 +223,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Actors
@@ -235,6 +245,8 @@ paths:
       responses:
         '204':
           description: Actor deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -253,6 +265,15 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            ACTOR_HAS_MESSAGES — session messages name the actor as their author.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Actors
@@ -307,6 +328,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActorRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -325,6 +348,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/actors/{actor_id}/tags:
     get:
       tags:
@@ -350,6 +375,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -368,6 +395,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Actors
@@ -398,6 +427,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -416,6 +447,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Actors
@@ -446,6 +479,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -464,6 +499,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:

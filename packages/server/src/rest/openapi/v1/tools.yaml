@@ -166,7 +166,7 @@ paths:
                     properties:
                       x:
                         type: number
-                      y:
+                      'y':
                         type: number
                     required:
                       - x
@@ -214,6 +214,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     get:
       tags:
         - Tools
@@ -242,6 +244,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Tool'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -254,6 +258,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/tools/{tool_id}:
     get:
@@ -281,6 +287,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tool'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -299,6 +307,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Tools
@@ -327,6 +337,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tool'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -345,6 +357,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Tools
@@ -379,6 +393,8 @@ paths:
       responses:
         '204':
           description: Deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -405,6 +421,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/tools/{tool_id}/call:
     post:
@@ -534,6 +552,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           description: >
             Upstream tool target error (TOOL_HTTP_ERROR). Returned when an

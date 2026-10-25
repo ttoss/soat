@@ -12,6 +12,22 @@ info:
 paths: {}
 components:
   responses:
+    InternalError:
+      description: >-
+        Unexpected server error — `INTERNAL_ERROR`, with the raw message never
+        forwarded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: >-
+        Invalid request — a query parameter or body field the operation does
+        not declare, or a value that fails validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
       description: Authentication required
       content:

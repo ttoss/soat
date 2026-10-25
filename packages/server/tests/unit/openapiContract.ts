@@ -22,6 +22,8 @@ const AUDIT_FILE = process.env.OPENAPI_DRIFT_AUDIT_FILE;
  *   introduces drift fails the suite with the field named.
  *   `additionalProperties: false` (rejecting undeclared response keys) is not
  *   enforced.
+ * - **Every status a `rest/` test receives** is declared by its operation, so
+ *   a route cannot answer a status its generated client does not know.
  * - Only `application/json` responses under `/api/v1` are considered;
  *   `/openapi.json` and `/mcp` (which bypass caseTransform) are excluded.
  * - With `OPENAPI_DRIFT_AUDIT_FILE` set, violations are appended as JSONL
@@ -254,9 +256,38 @@ const recordOrThrowViolation = (args: {
 };
 
 /**
+ * A client generated from the spec only handles the statuses the spec
+ * declares, so a status the route answers but its operation leaves out is
+ * drift as much as a mismatched body.
+ */
+const assertStatusDeclared = (args: {
+  method: string;
+  template: string;
+  status: number;
+}): void => {
+  const pathItem = getMergedOpenApiSpec().paths[args.template];
+  const operation = isRecord(pathItem) ? pathItem[args.method] : undefined;
+  if (!isRecord(operation) || !isRecord(operation.responses)) return;
+  const responses = operation.responses;
+  if (String(args.status) in responses || 'default' in responses) return;
+
+  const message = `OpenAPI contract violation: ${args.method.toUpperCase()} ${args.template} answered ${args.status}, which its operation does not declare`;
+  if (!AUDIT_FILE) throw new Error(message);
+  appendFileSync(
+    AUDIT_FILE,
+    `${JSON.stringify({
+      method: args.method.toUpperCase(),
+      template: args.template,
+      status: args.status,
+      undeclared: true,
+    })}\n`
+  );
+};
+
+/**
  * Validates a single supertest response against its OpenAPI response schema.
- * Throws (failing the test) on any shape mismatch. No-ops for responses without
- * a documented JSON schema, non-JSON bodies, or excluded paths.
+ * Throws (failing the test) on any shape mismatch or on a status the
+ * operation does not declare. No-ops for non-JSON bodies or excluded paths.
  */
 export const assertResponseMatchesSpec = (args: {
   method: string;
@@ -275,6 +306,8 @@ export const assertResponseMatchesSpec = (args: {
 
   const template = matchOpenApiPath({ path: args.path.split('?')[0] });
   if (!template) return;
+
+  assertStatusDeclared({ method, template, status: args.status });
 
   const validators = getResponseValidators({
     template,

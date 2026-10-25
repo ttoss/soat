@@ -65,6 +65,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Trace'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -77,6 +79,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/traces/{trace_id}:
     get:
@@ -102,6 +106,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Trace'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -120,6 +126,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/traces/{trace_id}/tree:
     get:
@@ -151,6 +159,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TraceTreeNode'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -169,6 +179,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/traces/{trace_id}/content:
     delete:
@@ -210,6 +222,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Trace'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -228,6 +242,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
 components:
   securitySchemes:

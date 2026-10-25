@@ -57,6 +57,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/ConversationRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -69,6 +71,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     post:
       tags:
         - Conversations
@@ -133,6 +137,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/conversations/{conversation_id}:
     get:
       tags:
@@ -158,6 +164,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConversationRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -176,6 +184,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Conversations
@@ -248,6 +258,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Conversations
@@ -268,6 +280,8 @@ paths:
       responses:
         '204':
           description: Conversation deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -286,6 +300,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/conversations/{conversation_id}/messages:
     get:
       tags:
@@ -327,6 +343,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/ConversationMessageRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -345,6 +363,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     post:
       tags:
         - Conversations
@@ -438,6 +458,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/conversations/{conversation_id}/generate:
     post:
       tags:
@@ -564,6 +586,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '501':
           description: Streaming not implemented
           content:
@@ -598,6 +622,8 @@ paths:
       responses:
         '204':
           description: Message removed
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -616,6 +642,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/conversations/{conversation_id}/tags:
     get:
       tags:
@@ -641,6 +669,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -659,6 +689,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Conversations
@@ -689,6 +721,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -707,6 +741,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Conversations
@@ -737,6 +773,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -755,6 +793,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:
@@ -783,6 +823,10 @@ components:
           enum: [open, closed]
           description: Conversation status
           example: 'open'
+        tags:
+          description: The conversation's tag bag. Absent when none were set.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/TagBag'
         created_at:
           type: string
           format: date-time

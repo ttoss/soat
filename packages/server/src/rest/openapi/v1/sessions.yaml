@@ -50,6 +50,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -73,6 +75,8 @@ paths:
                     https://soat.ttoss.dev/docs/error-codes#single_session_conflict
                   meta:
                     session_id: sess_abc123
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     get:
       tags:
         - Sessions
@@ -133,12 +137,16 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}:
     get:
@@ -163,12 +171,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Sessions
@@ -192,12 +204,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Sessions
@@ -216,12 +232,16 @@ paths:
       responses:
         '204':
           description: Session deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/messages:
     post:
@@ -260,6 +280,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AddSessionMessageResponse'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -285,6 +307,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/generate:
     post:
@@ -337,6 +361,8 @@ paths:
                     enum: [accepted]
                   session_id:
                     type: string
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -365,6 +391,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR). The error `meta`
@@ -405,6 +433,8 @@ paths:
             application/json:
               schema:
                 $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -420,6 +450,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/fork:
     post:
@@ -488,6 +520,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/forks:
     get:
@@ -518,12 +552,16 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/tags:
     get:
@@ -544,12 +582,16 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Sessions
@@ -574,12 +616,16 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Sessions
@@ -604,12 +650,16 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
 components:
   securitySchemes:
