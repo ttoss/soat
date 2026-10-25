@@ -747,7 +747,7 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional human tag for this version, e.g. `pre-tightening`. Set from
+            Optional human tag for this version, e.g. `tightened`. Set from
             the `label` field of a restore, or generated for one.
           example: restored from v2
         created_by_principal_type:
@@ -809,7 +809,7 @@ components:
         version_label:
           type: string
           description: >-
-            Optional tag for the config version this write archives (e.g.
+            Optional tag for the config version this write creates (e.g.
             `initial`). Annotates the version only — it is not stored on the
             guardrail and is not part of the config, so labelling a change is
             never itself a change.
@@ -839,12 +839,12 @@ components:
         version_label:
           type: string
           description: >-
-            Optional tag for the config version this write archives (e.g.
-            `pre-tightening`). Annotates the version only — it is not stored on
+            Optional tag for the config version this write creates (e.g.
+            `tightened`). Annotates the version only — it is not stored on
             the guardrail and is not part of the config, so labelling a change is
             never itself a change. Ignored when the write changes no policy, since
             no version is created.
-          example: pre-tightening
+          example: tightened
 
         expected_version:
           description: >-

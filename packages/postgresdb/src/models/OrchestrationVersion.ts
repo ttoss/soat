@@ -83,7 +83,7 @@ export class OrchestrationVersion extends Model {
   @Column({ type: DataType.JSONB, allowNull: false })
   declare config: object;
 
-  /** Optional human tag for this version, e.g. `pre-rewire`. */
+  /** Optional human tag for this version, e.g. `rewired`. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 

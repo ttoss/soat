@@ -86,7 +86,7 @@ export class DocumentVersion extends Model {
   @Column({ type: DataType.JSONB, allowNull: false })
   declare config: object;
 
-  /** Optional human tag for this version, e.g. `pre-correction`. */
+  /** Optional human tag for this version, e.g. `corrected`. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 

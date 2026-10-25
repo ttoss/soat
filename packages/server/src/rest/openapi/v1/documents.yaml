@@ -740,7 +740,7 @@ paths:
                   type: string
                   nullable: true
                   description: >-
-                    Optional tag for the tombstone version this write archives.
+                    Optional tag for the tombstone version this write creates.
                   example: superseded-by-q2
                 expected_version:
                   description: >-
@@ -1363,10 +1363,10 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional human tag for this version, e.g. `pre-correction`. Set from
+            Optional human tag for this version, e.g. `corrected`. Set from
             the `version_label` of the write that archived it, or generated for
             a restore or a withdrawal.
-          example: pre-correction
+          example: corrected
         created_by_principal_type:
           nullable: true
           allOf:

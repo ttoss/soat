@@ -60,7 +60,7 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 | `created_at`               | string         | ISO 8601 creation timestamp                                                                                                                                                    |
 | `updated_at`               | string         | ISO 8601 last-updated timestamp                                                                                                                                                |
 
-`version_label` (create/update body only) tags the version the write archives — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
+`version_label` (create/update body only) tags the version the write creates — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
 
 ### Agent Version
 
@@ -72,7 +72,7 @@ Immutable archive of one config version, written on create and on every config-c
 | `agent_id`    | string      | Agent this version belongs to                                                                                                                               |
 | `version`     | number      | The archived version number                                                                                                                                 |
 | `config`      | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures)                                           |
-| `label`       | string/null | Optional human tag, e.g. `pre-tone-change`                                                                                                                  |
+| `label`       | string/null | Optional human tag, e.g. `tone-change`                                                                                                                  |
 | `eval_run_id` | string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
 | `created_by_principal_type` | string/null | [Principal](./audit-log.md#principals) that produced this version: `user` or `api_key`                                                              |
 | `created_by_principal_id`   | string/null | Public id of that principal — the key's own `key_…` when a key acted, else `user_…`                                                                 |
@@ -756,7 +756,7 @@ curl https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions/2 \
 </TabItem>
 </Tabs>
 
-Tag the version a write archives with `version_label`:
+Tag the version a write creates with `version_label`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -764,7 +764,7 @@ Tag the version a write archives with `version_label`:
 ```bash
 soat update-agent --agent-id agent_V1StGXR8Z5jdHi6B \
   --instructions "Be concise and cite sources." \
-  --version-label pre-tone-change
+  --version-label tone-change
 ```
 
 </TabItem>
@@ -775,7 +775,7 @@ const { data, error } = await soat.agents.updateAgent({
   path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
   body: {
     instructions: 'Be concise and cite sources.',
-    version_label: 'pre-tone-change',
+    version_label: 'tone-change',
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -790,7 +790,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
   -H "Content-Type: application/json" \
   -d '{
     "instructions": "Be concise and cite sources.",
-    "version_label": "pre-tone-change"
+    "version_label": "tone-change"
   }'
 ```
 
