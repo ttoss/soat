@@ -19,7 +19,11 @@
  * uncached token, so an agent whose prefix is never re-read would pay for the
  * privilege.
  */
-import type { ModelMessage, SystemModelMessage } from 'ai';
+import type {
+  LanguageModelMiddleware,
+  ModelMessage,
+  SystemModelMessage,
+} from 'ai';
 
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
@@ -34,6 +38,9 @@ export type PromptCachingConfig = { enabled: boolean };
  * branch on at the time the prompt is assembled. Each provider reads only its
  * own key and ignores the rest, so the unread spellings cost nothing — and a
  * provider that caches automatically (OpenAI) or not at all is unaffected.
+ * Bedrock is the exception: it refuses a cache point on a model that does not
+ * cache, so a Bedrock model outside `bedrockModelCaches` is built with
+ * `withoutBedrockCachePoints` and never sends one.
  */
 const CACHE_BREAKPOINT: SystemModelMessage['providerOptions'] = {
   anthropic: { cacheControl: { type: 'ephemeral' } },
@@ -167,4 +174,58 @@ export const buildStepCacheBreakpoint = (
     originals.set(marked, last);
     return [...unmarked.slice(0, -1), marked];
   };
+};
+
+/**
+ * The Bedrock models whose Converse API accepts a cache point. Bedrock answers
+ * one on any other model with a `403` rather than ignoring it, so this is an
+ * allowlist: a model missing from it loses caching, never its turn. Matched
+ * anywhere in the id, so cross-region (`us.`, `global.`) profiles and an
+ * inference-profile ARN naming the model are covered; an application
+ * inference-profile ARN names no model and reads as not caching.
+ */
+const BEDROCK_CACHING_MODEL =
+  /anthropic\.claude-(?:3-5-haiku|3-7-sonnet|(?:opus|sonnet|haiku)-\d)|amazon\.nova-/;
+
+export const bedrockModelCaches = (args: { modelId: string }): boolean => {
+  return BEDROCK_CACHING_MODEL.test(args.modelId);
+};
+
+/** The two keys the Bedrock provider reads a cache point from. */
+const BEDROCK_OPTION_KEYS = ['bedrock', 'amazonBedrock'];
+
+const withoutCachePoint = (
+  providerOptions: ProviderOptions | undefined
+): ProviderOptions | undefined => {
+  if (!providerOptions) return providerOptions;
+  const stripped: ProviderOptions = { ...providerOptions };
+  for (const key of BEDROCK_OPTION_KEYS) {
+    const options = providerOptions[key];
+    if (!options) continue;
+    stripped[key] = Object.fromEntries(
+      Object.entries(options).filter(([option]) => {
+        return option !== 'cachePoint';
+      })
+    );
+  }
+  return stripped;
+};
+
+/**
+ * Drops every cache point from a request, at the provider call: the marks are
+ * placed before a `model_route` picks its target, so only the built model
+ * knows whether its Bedrock model would refuse them.
+ */
+export const withoutBedrockCachePoints: LanguageModelMiddleware = {
+  transformParams: async ({ params }) => {
+    return {
+      ...params,
+      prompt: params.prompt.map((message) => {
+        return {
+          ...message,
+          providerOptions: withoutCachePoint(message.providerOptions),
+        };
+      }),
+    };
+  },
 };

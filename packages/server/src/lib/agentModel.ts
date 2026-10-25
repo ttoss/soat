@@ -10,11 +10,13 @@ import { createXai } from '@ai-sdk/xai';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel } from 'ai';
+import { wrapLanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import { assertAmbientCredentialsAllowed } from './ambientCredentials';
 import { egressGuardedFetch } from './egressFetch';
+import { bedrockModelCaches, withoutBedrockCachePoints } from './promptCaching';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
@@ -156,9 +158,11 @@ export const resolveBedrockCredentials = (args: {
  */
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
   const options = resolveBedrockCredentials(args);
-  return createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(
+  const model = createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(
     args.model
   );
+  if (bedrockModelCaches({ modelId: args.model })) return model;
+  return wrapLanguageModel({ model, middleware: withoutBedrockCachePoints });
 };
 
 /**
