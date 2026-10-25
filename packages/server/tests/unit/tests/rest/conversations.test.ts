@@ -104,6 +104,15 @@ describe('Conversations', () => {
       expect(response.body.status).toBe('closed');
     });
 
+    test('a status outside the enum is refused', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, status: 'weird' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/conversations')
@@ -356,6 +365,19 @@ describe('Conversations', () => {
       expect(response.status).toBe(401);
     });
 
+    test('a status outside the enum is refused and not stored', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/conversations/${conversationId}`)
+        .send({ status: 'weird' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}`
+      );
+      expect(getRes.body.status).not.toBe('weird');
+    });
+
     test('missing status returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/conversations/${conversationId}`)
@@ -557,6 +579,22 @@ describe('Conversations', () => {
         .send({});
 
       expect(response.status).toBe(400);
+    });
+
+    test('a role outside the enum is refused and not stored', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'x', role: 'wizard' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+      const roles = listRes.body.data.map((m: { role: string }) => {
+        return m.role;
+      });
+      expect(roles).not.toContain('wizard');
     });
 
     test('a system role is refused with 400', async () => {

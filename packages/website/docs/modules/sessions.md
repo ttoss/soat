@@ -32,7 +32,7 @@ Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./a
 | `id`                     | string          | Public identifier prefixed with `sess_`                                                                                                                  |
 | `agent_id`               | string          | Public ID of the agent this session belongs to; kept after a [shared](./shares.md#using-a-shared-agent) agent is deleted by its owner                    |
 | `conversation_id`        | string          | Public ID of the underlying conversation                                                                                                                 |
-| `status`                 | string          | `open` (default), `closed`, or `expired`                                                                                                                 |
+| `status`                 | string          | `open` (default), `closed`, or `expired`; any other value is `400 VALIDATION_FAILED`                                                                    |
 | `name`                   | string          | Optional display name                                                                                                                                    |
 | `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) linked on create (`actor_` prefix); `null` when none was supplied                                         |
 | `tags`                   | object          | Free-form key-value metadata                                                                                                                             |

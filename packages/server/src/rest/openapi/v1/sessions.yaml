@@ -192,6 +192,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
