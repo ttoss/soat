@@ -58,6 +58,16 @@ const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
 };
 
 /**
+ * A `url` written as an intrinsic (`param`, `sub`, `ref`) is a string only
+ * after deploy, where the create path checks it again; here it counts as
+ * present.
+ */
+const withDeployTimeUrl = (execute: unknown): unknown => {
+  if (!isObjectRecord(execute) || !isObjectRecord(execute.url)) return execute;
+  return { ...execute, url: 'resolved-at-deploy' };
+};
+
+/**
  * Applies the same `execute` rules the REST create/update paths enforce, so a
  * malformed config fails at `validate-formation` rather than part-way through
  * an apply.
@@ -67,8 +77,12 @@ const pushExecuteErrors = (args: {
   basePath: string;
   errors: ValidationError[];
 }): void => {
+  const { type = 'http', execute } = args.properties;
   try {
-    validateHttpExecute({ execute: args.properties.execute });
+    validateHttpExecute({
+      type,
+      execute: withDeployTimeUrl(execute),
+    });
   } catch (error) {
     args.errors.push({
       path: `${args.basePath}.execute`,

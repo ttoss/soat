@@ -1021,7 +1021,9 @@ components:
       nullable: true
       additionalProperties: false
       description: >
-        Execution config for http tools. Supported fields: `url` (required),
+        Execution config for http tools. An `http` tool without a non-empty
+        `url` is `400 VALIDATION_FAILED`, on create and on an update that would
+        leave it without one. Supported fields: `url` (required),
         `method` (default `POST`), `headers`, `body_mode` and `response_mode`. The `url`
         may contain `{paramName}` placeholders (e.g. `/users/{userId}`)
         that are replaced at call time with the corresponding tool argument

@@ -5,6 +5,14 @@ import { validateExecuteAuth } from './toolAuthConfig';
 
 export const RESPONSE_MODES = ['json', 'base64'] as const;
 
+const hasExecuteUrl = (execute: unknown): boolean => {
+  return (
+    isPlainObject(execute) &&
+    typeof execute.url === 'string' &&
+    execute.url !== ''
+  );
+};
+
 export type ResponseMode = (typeof RESPONSE_MODES)[number];
 
 export const parseResponseMode = (value: unknown): ResponseMode => {
@@ -20,9 +28,22 @@ export type ToolFileOutput = {
 
 /**
  * Every write-time rule on an http tool's `execute`, shared by the REST
- * create/update paths and the tools formation module.
+ * create/update paths, inline tool definitions and the tools formation module.
+ *
+ * `type` is required so each site states which type the written tool ends up
+ * as: `execute.url` is an `http` tool's only target, and a tool stored without
+ * one is bindable but fails on every call.
  */
-export const validateHttpExecute = (args: { execute: unknown }): void => {
+export const validateHttpExecute = (args: {
+  type: unknown;
+  execute: unknown;
+}): void => {
+  if (args.type === 'http' && !hasExecuteUrl(args.execute)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'An http tool requires execute.url.'
+    );
+  }
   validateExecuteAuth(args);
   if (!isPlainObject(args.execute)) return;
 

@@ -114,6 +114,7 @@ describe('Agents', () => {
         .send({
           name: 'coerced-tool',
           project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
           parameters: JSON.stringify({ type: 'object', properties: {} }),
         });
 
@@ -127,7 +128,11 @@ describe('Agents', () => {
     test('creates an agent tool with required fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ name: 'my-http-tool', project_id: projectId });
+        .send({
+          name: 'my-http-tool',
+          project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
@@ -239,7 +244,11 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ name: 'get-tool-test', project_id: projectId });
+        .send({
+          name: 'get-tool-test',
+          project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
+        });
       toolId = res.body.id;
     });
 
@@ -273,7 +282,11 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ name: 'update-tool-test', project_id: projectId });
+        .send({
+          name: 'update-tool-test',
+          project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
+        });
       toolId = res.body.id;
     });
 
@@ -309,7 +322,11 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ name: 'delete-tool-test', project_id: projectId });
+        .send({
+          name: 'delete-tool-test',
+          project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
+        });
       toolId = res.body.id;
     });
 
@@ -576,7 +593,11 @@ describe('Agents', () => {
     test('one binding list carries reference and inline entries together', async () => {
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ name: 'preexisting-tool', project_id: projectId });
+        .send({
+          name: 'preexisting-tool',
+          project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
+        });
       const existingToolId = toolRes.body.id;
 
       const response = await authenticatedTestClient(userToken)
@@ -586,14 +607,14 @@ describe('Agents', () => {
           project_id: projectId,
           tool_bindings: [
             { tool_id: existingToolId },
-            { tool: { name: 'inline-tool-merge' } },
+            { tool: { name: 'inline-tool-merge', type: 'client' } },
           ],
         });
 
       expect(response.status).toBe(201);
       expect(response.body.tool_bindings).toEqual([
         { tool_id: existingToolId },
-        { tool: { name: 'inline-tool-merge' } },
+        { tool: { name: 'inline-tool-merge', type: 'client' } },
       ]);
     });
 
@@ -671,7 +692,12 @@ describe('Agents', () => {
     test('accepts an active_tool_ids entry naming a real tool in the project', async () => {
       const tool = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ project_id: projectId, name: 'active-tools-ok', type: 'http' });
+        .send({
+          project_id: projectId,
+          name: 'active-tools-ok',
+          type: 'http',
+          execute: { url: 'https://example.com/hook' },
+        });
       expect(tool.status).toBe(201);
 
       const response = await authenticatedTestClient(userToken)
@@ -843,7 +869,11 @@ describe('Agents', () => {
     test('can update agent with a reference binding', async () => {
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ name: 'tool-for-agent', project_id: projectId });
+        .send({
+          name: 'tool-for-agent',
+          project_id: projectId,
+          execute: { url: 'https://example.com/hook' },
+        });
       const toolId = toolRes.body.id;
 
       const response = await authenticatedTestClient(userToken)
@@ -871,11 +901,15 @@ describe('Agents', () => {
 
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/agents/${freshAgentId}`)
-        .send({ tool_bindings: [{ tool: { name: 'inline-tool-on-update' } }] });
+        .send({
+          tool_bindings: [
+            { tool: { name: 'inline-tool-on-update', type: 'client' } },
+          ],
+        });
 
       expect(response.status).toBe(200);
       expect(response.body.tool_bindings).toEqual([
-        { tool: { name: 'inline-tool-on-update' } },
+        { tool: { name: 'inline-tool-on-update', type: 'client' } },
       ]);
     });
 
@@ -885,7 +919,7 @@ describe('Agents', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tool_bindings: [{ tool: { name: 'to-be-cleared' } }],
+          tool_bindings: [{ tool: { name: 'to-be-cleared', type: 'client' } }],
         });
       const freshAgentId = freshAgentRes.body.id;
 

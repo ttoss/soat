@@ -128,7 +128,11 @@ describe('Triggers', () => {
     httpToolId = (
       await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
-        .send({ project_id: projectId, name: 'triggers-http-tool' })
+        .send({
+          project_id: projectId,
+          name: 'triggers-http-tool',
+          execute: { url: 'http://127.0.0.1:9/unreachable' },
+        })
     ).body.id;
 
     mcpToolId = (

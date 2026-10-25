@@ -129,6 +129,7 @@ describe('Tools', () => {
           name: 'My HTTP Tool',
           type: 'http',
           description: 'A test HTTP tool',
+          execute: { url: 'https://example.com/hook' },
         });
 
       expect(response.status).toBe(201);
@@ -298,6 +299,101 @@ describe('Tools', () => {
     });
   });
 
+  describe('An http tool requires execute.url', () => {
+    const createHttpTool = async (name: string) => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name,
+          type: 'http',
+          execute: { url: 'https://example.com/hook' },
+        });
+      expect(created.status).toBe(201);
+      return created.body.id as string;
+    };
+
+    test.each([
+      ['no execute', { type: 'http' }],
+      ['the default type and no execute', {}],
+      ['a null execute', { type: 'http', execute: null }],
+      ['an execute without url', { type: 'http', execute: { method: 'GET' } }],
+      ['an empty execute.url', { type: 'http', execute: { url: '' } }],
+    ])('create with %s returns 400', async (_label, body) => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({ project_id: projectId, name: 'no-url-tool', ...body });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/execute\.url/);
+    });
+
+    test('an update clearing execute returns 400 and leaves the tool intact', async () => {
+      const id = await createHttpTool('clear-execute-probe');
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${id}`)
+        .send({ execute: null });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const stored = await authenticatedTestClient(userToken).get(
+        `/api/v1/tools/${id}`
+      );
+      expect(stored.body.execute).toEqual({ url: 'https://example.com/hook' });
+    });
+
+    test('an update switching a client tool to http without execute returns 400', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'client-to-http',
+          type: 'client',
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${created.body.id}`)
+        .send({ type: 'http' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an update switching an http tool to client may drop execute', async () => {
+      const id = await createHttpTool('http-to-client');
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${id}`)
+        .send({ type: 'client', execute: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.type).toBe('client');
+      expect(response.body.execute).toBeNull();
+    });
+
+    test('an inline http step tool without execute returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'inline-no-url-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              { id: 'fetch', tool: { name: 'inline-fetch', type: 'http' } },
+            ],
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/execute\.url/);
+    });
+  });
+
   describe('GET /api/v1/tools', () => {
     test('authenticated user can list tools', async () => {
       const response = await authenticatedTestClient(userToken)
@@ -447,7 +543,12 @@ describe('Tools', () => {
     test('authenticated user can delete a tool', async () => {
       const toDelete = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
-        .send({ project_id: projectId, name: 'To Delete', type: 'http' });
+        .send({
+          project_id: projectId,
+          name: 'To Delete',
+          type: 'http',
+          execute: { url: 'https://example.com/hook' },
+        });
       expect(toDelete.status).toBe(201);
 
       const response = await authenticatedTestClient(userToken).delete(
@@ -2159,15 +2260,22 @@ describe('Tools', () => {
       });
     });
 
-    test('calling an http tool with no execute config returns 400', async () => {
+    test('calling an http tool stored without execute returns 400', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
           name: 'no-execute-http-tool',
           type: 'http',
+          execute: { url: 'https://example.com/hook' },
         });
       expect(createRes.status).toBe(201);
+      // The API refuses an http tool without `execute.url`, so the stored row
+      // is planted directly.
+      await db.Tool.update(
+        { execute: null },
+        { where: { publicId: createRes.body.id } }
+      );
 
       const callRes = await authenticatedTestClient(adminToken)
         .post(`/api/v1/tools/${createRes.body.id}/call`)

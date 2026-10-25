@@ -1851,6 +1851,7 @@ describe('MCP tools - happy path', () => {
         name: 'mcp-test-tool',
         type: 'http',
         description: 'A test tool',
+        execute: { url: 'https://example.com/hook' },
       });
       createToolResult = parseResult(res);
       toolId = createToolResult.id;
