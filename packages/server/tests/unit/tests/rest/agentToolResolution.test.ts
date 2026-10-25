@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -37,7 +39,12 @@ describe('POST /api/v1/agents/:agent_id/generate — tool resolution', () => {
 
   describe('http tools', () => {
     test('a stored execute with no url fails the call without sending anything', async () => {
-      const tool = await turn.createTool({ execute: { method: 'GET' } });
+      const tool = await turn.createTool({});
+      // The API refuses an http tool with no url, so the stored row is planted.
+      await db.Tool.update(
+        { execute: { method: 'GET' } },
+        { where: { publicId: tool.id } }
+      );
       const agentId = await bindAgent([tool.id]);
 
       const { results } = await turn.generate({
