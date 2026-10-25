@@ -208,16 +208,13 @@ export const updateConversation = async (args: {
     });
   }
 
-  const updated = await db.Conversation.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
+  const updated = await conversations.reload(conversation);
 
-  const mapped = mapConversation(updated!);
+  const mapped = mapConversation(updated);
 
   emitResourceEvent({
     type: 'conversations.updated',
-    projectId: updated!.projectId,
+    projectId: updated.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
@@ -328,16 +325,13 @@ export const updateConversationTags = async (args: {
   });
   await conversation.update({ tags: newTags });
 
-  const updated = await db.Conversation.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
+  const updated = await conversations.reload(conversation);
 
-  const mapped = mapConversation(updated!);
+  const mapped = mapConversation(updated);
 
   emitResourceEvent({
     type: 'conversations.updated',
-    projectId: updated!.projectId,
+    projectId: updated.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
