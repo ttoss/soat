@@ -504,6 +504,8 @@ Each entry in `plan-formation`'s `changes[]` carries a `diff` object alongside `
 
 For a type whose live state can be read back (most), `diff.current` is the resource as it exists today; for a write-only type (currently only `secret`), it is the last-applied snapshot on the formation resource, which `update-formation` also diffs against.
 
+The `formation_id` a plan compares against is looked up in the plan's project only. An id that names no formation there, including one owned by another project, is treated as absent: every resource plans as a `create`, and nothing about the other project's formation is returned.
+
 Plan and apply share one change rule:
 
 - Only properties **the template declares** are compared; a field the resource carries but the template omits is not a change.
