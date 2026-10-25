@@ -13,8 +13,10 @@ import { load } from 'js-yaml';
  * (`strictFieldsMiddleware` refuses an unknown query parameter on every
  * documented route, and an unknown body field on every write) and `429` (a
  * `requests` quota on the calling key, `requestAttributionMiddleware`), so
- * each one declares all three. Every operation, public ones included, can answer `500`
- * (`errorLogger`'s catch-all), so each one declares it.
+ * each one declares all three. Every operation taking a request body can
+ * answer `413` (the body parser's size limit), and every operation, public
+ * ones included, can answer `500` (`errorLogger`'s catch-all), so each one
+ * declares those.
  *
  * Keys are read as YAML 1.1 too: a generator on that version reads an unquoted
  * `on`, `off`, `yes` or `no` key as a boolean, so the property it names
@@ -101,6 +103,7 @@ const operations = [...specs].flatMap(([file, spec]) => {
         {
           name: `${file} ${String(op.operationId)}`,
           authenticated,
+          takesBody: op.requestBody !== undefined,
           statuses: Object.keys(op.responses),
         },
       ];
@@ -141,11 +144,13 @@ describe('error response spec contract', () => {
     { status: '400', scope: 'authenticated' },
     { status: '401', scope: 'authenticated' },
     { status: '429', scope: 'authenticated' },
+    { status: '413', scope: 'body' },
     { status: '500', scope: 'all' },
   ])('every $scope operation declares $status', ({ status, scope }) => {
     const missing = operations
-      .filter(({ authenticated, statuses }) => {
+      .filter(({ authenticated, takesBody, statuses }) => {
         if (scope === 'authenticated' && !authenticated) return false;
+        if (scope === 'body' && !takesBody) return false;
         return !statuses.includes(status);
       })
       .map(({ name }) => {

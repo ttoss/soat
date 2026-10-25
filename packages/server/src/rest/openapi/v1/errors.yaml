@@ -12,6 +12,14 @@ info:
 paths: {}
 components:
   responses:
+    PayloadTooLarge:
+      description: >-
+        `REQUEST_REJECTED` — the request body is over the size the body parser
+        accepts
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     TooManyRequests:
       description: >-
         `QUOTA_EXCEEDED` — a `requests` quota on the calling API key or its

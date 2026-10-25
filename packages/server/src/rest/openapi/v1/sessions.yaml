@@ -75,6 +75,8 @@ paths:
                     https://soat.ttoss.dev/docs/error-codes#single_session_conflict
                   meta:
                     session_id: sess_abc123
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -218,6 +220,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -306,6 +310,15 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '410':
+          description: >-
+            SESSION_EXPIRED — the session outlived its time-to-live and takes no more messages.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: the session auto-generates and an `enforce`-mode
@@ -391,6 +404,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted.
@@ -460,6 +475,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -532,6 +549,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -642,6 +661,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -678,6 +699,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':

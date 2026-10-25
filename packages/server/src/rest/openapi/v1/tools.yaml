@@ -214,6 +214,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -363,6 +365,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -547,6 +551,15 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            PROJECT_PAUSED — the project is paused, so nothing new starts in it; `error.meta` carries `paused_at` and `pause_reason`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '422':
           description: Unprocessable — tool type cannot be invoked server-side
           content:

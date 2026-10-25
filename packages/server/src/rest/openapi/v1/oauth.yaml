@@ -104,6 +104,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OauthErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
   /authorize:
@@ -228,6 +230,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OauthErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 components:

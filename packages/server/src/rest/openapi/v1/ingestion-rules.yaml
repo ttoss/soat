@@ -175,6 +175,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -332,6 +334,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
