@@ -195,14 +195,14 @@ describe('Session context window (max_context_messages)', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('403 without UpdateSession', async () => {
+    test('404 without UpdateSession', async () => {
       const created = await createSession({ agent_id: unlimitedAgentId });
 
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/sessions/${created.body.id}`)
         .send({ max_context_messages: 2 });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

@@ -693,12 +693,12 @@ describe('Webhooks', () => {
       expect(response.status).toBe(403);
     });
 
-    test('GET /webhooks/:id without permission returns 403', async () => {
+    test('GET /webhooks/:id without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/webhooks/${targetWebhookId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('PUT /webhooks/:id returns 404 for a non-existent webhook', async () => {
@@ -709,12 +709,12 @@ describe('Webhooks', () => {
       expect(response.status).toBe(404);
     });
 
-    test('PUT /webhooks/:id without permission returns 403', async () => {
+    test('PUT /webhooks/:id without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/webhooks/${targetWebhookId}`)
         .send({ name: 'Renamed' });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('PUT /webhooks/:id with an invalid policy_id returns 400', async () => {
@@ -734,12 +734,12 @@ describe('Webhooks', () => {
       expect(response.status).toBe(404);
     });
 
-    test('DELETE /webhooks/:id without permission returns 403', async () => {
+    test('DELETE /webhooks/:id without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/webhooks/${targetWebhookId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('GET /webhook-deliveries without webhook_id returns 400', async () => {
@@ -758,15 +758,15 @@ describe('Webhooks', () => {
       expect(response.status).toBe(404);
     });
 
-    test('GET /webhook-deliveries without permission returns 403', async () => {
+    test('GET /webhook-deliveries without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/webhook-deliveries')
         .query({ webhook_id: targetWebhookId });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
-    test('GET /webhook-deliveries/:deliveryId without permission returns 403', async () => {
+    test('GET /webhook-deliveries/:deliveryId without permission returns 404', async () => {
       const webhook = await db.Webhook.findOne({
         where: { publicId: targetWebhookId },
       });
@@ -783,10 +783,10 @@ describe('Webhooks', () => {
         `/api/v1/webhook-deliveries/${delivery.publicId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
-    test('POST /webhook-deliveries/:deliveryId/redeliver without permission returns 403', async () => {
+    test('POST /webhook-deliveries/:deliveryId/redeliver without permission returns 404', async () => {
       const webhook = await db.Webhook.findOne({
         where: { publicId: targetWebhookId },
       });
@@ -803,7 +803,7 @@ describe('Webhooks', () => {
         `/api/v1/webhook-deliveries/${delivery.publicId}/redeliver`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('POST /webhooks/:id/rotate-secret returns 404 for a non-existent webhook', async () => {
@@ -814,12 +814,12 @@ describe('Webhooks', () => {
       expect(response.status).toBe(404);
     });
 
-    test('POST /webhooks/:id/rotate-secret without permission returns 403', async () => {
+    test('POST /webhooks/:id/rotate-secret without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).post(
         `/api/v1/webhooks/${targetWebhookId}/rotate-secret`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

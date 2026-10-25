@@ -303,7 +303,7 @@ describe('POST /api/v1/memories supersedes', () => {
       expect(response.status).toBe(401);
     });
 
-    test('a caller without the write grant returns 403', async () => {
+    test('a caller without the write grant returns 404', async () => {
       const storeId = await createStore({});
       const target = await seedAt({
         storeId,
@@ -318,7 +318,7 @@ describe('POST /api/v1/memories supersedes', () => {
         supersedes: target,
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('a caller who may write but not update the target returns 403', async () => {
@@ -390,7 +390,7 @@ describe('POST /api/v1/memories supersedes', () => {
       expect(untouched!.invalidatedAt).toBeNull();
     });
 
-    test('a target outside the caller project returns 403', async () => {
+    test('a target outside the caller project returns 404', async () => {
       const storeId = await createStore({});
       const foreignStoreId = await createStore({
         token: adminToken,
@@ -409,7 +409,7 @@ describe('POST /api/v1/memories supersedes', () => {
         supersedes: foreign.body.id,
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
       const untouched = await db.Memory.findOne({
         where: { publicId: foreign.body.id },
       });

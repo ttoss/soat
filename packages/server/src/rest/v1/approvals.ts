@@ -25,6 +25,7 @@ import {
   requireAuth,
   resolveReadProjectIds,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 const approvalsRouter = new Router<Context>();
 
@@ -210,7 +211,14 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
     resource: approvalSrn(approval),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: approval.project_id!,
+      notFound: new DomainError(
+        'APPROVAL_NOT_FOUND',
+        `Approval '${ctx.params.approval_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = approval;
@@ -229,7 +237,14 @@ approvalsRouter.post(
       resource: approvalSrn(approval),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: approval.project_id!,
+        notFound: new DomainError(
+          'APPROVAL_NOT_FOUND',
+          `Approval '${ctx.params.approval_id}' not found.`
+        ),
+      });
     }
 
     const body = ctx.request.body as {
@@ -266,7 +281,14 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
     resource: approvalSrn(approval),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: approval.project_id!,
+      notFound: new DomainError(
+        'APPROVAL_NOT_FOUND',
+        `Approval '${ctx.params.approval_id}' not found.`
+      ),
+    });
   }
 
   // `reason` is guaranteed present by the strict-field middleware (required in

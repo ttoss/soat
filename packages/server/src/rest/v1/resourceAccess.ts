@@ -29,15 +29,20 @@
  * An id that names nothing at all is `404` under both.
  *
  * `actors.ts` and `secrets.ts` are the exception, and say so at their own call
- * sites: they were already per-resource and already answered `403` on a denied
- * read, so they share the preamble at their existing shape. What they gain from
- * it is the `assertCredentialProjectScope` they were missing.
+ * sites: they answer `403` on a denied read inside a project the caller
+ * reaches, so they share the preamble at that shape.
+ *
+ * A resource outside the caller's credential is `404` under every shape, for
+ * the reason {@link beyondReach} gives.
  */
 import type { Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
 import { buildSrn, extractProjectIdsFromPolicies } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
+import { findSharedUse } from 'src/lib/resourceReferences';
+import { findGranteeScope } from 'src/lib/shares';
 import { buildResourceTagContext } from 'src/lib/tags';
+import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
   assertCredentialProjectScope,
@@ -88,14 +93,89 @@ export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
  */
 const beyondReach = async (args: {
   ctx: AuthenticatedContext;
-  scope: ResourceScope;
+  projectPublicId: string;
 }): Promise<boolean> => {
   const named = extractProjectIdsFromPolicies(
-    await args.ctx.authUser.getPolicies(args.scope.projectPublicId)
+    await args.ctx.authUser.getPolicies(args.projectPublicId)
   );
 
   if (named === undefined) return false;
-  return !named.includes(args.scope.projectPublicId);
+  return !named.includes(args.projectPublicId);
+};
+
+/**
+ * Whether the caller's credential is pinned to a project other than the
+ * resource's. Such a credential reaches nothing there whatever its owner's
+ * role, so the resource is beyond it exactly as it is beyond a caller whose
+ * policies name no project there.
+ */
+const outsideCredential = (args: {
+  ctx: AuthenticatedContext;
+  projectPublicId: string;
+}): boolean => {
+  const { authUser } = args.ctx;
+  const scopedProject =
+    authUser.apiKeyProjectPublicId ?? authUser.oauthProjectPublicId;
+  return !!scopedProject && scopedProject !== args.projectPublicId;
+};
+
+/**
+ * Whether a share makes the resource visible from the credential's own
+ * project: a tool or agent an accepted share reaches, or a share addressed to
+ * it. The grantee already reads it there, so a refusal on its own route states
+ * the binding: a `404` would contradict the grantee's own `GET`.
+ */
+const sharedWithCredential = async (args: {
+  ctx: AuthenticatedContext;
+  resourceType: string;
+  resourceId: string;
+}): Promise<boolean> => {
+  const { authUser } = args.ctx;
+  const projectPublicId =
+    authUser.apiKeyProjectPublicId ?? authUser.oauthProjectPublicId;
+  if (!projectPublicId) return false;
+  if (args.resourceType === 'share') {
+    const scope = await findGranteeScope({
+      shareId: args.resourceId,
+      projectPublicId,
+    });
+    return scope !== null;
+  }
+  if (args.resourceType !== 'tool' && args.resourceType !== 'agent') {
+    return false;
+  }
+  const shared = await findSharedUse({
+    resourceType: args.resourceType,
+    id: args.resourceId,
+    projectPublicId,
+  });
+  return shared !== null;
+};
+
+/**
+ * The error for a caller refused an action on one resource they addressed by
+ * id: the module's own `notFound` when the resource is outside their
+ * credential or {@link beyondReach}, `FORBIDDEN` otherwise. The caller named
+ * the resource, never its project, so naming that project back — or answering
+ * anything but the `404` a made-up id gets — confirms the resource exists.
+ *
+ * Every by-id refusal goes through here, so the line between `403` and `404`
+ * is drawn once.
+ */
+export const resourceRefusal = async (args: {
+  ctx: Context;
+  projectPublicId: string;
+  notFound: DomainError;
+}): Promise<DomainError> => {
+  const { ctx, projectPublicId } = args;
+  requireAuth(ctx);
+  if (
+    outsideCredential({ ctx, projectPublicId }) ||
+    (await beyondReach({ ctx, projectPublicId }))
+  ) {
+    return args.notFound;
+  }
+  return new DomainError('FORBIDDEN', 'Forbidden');
 };
 
 export const authorizeResource = async (args: {
@@ -146,13 +226,24 @@ export const authorizeResource = async (args: {
 
   if (!args.scope) throw notFound;
 
-  // A credential pinned to another project keeps its own refusal, with the
-  // remedy in the message; without this it would read as a plain denial.
-  assertCredentialProjectScope({
-    ctx,
-    requestedProjectPublicId: args.scope.projectPublicId,
-    action: args.action,
-  });
+  // Refused before `isAllowed`, which an admin-owned key would pass, and
+  // recorded here because nothing else records it.
+  if (outsideCredential({ ctx, projectPublicId: args.scope.projectPublicId })) {
+    const shared = await sharedWithCredential({
+      ctx,
+      resourceType: args.resourceType,
+      resourceId: args.resourceId,
+    });
+    if (shared) {
+      assertCredentialProjectScope({
+        ctx,
+        requestedProjectPublicId: args.scope.projectPublicId,
+        action: args.action,
+      });
+    }
+    recordAuthorizationDecision(ctx, { action: args.action, allowed: false });
+    throw notFound;
+  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: args.scope.projectPublicId,
@@ -172,11 +263,12 @@ export const authorizeResource = async (args: {
   });
 
   if (!allowed) {
-    const hide =
-      args.onDenied === 'hide' ||
-      (await beyondReach({ ctx, scope: args.scope }));
-
-    throw hide ? notFound : new DomainError('FORBIDDEN', 'Forbidden');
+    if (args.onDenied === 'hide') throw notFound;
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: args.scope.projectPublicId,
+      notFound,
+    });
   }
 
   return {

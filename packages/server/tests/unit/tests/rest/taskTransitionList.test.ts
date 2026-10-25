@@ -226,12 +226,12 @@ describe('Task transition list', () => {
       expect(res.status).toBe(401);
     });
 
-    test('returns 403 without tasks:GetTask', async () => {
+    test('returns 404 without tasks:GetTask', async () => {
       const taskId = await createTask();
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/tasks/${taskId}/transitions`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('pages with limit and cursor', async () => {

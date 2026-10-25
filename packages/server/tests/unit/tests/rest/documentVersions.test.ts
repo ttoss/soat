@@ -100,14 +100,14 @@ describe('Document versions', () => {
       expect(await versionsOf(id)).toHaveLength(1);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const id = await createDocument({ content: 'Guarded.' });
 
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/documents/${id}/versions`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unauthenticated returns 401', async () => {
@@ -212,14 +212,14 @@ describe('Document versions', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const id = await createDocument({ content: 'Guarded.' });
 
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/documents/${id}/versions/1`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('a version that is not a number returns 400', async () => {
@@ -323,14 +323,14 @@ describe('Document versions', () => {
       expect(await versionsOf(id)).toHaveLength(1);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const id = await createDocument({ content: 'Guarded.' });
 
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/documents/${id}/versions/1/restore`)
         .send({});
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 });

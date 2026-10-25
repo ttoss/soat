@@ -14,6 +14,7 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 /**
  * Workflow state-machine version history.
@@ -64,7 +65,14 @@ const authorizeWorkflow = async (
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: workflow.project_id!,
+      notFound: new DomainError(
+        'WORKFLOW_NOT_FOUND',
+        `Workflow '${workflowId}' not found.`
+      ),
+    });
   }
   return workflowId;
 };

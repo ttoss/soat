@@ -235,14 +235,14 @@ describe('Task transition payload', () => {
       expect(res.status).toBe(401);
     });
 
-    test('returns 403 without tasks:TransitionTask and writes nothing', async () => {
+    test('returns 404 without tasks:TransitionTask and writes nothing', async () => {
       const taskId = await createInReview();
       const res = await fire(
         taskId,
         { transition: 'publish', payload: { approved: true } },
         noPermToken
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
       expect((await getTask(taskId)).payload).toEqual({ topic: 'keep' });
     });
   });

@@ -361,12 +361,12 @@ describe('Documents', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without GetDocument permission returns 403', async () => {
+    test('user without GetDocument permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/documents/${documentId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     // The permission check read `doc.projectId` from a mapped shape that only
@@ -451,7 +451,7 @@ describe('Documents', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without DeleteDocument permission returns 403', async () => {
+    test('user without DeleteDocument permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({ project_id: projectId, content: 'Protect me from delete.' });
@@ -461,7 +461,7 @@ describe('Documents', () => {
         `/api/v1/documents/${documentId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -815,25 +815,25 @@ describe('Documents', () => {
       expect(response.status).toBe(404);
     });
 
-    test('GET tags without GetDocument permission returns 403', async () => {
+    test('GET tags without GetDocument permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/documents/${tagDocId}/tags`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
-    test('PUT tags without UpdateDocument permission returns 403', async () => {
+    test('PUT tags without UpdateDocument permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/documents/${tagDocId}/tags`)
         .send({ region: 'us' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
-    test('PATCH tags without UpdateDocument permission returns 403', async () => {
+    test('PATCH tags without UpdateDocument permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/documents/${tagDocId}/tags`)
         .send({ version: '2' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -1869,7 +1869,7 @@ describe('Documents', () => {
       expect(res.status).toBe(404);
     });
 
-    test('without GetDocument permission returns 403', async () => {
+    test('without GetDocument permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
@@ -1880,7 +1880,7 @@ describe('Documents', () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/documents/${createRes.body.id}/status`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('self-recovers a document stuck in processing (issue #4)', async () => {
@@ -2065,7 +2065,7 @@ describe('Documents', () => {
       expect(res.status).toBe(401);
     });
 
-    test('returns 403 without IngestDocument permission', async () => {
+    test('returns 404 without IngestDocument permission', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
         filename: 'reingest-403.pdf',
@@ -2079,7 +2079,7 @@ describe('Documents', () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/documents/${docId}/ingest`)
         .send({});
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

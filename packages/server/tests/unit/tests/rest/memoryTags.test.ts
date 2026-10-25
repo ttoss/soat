@@ -135,12 +135,12 @@ describe('MemoryStoreTags', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/memory-stores/${memoryStoreId}/tags`)
         .send({ env: 'prod' });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent memoryStore returns 404', async () => {
@@ -221,12 +221,12 @@ describe('MemoryStoreTags', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/memories/${entryId}/tags`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent entry returns 404', async () => {

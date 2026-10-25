@@ -272,12 +272,12 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     expect(toolRequests).toHaveLength(0);
   });
 
-  test('user without permission returns 403', async () => {
+  test('user without permission returns 404', async () => {
     const item = await seed();
 
     const res = await authenticatedTestClient(noPermToken)
       .post(`/api/v1/approvals/${item.id}/approve`)
       .send({ tool_context: { turn_token: 'x' } });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });

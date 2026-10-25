@@ -24,6 +24,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
 export const chatsRouter = new Router<Context>();
@@ -52,7 +53,14 @@ const checkChatPermission = async (
     resource,
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: chat.project_id,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Chat '${chat.id}' not found.`
+      ),
+    });
   }
   return allowed;
 };

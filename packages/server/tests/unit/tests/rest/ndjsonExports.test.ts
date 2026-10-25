@@ -268,12 +268,12 @@ describe('NDJSON exports', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a caller without the export permission returns 403', async () => {
+    test('a caller without the export permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/memory-stores/${memoryStoreId}/export`
       );
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('an unknown store returns 404', async () => {

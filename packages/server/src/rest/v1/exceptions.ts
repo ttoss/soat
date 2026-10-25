@@ -21,6 +21,7 @@ import {
   requireAuth,
   resolveReadProjectIds,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 const exceptionsRouter = new Router<Context>();
 
@@ -75,7 +76,14 @@ exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
     resource: exceptionSrn(exception),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: exception.project_id!,
+      notFound: new DomainError(
+        'EXCEPTION_NOT_FOUND',
+        `Exception '${ctx.params.exception_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = exception;
@@ -94,7 +102,14 @@ exceptionsRouter.post(
       resource: exceptionSrn(exception),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: exception.project_id!,
+        notFound: new DomainError(
+          'EXCEPTION_NOT_FOUND',
+          `Exception '${ctx.params.exception_id}' not found.`
+        ),
+      });
     }
 
     ctx.body = await acknowledgeException({
@@ -117,7 +132,14 @@ exceptionsRouter.post(
       resource: exceptionSrn(exception),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: exception.project_id!,
+        notFound: new DomainError(
+          'EXCEPTION_NOT_FOUND',
+          `Exception '${ctx.params.exception_id}' not found.`
+        ),
+      });
     }
 
     const body = ctx.request.body as { note?: string };

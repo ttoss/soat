@@ -15,6 +15,7 @@ import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
 import { verifyFileDownloadToken } from '../../lib/fileDownloadToken';
 import { type AuthenticatedContext, requireAuth } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const collectStreamToBuffer = async (args: {
@@ -27,10 +28,14 @@ const collectStreamToBuffer = async (args: {
   return Buffer.concat(chunks);
 };
 
+const fileNotFound = () => {
+  return new DomainError('RESOURCE_NOT_FOUND', 'File not found.');
+};
+
 const ensureFileExists = async (args: { ctx: Context }) => {
   const file = await getFile({ id: args.ctx.params.file_id });
   if (!file) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'File not found.');
+    throw fileNotFound();
   }
 
   return file;
@@ -63,7 +68,11 @@ const ensureAllowed = async (args: {
   });
 
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx: args.ctx,
+      projectPublicId: args.file.project_id!,
+      notFound: fileNotFound(),
+    });
   }
 };
 
@@ -87,7 +96,7 @@ const registerDeleteFileRoute = (args: { filesRouter: Router<Context> }) => {
       include: [{ model: db.Project, as: 'project' }],
     });
     if (!file) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'File not found');
+      throw fileNotFound();
     }
 
     await ensureAllowed({
@@ -103,7 +112,7 @@ const registerDeleteFileRoute = (args: { filesRouter: Router<Context> }) => {
 
     const result = await deleteFile({ id: ctx.params.file_id });
     if (result === null) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'File not found');
+      throw fileNotFound();
     }
 
     ctx.status = 204;

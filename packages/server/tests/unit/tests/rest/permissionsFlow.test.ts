@@ -718,9 +718,9 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .get(`/api/v1/files/${fileInProjectB}`)
       .set('Authorization', `Bearer ${apiKey}`);
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    expect(response.body.error.message).toBe('File not found.');
   });
 });
 
@@ -1030,9 +1030,9 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
       `/api/v1/files/${fileInProjectB}`
     );
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    expect(response.body.error.message).toBe('File not found.');
   });
 
   test('listing files filtered by the allowed project returns results', async () => {

@@ -35,6 +35,7 @@ import {
   resolveWriteProjectId,
 } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
+import { resourceRefusal } from './resourceAccess';
 
 const tasksRouter = new Router<Context>();
 
@@ -109,7 +110,14 @@ tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = task;
@@ -129,7 +137,14 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = await getTaskHistory({
@@ -152,7 +167,14 @@ tasksRouter.get('/tasks/:task_id/transitions', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = await listTaskTransitions({
@@ -219,7 +241,14 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   const body = ctx.request.body as {
@@ -250,7 +279,14 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   const body = ctx.request.body as {
@@ -303,7 +339,14 @@ tasksRouter.post('/tasks/:task_id/migrate', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   const body = ctx.request.body as {
@@ -333,7 +376,14 @@ tasksRouter.post('/tasks/:task_id/pause', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   const body = ctx.request.body as { reason?: unknown };
@@ -359,7 +409,14 @@ tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = await resumeTask({
@@ -384,7 +441,14 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: task.project_id!,
+      notFound: new DomainError(
+        'TASK_NOT_FOUND',
+        `Task '${ctx.params.task_id}' not found.`
+      ),
+    });
   }
 
   await deleteTask({ id: ctx.params.task_id });

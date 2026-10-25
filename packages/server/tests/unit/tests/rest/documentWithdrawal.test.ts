@@ -205,14 +205,14 @@ describe('Document withdrawal', () => {
       expect(response.body.error.code).toBe('DOCUMENT_ALREADY_WITHDRAWN');
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const id = await createDocument('Guarded.');
 
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/documents/${id}/withdraw`)
         .send({});
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unauthenticated returns 401', async () => {
@@ -270,7 +270,7 @@ describe('Document withdrawal', () => {
       expect(JSON.stringify(search.body)).toContain(id);
     }, 60_000);
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const id = await createDocument('Guarded.');
       await withdraw(id);
 
@@ -278,7 +278,7 @@ describe('Document withdrawal', () => {
         .post(`/api/v1/documents/${id}/versions/1/restore`)
         .send({});
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     /**

@@ -137,7 +137,7 @@ describe('MemoryAssertions', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const memoryStoreId = await createMemoryStore('Forbidden History');
       const created = await writeMemory({
         memoryStoreId,
@@ -148,7 +148,7 @@ describe('MemoryAssertions', () => {
         `/api/v1/memories/${created.id}/assertions`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns 404 for a non-existent memory', async () => {
@@ -324,14 +324,14 @@ describe('MemoryAssertions', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const memoryStoreId = await createMemoryStore('Ledger Forbidden');
 
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/memory-stores/${memoryStoreId}/assertions`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns 404 for a non-existent memory store', async () => {

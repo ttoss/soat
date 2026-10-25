@@ -210,11 +210,9 @@ describe('Chains', () => {
       });
     });
 
-    // A project-scoped key hitting another project's chain gets its own
-    // binding error, with the remedy in the message, rather than the opaque
-    // answer an id-scoped lookup produced. It still
-    // never returns the row.
-    test('a chain outside the credential project reports the key binding', async () => {
+    // A chain outside a project-scoped key's project answers as a made-up id
+    // does, so the key learns nothing about which ids exist there.
+    test('a chain outside the credential project is 404', async () => {
       const own = await authenticatedTestClient(scopedKey).get(
         `/api/v1/chains/${activeChainId}`
       );
@@ -223,8 +221,8 @@ describe('Chains', () => {
       const res = await authenticatedTestClient(scopedKey).get(
         `/api/v1/chains/${otherProjectChainId}`
       );
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('CHAIN_NOT_FOUND');
     });
 
     test('an unknown chain returns 404', async () => {

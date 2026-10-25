@@ -276,7 +276,7 @@ describe('Workflow versions', () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/workflows/${other.body.id}/versions`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('unauthenticated request returns 401', async () => {

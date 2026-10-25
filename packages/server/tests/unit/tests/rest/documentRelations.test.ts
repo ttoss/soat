@@ -174,7 +174,7 @@ describe('Document relations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('a caller without update permission returns 403', async () => {
+    test('a caller without update permission returns 404', async () => {
       const from = await createDocument({ filename: 'forbidden.txt' });
       const to = await createDocument({ filename: 'forbidden-to.txt' });
 
@@ -185,7 +185,7 @@ describe('Document relations', () => {
         token: noPermToken,
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -376,7 +376,7 @@ describe('Document relations', () => {
       expect(response.status).toBe(404);
     });
 
-    test('a caller without update permission returns 403', async () => {
+    test('a caller without update permission returns 404', async () => {
       const from = await createDocument({ filename: 'delete-forbidden.txt' });
       const to = await createDocument({ filename: 'delete-forbidden-to.txt' });
       const created = await relate({ from, type: 'cites', to });
@@ -385,7 +385,7 @@ describe('Document relations', () => {
         `/api/v1/documents/${from}/relations/${created.body.id}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 });

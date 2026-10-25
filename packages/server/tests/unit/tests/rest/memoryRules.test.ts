@@ -239,16 +239,16 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(401);
     });
 
-    test('403 without the action', async () => {
+    test('404 without the action', async () => {
       const res = await createRule(
         { on: 'generations.completed' },
         noPermToken
       );
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
-    test('403 for a store in a project the caller cannot reach', async () => {
+    test('404 for a store in a project the caller cannot reach', async () => {
       const res = await authenticatedTestClient(scopedToken)
         .post('/api/v1/memory-rules')
         .send({
@@ -256,7 +256,7 @@ describe('Memory Rules API', () => {
           on: 'generations.completed',
         });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -300,11 +300,11 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(401);
     });
 
-    test('403 listing a store the caller cannot reach', async () => {
+    test('404 listing a store the caller cannot reach', async () => {
       const res = await authenticatedTestClient(scopedToken).get(
         `/api/v1/memory-rules?memory_store_id=${otherStoreId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -335,13 +335,13 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(401);
     });
 
-    test('403 without the action', async () => {
+    test('404 without the action', async () => {
       const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/memory-rules/${created.body.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -415,13 +415,13 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(401);
     });
 
-    test('403 without the action', async () => {
+    test('404 without the action', async () => {
       const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/memory-rules/${created.body.id}`)
         .send({ enabled: false });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -454,13 +454,13 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(401);
     });
 
-    test('403 without the action', async () => {
+    test('404 without the action', async () => {
       const created = await createRule({ on: 'generations.completed' });
 
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/memory-rules/${created.body.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
