@@ -460,6 +460,34 @@ resources:
       expect(res.body.changes[0].physical_resource_id).toBeUndefined();
     });
 
+    test("plan with another project's formation_id reveals none of its resources", async () => {
+      const otherProjectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: `Formations Plan Other ${Date.now()}` });
+      const foreign = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: otherProjectRes.body.id,
+          name: `plan-foreign-${Date.now()}`,
+          template: simpleTemplate,
+        });
+      expect(foreign.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: foreign.body.id,
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.changes).toHaveLength(1);
+      expect(res.body.changes[0].action).toBe('create');
+      expect(res.body.changes[0].physical_resource_id).toBeUndefined();
+      expect(res.body.changes[0].diff.current).toBeNull();
+    });
+
     test('invalid template returns 400', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/plan')
