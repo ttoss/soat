@@ -1,10 +1,10 @@
 import { db } from 'src/db';
-import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { getGenerationPendingState } from 'src/lib/generationPendingState';
 import {
   createGenerationRecord,
   updateGenerationRecord,
 } from 'src/lib/generations';
+import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -405,7 +405,11 @@ describe('Generations', () => {
       expect(response.status).toBe(200);
       expect(response.body.source).toBe('eval');
       const schema = getMergedOpenApiSpec().components.schemas.Generation;
-      const declared = Object.keys(schema.properties ?? {});
+      const properties =
+        typeof schema === 'object' && schema !== null && 'properties' in schema
+          ? schema.properties
+          : {};
+      const declared = Object.keys(properties ?? {});
       expect(
         Object.keys(response.body).filter((key) => {
           return !declared.includes(key);

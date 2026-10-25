@@ -78,7 +78,7 @@ export const transitionRefusal = (args: {
     return new DomainError(
       'TASK_TRANSITION_CONFLICT',
       `Task '${task.publicId}' has transition '${task.pendingTransition}' pending approval.`,
-      { pendingTransition: task.pendingTransition }
+      { pending_transition: task.pendingTransition }
     );
   }
   const valid = findValidTransition({
@@ -90,7 +90,7 @@ export const transitionRefusal = (args: {
     return new DomainError(
       'TASK_TRANSITION_CONFLICT',
       `Transition '${transition.name}' is not valid from state '${task.state}'.`,
-      { transition: transition.name, fromState: task.state }
+      { transition: transition.name, from_state: task.state }
     );
   }
   const parks =

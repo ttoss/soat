@@ -56,7 +56,7 @@ describe('strictFieldsMiddleware', () => {
     expect(thrown).toBeDefined();
     expect((thrown as { code?: string }).code).toBe('VALIDATION_FAILED');
     expect(
-      (thrown as { meta?: { unknownFields?: string[] } }).meta?.unknownFields
+      (thrown as { meta?: { unknown_fields?: string[] } }).meta?.unknown_fields
     ).toEqual(['bogus']);
   });
 
@@ -72,7 +72,7 @@ describe('strictFieldsMiddleware', () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(
-      (thrown as { meta?: { unknownFields?: string[] } }).meta?.unknownFields
+      (thrown as { meta?: { unknown_fields?: string[] } }).meta?.unknown_fields
     ).toEqual(['knowledge_config.bogus']);
   });
 
@@ -89,7 +89,7 @@ describe('strictFieldsMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
     expect((thrown as { code?: string }).code).toBe('VALIDATION_FAILED');
     expect(
-      (thrown as { meta?: { missingFields?: string[] } }).meta?.missingFields
+      (thrown as { meta?: { missing_fields?: string[] } }).meta?.missing_fields
     ).toEqual(['name']);
   });
 

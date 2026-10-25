@@ -4267,7 +4267,7 @@ resources:
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'knowledge_config.extraction',
       ]);
     });

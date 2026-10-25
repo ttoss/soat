@@ -2211,7 +2211,7 @@ describe('Agents', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'stop_conditions.0.toolName',
       ]);
     });
@@ -2222,7 +2222,7 @@ describe('Agents', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'step_rules.0.active_tools',
       ]);
     });
@@ -2237,7 +2237,7 @@ describe('Agents', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'boundary_policy.statement.0.resources',
       ]);
     });
