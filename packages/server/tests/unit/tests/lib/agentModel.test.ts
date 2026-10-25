@@ -207,11 +207,11 @@ describe('buildModel', () => {
       buildModel({
         provider: 'bedrock',
         secretValue: 'ABSKexample',
-        model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        model: 'anthropic.claude-sonnet-4-20250514-v1:0',
         config: { region: 'us-west-2' },
       })
     );
-    expect(model.modelId).toBe('anthropic.claude-3-5-sonnet-20241022-v2:0');
+    expect(model.modelId).toBe('anthropic.claude-sonnet-4-20250514-v1:0');
     expect(model.config.baseUrl()).toBe(
       'https://bedrock-runtime.us-west-2.amazonaws.com'
     );
