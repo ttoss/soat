@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.96.0](https://github.com/ttoss/soat/compare/v0.95.0...v0.96.0) (2026-10-25)
+
+### Bug Fixes
+
+* **api:** express ingestion-rule exactly-one-of tool_id/agent_id in the request schema ([#1739](https://github.com/ttoss/soat/issues/1739)) ([100ee98](https://github.com/ttoss/soat/commit/100ee98949938ca0e595744bed324f27819d3d5a))
+
 # [0.95.0](https://github.com/ttoss/soat/compare/v0.94.1...v0.95.0) (2026-10-25)
 
 **Note:** Version bump only for package @soat/cli

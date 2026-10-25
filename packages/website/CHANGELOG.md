@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.96.0](https://github.com/ttoss/soat/compare/v0.95.0...v0.96.0) (2026-10-25)
+
+* fix(api-keys)!: keep a key narrowed by policy_ids from writing a key outside its boundary (#1738) ([3f04091](https://github.com/ttoss/soat/commit/3f04091c877cedc76107688ba55b8f454f0529ea)), closes [#1738](https://github.com/ttoss/soat/issues/1738)
+* fix(conversations)!: filter `?actor_id=` on the conversation's owner (#1737) ([5c51c0f](https://github.com/ttoss/soat/commit/5c51c0f2a93c7be5d4f6c90e77a522dcfa464501)), closes [#1737](https://github.com/ttoss/soat/issues/1737)
+
+### BREAKING CHANGES
+
+* `GET /conversations?actor_id=X` lists the conversations owned by X; a conversation where X only authored a message is no longer listed.
+* a key narrowed by policy_ids can no longer mint or update a key with no, empty, or other policy_ids; such writes answer 403 API_KEY_POLICY_BOUNDARY. POST /api-keys without policy_ids under a narrowed key inherits the caller's boundary.
+
 # [0.95.0](https://github.com/ttoss/soat/compare/v0.94.1...v0.95.0) (2026-10-25)
 
 * fix(iam)!: answer 404 for a by-id resource outside the caller's project (#1735) ([80238ec](https://github.com/ttoss/soat/commit/80238ec442d8c3af046ae1b3d87871e069c07389)), closes [#1735](https://github.com/ttoss/soat/issues/1735)
