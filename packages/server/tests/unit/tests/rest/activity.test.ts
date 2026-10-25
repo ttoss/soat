@@ -129,6 +129,26 @@ describe('Activity', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test.each(['kind', 'severity'])(
+      'a %s outside the vocabulary is refused with its allowed values',
+      async (name) => {
+        const res = await listActivity(`&${name}=bogus`);
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.meta.parameter).toBe(name);
+        expect(res.body.error.meta.invalid).toEqual(['bogus']);
+        expect(res.body.error.meta.allowed.length).toBeGreaterThan(0);
+      }
+    );
+
+    test('a repeated kind is refused: the filter names one value', async () => {
+      const res = await listActivity(
+        '&kind=schedule_fired&kind=action_executed'
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('filters by kind', async () => {
       await emitActivityEntry({
         projectId: projectInternalId,
@@ -331,7 +351,7 @@ describe('Activity', () => {
       const first = await listActivity('&limit=1');
       expect(first.body.next_cursor).toEqual(expect.any(String));
       const res = await listActivity(
-        `&limit=1&severity=error&cursor=${encodeURIComponent(first.body.next_cursor)}`
+        `&limit=1&severity=critical&cursor=${encodeURIComponent(first.body.next_cursor)}`
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_CURSOR');

@@ -26,7 +26,7 @@ describe('toProviderDomainError', () => {
     expect(error?.httpStatus).toBe(502);
     expect(error?.message).toContain('402');
     expect(error?.message).toContain('insufficient credits');
-    expect(error?.meta?.providerStatusCode).toBe(402);
+    expect(error?.meta?.provider_status_code).toBe(402);
   });
 
   test('unwraps RetryError to the last APICallError', () => {
@@ -109,7 +109,7 @@ describe('toProviderDomainError', () => {
     expect(error?.code).toBe('AI_PROVIDER_ERROR');
     expect(error?.httpStatus).toBe(502);
     expect(error?.message).toContain('upstream capacity exceeded');
-    expect(error?.meta?.providerStatusCode).toBe(529);
+    expect(error?.meta?.provider_status_code).toBe(529);
   });
 
   // Unmapped, a violated forced `tool_choice` reads as a runtime fault (500).

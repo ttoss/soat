@@ -1,13 +1,40 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { listActivity } from 'src/lib/activity';
+import {
+  ACTIVITY_KINDS,
+  ACTIVITY_SEVERITIES,
+  type ActivityFilters,
+  listActivity,
+} from 'src/lib/activity';
 import { streamActivityNdjson } from 'src/lib/activityExport';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parseEnumQuery,
+  parsePagination,
+  requireAuth,
+  resolveReadProjectIds,
+} from './helpers';
 import { sendNdjson } from './ndjsonResponse';
 
 const activityRouter = new Router<Context>();
+
+/** The filters a caller may add, read once for the feed and its export. */
+const readActivityFilters = (
+  ctx: Context
+): Omit<ActivityFilters, 'projectIds'> => {
+  return {
+    kind: parseEnumQuery({ ctx, name: 'kind', allowed: ACTIVITY_KINDS }),
+    severity: parseEnumQuery({
+      ctx,
+      name: 'severity',
+      allowed: ACTIVITY_SEVERITIES,
+    }),
+    agentId: ctx.query.agent_id as string | undefined,
+    generationId: ctx.query.generation_id as string | undefined,
+    orchestrationRunId: ctx.query.orchestration_run_id as string | undefined,
+  };
+};
 
 activityRouter.get('/activity', async (ctx: Context) => {
   requireAuth(ctx);
@@ -23,11 +50,7 @@ activityRouter.get('/activity', async (ctx: Context) => {
 
   ctx.body = await listActivity({
     projectIds: projectIds ?? [],
-    kind: ctx.query.kind as string | undefined,
-    severity: ctx.query.severity as string | undefined,
-    agentId: ctx.query.agent_id as string | undefined,
-    generationId: ctx.query.generation_id as string | undefined,
-    orchestrationRunId: ctx.query.orchestration_run_id as string | undefined,
+    ...readActivityFilters(ctx),
     ...parsePagination(ctx),
   });
 });
@@ -54,11 +77,7 @@ activityRouter.get('/activity/export', async (ctx: Context) => {
     filename: `activity-${projectPublicId}.ndjson`,
     lines: streamActivityNdjson({
       projectIds: projectIds ?? [],
-      kind: ctx.query.kind as string | undefined,
-      severity: ctx.query.severity as string | undefined,
-      agentId: ctx.query.agent_id as string | undefined,
-      generationId: ctx.query.generation_id as string | undefined,
-      orchestrationRunId: ctx.query.orchestration_run_id as string | undefined,
+      ...readActivityFilters(ctx),
     }),
   });
 });

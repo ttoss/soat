@@ -22,6 +22,9 @@ firing record holds the outcome.
 [`GET /api/v1/triggers/count`](/docs/api/triggers/count-triggers) returns `{ "count": n }` for the same project and
 filters (`type`, `target_type`) the list takes, under the same
 `triggers:ListTriggers` permission.
+Each filter takes one value from its enum; any other value, an empty one or a
+repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in
+`meta.allowed`.
 
 > See the [Permissions Reference](../permissions.md#triggers) for the IAM action
 > strings for this module.
@@ -51,7 +54,7 @@ filters (`type`, `target_type`) the list takes, under the same
 | `active`       | boolean                                 | Inactive triggers never fire                                                      |
 | `policy_id`    | string \| null                          | Optional boundary policy that further restricts firings (see [Run-as Identity](#run-as-identity)) |
 | `secret`       | string                                  | Webhook type only. Returned **only** on create, rotate, and `GET …/secret`        |
-| `next_fire_at` | string \| null                          | Read-only. Schedule type only. Server-computed next fire time                     |
+| `next_fire_at` | string \| null                          | Read-only. Schedule type only. Server-computed next fire time; `null` while inactive, recomputed from now on re-activation |
 | `created_at`   | string                                  | ISO 8601 creation timestamp                                                       |
 | `updated_at`   | string                                  | ISO 8601 last-updated timestamp                                                   |
 

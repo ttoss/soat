@@ -1,4 +1,9 @@
-import { assertCallerPath, normalizePath, systemPath } from './filePaths';
+import {
+  assertCallerPath,
+  filenameFromPath,
+  normalizePath,
+  systemPath,
+} from './filePaths';
 
 /**
  * Where a document is filed.
@@ -39,8 +44,9 @@ export const resolveDocumentFiling = (args: {
       filename: `${args.publicId}.txt`,
     };
   }
+  const normalizedPath = normalizePath(rawPath);
   return {
-    normalizedPath: normalizePath(rawPath),
-    filename: args.filename,
+    normalizedPath,
+    filename: args.filename ?? filenameFromPath(normalizedPath),
   };
 };

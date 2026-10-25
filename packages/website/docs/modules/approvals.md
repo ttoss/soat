@@ -172,7 +172,9 @@ Expiry is enforced server-side in **both directions**:
   [continuation generation](#how-producers-suspend-and-resume).
 - **Edit-then-approve** replaces the arguments via `arguments` on the approve
   call. They must be a JSON object satisfying the tool's `parameters` schema
-  (`400 APPROVAL_INVALID_EDIT` otherwise); the original stays in
+  (`400 APPROVAL_INVALID_EDIT` otherwise). An item with no `proposed_action`
+  (`task_transition`) has nothing to edit, so `arguments` on it is
+  `400 APPROVAL_INVALID_EDIT` and the item stays `pending`. The original stays in
   `proposed_action`, the edit in `edited_arguments`. Editing needs more
   authority; see [Who may resolve](#who-may-resolve).
 - **`tool_context`** on the approve call is forwarded to the approved action

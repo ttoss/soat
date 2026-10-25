@@ -189,7 +189,10 @@ export const validateToolDefinition = async (args: {
     validateSoatActions(definition.actions);
   }
 
-  validateHttpExecute({ execute: definition.execute });
+  validateHttpExecute({
+    type: definition.type ?? 'http',
+    execute: definition.execute,
+  });
 
   // A `context_keys` entry is a `tool_context` key, held to the same
   // header-name grammar (`toolContext.ts`) so an entry cannot be one that no
@@ -333,9 +336,6 @@ const validateToolUpdateTemplates = async (params: {
   const touchesConfig = args.execute !== undefined || args.mcp !== undefined;
   if (!touchesConfig && args.presetParameters === undefined) return;
 
-  if (touchesConfig) {
-    validateHttpExecute({ execute: args.execute });
-  }
   assertValidToolTemplateTokens({
     execute: args.execute,
     mcp: args.mcp,
@@ -347,6 +347,22 @@ const validateToolUpdateTemplates = async (params: {
       projectId: params.projectId,
     });
   }
+};
+
+/**
+ * Checked against the tool the write leaves behind, so switching to `http` or
+ * clearing `execute` cannot leave an http tool without a target.
+ */
+const validateUpdatedExecute = (params: {
+  args: ToolUpdateArgs;
+  tool: InstanceType<typeof db.Tool>;
+}): void => {
+  const { args, tool } = params;
+  if (args.type === undefined && args.execute === undefined) return;
+  validateHttpExecute({
+    type: args.type ?? tool.type,
+    execute: args.execute === undefined ? tool.execute : args.execute,
+  });
 };
 
 /** Runs the per-type validation for an update against the existing tool row. */
@@ -372,6 +388,7 @@ const validateToolUpdate = async (params: {
   if (args.contextKeys !== undefined) {
     assertValidToolContextAllowlist(args.contextKeys);
   }
+  validateUpdatedExecute({ args, tool });
   await validateToolUpdateTemplates({ args, projectId: tool.projectId });
 };
 

@@ -112,7 +112,11 @@ export const validateRequestBody = (args: {
     return typeError.field;
   });
 
-  const lists = { unknownFields, missingFields, invalidFields };
+  const lists = {
+    unknown_fields: unknownFields,
+    missing_fields: missingFields,
+    invalid_fields: invalidFields,
+  };
   const parts = [
     unknownFields.length > 0 && `Unknown field(s): ${unknownFields.join(', ')}`,
     missingFields.length > 0 &&

@@ -31,6 +31,20 @@ const assertEmbeddingsRequest = (
     );
   }
 
+  // An embedding provider rejects an empty text, which would surface as a 500.
+  if (
+    body.input === '' ||
+    (Array.isArray(body.inputs) &&
+      body.inputs.some((text) => {
+        return text === '';
+      }))
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      '`input` and every `inputs` value must be a non-empty string.'
+    );
+  }
+
   if (!hasSingle && !hasBatch) {
     throw new DomainError(
       'VALIDATION_FAILED',

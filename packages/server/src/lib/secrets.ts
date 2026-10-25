@@ -257,7 +257,7 @@ const loadReferencedSecrets = async (args: {
     throw new DomainError(
       'SECRET_NOT_FOUND',
       `Secret '${missing}' referenced by a {{secret:...}} token does not exist in this project.`,
-      { secretId: missing }
+      { secret_id: missing }
     );
   }
   return byId;
@@ -370,7 +370,7 @@ export const deleteSecret = async (args: {
     throw new DomainError(
       'SECRET_HAS_DEPENDENTS',
       `Secret '${args.id}' is in use by ${dependentCount} AI provider(s) and cannot be deleted without force.`,
-      { dependentCount }
+      { dependent_count: dependentCount }
     );
   }
 

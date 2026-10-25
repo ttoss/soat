@@ -7,10 +7,13 @@ import {
   ownerActorPublicId,
 } from './conversationSystemTags';
 import { createDocument, deleteDocument } from './documents';
+import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
+
+export const MESSAGE_ROLES = ['user', 'assistant'] as const;
 
 const readStoredFileContent = async (
   file?: InstanceType<(typeof db)['File']>
@@ -225,6 +228,8 @@ const createTextMessage = async (
 export const addConversationMessage = async (
   args: AddConversationMessageArgs
 ) => {
+  assertEnumField({ field: 'role', value: args.role, allowed: MESSAGE_ROLES });
+
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
     // The owner rides along: every turn is stamped with it, so a per-actor
@@ -310,6 +315,8 @@ const createDocumentMessage = async (
 export const addConversationDocumentMessage = async (
   args: AddConversationDocumentMessageArgs
 ) => {
+  assertEnumField({ field: 'role', value: args.role, allowed: MESSAGE_ROLES });
+
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
   });

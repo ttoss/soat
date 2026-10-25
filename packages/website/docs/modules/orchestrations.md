@@ -584,7 +584,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations/validate \
 
 ### Versioning
 
-The graph is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create; every write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. Versioned surface: `nodes`, `edges`, `state_schema`, `input_schema`, `output_mapping`. Metadata-only edits, structurally identical rewrites and restoring the live version archive nothing. `version_label` on a create or update annotates the archived version; it is not part of the config.
+The graph is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create; every write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. Versioned surface: `nodes`, `edges`, `state_schema`, `input_schema`, `output_mapping`. Metadata-only edits, structurally identical rewrites and restoring the live version archive nothing. `version_label` on a create or update tags the version that write creates; it is not part of the config.
 
 A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
 

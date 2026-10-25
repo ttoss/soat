@@ -1361,7 +1361,7 @@ components:
             Optional human tag, set with `version_label` on the write that
             created this version. Restore, promote and abort set one
             automatically (e.g. `restored from v1`).
-          example: pre-tone-change
+          example: tone-change
         eval_run_id:
           x-soat-ref: eval-runs
           type: string
@@ -1730,7 +1730,7 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional tag for the config version this write archives (e.g.
+            Optional tag for the config version this write creates (e.g.
             `initial`). Annotates the version only — it is not stored on the
             agent and is not part of the config, so labelling a change is never
             itself a change.
@@ -2000,12 +2000,12 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional tag for the config version this write archives (e.g.
-            `pre-tone-change`). Annotates the version only — it is not stored on
+            Optional tag for the config version this write creates (e.g.
+            `tone-change`). Annotates the version only — it is not stored on
             the agent and is not part of the config, so labelling a change is
             never itself a change. Ignored when the write changes nothing, since
             no version is created.
-          example: pre-tone-change
+          example: tone-change
 
         expected_version:
           description: >-

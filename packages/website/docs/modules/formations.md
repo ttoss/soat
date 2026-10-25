@@ -115,10 +115,12 @@ A template has four top-level keys. Complete 14-resource template: [Deploy a Mul
 | ------------ | -------- | ------------------------------------------------------------ |
 | `parameters` | No       | Map of parameter names → parameter declarations              |
 | `resources`  | Yes      | Map of logical resource ID → resource declaration            |
-| `outputs`    | No       | Map of output names → values (may contain `ref` expressions) |
+| `outputs`    | No       | Map of output names → values; each value is a string or one `ref`, `param`, `sub` or `ref_attr` expression, else `400 VALIDATION_FAILED` |
 | `metadata`   | No       | Arbitrary metadata; supports `sub`/`param`/`ref` substitution (see [Metadata Substitution](#metadata-substitution)) |
 
 A request carrying a template may be up to 10 MB, so documents can be declared with their content inline; every other route keeps a 1 MB body limit.
+
+A `template` sent as a string is parsed as YAML (JSON is a subset). One that does not parse — a duplicated key, a bad indent — is a single error at path `""` reading `Template is not valid YAML or JSON: <parser message>`.
 
 #### Key Naming and Case
 
@@ -503,6 +505,8 @@ Each entry in `plan-formation`'s `changes[]` carries a `diff` object alongside `
 | `diff.current`  | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read) |
 
 For a type whose live state can be read back (most), `diff.current` is the resource as it exists today; for a write-only type (currently only `secret`), it is the last-applied snapshot on the formation resource, which `update-formation` also diffs against.
+
+The `formation_id` a plan compares against is looked up in the plan's project only. An id that names no formation there, including one owned by another project, is treated as absent: every resource plans as a `create`, and nothing about the other project's formation is returned.
 
 Plan and apply share one change rule:
 

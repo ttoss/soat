@@ -2022,7 +2022,7 @@ components:
         version_label:
           type: string
           description: >-
-            Optional tag for the version this write archives. Ignored when the
+            Optional tag for the version this write creates. Ignored when the
             write changes no definition, since no version is archived.
         expected_version:
           description: Refuses the write unless the playbook is at this version.

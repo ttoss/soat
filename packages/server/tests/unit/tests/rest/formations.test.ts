@@ -197,6 +197,39 @@ outputs:
       expect(res.body.errors).toHaveLength(0);
     });
 
+    test('a YAML string that does not parse reports the parse error', async () => {
+      const yamlTemplate = `
+resources:
+  MyMemoryStore:
+    type: memory_store
+    type: memory_store
+`.trim();
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: yamlTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toHaveLength(1);
+      expect(res.body.errors[0].path).toBe('');
+      expect(res.body.errors[0].message).toMatch(
+        /^Template is not valid YAML or JSON: duplicated mapping key/
+      );
+    });
+
+    test('a YAML string holding a scalar is not an object', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: 'just a string' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual([
+        { path: '', message: 'Template must be an object' },
+      ]);
+    });
+
     test('invalid ref returns valid=false', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
@@ -458,6 +491,34 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.changes[0].action).toBe('create');
       expect(res.body.changes[0].physical_resource_id).toBeUndefined();
+    });
+
+    test("plan with another project's formation_id reveals none of its resources", async () => {
+      const otherProjectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: `Formations Plan Other ${Date.now()}` });
+      const foreign = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: otherProjectRes.body.id,
+          name: `plan-foreign-${Date.now()}`,
+          template: simpleTemplate,
+        });
+      expect(foreign.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: foreign.body.id,
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.changes).toHaveLength(1);
+      expect(res.body.changes[0].action).toBe('create');
+      expect(res.body.changes[0].physical_resource_id).toBeUndefined();
+      expect(res.body.changes[0].diff.current).toBeNull();
     });
 
     test('invalid template returns 400', async () => {
@@ -1604,6 +1665,7 @@ resources:
           properties: {
             name: 'Tool With Full Options',
             description: 'Tool with description and parameters',
+            execute: { url: 'https://example.com/search' },
             parameters: {
               type: 'object',
               properties: {
@@ -1726,6 +1788,53 @@ resources:
           return error.message.includes('execute.response_mode');
         })
       ).toBe(true);
+    });
+
+    test('rejects an http tool without execute.url at validate time', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              NoUrlTool: {
+                type: 'tool',
+                properties: { name: 'formation-no-url-tool' },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((error: { message: string }) => {
+          return error.message.includes('execute.url');
+        })
+      ).toBe(true);
+    });
+
+    test('accepts an execute.url resolved from a parameter at validate time', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            parameters: { TargetUrl: { type: 'string' } },
+            resources: {
+              ParamUrlTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-param-url-tool',
+                  type: 'http',
+                  execute: { url: { param: 'TargetUrl' } },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.errors).toEqual([]);
+      expect(res.body.valid).toBe(true);
     });
 
     test('carries execute.auth through an apply', async () => {
@@ -4234,7 +4343,7 @@ resources:
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'knowledge_config.extraction',
       ]);
     });

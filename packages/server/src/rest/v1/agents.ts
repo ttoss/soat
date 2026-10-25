@@ -58,7 +58,7 @@ type CreateAgentBody = {
   trace_content_mode?: unknown;
   on_approval_expiry?: unknown;
   project_id?: string;
-  /** Write-only tag for the version this write archives; never stored on the agent. */
+  /** Write-only tag for the version this write creates; never stored on the agent. */
   version_label?: unknown;
 };
 

@@ -13,19 +13,23 @@ import { retryTransient } from './transientRetry';
 
 const log = createDebug('soat:activity');
 
-export type ActivitySeverity = 'info' | 'warning' | 'critical';
-export type ActivityKind =
-  | 'action_executed'
-  | 'approval_created'
-  | 'approval_resolved'
-  | 'exception_created'
-  | 'schedule_fired'
-  | 'share_cap_exceeded'
-  | 'share_resumed'
-  | 'share_revoked'
-  | 'share_suspended'
-  | 'tool_resolution_failed'
-  | 'usage_quantity_invalid';
+export const ACTIVITY_SEVERITIES = ['info', 'warning', 'critical'] as const;
+export type ActivitySeverity = (typeof ACTIVITY_SEVERITIES)[number];
+
+export const ACTIVITY_KINDS = [
+  'action_executed',
+  'approval_created',
+  'approval_resolved',
+  'exception_created',
+  'schedule_fired',
+  'share_cap_exceeded',
+  'share_resumed',
+  'share_revoked',
+  'share_suspended',
+  'tool_resolution_failed',
+  'usage_quantity_invalid',
+] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
 /**
  * Default severity per kind, applied when a producer emits without an
@@ -157,8 +161,8 @@ export const emitActivityEntry = async (
 /** What narrows a feed read: the scope, and the filters a caller may add. */
 export type ActivityFilters = {
   projectIds: number[];
-  kind?: string;
-  severity?: string;
+  kind?: ActivityKind;
+  severity?: ActivitySeverity;
   agentId?: string;
   generationId?: string;
   orchestrationRunId?: string;

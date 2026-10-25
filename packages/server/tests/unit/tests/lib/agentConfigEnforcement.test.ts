@@ -194,7 +194,7 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     enforces: 'Decides whether turn content is persisted at all.',
   },
   onApprovalExpiry: {
-    modules: ['agentApprovalExpiry.ts'],
+    modules: ['agentToolApprovalContinuation.ts'],
     enforces:
       'Decides whether a lapsed approval terminates the turn or resumes it.',
   },

@@ -160,7 +160,7 @@ describe('Guardrails', () => {
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.meta.unknownFields).toEqual([
+      expect(response.body.error.meta.unknown_fields).toEqual([
         'document.rules',
       ]);
     });

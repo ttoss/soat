@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
@@ -348,6 +349,12 @@ export const updateSession = async (args: {
   messageDelaySeconds?: number | null;
   maxContextMessages?: number | null;
 }) => {
+  assertEnumField({
+    field: 'status',
+    value: args.status,
+    allowed: SESSION_STATUSES,
+  });
+
   const toolContext = await acceptStoredToolContextUpdate({
     toolContext: args.toolContext,
     secretRefs: 'verbatim',

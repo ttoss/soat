@@ -60,7 +60,7 @@ An immutable archive of a guardrail's configuration at one version; same shape a
 | `guardrail_id` | string  | The `guard_`-prefixed guardrail this version belongs to                     |
 | `version`      | integer | The archived version number                                                 |
 | `config`       | object  | The versioned surface at that version — today `{ document }` and nothing else |
-| `label`        | string  | Optional human tag, e.g. `pre-tightening`; null when unset                   |
+| `label`        | string  | Optional human tag, e.g. `tightened`; null when unset                   |
 | `created_by_principal_type` / `created_by_principal_id` | string | Who produced this version: `user` (`user_…`) or `api_key` (the key's own `key_…`); null when there was none |
 | `created_at`   | string  | ISO 8601 timestamp                                                          |
 
@@ -310,7 +310,7 @@ There is no override resource: [attach](#attachment) a tighter guardrail at the 
 
 The policy uses the append-only archive that backs [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create; every write that changes the `document` increments `version` and archives a `GuardrailVersion`. Approval items, activity entries and exceptions record the governing version.
 
-Three writes archive nothing: a metadata-only edit (`name`, `description`, `context_tool_id`, `context_mode`); re-writing the document already held (compared structurally); restoring the version already live. `version_label` on a create or update annotates the version that write archives and is not itself a change.
+Three writes archive nothing: a metadata-only edit (`name`, `description`, `context_tool_id`, `context_mode`); re-writing the document already held (compared structurally); restoring the version already live. `version_label` on a create or update annotates the version that write creates and is not itself a change.
 
 A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
 

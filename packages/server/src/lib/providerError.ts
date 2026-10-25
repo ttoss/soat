@@ -74,9 +74,9 @@ const apiCallDomainError = (error: APICallError): DomainError => {
     : `Provider request failed: ${error.message}`;
 
   return new DomainError('AI_PROVIDER_ERROR', message, {
-    ...(statusCode !== undefined && { providerStatusCode: statusCode }),
+    ...(statusCode !== undefined && { provider_status_code: statusCode }),
     ...(error.responseBody !== undefined && {
-      providerResponseBody: error.responseBody,
+      provider_response_body: error.responseBody,
     }),
   });
 };
@@ -95,7 +95,7 @@ const modelFaultDomainError = (error: unknown): DomainError | null => {
       `Provider request failed: ${error.message}`,
       {
         ...(error.statusCode !== undefined && {
-          providerStatusCode: error.statusCode,
+          provider_status_code: error.statusCode,
         }),
       }
     );
@@ -153,7 +153,7 @@ export const toProviderDomainError = (error: unknown): DomainError | null => {
       `Model output did not satisfy output_schema: ${unwrapped.cause instanceof Error ? unwrapped.cause.message : unwrapped.message}`,
       {
         ...(unwrapped.finishReason !== undefined && {
-          finishReason: unwrapped.finishReason,
+          finish_reason: unwrapped.finishReason,
         }),
       }
     );

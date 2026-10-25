@@ -3,6 +3,8 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   acknowledgeException,
+  EXCEPTION_KINDS,
+  EXCEPTION_SEVERITIES,
   EXCEPTION_STATUSES,
   getException,
   listExceptions,
@@ -13,6 +15,7 @@ import { buildSrn } from 'src/lib/iam';
 import type { ProjectOwned } from './helpers';
 import {
   parseEnumListQuery,
+  parseEnumQuery,
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
@@ -51,8 +54,12 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
       name: 'status',
       allowed: EXCEPTION_STATUSES,
     }),
-    severity: ctx.query.severity as string | undefined,
-    kind: ctx.query.kind as string | undefined,
+    severity: parseEnumQuery({
+      ctx,
+      name: 'severity',
+      allowed: EXCEPTION_SEVERITIES,
+    }),
+    kind: parseEnumQuery({ ctx, name: 'kind', allowed: EXCEPTION_KINDS }),
     ...parsePagination(ctx),
   });
 });

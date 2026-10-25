@@ -36,6 +36,21 @@ export const parseFormationTemplateInput = (input: unknown): unknown => {
   }
 };
 
+/**
+ * Why a string template does not parse, or `null` when it is not a string or
+ * parses. {@link parseFormationTemplateInput} hands an unparseable string on
+ * as-is, so the reason is recovered here rather than reported as a non-object.
+ */
+const yamlParseError = (template: unknown): string | null => {
+  if (typeof template !== 'string') return null;
+  try {
+    load(template);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+
 // ── Resource Declaration Validation ──────────────────────────────────────
 
 const singleError = (path: string, message: string): ValidationError[] => {
@@ -328,9 +343,17 @@ export const validateFormationTemplate = (
 ): ValidationResult => {
   const tmpl = parseTemplateObject(template);
   if (!tmpl) {
+    const parseError = yamlParseError(template);
     return {
       valid: false,
-      errors: [{ path: '', message: 'Template must be an object' }],
+      errors: [
+        {
+          path: '',
+          message: parseError
+            ? `Template is not valid YAML or JSON: ${parseError}`
+            : 'Template must be an object',
+        },
+      ],
       warnings: [],
     };
   }

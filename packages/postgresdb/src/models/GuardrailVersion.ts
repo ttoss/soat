@@ -82,7 +82,7 @@ export class GuardrailVersion extends Model {
   @Column({ type: DataType.JSONB, allowNull: false })
   declare config: object;
 
-  /** Optional human tag for this version, e.g. `pre-tightening`. */
+  /** Optional human tag for this version, e.g. `tightened`. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 

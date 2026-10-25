@@ -104,6 +104,15 @@ describe('Conversations', () => {
       expect(response.body.status).toBe('closed');
     });
 
+    test('a status outside the enum is refused', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, status: 'weird' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/conversations')
@@ -335,12 +344,38 @@ describe('Conversations', () => {
       expect(response.body.status).toBe('closed');
     });
 
+    test('answers the conversation owner it keeps', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, actor_id: actorId });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/conversations/${created.body.id}`)
+        .send({ name: 'renamed' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.actor_id).toBe(actorId);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .patch(`/api/v1/conversations/${conversationId}`)
         .send({ status: 'open' });
 
       expect(response.status).toBe(401);
+    });
+
+    test('a status outside the enum is refused and not stored', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/conversations/${conversationId}`)
+        .send({ status: 'weird' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}`
+      );
+      expect(getRes.body.status).not.toBe('weird');
     });
 
     test('missing status returns 400', async () => {
@@ -544,6 +579,22 @@ describe('Conversations', () => {
         .send({});
 
       expect(response.status).toBe(400);
+    });
+
+    test('a role outside the enum is refused and not stored', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'x', role: 'wizard' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+      const roles = listRes.body.data.map((m: { role: string }) => {
+        return m.role;
+      });
+      expect(roles).not.toContain('wizard');
     });
 
     test('a system role is refused with 400', async () => {
@@ -1362,6 +1413,26 @@ describe('Conversations', () => {
       expect(response.body).toMatchObject({ source: 'api' });
       expect(response.body.env).toBeDefined(); // pre-existing tag preserved
       expect(response.body.id).toBeUndefined();
+    });
+
+    test('announces the conversation with the owner it keeps', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, actor_id: actorId });
+
+      const [event] = await captureEvents({
+        type: 'conversations.updated',
+        where: (event) => {
+          return event.resourceId === created.body.id;
+        },
+        action: () => {
+          return authenticatedTestClient(userToken)
+            .patch(`/api/v1/conversations/${created.body.id}/tags`)
+            .send({ source: 'api' });
+        },
+      });
+
+      expect(event.data.actor_id).toBe(actorId);
     });
 
     test('returns 401 for unauthenticated request', async () => {

@@ -103,7 +103,7 @@ export const assertValidStopConditions = (value: unknown): void => {
   if (value === undefined || value === null) return;
   if (!Array.isArray(value)) {
     throw invalid('stop_conditions must be an array.', {
-      stopConditions: value,
+      stop_conditions: value,
     });
   }
 
@@ -154,7 +154,7 @@ export const assertForcedToolChoiceCanStop = (args: {
   throw new DomainError(
     'FORCED_TOOL_CHOICE_CANNOT_STOP',
     'An agent whose tool_choice forces a tool must declare a has_tool_call stop condition, or no turn it runs could end by answering.',
-    { toolChoice: args.toolChoice }
+    { tool_choice: args.toolChoice }
   );
 };
 
