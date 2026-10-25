@@ -335,6 +335,19 @@ describe('Conversations', () => {
       expect(response.body.status).toBe('closed');
     });
 
+    test('answers the conversation owner it keeps', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, actor_id: actorId });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/conversations/${created.body.id}`)
+        .send({ name: 'renamed' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.actor_id).toBe(actorId);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .patch(`/api/v1/conversations/${conversationId}`)
@@ -1362,6 +1375,26 @@ describe('Conversations', () => {
       expect(response.body).toMatchObject({ source: 'api' });
       expect(response.body.env).toBeDefined(); // pre-existing tag preserved
       expect(response.body.id).toBeUndefined();
+    });
+
+    test('announces the conversation with the owner it keeps', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, actor_id: actorId });
+
+      const [event] = await captureEvents({
+        type: 'conversations.updated',
+        where: (event) => {
+          return event.resourceId === created.body.id;
+        },
+        action: () => {
+          return authenticatedTestClient(userToken)
+            .patch(`/api/v1/conversations/${created.body.id}/tags`)
+            .send({ source: 'api' });
+        },
+      });
+
+      expect(event.data.actor_id).toBe(actorId);
     });
 
     test('returns 401 for unauthenticated request', async () => {

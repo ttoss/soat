@@ -797,6 +797,8 @@ components:
           nullable: true
           description: Actor ID associated with this conversation
           example: 'actor_V1StGXR8Z5jdHi6B'
+        tags:
+          $ref: './tags.yaml#/components/schemas/TagBag'
         retrieval:
           type: string
           enum: [embed, none, null]
