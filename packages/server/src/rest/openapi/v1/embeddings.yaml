@@ -50,7 +50,8 @@ paths:
                   example: proj_V1StGXR8Z5jdHi6B
                 input:
                   type: string
-                  description: Single text to embed.
+                  minLength: 1
+                  description: Single text to embed. An empty string is `400 VALIDATION_FAILED`.
                   example: 'The quick brown fox jumps over the lazy dog.'
                 inputs:
                   type: array
@@ -62,6 +63,7 @@ paths:
                   maxItems: 256
                   items:
                     type: string
+                    minLength: 1
                   example:
                     - 'The quick brown fox.'
                     - 'Pack my box with five dozen liquor jugs.'
