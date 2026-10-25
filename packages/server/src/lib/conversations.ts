@@ -6,6 +6,7 @@ import {
   type RetrievalMode,
 } from './conversationRetrieval';
 import { deleteDocument } from './documents';
+import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
 import {
@@ -17,6 +18,8 @@ import { makeResourceAccessor } from './resourceAccessor';
 import { applyTagFilter, mergeTags } from './tags';
 
 export type { CompiledPolicy };
+
+export const CONVERSATION_STATUSES = ['open', 'closed'] as const;
 
 registerResourceFieldMap({
   resourceType: 'conversation',
@@ -141,6 +144,12 @@ export const createConversation = async (args: {
   actorId?: number | null;
   retrieval?: RetrievalMode | null;
 }) => {
+  assertEnumField({
+    field: 'status',
+    value: args.status,
+    allowed: CONVERSATION_STATUSES,
+  });
+
   const conversation = await db.Conversation.create({
     projectId: args.projectId,
     status: args.status ?? 'open',
@@ -171,6 +180,12 @@ export const updateConversation = async (args: {
   status?: string;
   retrieval?: RetrievalMode | null;
 }) => {
+  assertEnumField({
+    field: 'status',
+    value: args.status,
+    allowed: CONVERSATION_STATUSES,
+  });
+
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.id },
   });
