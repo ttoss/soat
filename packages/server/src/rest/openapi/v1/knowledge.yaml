@@ -191,6 +191,19 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '503':
+          description: >-
+            EMBEDDING_NOT_CONFIGURED — the vector channel has no usable embedding provider; the search surfaces it rather than degrading to lexical only.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:

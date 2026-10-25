@@ -12,6 +12,43 @@ info:
 paths: {}
 components:
   responses:
+    PayloadTooLarge:
+      description: >-
+        `REQUEST_REJECTED` — the request body is over the size the body parser
+        accepts
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: >-
+        `QUOTA_EXCEEDED` — a `requests` quota on the calling API key or its
+        project is spent for the window; `Retry-After` says when it reopens
+      headers:
+        Retry-After:
+          description: Seconds until the quota window admits a request again
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: >-
+        Unexpected server error — `INTERNAL_ERROR`, with the raw message never
+        forwarded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: >-
+        Invalid request — a query parameter or body field the operation does
+        not declare, or a value that fails validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
       description: Authentication required
       content:

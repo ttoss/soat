@@ -87,6 +87,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     get:
       tags:
         - Agents
@@ -115,6 +121,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -127,6 +135,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}:
     get:
@@ -150,6 +162,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -168,6 +182,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Agents
@@ -193,6 +211,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -213,6 +233,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           $ref: './concurrency.yaml#/components/responses/VersionConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Agents
@@ -238,6 +264,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -258,6 +286,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           $ref: './concurrency.yaml#/components/responses/VersionConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Agents
@@ -287,6 +321,8 @@ paths:
       responses:
         '204':
           description: Deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -317,6 +353,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}/generate:
     post:
@@ -463,6 +503,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted;
@@ -475,6 +517,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR); model output that
@@ -554,6 +598,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR); model output that
@@ -598,6 +648,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/AgentVersion'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -616,6 +668,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}/versions/{version}:
     get:
@@ -663,6 +719,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}/versions/{version}/restore:
     post:
@@ -726,6 +786,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           $ref: './concurrency.yaml#/components/responses/VersionConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}/release:
     put:
@@ -789,6 +855,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}/release/promote:
     post:
@@ -820,6 +892,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -847,6 +921,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/agents/{agent_id}/release/abort:
     post:
@@ -871,6 +949,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -895,6 +975,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   parameters:
     AgentId:

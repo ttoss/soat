@@ -1008,7 +1008,11 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
           text += chunk.toString('utf8');
         });
         response.on('end', () => {
-          callback(null, text);
+          // A refusal is an `application/json` error body, read as one.
+          const isJson = String(response.headers['content-type']).includes(
+            'application/json'
+          );
+          callback(null, isJson ? JSON.parse(text) : text);
         });
       });
     return res;
