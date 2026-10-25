@@ -2,7 +2,8 @@
  * Specs in, tool definitions out: the one derivation of the SOAT tool surface.
  * The server's `soatTools` wraps its result with SOAT metadata, and the
  * website's MCP tools reference reads it, so the two cannot list different
- * arguments. It depends only on the derivation library, never on the server.
+ * arguments. It depends only on the derivation library and pure sibling
+ * modules, never on the server.
  */
 
 import {
@@ -12,6 +13,7 @@ import {
   type ToolDefinition,
 } from '@ttoss/http-server-mcp-openapi';
 
+import { stripPresenceUnions } from './openapiPresenceUnions';
 import { prepareToolExtensions } from './soatToolsExtensions';
 
 export type { ToolDefinition };
@@ -67,7 +69,9 @@ export const deriveToolDefinitions = (args: {
 }): ToolDefinition[] => {
   const documents: OpenApiDocuments = {};
   for (const { file, spec } of args.specs) {
-    documents[`./${file}`] = prepareToolExtensions({ spec, file });
+    const prepared = prepareToolExtensions({ spec, file });
+    stripPresenceUnions(prepared);
+    documents[`./${file}`] = prepared;
   }
 
   return openApiToToolDefinitions({

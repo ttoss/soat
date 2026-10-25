@@ -164,6 +164,33 @@ describe('IngestionRules', () => {
       expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
     });
 
+    test('rejects an unknown field on the create body (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'image/tiff',
+          tool_id: httpToolId,
+          converter: 'ocr',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({ unknown_fields: ['converter'] });
+    });
+
+    test('rejects a create body missing content_type_glob (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({ project_id: projectId, tool_id: httpToolId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({
+        missing_fields: ['content_type_glob'],
+      });
+    });
+
     test('rejects preset_parameters containing the reserved key "file" (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
