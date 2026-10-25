@@ -63,6 +63,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -158,6 +160,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -208,6 +212,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -311,6 +317,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -356,6 +364,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -460,6 +470,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -529,6 +541,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/memory-stores/{memory_store_id}/tags:
@@ -577,6 +591,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     put:
@@ -634,6 +650,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     patch:
@@ -691,6 +709,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 components:

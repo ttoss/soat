@@ -75,6 +75,8 @@ paths:
                     https://soat.ttoss.dev/docs/error-codes#single_session_conflict
                   meta:
                     session_id: sess_abc123
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     get:
@@ -145,6 +147,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
@@ -179,6 +183,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     patch:
@@ -212,6 +218,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     delete:
@@ -240,6 +248,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
@@ -450,6 +460,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
@@ -520,6 +532,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
@@ -560,6 +574,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
@@ -590,6 +606,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     put:
@@ -624,6 +642,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     patch:
@@ -658,6 +678,8 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 

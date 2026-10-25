@@ -9,10 +9,11 @@ import { load } from 'js-yaml';
  * with no `application/json` schema leaves `error.code` untyped for every
  * caller of that operation.
  *
- * Every authenticated operation can answer `401` (no credential) and `400`
+ * Every authenticated operation can answer `401` (no credential), `400`
  * (`strictFieldsMiddleware` refuses an unknown query parameter on every
- * documented route, and an unknown body field on every write), so each one
- * declares both. Every operation, public ones included, can answer `500`
+ * documented route, and an unknown body field on every write) and `429` (a
+ * `requests` quota on the calling key, `requestAttributionMiddleware`), so
+ * each one declares all three. Every operation, public ones included, can answer `500`
  * (`errorLogger`'s catch-all), so each one declares it.
  *
  * Keys are read as YAML 1.1 too: a generator on that version reads an unquoted
@@ -139,6 +140,7 @@ describe('error response spec contract', () => {
   test.each([
     { status: '400', scope: 'authenticated' },
     { status: '401', scope: 'authenticated' },
+    { status: '429', scope: 'authenticated' },
     { status: '500', scope: 'all' },
   ])('every $scope operation declares $status', ({ status, scope }) => {
     const missing = operations

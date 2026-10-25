@@ -12,6 +12,19 @@ info:
 paths: {}
 components:
   responses:
+    TooManyRequests:
+      description: >-
+        `QUOTA_EXCEEDED` — a `requests` quota on the calling API key or its
+        project is spent for the window; `Retry-After` says when it reopens
+      headers:
+        Retry-After:
+          description: Seconds until the quota window admits a request again
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InternalError:
       description: >-
         Unexpected server error — `INTERNAL_ERROR`, with the raw message never
