@@ -33,6 +33,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Send `Authorization: Bearer <token>` — a user token from `POST /api/v1/users/login`, a project API key (`sk_…`), or an OAuth access token. Discovery metadata for the OAuth flow is at `/.well-known/oauth-authorization-server`.',
   FORBIDDEN:
     'The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.',
+  API_KEY_POLICY_BOUNDARY:
+    "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `boundary_policy_ids`; a wider key requires a credential that carries that permission.",
   API_KEY_PROJECT_SCOPE:
     "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
   RESOURCE_NOT_FOUND:

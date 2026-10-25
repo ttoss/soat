@@ -104,6 +104,25 @@ Owner-or-admin applies on top: the project check decides *which* keys are visibl
 
 `policy_ids` are `pol_`-prefixed public IDs from the global [Policies](./policies.md) store; the REST API accepts and returns them.
 
+### Narrowing a key to a capability set
+
+A key's `policy_ids` is its capability set. The vocabulary is the IAM action strings in the [Permissions Reference](../permissions.md) (`secrets:ListSecrets`, `files:GetFile`, …); a policy naming an unknown action is refused at creation. A service fronting SOAT narrows a credential by minting one key per capability set: [create a policy](./policies.md) allowing those actions, then [create a key](#create-an-api-key) with it in `policy_ids`.
+
+A request with that key for an action outside the set is `403 FORBIDDEN`, whatever its owner may do.
+
+### A narrowed key stays inside its boundary
+
+Key management is self-service, so the boundary also guards the key being written. Under a key whose `policy_ids` are `[pol_A, pol_B]`:
+
+| Operation | Behavior |
+| --- | --- |
+| [`POST /api-keys`](/docs/api/api-keys/create-api-key) with no `policy_ids` | Mints a key with `policy_ids: [pol_A, pol_B]` |
+| [`POST /api-keys`](/docs/api/api-keys/create-api-key) or [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) with `policy_ids: [pol_A]` | Accepted |
+| Either with `policy_ids: []`, or naming `pol_C` | `403 API_KEY_POLICY_BOUNDARY` |
+| [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) with no `policy_ids` | Leaves the stored list unchanged |
+
+`meta` carries `boundary_policy_ids` and `requested_policy_ids`. Otherwise a narrowed key could mint a policy-less key for the same owner and act with the owner's full permissions.
+
 ### Revoking a Key
 
 [`DELETE /api/v1/api-keys/:id`](/docs/api/api-keys/delete-api-key) stops the key immediately. There is no rotation endpoint: create a new key, delete the old.

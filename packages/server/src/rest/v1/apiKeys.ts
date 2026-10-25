@@ -7,6 +7,7 @@ import {
   deleteApiKey,
   getApiKey,
   listApiKeys,
+  resolveKeyPolicyBoundary,
   updateApiKey,
 } from 'src/lib/apiKeys';
 import { buildSrn } from 'src/lib/iam';
@@ -96,6 +97,42 @@ const resolvePolicyIds = async (args: {
       return p.id as number;
     }),
   };
+};
+
+/**
+ * Refuses a key write wider than the calling key's own `policy_ids` boundary,
+ * recording the denial first: the refusal happens before any `isAllowed` call,
+ * so the audit wrapper would otherwise never see it. Returns the `policy_ids`
+ * to store.
+ */
+const assertKeyPolicyBoundary = async (args: {
+  ctx: Context & { authUser: NonNullable<Context['authUser']> };
+  requestedPolicyPublicIds: string[] | undefined;
+  requestedPolicyIds: number[] | undefined;
+  inheritWhenOmitted: boolean;
+  action: string;
+}): Promise<number[] | undefined> => {
+  const boundary = await resolveKeyPolicyBoundary({
+    boundaryPolicyIds: args.ctx.authUser.apiKeyPolicyIds,
+    requestedPolicyIds: args.requestedPolicyIds,
+    inheritWhenOmitted: args.inheritWhenOmitted,
+  });
+  if (boundary.allowed) return boundary.policyIds;
+
+  recordAuthorizationDecision(args.ctx, {
+    action: args.action,
+    allowed: false,
+  });
+  // Meta keys are snake_case to match the external REST contract.
+  throw new DomainError(
+    'API_KEY_POLICY_BOUNDARY',
+    'This API key is narrowed by policy_ids and cannot write a key outside ' +
+      'that boundary. Name a non-empty subset of its policy_ids.',
+    {
+      boundary_policy_ids: boundary.boundaryPolicyPublicIds,
+      requested_policy_ids: args.requestedPolicyPublicIds ?? [],
+    }
+  );
 };
 
 /**
@@ -211,11 +248,19 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', policyResult.error);
   }
 
+  const boundedPolicyIds = await assertKeyPolicyBoundary({
+    ctx,
+    requestedPolicyPublicIds: policyIds,
+    requestedPolicyIds: policyResult.ids,
+    inheritWhenOmitted: true,
+    action: 'api-keys:CreateApiKey',
+  });
+
   const apiKey = await createApiKey({
     userId: ctx.authUser.id,
     name,
     projectId: projectResult.id,
-    policyIds: policyResult.ids,
+    policyIds: boundedPolicyIds,
   });
 
   // Self-service — any authenticated caller may create a key for themselves,
@@ -302,11 +347,19 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', policyResult.error);
   }
 
+  const boundedPolicyIds = await assertKeyPolicyBoundary({
+    ctx,
+    requestedPolicyPublicIds: policyIds,
+    requestedPolicyIds: policyResult.ids,
+    inheritWhenOmitted: false,
+    action: 'api-keys:UpdateApiKey',
+  });
+
   const updated = await updateApiKey({
     id: ctx.params.api_key_id,
     name,
     projectId: projectResult.id,
-    policyIds: policyResult.ids,
+    policyIds: boundedPolicyIds,
   });
   // projectResult.id: `undefined` = scope unchanged (project_id omitted),
   // `null` = scope cleared (unscoped), a number = re-scoped to that project.

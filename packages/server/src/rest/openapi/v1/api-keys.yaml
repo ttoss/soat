@@ -74,6 +74,7 @@ paths:
         - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies.
         - Otherwise the key inherits the user's permissions (confined to the key's project when scoped).
         - When the request is authenticated with a **project-scoped credential**, the new key is confined to that same project: omitting `project_id` defaults to it, naming a different project returns `403 API_KEY_PROJECT_SCOPE`, and `project_id: null` (an unscoped key) is likewise refused. Minting an unscoped key requires an unscoped credential.
+        - When the request is authenticated with an **API key narrowed by `policy_ids`**, the new key stays inside that boundary: omitting `policy_ids` inherits the caller's own, a non-empty subset of them is accepted, and an empty list or any other policy returns `403 API_KEY_POLICY_BOUNDARY`.
       operationId: createApiKey
       x-soat-agent-exclude: true
       requestBody:
@@ -123,7 +124,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (a project-scoped credential named a different project, or asked for an unscoped key)
+          description: Forbidden (a project-scoped credential named a different project, or asked for an unscoped key; or a key narrowed by `policy_ids` asked for a key outside its boundary)
           content:
             application/json:
               schema:
@@ -185,7 +186,7 @@ paths:
       tags:
         - API Keys
       summary: Update an API key
-      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it.
+      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise).
       operationId: updateApiKey
       x-soat-agent-exclude: true
       parameters:
@@ -240,7 +241,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (not the key owner or admin, or the credential is scoped to a different project)
+          description: Forbidden (not the key owner or admin, the credential is scoped to a different project, or a key narrowed by `policy_ids` asked for policies outside its boundary)
           content:
             application/json:
               schema:

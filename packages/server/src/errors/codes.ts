@@ -258,6 +258,11 @@ export const ERROR_CODES = {
     description:
       'The authenticated user does not have permission to perform this action.',
   },
+  API_KEY_POLICY_BOUNDARY: {
+    httpStatus: 403,
+    description:
+      'The credential is an API key narrowed by `policy_ids`, and the request would write an API key outside that boundary: no `policy_ids`, an empty list, or a policy the credential does not carry. A narrowed key may only mint or update keys whose `policy_ids` are a non-empty subset of its own. The error meta reports `boundary_policy_ids` and `requested_policy_ids`.',
+  },
   API_KEY_PROJECT_SCOPE: {
     httpStatus: 403,
     description:
