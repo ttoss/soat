@@ -123,6 +123,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
     apiKeyPublicId: row.publicId as string,
     apiKeyProjectId,
     apiKeyProjectPublicId,
+    ...(apiKeyPolicyIds.length > 0 ? { apiKeyPolicyIds } : {}),
     isControlPlaneKey:
       role === 'admin' && rawProjectId == null && apiKeyPolicyIds.length === 0,
     isAllowed: apiKeyIsAllowed,

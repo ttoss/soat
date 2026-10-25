@@ -49,6 +49,11 @@ export type AuthUser = {
   /** Public string id of the project the API key is scoped to. */
   apiKeyProjectPublicId?: string;
   /**
+   * Internal numeric ids of the policies the API key is narrowed to. Absent
+   * when the key carries no policy boundary.
+   */
+  apiKeyPolicyIds?: number[];
+  /**
    * True for an admin's API key bound to no project and narrowed by no policy
    * of its own: the deployment's control plane, whose requests are operator
    * traffic rather than any project's (`requestAttribution.ts`).

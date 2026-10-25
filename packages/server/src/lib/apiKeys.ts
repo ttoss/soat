@@ -1,9 +1,12 @@
 import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
+import createDebug from 'debug';
 
 import { db } from '../db';
 import { hashApiKey } from './apiKeyVerifier';
 import { paginatedList } from './pagination';
 import { generateSecretValue } from './secrets';
+
+const log = createDebug('soat:apiKeys');
 
 type ApiKeyWithAssociations = InstanceType<(typeof db)['ApiKey']> & {
   user: InstanceType<(typeof db)['User']> | null;
@@ -52,6 +55,54 @@ const mapApiKeyWithAssociations = async (
     user_id: apiKey.user?.publicId ?? null,
     project_id: apiKey.project?.publicId ?? null,
     policy_ids: policyPublicIds,
+  };
+};
+
+/**
+ * The `policy_ids` a key write may store when the caller is itself an API key
+ * narrowed by `boundaryPolicyIds`: a non-empty subset of that boundary, so a
+ * narrowed key never writes a key wider than itself. An omitted list inherits
+ * the boundary when `inheritWhenOmitted` (create) and stays unchanged
+ * otherwise (update).
+ */
+export const resolveKeyPolicyBoundary = async (args: {
+  boundaryPolicyIds: number[] | undefined;
+  requestedPolicyIds: number[] | undefined;
+  inheritWhenOmitted: boolean;
+}): Promise<
+  | { allowed: true; policyIds: number[] | undefined }
+  | { allowed: false; boundaryPolicyPublicIds: string[] }
+> => {
+  const { boundaryPolicyIds, requestedPolicyIds } = args;
+  if (!boundaryPolicyIds || boundaryPolicyIds.length === 0) {
+    return { allowed: true, policyIds: requestedPolicyIds };
+  }
+  if (requestedPolicyIds === undefined) {
+    return {
+      allowed: true,
+      policyIds: args.inheritWhenOmitted ? boundaryPolicyIds : undefined,
+    };
+  }
+  const withinBoundary =
+    requestedPolicyIds.length > 0 &&
+    requestedPolicyIds.every((id) => {
+      return boundaryPolicyIds.includes(id);
+    });
+  if (withinBoundary) {
+    return { allowed: true, policyIds: requestedPolicyIds };
+  }
+  log('resolveKeyPolicyBoundary: refused requested=%o', requestedPolicyIds);
+  const boundaryPolicies = await db.Policy.findAll({
+    where: { id: boundaryPolicyIds },
+    order: [['id', 'ASC']],
+  });
+  return {
+    allowed: false,
+    boundaryPolicyPublicIds: boundaryPolicies.map(
+      (p: InstanceType<(typeof db)['Policy']>) => {
+        return p.publicId as string;
+      }
+    ),
   };
 };
 
