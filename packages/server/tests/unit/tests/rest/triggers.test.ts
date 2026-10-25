@@ -636,6 +636,19 @@ describe('Triggers', () => {
       );
       expect(res.status).toBe(403);
     });
+
+    test.each(['type', 'target_type'])(
+      'a %s outside the vocabulary is refused, not answered empty',
+      async (name) => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/triggers?project_id=${projectId}&${name}=bogus`
+        );
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.meta.parameter).toBe(name);
+        expect(res.body.error.meta.invalid).toEqual(['bogus']);
+      }
+    );
   });
 
   describe('GET /api/v1/triggers/count', () => {
@@ -696,6 +709,19 @@ describe('Triggers', () => {
       );
       expect(res.status).toBe(403);
     });
+
+    test.each(['type', 'target_type'])(
+      'a %s outside the vocabulary is refused, not answered empty',
+      async (name) => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/triggers/count?project_id=${projectId}&${name}=bogus`
+        );
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.meta.parameter).toBe(name);
+        expect(res.body.error.meta.invalid).toEqual(['bogus']);
+      }
+    );
   });
 
   describe('GET /api/v1/triggers/:trigger_id', () => {

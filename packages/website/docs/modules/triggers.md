@@ -22,6 +22,9 @@ firing record holds the outcome.
 [`GET /api/v1/triggers/count`](/docs/api/triggers/count-triggers) returns `{ "count": n }` for the same project and
 filters (`type`, `target_type`) the list takes, under the same
 `triggers:ListTriggers` permission.
+Each filter takes one value from its enum; any other value, an empty one or a
+repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in
+`meta.allowed`.
 
 > See the [Permissions Reference](../permissions.md#triggers) for the IAM action
 > strings for this module.

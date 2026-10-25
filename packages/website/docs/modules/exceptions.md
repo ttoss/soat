@@ -70,6 +70,10 @@ Identical failures fold into one **open** item: a partial unique index keys at m
 
 Filed as `open`. **Acknowledge** (`acknowledged`) signals someone is on it; **resolve** (`resolved`) records the resolver and optional note and is terminal: acknowledging or resolving again returns `409 EXCEPTION_ALREADY_RESOLVED`.
 
+### List filters
+
+[`GET /api/v1/exceptions`](/docs/api/exceptions/list-exceptions) filters by `status` (repeatable, ORed), `severity` and `kind`. `severity` and `kind` take one value each; a value outside the enum above, an empty one or a repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in `meta.allowed`.
+
 ### Producers
 
 Producers subscribe to platform events: `run_failed` rides `orchestration_runs.failed`, `approval_expired` rides `approvals.expired`, `guardrail_tripwire` rides `guardrails.tripwire` from the guardrail dispatch path. Filing is fire-and-forget.
