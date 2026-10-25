@@ -15,10 +15,13 @@ import {
   listTriggers,
   mayStartTarget,
   rotateTriggerSecret,
+  TRIGGER_TARGET_TYPES,
+  TRIGGER_TYPES,
   updateTrigger,
 } from 'src/lib/triggers';
 
 import {
+  parseEnumQuery,
   parseNullableToolContextBody,
   parsePagination,
   parseToolContextBody,
@@ -45,12 +48,22 @@ const resolvePolicyId = async (
   return policy.id;
 };
 
+/** `type` and `target_type`, read once for the list and its count. */
+const readTriggerListFilters = (ctx: Context) => {
+  return {
+    type: parseEnumQuery({ ctx, name: 'type', allowed: TRIGGER_TYPES }),
+    targetType: parseEnumQuery({
+      ctx,
+      name: 'target_type',
+      allowed: TRIGGER_TARGET_TYPES,
+    }),
+  };
+};
+
 triggersRouter.get('/triggers', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const type = ctx.query.type as string | undefined;
-  const targetType = ctx.query.target_type as string | undefined;
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -60,8 +73,7 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
   });
   ctx.body = await listTriggers({
     projectIds: projectIds ?? [],
-    type,
-    targetType,
+    ...readTriggerListFilters(ctx),
     ...parsePagination(ctx),
   });
 });
@@ -77,8 +89,7 @@ triggersRouter.get('/triggers/count', async (ctx: Context) => {
   });
   ctx.body = await countTriggers({
     projectIds: projectIds ?? [],
-    type: ctx.query.type as string | undefined,
-    targetType: ctx.query.target_type as string | undefined,
+    ...readTriggerListFilters(ctx),
   });
 });
 

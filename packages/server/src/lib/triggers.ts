@@ -16,6 +16,8 @@ import {
 import {
   assertTriggerConfigValid,
   computeNextFireAt,
+  type TriggerTargetType,
+  type TriggerType,
 } from './triggerValidation';
 
 export type { TriggerTargetType, TriggerType } from './triggerValidation';
@@ -109,8 +111,8 @@ const findTriggerOrThrow = async (args: { id: string }) => {
 
 type TriggerListFilters = {
   projectIds: number[];
-  type?: string;
-  targetType?: string;
+  type?: TriggerType;
+  targetType?: TriggerTargetType;
 };
 
 const buildTriggerListWhere = (

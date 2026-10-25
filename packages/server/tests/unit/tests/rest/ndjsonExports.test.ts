@@ -331,6 +331,19 @@ describe('NDJSON exports', () => {
       expect(parseLines(res.body)).toHaveLength(0);
     });
 
+    test.each(['kind', 'severity'])(
+      'a %s outside the vocabulary is refused before the stream opens',
+      async (name) => {
+        const res = await authenticatedTestClient(userToken)
+          .get('/api/v1/activity/export')
+          .query({ project_id: projectId, [name]: 'bogus' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.meta.parameter).toBe(name);
+      }
+    );
+
     test('project_id is required', async () => {
       const res = await authenticatedTestClient(userToken).get(
         '/api/v1/activity/export'
