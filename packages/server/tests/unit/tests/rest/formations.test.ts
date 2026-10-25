@@ -197,6 +197,39 @@ outputs:
       expect(res.body.errors).toHaveLength(0);
     });
 
+    test('a YAML string that does not parse reports the parse error', async () => {
+      const yamlTemplate = `
+resources:
+  MyMemoryStore:
+    type: memory_store
+    type: memory_store
+`.trim();
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: yamlTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toHaveLength(1);
+      expect(res.body.errors[0].path).toBe('');
+      expect(res.body.errors[0].message).toMatch(
+        /^Template is not valid YAML or JSON: duplicated mapping key/
+      );
+    });
+
+    test('a YAML string holding a scalar is not an object', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: 'just a string' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual([
+        { path: '', message: 'Template must be an object' },
+      ]);
+    });
+
     test('invalid ref returns valid=false', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')

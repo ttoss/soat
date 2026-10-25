@@ -120,6 +120,8 @@ A template has four top-level keys. Complete 14-resource template: [Deploy a Mul
 
 A request carrying a template may be up to 10 MB, so documents can be declared with their content inline; every other route keeps a 1 MB body limit.
 
+A `template` sent as a string is parsed as YAML (JSON is a subset). One that does not parse — a duplicated key, a bad indent — is a single error at path `""` reading `Template is not valid YAML or JSON: <parser message>`.
+
 #### Key Naming and Case
 
 The template is stored and returned **verbatim**; keys are never rewritten.
