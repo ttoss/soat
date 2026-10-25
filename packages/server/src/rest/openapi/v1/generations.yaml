@@ -596,6 +596,14 @@ components:
             Agent config version that served this generation, resolved by the
             served-version resolver (see
             [agent versions](/docs/modules/agents#versions-and-releases)).
+        source:
+          type: string
+          nullable: true
+          description: >
+            What produced the generation besides production traffic: `eval`
+            for an eval run, `decider` for a decider question. `null` for
+            production traffic.
+          example: eval
         extraction:
           type: object
           nullable: true

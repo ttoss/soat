@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { getGenerationPendingState } from 'src/lib/generationPendingState';
 import {
   createGenerationRecord,
@@ -383,6 +384,33 @@ describe('Generations', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.conversation_id).toBeNull();
+    });
+
+    test('reports the usage source, a field the Generation schema declares', async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      await createGenerationRecord({
+        publicId: 'gen_eval_source',
+        projectId: project!.id as number,
+        agentId,
+        traceId: 'trc_eval_source',
+        source: 'eval',
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations/gen_eval_source'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.source).toBe('eval');
+      const schema = getMergedOpenApiSpec().components.schemas.Generation;
+      const declared = Object.keys(schema.properties ?? {});
+      expect(
+        Object.keys(response.body).filter((key) => {
+          return !declared.includes(key);
+        })
+      ).toEqual([]);
     });
 
     test('does not expose internal numeric IDs', async () => {

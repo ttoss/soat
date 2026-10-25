@@ -50,7 +50,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `node_id`                   | string \| null | Node within that run                                                                                 |
 | `node_attempt`              | number \| null | The node's 1-based retry attempt, so a retried node's generations are told apart (see [Finding an orchestration run's generations](#finding-an-orchestration-runs-generations)) |
 | `agent_version`             | number \| null | Agent config version that served the generation                                                      |
-| `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation; `null` for ordinary traffic     |
+| `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation, `decider` when a [decider](./deciders.md) question did; `null` for ordinary traffic |
 | `idempotency_key`           | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once)) |
 | `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
 | `retrieval`                 | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served)) |
