@@ -85,17 +85,7 @@ export const listConversations = async (args: {
     if (!actor) {
       return emptyPage(args);
     }
-    const messages = await db.ConversationMessage.findAll({
-      where: { actorId: actor.id },
-      attributes: ['conversationId'],
-      group: ['conversationId'],
-    });
-    const conversationIds = messages.map(
-      (m: InstanceType<(typeof db)['ConversationMessage']>) => {
-        return m.conversationId;
-      }
-    );
-    where.id = conversationIds;
+    where.actorId = actor.id;
   }
 
   if (args.policyWhere) {

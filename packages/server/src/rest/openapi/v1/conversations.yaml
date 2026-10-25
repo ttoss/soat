@@ -37,7 +37,7 @@ paths:
         - name: actor_id
           in: query
           required: false
-          description: Filter by actor ID
+          description: Only conversations owned by this actor (their `actor_id`); message authorship does not match.
           schema:
             type: string
             example: 'actor_V1StGXR8Z5jdHi6B'

@@ -224,7 +224,7 @@ With `"stream": true` the response is `text/event-stream`. The message is persis
 
 ### Filtering by Actor
 
-[`GET /conversations?actor_id=...`](/docs/api/conversations/list-conversations) lists conversations where the actor authored at least one message (an `EXISTS` join on `conversation_messages`, costlier than the default listing).
+[`GET /conversations?actor_id=...`](/docs/api/conversations/list-conversations) lists the conversations the actor **owns** (their `actor_id`). Message authorship does not match: list a conversation's participants with [`GET /actors?conversation_id=...`](/docs/api/actors/list-actors).
 
 ### Status
 

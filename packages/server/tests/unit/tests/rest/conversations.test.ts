@@ -238,36 +238,44 @@ describe('Conversations', () => {
       expect(response.status).toBe(403);
     });
 
-    test('can filter by actorId', async () => {
-      const secondActorRes = await authenticatedTestClient(userToken)
+    test('actor_id filters on the owner, not on message authorship', async () => {
+      const ownerRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'FilterActor' });
-      const secondActorId = secondActorRes.body.id;
+        .send({ project_id: projectId, name: 'FilterOwner' });
+      const ownerId = ownerRes.body.id;
 
-      const convRes = await authenticatedTestClient(userToken)
+      const ownedRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId, actor_id: ownerId });
+      const ownedConvId = ownedRes.body.id;
+
+      const authoredRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
         .send({ project_id: projectId });
-      const filteredConvId = convRes.body.id;
+      const authoredConvId = authoredRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${filteredConvId}/messages`)
-        .send({
-          message: 'Filter test',
-          role: 'user',
-          actor_id: secondActorId,
-        });
+        .post(`/api/v1/conversations/${authoredConvId}/messages`)
+        .send({ message: 'Filter test', role: 'user', actor_id: ownerId });
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/conversations?actor_id=${secondActorId}`
+        `/api/v1/conversations?actor_id=${ownerId}`
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(
-        response.body.data.some((c: { id: string }) => {
-          return c.id === filteredConvId;
-        })
-      ).toBe(true);
+      const ids = response.body.data.map((c: { id: string }) => {
+        return c.id;
+      });
+      expect(ids).toEqual([ownedConvId]);
+    });
+
+    test('actor_id naming no actor returns an empty page', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/conversations?actor_id=actor_doesnotexist000'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
     });
 
     test('unauthenticated request returns 401', async () => {
