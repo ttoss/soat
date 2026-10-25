@@ -130,6 +130,7 @@ paths:
                   example: '/reports/q1.txt'
                 filename:
                   type: string
+                  description: Download name. Defaults to the leaf of `path`.
                   example: 'my-doc.txt'
                 title:
                   type: string
@@ -1488,7 +1489,7 @@ components:
           properties:
             chunk_count:
               type: integer
-              description: Number of chunks created from the file.
+              description: Chunks indexed when the response was built. The final count under `?wait=true`; on a `202`, usually `0`, with the live count on `GET /documents/{document_id}/status`.
               example: 10
     DocumentStatusRecord:
       type: object

@@ -14,6 +14,7 @@ import {
   type IngestedDoc,
   resolveChunkConfig,
 } from './documentIngestionCore';
+import { countIndexedChunks } from './documentLoaders';
 import { mapDocument } from './documentMapper';
 import { assertFilePathFree } from './filePathConflict';
 import { normalizePath } from './filePaths';
@@ -255,6 +256,15 @@ const processDocumentIngestion = async (args: {
   }
 };
 
+/** An ingest answer: the document plus the chunks indexed so far. */
+const toIngestedRecord = async (args: { docId: number }) => {
+  const fetched = await fetchIngestedDocById(args.docId);
+  return {
+    ...mapDocument(fetched!),
+    chunk_count: await countIndexedChunks({ documentId: args.docId }),
+  };
+};
+
 /**
  * Validate the file and create a Document record. When `wait` is false
  * (default) processing is deferred to the next event loop tick and the
@@ -340,8 +350,7 @@ export const enqueueDocumentIngestion = async (args: {
     await processDocumentIngestion(pipelineArgs);
   }
 
-  const fetched = await fetchIngestedDocById(docId);
-  return mapDocument(fetched!);
+  return toIngestedRecord({ docId });
 };
 
 const ensureReingestibleFile = async (args: {
@@ -439,6 +448,5 @@ export const reingestDocument = async (args: {
     await processDocumentIngestion(pipelineArgs);
   }
 
-  const fetched = await fetchIngestedDocById(docId);
-  return mapDocument(fetched!);
+  return toIngestedRecord({ docId });
 };
