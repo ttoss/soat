@@ -486,6 +486,28 @@ export const parseEnumListQuery = <T extends string>(args: {
 };
 
 /**
+ * A single-valued query parameter, checked against the enum the column holds.
+ * Refused as `parseEnumListQuery` refuses, and also when repeated: the filter
+ * names one value, and keeping either would silently drop the other.
+ */
+export const parseEnumQuery = <T extends string>(args: {
+  ctx: Context;
+  name: string;
+  allowed: readonly T[];
+}): T | undefined => {
+  const values = parseEnumListQuery(args);
+  if (values === undefined) return undefined;
+  if (values.length > 1) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `\`${args.name}\` takes one value — received ${values.length}`,
+      { parameter: args.name, allowed: [...args.allowed] }
+    );
+  }
+  return values[0];
+};
+
+/**
  * One end of a time-range filter (`from`, `to`, `expires_to`), as a `Date`.
  *
  * Absent is not invalid: an unsupplied bound is simply not applied. A supplied

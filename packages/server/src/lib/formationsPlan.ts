@@ -36,7 +36,7 @@ export const planFormation = async (args: {
   let existingResources: InstanceType<(typeof db)['FormationResource']>[] = [];
   if (args.formationId) {
     const formation = await db.Formation.findOne({
-      where: { publicId: args.formationId },
+      where: { publicId: args.formationId, projectId: args.projectId },
     });
     if (formation) {
       existingResources = await db.FormationResource.findAll({

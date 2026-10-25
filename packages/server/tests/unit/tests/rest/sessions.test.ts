@@ -540,6 +540,19 @@ describe('Sessions', () => {
       expect(response.body.status).toBe('closed');
     });
 
+    test('a status outside the enum is refused and not stored', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${sessionId}`)
+        .send({ status: 'weird' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      const stored = await db.Session.findOne({
+        where: { publicId: sessionId },
+      });
+      expect(stored?.status).not.toBe('weird');
+    });
+
     test('can update session toolContext', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/sessions/${sessionId}`)

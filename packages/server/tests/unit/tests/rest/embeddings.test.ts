@@ -44,6 +44,24 @@ describe('Embeddings', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test('empty input string returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/embeddings')
+        .send({ project_id: projectId, input: '' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('empty string inside inputs returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/embeddings')
+        .send({ project_id: projectId, inputs: ['The quick brown fox.', ''] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('single input returns embedding vector', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/embeddings')

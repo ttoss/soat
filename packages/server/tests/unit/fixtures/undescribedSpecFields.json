@@ -17,7 +17,6 @@
   "documents.yaml completeIngestionCallback.pages",
   "documents.yaml completeIngestionCallback.text",
   "documents.yaml createDocument.content",
-  "documents.yaml createDocument.filename",
   "documents.yaml path document_id @createDocumentRelation",
   "documents.yaml path document_id @deleteDocumentRelation",
   "documents.yaml path document_id @getDocumentVersion",

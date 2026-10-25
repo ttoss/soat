@@ -70,7 +70,7 @@ const assertAutomationHasProvenance = (args: {
     throw new DomainError(
       'TASK_AUTOMATION_PROVENANCE_MISSING',
       `Automation transition '${transitionName}' for task '${a.id}' has no recorded cause (no principal, generation, or orchestration run id).`,
-      { transition: transitionName, taskId: a.id }
+      { transition: transitionName, task_id: a.id }
     );
   }
 };
@@ -178,7 +178,7 @@ const nextChainDepth = (args: {
       `Task '${args.transitionArgs.id}' has run ${limit} automated transitions with no outside intervention; '${args.transitionName}' was refused to break the cycle.`,
       {
         transition: args.transitionName,
-        taskId: args.transitionArgs.id,
+        task_id: args.transitionArgs.id,
         limit,
       }
     );

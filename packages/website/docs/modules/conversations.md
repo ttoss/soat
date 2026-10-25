@@ -30,7 +30,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | `id`         | string | Public identifier prefixed with `conv_`                            |
 | `project_id` | string | ID of the owning project                                           |
 | `name`       | string | Optional human-readable title for the conversation                 |
-| `status`     | string | Conversation status: `open` or `closed`                            |
+| `status`     | string | Conversation status: `open` or `closed`; any other value is `400 VALIDATION_FAILED` |
 | `actor_id`   | string | Optional ID of the Actor who **owns** this conversation (nullable) |
 | `retrieval`  | string | `embed`, `none`, or `null` to inherit the project — see [Retrieval](#retrieval) |
 | `tags`       | object | Free-form string tags                                              |
@@ -44,7 +44,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | Field         | Type           | Description                                                                                                                |
 | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `document_id` | string         | ID of the Document attached as a message                                                                                   |
-| `role`        | string         | Role of the message: `user` or `assistant` — `system` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED` |
+| `role`        | string         | Role of the message: `user` or `assistant` — `system` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`, any other value with `400 VALIDATION_FAILED` |
 | `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
 | `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |

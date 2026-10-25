@@ -634,8 +634,8 @@ describe('AI Providers', () => {
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
       // Hard reference: force is powerless and the block names the offenders.
-      expect(response.body.error.meta.chatCount).toBe(1);
-      expect(response.body.error.meta.chatIds).toContain(chatId);
+      expect(response.body.error.meta.chat_count).toBe(1);
+      expect(response.body.error.meta.chat_ids).toContain(chatId);
       expect(response.body.error.meta.forcible).toBe(false);
     });
 
@@ -660,8 +660,8 @@ describe('AI Providers', () => {
         .query({ force: 'true' });
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
-      expect(response.body.error.meta.agentCount).toBe(1);
-      expect(response.body.error.meta.agentIds).toContain(agentId);
+      expect(response.body.error.meta.agent_count).toBe(1);
+      expect(response.body.error.meta.agent_ids).toContain(agentId);
       // force never cascades hard references.
       expect(response.body.error.meta.forcible).toBe(false);
 
@@ -702,7 +702,7 @@ describe('AI Providers', () => {
       );
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
-      expect(response.body.error.meta.priceOverrideCount).toBe(1);
+      expect(response.body.error.meta.price_override_count).toBe(1);
       // Only soft dependents block, so force=true would resolve it.
       expect(response.body.error.meta.forcible).toBe(true);
     });

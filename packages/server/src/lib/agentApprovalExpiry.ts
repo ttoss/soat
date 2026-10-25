@@ -34,7 +34,7 @@ export const assertValidOnApprovalExpiry = (value: unknown): void => {
     throw new DomainError(
       'VALIDATION_FAILED',
       `on_approval_expiry must be one of: ${ON_APPROVAL_EXPIRY_VALUES.join(', ')}.`,
-      { onApprovalExpiry: value }
+      { on_approval_expiry: value }
     );
   }
 };

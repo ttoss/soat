@@ -25,15 +25,19 @@ export const EXCEPTION_STATUSES = ['open', 'acknowledged', 'resolved'] as const;
 
 type ExceptionStatus = (typeof EXCEPTION_STATUSES)[number];
 
-export type ExceptionSeverity = 'info' | 'warning' | 'critical';
-export type ExceptionKind =
-  | 'run_failed'
-  | 'guardrail_tripwire'
-  | 'approval_expired'
-  | 'quota_unpriced'
-  | 'event_trigger_loop'
-  | 'chain_limit'
-  | 'manual';
+export const EXCEPTION_SEVERITIES = ['info', 'warning', 'critical'] as const;
+export type ExceptionSeverity = (typeof EXCEPTION_SEVERITIES)[number];
+
+export const EXCEPTION_KINDS = [
+  'run_failed',
+  'guardrail_tripwire',
+  'approval_expired',
+  'quota_unpriced',
+  'event_trigger_loop',
+  'chain_limit',
+  'manual',
+] as const;
+export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
 
 /**
  * Default severity per kind, applied when a producer files without an explicit
@@ -286,8 +290,8 @@ export const fileException = async (
 export const listExceptions = async (args: {
   projectIds: number[];
   statuses?: readonly ExceptionStatus[];
-  severity?: string;
-  kind?: string;
+  severity?: ExceptionSeverity;
+  kind?: ExceptionKind;
   limit?: number;
   cursor?: string;
 }): Promise<Page<MappedException>> => {

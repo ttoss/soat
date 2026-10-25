@@ -65,6 +65,14 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/FileRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -115,6 +123,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '409':
           description: >-
             The project's `storage_bytes` quota is exceeded
@@ -125,6 +139,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -203,6 +221,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/upload/base64:
     post:
       tags:
@@ -243,6 +265,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/presigned-url:
     post:
       tags:
@@ -280,6 +308,12 @@ paths:
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/upload/{token}:
     post:
       tags:
@@ -361,6 +395,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/{file_id}:
     get:
       tags:
@@ -383,12 +419,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -412,12 +456,27 @@ paths:
       responses:
         '204':
           description: File deleted successfully
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           description: File not found
           content:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            FILE_HAS_DEPENDENTS — another record still references the file.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
           content:
@@ -461,6 +520,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -471,6 +532,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/{file_id}/metadata:
     patch:
       tags:
@@ -513,6 +578,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -529,6 +596,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/{file_id}/download/base64:
     get:
       tags:
@@ -572,6 +645,8 @@ paths:
                     type: integer
                     nullable: true
                     description: File size in bytes
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -582,6 +657,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/files/{file_id}/tags:
     get:
       tags:
@@ -603,6 +682,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -613,6 +694,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Files
@@ -639,6 +724,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -649,6 +736,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Files
@@ -675,6 +768,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -685,6 +780,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:
@@ -787,6 +888,13 @@ components:
           type: string
           description: Unique file identifier
           example: 'abc123'
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: >-
+            Project the file belongs to. Present on `getFile` and on file
+            events; absent on the other operations' records.
+          example: 'proj_V1StGXR8Z5jdHi6B'
         prefix:
           type: string
           readOnly: true

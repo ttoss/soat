@@ -280,7 +280,7 @@ export const deleteWorkflow = async (args: { id: string }) => {
     throw new DomainError(
       'WORKFLOW_HAS_OPEN_TASKS',
       `Workflow '${args.id}' has ${openTasks} open task(s) and cannot be deleted.`,
-      { openTasks }
+      { open_tasks: openTasks }
     );
   }
 

@@ -60,7 +60,7 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 | `created_at`               | string         | ISO 8601 creation timestamp                                                                                                                                                    |
 | `updated_at`               | string         | ISO 8601 last-updated timestamp                                                                                                                                                |
 
-`version_label` (create/update body only) tags the version the write archives — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
+`version_label` (create/update body only) tags the version the write creates — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
 
 ### Agent Version
 
@@ -72,7 +72,7 @@ Immutable archive of one config version, written on create and on every config-c
 | `agent_id`    | string      | Agent this version belongs to                                                                                                                               |
 | `version`     | number      | The archived version number                                                                                                                                 |
 | `config`      | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures)                                           |
-| `label`       | string/null | Optional human tag, e.g. `pre-tone-change`                                                                                                                  |
+| `label`       | string/null | Optional human tag, e.g. `tone-change`                                                                                                                  |
 | `eval_run_id` | string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
 | `created_by_principal_type` | string/null | [Principal](./audit-log.md#principals) that produced this version: `user` or `api_key`                                                              |
 | `created_by_principal_id`   | string/null | Public id of that principal — the key's own `key_…` when a key acted, else `user_…`                                                                 |
@@ -456,7 +456,7 @@ Consequences worth knowing before turning it on:
 - **It is off by default, per agent.** A cache write costs more than an uncached token, so an agent whose prefix is never re-read pays for the privilege. It pays off where the prefix is large and repeatedly re-sent — a multi-step tool-using agent, a long-running session — and not on one-shot calls with short instructions.
 - **Below the model's minimum, nothing is cached.** A provider caches a prefix only from a minimum length per breakpoint (for Anthropic, 1,024–4,096 tokens depending on the model; Claude Haiku 4.5 needs 4,096) and reports nothing when a prefix falls short. Short instructions and a few tools often miss it alone; the message mark reaches it once the conversation and tool results grow.
 - **An agent with no `instructions` has no system mark.** Its message mark still caches the tool definitions with the conversation.
-- **Who honors it.** Anthropic, and Anthropic models served through Bedrock, cache by explicit breakpoint and act on the mark. Providers that cache automatically (OpenAI) and providers that do not cache at all are unaffected — the mark travels as provider-specific metadata each one either reads or ignores, so a `model_route` that fails over between them needs no per-provider configuration.
+- **Who honors it.** Anthropic, and the Bedrock models that cache (Claude 3.5 Haiku, Claude 3.7 Sonnet, the Claude 4 family and later, Amazon Nova), cache by explicit breakpoint and act on the mark. Providers that cache automatically (OpenAI) and providers that do not cache at all are unaffected — the mark travels as provider-specific metadata each one either reads or ignores, so a `model_route` that fails over between them needs no per-provider configuration. Bedrock refuses a mark on a model that does not cache, so SOAT sends none to any other Bedrock model; one addressed by an application inference-profile ARN names no model and is sent none either.
 - **What you get back.** Cache reads are metered as `cached_tokens` and cache writes as `cache_write_tokens` — separate components, because they are separately priced. See [Usage — Token Components](./usage.md#token-components).
 - **Price the write.** Every step writes what it appended, so writes are routine. A `cache_write_tokens` component with no price row of its own bills at the `input_tokens` rate, which understates a provider that charges a premium for writes; add the row before enabling caching on a priced deployment. See [Usage — Pricing](./usage.md#pricing).
 - **`active_tool_ids` on a step rule breaks the prefix.** The tool block is inside the cached prefix, so a [step rule](#step-rules) that changes the active set makes that step write a new cache entry, and the step after it — back to the full set — write another: the prefix is bought twice to save it once. Narrowing by `active_tool_ids` is a capability restriction and is honored anyway; a rule that only forces a tool by name does not narrow on a caching agent, because `tool_choice` already obliges the call.
@@ -756,7 +756,7 @@ curl https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions/2 \
 </TabItem>
 </Tabs>
 
-Tag the version a write archives with `version_label`:
+Tag the version a write creates with `version_label`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -764,7 +764,7 @@ Tag the version a write archives with `version_label`:
 ```bash
 soat update-agent --agent-id agent_V1StGXR8Z5jdHi6B \
   --instructions "Be concise and cite sources." \
-  --version-label pre-tone-change
+  --version-label tone-change
 ```
 
 </TabItem>
@@ -775,7 +775,7 @@ const { data, error } = await soat.agents.updateAgent({
   path: { agent_id: 'agent_V1StGXR8Z5jdHi6B' },
   body: {
     instructions: 'Be concise and cite sources.',
-    version_label: 'pre-tone-change',
+    version_label: 'tone-change',
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -790,7 +790,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
   -H "Content-Type: application/json" \
   -d '{
     "instructions": "Be concise and cite sources.",
-    "version_label": "pre-tone-change"
+    "version_label": "tone-change"
   }'
 ```
 

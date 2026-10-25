@@ -27,7 +27,7 @@ import { workflowVersionsRouter } from './workflowVersions';
 
 const workflowsRouter = new Router<Context>();
 
-/** The tag to attach to the version a write archives, when one was given. */
+/** The tag to attach to the version a write creates, when one was given. */
 const parseVersionLabel = (raw: unknown): string | undefined => {
   return typeof raw === 'string' ? raw : undefined;
 };

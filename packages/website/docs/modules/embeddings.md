@@ -38,7 +38,7 @@ The model is configured server-side (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`; ba
 
 ### Batch size
 
-`inputs` accepts at most **256** values per request (each a model call); larger batches are refused with `VALIDATION_FAILED` (`400`).
+`inputs` accepts at most **256** values per request (each a model call); larger batches are refused with `VALIDATION_FAILED` (`400`). An empty string in `input` or `inputs` is refused the same way.
 
 ## Data Model
 

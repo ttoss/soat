@@ -104,11 +104,11 @@ export const nextRunDepthOrRefuse = async (args: {
       'ORCHESTRATION_RUN_DEPTH_LIMIT',
       `Starting a child run of orchestration '${args.orchestrationPublicId}' would reach nesting depth ${next}, past the limit of ${limit}; the graph is recursing through its loop / sub_orchestration nodes.`,
       {
-        orchestrationId: args.orchestrationPublicId,
-        parentOrchestrationRunId: args.parentRunId ?? null,
+        orchestration_id: args.orchestrationPublicId,
+        parent_orchestration_run_id: args.parentRunId ?? null,
         depth: next,
         limit,
-        limitSource,
+        limit_source: limitSource,
       }
     );
   }

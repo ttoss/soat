@@ -88,7 +88,7 @@ Severity defaults per kind, and a producer may override it:
 
 ### Filtering
 
-`kind`, `severity`, `agent_id`, `generation_id` and `orchestration_run_id` are all query parameters on [`GET /api/v1/activity`](/docs/api/activity/list-activity), and all compose: an entry carries one agent, one generation and one run, so naming two narrows to the entries where both hold.
+`kind`, `severity`, `agent_id`, `generation_id` and `orchestration_run_id` are all query parameters on [`GET /api/v1/activity`](/docs/api/activity/list-activity), and all compose: an entry carries one agent, one generation and one run, so naming two narrows to the entries where both hold. `kind` and `severity` take one value each; a value outside their enum, an empty one or a repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in `meta.allowed`.
 
 `generation_id` is what makes `tool_resolution_failed` usable during an incident rather than merely alertable — the warning for one suspect turn is a single query, not a scan of the project's feed. `action_executed` carries the same id, so "everything this turn did" is the same query without a `kind`.
 

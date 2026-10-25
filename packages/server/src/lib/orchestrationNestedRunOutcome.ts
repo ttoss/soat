@@ -40,7 +40,7 @@ const isErrorCode = (code: string | null): code is ErrorCode => {
 export type NestedRunFailure = {
   code: ErrorCode;
   message: string;
-  meta: { nodeId: string; orchestrationRunId: string; status: string };
+  meta: { node_id: string; orchestration_run_id: string; status: string };
 };
 
 /**
@@ -65,7 +65,7 @@ export const readNestedRunFailure = (args: {
     message:
       childMessage ??
       `Child run '${run.id}' started by node '${nodeId}' settled '${run.status}'.`,
-    meta: { nodeId, orchestrationRunId: run.id, status: run.status },
+    meta: { node_id: nodeId, orchestration_run_id: run.id, status: run.status },
   };
 };
 

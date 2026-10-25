@@ -167,6 +167,19 @@ describe('Exceptions', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test.each(['severity', 'kind'])(
+      'a %s outside the vocabulary is refused with its allowed values',
+      async (name) => {
+        const res = await listExceptions(`&${name}=bogus`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.meta.parameter).toBe(name);
+        expect(res.body.error.meta.invalid).toEqual(['bogus']);
+        expect(res.body.error.meta.allowed.length).toBeGreaterThan(0);
+      }
+    );
+
     test('an API key acknowledging and resolving names the key', async () => {
       const key = await authenticatedTestClient(userToken)
         .post('/api/v1/api-keys')

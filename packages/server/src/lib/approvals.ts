@@ -671,8 +671,20 @@ const assertNotExpiredOrExpire = async (
   }
 };
 
-const assertValidEditedArgs = (editedArguments?: object | null): void => {
+const assertValidEditedArgs = (args: {
+  editedArguments?: object | null;
+  proposedAction: ProposedAction | undefined;
+}): void => {
+  const { editedArguments } = args;
   if (editedArguments === undefined || editedArguments === null) return;
+  // Without a proposed action nothing runs with the arguments, so storing
+  // them would record an edit that had no effect.
+  if (!args.proposedAction) {
+    throw new DomainError(
+      'APPROVAL_INVALID_EDIT',
+      'This approval proposes no action, so it takes no edited arguments.'
+    );
+  }
   if (typeof editedArguments !== 'object' || Array.isArray(editedArguments)) {
     throw new DomainError(
       'APPROVAL_INVALID_EDIT',
@@ -764,7 +776,10 @@ export const approveApproval = async (args: {
   const item = await findApprovalOrThrow(args.id);
   assertResolvable(item);
   await assertNotExpiredOrExpire(item, 'approved');
-  assertValidEditedArgs(args.editedArguments);
+  assertValidEditedArgs({
+    editedArguments: args.editedArguments,
+    proposedAction: item.proposedAction as ProposedAction | undefined,
+  });
   // The approved action runs outside any generation, so nothing would stamp
   // the server's identity over a forged `session_id`; strip it here.
   const toolContext = sanitizeCallerToolContext(args.toolContext);

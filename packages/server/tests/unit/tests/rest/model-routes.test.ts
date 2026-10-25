@@ -561,8 +561,8 @@ describe('Model Routes', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
       expect(res.body.error.message).toMatch(/1 model route\(s\)/);
-      expect(res.body.error.meta.modelRouteCount).toBe(1);
-      expect(res.body.error.meta.modelRouteIds).toEqual([route.body.id]);
+      expect(res.body.error.meta.model_route_count).toBe(1);
+      expect(res.body.error.meta.model_route_ids).toEqual([route.body.id]);
       expect(res.body.error.meta.forcible).toBe(false);
 
       await authenticatedTestClient(userToken)

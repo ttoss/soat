@@ -61,6 +61,20 @@ describe('Documents', () => {
       expect(response.body.content).toBeUndefined();
     });
 
+    test('a path alone files the document under its leaf as the filename', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Filed by path.',
+          path: '/leaf-check/zebra.txt',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.path).toBe('/leaf-check/zebra.txt');
+      expect(response.body.filename).toBe('zebra.txt');
+    });
+
     test('unauthenticated request cannot create a document', async () => {
       const response = await testClient.post('/api/v1/documents').send({
         project_id: projectId,
@@ -929,6 +943,7 @@ describe('Documents', () => {
       expect(response.body.id).toMatch(/^doc_/);
       expect(response.body.status).toBe('pending');
       expect(response.body.project_id).toBe(projectId);
+      expect(typeof response.body.chunk_count).toBe('number');
     });
 
     test('document transitions to ready after background processing', async () => {
@@ -1244,8 +1259,7 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
-      const status = await getDocumentStatus(ingestRes.body.id);
-      expect(status.chunk_count).toBeGreaterThan(0);
+      expect(ingestRes.body.chunk_count).toBe(1);
     });
 
     test('?wait=true sets failure reason on unparseable file', async () => {
@@ -1743,6 +1757,51 @@ describe('Documents', () => {
       expect(res.body.content).toBeUndefined();
     });
 
+    test('a document created from content reports its chunk total', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Chunk total content.',
+          filename: 'chunk-total.txt',
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${createRes.body.id}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.chunk_count).toBe(1);
+      expect(res.body.total_chunks).toBe(1);
+    });
+
+    test('a re-chunking update reports the new chunk total', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'a'.repeat(50),
+          filename: 'rechunk-total.txt',
+          chunk_strategy: 'size',
+          chunk_size: 100,
+          chunk_overlap: 0,
+        });
+      expect(createRes.status).toBe(201);
+      const patchRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${createRes.body.id}`)
+        .send({ content: 'a'.repeat(250) });
+      expect(patchRes.status).toBe(200);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${createRes.body.id}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.chunk_count).toBe(3);
+      expect(res.body.total_chunks).toBe(3);
+    });
+
     test('reports total_pages and chunk_count after PDF ingestion', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
@@ -1932,8 +1991,7 @@ describe('Documents', () => {
       expect(reRes.status).toBe(201);
       expect(reRes.body.id).toBe(docId);
       expect(reRes.body.status).toBe('ready');
-      const secondStatus = await getDocumentStatus(docId);
-      expect(secondStatus.chunk_count).toBe(1);
+      expect(reRes.body.chunk_count).toBe(1);
     });
 
     test('async re-ingest returns 202 then transitions to ready', async () => {

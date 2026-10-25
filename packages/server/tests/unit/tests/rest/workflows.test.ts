@@ -155,7 +155,7 @@ describe('Workflows', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'states.0.stalledAfter',
       ]);
     });
@@ -172,7 +172,7 @@ describe('Workflows', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'transitions.0.requiresApproval',
       ]);
     });
@@ -193,7 +193,7 @@ describe('Workflows', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.meta.unknownFields).toEqual([
+      expect(res.body.error.meta.unknown_fields).toEqual([
         'states.0.on_enter.dispatch.agentId',
       ]);
     });
@@ -440,6 +440,7 @@ describe('Workflows', () => {
       );
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('WORKFLOW_HAS_OPEN_TASKS');
+      expect(res.body.error.meta).toEqual({ open_tasks: 1 });
     });
 
     test('deletes a workflow once its only task is closed (no bare 500)', async () => {

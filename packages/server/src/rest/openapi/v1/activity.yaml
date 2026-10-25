@@ -118,10 +118,24 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/activity/export:
     get:
       tags:
@@ -151,11 +165,26 @@ paths:
           description: Only entries of this kind
           schema:
             type: string
+            enum:
+              [
+                action_executed,
+                approval_created,
+                approval_resolved,
+                exception_created,
+                schedule_fired,
+                share_cap_exceeded,
+                share_resumed,
+                share_revoked,
+                share_suspended,
+                tool_resolution_failed,
+                usage_quantity_invalid,
+              ]
         - name: severity
           in: query
           description: Only entries of this severity
           schema:
             type: string
+            enum: [info, warning, critical]
         - name: agent_id
           in: query
           description: Only entries an agent produced
@@ -185,10 +214,26 @@ paths:
                 type: string
         '400':
           description: '`project_id` is required'
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
 components:
   securitySchemes:

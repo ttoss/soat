@@ -50,6 +50,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -73,6 +75,12 @@ paths:
                     https://soat.ttoss.dev/docs/error-codes#single_session_conflict
                   meta:
                     session_id: sess_abc123
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     get:
       tags:
         - Sessions
@@ -133,12 +141,18 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}:
     get:
@@ -163,12 +177,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Sessions
@@ -192,12 +212,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Sessions
@@ -216,12 +248,18 @@ paths:
       responses:
         '204':
           description: Session deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/messages:
     post:
@@ -260,6 +298,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AddSessionMessageResponse'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -274,6 +314,15 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '410':
+          description: >-
+            SESSION_EXPIRED — the session outlived its time-to-live and takes no more messages.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: the session auto-generates and an `enforce`-mode
@@ -285,6 +334,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/generate:
     post:
@@ -337,6 +388,8 @@ paths:
                     enum: [accepted]
                   session_id:
                     type: string
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -355,6 +408,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted.
@@ -365,6 +420,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR). The error `meta`
@@ -405,6 +462,8 @@ paths:
             application/json:
               schema:
                 $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
@@ -420,6 +479,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/fork:
     post:
@@ -488,6 +553,12 @@ paths:
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/forks:
     get:
@@ -518,12 +589,18 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/SessionRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/sessions/{session_id}/tags:
     get:
@@ -544,12 +621,18 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Sessions
@@ -574,12 +657,20 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Sessions
@@ -604,12 +695,20 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
         '403':
           $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
 components:
   securitySchemes:

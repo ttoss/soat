@@ -212,14 +212,14 @@ const collectAiProviderDependents = async (args: {
   };
 
   const meta = {
-    chatCount: chats.length,
-    chatIds: sample(chats),
-    agentCount: agents.length,
-    agentIds: sample(agents),
-    modelRouteCount: modelRoutes.length,
-    modelRouteIds: sample(modelRoutes),
-    priceOverrideCount,
-    usageEventCount,
+    chat_count: chats.length,
+    chat_ids: sample(chats),
+    agent_count: agents.length,
+    agent_ids: sample(agents),
+    model_route_count: modelRoutes.length,
+    model_route_ids: sample(modelRoutes),
+    price_override_count: priceOverrideCount,
+    usage_event_count: usageEventCount,
     // True only when the block is caused solely by soft dependents, i.e. a
     // `force=true` retry would succeed. Hard references make this false.
     forcible: hardCount === 0,
@@ -267,7 +267,7 @@ export const deleteAiProvider = async (args: {
   if (softCount > 0 && !args.force) {
     throw new DomainError(
       'AI_PROVIDER_HAS_DEPENDENTS',
-      `AI provider '${args.id}' has ${meta.priceOverrideCount} price override(s) and ${meta.usageEventCount} usage record(s). Retry with force=true to delete its overrides and unlink usage history.`,
+      `AI provider '${args.id}' has ${meta.price_override_count} price override(s) and ${meta.usage_event_count} usage record(s). Retry with force=true to delete its overrides and unlink usage history.`,
       meta
     );
   }

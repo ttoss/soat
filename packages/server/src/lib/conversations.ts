@@ -6,6 +6,7 @@ import {
   type RetrievalMode,
 } from './conversationRetrieval';
 import { deleteDocument } from './documents';
+import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
 import {
@@ -17,6 +18,8 @@ import { makeResourceAccessor } from './resourceAccessor';
 import { applyTagFilter, mergeTags } from './tags';
 
 export type { CompiledPolicy };
+
+export const CONVERSATION_STATUSES = ['open', 'closed'] as const;
 
 registerResourceFieldMap({
   resourceType: 'conversation',
@@ -141,6 +144,12 @@ export const createConversation = async (args: {
   actorId?: number | null;
   retrieval?: RetrievalMode | null;
 }) => {
+  assertEnumField({
+    field: 'status',
+    value: args.status,
+    allowed: CONVERSATION_STATUSES,
+  });
+
   const conversation = await db.Conversation.create({
     projectId: args.projectId,
     status: args.status ?? 'open',
@@ -171,6 +180,12 @@ export const updateConversation = async (args: {
   status?: string;
   retrieval?: RetrievalMode | null;
 }) => {
+  assertEnumField({
+    field: 'status',
+    value: args.status,
+    allowed: CONVERSATION_STATUSES,
+  });
+
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.id },
   });
@@ -208,16 +223,13 @@ export const updateConversation = async (args: {
     });
   }
 
-  const updated = await db.Conversation.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
+  const updated = await conversations.reload(conversation);
 
-  const mapped = mapConversation(updated!);
+  const mapped = mapConversation(updated);
 
   emitResourceEvent({
     type: 'conversations.updated',
-    projectId: updated!.projectId,
+    projectId: updated.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
@@ -328,16 +340,13 @@ export const updateConversationTags = async (args: {
   });
   await conversation.update({ tags: newTags });
 
-  const updated = await db.Conversation.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
+  const updated = await conversations.reload(conversation);
 
-  const mapped = mapConversation(updated!);
+  const mapped = mapConversation(updated);
 
   emitResourceEvent({
     type: 'conversations.updated',
-    projectId: updated!.projectId,
+    projectId: updated.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,

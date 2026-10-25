@@ -84,6 +84,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/DocumentRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -96,6 +98,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     post:
       tags:
         - Documents
@@ -130,6 +136,7 @@ paths:
                   example: '/reports/q1.txt'
                 filename:
                   type: string
+                  description: Download name. Defaults to the leaf of `path`.
                   example: 'my-doc.txt'
                 title:
                   type: string
@@ -192,6 +199,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/ingest:
     post:
       tags:
@@ -311,6 +324,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/export:
     get:
       tags:
@@ -355,10 +372,26 @@ paths:
                 type: string
         '400':
           description: '`project_id` is required'
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}:
     get:
       tags:
@@ -381,6 +414,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocumentRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -399,6 +434,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Documents
@@ -416,6 +455,8 @@ paths:
       responses:
         '204':
           description: Document deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -434,6 +475,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Documents
@@ -490,6 +535,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocumentRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -518,6 +565,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}/relations:
     get:
       tags:
@@ -551,12 +604,30 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/DocumentRelation'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     post:
       tags:
         - Documents
@@ -612,14 +683,40 @@ paths:
           description: >-
             An undeclared `type`, a `to_document_id` that is not a document id,
             a document relating to itself, or a target in another project
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Either document was not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: That relation is already asserted
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}/relations/{relation_id}:
     delete:
       tags:
@@ -645,12 +742,30 @@ paths:
       responses:
         '204':
           description: Relation retracted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document or relation not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}/status:
     get:
       tags:
@@ -680,6 +795,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocumentStatusRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -698,6 +815,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}/withdraw:
     post:
       tags:
@@ -740,7 +861,7 @@ paths:
                   type: string
                   nullable: true
                   description: >-
-                    Optional tag for the tombstone version this write archives.
+                    Optional tag for the tombstone version this write creates.
                   example: superseded-by-q2
                 expected_version:
                   description: >-
@@ -788,6 +909,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/documents/{document_id}/versions:
     get:
@@ -821,6 +948,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/DocumentVersion'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -839,6 +968,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/documents/{document_id}/versions/{version}:
     get:
@@ -893,6 +1026,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/documents/{document_id}/versions/{version}/restore:
     post:
@@ -983,6 +1120,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/documents/{document_id}/ingest:
     post:
@@ -1057,6 +1200,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IngestedDocumentRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -1091,6 +1236,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}/ingestion-callback:
     post:
       tags:
@@ -1157,6 +1306,8 @@ paths:
             Conversion completed — the document was chunked and marked
             `ready` (or `failed` with `FILE_PARSE_FAILED` if the output
             produced no text).
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: The token is missing, invalid, or does not match this document.
           content:
@@ -1177,12 +1328,18 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '422':
           description: The output shape is unrecognized.
           content:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/documents/{document_id}/tags:
     get:
       tags:
@@ -1205,6 +1362,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -1223,6 +1382,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     put:
       tags:
         - Documents
@@ -1250,6 +1413,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -1268,6 +1433,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Documents
@@ -1295,6 +1466,8 @@ paths:
             application/json:
               schema:
                 $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -1313,6 +1486,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:
@@ -1363,10 +1542,10 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional human tag for this version, e.g. `pre-correction`. Set from
+            Optional human tag for this version, e.g. `corrected`. Set from
             the `version_label` of the write that archived it, or generated for
             a restore or a withdrawal.
-          example: pre-correction
+          example: corrected
         created_by_principal_type:
           nullable: true
           allOf:
@@ -1419,6 +1598,18 @@ components:
           type: integer
           description: File size in bytes
           example: 42
+        title:
+          type: string
+          description: Document title. Absent when none was set.
+          example: 'Q1 report'
+        metadata:
+          description: Caller-owned annotations. Absent when none were set.
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
+        tags:
+          description: The document's tag bag. Absent when none were set.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/TagBag'
         status:
           type: string
           enum: [pending, processing, ready, failed, withdrawn]
@@ -1488,7 +1679,7 @@ components:
           properties:
             chunk_count:
               type: integer
-              description: Number of chunks created from the file.
+              description: Chunks indexed when the response was built. The final count under `?wait=true`; on a `202`, usually `0`, with the live count on `GET /documents/{document_id}/status`.
               example: 10
     DocumentStatusRecord:
       type: object

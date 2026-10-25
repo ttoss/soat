@@ -701,7 +701,7 @@ describe('Knowledge', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.meta.unknownFields).toContain('min_score');
+      expect(response.body.error.meta.unknown_fields).toContain('min_score');
     });
 
     test('min_similarity filters on similarity_score, not on score', async () => {

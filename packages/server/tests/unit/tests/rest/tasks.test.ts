@@ -1007,7 +1007,7 @@ describe('Tasks', () => {
       // request validation as an unknown property of UpdateTaskRequest.
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.meta.unknownFields).toContain('state');
+      expect(res.body.error.meta.unknown_fields).toContain('state');
 
       // The task's state must be untouched by the rejected write.
       const after = await authenticatedTestClient(userToken).get(

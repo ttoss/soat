@@ -32,7 +32,7 @@ Files belong to a project and are persisted through the configured backend (loca
 | `content_type` | string                   | MIME type                                                                                                           |
 | `size`         | number                   | File size in bytes                                                                                                  |
 | `metadata`     | object           | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata) |
-| `project_id`   | string                   | ID of the owning project                                                                                            |
+| `project_id`   | string                   | ID of the owning project. Present on [`GET /files/:id`](/docs/api/files/get-file) and on file events; absent on the other operations' records. |
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
 

@@ -384,6 +384,39 @@ describe('Approvals', () => {
       expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
     });
 
+    test('an item with no proposed action refuses edited arguments and stays pending', async () => {
+      const seeded = await seedApproval({
+        origin: 'task_transition',
+        proposedAction: null,
+      });
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: { amount: 450 } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+
+      const after = await authenticatedTestClient(adminToken).get(
+        `/api/v1/approvals/${seeded.id}`
+      );
+      expect(after.body.status).toBe('pending');
+      expect(after.body.edited_arguments).toBeNull();
+    });
+
+    test('an item with no proposed action approves without arguments', async () => {
+      const seeded = await seedApproval({
+        origin: 'task_transition',
+        proposedAction: null,
+      });
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('approved');
+      expect(res.body.edited_arguments).toBeNull();
+    });
+
     test('approving an already-resolved item returns 409', async () => {
       const seeded = await seedApproval();
       await authenticatedTestClient(userToken)

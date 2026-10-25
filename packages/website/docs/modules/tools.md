@@ -35,8 +35,8 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`builtin`)                               |
 | `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"builtin"` \| `"pipeline"` | Tool type — determines execution behaviour                                        |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
-| `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
-| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `response_mode`, `auth`). Required for `http` type. |
+| `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. `null`: the model sees `{ "type": "object", "properties": {} }`. |
+| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `response_mode`, `auth`). Required for `http` type, with `url`. |
 | `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.   |
 | `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
 | `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
@@ -92,6 +92,8 @@ For `mcp` and `builtin`, `name` is a prefix joined with `_` to each sub-tool nam
 ### http
 
 The server sends the arguments to `execute.url` with the configured method: as a JSON body for `POST`, `PUT`, `PATCH`; as query-string parameters for `GET`, `HEAD`, `DELETE`.
+
+An `http` tool without a non-empty `execute.url` is `400 VALIDATION_FAILED` on create, on an update that leaves it without one (`execute: null`, or `type` switched to `http`), in an inline tool definition and in `validate-formation`. A `url` written as a formation intrinsic (`param`, `sub`) counts as present until deploy resolves it.
 
 :::caution Pointing a `GET` tool at this API
 

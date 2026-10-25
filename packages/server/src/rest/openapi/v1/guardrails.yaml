@@ -93,6 +93,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     get:
       tags:
         - Guardrails
@@ -121,6 +127,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Guardrail'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -133,6 +141,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/guardrails/{guardrail_id}:
     get:
@@ -157,6 +169,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Guardrail'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -175,6 +189,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       tags:
         - Guardrails
@@ -235,6 +253,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           $ref: './concurrency.yaml#/components/responses/VersionConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
     delete:
       tags:
         - Guardrails
@@ -253,6 +277,8 @@ paths:
       responses:
         '204':
           description: Deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -271,6 +297,17 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            GUARDRAIL_HAS_REFERENCES — the guardrail is still attached to a tool, agent or project; `error.meta` lists the references.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/guardrails/{guardrail_id}/versions:
     get:
@@ -308,6 +345,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/GuardrailVersion'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -326,6 +365,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/guardrails/{guardrail_id}/versions/{version}:
     get:
@@ -384,6 +427,10 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/guardrails/{guardrail_id}/versions/{version}/restore:
     post:
@@ -455,6 +502,12 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           $ref: './concurrency.yaml#/components/responses/VersionConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
   /api/v1/guardrails/{guardrail_id}/evaluate:
     post:
@@ -508,6 +561,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GuardrailEvaluation'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -526,6 +581,12 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 
 components:
   securitySchemes:
@@ -747,7 +808,7 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional human tag for this version, e.g. `pre-tightening`. Set from
+            Optional human tag for this version, e.g. `tightened`. Set from
             the `label` field of a restore, or generated for one.
           example: restored from v2
         created_by_principal_type:
@@ -809,7 +870,7 @@ components:
         version_label:
           type: string
           description: >-
-            Optional tag for the config version this write archives (e.g.
+            Optional tag for the config version this write creates (e.g.
             `initial`). Annotates the version only — it is not stored on the
             guardrail and is not part of the config, so labelling a change is
             never itself a change.
@@ -839,12 +900,12 @@ components:
         version_label:
           type: string
           description: >-
-            Optional tag for the config version this write archives (e.g.
-            `pre-tightening`). Annotates the version only — it is not stored on
+            Optional tag for the config version this write creates (e.g.
+            `tightened`). Annotates the version only — it is not stored on
             the guardrail and is not part of the config, so labelling a change is
             never itself a change. Ignored when the write changes no policy, since
             no version is created.
-          example: pre-tightening
+          example: tightened
 
         expected_version:
           description: >-
