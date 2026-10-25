@@ -55,8 +55,8 @@ describe('assertNestedRunCompleted', () => {
         `Child run 'orch_run_child' started by node 'delegate' settled '${status}'.`
       );
       expect(error.meta).toEqual({
-        nodeId: 'delegate',
-        orchestrationRunId: 'orch_run_child',
+        node_id: 'delegate',
+        orchestration_run_id: 'orch_run_child',
         status,
       });
     }

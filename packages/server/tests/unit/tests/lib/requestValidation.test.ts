@@ -44,7 +44,7 @@ describe('validateRequestBody', () => {
       });
       expect(error.code).toBe('VALIDATION_FAILED');
       expect(error.httpStatus).toBe(400);
-      expect(error.meta).toEqual({ unknownFields: ['prompt', 'foo'] });
+      expect(error.meta).toEqual({ unknown_fields: ['prompt', 'foo'] });
       expect(error.message).toMatch(/Unknown field/);
     });
 
@@ -56,7 +56,9 @@ describe('validateRequestBody', () => {
           body: { ai_provider_id: 'aip_1', knowledge_config: { bogus: true } },
         });
       });
-      expect(error.meta).toEqual({ unknownFields: ['knowledge_config.bogus'] });
+      expect(error.meta).toEqual({
+        unknown_fields: ['knowledge_config.bogus'],
+      });
     });
 
     test('rejects an unknown field inside an array item with an indexed path', () => {
@@ -71,7 +73,7 @@ describe('validateRequestBody', () => {
           },
         });
       });
-      expect(error.meta).toEqual({ unknownFields: ['nodes.0.bogus'] });
+      expect(error.meta).toEqual({ unknown_fields: ['nodes.0.bogus'] });
     });
 
     test('compares against spec names (a camelCase key is unknown)', () => {
@@ -132,7 +134,7 @@ describe('validateRequestBody', () => {
           body: { message: 'hi', bogus: 1 },
         });
       });
-      expect(error.meta).toEqual({ unknownFields: ['bogus'] });
+      expect(error.meta).toEqual({ unknown_fields: ['bogus'] });
     });
 
     test('accepts fields drawn from more than one branch of a union', () => {
@@ -158,7 +160,7 @@ describe('validateRequestBody', () => {
           },
         });
       });
-      expect(error.meta).toEqual({ unknownFields: ['scorers.0.bogus'] });
+      expect(error.meta).toEqual({ unknown_fields: ['scorers.0.bogus'] });
     });
 
     test('accepts a policy statement condition (open object) after the spec fix', () => {
@@ -204,7 +206,7 @@ describe('validateRequestBody', () => {
         });
       });
       expect(error.code).toBe('VALIDATION_FAILED');
-      expect(error.meta).toEqual({ missingFields: ['name'] });
+      expect(error.meta).toEqual({ missing_fields: ['name'] });
       expect(error.message).toMatch(/Missing required field/);
     });
 
@@ -216,7 +218,7 @@ describe('validateRequestBody', () => {
           body: { name: '' },
         });
       });
-      expect(error.meta).toEqual({ missingFields: ['name'] });
+      expect(error.meta).toEqual({ missing_fields: ['name'] });
     });
 
     test('does not enforce required fields nested inside objects', () => {
@@ -254,8 +256,8 @@ describe('validateRequestBody', () => {
       // field exactly as the spec declares it cannot have that field counted
       // as unknown *and* another spelling of it as missing.
       expect(error.meta).toEqual({
-        unknownFields: ['foo'],
-        missingFields: ['targets'],
+        unknown_fields: ['foo'],
+        missing_fields: ['targets'],
       });
     });
 
@@ -288,7 +290,7 @@ describe('validateRequestBody', () => {
         });
       });
       expect(error.code).toBe('VALIDATION_FAILED');
-      expect(error.meta).toEqual({ invalidFields: ['workflow_id'] });
+      expect(error.meta).toEqual({ invalid_fields: ['workflow_id'] });
       expect(error.message).toBe('`workflow_id` must be a string');
     });
 
@@ -336,7 +338,7 @@ describe('validateRequestBody', () => {
           body: { name: null },
         });
       });
-      expect(error.meta).toEqual({ missingFields: ['name'] });
+      expect(error.meta).toEqual({ missing_fields: ['name'] });
     });
   });
 });

@@ -69,3 +69,13 @@ export const emitDocumentLifecycleEvent = (args: {
     data: args.data,
   });
 };
+
+/**
+ * Chunks currently indexed for a document — the one count every response
+ * naming `chunk_count` reports, so a poller and an ingest answer agree.
+ */
+export const countIndexedChunks = (args: {
+  documentId: number;
+}): Promise<number> => {
+  return db.DocumentChunk.count({ where: { documentId: args.documentId } });
+};

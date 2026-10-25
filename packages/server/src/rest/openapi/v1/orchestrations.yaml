@@ -1288,10 +1288,10 @@ components:
         version_label:
           type: string
           description: >-
-            Optional tag for the version this write archives, e.g. `pre-rewire`.
+            Optional tag for the version this write creates, e.g. `rewired`.
             Ignored when the write changes no graph field, since no version is
             archived.
-          example: pre-rewire
+          example: rewired
 
         expected_version:
           description: >-
@@ -1351,7 +1351,7 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional human tag for this version, e.g. `pre-rewire`. Set from the
+            Optional human tag for this version, e.g. `rewired`. Set from the
             `version_label` field of a write, the `label` field of a restore, or
             generated for one.
           example: restored from v2

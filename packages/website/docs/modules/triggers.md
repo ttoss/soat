@@ -54,7 +54,7 @@ repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in
 | `active`       | boolean                                 | Inactive triggers never fire                                                      |
 | `policy_id`    | string \| null                          | Optional boundary policy that further restricts firings (see [Run-as Identity](#run-as-identity)) |
 | `secret`       | string                                  | Webhook type only. Returned **only** on create, rotate, and `GET …/secret`        |
-| `next_fire_at` | string \| null                          | Read-only. Schedule type only. Server-computed next fire time                     |
+| `next_fire_at` | string \| null                          | Read-only. Schedule type only. Server-computed next fire time; `null` while inactive, recomputed from now on re-activation |
 | `created_at`   | string                                  | ISO 8601 creation timestamp                                                       |
 | `updated_at`   | string                                  | ISO 8601 last-updated timestamp                                                   |
 

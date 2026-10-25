@@ -1400,7 +1400,11 @@ describe('Quotas', () => {
 
       const toolRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
-        .send({ project_id: enfProjectId, name: 'quota probe tool' });
+        .send({
+          project_id: enfProjectId,
+          name: 'quota probe tool',
+          execute: { url: 'https://example.com/hook' },
+        });
       expect(toolRes.status).toBe(201);
 
       await createQuota(

@@ -128,7 +128,11 @@ describe('Triggers', () => {
     httpToolId = (
       await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
-        .send({ project_id: projectId, name: 'triggers-http-tool' })
+        .send({
+          project_id: projectId,
+          name: 'triggers-http-tool',
+          execute: { url: 'http://127.0.0.1:9/unreachable' },
+        })
     ).body.id;
 
     mcpToolId = (
@@ -892,6 +896,47 @@ describe('Triggers', () => {
       expect(valid.status).toBe(200);
       expect(valid.body.cron).toBe('30 9 * * 1');
       expect(valid.body.next_fire_at).toBeTruthy();
+    });
+
+    test('an inactive schedule trigger has no next_fire_at until re-activated', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'schedule-inactive-toggle',
+          type: 'schedule',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          cron: '0 8 * * *',
+          active: false,
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.next_fire_at).toBeNull();
+
+      const cronWhileInactive = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${created.body.id}`)
+        .send({ cron: '30 9 * * 1' });
+      expect(cronWhileInactive.status).toBe(200);
+      expect(cronWhileInactive.body.next_fire_at).toBeNull();
+
+      const activated = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${created.body.id}`)
+        .send({ active: true });
+      expect(activated.status).toBe(200);
+      expect(new Date(activated.body.next_fire_at).getTime()).toBeGreaterThan(
+        Date.now()
+      );
+
+      const deactivated = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${created.body.id}`)
+        .send({ active: false });
+      expect(deactivated.status).toBe(200);
+      expect(deactivated.body.next_fire_at).toBeNull();
+
+      const fetched = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/${created.body.id}`
+      );
+      expect(fetched.body.next_fire_at).toBeNull();
     });
 
     test('returns 404 for an unknown trigger', async () => {

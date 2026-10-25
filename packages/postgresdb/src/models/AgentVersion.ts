@@ -76,7 +76,7 @@ export class AgentVersion extends Model {
   @Column({ type: DataType.JSONB, allowNull: false })
   declare config: object;
 
-  /** Optional human tag for this version, e.g. `pre-tone-change`. */
+  /** Optional human tag for this version, e.g. `tone-change`. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
 

@@ -279,17 +279,17 @@ A delete with no dependents (or `force=true` and only soft dependents) returns `
     "code": "AI_PROVIDER_HAS_DEPENDENTS",
     "message": "AI provider 'aip_01' is in use by 2 chat(s), 1 agent(s) ...",
     "meta": {
-      "chatCount": 2, "chatIds": ["chat_01", "chat_02"],
-      "agentCount": 1, "agentIds": ["agent_01"],
-      "modelRouteCount": 0, "modelRouteIds": [],
-      "priceOverrideCount": 0, "usageEventCount": 0,
+      "chat_count": 2, "chat_ids": ["chat_01", "chat_02"],
+      "agent_count": 1, "agent_ids": ["agent_01"],
+      "model_route_count": 0, "model_route_ids": [],
+      "price_override_count": 0, "usage_event_count": 0,
       "forcible": false
     }
   }
 }
 ```
 
-`forcible` is `true` only when the block comes solely from soft dependents, so a `force=true` retry would succeed. The `*Ids` arrays sample up to 20 offending IDs; the `*Count` fields report the true totals.
+`forcible` is `true` only when the block comes solely from soft dependents, so a `force=true` retry would succeed. The `*_ids` arrays sample up to 20 offending IDs; the `*_count` fields report the true totals.
 
 ## Examples
 

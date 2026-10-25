@@ -1,5 +1,7 @@
-import { db } from '../db';
-import { fetchDocumentWithContext } from './documentLoaders';
+import {
+  countIndexedChunks,
+  fetchDocumentWithContext,
+} from './documentLoaders';
 import { mapDocument } from './documentMapper';
 import { recoverStaleDocument } from './ingestionCallback';
 
@@ -52,8 +54,8 @@ export const getDocumentStatus = async (args: { id: string }) => {
 
   // Always report the live count so the value is meaningful while processing,
   // not just after the total is persisted on completion.
-  const chunkCount = await db.DocumentChunk.count({
-    where: { documentId: doc.id },
+  const chunkCount = await countIndexedChunks({
+    documentId: doc.id as number,
   });
 
   const totalChunks = doc.totalChunks ?? undefined;

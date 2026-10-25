@@ -35,7 +35,7 @@ export type RawUpdateBody = {
   version_label?: unknown;
 };
 
-/** The tag to attach to the version a write archives, when one was given. */
+/** The tag to attach to the version a write creates, when one was given. */
 export const parseVersionLabel = (raw: unknown): string | undefined => {
   return typeof raw === 'string' ? raw : undefined;
 };

@@ -130,6 +130,7 @@ paths:
                   example: '/reports/q1.txt'
                 filename:
                   type: string
+                  description: Download name. Defaults to the leaf of `path`.
                   example: 'my-doc.txt'
                 title:
                   type: string
@@ -740,7 +741,7 @@ paths:
                   type: string
                   nullable: true
                   description: >-
-                    Optional tag for the tombstone version this write archives.
+                    Optional tag for the tombstone version this write creates.
                   example: superseded-by-q2
                 expected_version:
                   description: >-
@@ -1363,10 +1364,10 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional human tag for this version, e.g. `pre-correction`. Set from
+            Optional human tag for this version, e.g. `corrected`. Set from
             the `version_label` of the write that archived it, or generated for
             a restore or a withdrawal.
-          example: pre-correction
+          example: corrected
         created_by_principal_type:
           nullable: true
           allOf:
@@ -1488,7 +1489,7 @@ components:
           properties:
             chunk_count:
               type: integer
-              description: Number of chunks created from the file.
+              description: Chunks indexed when the response was built. The final count under `?wait=true`; on a `202`, usually `0`, with the live count on `GET /documents/{document_id}/status`.
               example: 10
     DocumentStatusRecord:
       type: object

@@ -112,8 +112,9 @@ export const mapGeneration = (
     node_id: gen.nodeId,
     node_attempt: gen.nodeAttempt,
     agent_version: gen.agentVersion,
-    // `eval` when an eval run produced this generation; null for production
-    // traffic. Part of the attribution skeleton a content purge preserves.
+    // `eval` or `decider` when an eval run or a decider question produced this
+    // generation; null for production traffic. Part of the attribution
+    // skeleton a content purge preserves.
     source: gen.source,
     routing: gen.routing,
     extraction: gen.extraction,

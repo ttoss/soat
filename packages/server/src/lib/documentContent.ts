@@ -45,7 +45,7 @@ export const createDocumentTextFile = async (args: {
   projectId: number;
   content: string;
   normalizedPath: string | null;
-  filename?: string;
+  filename: string | undefined;
 }): Promise<InstanceType<(typeof db)['File']>> => {
   const provider = getActiveStorageProvider();
   let file: InstanceType<(typeof db)['File']>;
@@ -53,7 +53,7 @@ export const createDocumentTextFile = async (args: {
     file = await db.File.create({
       projectId: args.projectId,
       path: args.normalizedPath,
-      filename: args.filename ?? 'document.txt',
+      filename: args.filename,
       contentType: 'text/plain',
       size: Buffer.byteLength(args.content, 'utf-8'),
       storageType: provider.storageType,
@@ -143,6 +143,10 @@ export const chunkDocumentText = async (args: {
     chunks,
     embed: args.embed,
   });
+  await db.Document.update(
+    { totalChunks: chunks.length },
+    { where: { id: args.documentId } }
+  );
 };
 
 // Effective chunk config for a re-chunk: an explicitly-supplied value wins;
@@ -243,6 +247,7 @@ export const commitDocumentChunkChanges = async (args: {
       { transaction }
     );
   }
+  await doc.update({ totalChunks: change.rows.length }, { transaction });
 
   const file = doc.file;
   if (change.rewriteStorage && file?.storagePath && holdsDocumentText(file)) {

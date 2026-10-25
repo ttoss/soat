@@ -43,7 +43,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `file_id`    | string         | ID of the underlying File record                                                                                   |
 | `project_id` | string         | ID of the owning project                                                                                           |
 | `path`       | string \| null | Logical path within the project (e.g. `/reports/q1.txt`). Also used as the resource ID segment in path-based SRNs. |
-| `filename`   | string         | Original filename                                                                                                  |
+| `filename`   | string         | Original filename; the leaf of `path` when only `path` is given on create                                          |
 | `content_type` | string       | Media type of the source file the document was ingested from (e.g. `application/pdf`). Absent when the underlying file is gone. |
 | `size`       | number         | File size in bytes                                                                                                 |
 | `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`, plus `withdrawn`. Plain-text documents are always `ready`. |
@@ -71,7 +71,7 @@ Chunks are not exposed directly; they are used for embedding-based search. `cont
 
 ### Path Field
 
-`path` defaults to `/<filename>`, or to `/<document_id>.txt` for a document created from inline content with neither a `path` nor a `filename` — a document with no path is reachable only by its id, since a prefix filter is a `LIKE` and never matches null. That document's `filename` is the same leaf, so the key and the download name agree.
+`path` defaults to `/<filename>`, or to `/<document_id>.txt` for a document created from inline content with neither a `path` nor a `filename` — a document with no path is reachable only by its id, since a prefix filter is a `LIKE` and never matches null. That document's `filename` is the same leaf, so the key and the download name agree. A create with `path` and no `filename` takes `filename` from the path's leaf: `/reports/q1.txt` gives `q1.txt`.
 
 Paths are absolute (start with `/`) and normalized (`.` and `..` resolved); `project_id + path` is unique. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts `path` to move a document, and `null` to clear it — a cleared document is reachable by id alone.
 
@@ -135,7 +135,7 @@ The prefix is a **path boundary, not a substring**: `/reports` matches `/reports
 
 [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) returns `202 Accepted` by default; the document is created with `status: pending` and extraction + embedding run in the background. Poll [`GET /api/v1/documents/:id`](/docs/api/documents/get-document) until `status` is `ready` or `failed`.
 
-`?wait=true` blocks until completion and returns `201 Created` with `status: ready` (or `failed`). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. A file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC`; ingest it in background mode instead.
+`?wait=true` blocks until completion and returns `201 Created` with `status: ready` (or `failed`). Both answers carry `chunk_count`, the chunks indexed when the response was built: the final count under `?wait=true`, usually `0` on a `202`. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. A file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC`; ingest it in background mode instead.
 
 ### Ingesting for an end user
 
@@ -178,7 +178,7 @@ Field semantics (they change with `status`):
 | --- | --- |
 | `status` | `pending` → `processing` → `ready` \| `failed` |
 | `chunk_count` | Chunks **currently indexed** — a live count. It is `0` while `pending`, grows during `processing`, and equals the final total once `ready`. |
-| `total_chunks` | Planned total number of chunks, known once chunking begins (`null` until then). The denominator for `progress`. |
+| `total_chunks` | Planned total number of chunks, known once chunking begins (`null` until then). The denominator for `progress`. Equals `chunk_count` once `ready`, for a document created from content as for an ingested file. |
 | `total_pages` | Source pages extracted. `null` until extraction has run (i.e. until `ready`/`failed`); `null` is not the same as zero pages. |
 | `progress` | Percentage `chunk_count / total_chunks`. `0` while `pending`, climbs while `processing` (capped at `99`), `100` when `ready`, `null` when `failed` or not yet computable. |
 | `error` | Why the ingestion failed, as a [recorded failure](/docs/api#recorded-failures) `{ code, message, meta? }` — `code` is for example `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT` or `INGESTION_FAILED`. Only set when `status` is `failed`; otherwise `null`. |

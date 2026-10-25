@@ -275,7 +275,7 @@ A write may name the version it is changing (`expected_version`, or an `If-Match
 
 **A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps `version` onto the task as `workflow_version`; validating a transition, parking an approval gate and validating a payload patch all read that version. Editing never re-shapes a task in flight; the live definition is a draft for tasks created from now on, and [a migration](#migrating-a-task-to-a-newer-version) moves an open task onto it.
 
-Archive nothing: a metadata-only edit (`name`, `description`); re-writing the definition already held (compared structurally); restoring the live version. `version_label` on a create or update annotates the archived version and is never itself a change.
+Archive nothing: a metadata-only edit (`name`, `description`); re-writing the definition already held (compared structurally); restoring the live version. `version_label` on a create or update tags the version that write creates and is never itself a change.
 
 | Operation | Endpoint |
 | --- | --- |
