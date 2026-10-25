@@ -19,6 +19,7 @@ import {
 } from 'src/lib/triggers';
 
 import {
+  type AuthenticatedContext,
   parseNullableToolContextBody,
   parsePagination,
   parseToolContextBody,
@@ -26,6 +27,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 const triggersRouter = new Router<Context>();
 
@@ -82,23 +84,43 @@ triggersRouter.get('/triggers/count', async (ctx: Context) => {
   });
 });
 
+/**
+ * Authorizes `action` on a loaded trigger against its own SRN; a refusal is
+ * `resourceRefusal`'s.
+ */
+const authorizeTrigger = async (args: {
+  ctx: AuthenticatedContext;
+  trigger: { id: string; project_id?: string };
+  action: string;
+}): Promise<void> => {
+  const projectPublicId = args.trigger.project_id!;
+  const allowed = await args.ctx.authUser.isAllowed({
+    projectPublicId,
+    action: args.action,
+    resource: buildSrn({
+      projectPublicId,
+      resourceType: 'trigger',
+      resourceId: args.trigger.id,
+    }),
+  });
+  if (!allowed) {
+    throw await resourceRefusal({
+      ctx: args.ctx,
+      projectPublicId,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Trigger '${args.trigger.id}' not found.`
+      ),
+    });
+  }
+};
+
 triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
   requireAuth(ctx);
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.project_id!,
-    action: 'triggers:GetTrigger',
-    resource: buildSrn({
-      projectPublicId: trigger.project_id!,
-      resourceType: 'trigger',
-      resourceId: trigger.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await authorizeTrigger({ ctx, trigger, action: 'triggers:GetTrigger' });
 
   ctx.body = trigger;
 });
@@ -208,18 +230,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.project_id!,
-    action: 'triggers:UpdateTrigger',
-    resource: buildSrn({
-      projectPublicId: trigger.project_id!,
-      resourceType: 'trigger',
-      resourceId: trigger.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await authorizeTrigger({ ctx, trigger, action: 'triggers:UpdateTrigger' });
 
   const body = ctx.request.body as {
     name?: string;
@@ -265,18 +276,7 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.project_id!,
-    action: 'triggers:DeleteTrigger',
-    resource: buildSrn({
-      projectPublicId: trigger.project_id!,
-      resourceType: 'trigger',
-      resourceId: trigger.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await authorizeTrigger({ ctx, trigger, action: 'triggers:DeleteTrigger' });
 
   await deleteTrigger({ id: ctx.params.trigger_id });
   ctx.status = 204;
@@ -295,18 +295,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.project_id!,
-    action: 'triggers:FireTrigger',
-    resource: buildSrn({
-      projectPublicId: trigger.project_id!,
-      resourceType: 'trigger',
-      resourceId: trigger.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await authorizeTrigger({ ctx, trigger, action: 'triggers:FireTrigger' });
 
   const body = ctx.request.body as {
     input?: Record<string, unknown>;
@@ -342,18 +331,11 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
   // 403 if the caller lacks access (a permission-less JWT user resolves to an
   // empty project set, which would otherwise read as "not found").
   const trigger = await getTrigger({ id: triggerPublicId });
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.project_id!,
+  await authorizeTrigger({
+    ctx,
+    trigger,
     action: 'triggers:ListTriggerFirings',
-    resource: buildSrn({
-      projectPublicId: trigger.project_id!,
-      resourceType: 'trigger',
-      resourceId: trigger.id,
-    }),
   });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   ctx.body = await listTriggerFirings({
     triggerPublicId,
@@ -376,7 +358,14 @@ triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: firing.project_id!,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Trigger firing '${ctx.params.firing_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = firing;
@@ -387,18 +376,7 @@ triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.project_id!,
-    action: 'triggers:GetTriggerSecret',
-    resource: buildSrn({
-      projectPublicId: trigger.project_id!,
-      resourceType: 'trigger',
-      resourceId: trigger.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await authorizeTrigger({ ctx, trigger, action: 'triggers:GetTriggerSecret' });
 
   ctx.body = await getTriggerSecret({ id: ctx.params.trigger_id });
 });
@@ -410,18 +388,11 @@ triggersRouter.post(
 
     const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: trigger.project_id!,
+    await authorizeTrigger({
+      ctx,
+      trigger,
       action: 'triggers:RotateTriggerSecret',
-      resource: buildSrn({
-        projectPublicId: trigger.project_id!,
-        resourceType: 'trigger',
-        resourceId: trigger.id,
-      }),
     });
-    if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
 
     ctx.body = await rotateTriggerSecret({ id: ctx.params.trigger_id });
   }

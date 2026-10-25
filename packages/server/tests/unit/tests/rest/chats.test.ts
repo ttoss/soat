@@ -290,11 +290,11 @@ describe('Chats', () => {
       expect(response.body.ai_provider_id).toBe(aiProviderId);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/chats/${chatId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -320,11 +320,11 @@ describe('Chats', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/chats/${chatId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('authenticated user can delete a chat', async () => {
@@ -390,7 +390,7 @@ describe('Chats', () => {
       expect(response.body.error.code).toBe('CHAT_NOT_FOUND');
     });
 
-    test('user without permission on the chat returns 403', async () => {
+    test('user without permission on the chat returns 404', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
@@ -402,7 +402,7 @@ describe('Chats', () => {
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('ai_provider_id and chat_id together return 400', async () => {

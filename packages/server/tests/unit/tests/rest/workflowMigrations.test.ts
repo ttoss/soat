@@ -354,15 +354,15 @@ describe('POST /api/v1/workflows/:workflow_id/migrations', () => {
     expect(res.status).toBe(401);
   });
 
-  test('403 without workflows:MigrateWorkflowTasks', async () => {
+  test('404 without workflows:MigrateWorkflowTasks', async () => {
     const { workflow, triage } = await workflowWithTasks();
     const res = await startMigration(
       workflow.id,
       { to_version: 2, wait: true },
       noPermToken
     );
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
     expect((await getTask(triage.id)).workflow_version).toBe(1);
   });
 });
@@ -406,7 +406,7 @@ describe('GET /api/v1/workflows/:workflow_id/migrations/:migration_id', () => {
     expect(res.status).toBe(401);
   });
 
-  test('403 without workflows:GetWorkflowMigration', async () => {
+  test('404 without workflows:GetWorkflowMigration', async () => {
     const { workflow } = await workflowWithTasks();
     const started = await startMigration(workflow.id, {
       to_version: 2,
@@ -415,7 +415,7 @@ describe('GET /api/v1/workflows/:workflow_id/migrations/:migration_id', () => {
     const res = await authenticatedTestClient(noPermToken).get(
       `/api/v1/workflows/${workflow.id}/migrations/${started.body.id}`
     );
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
   });
 });

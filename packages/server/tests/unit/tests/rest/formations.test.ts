@@ -1096,11 +1096,11 @@ resources:
       expect(res.status).toBe(401);
     });
 
-    test('no permission returns 403', async () => {
+    test('no permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/formations/${formationId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -1158,12 +1158,12 @@ resources:
       expect(res.status).toBe(401);
     });
 
-    test('no permission returns 403', async () => {
+    test('no permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/formations/${formationId}`)
         .send({ template: simpleTemplate });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -1250,18 +1250,18 @@ resources:
       expect(res.status).toBe(401);
     });
 
-    test('no permission returns 403', async () => {
+    test('no permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/formations/${formationId}/events`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
   // ── Delete ────────────────────────────────────────────────────────────────
 
   describe('DELETE /api/v1/formations/:formation_id', () => {
-    test('no permission returns 403', async () => {
+    test('no permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
@@ -1273,7 +1273,7 @@ resources:
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/formations/${createRes.body.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('deletes the formation and returns 200 with success', async () => {

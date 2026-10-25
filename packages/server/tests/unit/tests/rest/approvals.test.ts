@@ -320,12 +320,12 @@ describe('Approvals', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const seeded = await seedApproval();
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/approvals/${seeded.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -415,12 +415,12 @@ describe('Approvals', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const seeded = await seedApproval();
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/approvals/${seeded.id}/approve`)
         .send({});
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -651,12 +651,12 @@ describe('Approvals', () => {
       expect(res.body.error.code).toBe('APPROVAL_ALREADY_RESOLVED');
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const seeded = await seedApproval();
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/approvals/${seeded.id}/reject`)
         .send({ reason: 'nope' });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

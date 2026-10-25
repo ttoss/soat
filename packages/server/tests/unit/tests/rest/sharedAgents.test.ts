@@ -436,8 +436,8 @@ describe('Shared agents', () => {
 
       const response = await generate(gone.agentId);
 
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
     test("deleting the publisher's agent keeps the grantee's records", async () => {

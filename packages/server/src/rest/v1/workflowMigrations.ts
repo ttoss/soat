@@ -9,6 +9,7 @@ import {
 import { getWorkflow } from 'src/lib/workflows';
 
 import { requestPrincipalFromCtx, requireAuth } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 /** Mounted onto `workflowsRouter`, like `workflowVersions.ts`. */
 export const workflowMigrationsRouter = new Router<Context>();
@@ -27,7 +28,14 @@ const authorizeWorkflow = async (args: { ctx: Context; action: string }) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: workflow.project_id!,
+      notFound: new DomainError(
+        'WORKFLOW_NOT_FOUND',
+        `Workflow '${ctx.params.workflow_id}' not found.`
+      ),
+    });
   }
   return workflow;
 };

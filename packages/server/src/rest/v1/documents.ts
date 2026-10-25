@@ -41,6 +41,7 @@ import {
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 import { sendNdjson } from './ndjsonResponse';
+import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const documentsRouter = new Router<Context>();
@@ -104,7 +105,11 @@ export const checkDocumentPermission = async (
     context,
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: doc.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Document not found'),
+    });
   }
   return allowed;
 };

@@ -254,10 +254,10 @@ describe('Exceptions', () => {
       ).toBe(401);
     });
 
-    test('requests without permission are 403', async () => {
+    test('requests without permission are 404', async () => {
       const client = authenticatedTestClient(noPermToken);
       expect((await client.get(`/api/v1/exceptions/${targetId}`)).status).toBe(
-        403
+        404
       );
       expect(
         (
@@ -265,11 +265,11 @@ describe('Exceptions', () => {
             .post(`/api/v1/exceptions/${targetId}/acknowledge`)
             .send({})
         ).status
-      ).toBe(403);
+      ).toBe(404);
       expect(
         (await client.post(`/api/v1/exceptions/${targetId}/resolve`).send({}))
           .status
-      ).toBe(403);
+      ).toBe(404);
     });
 
     // `exceptionSrn()` read `projectId` from a mapper whose field is

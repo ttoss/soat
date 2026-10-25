@@ -29,6 +29,7 @@ import {
   requireAuth,
   requireProjectAccess,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 import { sessionSubResourcesRouter } from './sessionSubResources';
 import { authorizeSharedUse } from './sharedAccess';
 
@@ -81,7 +82,11 @@ export const checkSessionAccess = async (
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: access.projectPublicId,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Session not found'),
+    });
   }
 
   return access;

@@ -25,6 +25,7 @@ import {
   parseToolContextBody,
   requireAuth,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 import { assertNotSystemRole } from './systemMessageGuard';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -50,7 +51,14 @@ conversationSubResourcesRouter.get(
         'conversations:GetConversation'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found'
+        ),
+      });
     }
 
     const { limit, cursor } = parsePagination(ctx);
@@ -108,7 +116,14 @@ conversationSubResourcesRouter.post(
         'conversations:UpdateConversation'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found.'
+        ),
+      });
     }
 
     const message = await addConversationMessage({
@@ -152,7 +167,14 @@ conversationSubResourcesRouter.delete(
         'conversations:UpdateConversation'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found.'
+        ),
+      });
     }
 
     const result = await removeConversationMessage({
@@ -189,7 +211,11 @@ const resolveConversation = async (args: {
         : 'conversations:UpdateConversation'
     ))
   ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx: args.ctx,
+      projectPublicId: conversation.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found'),
+    });
   }
 
   return conversation;
@@ -240,7 +266,14 @@ conversationSubResourcesRouter.post(
         'conversations:GenerateConversationMessage'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found'
+        ),
+      });
     }
 
     // The agent is resolved first either way, so an unknown one is still a

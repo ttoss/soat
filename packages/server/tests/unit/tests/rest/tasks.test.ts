@@ -704,10 +704,10 @@ describe('Tasks', () => {
       expect(res.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
     });
 
-    test('403 without permission', async () => {
+    test('404 without permission', async () => {
       const task = (await createTask()).body;
       const res = await transition(task.id, 'to_review', noPermToken);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('401 for unauthenticated requests', async () => {
@@ -918,20 +918,20 @@ describe('Tasks', () => {
       expect(res.body.error.code).toBe('TASK_NOT_FOUND');
     });
 
-    test('403 without permission', async () => {
+    test('404 without permission', async () => {
       const task = (await createTask()).body;
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/tasks/${task.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
-    test('403 without permission on history', async () => {
+    test('404 without permission on history', async () => {
       const task = (await createTask()).body;
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/tasks/${task.id}/history`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('404 on history for an unknown task', async () => {
@@ -1016,12 +1016,12 @@ describe('Tasks', () => {
       expect(after.body.state).toBe(stateBefore);
     });
 
-    test('403 without permission', async () => {
+    test('404 without permission', async () => {
       const task = (await createTask()).body;
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/tasks/${task.id}`)
         .send({ title: 'x' });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('401 for unauthenticated requests', async () => {
@@ -1255,12 +1255,12 @@ describe('Tasks', () => {
       expect(res.status).toBe(404);
     });
 
-    test('403 for a user without permission', async () => {
+    test('404 for a user without permission', async () => {
       const task = (await createPauseTask()).body;
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tasks/${task.id}/pause`)
         .send({});
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('401 for unauthenticated requests', async () => {
@@ -1296,12 +1296,12 @@ describe('Tasks', () => {
       expect(res.body.error.code).toBe('TASK_NOT_FOUND');
     });
 
-    test('403 without permission', async () => {
+    test('404 without permission', async () => {
       const task = (await createTask()).body;
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/tasks/${task.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -3995,10 +3995,10 @@ describe('Tasks', () => {
       expect(res.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
     });
 
-    test('403 firing a gated transition without permission', async () => {
+    test('404 firing a gated transition without permission', async () => {
       const taskId = await startGatedTask();
       const res = await transition(taskId, 'publish', noPermToken);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

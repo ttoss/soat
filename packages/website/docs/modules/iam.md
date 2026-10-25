@@ -216,7 +216,7 @@ Authorization is **policy-only**: every decision is evaluated against the reques
 | **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
 | **OAuth token**               | Intersection of user policies and the consented scope, hard-locked to the token's project |
 
-Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope and passes the role-gated project create/delete, never the scope binding, so a cross-project resource write returns `403 API_KEY_PROJECT_SCOPE`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
+Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope and passes the role-gated project create/delete, never the scope binding, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 
 ### Why Intersection Semantics Matter
 
@@ -244,11 +244,14 @@ A denial's status code depends on what the route does, not on which policy faile
 | **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
 | **Write / act on one, in a project none of the caller's policies name** | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either      |
 | **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                             | `403 FORBIDDEN`                                                                        |
-| Scoped credential targeting another project                             | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
+| Scoped credential naming another project (`project_id`)                | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
+| Scoped credential addressing, by id, a resource in another project     | `404` — the module's not-found, as for an id that names nothing                      |
 
 A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
 The `403`/`404` split on a write is about **which project**, not which resource. Being told plainly that one agent in a project you work in is off limits tells you nothing you could not already work out, so that stays `403`. A resource in a project none of your policies name is `404`: a `403` there would confirm it exists to someone with no business knowing it does — including to a caller whose policies name no project at all, for whom every project is someone else's. A denied write never says more than a denied read of the same resource would.
+
+A credential scoped to one project reaches nothing outside it, so every resource elsewhere is beyond it in exactly that sense: addressed by id, it answers the `404` a made-up id gets, and nothing in the response names its project. `403 API_KEY_PROJECT_SCOPE` is kept for a request that names another project itself, which leaks nothing the caller did not send, and for a tool or agent an accepted [share](./shares.md) lets the credential's project read.
 
 ## Cross-project shares
 

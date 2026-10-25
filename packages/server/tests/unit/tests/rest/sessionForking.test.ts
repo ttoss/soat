@@ -495,14 +495,14 @@ describe('Session forking', () => {
       expect(response.status).toBe(401);
     });
 
-    test('a user without permission returns 403', async () => {
+    test('a user without permission returns 404', async () => {
       const parentId = await seedSession({ name: 'Fork Forbidden', count: 1 });
 
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/sessions/${parentId}/fork`)
         .send({});
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -570,7 +570,7 @@ describe('Session forking', () => {
       expect(response.status).toBe(401);
     });
 
-    test('a user without permission returns 403', async () => {
+    test('a user without permission returns 404', async () => {
       const parentId = await seedSession({
         name: 'Fork List Forbidden',
         count: 1,
@@ -580,7 +580,7 @@ describe('Session forking', () => {
         `/api/v1/sessions/${parentId}/forks`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 });

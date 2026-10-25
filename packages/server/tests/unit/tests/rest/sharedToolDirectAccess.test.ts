@@ -202,8 +202,8 @@ describe('Shared resources on their own routes', () => {
         .post(`/api/v1/tools/${pendingToolId}/call`)
         .send({ input: {} });
 
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
       expect((await granteeEvents()).length).toBe(before);
     });
   });

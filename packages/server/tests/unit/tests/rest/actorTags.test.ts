@@ -95,12 +95,12 @@ describe('ActorTags', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/actors/${actorId}/tags`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -151,12 +151,12 @@ describe('ActorTags', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/actors/${actorId}/tags`)
         .send({ key: 'value' });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -209,12 +209,12 @@ describe('ActorTags', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/actors/${actorId}/tags`)
         .send({ key: 'value' });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

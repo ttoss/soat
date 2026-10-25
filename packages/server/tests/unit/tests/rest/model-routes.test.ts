@@ -353,15 +353,13 @@ describe('Model Routes', () => {
       );
       expect(created.status).toBe(201);
 
-      // A key bound to `projectId` gets its own binding error, with the
-      // remedy in the message, rather than the opaque answer a project-filtered
-      // lookup produced. It still never returns a body.
+      // A route outside the key's project answers as a made-up id does.
       const scopedKey = await createRestrictedApiKey('model-routes:NoneOfThem');
       const res = await authenticatedTestClient(scopedKey).get(
         `/api/v1/model-routes/${created.body.id}`
       );
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
     // A read the caller may not perform is indistinguishable from absence, now

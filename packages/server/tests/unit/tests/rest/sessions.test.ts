@@ -496,7 +496,7 @@ describe('Sessions', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
         .send({ username: 'sessgetnoperm', password: 'sessgetnopass' });
@@ -506,7 +506,7 @@ describe('Sessions', () => {
         `/api/v1/sessions/${sessionId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

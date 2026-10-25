@@ -318,7 +318,7 @@ describe('Memory retraction', () => {
       expect(response.status).toBe(401);
     });
 
-    test('403 without the action', async () => {
+    test('404 without the action', async () => {
       const storeId = await createStore();
       const id = await write({
         storeId,
@@ -327,7 +327,7 @@ describe('Memory retraction', () => {
 
       const response = await retract({ id, token: noPermToken });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('404 for a memory that does not exist', async () => {

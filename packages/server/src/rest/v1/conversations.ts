@@ -22,6 +22,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 const conversationsRouter = new Router<Context>();
 
@@ -85,7 +86,14 @@ conversationsRouter.get(
         'conversations:GetConversation'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found'
+        ),
+      });
     }
 
     ctx.body = conversation;
@@ -170,7 +178,14 @@ conversationsRouter.patch(
         'conversations:UpdateConversation'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found'
+        ),
+      });
     }
 
     const updated = await updateConversation({
@@ -209,7 +224,14 @@ conversationsRouter.delete(
         'conversations:DeleteConversation'
       ))
     ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: conversation.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'Conversation not found'
+        ),
+      });
     }
 
     await deleteConversation({ id: ctx.params.conversation_id });

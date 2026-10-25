@@ -298,12 +298,12 @@ describe('Workflows', () => {
       expect(res.body.name).toBe('get-one');
     });
 
-    test('403 for a user without permission', async () => {
+    test('404 for a user without permission', async () => {
       const created = (await createWorkflow(userToken)).body;
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/workflows/${created.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -380,12 +380,12 @@ describe('Workflows', () => {
       expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
     });
 
-    test('403 for a user without permission', async () => {
+    test('404 for a user without permission', async () => {
       const created = (await createWorkflow(userToken)).body;
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/workflows/${created.id}`)
         .send({ description: 'x' });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('401 for unauthenticated requests', async () => {
@@ -406,12 +406,12 @@ describe('Workflows', () => {
       expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
     });
 
-    test('403 for a user without permission', async () => {
+    test('404 for a user without permission', async () => {
       const created = (await createWorkflow(userToken)).body;
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/workflows/${created.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('401 for unauthenticated requests', async () => {

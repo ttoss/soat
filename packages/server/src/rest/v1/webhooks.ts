@@ -22,6 +22,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 const resolvePolicyId = async (
   policyPublicId: string | undefined
@@ -116,7 +117,11 @@ webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: webhook.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
+    });
   }
 
   ctx.body = webhook;
@@ -140,7 +145,11 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: webhook.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
+    });
   }
 
   const body = ctx.request.body as {
@@ -188,7 +197,11 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: webhook.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
+    });
   }
 
   await deleteWebhook({ id: ctx.params.webhook_id });
@@ -221,7 +234,11 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: webhook.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
+    });
   }
 
   const webhookRecord = await db.Webhook.findOne({
@@ -257,7 +274,11 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: webhook.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found'),
+    });
   }
 
   ctx.body = delivery;
@@ -290,7 +311,11 @@ webhooksRouter.post(
       }),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: webhook.project_id!,
+        notFound: new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found'),
+      });
     }
 
     ctx.status = 202;
@@ -316,7 +341,11 @@ webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: webhook.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
+    });
   }
 
   const secretData = await findWebhookSecret({ id: ctx.params.webhook_id });
@@ -346,7 +375,11 @@ webhooksRouter.post(
       }),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: webhook.project_id!,
+        notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
+      });
     }
 
     const rotated = await rotateWebhookSecret({

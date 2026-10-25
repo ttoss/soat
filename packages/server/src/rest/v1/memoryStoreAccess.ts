@@ -4,6 +4,8 @@ import { buildSrn } from 'src/lib/iam';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { buildResourceTagContext } from 'src/lib/tags';
 
+import { resourceRefusal } from './resourceAccess';
+
 export type LoadedMemoryStore = NonNullable<
   Awaited<ReturnType<typeof getMemoryStore>>
 >;
@@ -42,7 +44,11 @@ export const requireMemoryStore = async (args: {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx: args.ctx,
+      projectPublicId: memoryStore.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found'),
+    });
   }
 
   return memoryStore;

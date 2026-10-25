@@ -129,7 +129,7 @@ A key or OAuth token scoped to the grantee project also reaches the shared tool 
 
 A share that is not accepted, suspended or revoked resolves nothing, and nothing runs, so nothing is metered:
 
-- a write naming it is `400 TOOL_NOT_FOUND`, and a call or read on its own route answers `403 API_KEY_PROJECT_SCOPE`;
+- a write naming it is `400 TOOL_NOT_FOUND`, and a call or read on its own route answers `404`, as for an id that names nothing;
 - an agent's binding to it is left out of the turn: the model is told the tool is unavailable, and a `tool_resolution_failed` [activity](./activity.md) entry records why;
 - an ingestion rule converting with it fails the document with `CONVERTER_FAILED`;
 - a [formation](./formations.md) naming it fails to deploy with `Tool not found: <tool_id>`.

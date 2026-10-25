@@ -464,7 +464,7 @@ describe('AI Providers', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
@@ -477,7 +477,7 @@ describe('AI Providers', () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/ai-providers/${adminRes.body.id}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown ID returns 404', async () => {
@@ -540,7 +540,7 @@ describe('AI Providers', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
@@ -553,7 +553,7 @@ describe('AI Providers', () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/ai-providers/${adminRes.body.id}`)
         .send({ name: 'x' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown ID returns 404', async () => {
@@ -589,7 +589,7 @@ describe('AI Providers', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
@@ -602,7 +602,7 @@ describe('AI Providers', () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/ai-providers/${adminRes.body.id}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown ID returns 404', async () => {
@@ -769,11 +769,11 @@ describe('AI Providers', () => {
         expect(res.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const res = await authenticatedTestClient(noPermToken).get(
           `/api/v1/ai-providers/${pricedProviderId}/prices`
         );
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(404);
       });
 
       test('unknown provider returns 404', async () => {
@@ -800,11 +800,11 @@ describe('AI Providers', () => {
         expect(res.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const res = await authenticatedTestClient(noPermToken)
           .put(`/api/v1/ai-providers/${pricedProviderId}/prices`)
           .send({ prices: [] });
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(404);
       });
 
       test('rejects an unparseable effective_from with 400', async () => {
@@ -1062,11 +1062,11 @@ describe('AI Providers', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/ai-providers/${azureProviderId}/models`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('a provider type that cannot enumerate models returns 400', async () => {

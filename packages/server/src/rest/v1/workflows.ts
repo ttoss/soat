@@ -21,6 +21,7 @@ import {
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 import { workflowMigrationsRouter } from './workflowMigrations';
 import { workflowVersionsRouter } from './workflowVersions';
 
@@ -64,7 +65,14 @@ workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: workflow.project_id!,
+      notFound: new DomainError(
+        'WORKFLOW_NOT_FOUND',
+        `Workflow '${ctx.params.workflow_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = workflow;
@@ -118,7 +126,14 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: workflow.project_id!,
+      notFound: new DomainError(
+        'WORKFLOW_NOT_FOUND',
+        `Workflow '${ctx.params.workflow_id}' not found.`
+      ),
+    });
   }
 
   const body = ctx.request.body as {
@@ -159,7 +174,14 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: workflow.project_id!,
+      notFound: new DomainError(
+        'WORKFLOW_NOT_FOUND',
+        `Workflow '${ctx.params.workflow_id}' not found.`
+      ),
+    });
   }
 
   await deleteWorkflow({ id: ctx.params.workflow_id });

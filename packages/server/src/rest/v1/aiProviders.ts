@@ -21,6 +21,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 
 const aiProvidersRouter = new Router<Context>();
 
@@ -82,7 +83,11 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: provider.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
+    });
   }
 
   ctx.body = provider;
@@ -122,7 +127,11 @@ const authorizeProviderPrices = async (args: {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: provider.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
+    });
   }
 
   return provider;
@@ -229,7 +238,14 @@ aiProvidersRouter.patch(
       }),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: existing.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'AI provider not found'
+        ),
+      });
     }
 
     const body = ctx.request.body as {
@@ -289,7 +305,14 @@ aiProvidersRouter.get(
       }),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: existing.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'AI provider not found'
+        ),
+      });
     }
 
     ctx.body = await listAiProviderModels({
@@ -320,7 +343,14 @@ aiProvidersRouter.delete(
       }),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: existing.project_id!,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          'AI provider not found'
+        ),
+      });
     }
 
     await deleteAiProvider({

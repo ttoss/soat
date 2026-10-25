@@ -42,6 +42,7 @@ import {
   validateTagsBag,
 } from './memoriesRequestBody';
 import { sendNdjson } from './ndjsonResponse';
+import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
@@ -118,7 +119,11 @@ const resolveMemoryStoreForAction = async (
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: memoryStore.project_id!,
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found'),
+    });
   }
   const memoryStoreRow = await db.MemoryStore.findOne({
     where: { publicId: memoryStorePublicId },
@@ -180,7 +185,11 @@ const resolveEntryForAction = async (
       context,
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: memoryStore.project_id!,
+        notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory not found'),
+      });
     }
   }
 

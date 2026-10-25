@@ -174,12 +174,12 @@ describe('MemoryStores', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/memory-stores/${memoryStoreId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -233,12 +233,12 @@ describe('MemoryStores', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/memory-stores/${memoryStoreId}`)
         .send({ name: 'New Name' });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -288,7 +288,7 @@ describe('MemoryStores', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/memory-stores')
         .send({
@@ -301,7 +301,7 @@ describe('MemoryStores', () => {
         `/api/v1/memory-stores/${tempMemId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -411,12 +411,12 @@ describe('MemoryStores', () => {
         expect(response.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const response = await authenticatedTestClient(noPermToken)
           .post('/api/v1/memories')
           .send({ memory_store_id: memoryStoreId, content: 'test' });
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(404);
       });
 
       test('second write to same memoryStore is skipped (duplicate)', async () => {
@@ -628,12 +628,12 @@ describe('MemoryStores', () => {
         expect(response.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
           `/api/v1/memories?memory_store_id=${memoryStoreId}`
         );
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(404);
       });
     });
 
@@ -676,12 +676,12 @@ describe('MemoryStores', () => {
         expect(response.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
           `/api/v1/memories/${entryId}`
         );
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(404);
       });
     });
 
@@ -725,12 +725,12 @@ describe('MemoryStores', () => {
         expect(response.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const response = await authenticatedTestClient(noPermToken)
           .put(`/api/v1/memories/${entryId}`)
           .send({ content: 'x' });
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(404);
       });
 
       test('can set and then clear tags/metadata', async () => {
@@ -880,7 +880,7 @@ describe('MemoryStores', () => {
         expect(response.status).toBe(401);
       });
 
-      test('user without permission returns 403', async () => {
+      test('user without permission returns 404', async () => {
         const deleteMemoryStoreId = await createTestMemoryStore();
         const createRes = await authenticatedTestClient(userToken)
           .post('/api/v1/memories')
@@ -894,7 +894,7 @@ describe('MemoryStores', () => {
           `/api/v1/memories/${entryId}`
         );
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(404);
       });
     });
 

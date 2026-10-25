@@ -494,11 +494,11 @@ describe('POST /api/v1/tasks/:task_id/migrate', () => {
     expect(res.status).toBe(401);
   });
 
-  test('403 without tasks:MigrateTask', async () => {
+  test('404 without tasks:MigrateTask', async () => {
     const { task } = await reviewTaskWithV2();
     const res = await migrate(task.id, { to_version: 2 }, noPermToken);
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('TASK_NOT_FOUND');
 
     const read = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/${task.id}`

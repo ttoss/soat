@@ -735,11 +735,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/triggers/${triggerId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -882,11 +882,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/triggers/${triggerId}`)
         .send({ name: 'x' });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -910,11 +910,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/triggers/${triggerId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('deletes a trigger', async () => {
@@ -996,11 +996,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('GET secret without permission returns 403', async () => {
+    test('GET secret without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/triggers/${webhookTriggerId}/secret`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('rotate-secret returns a new secret', async () => {
@@ -1070,11 +1070,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('rotate-secret without permission returns 403', async () => {
+    test('rotate-secret without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).post(
         `/api/v1/triggers/${webhookTriggerId}/rotate-secret`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -1760,11 +1760,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('fire without triggers:FireTrigger returns 403', async () => {
+    test('fire without triggers:FireTrigger returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/triggers/${orchTriggerId}/fire`)
         .send({});
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('recursion guard: a trigger run-as token cannot fire (403)', async () => {
@@ -2053,11 +2053,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(404);
     });
 
-    test('getting a firing by id without permission returns 403', async () => {
+    test('getting a firing by id without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/trigger-firings/${firingId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('unauthenticated get firing by id returns 401', async () => {
@@ -2072,11 +2072,11 @@ describe('Triggers', () => {
       expect(res.status).toBe(401);
     });
 
-    test('firings list without permission returns 403', async () => {
+    test('firings list without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/trigger-firings?trigger_id=${firedTriggerId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

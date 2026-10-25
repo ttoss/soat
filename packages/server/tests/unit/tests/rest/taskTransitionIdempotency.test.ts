@@ -199,7 +199,7 @@ describe('Task transition idempotency', () => {
       expect(res.status).toBe(401);
     });
 
-    test('returns 403 without tasks:TransitionTask, claiming nothing', async () => {
+    test('returns 404 without tasks:TransitionTask, claiming nothing', async () => {
       const taskId = await createTask();
       const res = await fire({
         taskId,
@@ -207,7 +207,7 @@ describe('Task transition idempotency', () => {
         key: 'k-403',
         token: noPermToken,
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
       const owner = await fire({ taskId, transition: 'touch', key: 'k-403' });
       expect(owner.status).toBe(200);
       expect(await historyTotal(taskId)).toBe(2);

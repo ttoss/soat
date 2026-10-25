@@ -6,6 +6,7 @@ import { buildSrn } from 'src/lib/iam';
 import { buildResourceTagContext } from 'src/lib/tags';
 
 import type { AuthenticatedContext } from './helpers';
+import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const actorTagsRouter = new Router<Context>();
@@ -30,7 +31,14 @@ const resolveActor = async (args: {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx: args.ctx,
+      projectPublicId: actor.project_id!,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Actor '${args.ctx.params.actor_id}' not found.`
+      ),
+    });
   }
 
   return actor;

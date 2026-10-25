@@ -156,10 +156,9 @@ describe('Secrets', () => {
       expect(response.body.value).toBeUndefined();
     });
 
-    // A project-scoped credential reaching another project's secret gets
-    // its own binding error, with the remedy in the message, rather than the
-    // opaque `Forbidden` this route answered before it shared the preamble.
-    test('a key scoped to another project reports the binding', async () => {
+    // A secret outside a project-scoped key's project answers as a made-up id
+    // does, and nothing in the refusal names the project that holds it.
+    test('a key scoped to another project gets 404', async () => {
       const keyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/api-keys')
         .send({
@@ -172,10 +171,10 @@ describe('Secrets', () => {
         keyRes.body.key as string
       ).get(`/api/v1/secrets/${secretId}`);
 
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
-      expect(response.body.error.meta.scoped_project).toBe(otherProjectId);
-      expect(response.body.error.meta.requested_project).toBe(projectId);
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.meta).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toContain(projectId);
     });
 
     test('unauthenticated request returns 401', async () => {

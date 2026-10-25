@@ -31,6 +31,7 @@ import {
   resolveWriteProjectPublicId,
 } from './helpers';
 import { playbookAuthorOf } from './playbookAccess';
+import { resourceRefusal } from './resourceAccess';
 
 export const formationsRouter = new Router<Context>();
 
@@ -268,7 +269,14 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: formation.project_id,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Formation '${ctx.params.formation_id}' not found.`
+      ),
+    });
   }
 
   ctx.body = formation;
@@ -289,7 +297,14 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: formation.project_id,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Formation '${ctx.params.formation_id}' not found.`
+      ),
+    });
   }
 
   const body = ctx.request.body as {
@@ -348,7 +363,14 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw await resourceRefusal({
+      ctx,
+      projectPublicId: formation.project_id,
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Formation '${ctx.params.formation_id}' not found.`
+      ),
+    });
   }
 
   const result = await deleteFormation({
@@ -380,7 +402,14 @@ formationsRouter.get(
       }),
     });
     if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
+      throw await resourceRefusal({
+        ctx,
+        projectPublicId: formation.project_id,
+        notFound: new DomainError(
+          'RESOURCE_NOT_FOUND',
+          `Formation '${ctx.params.formation_id}' not found.`
+        ),
+      });
     }
 
     ctx.body = await listFormationEvents({
