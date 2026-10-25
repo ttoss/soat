@@ -8,6 +8,10 @@ import {
   collectParamRefs,
   collectRefAttrs,
   collectRefs,
+  isParam,
+  isRef,
+  isRefAttr,
+  isSub,
   parseRefAttr,
 } from './formationsHelpers';
 import { isSensitiveAttribute } from './formationsSensitive';
@@ -57,6 +61,18 @@ const readResourceType = (decl: unknown): string | undefined => {
   return typeof decl.type === 'string' ? decl.type : undefined;
 };
 
+// The deploy keeps an output only when it resolves to a string, so any other
+// value would be dropped without a word.
+const resolvesToString = (value: unknown): boolean => {
+  return (
+    typeof value === 'string' ||
+    isRef(value) ||
+    isParam(value) ||
+    isSub(value) ||
+    isRefAttr(value)
+  );
+};
+
 export const validateOutputRefs = (args: {
   outputs: Record<string, unknown>;
   resources: Record<string, unknown>;
@@ -67,6 +83,14 @@ export const validateOutputRefs = (args: {
   const errors: ValidationError[] = [];
   for (const [outputName, outputValue] of Object.entries(outputs)) {
     const path = `outputs.${outputName}`;
+    if (!resolvesToString(outputValue)) {
+      errors.push({
+        path,
+        message:
+          'An output must be a string or one of { "ref" }, { "param" }, { "sub" }, { "ref_attr" }; any other value resolves to nothing',
+      });
+      continue;
+    }
     errors.push(
       ...validateRefAndParamTokens(outputValue, path, logicalIds, paramNames)
     );

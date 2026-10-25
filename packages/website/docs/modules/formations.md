@@ -115,7 +115,7 @@ A template has four top-level keys. Complete 14-resource template: [Deploy a Mul
 | ------------ | -------- | ------------------------------------------------------------ |
 | `parameters` | No       | Map of parameter names → parameter declarations              |
 | `resources`  | Yes      | Map of logical resource ID → resource declaration            |
-| `outputs`    | No       | Map of output names → values (may contain `ref` expressions) |
+| `outputs`    | No       | Map of output names → values; each value is a string or one `ref`, `param`, `sub` or `ref_attr` expression, else `400 VALIDATION_FAILED` |
 | `metadata`   | No       | Arbitrary metadata; supports `sub`/`param`/`ref` substitution (see [Metadata Substitution](#metadata-substitution)) |
 
 A request carrying a template may be up to 10 MB, so documents can be declared with their content inline; every other route keeps a 1 MB body limit.

@@ -483,9 +483,12 @@ components:
           type: object
           additionalProperties: true
           description: >
-            Map of output names to values. Values may use `{ "ref": "logicalId" }`
-            to reference physical IDs of created resources, or `{ "param": "ParamName" }`
-            and `{ "sub": "text ${ParamName}" }` to embed parameter values.
+            Map of output names to values. Each value is a string or exactly one
+            expression: `{ "ref": "logicalId" }` for the physical ID of a created
+            resource, `{ "param": "ParamName" }` or `{ "sub": "text ${ParamName}" }`
+            to embed parameter values. Any other value (a number, a boolean, an
+            array, or an object that is not a single expression) is refused with
+            400 VALIDATION_FAILED, since an output resolves to a string.
             `{ "ref_attr": "LogicalId.attribute" }` resolves a named attribute of
             a created resource, except one carrying credential material — a
             trigger's or webhook's `secret` is refused with 400
