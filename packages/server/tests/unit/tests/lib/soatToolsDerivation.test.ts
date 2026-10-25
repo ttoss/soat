@@ -34,4 +34,51 @@ describe('deriveToolDefinitions', () => {
       })
     ).toEqual([]);
   });
+
+  test('a body whose union only says which fields are required keeps its own properties', () => {
+    const [tool] = deriveToolDefinitions({
+      specs: [
+        {
+          file: 'things.yaml',
+          spec: {
+            paths: {
+              '/api/v1/things': {
+                post: {
+                  operationId: 'createThing',
+                  responses: {},
+                  requestBody: {
+                    content: {
+                      'application/json': {
+                        schema: {
+                          type: 'object',
+                          required: ['name'],
+                          oneOf: [
+                            { required: ['tool_id'] },
+                            { required: ['agent_id'] },
+                          ],
+                          properties: {
+                            name: { type: 'string' },
+                            tool_id: { type: 'string' },
+                            agent_id: { type: 'string' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(Object.keys(tool.inputSchema.properties ?? {})).toEqual([
+      'name',
+      'tool_id',
+      'agent_id',
+    ]);
+    expect(tool.inputSchema.required).toEqual(['name']);
+    expect(tool.inputSchema).not.toHaveProperty('oneOf');
+  });
 });

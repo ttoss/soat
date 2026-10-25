@@ -89,6 +89,9 @@ paths:
               type: object
               required:
                 - content_type_glob
+              oneOf:
+                - required: [tool_id]
+                - required: [agent_id]
               additionalProperties: false
               properties:
                 project_id:

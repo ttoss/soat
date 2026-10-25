@@ -6,6 +6,7 @@
  * Run via: pnpm generate
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
@@ -14,6 +15,8 @@ import {
   renderCliRoutesSource,
 } from '@ttoss/openapi-codegen';
 import * as yaml from 'js-yaml';
+
+import { stripPresenceUnions } from '../../server/src/lib/openapiPresenceUnions';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -71,8 +74,27 @@ const nonRestOperationIds = (specsDir: string): Set<string> => {
   return ids;
 };
 
+/**
+ * A copy of the specs with every presence-only union removed
+ * (`openapiPresenceUnions.ts`): the generator reads a body carrying a `oneOf`
+ * as a union and collapses it into one `--body` flag, though its fields are all
+ * in `properties`. The server enforces the constraint either way.
+ */
+const specsWithoutPresenceUnions = (specsDir: string): string => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-cli-specs-'));
+  for (const file of fs.readdirSync(specsDir)) {
+    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+    const doc: unknown = yaml.load(
+      fs.readFileSync(path.join(specsDir, file), 'utf8')
+    );
+    stripPresenceUnions(doc);
+    fs.writeFileSync(path.join(outDir, file), yaml.dump(doc));
+  }
+  return outDir;
+};
+
 const routes = generateCliRouteManifest({
-  specsDir: SPECS_DIR,
+  specsDir: specsWithoutPresenceUnions(SPECS_DIR),
   moduleDocsUrl: (moduleSlug) => {
     return `${MODULE_DOCS_BASE_URL}/${moduleSlug}`;
   },

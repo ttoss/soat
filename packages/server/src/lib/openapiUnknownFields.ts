@@ -14,6 +14,7 @@
  * to throw or accumulate, and how to word the refusal.
  */
 
+import { hasOnlyPresenceUnions } from './openapiPresenceUnions';
 import type { SchemaWithProperties } from './openapiSchemaFields';
 import {
   deriveSchemaFields,
@@ -54,7 +55,9 @@ const joinPath = (base: string, key: string): string => {
  * against — when it accepts arbitrary keys or could take multiple shapes:
  * - `oneOf`/`anyOf`/`allOf` — the concrete branch is unknown, so any property
  *   set could be valid. {@link collectUnknownFields} takes the one case this
- *   still answers (every branch closed) before consulting this.
+ *   still answers (every branch closed) before consulting this. A union whose
+ *   branches only carry `required` adds no shape and reads as its level
+ *   ({@link hasOnlyPresenceUnions}).
  * - `additionalProperties: true` or a schema map — an open key/value map
  *   (tags, `tool_context`, `input_mapping`, …).
  * - no `properties` — a free-form object (`metadata`, JSON-logic blobs, …).
@@ -65,7 +68,10 @@ const joinPath = (base: string, key: string): string => {
  * `tests/unit/tests/lib/openapiClosedSchemas.test.ts`.
  */
 export const isOpenOrAmbiguous = (schema: Record<string, unknown>): boolean => {
-  if ('oneOf' in schema || 'anyOf' in schema || 'allOf' in schema) {
+  if (
+    ('oneOf' in schema || 'anyOf' in schema || 'allOf' in schema) &&
+    !hasOnlyPresenceUnions(schema)
+  ) {
     return true;
   }
   const additional = schema.additionalProperties;
