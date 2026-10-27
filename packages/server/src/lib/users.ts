@@ -2,6 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   comparePassword,
+  DUMMY_PASSWORD_HASH,
   hashPassword,
   signUserToken,
 } from '../middleware/auth';
@@ -47,16 +48,12 @@ export const loginUser = async (args: {
 }) => {
   const user = await db.User.findOne({ where: { username: args.username } });
 
-  if (!user) {
-    return null;
-  }
-
   const valid = await comparePassword(
     args.password,
-    user.passwordHash as string
+    user ? (user.passwordHash as string) : DUMMY_PASSWORD_HASH
   );
 
-  if (!valid) {
+  if (!user || !valid) {
     return null;
   }
 

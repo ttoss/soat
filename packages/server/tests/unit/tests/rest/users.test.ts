@@ -1,4 +1,6 @@
+import bcrypt from 'bcryptjs';
 import { db } from 'src/db';
+import { BCRYPT_SALT_ROUNDS } from 'src/middleware/auth';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -47,6 +49,19 @@ describe('POST /api/v1/users/login', () => {
       .send({ username: 'admin', password: 'wrongpassword' });
 
     expect(response.status).toBe(401);
+  });
+
+  test('should compare a hash for an unknown username before refusing', async () => {
+    const compare = jest.spyOn(bcrypt, 'compare');
+
+    const response = await testClient
+      .post('/api/v1/users/login')
+      .send({ username: 'no_such_user', password: 'whatever' });
+
+    expect(response.status).toBe(401);
+    expect(compare).toHaveBeenCalledTimes(1);
+    expect(bcrypt.getRounds(compare.mock.calls[0][1])).toBe(BCRYPT_SALT_ROUNDS);
+    compare.mockRestore();
   });
 });
 
