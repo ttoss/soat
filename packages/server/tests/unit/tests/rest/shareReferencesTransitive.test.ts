@@ -176,8 +176,8 @@ describe('Share references through local resources', () => {
       scorers: [{ type: 'exact_match' }],
     });
     const decider = await createIn(granteeId, '/api/v1/deciders', {
-      name: 'asks-the-agent',
-      agent_id: agent,
+      name: 'calls-the-wrapper',
+      tool_id: pipeline,
       questions: [
         { type: 'predicate', name: 'escalate', instructions: 'Escalate?' },
       ],
