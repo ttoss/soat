@@ -35,6 +35,19 @@ const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 /** Synthetic scope prefix used to carry the granted project through the flow. */
 export const PROJECT_SCOPE_PREFIX = 'prj:';
 
+/**
+ * The project a scope set is bound to, or undefined unless it names exactly
+ * one: an OAuth token without its project would resolve as a plain login.
+ */
+export const projectFromScopes = (scopes: string[]): string | undefined => {
+  const projects = scopes.filter((s) => {
+    return s.startsWith(PROJECT_SCOPE_PREFIX);
+  });
+  return projects.length === 1
+    ? projects[0].slice(PROJECT_SCOPE_PREFIX.length) || undefined
+    : undefined;
+};
+
 /** Stores a consent grant keyed by PKCE code_challenge (single-use, 10-min TTL). */
 export const saveConsentGrant = async (args: {
   codeChallenge: string;
@@ -139,11 +152,10 @@ export const oauthAuthorizationServer = oauthServer({
   authCodeStore,
   scopesSupported: ['mcp:access'],
   issueTokens: async ({ subject, scopes, client }) => {
-    const project = scopes
-      .find((s) => {
-        return s.startsWith(PROJECT_SCOPE_PREFIX);
-      })
-      ?.slice(PROJECT_SCOPE_PREFIX.length);
+    const project = projectFromScopes(scopes);
+    if (!project) {
+      throw new Error('OAuth scope set must name exactly one project');
+    }
 
     const user = await db.User.findOne({ where: { publicId: subject } });
     const role = user?.role ?? 'user';
@@ -178,7 +190,11 @@ export const oauthAuthorizationServer = oauthServer({
       refreshToken,
     };
   },
-  onRefreshToken: refreshRotation.onRefreshToken,
+  onRefreshToken: async (args) => {
+    // Checked before rotation so a refused narrowing leaves the token unconsumed.
+    if (args.scopes.length > 0 && !projectFromScopes(args.scopes)) return;
+    return refreshRotation.onRefreshToken(args);
+  },
   onAuthorize: async ({ request }) => {
     // Atomically consume the consent grant: lock the row, verify it belongs to
     // this client, then destroy it in the same transaction to prevent double-use.

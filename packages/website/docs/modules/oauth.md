@@ -148,6 +148,8 @@ The access token is an HS256 JWT (`@ttoss/auth-core` `signJwt`) carrying:
   `prj:<project_id>` marker
 - `prj` — the granted project's public id
 
+A token carrying `scope` without `prj` is rejected (`401`). A refresh-token grant may narrow `scope` to a subset of the granted scopes, but the subset must keep the `prj:<project_id>` marker; one without it answers `400 invalid_grant` and leaves the refresh token unconsumed.
+
 ## Configuration
 
 | Variable | Default | Purpose |
