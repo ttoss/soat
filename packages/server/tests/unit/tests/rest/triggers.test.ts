@@ -2614,6 +2614,123 @@ describe('Triggers', () => {
     });
   });
 
+  describe('shaping a firing re-checks the target-start action', () => {
+    let shaperToken: string;
+    let triggerId: string;
+
+    beforeAll(async () => {
+      const createUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'triggersshaper', password: 'shaperpass' });
+
+      // May update and fire any trigger, but start no target.
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: [
+                  'triggers:GetTrigger',
+                  'triggers:UpdateTrigger',
+                  'triggers:FireTrigger',
+                ],
+                resource: ['*'],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${createUserRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+      shaperToken = await loginAs('triggersshaper', 'shaperpass');
+
+      triggerId = (
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/triggers')
+          .send({
+            project_id: projectId,
+            name: 'shape-subject',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+            input: { seed: 1 },
+          })
+      ).body.id;
+    });
+
+    test('refuses a fire carrying input from a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .post(`/api/v1/triggers/${triggerId}/fire`)
+        .send({ input: { seed: 2 } });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    test('refuses a fire carrying tool_context from a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .post(`/api/v1/triggers/${triggerId}/fire`)
+        .send({ tool_context: { region: 'eu' } });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    test('fires the stored firing for a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .post(`/api/v1/triggers/${triggerId}/fire`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.input).toEqual({ seed: 1 });
+    });
+
+    test('refuses an input update from a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ input: { seed: 3 } });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    test('refuses a tool_context update from a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ tool_context: { region: 'eu' } });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('refuses a policy_id update from a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ policy_id: null });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('keeps the stored input after a refused update', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/triggers/${triggerId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.input).toEqual({ seed: 1 });
+    });
+
+    test('allows a rename from a caller who cannot start the target', async () => {
+      const res = await authenticatedTestClient(shaperToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ name: 'shape-subject-renamed' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('shape-subject-renamed');
+    });
+  });
+
   describe('SRN-scoped principal (project-scoped credential)', () => {
     let scopedToken: string;
 
