@@ -3,7 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
 import { withRequestIdHeader } from './requestCorrelation';
-import { resolveSecretRefsInString } from './secrets';
+import { resolveSecretRefsWithValues } from './secrets';
 import {
   isToolAssertionConfigured,
   toolAssertionHeaderName,
@@ -26,6 +26,8 @@ const log = createDebug('soat:mcpTransport');
  */
 export type McpTransport = {
   url: string;
+  // The `{{secret:}}` values resolved into `url`, by secret id.
+  urlSecrets: ReadonlyMap<string, string>;
   headers: Record<string, string>;
   identity: ToolAssertionIdentity | null;
 };
@@ -62,10 +64,9 @@ export const openMcpTransport = async (args: {
   contextKeys?: string[] | null;
 }): Promise<McpTransport> => {
   const { projectId } = args.meter;
-  const url = await resolveSecretRefsInString({
-    value: args.mcp.url,
-    projectId,
-  });
+  const { value: url, secrets: urlSecrets } = await resolveSecretRefsWithValues(
+    { value: args.mcp.url, projectId }
+  );
   const resolved = await resolveToolHeaderTemplates({
     record: args.mcp.headers ?? undefined,
     projectId,
@@ -81,7 +82,7 @@ export const openMcpTransport = async (args: {
     }),
   });
   if (!isToolAssertionConfigured()) {
-    return { url, headers, identity: null };
+    return { url, urlSecrets, headers, identity: null };
   }
   // Validated here so a bad name fails before the first request, not on it.
   toolAssertionHeaderName();
@@ -91,7 +92,7 @@ export const openMcpTransport = async (args: {
     identity.toolId,
     identity.projectId
   );
-  return { url, headers, identity };
+  return { url, urlSecrets, headers, identity };
 };
 
 /**
@@ -135,6 +136,10 @@ export const postMcp = (args: {
       body: args.body,
     },
     // Its `aud` is this URL, so another origin holding it could replay it here.
-    { onRequest: args.onRequest, credentialHeaders: Object.keys(assertion) }
+    {
+      onRequest: args.onRequest,
+      credentialHeaders: Object.keys(assertion),
+      secrets: transport.urlSecrets,
+    }
   );
 };
