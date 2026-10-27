@@ -434,7 +434,7 @@ A literal stored before the rule reads back as `{"no_echo": true}` wherever the 
 
 An `http` or `mcp` tool's target is bounded by the deployment, not the tool definition. Default: any publicly routable address. Loopback, `10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata), CGNAT and IPv6 ULA fail with `403 TOOL_EGRESS_BLOCKED`, the refused address in `meta.tool_address`.
 
-The resolved address is checked on the first request and every redirect hop; credential headers (`Authorization`, `Cookie`) are dropped when a redirect changes origin. A public hostname resolving to `169.254.169.254` and a `302 Location: http://169.254.169.254/…` are both refused.
+The resolved address is checked on the first request and every redirect hop, and again on the address the connection dials, so a hostname that resolves differently at connect is refused too; credential headers (`Authorization`, `Cookie`) are dropped when a redirect changes origin. A public hostname resolving to `169.254.169.254` and a `302 Location: http://169.254.169.254/…` are both refused.
 
 The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), deployment-wide, not per project. For SOAT's own API use a [`builtin` tool](#builtin): in-process, under the caller's permissions.
 

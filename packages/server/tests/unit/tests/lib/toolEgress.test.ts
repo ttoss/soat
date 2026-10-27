@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+import dnsPromises from 'node:dns/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -34,7 +36,47 @@ const closeServer = (server: Server): Promise<void> => {
   });
 };
 
+/**
+ * DNS is external I/O, so it is the one thing mocked here: `checked` answers
+ * the guard's check, `connected` every lookup after it — a rebinding resolver.
+ */
+const answerDns = (args: { checked: string; connected: string }): void => {
+  const family = (address: string): number => {
+    return address.includes(':') ? 6 : 4;
+  };
+  const checked = async (
+    _hostname: string,
+    _options: dns.LookupOptions
+  ): Promise<dns.LookupAddress | dns.LookupAddress[]> => {
+    return [{ address: args.checked, family: family(args.checked) }];
+  };
+  const connected = (
+    _hostname: string,
+    options: dns.LookupOptions,
+    callback: (
+      error: NodeJS.ErrnoException | null,
+      address: string | dns.LookupAddress[],
+      family?: number
+    ) => void
+  ): void => {
+    const address = args.connected;
+    if (options.all) {
+      callback(null, [{ address, family: family(address) }]);
+      return;
+    }
+    callback(null, address, family(address));
+  };
+  jest
+    .spyOn(dnsPromises, 'lookup')
+    .mockImplementation(checked as typeof dnsPromises.lookup);
+  jest.spyOn(dns, 'lookup').mockImplementation(connected as typeof dns.lookup);
+};
+
 describe('toolEgress', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe('isPublicAddress', () => {
     test.each([
       ['8.8.8.8', true],
@@ -598,6 +640,61 @@ describe('toolEgress', () => {
             }
           )
         ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
+      } finally {
+        await closeServer(server);
+      }
+    });
+
+    test('blocks a host that re-resolves to loopback after the check', async () => {
+      let reached = false;
+      const { server, port } = await startServer((_req, res) => {
+        reached = true;
+        res.end('SECRET');
+      });
+      answerDns({ checked: '93.184.216.34', connected: '127.0.0.1' });
+      try {
+        await expect(
+          fetchWithEgressGuard(
+            `http://rebind.example:${port}/`,
+            {},
+            { allowlist: parseEgressAllowlist(undefined) }
+          )
+        ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
+        expect(reached).toBe(false);
+      } finally {
+        await closeServer(server);
+      }
+    });
+
+    test('reaches a hostname whose address a CIDR entry allows', async () => {
+      const { server, port } = await startServer((_req, res) => {
+        res.end('reached');
+      });
+      answerDns({ checked: '127.0.0.1', connected: '127.0.0.1' });
+      try {
+        const response = await fetchWithEgressGuard(
+          `http://internal.example:${port}/`,
+          {},
+          { allowlist: parseEgressAllowlist('127.0.0.0/8') }
+        );
+        await expect(response.text()).resolves.toBe('reached');
+      } finally {
+        await closeServer(server);
+      }
+    });
+
+    test('reaches a host listed by name whatever it resolves to', async () => {
+      const { server, port } = await startServer((_req, res) => {
+        res.end('reached');
+      });
+      answerDns({ checked: '127.0.0.1', connected: '127.0.0.1' });
+      try {
+        const response = await fetchWithEgressGuard(
+          `http://internal.example:${port}/`,
+          {},
+          { allowlist: parseEgressAllowlist('internal.example') }
+        );
+        await expect(response.text()).resolves.toBe('reached');
       } finally {
         await closeServer(server);
       }
