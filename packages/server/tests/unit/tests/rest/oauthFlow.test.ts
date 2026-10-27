@@ -324,6 +324,47 @@ describe('OAuth authorization server (SPA consent)', () => {
       expect(afterRow).toBeNull();
     });
 
+    test('a refresh narrowed to a scope set without the project is refused, and the token stays usable', async () => {
+      const { clientId, refreshToken } = await completeAuthFlow();
+
+      const narrowed = await testClient.post('/token').type('form').send({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+        scope: 'mcp:access',
+      });
+      expect(narrowed.status).toBe(400);
+      expect(narrowed.body.error).toBe('invalid_grant');
+
+      const retry = await testClient.post('/token').type('form').send({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+      });
+      expect(retry.status).toBe(200);
+      expect(verifyOauthAccessToken(retry.body.access_token)?.prj).toBe(
+        projectId
+      );
+    });
+
+    test('a refresh narrowed to a scope set keeping the project carries it', async () => {
+      const { clientId, refreshToken } = await completeAuthFlow();
+
+      const res = await testClient
+        .post('/token')
+        .type('form')
+        .send({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: clientId,
+          scope: `mcp:access prj:${projectId}`,
+        });
+      expect(res.status).toBe(200);
+      const payload = verifyOauthAccessToken(res.body.access_token);
+      expect(payload?.prj).toBe(projectId);
+      expect(payload?.scope).toBe(`mcp:access prj:${projectId}`);
+    });
+
     test('replayed refresh token is rejected (reuse detection)', async () => {
       const { clientId, refreshToken } = await completeAuthFlow();
 
@@ -472,6 +513,25 @@ describe('OAuth authorization server (SPA consent)', () => {
         `/api/v1/files/${fileId}`
       );
       expect(res.status).toBe(403);
+    });
+
+    test('a token carrying a scope claim but no project is refused', async () => {
+      const userPublicId = jwt.decode(readOnlyOauthToken, { json: true })?.sub;
+      const projectlessToken = jwt.sign(
+        {
+          sub: userPublicId,
+          publicId: userPublicId,
+          role: 'user',
+          scope: '* mcp:access',
+        },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const res = await authenticatedTestClient(projectlessToken).get(
+        `/api/v1/files/${fileId}`
+      );
+      expect(res.status).toBe(401);
     });
 
     test('a project-scoped token with no scope claim grants nothing', async () => {

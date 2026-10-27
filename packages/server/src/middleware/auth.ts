@@ -235,7 +235,9 @@ type JwtClaims = {
 const verifyJwtClaims = (token: string): JwtClaims | null => {
   try {
     const claims = jwt.verify(token, JWT_SECRET) as JwtClaims;
-    return typeof claims.publicId === 'string' ? claims : null;
+    if (typeof claims.publicId !== 'string') return null;
+    // A `scope` claim marks an OAuth token, which is only valid bound to a project.
+    return claims.scope !== undefined && !claims.prj ? null : claims;
   } catch {
     return null;
   }
