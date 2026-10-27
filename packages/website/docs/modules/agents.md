@@ -234,7 +234,7 @@ Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choic
 
 **Every turn of a chain uses the agent's `tool_choice`**, continuations included; a turn ending on the step budget reports `stop_reason: "max_steps"`.
 
-**A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_store_id`), even after a server restart.
+**A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_store_id`), even after a server restart. Its tools call with the credential of the caller who submits the outputs, not the one who started the turn.
 
 ### Step Rules
 

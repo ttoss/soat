@@ -198,6 +198,11 @@ export type PendingGeneration = {
   aiProviderId?: string | null;
   agentConfig: PendingAgentConfig;
   resolvedTools: Record<string, Tool>;
+  /**
+   * The credential `resolvedTools` call with. A submitter presenting any other
+   * rebuilds them on its own, so a continuation never borrows the starter's.
+   */
+  toolsAuthHeader: string | undefined;
   toolContext?: Record<string, string>;
 };
 
