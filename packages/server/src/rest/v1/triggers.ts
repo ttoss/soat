@@ -221,13 +221,6 @@ const assertCallerMayStart = async (args: {
   }
 };
 
-const FIRING_SHAPE_FIELDS = [
-  'action',
-  'input',
-  'tool_context',
-  'policy_id',
-] as const;
-
 /**
  * A firing runs as the creator, so every field that shapes what it does asks
  * the create route's question again, against the effective target pair.
@@ -240,18 +233,20 @@ const assertMayShapeUpdatedFiring = async (args: {
     target_id?: string;
     action?: string | null;
     input?: Record<string, unknown> | null;
-    tool_context?: unknown;
     policy_id?: string | null;
   };
+  toolContext: Record<string, string> | null | undefined;
 }): Promise<void> => {
-  const { authUser, trigger, body } = args;
+  const { authUser, trigger, body, toolContext } = args;
   const retypes =
     body.target_type !== undefined && body.target_type !== trigger.target_type;
   const repoints =
     body.target_id !== undefined && body.target_id !== trigger.target_id;
-  const reshapes = FIRING_SHAPE_FIELDS.some((field) => {
-    return body[field] !== undefined;
-  });
+  const reshapes = [body.action, body.input, toolContext, body.policy_id].some(
+    (field) => {
+      return field !== undefined;
+    }
+  );
   if (!retypes && !repoints && !reshapes) return;
 
   await assertCallerMayStart({
@@ -283,7 +278,14 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     policy_id?: string | null;
   };
 
-  await assertMayShapeUpdatedFiring({ authUser: ctx.authUser, trigger, body });
+  const toolContext = parseNullableToolContextBody(body.tool_context);
+
+  await assertMayShapeUpdatedFiring({
+    authUser: ctx.authUser,
+    trigger,
+    body,
+    toolContext,
+  });
 
   const policyId =
     body.policy_id === undefined
@@ -298,7 +300,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     targetId: body.target_id,
     action: body.action,
     input: body.input,
-    toolContext: parseNullableToolContextBody(body.tool_context),
+    toolContext,
     cron: body.cron,
     eventPattern: body.event_pattern,
     active: body.active,
@@ -339,7 +341,9 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     tool_context?: unknown;
   };
 
-  if (carriesFields(body.input) || carriesFields(body.tool_context)) {
+  const toolContext = parseToolContextBody(body.tool_context);
+
+  if (carriesFields(body.input) || carriesFields(toolContext)) {
     await assertCallerMayStart({
       authUser: ctx.authUser,
       projectPublicId: trigger.project_id!,
@@ -356,9 +360,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     // target is a tool reaches it with no generation in between — so the
     // reserved identity keys are stripped here, where the caller's bytes
     // arrive, rather than trusted.
-    fireToolContext: sanitizeCallerToolContext(
-      parseToolContextBody(body.tool_context)
-    ),
+    fireToolContext: sanitizeCallerToolContext(toolContext),
   });
 
   ctx.status = 200;
