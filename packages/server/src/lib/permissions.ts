@@ -5,6 +5,7 @@ import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
   type PolicyDocument,
+  type PolicySets,
 } from './iam';
 
 const log = createDebug('soat:permissions');
@@ -69,24 +70,47 @@ const evalDocs = (args: {
   });
 };
 
-/**
- * Resolves the credential boundary policy set: inline docs (OAuth consent) take
- * precedence, otherwise the key's attached policies loaded by id. Returns `null`
- * when there is no boundary (the credential inherits the user's permissions).
- */
-const resolveBoundaryDocs = async (args: {
-  boundaryPolicyDocs?: PolicyDocument[];
-  apiKeyPolicyIds: number[];
+const ADMIN_WILDCARD_POLICY: PolicyDocument = {
+  statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
+};
+
+const loadPolicyDocs = async (args: {
+  policyIds: number[];
   db: DB;
-}): Promise<PolicyDocument[] | null> => {
-  if (args.boundaryPolicyDocs) return args.boundaryPolicyDocs;
-  if (args.apiKeyPolicyIds.length === 0) return null;
-  const keyPolicies = await args.db.Policy.findAll({
-    where: { id: args.apiKeyPolicyIds },
+}): Promise<PolicyDocument[]> => {
+  if (args.policyIds.length === 0) return [];
+  const policies = await args.db.Policy.findAll({
+    where: { id: args.policyIds },
   });
-  return keyPolicies.map((p: InstanceType<DB['Policy']>) => {
+  return policies.map((p: InstanceType<DB['Policy']>) => {
     return p.document as PolicyDocument;
   });
+};
+
+/**
+ * The policy sets a caller's request must each satisfy: the owning user's
+ * (an admin's allow anything) and, when the credential carries one, its
+ * boundary — inline docs (OAuth consent) first, else the key's own policies.
+ * Authorization (`createApiKeyIsAllowed`) and list filters (`getPolicies`)
+ * both read it, so a row filter never grants what a check would refuse.
+ */
+export const resolvePolicySets = async (args: {
+  userRole: 'admin' | 'user';
+  userPolicyIds: number[];
+  apiKeyPolicyIds: number[];
+  boundaryPolicyDocs?: PolicyDocument[];
+  db: DB;
+}): Promise<PolicySets> => {
+  const userDocs =
+    args.userRole === 'admin'
+      ? [ADMIN_WILDCARD_POLICY]
+      : await loadPolicyDocs({ policyIds: args.userPolicyIds, db: args.db });
+  const boundaryDocs =
+    args.boundaryPolicyDocs ??
+    (args.apiKeyPolicyIds.length > 0
+      ? await loadPolicyDocs({ policyIds: args.apiKeyPolicyIds, db: args.db })
+      : null);
+  return boundaryDocs === null ? [userDocs] : [userDocs, boundaryDocs];
 };
 
 /**
@@ -134,51 +158,15 @@ export const createApiKeyIsAllowed = (args: {
       return false;
     }
 
-    // Admin users bypass policy evaluation — their user boundary is always satisfied
-    const userIsAdmin = args.userRole === 'admin';
-
-    const userPolicies =
-      !userIsAdmin && args.userPolicyIds.length > 0
-        ? await args.db.Policy.findAll({ where: { id: args.userPolicyIds } })
-        : [];
-
-    const userDocs = userPolicies.map((p: InstanceType<DB['Policy']>) => {
-      return p.document as PolicyDocument;
-    });
-
-    // Admin role always satisfies the user boundary; otherwise evaluate the
-    // user's own policies.
-    const evalUser = (): boolean => {
-      if (userIsAdmin) return true;
+    const sets = await resolvePolicySets(args);
+    return sets.every((policies) => {
       return evalDocs({
-        policies: userDocs,
+        policies,
         action: reqArgs.action,
         resource: reqArgs.resource,
         resources: reqArgs.resources,
         context: reqArgs.context,
       });
-    };
-
-    const keyDocs = await resolveBoundaryDocs({
-      boundaryPolicyDocs: args.boundaryPolicyDocs,
-      apiKeyPolicyIds: args.apiKeyPolicyIds,
-      db: args.db,
-    });
-
-    // No boundary: user policies alone determine access (inherit user permissions)
-    if (keyDocs === null) {
-      return evalUser();
-    }
-
-    // Intersection: both user policies AND the credential boundary must allow
-    if (!evalUser()) return false;
-
-    return evalDocs({
-      policies: keyDocs,
-      action: reqArgs.action,
-      resource: reqArgs.resource,
-      resources: reqArgs.resources,
-      context: reqArgs.context,
     });
   };
 };
