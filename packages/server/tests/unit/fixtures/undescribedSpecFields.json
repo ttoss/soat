@@ -3,7 +3,6 @@
   "actors.yaml updateActor.name",
   "ai-providers.yaml UpsertProviderPricesRequest.prices",
   "ai-providers.yaml updateAiProvider.base_url",
-  "ai-providers.yaml updateAiProvider.config",
   "ai-providers.yaml updateAiProvider.default_model",
   "ai-providers.yaml updateAiProvider.name",
   "ai-providers.yaml updateAiProvider.secret_id",

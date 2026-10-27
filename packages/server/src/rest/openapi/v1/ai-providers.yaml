@@ -81,7 +81,7 @@ paths:
                               description: Custom base URL for the provider. Absent when the record sets none.
                             config:
                               type: object
-                              description: Additional provider-specific configuration. Absent when the record sets none.
+                              description: 'Additional provider-specific configuration. Absent when the record sets none. A `config.apiKey` reads as `{"no_echo": true}`.'
                             project_id:
                               x-soat-ref: projects
                               type: string
@@ -179,7 +179,7 @@ paths:
                   description: Custom base URL for the provider
                 config:
                   type: object
-                  description: Additional provider-specific configuration
+                  description: 'Additional provider-specific configuration. `config.apiKey`, when set, must be a string; every read returns it as `{"no_echo": true}`.'
       responses:
         '201':
           description: AI provider created successfully
@@ -275,6 +275,7 @@ paths:
                     type: string
                   config:
                     type: object
+                    description: 'Additional provider-specific configuration. A `config.apiKey` reads as `{"no_echo": true}`.'
                   created_at:
                     type: string
                     format: date-time
@@ -356,6 +357,7 @@ paths:
                   type: string
                 config:
                   type: object
+                  description: 'Replaces the whole configuration, so a `config.apiKey` the record keeps is sent again as a string; the masked `{"no_echo": true}` a read returns is refused.'
       responses:
         '200':
           description: AI provider updated successfully
