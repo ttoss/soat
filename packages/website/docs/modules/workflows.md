@@ -194,6 +194,8 @@ A state, a transition and everything under `on_enter` take the fields named here
 
 Entering a state cancels any dispatch still running from the state left, an in-flight orchestration run included: task state is the source of truth.
 
+A dispatch runs as the user or API key that moved the task into the state; an `automation` hop inherits it. A move made with a trigger or OAuth token records none, so its dispatch's platform self-calls are unauthenticated, as for [an orchestration run](./orchestrations.md#durable-background-execution).
+
 #### Tool dispatch
 
 A single tool call dispatches directly:

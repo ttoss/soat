@@ -6,6 +6,7 @@ import {
   parseOrchestrationGraph,
   parseOutputMapping,
 } from 'src/lib/orchestrationGraphWire';
+import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import {
   cancelOrchestrationRun,
   createOrchestration,
@@ -296,7 +297,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     authHeader,
     // Persisted on the run so a worker driving it later can act as the same
     // principal; the request's own header only reaches `wait` mode.
-    principal: requestPrincipalFromCtx(ctx),
+    principal: resolveStartingPrincipal({ authUser: ctx.authUser }),
     wait: body.wait === true,
     idempotencyKey,
   });

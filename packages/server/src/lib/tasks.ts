@@ -223,7 +223,7 @@ const finalizeCreatedTask = async (args: {
   projectId: number;
   entryState: WorkflowState;
   closed: boolean;
-  principal: TaskPrincipal;
+  startingPrincipal: RequestPrincipal | null;
 }) => {
   const created = await findTaskInstance({ id: args.taskPublicId });
   const mapped = mapTask(created!);
@@ -246,15 +246,7 @@ const finalizeCreatedTask = async (args: {
     state: args.entryState,
     // The creator is the identity the entry state's automation acts as; every
     // later hop inherits it (see `resolveDispatchPrincipal`).
-    principal:
-      args.principal.kind === 'user' || args.principal.kind === 'api_key'
-        ? args.principal.id
-          ? {
-              principalType: args.principal.kind,
-              principalId: args.principal.id,
-            }
-          : undefined
-        : undefined,
+    principal: args.startingPrincipal ?? undefined,
   });
 
   return mapped;
@@ -293,6 +285,11 @@ export type CreateTaskArgs = {
    */
   idempotency?: TaskCreateIdempotency;
   principal: TaskPrincipal;
+  /**
+   * The identity the entry state's dispatch runs as, by
+   * `resolveStartingPrincipal`'s rule; `principal` is only who is credited.
+   */
+  startingPrincipal: RequestPrincipal | null;
 };
 
 const insertTask = async (args: CreateTaskArgs) => {
@@ -376,7 +373,7 @@ const insertTask = async (args: CreateTaskArgs) => {
     projectId: args.projectId,
     entryState,
     closed,
-    principal: args.principal,
+    startingPrincipal: args.startingPrincipal,
   });
 };
 

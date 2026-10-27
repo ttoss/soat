@@ -107,6 +107,11 @@ type TransitionArgs = {
    */
   viaRunToken?: boolean;
   /**
+   * The identity a `user` or `api_key` move's dispatch runs as, by
+   * `resolveStartingPrincipal`'s rule. Absent, that dispatch runs as nobody.
+   */
+  startingPrincipal?: RequestPrincipal | null;
+  /**
    * Caller context for the dispatches the task makes from here on.
    *
    * The precedence rule is the whole rule: **supplying one replaces the stored
@@ -360,7 +365,8 @@ const performTransitionTxn = async (args: {
 /**
  * The identity the *next* state's automation runs as.
  *
- * A human or API-key move names itself. An `automation` move names nobody — its
+ * A human or API-key move names its `startingPrincipal`, which an OAuth or
+ * trigger credential leaves empty. An `automation` move names nobody — its
  * cause is the generation or run recorded alongside it — so the identity is
  * inherited from the run that routed the task here, which is what keeps a chain
  * acting as the user who fired the first transition rather than decaying to no
@@ -372,9 +378,9 @@ const performTransitionTxn = async (args: {
 const resolveDispatchPrincipal = async (
   args: TransitionArgs
 ): Promise<RequestPrincipal | undefined> => {
-  const { kind, id } = args.principal;
-  if ((kind === 'user' || kind === 'api_key') && id) {
-    return { principalType: kind, principalId: id };
+  const { kind } = args.principal;
+  if (kind === 'user' || kind === 'api_key') {
+    return args.startingPrincipal ?? undefined;
   }
   if (!args.orchestrationRunId) return undefined;
   const run = await db.OrchestrationRun.findOne({

@@ -500,10 +500,13 @@ const driveRunToRest = async (args: {
  * redriven from the queue would have none.
  */
 const resolveRunPrincipal = (args: {
-  principal?: RequestPrincipal;
+  principal?: RequestPrincipal | null;
   authHeader?: string;
 }): { principalKind: string | null; principalId: string | null } => {
-  const principal = args.principal ?? readRunTokenPrincipal(args.authHeader);
+  const principal =
+    args.principal === undefined
+      ? readRunTokenPrincipal(args.authHeader)
+      : args.principal;
   return {
     principalKind: principal?.principalType ?? null,
     principalId: principal?.principalId ?? null,
@@ -570,7 +573,7 @@ const createRunRecord = async (args: {
   toolContext?: Record<string, string>;
   metadata?: Record<string, unknown>;
   triggerId?: string;
-  principal?: RequestPrincipal;
+  principal?: RequestPrincipal | null;
   authHeader?: string;
   wait?: boolean;
   parent?: NestedRunParent;
@@ -677,8 +680,9 @@ export type StartOrchestrationRunArgs = {
   // events for in-run trigger attribution.
   triggerId?: string;
   // Persisted so the background worker can re-establish it later. When omitted,
-  // a child run inherits its parent's identity from `authHeader`.
-  principal?: RequestPrincipal;
+  // a child run inherits its parent's identity from `authHeader`; `null`
+  // records none (see `resolveStartingPrincipal`).
+  principal?: RequestPrincipal | null;
   // Fires as soon as the run row exists, before any blocking execution, so a
   // caller can persist the id — a workflow task records `active_dispatch.id`
   // here so cancellation-on-exit can reach a still-running run.
