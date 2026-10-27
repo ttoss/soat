@@ -10,7 +10,7 @@ import {
 } from './orchestrationRunActions';
 import { clearRunPause, PAUSABLE_RUN_STATUSES } from './orchestrationRunPause';
 import { kickPlaybookWorker } from './playbookCascade';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { readPauseReason } from './projectPause';
 import { getProjectOrThrow, mapProject } from './projects';
 import { pauseTask, resumeTask } from './tasksPauseActions';
@@ -227,7 +227,7 @@ const reanchorSchedules = async (args: {
  */
 export const resumeProject = async (args: {
   id: string;
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
 }): Promise<MappedProject> => {
   log('resumeProject: id=%s', args.id);
   const project = await getProjectOrThrow(args.id);

@@ -4,7 +4,8 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
-import type { RequestPrincipal } from './principals';
+import { readStoredStartingPrincipal } from './orchestrationRunToken';
+import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import {
   type ActiveDispatch,
@@ -110,7 +111,7 @@ type TransitionArgs = {
    * The identity a `user` or `api_key` move's dispatch runs as, by
    * `resolveStartingPrincipal`'s rule. Absent, that dispatch runs as nobody.
    */
-  startingPrincipal?: RequestPrincipal | null;
+  startingPrincipal?: StartingPrincipal | null;
   /**
    * Caller context for the dispatches the task makes from here on.
    *
@@ -377,7 +378,7 @@ const performTransitionTxn = async (args: {
  */
 const resolveDispatchPrincipal = async (
   args: TransitionArgs
-): Promise<RequestPrincipal | undefined> => {
+): Promise<StartingPrincipal | undefined> => {
   const { kind } = args.principal;
   if (kind === 'user' || kind === 'api_key') {
     return args.startingPrincipal ?? undefined;
@@ -387,10 +388,12 @@ const resolveDispatchPrincipal = async (
     where: { publicId: args.orchestrationRunId },
     attributes: ['principalKind', 'principalId'],
   });
-  const runKind = run?.principalKind;
-  const runId = run?.principalId;
-  if ((runKind !== 'user' && runKind !== 'api_key') || !runId) return undefined;
-  return { principalType: runKind, principalId: runId };
+  return (
+    readStoredStartingPrincipal({
+      kind: run?.principalKind,
+      id: run?.principalId,
+    }) ?? undefined
+  );
 };
 
 const currentTask = async (id: string) => {

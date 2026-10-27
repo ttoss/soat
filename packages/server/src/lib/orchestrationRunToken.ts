@@ -3,7 +3,11 @@ import jwt from 'jsonwebtoken';
 
 import { db } from '../db';
 import { JWT_SECRET } from '../middleware/auth';
-import { principalFromAuthUser, type RequestPrincipal } from './principals';
+import {
+  principalFromAuthUser,
+  type RequestPrincipal,
+  type StartingPrincipal,
+} from './principals';
 
 const log = createDebug('soat:orchestrations');
 
@@ -163,6 +167,11 @@ export const readRunTokenWork = (
   }
 };
 
+/** The one construction of the brand; every other module receives it. */
+const brand = (principal: RequestPrincipal | null) => {
+  return principal as StartingPrincipal | null;
+};
+
 /**
  * The principal to persist as having *started* a piece of work, from whichever
  * credential reached it: the authenticated caller when a request started the
@@ -188,10 +197,24 @@ export const resolveStartingPrincipal = (args: {
     isRunToken?: boolean;
   };
   authHeader?: string;
-}): RequestPrincipal | null => {
+}): StartingPrincipal | null => {
   const { authUser } = args;
-  if (!authUser) return readRunTokenPrincipal(args.authHeader);
+  if (!authUser) return brand(readRunTokenPrincipal(args.authHeader));
   if (authUser.isTriggerToken) return null;
   if (authUser.oauthProjectPublicId && !authUser.isRunToken) return null;
-  return principalFromAuthUser(authUser);
+  return brand(principalFromAuthUser(authUser));
+};
+
+/**
+ * A starting principal read back from the columns that recorded one. Those
+ * columns are written only from a `StartingPrincipal`, so the rule already ran.
+ */
+export const readStoredStartingPrincipal = (args: {
+  kind: string | null | undefined;
+  id: string | null | undefined;
+}): StartingPrincipal | null => {
+  if ((args.kind !== 'user' && args.kind !== 'api_key') || !args.id) {
+    return null;
+  }
+  return brand({ principalType: args.kind, principalId: args.id });
 };

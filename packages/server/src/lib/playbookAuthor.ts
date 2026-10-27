@@ -5,7 +5,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveJwtAuthUser } from '../middleware/auth';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import { buildRunAuthHeader } from './orchestrationRunToken';
+import {
+  buildRunAuthHeader,
+  resolveStartingPrincipal,
+} from './orchestrationRunToken';
 import type {
   PlaybookDefinition,
   PlaybookExecutor,
@@ -13,7 +16,7 @@ import type {
 } from './playbookDefinition';
 import { executorResolves } from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { mayStart, START_ACTIONS } from './startActions';
 import type { ValidationProblem } from './validationProblems';
 
@@ -124,7 +127,7 @@ export const executorReferenceProblems = async (args: {
  * OAuth token): no run can be minted from it.
  */
 export type PlaybookAuthor = {
-  principal: RequestPrincipal | null;
+  principal: StartingPrincipal | null;
   isAllowed: IsAllowedFn;
 };
 
@@ -164,7 +167,7 @@ export const assertAuthorCanRun = async (args: {
 };
 
 /** The version row's author columns. */
-export const authorColumns = (principal: RequestPrincipal | null) => {
+export const authorColumns = (principal: StartingPrincipal | null) => {
   return {
     principalKind: principal?.principalType ?? null,
     principalId: principal?.principalId ?? null,
@@ -173,7 +176,7 @@ export const authorColumns = (principal: RequestPrincipal | null) => {
 
 /** The author a case's executors run as: who wrote its pinned version. */
 export type PlaybookRunAs = {
-  principal: RequestPrincipal;
+  principal: StartingPrincipal;
   authHeader: string;
   isAllowed: IsAllowedFn;
 };
@@ -202,7 +205,8 @@ export const resolvePlaybookRunAs = async (args: {
       })
     : undefined;
 
-  if (!authHeader || !authUser || !principalKind || !principalId) {
+  const principal = resolveStartingPrincipal({ authHeader });
+  if (!authHeader || !authUser || !principal) {
     log('resolvePlaybookRunAs: no author for %s', args.workPublicId);
     throw new DomainError(
       'PLAYBOOK_AUTHOR_UNAVAILABLE',
@@ -211,10 +215,7 @@ export const resolvePlaybookRunAs = async (args: {
   }
 
   return {
-    principal: {
-      principalType: principalKind === 'api_key' ? 'api_key' : 'user',
-      principalId,
-    },
+    principal,
     authHeader,
     isAllowed: authUser.isAllowed,
   };

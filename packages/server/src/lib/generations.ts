@@ -29,6 +29,10 @@ import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
+import {
+  startedByPrincipalColumns,
+  type StartingPrincipal,
+} from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import { rollUpUsageTotals } from './usageAggregate';
@@ -70,8 +74,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     parentTraceId?: string | null;
     rootTraceId?: string | null;
     rootGenerationId?: string | null;
-    startedByPrincipalType?: string | null;
-    startedByPrincipalId?: string | null;
+    startedBy?: StartingPrincipal | null;
     toolSurface?: Record<string, unknown> | null;
     inputModalities: string[];
     retrieval?: KnowledgeRetrieval;
@@ -119,8 +122,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         rootGenerationId: args.rootGenerationId ?? null,
         ...conversation,
         chainId,
-        startedByPrincipalType: args.startedByPrincipalType ?? null,
-        startedByPrincipalId: args.startedByPrincipalId ?? null,
+        ...startedByPrincipalColumns(args.startedBy ?? null),
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
         status: 'running',
@@ -158,8 +160,7 @@ const insertGenerationRecord = async (
     // which is the only writer of the column.
     rootGenerationId?: string | null;
     initiatorGenerationId?: string | null;
-    startedByPrincipalType?: string | null;
-    startedByPrincipalId?: string | null;
+    startedBy?: StartingPrincipal | null;
     // The conversation this generation serves, when it serves one: the edge
     // the memory assertions walk up from a generation.
     conversation?: GenerationConversation;

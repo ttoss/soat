@@ -23,7 +23,11 @@ import { readCaseNode } from './playbookExecutions';
 import { resolveRunAs } from './playbookExecutionWork';
 import { type ExportCase, renderPlaybookExport } from './playbookExportRender';
 import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
-import { createdByColumns, type RequestPrincipal } from './principals';
+import {
+  createdByColumns,
+  type RequestPrincipal,
+  type StartingPrincipal,
+} from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExports');
@@ -300,7 +304,7 @@ export const exportPlaybookCaseNode = async (args: {
     projectId: row.projectId,
     projectPublicId: row.project.publicId,
   };
-  const principal: RequestPrincipal = runAs.principal;
+  const principal: StartingPrincipal = runAs.principal;
   const render = () => {
     return Promise.all(
       created.map((exported) => {

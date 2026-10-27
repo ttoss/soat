@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
@@ -157,7 +157,7 @@ type AttemptContext = {
   /** The `{task}` context `inputs` was resolved from; see `runDispatch`. */
   taskContext: Record<string, unknown>;
   retry: RetryPolicy | null;
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
   /**
    * The task's caller context, read off the task row by
    * `runStateAutomation` rather than threaded down from the transition that

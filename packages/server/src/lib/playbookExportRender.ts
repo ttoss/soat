@@ -7,7 +7,7 @@ import { systemPath } from './filePaths';
 import { upsertFileByPath } from './files';
 import { isPlainObject } from './plainObject';
 import { PLAYBOOK_EXPORT_FORMATS } from './playbookDefinition';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
   type StoredError,
@@ -52,7 +52,7 @@ const readToolFile = (result: unknown): ToolFile => {
 const renderFile = async (args: {
   exported: ExportRow;
   exportCase: ExportCase;
-  principal: RequestPrincipal;
+  principal: StartingPrincipal;
 }): Promise<number> => {
   const { exported, exportCase } = args;
   const entry = await db.PlaybookEntry.findOne({
@@ -120,7 +120,7 @@ const renderFile = async (args: {
 export const renderPlaybookExport = async (args: {
   exportId: number;
   exportCase: ExportCase;
-  principal: RequestPrincipal;
+  principal: StartingPrincipal;
 }): Promise<void> => {
   const exported = (await db.PlaybookExport.findByPk(args.exportId))!;
   log('renderPlaybookExport: %s', exported.publicId);
