@@ -540,8 +540,9 @@ describe('Playbook executions', () => {
         read: () => {
           return executionsOf(caseId);
         },
+        // The rerun is inserted `queued`; the worker claims it a tick later.
         done: (rows) => {
-          return rows.length === 2;
+          return rows.length === 2 && rows[0].status !== 'queued';
         },
       });
       expect(again[0]).toMatchObject({

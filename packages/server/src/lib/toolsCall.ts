@@ -135,6 +135,38 @@ const adjudicate = async (gateArgs: {
   });
 };
 
+/**
+ * A call a human signed off on. Its presets are the values the proposal froze
+ * into `frozenArguments`, never re-resolved from the resolving request's
+ * `tool_context`, and a `builtin` action stays within the proposing agent's
+ * `boundaryPolicy`.
+ */
+export type SignedOffCall = {
+  frozenArguments: Record<string, unknown>;
+  boundaryPolicy: unknown;
+};
+
+/**
+ * The tool's presets with each key the sign-off froze taking its frozen value;
+ * a key the proposal did not carry keeps its stored template.
+ */
+const frozenPresets = (args: {
+  presetParameters?: object | null;
+  frozenArguments: Record<string, unknown>;
+}): Record<string, unknown> | null => {
+  if (!args.presetParameters) return null;
+  return Object.fromEntries(
+    Object.entries(args.presetParameters).map(([key, value]) => {
+      return [
+        key,
+        Object.hasOwn(args.frozenArguments, key)
+          ? args.frozenArguments[key]
+          : value,
+      ];
+    })
+  );
+};
+
 type CallResolvedToolArgs = {
   tool: CallableToolDefinition;
   toolProjectId: number;
@@ -165,6 +197,7 @@ type CallResolvedToolArgs = {
   toolContext?: Record<string, string>;
   // Who the call's executions are metered against; a pipeline's steps inherit it.
   attribution: ToolCallAttribution;
+  signedOff?: SignedOffCall;
 };
 
 /**
@@ -230,12 +263,23 @@ const resolveCallPresets = async (args: {
   mcp: PreparedMcpCall | null;
 }> => {
   const { call } = args;
-  const resolvedPresets = resolvePresetParametersForCall({
-    presetParameters: call.tool.presetParameters,
-    toolContext: call.toolContext,
-    toolName: call.tool.name,
-    schema: call.tool.parameters,
-  });
+  // Resolved with no bag: a token the proposal could not resolve fails with
+  // `MISSING_TOOL_CONTEXT_KEY` rather than taking the resolver's value.
+  const resolvedPresets = call.signedOff
+    ? resolvePresetParametersForCall({
+        presetParameters: frozenPresets({
+          presetParameters: call.tool.presetParameters,
+          frozenArguments: call.signedOff.frozenArguments,
+        }),
+        toolName: call.tool.name,
+        schema: call.tool.parameters,
+      })
+    : resolvePresetParametersForCall({
+        presetParameters: call.tool.presetParameters,
+        toolContext: call.toolContext,
+        toolName: call.tool.name,
+        schema: call.tool.parameters,
+      });
   if (args.type !== 'mcp') {
     return { presetParameters: resolvedPresets, mcp: null };
   }
@@ -329,14 +373,10 @@ const runResolvedTool = async (
         meter: { ...meter, attribution },
       })
     : await dispatchDirectTool({
+        ...args,
         type,
-        tool: args.tool,
-        action: args.action,
         mergedInput,
-        authHeader: args.authHeader,
         meter: { ...meter, attribution },
-        idempotencyKey: args.idempotencyKey,
-        toolContext: args.toolContext,
       });
 
   return applyToolOutputMapping({
