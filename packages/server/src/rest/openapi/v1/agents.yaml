@@ -34,6 +34,7 @@ paths:
       summary: Create an agent
       description: Creates a new agent bound to an AI provider.
       operationId: createAgent
+      x-iam-action: agents:CreateAgent
       requestBody:
         required: true
         content:
@@ -99,6 +100,7 @@ paths:
       summary: List agents
       description: Returns all agents in the project.
       operationId: listAgents
+      x-iam-action: agents:ListAgents
       parameters:
         - name: project_id
           in: query
@@ -150,6 +152,7 @@ paths:
         agent is shared with, through an accepted share, reads its `id` and
         `name` only.
       operationId: getAgent
+      x-iam-action: agents:GetAgent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -192,6 +195,7 @@ paths:
       summary: Update an agent
       description: Updates an existing agent. Identical to PATCH — both perform partial updates.
       operationId: updateAgent
+      x-iam-action: agents:UpdateAgent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -245,6 +249,7 @@ paths:
       summary: Partially update an agent
       description: Partially updates an existing agent. Identical to PUT — both perform partial updates.
       operationId: patchAgent
+      x-iam-action: agents:UpdateAgent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -303,6 +308,7 @@ paths:
         traces are deleted along with the agent and the shares are revoked.
         Every share of the agent is revoked when it is deleted.
       operationId: deleteAgent
+      x-iam-action: agents:DeleteAgent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -378,6 +384,7 @@ paths:
         accepted share, runs it in that project: on the publisher's
         configuration, recorded, metered and governed in the grantee project.
       operationId: createAgentGeneration
+      x-iam-action: agents:CreateAgentGeneration
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -546,6 +553,7 @@ paths:
         Resumes a generation that was paused due to client tool calls.
         Provide tool outputs for each pending tool call.
       operationId: submitAgentToolOutputs
+      x-iam-action: agents:CreateAgentGeneration
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -628,6 +636,7 @@ paths:
         through the REST API or a formation apply alike. See
         [Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
       operationId: listAgentVersions
+      x-iam-action: agents:ListAgentVersions
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -682,6 +691,7 @@ paths:
         Returns the exact configuration the agent held at a given version, so a
         generation can be traced back to the config that produced it.
       operationId: getAgentVersion
+      x-iam-action: agents:GetAgentVersion
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -741,6 +751,7 @@ paths:
         config, so a tool, provider, or guardrail deleted since the snapshot was
         taken fails the request instead of writing a broken agent.
       operationId: restoreAgentVersion
+      x-iam-action: agents:RestoreAgentVersion
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -813,6 +824,7 @@ paths:
         further edits archive new versions but do not disturb either side of the
         running split. End the rollout with `promote` or `abort`.
       operationId: setAgentRelease
+      x-iam-action: agents:SetAgentRelease
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -880,6 +892,7 @@ paths:
         the rollout is left running untouched. The run that cleared the gate is
         recorded as `eval_run_id` on the version that goes live.
       operationId: promoteAgentRelease
+      x-iam-action: agents:SetAgentRelease
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -937,6 +950,7 @@ paths:
         rollout was measured against — not to whatever draft the live columns
         happened to hold.
       operationId: abortAgentRelease
+      x-iam-action: agents:SetAgentRelease
       x-soat-resource:
         kind: agent
         from: agent_id

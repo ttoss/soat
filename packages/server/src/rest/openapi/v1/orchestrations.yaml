@@ -31,6 +31,7 @@ paths:
       summary: Create an orchestration
       description: Creates a new orchestration (pipeline) definition in the project.
       operationId: createOrchestration
+      x-iam-action: orchestrations:CreateOrchestration
       requestBody:
         required: true
         content:
@@ -75,6 +76,7 @@ paths:
       summary: List orchestrations
       description: Returns orchestrations accessible to the caller.
       operationId: listOrchestrations
+      x-iam-action: orchestrations:ListOrchestrations
       parameters:
         - in: query
           name: project_id
@@ -132,6 +134,7 @@ paths:
         ORCHESTRATION_VALIDATION_FAILED` listing the same items under
         `meta.problems` and `meta.warnings`.
       operationId: validateOrchestration
+      x-iam-action: orchestrations:ValidateOrchestration
       requestBody:
         required: true
         content:
@@ -182,6 +185,7 @@ paths:
         withheld rather than approximated. An unrestricted caller (the action
         granted on every project) gets the deployment-wide figures.
       operationId: getQueueStats
+      x-iam-action: orchestrations:GetQueueStats
       security:
         - bearerAuth: []
       responses:
@@ -221,6 +225,7 @@ paths:
         A project-scoped caller sees its own projects only. Guarded by
         `orchestrations:GetQueueStats`.
       operationId: listQueueStatsProjects
+      x-iam-action: orchestrations:GetQueueStats
       security:
         - bearerAuth: []
       parameters:
@@ -265,6 +270,7 @@ paths:
       summary: Get an orchestration
       description: Returns the orchestration with nodes and edges.
       operationId: getOrchestration
+      x-iam-action: orchestrations:GetOrchestration
       x-soat-resource:
         kind: orchestration
         from: orchestration_id
@@ -308,6 +314,7 @@ paths:
       summary: Update an orchestration
       description: Partially updates an orchestration definition.
       operationId: updateOrchestration
+      x-iam-action: orchestrations:UpdateOrchestration
       x-soat-resource:
         kind: orchestration
         from: orchestration_id
@@ -366,6 +373,7 @@ paths:
       summary: Delete an orchestration
       description: Deletes an orchestration definition and all its runs.
       operationId: deleteOrchestration
+      x-iam-action: orchestrations:DeleteOrchestration
       x-soat-resource:
         kind: orchestration
         from: orchestration_id
@@ -412,6 +420,7 @@ paths:
         archive a version. See
         [Versioning](/docs/modules/orchestrations#versioning).
       operationId: listOrchestrationVersions
+      x-iam-action: orchestrations:ListOrchestrationVersions
       x-soat-resource:
         kind: orchestration
         from: orchestration_id
@@ -468,6 +477,7 @@ paths:
         for its whole life, so this is how you read the topology a run actually
         took — including a run whose orchestration has been rewired since.
       operationId: getOrchestrationVersion
+      x-iam-action: orchestrations:GetOrchestrationVersion
       x-soat-resource:
         kind: orchestration
         from: orchestration_id
@@ -537,6 +547,7 @@ paths:
         already in flight are unaffected either way — a restore is an ordinary
         edit, and pinning is what keeps it from reaching them.
       operationId: restoreOrchestrationVersion
+      x-iam-action: orchestrations:RestoreOrchestrationVersion
       x-soat-resource:
         kind: orchestration
         from: orchestration_id
@@ -611,6 +622,7 @@ paths:
         scheduler, surviving restarts. Pass wait=true to block until the run
         reaches a terminal or awaiting_input state.
       operationId: startOrchestrationRun
+      x-iam-action: orchestrations:StartRun
       parameters:
         - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
       requestBody:
@@ -692,6 +704,7 @@ paths:
         counts the children more than once. Pass `nested=false` to sum over
         runs a caller started.
       operationId: listOrchestrationRuns
+      x-iam-action: orchestrations:ListRuns
       parameters:
         - name: project_id
           in: query
@@ -801,6 +814,7 @@ paths:
       summary: Cancel an orchestration run
       description: Cancels a run that has not yet reached a terminal state.
       operationId: cancelOrchestrationRun
+      x-iam-action: orchestrations:CancelRun
       x-soat-resource:
         kind: orchestration_run
         from: orchestration_run_id
@@ -872,6 +886,7 @@ paths:
 
         Idempotent: pausing an already-paused run answers with it unchanged.
       operationId: pauseOrchestrationRun
+      x-iam-action: orchestrations:PauseRun
       x-soat-resource:
         kind: orchestration_run
         from: orchestration_run_id
@@ -930,6 +945,7 @@ paths:
       summary: Submit human input
       description: Provides human input to a run that is awaiting_input at a human node.
       operationId: submitHumanInput
+      x-iam-action: orchestrations:SubmitHumanInput
       x-soat-resource:
         kind: orchestration_run
         from: orchestration_run_id
@@ -1002,6 +1018,7 @@ paths:
         `paused` re-drives the frontier that had not run yet, and one paused
         mid-timer goes back to `sleeping` for the wake it was already due.
       operationId: resumeOrchestrationRun
+      x-iam-action: orchestrations:ResumeRun
       x-soat-resource:
         kind: orchestration_run
         from: orchestration_run_id
@@ -1052,6 +1069,7 @@ paths:
       summary: Get an orchestration run
       description: Returns the status, state, and artifacts of a specific run.
       operationId: getOrchestrationRun
+      x-iam-action: orchestrations:GetRun
       x-soat-resource:
         kind: orchestration_run
         from: orchestration_run_id
@@ -1101,6 +1119,7 @@ paths:
         analogue of an LLM trace. Reading them is reading the run
         (`orchestrations:GetRun`).
       operationId: listOrchestrationRunNodeExecutions
+      x-iam-action: orchestrations:GetRun
       x-soat-resource:
         kind: orchestration_run
         from: orchestration_run_id

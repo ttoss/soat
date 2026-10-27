@@ -54,6 +54,7 @@ paths:
       summary: List all users
       description: Returns a list of all users
       operationId: listUsers
+      x-iam-action: users:ListUsers
       x-soat-agent-exclude: true
       parameters:
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -91,6 +92,7 @@ paths:
       summary: Create a user
       description: Creates a new user in the system
       operationId: createUser
+      x-iam-action: users:CreateUser
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -144,6 +146,7 @@ paths:
       summary: Get a user by ID
       description: Returns the data of a specific user
       operationId: getUser
+      x-iam-action: users:GetUser
       x-soat-agent-exclude: true
       parameters:
         - name: user_id
@@ -186,6 +189,7 @@ paths:
       summary: Delete a user by ID
       description: Deletes a specific user
       operationId: deleteUser
+      x-iam-action: users:DeleteUser
       x-soat-agent-exclude: true
       parameters:
         - name: user_id
@@ -319,6 +323,7 @@ paths:
       summary: Attach policies to a user
       description: Replaces the user's policy list with the provided policy IDs. Requires admin role.
       operationId: attachUserPolicies
+      x-iam-action: users:AttachUserPolicies
       x-soat-agent-exclude: true
       parameters:
         - name: user_id

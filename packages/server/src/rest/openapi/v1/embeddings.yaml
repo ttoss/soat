@@ -34,6 +34,7 @@ paths:
         quotas. A project-scoped credential supplies its own project; a call that names
         none and is bound to none is `400 VALIDATION_FAILED`.
       operationId: createEmbeddings
+      x-iam-action: embeddings:CreateEmbeddings
       requestBody:
         required: true
         content:

@@ -28,6 +28,7 @@ paths:
         Returns global policies. Requires admin role. Pass user_id to list only
         the policies attached to that user.
       operationId: listPolicies
+      x-iam-action: policies:ListPolicies
       parameters:
         - name: user_id
           in: query
@@ -74,6 +75,7 @@ paths:
       summary: Create a policy
       description: Creates a new global policy. Requires admin role.
       operationId: createPolicy
+      x-iam-action: policies:CreatePolicy
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -131,6 +133,7 @@ paths:
       summary: Get a policy
       description: Returns details of a specific policy. Requires admin role.
       operationId: getPolicy
+      x-iam-action: policies:GetPolicy
       parameters:
         - name: policy_id
           in: path
@@ -176,6 +179,7 @@ paths:
       summary: Update a policy
       description: Updates an existing global policy. Requires admin role.
       operationId: updatePolicy
+      x-iam-action: policies:UpdatePolicy
       x-soat-agent-exclude: true
       parameters:
         - name: policy_id
@@ -244,6 +248,7 @@ paths:
       summary: Delete a policy
       description: Deletes a global policy. Requires admin role.
       operationId: deletePolicy
+      x-iam-action: policies:DeletePolicy
       x-soat-agent-exclude: true
       parameters:
         - name: policy_id

@@ -144,10 +144,10 @@ let operationActions: Map<string, string> | null = null;
  *
  * This is what lets the `soat` tool surface evaluate `boundary_policy` against
  * the action an author can actually write (`documents:UpdateDocument`) rather
- * than the tool's own kebab-case name (`update-document`). Only 9 of 267
- * operations declare `x-iam-action` in their spec, and a boundary containing a
- * kebab name is rejected by `validatePolicyActions` — so without this lookup a
- * `Deny` boundary matched nothing at all and failed open.
+ * than the tool's own kebab-case name (`update-document`), which
+ * `validatePolicyActions` rejects, so a `Deny` boundary would match nothing.
+ * Each spec's `x-iam-action` mirrors this mapping
+ * (`tests/harness/iamActionExtension.test.mjs`).
  *
  * Returns `undefined` for operations that are unauthorized by design (login,
  * bootstrap, `users/me`, token-credentialed upload, the ingestion callback).

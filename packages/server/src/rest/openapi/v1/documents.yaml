@@ -26,6 +26,7 @@ paths:
       summary: List documents
       description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. project keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
       operationId: listDocuments
+      x-iam-action: documents:ListDocuments
       parameters:
         - name: project_id
           in: query
@@ -108,6 +109,7 @@ paths:
       summary: Create a document
       description: Creates a new text document and generates an embedding vector for semantic search. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
+      x-iam-action: documents:CreateDocument
       requestBody:
         required: true
         content:
@@ -341,6 +343,7 @@ paths:
         the same caller, so a policy that hides a document hides it here too,
         and withdrawn documents and the reserved `/.system/` root are left out.
       operationId: exportDocuments
+      x-iam-action: documents:ExportDocuments
       # Not a tool: the response is a stream with no JSON projection, and an
       # export is deliberately unbounded, so the callable form of "read the
       # documents" is `listDocuments`, which is paged.
@@ -399,6 +402,7 @@ paths:
       summary: Get a document by ID
       description: Returns a document with its text content
       operationId: getDocument
+      x-iam-action: documents:GetDocument
       parameters:
         - name: document_id
           in: path
@@ -444,6 +448,7 @@ paths:
       summary: Delete a document
       description: Deletes a document and its underlying file
       operationId: deleteDocument
+      x-iam-action: documents:DeleteDocument
       parameters:
         - name: document_id
           in: path
@@ -485,6 +490,7 @@ paths:
       summary: Update a document
       description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
       operationId: updateDocument
+      x-iam-action: documents:UpdateDocument
       parameters:
         - name: document_id
           in: path
@@ -582,6 +588,7 @@ paths:
         document claims — use `?related_to=` on the listing to find what
         claims something about it.
       operationId: listDocumentRelations
+      x-iam-action: documents:GetDocument
       parameters:
         - name: document_id
           in: path
@@ -643,6 +650,7 @@ paths:
         which is what lets an agent record what its own report derives from
         without being able to make another report claim anything.
       operationId: createDocumentRelation
+      x-iam-action: documents:UpdateDocument
       parameters:
         - name: document_id
           in: path
@@ -726,6 +734,7 @@ paths:
         Removes an edge this document asserts. Both documents are left as they
         are — retracting a claim is not a change to what it was about.
       operationId: deleteDocumentRelation
+      x-iam-action: documents:UpdateDocument
       parameters:
         - name: document_id
           in: path
@@ -842,6 +851,7 @@ paths:
         Withdrawal is the reversible act. It does not apply under `/.system/`:
         a platform-written document keeps the owning module's lifecycle.
       operationId: withdrawDocument
+      x-iam-action: documents:WithdrawDocument
       parameters:
         - name: document_id
           in: path
@@ -927,6 +937,7 @@ paths:
         content or its annotations, and a withdrawal is archived as a version
         carrying no content.
       operationId: listDocumentVersions
+      x-iam-action: documents:ListDocumentVersions
       parameters:
         - name: document_id
           in: path
@@ -983,6 +994,7 @@ paths:
         version, which is what lets a run that cited a version read what it
         read.
       operationId: getDocumentVersion
+      x-iam-action: documents:GetDocumentVersion
       parameters:
         - name: document_id
           in: path
@@ -1052,6 +1064,7 @@ paths:
         A tombstone version has no content, so naming one is
         `400 VALIDATION_FAILED`: restore the version before it instead.
       operationId: restoreDocumentVersion
+      x-iam-action: documents:RestoreDocumentVersion
       parameters:
         - name: document_id
           in: path
@@ -1347,6 +1360,7 @@ paths:
       summary: Get document tags
       description: Returns all tags attached to the document
       operationId: getDocumentTags
+      x-iam-action: documents:GetDocument
       parameters:
         - name: document_id
           in: path
@@ -1392,6 +1406,7 @@ paths:
       summary: Replace document tags
       description: Replaces all tags on the document with the provided tags (not merged)
       operationId: replaceDocumentTags
+      x-iam-action: documents:UpdateDocument
       parameters:
         - name: document_id
           in: path
@@ -1445,6 +1460,7 @@ paths:
       summary: Merge document tags
       description: Merges provided tags into the document's existing tags (existing tags are preserved unless overridden)
       operationId: mergeDocumentTags
+      x-iam-action: documents:UpdateDocument
       parameters:
         - name: document_id
           in: path

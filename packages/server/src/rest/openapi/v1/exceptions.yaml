@@ -33,6 +33,7 @@ paths:
       summary: List exception items
       description: Returns exception items for a project, filterable by status, severity, and kind.
       operationId: listExceptions
+      x-iam-action: exceptions:ListExceptions
       parameters:
         - name: project_id
           in: query
@@ -118,6 +119,7 @@ paths:
       summary: Get an exception item
       description: Returns a single exception item with its full detail.
       operationId: getException
+      x-iam-action: exceptions:GetException
       parameters:
         - $ref: '#/components/parameters/exception_id'
       responses:
@@ -161,6 +163,7 @@ paths:
         A no-op that returns the item unchanged when already acknowledged;
         rejected when already resolved.
       operationId: acknowledgeException
+      x-iam-action: exceptions:AcknowledgeException
       parameters:
         - $ref: '#/components/parameters/exception_id'
       responses:
@@ -207,6 +210,7 @@ paths:
       summary: Resolve an exception item
       description: Moves the item to `resolved` ("fixed"), recording who and an optional note.
       operationId: resolveException
+      x-iam-action: exceptions:ResolveException
       parameters:
         - $ref: '#/components/parameters/exception_id'
       requestBody:

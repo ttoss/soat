@@ -26,6 +26,7 @@ paths:
         - Webhooks
       summary: List webhooks
       operationId: listWebhooks
+      x-iam-action: webhooks:ListWebhooks
       parameters:
         - name: project_id
           in: query
@@ -71,6 +72,7 @@ paths:
         - Webhooks
       summary: Create a webhook
       operationId: createWebhook
+      x-iam-action: webhooks:CreateWebhook
       requestBody:
         required: true
         content:
@@ -116,6 +118,7 @@ paths:
         - Webhooks
       summary: Get a webhook
       operationId: getWebhook
+      x-iam-action: webhooks:GetWebhook
       parameters:
         - name: webhook_id
           in: path
@@ -159,6 +162,7 @@ paths:
         - Webhooks
       summary: Update a webhook
       operationId: updateWebhook
+      x-iam-action: webhooks:UpdateWebhook
       parameters:
         - name: webhook_id
           in: path
@@ -214,6 +218,7 @@ paths:
         - Webhooks
       summary: Delete a webhook
       operationId: deleteWebhook
+      x-iam-action: webhooks:DeleteWebhook
       parameters:
         - name: webhook_id
           in: path
@@ -255,6 +260,7 @@ paths:
         - Webhooks
       summary: List webhook deliveries
       operationId: listWebhookDeliveries
+      x-iam-action: webhooks:ListWebhookDeliveries
       parameters:
         - name: webhook_id
           in: query
@@ -303,6 +309,7 @@ paths:
         - Webhooks
       summary: Get a delivery
       operationId: getWebhookDelivery
+      x-iam-action: webhooks:GetWebhookDelivery
       parameters:
         - name: delivery_id
           in: path
@@ -353,6 +360,7 @@ paths:
         - Webhooks
       summary: Redeliver a webhook delivery
       operationId: redeliverWebhookDelivery
+      x-iam-action: webhooks:RedeliverWebhookDelivery
       parameters:
         - name: delivery_id
           in: path
@@ -399,6 +407,7 @@ paths:
         - Webhooks
       summary: Get webhook secret
       operationId: getWebhookSecret
+      x-iam-action: webhooks:GetWebhookSecret
       x-soat-agent-exclude: true
       parameters:
         - name: webhook_id
@@ -445,6 +454,7 @@ paths:
         - Webhooks
       summary: Rotate webhook secret
       operationId: rotateWebhookSecret
+      x-iam-action: webhooks:RotateWebhookSecret
       x-soat-agent-exclude: true
       parameters:
         - name: webhook_id
