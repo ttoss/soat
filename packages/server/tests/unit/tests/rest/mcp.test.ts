@@ -1403,12 +1403,18 @@ describe('MCP tools - happy path', () => {
         await createDoc('mcp-page-b.txt'),
       ];
       for (const to of targets) {
-        await mcpCall('create-document-relation', {
+        const created = await mcpCall('create-document-relation', {
           document_id: from,
           type: 'cites',
           to_document_id: to,
         });
+        expect(created.status).toBe(200);
       }
+      const ids = (page: Record<string, unknown>) => {
+        return (page.data as Array<{ to_document_id: string }>).map((row) => {
+          return row.to_document_id;
+        });
+      };
 
       const first = parseResult(
         await mcpCall('list-document-relations', {
@@ -1425,11 +1431,10 @@ describe('MCP tools - happy path', () => {
       expect(listed.status).toBe(200);
       const page = parseResult(listed);
       expect(page.next_cursor).toBeNull();
-      expect(
-        (page.data as Array<{ to_document_id: string }>).map((row) => {
-          return row.to_document_id;
-        })
-      ).toEqual([targets[1]]);
+      // Edges created in one millisecond tie on `createdAt` and fall back to
+      // the random `publicId` tiebreak, so only the partition is fixed.
+      expect(ids(first)).toHaveLength(1);
+      expect([...ids(first), ...ids(page)].sort()).toEqual([...targets].sort());
     });
 
     test('get-document-status returns a lightweight status payload', async () => {

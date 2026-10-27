@@ -107,6 +107,13 @@ export type FormationActor = {
   author: RequestPrincipal;
   principal: RequestPrincipal | null;
   isAllowed: IsAllowedFn;
+  /**
+   * The deploying key's `policy_ids` (`undefined` when it carries none), so an
+   * `api_key` resource cannot be minted wider than the credential deploying it.
+   */
+  keyPolicyBoundary: number[] | undefined;
+  /** Records a refusal the module makes before any `isAllowed` call. */
+  recordRefusal: (action: string) => void;
 };
 
 export type FormationActingPrincipal = { actor: FormationActor };
