@@ -126,6 +126,22 @@ describe('toolEgress', () => {
     });
 
     test.each([
+      '::127.0.0.1',
+      '::a9fe:a9fe',
+      '::8.8.8.8',
+      '2002:7f00:1::',
+      '2002:a9fe:a9fe::1',
+      '2002:808:808::1',
+      '64:ff9b:1::a9fe:a9fe',
+      '64:ff9b:1::808:808',
+    ])(
+      'refuses %s: IPv4-compatible, 6to4 and local-use NAT64 are not public',
+      (address) => {
+        expect(isPublicAddress(address)).toBe(false);
+      }
+    );
+
+    test.each([
       'not-an-ip',
       '',
       '1.2.3',
