@@ -216,7 +216,7 @@ Authorization is **policy-only**: every decision is evaluated against the reques
 | **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
 | **OAuth token**               | Intersection of user policies and the consented scope, hard-locked to the token's project |
 
-Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope and passes the role-gated project create/delete, never the scope binding, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
+Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope, never the scope binding, and passes the instance-wide admin gates (users, policies, project creation, the price book) only through a credential with no project and no policies, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 
 ### Why Intersection Semantics Matter
 
