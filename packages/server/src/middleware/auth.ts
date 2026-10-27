@@ -35,6 +35,13 @@ export const hashPassword = (password: string) => {
   return bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 };
 
+/**
+ * Compared against when no user matches, so an unknown username costs the
+ * same bcrypt work as a wrong password. Its preimage is discarded random.
+ */
+export const DUMMY_PASSWORD_HASH =
+  '$2b$12$jKOsRv.DkYnzzOeUH1.Uj.dfC5.cJJqZpvjSx9DwlgNH.ekQW5cQK';
+
 export const comparePassword = (password: string, hash: string) => {
   return bcrypt.compare(password, hash);
 };
