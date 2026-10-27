@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.97.0](https://github.com/ttoss/soat/compare/v0.96.1...v0.97.0) (2026-10-27)
+
+### Bug Fixes
+
+* **agents:** run a paused generation's tools on the submitter's credential ([#1750](https://github.com/ttoss/soat/issues/1750)) ([9ba4218](https://github.com/ttoss/soat/commit/9ba421819cb1f375a9fcc1ca268e55f8819d2a86))
+* **ai-providers:** mask config.apiKey on every read surface ([#1755](https://github.com/ttoss/soat/issues/1755)) ([362ce40](https://github.com/ttoss/soat/commit/362ce407f1b5dc6056aaf559c134a2a636becab3))
+* **approvals:** hold approved builtin calls to the agent boundary and resolve atomically ([#1756](https://github.com/ttoss/soat/issues/1756)) ([67095dc](https://github.com/ttoss/soat/commit/67095dc2d130c4b2aaad27d8ebaf997c943593f1))
+* **formations:** bound an api_key resource by the deploying key's policy_ids ([#1758](https://github.com/ttoss/soat/issues/1758)) ([71e32fe](https://github.com/ttoss/soat/commit/71e32fe40f96c9a5df66744a166181095bd06e6c))
+* **iam:** apply row-level policy filter to lists and search without project_id ([#1757](https://github.com/ttoss/soat/issues/1757)) ([3f2b89a](https://github.com/ttoss/soat/commit/3f2b89a98e46c49e3d25688e4274cde1b3e805b3))
+* **iam:** gate admin routes on the credential, not only the role ([#1746](https://github.com/ttoss/soat/issues/1746)) ([6b8a7af](https://github.com/ttoss/soat/commit/6b8a7af8441089a875c6dc23eab11809c1bb2a1a))
+* **orchestrations:** record no principal for oauth- or trigger-started runs and task dispatches ([#1749](https://github.com/ttoss/soat/issues/1749)) ([d936c78](https://github.com/ttoss/soat/commit/d936c783b08c118c2b023681432fe2539a2fe41e))
+* **quotas:** check token and cost quotas before every model call ([#1753](https://github.com/ttoss/soat/issues/1753)) ([d92517b](https://github.com/ttoss/soat/commit/d92517b10141f14f0077a3cbcad2d9dfdc684475))
+* **server:** a run-as token whose key or trigger is gone authorizes nothing ([#1766](https://github.com/ttoss/soat/issues/1766)) ([8e9dc0d](https://github.com/ttoss/soat/commit/8e9dc0d41b7bc418f4727a70607b4fd37a85223c))
+* **server:** check the egress address again at connect ([#1752](https://github.com/ttoss/soat/issues/1752)) ([1b4797e](https://github.com/ttoss/soat/commit/1b4797e96b89ec5499e295496f6b230d209b63b5))
+* **server:** egress refusals name a url secret by its reference ([#1762](https://github.com/ttoss/soat/issues/1762)) ([aee1eaa](https://github.com/ttoss/soat/commit/aee1eaa788bd0679550d3f8aaaf15149b2b48726))
+* **tools:** drop secret-bearing http tool headers on a cross-origin redirect ([#1760](https://github.com/ttoss/soat/issues/1760)) ([34d7fe8](https://github.com/ttoss/soat/commit/34d7fe828966f27f9acf5dee335d2703dd521019))
+* **tools:** read http tool and webhook responses with a size cap ([#1763](https://github.com/ttoss/soat/issues/1763)) ([dcc8db0](https://github.com/ttoss/soat/commit/dcc8db05dc2ddc0d6429d65dc8f7c598ec71ca4e))
+* **triggers:** inbound hook verifies a timestamped signature and refuses replays ([#1759](https://github.com/ttoss/soat/issues/1759)) ([ff3fed4](https://github.com/ttoss/soat/commit/ff3fed49ce0f2499f7aa1a9ea6c20af85bc5e16b))
+* **triggers:** re-check target start when a caller shapes a firing ([#1751](https://github.com/ttoss/soat/issues/1751)) ([b5aef9e](https://github.com/ttoss/soat/commit/b5aef9ec1d8e0e5b5123cd53779b9cd5f62b3366))
+
+### Features
+
+* **shares:** list every grantee resource that reaches a shared one ([#1768](https://github.com/ttoss/soat/issues/1768)) ([4b6ff60](https://github.com/ttoss/soat/commit/4b6ff6067187fdb436664975de4a1096d7fbbf47))
+
 ## [0.96.1](https://github.com/ttoss/soat/compare/v0.96.0...v0.96.1) (2026-10-27)
 
 ### Bug Fixes
