@@ -2,6 +2,7 @@ import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { hashApiKey } from './apiKeyVerifier';
 import { paginatedList } from './pagination';
 import { generateSecretValue } from './secrets';
@@ -65,7 +66,7 @@ const mapApiKeyWithAssociations = async (
  * the boundary when `inheritWhenOmitted` (create) and stays unchanged
  * otherwise (update).
  */
-export const resolveKeyPolicyBoundary = async (args: {
+const resolveKeyPolicyBoundary = async (args: {
   boundaryPolicyIds: number[] | undefined;
   requestedPolicyIds: number[] | undefined;
   inheritWhenOmitted: boolean;
@@ -104,6 +105,35 @@ export const resolveKeyPolicyBoundary = async (args: {
       }
     ),
   };
+};
+
+/**
+ * The one boundary check every key write runs — `POST`/`PUT /api-keys` and the
+ * `api_key` formation module — refusing with `API_KEY_POLICY_BOUNDARY`. Returns
+ * the `policy_ids` to store. `onRefused` runs first: the refusal precedes any
+ * `isAllowed` call, so the audit wrapper would otherwise never see it.
+ */
+export const boundKeyPolicyIds = async (args: {
+  boundaryPolicyIds: number[] | undefined;
+  requestedPolicyIds: number[] | undefined;
+  requestedPolicyPublicIds: string[] | undefined;
+  inheritWhenOmitted: boolean;
+  onRefused: () => void;
+}): Promise<number[] | undefined> => {
+  const boundary = await resolveKeyPolicyBoundary(args);
+  if (boundary.allowed) return boundary.policyIds;
+
+  args.onRefused();
+  // Meta keys are snake_case to match the external REST contract.
+  throw new DomainError(
+    'API_KEY_POLICY_BOUNDARY',
+    'This API key is narrowed by policy_ids and cannot write a key outside ' +
+      'that boundary. Name a non-empty subset of its policy_ids.',
+    {
+      boundary_policy_ids: boundary.boundaryPolicyPublicIds,
+      requested_policy_ids: args.requestedPolicyPublicIds ?? [],
+    }
+  );
 };
 
 export const createApiKey = async (args: {

@@ -121,7 +121,7 @@ Key management is self-service, so the boundary also guards the key being writte
 | Either with `policy_ids: []`, or naming `pol_C` | `403 API_KEY_POLICY_BOUNDARY` |
 | [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) with no `policy_ids` | Leaves the stored list unchanged |
 
-`meta` carries `boundary_policy_ids` and `requested_policy_ids`. Otherwise a narrowed key could mint a policy-less key for the same owner and act with the owner's full permissions.
+`meta` carries `boundary_policy_ids` and `requested_policy_ids`. Otherwise a narrowed key could mint a policy-less key for the same owner and act with the owner's full permissions. An `api_key` [formation](./formations.md) resource follows the same table.
 
 ### Revoking a Key
 
