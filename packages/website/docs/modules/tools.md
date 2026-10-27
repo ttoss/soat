@@ -460,7 +460,6 @@ When the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration), every r
 The JWT is signed with EdDSA (Ed25519). The public key is published, unauthenticated, at `GET /.well-known/tool-assertion-jwks.json` under the header's `kid` (the key's RFC 7638 thumbprint); with no key configured the set is empty and no header is sent.
 
 {/* single-client: the key set is a public well-known document, not an API operation */}
-
 ```bash
 curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 ```
