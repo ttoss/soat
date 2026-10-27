@@ -1,5 +1,5 @@
 import type { DB } from './db';
-import type { PolicyDocument } from './lib/iam';
+import type { PolicySets } from './lib/iam';
 import type { OnBehalfOf } from './lib/onBehalfOf';
 
 export type AuthUser = {
@@ -36,12 +36,11 @@ export type AuthUser = {
     resourceType?: string;
   }) => Promise<number[] | undefined | null>;
   /**
-   * Returns the effective PolicyDocuments for the caller scoped to the given
-   * project. Used by the policy compiler to generate SQL-level access filters.
-   * - JWT admin: returns a single unrestricted Allow-all policy.
-   * - JWT user / project key: returns the actual policy documents.
+   * The caller's effective policy sets for the given project, each of which a
+   * request must satisfy (`resolvePolicySets`); none when the credential is
+   * pinned elsewhere. The policy compiler turns them into SQL access filters.
    */
-  getPolicies: (projectPublicId: string) => Promise<PolicyDocument[]>;
+  getPolicies: (projectPublicId: string) => Promise<PolicySets>;
   /** Public string id (`key_...`) of the API key used to authenticate, if any. */
   apiKeyPublicId?: string;
   /** Internal numeric DB id of the project the API key is scoped to. */

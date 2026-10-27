@@ -4,9 +4,13 @@ import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
-import type { PolicyDocument } from '../lib/iam';
+import type { PolicyDocument, PolicySets } from '../lib/iam';
 import { requestOnBehalfOf } from '../lib/onBehalfOf';
-import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
+import {
+  createApiKeyIsAllowed,
+  createJwtIsAllowed,
+  resolvePolicySets,
+} from '../lib/permissions';
 import type { IsAllowedFn } from './authProjectResolvers';
 import {
   createApiKeyResolveProjectIds,
@@ -41,10 +45,6 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 
 type Next = () => Promise<void>;
 
-const ADMIN_WILDCARD_POLICY: PolicyDocument = {
-  statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
-};
-
 const createApiKeyGetPolicies = (args: {
   apiKeyProjectPublicId: string | undefined;
   apiKeyPolicyIds: number[];
@@ -53,33 +53,19 @@ const createApiKeyGetPolicies = (args: {
   role: 'admin' | 'user';
   db: Context['db'];
 }) => {
-  return async (reqProjectPublicId: string): Promise<PolicyDocument[]> => {
+  return async (reqProjectPublicId: string): Promise<PolicySets> => {
     if (
       args.apiKeyProjectPublicId &&
       reqProjectPublicId !== args.apiKeyProjectPublicId
     ) {
       return [];
     }
-    // Inline boundary (OAuth consent) is the effective policy set, mirroring how
-    // an API key's attached policies become the effective set below.
-    if (args.boundaryPolicyDocs) {
-      return args.boundaryPolicyDocs;
-    }
-    if (args.apiKeyPolicyIds.length > 0) {
-      const keyPolicies = await args.db.Policy.findAll({
-        where: { id: args.apiKeyPolicyIds },
-      });
-      return keyPolicies.map((p: InstanceType<(typeof args.db)['Policy']>) => {
-        return p.document as PolicyDocument;
-      });
-    }
-    if (args.role === 'admin') return [ADMIN_WILDCARD_POLICY];
-    if (args.userPolicyIds.length === 0) return [];
-    const userPolicies = await args.db.Policy.findAll({
-      where: { id: args.userPolicyIds },
-    });
-    return userPolicies.map((p: InstanceType<(typeof args.db)['Policy']>) => {
-      return p.document as PolicyDocument;
+    return resolvePolicySets({
+      userRole: args.role,
+      userPolicyIds: args.userPolicyIds,
+      apiKeyPolicyIds: args.apiKeyPolicyIds,
+      boundaryPolicyDocs: args.boundaryPolicyDocs,
+      db: args.db,
     });
   };
 };
@@ -199,18 +185,12 @@ const createJwtGetPolicies = (args: {
   userPolicyIds: number[];
   db: Context['db'];
 }) => {
-  return async (_: string): Promise<PolicyDocument[]> => {
-    if (args.role === 'admin') {
-      return [
-        { statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }] },
-      ];
-    }
-    if (args.userPolicyIds.length === 0) return [];
-    const policies = await args.db.Policy.findAll({
-      where: { id: args.userPolicyIds },
-    });
-    return policies.map((p: InstanceType<(typeof args.db)['Policy']>) => {
-      return p.document as PolicyDocument;
+  return async (_: string): Promise<PolicySets> => {
+    return resolvePolicySets({
+      userRole: args.role,
+      userPolicyIds: args.userPolicyIds,
+      apiKeyPolicyIds: [],
+      db: args.db,
     });
   };
 };
