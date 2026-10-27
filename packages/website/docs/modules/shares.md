@@ -21,20 +21,20 @@ A share is the record and its lifecycle. What a share lets a grantee reference a
 
 ### Share
 
-| Field          | Type           | Description                                                                              |
-| -------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `id`           | string         | Public identifier (e.g. `shr_…`)                                                         |
-| `project_id`   | string         | The publishing project                                                                   |
-| `resource`     | string         | SRN of the shared resource, `srn:<project_id>:<type>:<id>`                               |
-| `actions`      | string[]       | The actions granted                                                                      |
-| `grantee`      | string         | The project the share is offered to, or `*`                                              |
+| Field          | Type           | Description                                                                                |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `id`           | string         | Public identifier (e.g. `shr_…`)                                                           |
+| `project_id`   | string         | The publishing project                                                                     |
+| `resource`     | string         | SRN of the shared resource, `srn:<project_id>:<type>:<id>`                                 |
+| `actions`      | string[]       | The actions granted                                                                        |
+| `grantee`      | string         | The project the share is offered to, or `*`                                                |
 | `cap`          | object \| null | `{ calls, window }`: the calls each accepting project may make per window; `null` for none |
-| `suspended_at` | string \| null | Set while the share is suspended                                                         |
-| `revoked_at`   | string \| null | Set once the publisher revoked the share                                                 |
-| `acceptance`   | object \| null | On a grantee's read only: that project's acceptance                                      |
-| `projection`   | object \| null | On a single-share read only: what a grantee sees of the resource; `null` once it is gone |
-| `created_at`   | string         | ISO 8601 creation timestamp                                                              |
-| `updated_at`   | string         | ISO 8601 last-updated timestamp                                                          |
+| `suspended_at` | string \| null | Set while the share is suspended                                                           |
+| `revoked_at`   | string \| null | Set once the publisher revoked the share                                                   |
+| `acceptance`   | object \| null | On a grantee's read only: that project's acceptance                                        |
+| `projection`   | object \| null | On a single-share read only: what a grantee sees of the resource; `null` once it is gone   |
+| `created_at`   | string         | ISO 8601 creation timestamp                                                                |
+| `updated_at`   | string         | ISO 8601 last-updated timestamp                                                            |
 
 ### ShareAcceptance
 
@@ -86,12 +86,27 @@ The publisher authorizes against `srn:<publisher>:share:<id>`, a grantee against
 Revoke applies to one acceptance or to the whole share:
 
 - [`POST /api/v1/shares/{share_id}/revoke`](/docs/api/shares/revoke-share) as the publisher revokes the whole share and every acceptance.
-- The same route as a grantee revokes that project's own acceptance (`revoked_by: consumer`). The project may accept again later. While any of the project's own resources still names the shared resource, it answers `409 SHARE_IN_USE` with those resources in `meta.references`; `force=true` revokes anyway, and each of them then resolves nothing, as below.
+- The same route as a grantee revokes that project's own acceptance (`revoked_by: consumer`). The project may accept again later. While any of the project's own resources still reaches the shared resource, it answers `409 SHARE_IN_USE` with those resources in `meta.references`; `force=true` revokes anyway, and each of them then resolves nothing, as below.
 - [`POST /api/v1/shares/{share_id}/acceptances/{acceptance_id}/revoke`](/docs/api/shares/revoke-share-acceptance) is the publisher cutting one consumer (`revoked_by: publisher`). That project's next accept is `403 SHARE_REVOKED` until the publisher deletes the acceptance with [`DELETE /api/v1/shares/{share_id}/acceptances/{acceptance_id}`](/docs/api/shares/delete-share-acceptance).
 
 Accepting a suspended share records the acceptance, which grants nothing until the share is resumed.
 
-[`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources: every agent, pipeline, ingestion rule, orchestration, trigger and formation of that project naming the shared resource, as `{ type, id }`, paged with `limit` (default 50, max 100) and `cursor` in the [list envelope](../api/index.md#pagination). `409 SHARE_IN_USE` lists every one, unpaged. The publisher's revoke is never refused.
+[`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources as `{ type, id }`: every resource of that project a run reaches the shared resource from, directly or through a chain of the project's own resources. A resource is listed when it names the shared resource or a listed one:
+
+| `type`           | Names it in                                      |
+| ---------------- | ------------------------------------------------ |
+| `agent`          | `tool_bindings`, `active_tool_ids`, `step_rules` |
+| `tool`           | a `pipeline` step                                |
+| `decider`        | `agent_id`, `tool_id`                            |
+| `ingestion_rule` | `agent_id`, `tool_id`                            |
+| `orchestration`  | a node                                           |
+| `workflow`       | a state's `dispatch`                             |
+| `playbook`       | a node's `executor`                              |
+| `eval`           | `agent_id`, a scorer                             |
+| `trigger`        | `target_id`                                      |
+| `formation`      | `template`                                       |
+
+So a shared tool bound by a local agent lists that agent, the orchestrations and workflows running it, and the triggers and playbooks starting those. Each resource is listed once, grouped by `type` in the table's order. The list is paged with `limit` (default 50, max 100) and `cursor` in the [list envelope](../api/index.md#pagination). `409 SHARE_IN_USE` lists every one, unpaged. The publisher's revoke is never refused.
 
 ### Cap
 
