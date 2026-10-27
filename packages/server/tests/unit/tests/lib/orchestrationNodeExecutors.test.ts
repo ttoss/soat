@@ -7,6 +7,7 @@ import {
   applyStateMapping,
   executeToolNode,
 } from 'src/lib/orchestrationNodeExecutors';
+import { buildRunOutput } from 'src/lib/orchestrationRunHelpers';
 
 /**
  * Two pure tables with an input space no run could cover case by case: how a
@@ -116,6 +117,45 @@ describe('applyStateMapping', () => {
       state
     );
     expect(state['proposed']).toEqual({ action_id: 'act_4' });
+  });
+
+  test.each([
+    'state.__proto__.polluted',
+    '__proto__',
+    'constructor.prototype.polluted',
+    'a.prototype',
+  ])('refuses %s without touching any prototype', (path) => {
+    const state: Record<string, unknown> = {};
+    expect(() => {
+      applyStateMapping({ [path]: 'yes' }, {}, state);
+    }).toThrow(DomainError);
+    expect(Object.getPrototypeOf(state)).toBe(Object.prototype);
+    expect(Object.prototype).not.toHaveProperty('polluted');
+    expect(Object).not.toHaveProperty('polluted');
+  });
+
+  test('walks own properties only: an inherited object is never descended into', () => {
+    const inherited = { shared: {} as Record<string, unknown> };
+    const state = Object.create(inherited) as Record<string, unknown>;
+    applyStateMapping({ 'state.shared.x': 1 }, {}, state);
+    expect(inherited.shared).toEqual({});
+    expect(Object.hasOwn(state, 'shared')).toBe(true);
+    expect(state['shared']).toEqual({ x: 1 });
+  });
+});
+
+describe('buildRunOutput', () => {
+  test('refuses an output_mapping key with a __proto__ segment', () => {
+    expect(() => {
+      buildRunOutput({
+        outputMapping: { '__proto__.polluted': 'yes' },
+        nodes: [],
+        edges: [],
+        state: {},
+        artifacts: {},
+      });
+    }).toThrow(DomainError);
+    expect(Object.prototype).not.toHaveProperty('polluted');
   });
 });
 

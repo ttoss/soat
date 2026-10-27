@@ -7,6 +7,7 @@ import type { EmbeddingBilling } from './embedding';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { parseDuration } from './orchestrationDuration';
+import { assertSafeMappingPath } from './orchestrationMappingPath';
 import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
@@ -22,18 +23,19 @@ const log = createDebug('soat:orchestrations');
 /**
  * Writes `value` at a dotted `path` inside `target`, building nested objects:
  * JSON-Logic's `var` descends dot-paths, so a flat `target["a.b"]` key reads
- * back as null.
+ * back as null. Descends own properties only, so no write reaches a prototype.
  */
 export const writeAtDottedPath = (args: {
   target: Record<string, unknown>;
   path: string;
   value: unknown;
 }): void => {
+  assertSafeMappingPath({ path: args.path, field: 'mapping' });
   const segments = args.path.split('.');
   let cursor = args.target;
   for (let i = 0; i < segments.length - 1; i += 1) {
     const segment = segments[i] as string;
-    const next = cursor[segment];
+    const next = Object.hasOwn(cursor, segment) ? cursor[segment] : undefined;
     if (next === null || typeof next !== 'object' || Array.isArray(next)) {
       cursor[segment] = {};
     }

@@ -479,6 +479,36 @@ describe('Orchestrations', () => {
       );
     });
 
+    test.each(['state.__proto__.polluted', 'constructor.prototype.x'])(
+      'refuses the state_mapping write path %s',
+      async (path) => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: 'Prototype Path',
+            nodes: [
+              {
+                id: 'a',
+                type: 'transform',
+                expression: 1,
+                state_mapping: { [path]: { var: 'output.result' } },
+              },
+            ],
+            edges: [],
+          });
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe(
+          'ORCHESTRATION_VALIDATION_FAILED'
+        );
+        expect(response.body.error.meta.problems).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ code: 'UNSAFE_PATH_SEGMENT' }),
+          ])
+        );
+      }
+    );
+
     test('accepts an input_schema property named nodes (input lives under state.input, no collision)', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations/validate')
