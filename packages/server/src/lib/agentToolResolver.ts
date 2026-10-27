@@ -63,6 +63,7 @@ import {
   resolvePresetParametersForCall,
   resolvePresetParametersForGate,
   resolveToolHeaderTemplates,
+  secretBearingHeaderNames,
 } from './toolTemplates';
 import type { SentToolCall } from './usageResourcePricing';
 import {
@@ -686,6 +687,7 @@ const sendHttpToolRequest = async (
         onRequest: () => {
           args.markSent({ input: rawArgs });
         },
+        credentialHeaders: secretBearingHeaderNames(args.execute.headers),
       }
     );
     return await readHttpToolResponse({ response, method, url, responseMode });

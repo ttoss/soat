@@ -299,6 +299,24 @@ const substituteTokens = (args: {
   return { value, resolvedContext };
 };
 
+const SECRET_REF_RE = new RegExp(`\\{\\{secret:${SECRET_ID_PATTERN}\\}\\}`);
+
+/**
+ * The headers whose template names a secret: credentials for the tool's own
+ * origin, which a redirect to another origin must not carry.
+ */
+export const secretBearingHeaderNames = (
+  record: Record<string, string> | null | undefined
+): string[] => {
+  return Object.entries(record ?? {})
+    .filter(([, value]) => {
+      return typeof value === 'string' && SECRET_REF_RE.test(value);
+    })
+    .map(([name]) => {
+      return name;
+    });
+};
+
 /**
  * Resolves `{{secret:...}}` and `{{context:...}}` tokens in every value of a
  * tool's headers record, at the point of use — the stored config (and anything
