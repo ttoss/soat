@@ -1,5 +1,6 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 
+import { redactAiProviderSecrets } from '../aiProviderConfigSecrets';
 import {
   createAiProvider,
   deleteAiProvider,
@@ -76,4 +77,6 @@ export const aiProvidersFormationModule = defineFormationModule({
   fetch: ({ physicalResourceId }) => {
     return getAiProvider({ id: physicalResourceId });
   },
+
+  maskCredentials: redactAiProviderSecrets,
 });

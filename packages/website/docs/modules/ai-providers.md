@@ -108,7 +108,7 @@ A record that links no secret and sets no `config.apiKey` would use the default 
 
 A record that links a secret holding neither an `apiKey` nor a complete key pair never falls back to the deployment's credentials, whatever the setting: it is `400 AI_PROVIDER_MISCONFIGURED` at create, update, generation and model listing.
 
-The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production.
+The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production. Every read — the provider routes, and a formation's template and plan — returns `config.apiKey` as `{ "no_echo": true }`. An update that sends `config` replaces it whole, so it carries the key again as a string; sending the mask back is `400 VALIDATION_FAILED` on `config.apiKey`.
 
 ### Bedrock request path
 
