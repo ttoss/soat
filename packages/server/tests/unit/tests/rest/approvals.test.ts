@@ -430,6 +430,36 @@ describe('Approvals', () => {
       expect(res.body.error.code).toBe('APPROVAL_ALREADY_RESOLVED');
     });
 
+    test('concurrent decisions resolve the item once', async () => {
+      const seeded = await seedApproval();
+      const decide = (verb: 'approve' | 'reject') => {
+        return authenticatedTestClient(userToken)
+          .post(`/api/v1/approvals/${seeded.id}/${verb}`)
+          .send(verb === 'reject' ? { reason: 'no' } : {});
+      };
+
+      const responses = await Promise.all([
+        decide('approve'),
+        decide('reject'),
+        decide('approve'),
+        decide('reject'),
+      ]);
+
+      const won = responses.filter((res) => {
+        return res.status === 200;
+      });
+      expect(won).toHaveLength(1);
+      for (const res of responses) {
+        if (res.status === 200) continue;
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('APPROVAL_ALREADY_RESOLVED');
+      }
+      const stored = await db.ApprovalItem.findOne({
+        where: { publicId: seeded.id },
+      });
+      expect(stored!.status).toBe(won[0].body.status);
+    });
+
     test('approving an expired item returns 409', async () => {
       const seeded = await seedApproval({ expiresInSeconds: -10 });
       const res = await authenticatedTestClient(userToken)
