@@ -1,5 +1,5 @@
 ---
-description: "HTTP callbacks that deliver signed event notifications when project resources change."
+description: 'HTTP callbacks that deliver signed event notifications when project resources change.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -29,36 +29,36 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 
 ### Webhook
 
-| Field         | Type           | Description                                 |
-| ------------- | -------------- | ------------------------------------------- |
-| `id`          | string         | Public identifier                           |
-| `project_id`  | string         | ID of the owning project                    |
+| Field         | Type           | Description                                          |
+| ------------- | -------------- | ---------------------------------------------------- |
+| `id`          | string         | Public identifier                                    |
+| `project_id`  | string         | ID of the owning project                             |
 | `policy_id`   | string \| null | Optional [policy](./policies.md) that gates delivery |
-| `name`        | string         | Human-readable name                         |
-| `description` | string \| null | Optional description                        |
-| `url`         | string         | HTTPS endpoint that receives deliveries     |
-| `events`      | string[]       | List of event patterns to subscribe to      |
-| `active`      | boolean        | Whether the webhook is enabled              |
-| `secret`      | string         | Returned only on create and secret rotation |
-| `created_at`  | string         | ISO 8601 creation timestamp                 |
-| `updated_at`  | string         | ISO 8601 last-updated timestamp             |
+| `name`        | string         | Human-readable name                                  |
+| `description` | string \| null | Optional description                                 |
+| `url`         | string         | HTTPS endpoint that receives deliveries              |
+| `events`      | string[]       | List of event patterns to subscribe to               |
+| `active`      | boolean        | Whether the webhook is enabled                       |
+| `secret`      | string         | Returned only on create and secret rotation          |
+| `created_at`  | string         | ISO 8601 creation timestamp                          |
+| `updated_at`  | string         | ISO 8601 last-updated timestamp                      |
 
 ### Webhook Delivery
 
-| Field             | Type                               | Description                                |
-| ----------------- | ---------------------------------- | ------------------------------------------ |
-| `id`              | string                             | Public identifier                          |
-| `webhook_id`      | string                             | Public ID of the webhook this delivery belongs to |
-| `event_type`      | string                             | The event type that triggered the delivery |
-| `payload`         | object                             | The [event envelope](#event-payload) that was sent |
-| `status`          | `queued` \| `completed` \| `failed` | Delivery outcome                           |
-| `status_code`     | number \| null                     | HTTP response status code                  |
-| `attempts`        | number                             | Number of delivery attempts made           |
-| `last_attempt_at` | string \| null                     | Timestamp of the most recent attempt       |
-| `next_attempt_at` | string \| null                     | When the next attempt becomes due; null once the delivery completed or exhausted its attempts |
-| `response_body`   | string \| null                     | First 1 KB of the response body returned by the receiver, or the reason a delivery was closed without an attempt |
-| `created_at`      | string                             | ISO 8601 creation timestamp                |
-| `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
+| Field             | Type                                | Description                                                                                                      |
+| ----------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `id`              | string                              | Public identifier                                                                                                |
+| `webhook_id`      | string                              | Public ID of the webhook this delivery belongs to                                                                |
+| `event_type`      | string                              | The event type that triggered the delivery                                                                       |
+| `payload`         | object                              | The [event envelope](#event-payload) that was sent                                                               |
+| `status`          | `queued` \| `completed` \| `failed` | Delivery outcome                                                                                                 |
+| `status_code`     | number \| null                      | HTTP response status code                                                                                        |
+| `attempts`        | number                              | Number of delivery attempts made                                                                                 |
+| `last_attempt_at` | string \| null                      | Timestamp of the most recent attempt                                                                             |
+| `next_attempt_at` | string \| null                      | When the next attempt becomes due; null once the delivery completed or exhausted its attempts                    |
+| `response_body`   | string \| null                      | First 1 KB of the response body returned by the receiver, or the reason a delivery was closed without an attempt |
+| `created_at`      | string                              | ISO 8601 creation timestamp                                                                                      |
+| `updated_at`      | string                              | ISO 8601 last-updated timestamp                                                                                  |
 
 ## Key Concepts
 
@@ -78,12 +78,12 @@ Every event is listed in the [Webhook Events Reference](../webhook-events.md), g
 
 A matching event is delivered as an HTTP POST with these headers ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
 
-| Header                | Description                                                                |
-| --------------------- | -------------------------------------------------------------------------- |
-| `X-Soat-Event`        | The event type (e.g., `files.created`)                                     |
-| `X-Soat-Delivery`     | Unique delivery ID; a redelivery has its own                               |
-| `X-Soat-Event-Id`     | The event's `id`, the same on every delivery and redelivery of one event   |
-| `X-Soat-Signature`    | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
+| Header             | Description                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `X-Soat-Event`     | The event type (e.g., `files.created`)                                                                        |
+| `X-Soat-Delivery`  | Unique delivery ID; a redelivery has its own                                                                  |
+| `X-Soat-Event-Id`  | The event's `id`, the same on every delivery and redelivery of one event                                      |
+| `X-Soat-Signature` | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
 
 Deliveries are retried up to three times; each attempt is recorded in the delivery log. See [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message). Test locally with [`soat listen`](../cli/usage.md#testing-webhooks-locally).
 
@@ -93,7 +93,7 @@ Deliveries are retried up to three times; each attempt is recorded in the delive
 
 The address the hostname **resolves to** passes the deployment's egress rule, re-checked on every redirect hop. A URL resolving inside the deployment's own network (loopback, RFC1918, link-local/cloud metadata, CGNAT, IPv6 ULA) is refused unless listed in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress).
 
-Such a delivery is closed as `failed` without a retry, `attempts` still `0`, the reason in `response_body`. `response_body` holds at most the first kilobyte of a real endpoint's answer.
+Such a delivery is closed as `failed` without a retry, `attempts` still `0`, the reason in `response_body`. `response_body` holds at most the first kilobyte of a real endpoint's answer; the rest is never read.
 
 ### Delivery durability
 
@@ -116,15 +116,15 @@ It creates a **new** delivery record, so the failed attempt stays in the history
 
 The body is a **snake_case** JSON envelope, the same one an [`event` trigger](./triggers.md#event-triggers) receives as its input:
 
-| Field           | Type   | Description                                                       |
-| --------------- | ------ | ----------------------------------------------------------------- |
-| `id`            | string | The event's identity, shared by every delivery of it              |
-| `event`         | string | Event type, e.g. `files.created`                                  |
-| `project_id`    | string | Public ID of the project the event belongs to                     |
-| `resource_type` | string | Type of the resource that changed, e.g. `file`                    |
-| `resource_id`   | string | Public ID of the resource that changed                            |
-| `data`          | object | The resource named by `resource_id`, as its `GET` returns it      |
-| `timestamp`     | string | ISO 8601 timestamp of the event                                   |
+| Field           | Type   | Description                                                  |
+| --------------- | ------ | ------------------------------------------------------------ |
+| `id`            | string | The event's identity, shared by every delivery of it         |
+| `event`         | string | Event type, e.g. `files.created`                             |
+| `project_id`    | string | Public ID of the project the event belongs to                |
+| `resource_type` | string | Type of the resource that changed, e.g. `file`               |
+| `resource_id`   | string | Public ID of the resource that changed                       |
+| `data`          | object | The resource named by `resource_id`, as its `GET` returns it |
+| `timestamp`     | string | ISO 8601 timestamp of the event                              |
 
 ```json
 {
@@ -244,7 +244,10 @@ soat create-webhook \
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.webhooks.createWebhook({
   body: {

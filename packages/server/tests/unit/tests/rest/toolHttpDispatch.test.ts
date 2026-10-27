@@ -287,6 +287,39 @@ describe('POST /api/v1/tools/{tool_id}/call — http request shape', () => {
       expect(res.status).toBe(200);
       expect(res.text).toContain('<html><body>hello</body></html>');
     });
+
+    describe('over TOOL_RESPONSE_MAX_BYTES', () => {
+      beforeEach(() => {
+        process.env.TOOL_RESPONSE_MAX_BYTES = '16';
+      });
+
+      afterEach(() => {
+        delete process.env.TOOL_RESPONSE_MAX_BYTES;
+      });
+
+      test('a 2xx body is 502 TOOL_RESPONSE_TOO_LARGE', async () => {
+        const tool = await httpTool({});
+        turn.target.reply(tool.path, { raw: 'x'.repeat(17) });
+
+        const res = await call(tool.id);
+
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe('TOOL_RESPONSE_TOO_LARGE');
+        expect(res.body.error.meta.max_bytes).toBe(16);
+      });
+
+      test('a non-2xx body is cut to the ceiling and keeps the status', async () => {
+        const tool = await httpTool({});
+        turn.target.reply(tool.path, { status: 404, raw: 'y'.repeat(40) });
+
+        const res = await call(tool.id);
+
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe('TOOL_HTTP_ERROR');
+        expect(res.body.error.meta.tool_status_code).toBe(404);
+        expect(res.body.error.meta.tool_response_body).toBe('y'.repeat(16));
+      });
+    });
   });
 
   describe('execute.response_mode base64', () => {

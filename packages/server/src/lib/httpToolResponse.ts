@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { readCappedBody } from './cappedBody';
 import { isPlainObject } from './plainObject';
 import { getToolResponseMaxBytes } from './requestBounds';
 import { validateExecuteAuth } from './toolAuthConfig';
@@ -65,34 +66,31 @@ const tooLarge = (args: { url: string; maxBytes: number }): DomainError => {
   );
 };
 
-// Read chunk by chunk so an oversized body is refused before it is buffered;
-// a declared `Content-Length` can be absent or wrong.
-const readBoundedBody = async (args: {
+/** A 2xx body over `TOOL_RESPONSE_MAX_BYTES` is refused, whatever its mode. */
+export const readToolResponseBody = (args: {
   response: Response;
   url: string;
-  maxBytes: number;
 }): Promise<Buffer> => {
-  const declared = Number(args.response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > args.maxBytes) {
-    await args.response.body?.cancel();
-    throw tooLarge(args);
-  }
-  if (!args.response.body) return Buffer.alloc(0);
+  const maxBytes = getToolResponseMaxBytes();
+  return readCappedBody({
+    response: args.response,
+    maxBytes,
+    onOverflow: () => {
+      return tooLarge({ url: args.url, maxBytes });
+    },
+  });
+};
 
-  const reader = args.response.body.getReader();
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > args.maxBytes) {
-      await reader.cancel();
-      throw tooLarge(args);
-    }
-    chunks.push(Buffer.from(value));
-  }
-  return Buffer.concat(chunks);
+/** A non-2xx body only explains the status, so it is cut rather than refused. */
+export const readToolErrorBody = async (args: {
+  response: Response;
+}): Promise<string> => {
+  const body = await readCappedBody({
+    response: args.response,
+    maxBytes: getToolResponseMaxBytes(),
+    onOverflow: 'cut',
+  });
+  return new TextDecoder().decode(body);
 };
 
 // RFC 5987 `filename*=charset'lang'value`; a non-UTF-8 value falls back.
@@ -124,10 +122,7 @@ export const readBase64ToolResponse = async (args: {
   response: Response;
   url: string;
 }): Promise<ToolFileOutput> => {
-  const body = await readBoundedBody({
-    ...args,
-    maxBytes: getToolResponseMaxBytes(),
-  });
+  const body = await readToolResponseBody(args);
   const contentType =
     (args.response.headers.get('content-type') ?? '')
       .split(';')[0]

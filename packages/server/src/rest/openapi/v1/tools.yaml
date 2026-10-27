@@ -653,8 +653,9 @@ components:
             a 2xx body as `{ content_type, filename, data_base64 }` — the same
             file shape `multipart` accepts, so a pipeline step can relay a
             downloaded file. `filename` comes from `Content-Disposition` and is
-            omitted when the target names none; a body over
-            `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`.
+            omitted when the target names none. In either mode a 2xx body over
+            `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`; a non-2xx
+            body over it is cut to it.
 
 
             `auth` adds a computed request credential, for targets whose
@@ -1083,8 +1084,9 @@ components:
         a 2xx body as `{ content_type, filename, data_base64 }` — the same
         file shape `multipart` accepts, so a pipeline step can relay a
         downloaded file. `filename` comes from `Content-Disposition` and is
-        omitted when the target names none; a body over
-        `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`.
+        omitted when the target names none. In either mode a 2xx body over
+        `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`; a non-2xx
+        body over it is cut to it.
 
 
         `auth` adds a computed request credential, for targets whose
@@ -1196,15 +1198,15 @@ components:
         region:
           type: string
           nullable: true
-          description: "`aws_sigv4`: the signing region, e.g. `us-east-1`."
+          description: '`aws_sigv4`: the signing region, e.g. `us-east-1`.'
         service:
           type: string
           nullable: true
-          description: "`aws_sigv4`: the signing service, e.g. `execute-api`."
+          description: '`aws_sigv4`: the signing service, e.g. `execute-api`.'
         access_key_id:
           type: string
           nullable: true
-          description: "`aws_sigv4`: the access key id."
+          description: '`aws_sigv4`: the access key id.'
         secret_access_key:
           type: string
           nullable: true
@@ -1228,7 +1230,7 @@ components:
           nullable: true
           items:
             type: string
-          description: "`gcp_service_account`: the OAuth scopes to mint the token for."
+          description: '`gcp_service_account`: the OAuth scopes to mint the token for.'
     ToolMcpConfig:
       type: object
       nullable: true

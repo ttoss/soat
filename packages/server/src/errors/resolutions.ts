@@ -80,7 +80,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   TOOL_EGRESS_BLOCKED:
     'The deployment only makes outbound requests to publicly routable addresses, and this destination is not one — `meta.tool_url` names it and `meta.tool_address` the address it resolved to. Point the tool, webhook or provider `base_url` at a public host, or have the operator list this destination in TOOL_EGRESS_ALLOWED_HOSTS. It is not a permissions problem: no policy grants it.',
   TOOL_RESPONSE_TOO_LARGE:
-    "The target's file is over this deployment's ceiling (`meta.max_bytes`). Fetch a smaller file, or ask the operator to raise `TOOL_RESPONSE_MAX_BYTES`.",
+    "The target's answer is over this deployment's ceiling (`meta.max_bytes`). Ask the target for less (a page, a filter, a smaller file), or ask the operator to raise `TOOL_RESPONSE_MAX_BYTES`.",
   MCP_TOOL_ERROR:
     'The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.',
   AI_PROVIDER_ERROR:
