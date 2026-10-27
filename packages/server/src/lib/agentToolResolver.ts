@@ -34,7 +34,10 @@ import { readRunTokenWork } from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { withRequestIdHeader } from './requestCorrelation';
 import { toolReferences } from './resourceReferences';
-import { resolveSecretRefsInString } from './secrets';
+import {
+  resolveSecretRefsInString,
+  resolveSecretRefsWithValues,
+} from './secrets';
 import { admitEachSharedCall } from './shareCaps';
 import {
   applyHttpToolAuth,
@@ -397,11 +400,13 @@ const resolveHttpRequestTemplates = async (args: {
   projectId: number;
   toolContext?: Record<string, string>;
 }) => {
+  const fetchUrl = await resolveSecretRefsWithValues({
+    value: args.url,
+    projectId: args.projectId,
+  });
   return {
-    fetchUrl: await resolveSecretRefsInString({
-      value: args.url,
-      projectId: args.projectId,
-    }),
+    fetchUrl: fetchUrl.value,
+    urlSecrets: fetchUrl.secrets,
     headers: await resolveToolHeaderTemplates({
       record: args.headers,
       projectId: args.projectId,
@@ -686,6 +691,7 @@ const sendHttpToolRequest = async (
         onRequest: () => {
           args.markSent({ input: rawArgs });
         },
+        secrets: resolved.urlSecrets,
       }
     );
     return await readHttpToolResponse({ response, method, url, responseMode });

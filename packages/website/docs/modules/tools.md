@@ -432,7 +432,7 @@ A literal stored before the rule reads back as `{"no_echo": true}` wherever the 
 
 ### Where a Tool May Reach (Egress)
 
-An `http` or `mcp` tool's target is bounded by the deployment, not the tool definition. Default: any publicly routable address. Loopback, `10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata), CGNAT and IPv6 ULA fail with `403 TOOL_EGRESS_BLOCKED`, the refused address in `meta.tool_address`.
+An `http` or `mcp` tool's target is bounded by the deployment, not the tool definition. Default: any publicly routable address. Loopback, `10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata), CGNAT and IPv6 ULA fail with `403 TOOL_EGRESS_BLOCKED`, the refused address in `meta.tool_address` and the URL in `meta.tool_url`, a `{{secret:}}` value in it shown as its reference.
 
 The resolved address is checked on the first request and every redirect hop, and again on the address the connection dials, so a hostname that resolves differently at connect is refused too; credential headers (`Authorization`, `Cookie`) are dropped when a redirect changes origin. A public hostname resolving to `169.254.169.254` and a `302 Location: http://169.254.169.254/…` are both refused.
 

@@ -328,27 +328,31 @@ export const loadSecretValues = async (args: {
 
 /**
  * Resolves every `{{secret:...}}` token in a string to the decrypted value
- * of the referenced secret, scoped to the given project. Throws
- * `SECRET_NOT_FOUND` for a token referencing a nonexistent or out-of-project
- * secret. Never log or persist the returned value.
+ * of the referenced secret, scoped to the given project, and returns the values
+ * it substituted by secret id. Throws `SECRET_NOT_FOUND` for a token
+ * referencing a nonexistent or out-of-project secret. Never log or persist
+ * either.
  */
+export const resolveSecretRefsWithValues = async (args: {
+  value: string;
+  projectId: number;
+}): Promise<{ value: string; secrets: Map<string, string> }> => {
+  const secrets = await loadSecretValues(args);
+  const value = args.value.replace(
+    SECRET_REF_RE,
+    (original, secretId: string) => {
+      return secrets.get(secretId) ?? original;
+    }
+  );
+  return { value, secrets };
+};
+
+/** `resolveSecretRefsWithValues`, the resolved string alone. */
 export const resolveSecretRefsInString = async (args: {
   value: string;
   projectId: number;
 }): Promise<string> => {
-  const ids = [...new Set(collectSecretRefs(args.value))];
-  if (ids.length === 0) return args.value;
-  log(
-    'resolveSecretRefsInString: projectId=%d refs=%d',
-    args.projectId,
-    ids.length
-  );
-  const byId = await loadReferencedSecrets({ ids, projectId: args.projectId });
-  return args.value.replace(SECRET_REF_RE, (original, secretId: string) => {
-    const secret = byId.get(secretId);
-    if (!secret?.encryptedValue) return original;
-    return decryptValue(secret.encryptedValue);
-  });
+  return (await resolveSecretRefsWithValues(args)).value;
 };
 
 export const deleteSecret = async (args: {
