@@ -39,6 +39,8 @@ export type GenerationContext = {
   typedAgent: TypedAgent;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
+  /** The credential {@link GenerationContext.resolvedTools} call with. */
+  toolsAuthHeader: string | undefined;
   /**
    * What {@link GenerationContext.resolvedTools} costs to send, measured before
    * the provider sees it. Stamped on the generation record; a resumed turn
@@ -203,22 +205,30 @@ export type BuildGenerationContextArgs = {
   outputSchemaOverride?: Record<string, unknown>;
 };
 
-export const buildGenerationContext = async (
-  args: BuildGenerationContextArgs
-): Promise<GenerationContext> => {
-  const toolContext = await resolvePinnedToolContext(args);
-
+const requireLiveAgent = async (args: {
+  agentId: string;
+  projectIds?: number[];
+  runProjectId?: number;
+}): Promise<TypedAgent> => {
   const liveAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
     runProjectId: args.runProjectId,
   });
-
   if (!liveAgent)
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
       `Agent '${args.agentId}' not found.`
     );
+  return liveAgent;
+};
+
+export const buildGenerationContext = async (
+  args: BuildGenerationContextArgs
+): Promise<GenerationContext> => {
+  const toolContext = await resolvePinnedToolContext(args);
+
+  const liveAgent = await requireLiveAgent(args);
 
   // Before anything reads the config: under a staged rollout everything below
   // must come from the assigned archived version, not the live row.
@@ -293,6 +303,7 @@ export const buildGenerationContext = async (
     typedAgent,
     model,
     resolvedTools,
+    toolsAuthHeader: args.authHeader,
     toolSurface: await measureToolSurface({ tools: resolvedTools }),
     allMessages,
     retrieval,

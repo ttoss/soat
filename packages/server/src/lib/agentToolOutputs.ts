@@ -69,8 +69,7 @@ const assertToolOutputsWereOpened = (args: {
  * branch's half of the same rule: the pending map is process-wide and keyed by
  * generation id alone, so without it any caller who could name a generation
  * could resume one belonging to another project. What that resumes is not
- * merely a read — the pending entry holds tool closures built with the original
- * caller's auth header, so the continuation runs on their credentials.
+ * merely a read — the continuation runs the agent's tools.
  *
  * `undefined` is the unrestricted principal, exactly as everywhere else the
  * project scope is threaded, and is what the session path relies on: it
@@ -93,8 +92,9 @@ export const submitToolOutputs = async (args: {
 }): Promise<GenerationResult> => {
   let pending = pendingGenerations.get(args.generationId);
 
-  // If not in memory (e.g. server restarted), recover from DB.
-  if (!pending) {
+  // The in-memory tools call with the starter's credential, so another
+  // submitter resumes through the rebuild, which binds them to its own.
+  if (!pending || pending.toolsAuthHeader !== args.authHeader) {
     pending = await recoverPendingFromDb({
       generationId: args.generationId,
       agentId: args.agentId,

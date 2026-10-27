@@ -153,6 +153,7 @@ const storePendingGenerationState = (args: {
   priorTurnMessageCount?: number;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   aiProviderId: string | null;
@@ -188,6 +189,7 @@ const storePendingGenerationState = (args: {
     aiProviderId: args.aiProviderId,
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: args.resolvedTools,
+    toolsAuthHeader: args.toolsAuthHeader,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
   });
@@ -248,6 +250,7 @@ export const savePendingGeneration = async (args: {
   typedAgent: TypedAgent;
   agentId: string;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): Promise<GenerationResult> => {

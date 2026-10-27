@@ -236,6 +236,7 @@ const settlePartition = async (args: {
       typedAgent: args.save.typedAgent,
       agentId: args.pending.agentId,
       resolvedTools: args.pending.resolvedTools,
+      toolsAuthHeader: args.pending.toolsAuthHeader,
       toolContext: args.pending.toolContext ?? null,
       remainingDepth: args.save.remainingDepth ?? null,
     });
@@ -258,6 +259,7 @@ const buildInitialResumePending = (args: {
   rootTraceId?: string | null;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -284,6 +286,7 @@ const buildInitialResumePending = (args: {
     }),
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: args.resolvedTools,
+    toolsAuthHeader: args.toolsAuthHeader,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
     toolContext: args.toolContext ?? undefined,
@@ -309,6 +312,7 @@ export const settleInitialClientCalls = async (args: {
   rootTraceId?: string | null;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -330,6 +334,7 @@ export const settleInitialClientCalls = async (args: {
       rootTraceId: args.rootTraceId,
       allMessages: args.allMessages,
       resolvedTools: args.resolvedTools,
+      toolsAuthHeader: args.toolsAuthHeader,
       model: args.model,
       typedAgent: args.typedAgent,
       agentId: args.agentId,
@@ -356,6 +361,7 @@ const resolveGenerationResult = async (args: {
   rootTraceId?: string | null;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -479,6 +485,7 @@ export const runNonStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   typedAgent: TypedAgent;
   toolChoice: TurnToolChoice;
   generationId: string;

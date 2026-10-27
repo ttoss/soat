@@ -260,6 +260,7 @@ const buildPendingFromState = async (args: {
     aiProviderId: args.typedAgent.aiProvider?.publicId ?? null,
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: tools,
+    toolsAuthHeader: args.authHeader,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
   };
