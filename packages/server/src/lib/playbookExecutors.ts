@@ -142,6 +142,7 @@ const startWorkflow = async (args: StartArgs): Promise<ExecutorOutcome> => {
       kind: args.runAs.principal.principalType,
       id: args.runAs.principal.principalId,
     },
+    startingPrincipal: args.runAs.principal,
   });
   // A task created straight into a terminal state is settled by the read that
   // follows a pending outcome.

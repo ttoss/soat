@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
+import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import { readMetadataQuery } from 'src/lib/structuredFilter';
 import {
   createTask,
@@ -221,6 +222,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
       ? { key: idempotencyKey, digest: createTaskRequestDigest(request) }
       : undefined,
     principal: principalFromCtx(ctx),
+    startingPrincipal: resolveStartingPrincipal({ authUser: ctx.authUser }),
   });
 
   ctx.status = idempotent ? 200 : 201;
@@ -318,6 +320,7 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
       : undefined,
     payload: body.payload,
     principal: principalFromCtx(ctx),
+    startingPrincipal: resolveStartingPrincipal({ authUser: ctx.authUser }),
     // A run-as token names a user or key like any other credential, so the
     // principal above cannot distinguish a dispatch continuing its own chain
     // from the person who started it. This can.
@@ -423,7 +426,8 @@ tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
     id: ctx.params.task_id,
     // The suppressed dispatch runs as whoever resumed: the resume is the
     // decision to spend, and the move that scheduled the work may be weeks old.
-    principal: requestPrincipalFromCtx(ctx),
+    principal:
+      resolveStartingPrincipal({ authUser: ctx.authUser }) ?? undefined,
   });
 });
 
