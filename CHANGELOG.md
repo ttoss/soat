@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.96.1](https://github.com/ttoss/soat/compare/v0.96.0...v0.96.1) (2026-10-27)
+
+### Bug Fixes
+
+* **oauth:** keep oauth tokens bound to exactly one project ([#1744](https://github.com/ttoss/soat/issues/1744)) ([662a69c](https://github.com/ttoss/soat/commit/662a69c56bbc7a02a22d3bce11f1a808138e3970))
+* **orchestrations:** refuse prototype segments in mapping write paths ([#1745](https://github.com/ttoss/soat/issues/1745)) ([cf318e3](https://github.com/ttoss/soat/commit/cf318e3929ba7ae0216e7186d045cb8d1e60c49e))
+* **traces:** stop storing the provider model id in a trace's steps object ([#1742](https://github.com/ttoss/soat/issues/1742)) ([7d94cb6](https://github.com/ttoss/soat/commit/7d94cb6d46f2d274f37fe47e42bfef9ad41d2a05))
+
 # [0.96.0](https://github.com/ttoss/soat/compare/v0.95.0...v0.96.0) (2026-10-25)
 
 * fix(api-keys)!: keep a key narrowed by policy_ids from writing a key outside its boundary (#1738) ([3f04091](https://github.com/ttoss/soat/commit/3f04091c877cedc76107688ba55b8f454f0529ea)), closes [#1738](https://github.com/ttoss/soat/issues/1738)
