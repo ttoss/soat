@@ -26,6 +26,8 @@ import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
   readBase64ToolResponse,
+  readToolErrorBody,
+  readToolResponseBody,
   type ResponseMode,
 } from './httpToolResponse';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
@@ -573,7 +575,7 @@ const readHttpToolResponse = async (args: {
   const { response, method, url } = args;
 
   if (!response.ok) {
-    const body = await response.text();
+    const body = await readToolErrorBody({ response });
     throw new HttpToolError(
       `HTTP ${response.status} ${method} ${url}: ${body}`,
       response.status,
@@ -589,7 +591,9 @@ const readHttpToolResponse = async (args: {
 
   // A 2xx with a non-JSON body must not surface as an opaque 500 from
   // `response.json()`'s `SyntaxError`.
-  const responseText = await response.text();
+  const responseText = new TextDecoder().decode(
+    await readToolResponseBody({ response, url })
+  );
   try {
     return JSON.parse(responseText);
   } catch {
