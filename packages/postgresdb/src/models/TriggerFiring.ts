@@ -19,8 +19,8 @@ import { Trigger } from './Trigger';
       unique: true,
       fields: ['public_id'],
     },
-    // One firing per (event, trigger). NULLs do not collide in Postgres, so a
-    // firing with no key — every source but `event` — is unconstrained.
+    // One firing per (event or signed delivery, trigger). NULLs do not collide
+    // in Postgres, so a firing with no key is unconstrained.
     {
       name: 'trigger_firings_idempotency_key_unique',
       unique: true,
@@ -97,12 +97,14 @@ export class TriggerFiring extends Model {
   declare error: Record<string, unknown> | null;
 
   /**
-   * `<event_id>:<trigger_public_id>` for an event firing, null for every other
-   * source.
+   * `<event_id>:<trigger_public_id>` for an event firing,
+   * `<v1 digest>:<trigger_public_id>` for a webhook firing signed with the
+   * timestamped scheme, null otherwise.
    *
    * It is what makes redelivery safe to attempt: the bus may hand the same
    * event to a restarted process, and the unique index turns the second
-   * enqueue into a no-op rather than a second run of the target.
+   * enqueue into a no-op rather than a second run of the target. On the
+   * inbound hook it turns a replayed signed delivery into a refusal.
    */
   @Column({ type: DataType.STRING, allowNull: true })
   declare idempotencyKey: string | null;

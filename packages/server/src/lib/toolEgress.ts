@@ -1,4 +1,8 @@
+import { lookup as lookupEach } from 'node:dns';
 import { lookup } from 'node:dns/promises';
+import type { LookupFunction } from 'node:net';
+
+import { Agent } from 'undici';
 
 import { DomainError } from '../errors';
 import {
@@ -7,6 +11,7 @@ import {
   isPublicAddress,
   toBytes,
 } from './egressAddress';
+import { redactEgressSecrets } from './egressSecretRedaction';
 
 export type { EgressCidr } from './egressAddress';
 export { isPublicAddress } from './egressAddress';
@@ -28,13 +33,12 @@ export { isPublicAddress } from './egressAddress';
  * refused unless declared in `TOOL_EGRESS_ALLOWED_HOSTS`, which keeps the
  * legitimate internal-service case available as an explicit operator decision.
  *
- * Two things make this a real control rather than a string check: it validates
- * the **resolved address** (`evil.com` can A-record to `169.254.169.254`), and
- * it validates **every redirect hop** (`fetch` follows redirects unchecked).
- *
- * Deliberate limitation: a TOCTOU window between the DNS check and the socket
- * connect, since pinning the connection requires replacing the fetch
- * dispatcher. The allowlist is deployment-level, not per-project.
+ * Three things make this a real control rather than a string check: it
+ * validates the **resolved address** (`evil.com` can A-record to
+ * `169.254.169.254`), it validates it again **at connect**, on the address the
+ * socket dials (a rebinding resolver answers the check and the connection
+ * differently), and it validates **every redirect hop** (`fetch` follows
+ * redirects unchecked). The allowlist is deployment-level, not per-project.
  */
 
 export type EgressHostEntry = {
@@ -253,20 +257,21 @@ const assertShape = (args: {
 
 /**
  * Throws `TOOL_EGRESS_BLOCKED` unless every address `url` resolves to is either
- * publicly routable or covered by the allowlist. Resolves silently otherwise.
+ * publicly routable or covered by the allowlist. Resolves to whether the
+ * connection still has to be pinned: true when the verdict rests on DNS.
  */
-export const assertEgressAllowed = async (args: {
+const checkDestination = async (args: {
   url: string;
   allowlist: EgressAllowlist;
-  noun?: string;
-}): Promise<void> => {
-  const noun = args.noun ?? DEFAULT_NOUN;
+  noun: string;
+}): Promise<boolean> => {
+  const { noun } = args;
   const verdict = assertShape({
     url: args.url,
     allowlist: args.allowlist,
     noun,
   });
-  if (verdict.settled) return;
+  if (verdict.settled) return false;
 
   const { hostname } = verdict;
 
@@ -291,6 +296,70 @@ export const assertEgressAllowed = async (args: {
       { tool_url: args.url, tool_address: denied }
     );
   }
+  return true;
+};
+
+export const assertEgressAllowed = async (args: {
+  url: string;
+  allowlist: EgressAllowlist;
+  noun?: string;
+}): Promise<void> => {
+  await checkDestination({ ...args, noun: args.noun ?? DEFAULT_NOUN });
+};
+
+type PinnedAgent = {
+  agent: Agent;
+  // Hostname → the address its connect-time lookup refused. Read back by the
+  // hop that failed: the lookup's error crosses `fetch` as an opaque cause.
+  denied: Map<string, string>;
+};
+
+/**
+ * `dns.lookup` refusing any address the allowlist does not allow. As the
+ * dispatcher's `connect.lookup` it checks the address the socket dials.
+ */
+const allowlistedLookup = (args: {
+  allowlist: EgressAllowlist;
+  denied: Map<string, string>;
+}): LookupFunction => {
+  return (hostname, options, callback) => {
+    lookupEach(hostname, { ...options, all: true }, (error, addresses) => {
+      if (error) {
+        callback(error, '', 0);
+        return;
+      }
+      const denied = addresses.find((entry) => {
+        return !isAddressAllowed({
+          address: entry.address,
+          allowlist: args.allowlist,
+        });
+      });
+      const first = addresses[0];
+      if (denied !== undefined || first === undefined) {
+        args.denied.set(hostname, denied?.address ?? '');
+        callback(new Error(`${hostname} is not allowed at connect.`), '', 0);
+        return;
+      }
+      if (options.all) {
+        callback(null, addresses);
+        return;
+      }
+      callback(null, first.address, first.family);
+    });
+  };
+};
+
+const pinnedAgents = new WeakMap<EgressAllowlist, PinnedAgent>();
+
+const pinnedAgent = (allowlist: EgressAllowlist): PinnedAgent => {
+  let pinned = pinnedAgents.get(allowlist);
+  if (!pinned) {
+    const denied = new Map<string, string>();
+    const lookup = allowlistedLookup({ allowlist, denied });
+    pinned = { agent: new Agent({ connect: { lookup } }), denied };
+    pinnedAgents.set(allowlist, pinned);
+  }
+  return pinned;
 };
 
 const nextRequest = (args: {
@@ -326,32 +395,51 @@ const sendHop = async (args: {
   onRequest?: () => void;
   init: RequestInit;
 }): Promise<Response> => {
-  await assertEgressAllowed({
+  const pin = await checkDestination({
     url: args.url,
     allowlist: args.allowlist,
     noun: args.noun,
   });
   args.onRequest?.();
-  return fetch(args.url, args.init);
+  if (!pin) return fetch(args.url, args.init);
+  const pinned = pinnedAgent(args.allowlist);
+  // Node's `fetch` takes `dispatcher`; the DOM `RequestInit` type does not
+  // declare it, and a declared variable is not held to excess properties.
+  const init: RequestInit & { dispatcher: Agent } = {
+    ...args.init,
+    dispatcher: pinned.agent,
+  };
+  try {
+    return await fetch(args.url, init);
+  } catch (error) {
+    const { hostname } = new URL(args.url);
+    const address = pinned.denied.get(hostname);
+    if (address === undefined) throw error;
+    pinned.denied.delete(hostname);
+    throw blocked(
+      `${args.noun} "${hostname}" resolved to ${address} at connect, which is not publicly routable. Add it to ${ENV_VAR} to allow it.`,
+      { tool_url: args.url, tool_address: address }
+    );
+  }
 };
 
-/**
- * `fetch` with the egress guard applied to the initial URL and to every
- * redirect hop. Redirects are followed manually — `redirect: 'follow'` would
- * reach the `Location` target without any check.
- */
-export const fetchWithEgressGuard = async (
+type EgressFetchOptions = {
+  allowlist?: EgressAllowlist;
+  noun?: string;
+  // Called right before each hop goes on the wire, after its check passed.
+  onRequest?: () => void;
+  // Headers of the caller's own that carry a credential, dropped with
+  // `CREDENTIAL_HEADERS` on a redirect to another origin.
+  credentialHeaders?: readonly string[];
+  // The `{{secret:}}` values resolved into `url`, by secret id: a refusal's
+  // message and meta carry the reference in their place.
+  secrets?: ReadonlyMap<string, string>;
+};
+
+const followRedirects = async (
   url: string,
-  init: RequestInit = {},
-  options: {
-    allowlist?: EgressAllowlist;
-    noun?: string;
-    // Called right before each hop goes on the wire, after its check passed.
-    onRequest?: () => void;
-    // Headers of the caller's own that carry a credential, dropped with
-    // `CREDENTIAL_HEADERS` on a redirect to another origin.
-    credentialHeaders?: readonly string[];
-  } = {}
+  init: RequestInit,
+  options: EgressFetchOptions
 ): Promise<Response> => {
   const allowlist = options.allowlist ?? getEgressAllowlist();
   const noun = options.noun ?? DEFAULT_NOUN;
@@ -407,4 +495,21 @@ export const fetchWithEgressGuard = async (
     `${noun} exceeded ${MAX_REDIRECTS} redirects; giving up rather than following further.`,
     { tool_url: url }
   );
+};
+
+/**
+ * `fetch` with the egress guard applied to the initial URL and to every
+ * redirect hop. Redirects are followed manually — `redirect: 'follow'` would
+ * reach the `Location` target without any check.
+ */
+export const fetchWithEgressGuard = async (
+  url: string,
+  init: RequestInit = {},
+  options: EgressFetchOptions = {}
+): Promise<Response> => {
+  try {
+    return await followRedirects(url, init, options);
+  } catch (error) {
+    throw redactEgressSecrets({ error, secrets: options.secrets });
+  }
 };

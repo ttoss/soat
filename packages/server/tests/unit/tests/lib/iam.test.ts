@@ -4,6 +4,7 @@ import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
   extractProjectIdsFromPolicies,
+  extractProjectIdsFromPolicySets,
   matchesPattern,
   type PolicyDocument,
   statementMatches,
@@ -821,6 +822,52 @@ describe('IAM', () => {
           context: { 'soat:tag:env': 'dev' },
         })
       ).toBe(false);
+    });
+  });
+
+  describe('extractProjectIdsFromPolicySets', () => {
+    const naming = (...projects: string[]): PolicyDocument[] => {
+      return [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile'],
+              resource: projects.map((p) => {
+                return `srn:${p}:file:*`;
+              }),
+            },
+          ],
+        },
+      ];
+    };
+    const unrestricted: PolicyDocument[] = [
+      { statement: [{ effect: 'Allow', action: ['files:GetFile'] }] },
+    ];
+
+    test('names the projects every set names', () => {
+      expect(
+        extractProjectIdsFromPolicySets([
+          naming('proj_A', 'proj_B'),
+          naming('proj_B', 'proj_C'),
+        ])
+      ).toEqual(['proj_B']);
+    });
+
+    test('an unrestricted set leaves the others to decide', () => {
+      expect(
+        extractProjectIdsFromPolicySets([unrestricted, naming('proj_A')])
+      ).toEqual(['proj_A']);
+    });
+
+    test('is undefined when every set is unrestricted', () => {
+      expect(
+        extractProjectIdsFromPolicySets([unrestricted, unrestricted])
+      ).toBeUndefined();
+    });
+
+    test('no set names no project', () => {
+      expect(extractProjectIdsFromPolicySets([])).toEqual([]);
     });
   });
 });

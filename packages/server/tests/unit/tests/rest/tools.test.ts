@@ -1272,6 +1272,37 @@ describe('Tools', () => {
       expect(getRes.body.mcp.headers).toEqual(expectedHeaders);
     });
 
+    // The URL reaches the egress guard resolved, and its refusal reaches the
+    // caller: the error names the reference, never the value.
+    test.each([
+      ['http', 'execute', { method: 'GET' }, {}],
+      ['mcp', 'mcp', {}, { action: 'anything' }],
+    ])(
+      'an egress refusal of a %s tool carries the secret reference, not its value',
+      async (type, transport, config, body) => {
+        const url = `http://10.255.255.1/{{secret:${secretId}}}?key={{secret:${secretId}}}`;
+        const created = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: `egress-secret-url-${type}`,
+            type,
+            parameters: { type: 'object', properties: {} },
+            [transport]: { ...config, url },
+          });
+        expect(created.status).toBe(201);
+
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/tools/${created.body.id}/call`)
+          .send(body);
+
+        const text = JSON.stringify(response.body);
+        expect(text).toContain('TOOL_EGRESS_BLOCKED');
+        expect(text).not.toContain('sk-live-topsecret');
+        expect(text).toContain(`{{secret:${secretId}}}`);
+      }
+    );
+
     test('creating an mcp tool with an invalid secret ref in mcp.headers returns 400', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')

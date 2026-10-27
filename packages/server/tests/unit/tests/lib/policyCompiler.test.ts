@@ -1,4 +1,5 @@
 import { Op } from '@ttoss/postgresdb';
+import type { PolicyDocument } from 'src/lib/iam';
 import {
   compilePolicy,
   globToLike,
@@ -56,7 +57,7 @@ describe('compilePolicy', () => {
   test('throws when resourceType is not registered', () => {
     expect(() => {
       return compilePolicy({
-        policies: [],
+        policies: [[]],
         action: 'test:Do',
         resourceType: 'notRegistered',
         projectPublicId: 'prj_1',
@@ -68,7 +69,7 @@ describe('compilePolicy', () => {
 
   test('returns hasAccess false when no policies provided', () => {
     const result = compilePolicy({
-      policies: [],
+      policies: [[]],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -80,11 +81,13 @@ describe('compilePolicy', () => {
   test('returns hasAccess false when action does not match', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            { effect: 'Allow', action: ['test:Other'], resource: ['*'] },
-          ],
-        },
+        [
+          {
+            statement: [
+              { effect: 'Allow', action: ['test:Other'], resource: ['*'] },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -96,11 +99,13 @@ describe('compilePolicy', () => {
   test('Allow all (resource=*) returns hasAccess true with empty where', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
-          ],
-        },
+        [
+          {
+            statement: [
+              { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -113,15 +118,19 @@ describe('compilePolicy', () => {
   test('Deny all immediately returns hasAccess false', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
-          ],
-        },
+        [
+          {
+            statement: [
+              { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+            ],
+          },
 
-        {
-          statement: [{ effect: 'Deny', action: ['test:Do'], resource: ['*'] }],
-        },
+          {
+            statement: [
+              { effect: 'Deny', action: ['test:Do'], resource: ['*'] },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -133,15 +142,17 @@ describe('compilePolicy', () => {
   test('Allow specific resource ID builds where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:testResource:res_abc123'],
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:testResource:res_abc123'],
+              },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -156,15 +167,17 @@ describe('compilePolicy', () => {
   test('Allow glob resource builds LIKE where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:testResource:res_*'],
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:testResource:res_*'],
+              },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -183,20 +196,21 @@ describe('compilePolicy', () => {
   test('Allow with StringEquals tag condition builds where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: {
-                StringEquals: { 'soat:ResourceTag/env': 'production' },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: {
+                  StringEquals: { 'soat:ResourceTag/env': 'production' },
+                },
               },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -218,20 +232,21 @@ describe('compilePolicy', () => {
   test('Allow with StringNotEquals tag condition builds where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: {
-                StringNotEquals: { 'soat:ResourceTag/env': 'dev' },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: {
+                  StringNotEquals: { 'soat:ResourceTag/env': 'dev' },
+                },
               },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -242,20 +257,21 @@ describe('compilePolicy', () => {
   test('Allow with StringLike tag condition builds where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: {
-                StringLike: { 'soat:ResourceTag/env': 'prod*' },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: {
+                  StringLike: { 'soat:ResourceTag/env': 'prod*' },
+                },
               },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -266,15 +282,17 @@ describe('compilePolicy', () => {
   test('Allow path-based resource builds path where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:testResource:/docs/readme.txt'],
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:testResource:/docs/readme.txt'],
+              },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -289,18 +307,19 @@ describe('compilePolicy', () => {
   test('Deny specific resource adds NOT condition', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
-            {
-              effect: 'Deny',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:testResource:res_secret'],
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+        [
+          {
+            statement: [
+              { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+              {
+                effect: 'Deny',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:testResource:res_secret'],
+              },
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -320,7 +339,7 @@ describe('compilePolicy', () => {
   test('wildcard action (*) matches any action', () => {
     const result = compilePolicy({
       policies: [
-        { statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }] },
+        [{ statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }] }],
       ],
       action: 'test:AnyAction',
       resourceType: 'testResource',
@@ -332,20 +351,21 @@ describe('compilePolicy', () => {
   test('Allow with multiple resources OR-combines them', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: [
-                'srn:prj_1:testResource:res_abc',
-                'srn:prj_1:testResource:res_xyz',
-              ],
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: [
+                  'srn:prj_1:testResource:res_abc',
+                  'srn:prj_1:testResource:res_xyz',
+                ],
+              },
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -371,15 +391,17 @@ describe('compilePolicy', () => {
   test('glob path resource builds LIKE where clause', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:testResource:/docs/*'],
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:testResource:/docs/*'],
+              },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -398,15 +420,17 @@ describe('compilePolicy', () => {
   test('aliased resource column renders $alias.column$ reference', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:aliasedResource:res_abc'],
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:aliasedResource:res_abc'],
+              },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'aliasedResource',
@@ -423,18 +447,19 @@ describe('compilePolicy', () => {
   test('aliased tags column compiles a StringLike condition', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: { StringLike: { 'soat:ResourceTag/env': 'prod*' } },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: { StringLike: { 'soat:ResourceTag/env': 'prod*' } },
+              },
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'aliasedResource',
       projectPublicId: 'prj_1',
@@ -445,19 +470,20 @@ describe('compilePolicy', () => {
   test('StringLike with an unsafe tag key is skipped', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              // The key after the prefix contains a space → rejected as unsafe.
-              condition: { StringLike: { 'soat:ResourceTag/bad key': 'x*' } },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                // The key after the prefix contains a space → rejected as unsafe.
+                condition: { StringLike: { 'soat:ResourceTag/bad key': 'x*' } },
+              },
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -470,16 +496,18 @@ describe('compilePolicy', () => {
   test('unrecognized condition operator produces no fragments', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: { NumericEquals: { 'soat:ResourceTag/count': '1' } },
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: { NumericEquals: { 'soat:ResourceTag/count': '1' } },
+              },
+            ],
+          },
+        ],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ] as any,
       action: 'test:Do',
@@ -493,16 +521,18 @@ describe('compilePolicy', () => {
   test('falsy condition block is skipped', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: { StringEquals: null },
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: { StringEquals: null },
+              },
+            ],
+          },
+        ],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ] as any,
       action: 'test:Do',
@@ -516,18 +546,19 @@ describe('compilePolicy', () => {
   test('condition key that is not a ResourceTag key is skipped', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['*'],
-              condition: { StringEquals: { 'soat:CurrentTime': 'noon' } },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['*'],
+                condition: { StringEquals: { 'soat:CurrentTime': 'noon' } },
+              },
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -539,15 +570,17 @@ describe('compilePolicy', () => {
   test('SRN with fewer than 4 segments is treated as unrestricted', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: ['srn:prj_1:testResource'],
-            },
-          ],
-        },
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: ['srn:prj_1:testResource'],
+              },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -560,18 +593,19 @@ describe('compilePolicy', () => {
   test('empty resource array with a tag condition yields only tag fragments', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['test:Do'],
-              resource: [],
-              condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
-            },
-          ],
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ] as any,
+        [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['test:Do'],
+                resource: [],
+                condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+              },
+            ],
+          },
+        ],
+      ],
       action: 'test:Do',
       resourceType: 'testResource',
       projectPublicId: 'prj_1',
@@ -591,12 +625,14 @@ describe('compilePolicy', () => {
   test('Deny with an empty resource array and no condition adds an empty NOT', () => {
     const result = compilePolicy({
       policies: [
-        {
-          statement: [
-            { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
-            { effect: 'Deny', action: ['test:Do'], resource: [] },
-          ],
-        },
+        [
+          {
+            statement: [
+              { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+              { effect: 'Deny', action: ['test:Do'], resource: [] },
+            ],
+          },
+        ],
       ],
       action: 'test:Do',
       resourceType: 'testResource',
@@ -605,6 +641,138 @@ describe('compilePolicy', () => {
     expect(result.hasAccess).toBe(true);
     expect(result.where).toEqual({
       [Op.and]: [{ [Op.not]: { [Op.or]: [{}] } }],
+    });
+  });
+});
+
+describe('compilePolicy project segment', () => {
+  const compile = (statement: PolicyDocument['statement']) => {
+    return compilePolicy({
+      policies: [[{ statement }]],
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+  };
+
+  test('an Allow naming another project grants nothing', () => {
+    const result = compile([
+      {
+        effect: 'Allow',
+        action: ['test:Do'],
+        resource: ['srn:prj_2:testResource:*'],
+      },
+    ]);
+    expect(result.hasAccess).toBe(false);
+  });
+
+  test('a Deny naming another project does not narrow', () => {
+    const result = compile([
+      { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+      {
+        effect: 'Deny',
+        action: ['test:Do'],
+        resource: ['srn:prj_2:testResource:*'],
+      },
+    ]);
+    expect(result).toEqual({ where: {}, hasAccess: true });
+  });
+
+  test('keeps only the resources whose project matches', () => {
+    const result = compile([
+      {
+        effect: 'Allow',
+        action: ['test:Do'],
+        resource: [
+          'srn:prj_1:testResource:res_a',
+          'srn:prj_2:testResource:res_b',
+        ],
+      },
+    ]);
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ publicId: 'res_a' }] }] }],
+    });
+  });
+
+  test('a project glob matches', () => {
+    const result = compile([
+      {
+        effect: 'Allow',
+        action: ['test:Do'],
+        resource: ['srn:prj_*:testResource:res_a'],
+      },
+    ]);
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ publicId: 'res_a' }] }] }],
+    });
+  });
+});
+
+describe('compilePolicy policy sets', () => {
+  const allowAll: PolicyDocument = {
+    statement: [{ effect: 'Allow', action: ['test:Do'], resource: ['*'] }],
+  };
+  const compile = (policies: PolicyDocument[][]) => {
+    return compilePolicy({
+      policies,
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+  };
+
+  test('no set grants nothing', () => {
+    expect(compile([]).hasAccess).toBe(false);
+  });
+
+  test('a set granting nothing denies the whole', () => {
+    expect(compile([[allowAll], []]).hasAccess).toBe(false);
+  });
+
+  test('a Deny in any set narrows the result', () => {
+    const result = compile([
+      [
+        {
+          statement: [
+            ...allowAll.statement,
+            {
+              effect: 'Deny',
+              action: ['test:Do'],
+              resource: ['srn:prj_1:testResource:res_a'],
+            },
+          ],
+        },
+      ],
+      [allowAll],
+    ]);
+    expect(result).toEqual({
+      hasAccess: true,
+      where: {
+        [Op.and]: [
+          { [Op.not]: { [Op.or]: [{ [Op.and]: [{ publicId: 'res_a' }] }] } },
+        ],
+      },
+    });
+  });
+
+  test('restricting sets are ANDed', () => {
+    const allowOne = (id: string): PolicyDocument => {
+      return {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['test:Do'],
+            resource: [`srn:prj_1:testResource:${id}`],
+          },
+        ],
+      };
+    };
+    const only = (id: string) => {
+      return { [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ publicId: id }] }] }] };
+    };
+    expect(compile([[allowOne('res_a')], [allowOne('res_b')]])).toEqual({
+      hasAccess: true,
+      where: { [Op.and]: [only('res_a'), only('res_b')] },
     });
   });
 });

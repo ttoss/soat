@@ -1,28 +1,49 @@
-import crypto from 'node:crypto';
-
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { signatureHeader } from 'src/lib/hmacSignature';
+import {
+  signatureHeader,
+  verifyBareBodySignature,
+  verifyTimestampedSignature,
+} from 'src/lib/hmacSignature';
 import { findWebhookTriggerForDelivery } from 'src/lib/triggers';
+import { isUniqueViolationOf } from 'src/lib/uniqueViolation';
 
 const hooksRouter = new Router<Context>();
 
-/** Timing-safe check of `X-Soat-Signature: sha256=<hex>` over the raw body. */
+type VerifiedSignature =
+  { valid: false } | { valid: true; idempotencyKey: string | null };
+
+/**
+ * `t=<unix>,v1=<hex>` over `<t>.<body>` (`timestampedSignature`), or the
+ * bare-body `sha256=<hex>`. Only the timestamped scheme yields a key: its digest
+ * names one signed delivery, while a bare-body digest repeats for every
+ * identical body a sender legitimately sends.
+ */
 const verifySignature = (args: {
   secret: string;
   rawBody: string;
   header?: string;
-}): boolean => {
-  if (!args.header) return false;
-  const expected = `sha256=${crypto
-    .createHmac('sha256', args.secret)
-    .update(args.rawBody)
-    .digest('hex')}`;
-  const provided = Buffer.from(args.header);
-  const computed = Buffer.from(expected);
-  if (provided.length !== computed.length) return false;
-  return crypto.timingSafeEqual(provided, computed);
+  triggerPublicId: string;
+}): VerifiedSignature => {
+  if (!args.header) return { valid: false };
+  if (args.header.startsWith('sha256=')) {
+    return verifyBareBodySignature({
+      secret: args.secret,
+      rawBody: args.rawBody,
+      header: args.header,
+    })
+      ? { valid: true, idempotencyKey: null }
+      : { valid: false };
+  }
+  const digest = verifyTimestampedSignature({
+    secret: args.secret,
+    rawBody: args.rawBody,
+    header: args.header,
+  });
+  return digest
+    ? { valid: true, idempotencyKey: `${digest}:${args.triggerPublicId}` }
+    : { valid: false };
 };
 
 /**
@@ -61,12 +82,13 @@ hooksRouter.post('/hooks/triggers/:trigger_id', async (ctx: Context) => {
   }
 
   const rawBody = (ctx.hookRawBody as string | undefined) ?? '';
-  const signatureOk = verifySignature({
+  const signature = verifySignature({
     secret: trigger.secret,
     rawBody,
     header: ctx.get(signatureHeader()) || undefined,
+    triggerPublicId: triggerId,
   });
-  if (!signatureOk) {
+  if (!signature.valid) {
     throw new DomainError('UNAUTHORIZED', 'Invalid or missing signature.');
   }
 
@@ -89,6 +111,20 @@ hooksRouter.post('/hooks/triggers/:trigger_id', async (ctx: Context) => {
     triggerPublicId: triggerId,
     source: 'webhook',
     fireInput,
+    idempotencyKey: signature.idempotencyKey,
+  }).catch((error: unknown) => {
+    if (
+      isUniqueViolationOf({
+        error,
+        index: 'trigger_firings_idempotency_key_unique',
+      })
+    ) {
+      throw new DomainError(
+        'HOOK_DELIVERY_REPLAYED',
+        'This signed delivery was already accepted.'
+      );
+    }
+    throw error;
   });
 
   // Acknowledge before kicking off dispatch — runFiringDispatch mutates the

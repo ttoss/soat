@@ -34,6 +34,7 @@ paths:
       summary: List traces
       description: Returns a paginated list of execution traces for the project.
       operationId: listTraces
+      x-iam-action: traces:ListTraces
       parameters:
         - name: project_id
           in: query
@@ -91,6 +92,7 @@ paths:
       summary: Get a trace
       description: Returns a single trace by ID.
       operationId: getTrace
+      x-iam-action: traces:GetTrace
       x-soat-resource:
         kind: trace
         from: trace_id
@@ -146,6 +148,7 @@ paths:
         by `GET /api/v1/generations?trace_id=`, and a node's direct children
         page by `GET /api/v1/traces?parent_trace_id=`.
       operationId: getTraceTree
+      x-iam-action: traces:GetTraceTree
       x-soat-resource:
         kind: trace
         from: trace_id
@@ -211,6 +214,7 @@ paths:
         Idempotent — purging an already-purged trace succeeds and leaves the
         original `content_redacted_at` in place.
       operationId: purgeTraceContent
+      x-iam-action: traces:PurgeTraceContent
       x-soat-resource:
         kind: trace
         from: trace_id

@@ -44,6 +44,8 @@ beforeAll(async () => {
     isAllowed: async () => {
       return true;
     },
+    keyPolicyBoundary: undefined,
+    recordRefusal: () => {},
   };
 });
 

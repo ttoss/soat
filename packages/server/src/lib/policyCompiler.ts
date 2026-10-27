@@ -1,6 +1,6 @@
 import { Op, Sequelize } from '@ttoss/postgresdb';
 
-import type { PolicyDocument } from './iam';
+import type { PolicyDocument, PolicySets } from './iam';
 import { matchesPattern } from './iam';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -269,31 +269,56 @@ const buildTagFragments = (
 };
 
 /**
- * Process resources for a statement and determine if it's unrestricted.
- * Returns the list of resource fragments and unrestricted flag.
+ * The resource segment a pattern names in this project: `'*'` when it is
+ * unrestricted, `undefined` when it names another project — whose rows it is
+ * not about, as `statementMatches` finds.
  */
-const processStatementResources = (
-  resources: string[],
-  fieldMap: ResourceFieldMap
-): { frags: Array<Record<string, unknown>>; unrestricted: boolean } => {
+const resourceSegmentInProject = (args: {
+  srnPattern: string;
+  projectPublicId: string;
+}): string | undefined => {
+  if (args.srnPattern === '*') return '*';
+  const parts = args.srnPattern.split(':');
+  if (parts.length < 4) return '*';
+  if (!matchesPattern({ pattern: parts[1], value: args.projectPublicId })) {
+    return undefined;
+  }
+  return parts.slice(3).join(':');
+};
+
+/**
+ * Process resources for a statement and determine if it's unrestricted. A
+ * statement whose every pattern names another project does not apply.
+ */
+const processStatementResources = (args: {
+  resources: string[] | undefined;
+  fieldMap: ResourceFieldMap;
+  projectPublicId: string;
+}): {
+  frags: Array<Record<string, unknown>>;
+  unrestricted: boolean;
+  applies: boolean;
+} => {
+  const { fieldMap } = args;
+  const resources = args.resources ?? ['*'];
   const frags: Array<Record<string, unknown>> = [];
+  let otherProjectOnly = resources.length > 0;
 
   for (const srnPattern of resources) {
-    if (srnPattern === '*') return { frags, unrestricted: true };
+    const segment = resourceSegmentInProject({
+      srnPattern,
+      projectPublicId: args.projectPublicId,
+    });
+    if (segment === undefined) continue;
+    otherProjectOnly = false;
 
-    const parts = srnPattern.split(':');
-    if (parts.length < 4) return { frags, unrestricted: true };
-
-    const resourceSegment = parts.slice(3).join(':');
-    if (resourceSegment === '*') return { frags, unrestricted: true };
-
-    const frag = buildResourceFragment(resourceSegment, fieldMap);
-    if (frag === null) return { frags, unrestricted: true };
+    const frag = buildResourceFragment(segment, fieldMap);
+    if (frag === null) return { frags, unrestricted: true, applies: true };
 
     frags.push(frag);
   }
 
-  return { frags, unrestricted: false };
+  return { frags, unrestricted: false, applies: !otherProjectOnly };
 };
 
 /**
@@ -324,6 +349,7 @@ const processStatement = (args: {
   statement: PolicyDocument['statement'][0];
   action: string;
   fieldMap: ResourceFieldMap;
+  projectPublicId: string;
   allowFragments: Array<Record<string, unknown>>;
   denyFragments: Array<Record<string, unknown>>;
   context: { hasAnyAllow: boolean; unconditionalAllow: boolean };
@@ -333,11 +359,16 @@ const processStatement = (args: {
   });
   if (!actionMatch) return false;
 
-  const resources = args.statement.resource ?? ['*'];
-  const { frags: resourceFrags, unrestricted } = processStatementResources(
-    resources,
-    args.fieldMap
-  );
+  const {
+    frags: resourceFrags,
+    unrestricted,
+    applies,
+  } = processStatementResources({
+    resources: args.statement.resource,
+    fieldMap: args.fieldMap,
+    projectPublicId: args.projectPublicId,
+  });
+  if (!applies) return false;
 
   const tagFrags = buildTagFragments(args.statement.condition, args.fieldMap);
   const allFrags = buildStatementFragments({
@@ -364,40 +395,12 @@ const processStatement = (args: {
 
 // ── Core compiler ─────────────────────────────────────────────────────────
 
-/**
- * Compile a set of policy documents into a Sequelize WHERE clause that
- * enforces resource-level access control for list-style queries.
- *
- * - Each Allow statement contributes an OR-branch that users must satisfy.
- * - Deny statements contribute AND-NOT conditions that always apply.
- * - An unconditional Deny-all (resource='*', no conditions) returns
- *   `{ hasAccess: false }` immediately.
- * - If no Allow statement matches the action the caller has no access.
- *
- * The returned `where` must be merged into the top-level Sequelize query.
- * When the fieldMap contains columns with an `alias` (e.g. `$file.path$`),
- * set `subQuery: false` on the query to enable association column references.
- */
-export const compilePolicy = (args: {
+const compilePolicySet = (args: {
   policies: PolicyDocument[];
   action: string;
-  resourceType: string;
+  fieldMap: ResourceFieldMap;
   projectPublicId: string;
-  /**
-   * Association alias the resource is reached through, when the query this
-   * clause is merged into is rooted at another model. Omit when the query is
-   * rooted at the resource itself.
-   */
-  columnRoot?: string;
 }): CompiledPolicy => {
-  const registered = registeredMaps.get(args.resourceType);
-  if (!registered) {
-    throw new Error(
-      `No ResourceFieldMap registered for resourceType '${args.resourceType}'`
-    );
-  }
-  const fieldMap = rootedFieldMap(registered, args.columnRoot);
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allowFragments: Array<Record<string, any>> = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -409,7 +412,8 @@ export const compilePolicy = (args: {
       const isDenyAll = processStatement({
         statement,
         action: args.action,
-        fieldMap,
+        fieldMap: args.fieldMap,
+        projectPublicId: args.projectPublicId,
         allowFragments,
         denyFragments,
         context,
@@ -434,4 +438,72 @@ export const compilePolicy = (args: {
   const where = whereParts.length > 0 ? { [Op.and]: whereParts } : {};
 
   return { where, hasAccess: true };
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const andWheres = (compiled: CompiledPolicy[]): Record<string, any> => {
+  const wheres = compiled
+    .map((c) => {
+      return c.where;
+    })
+    .filter((where) => {
+      return Reflect.ownKeys(where).length > 0;
+    });
+  if (wheres.length === 0) return {};
+  if (wheres.length === 1) return wheres[0];
+  return { [Op.and]: wheres };
+};
+
+/**
+ * Compile a caller's policy sets into a Sequelize WHERE clause that enforces
+ * resource-level access control for list-style queries.
+ *
+ * Within a set:
+ * - Each Allow statement contributes an OR-branch that users must satisfy.
+ * - Deny statements contribute AND-NOT conditions that always apply.
+ * - An unconditional Deny-all (resource='*', no conditions) grants nothing.
+ * - If no Allow statement matches the action the set grants nothing.
+ *
+ * Every set must grant a row (`PolicySets`), so the set clauses are ANDed and
+ * no set at all grants nothing.
+ *
+ * The returned `where` must be merged into the top-level Sequelize query.
+ * When the fieldMap contains columns with an `alias` (e.g. `$file.path$`),
+ * set `subQuery: false` on the query to enable association column references.
+ */
+export const compilePolicy = (args: {
+  policies: PolicySets;
+  action: string;
+  resourceType: string;
+  projectPublicId: string;
+  /**
+   * Association alias the resource is reached through, when the query this
+   * clause is merged into is rooted at another model. Omit when the query is
+   * rooted at the resource itself.
+   */
+  columnRoot?: string;
+}): CompiledPolicy => {
+  const registered = registeredMaps.get(args.resourceType);
+  if (!registered) {
+    throw new Error(
+      `No ResourceFieldMap registered for resourceType '${args.resourceType}'`
+    );
+  }
+  const fieldMap = rootedFieldMap(registered, args.columnRoot);
+
+  if (args.policies.length === 0) return { where: {}, hasAccess: false };
+
+  const compiled = args.policies.map((policies) => {
+    return compilePolicySet({
+      policies,
+      action: args.action,
+      fieldMap,
+      projectPublicId: args.projectPublicId,
+    });
+  });
+  const denied = compiled.find((c) => {
+    return !c.hasAccess;
+  });
+  if (denied) return denied;
+  return { where: andWheres(compiled), hasAccess: true };
 };

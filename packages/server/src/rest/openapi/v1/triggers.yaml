@@ -26,6 +26,7 @@ paths:
         - Triggers
       summary: List triggers
       operationId: listTriggers
+      x-iam-action: triggers:ListTriggers
       parameters:
         - name: project_id
           in: query
@@ -91,6 +92,7 @@ paths:
         - Triggers
       summary: Create a trigger
       operationId: createTrigger
+      x-iam-action: triggers:CreateTrigger
       requestBody:
         required: true
         content:
@@ -143,6 +145,7 @@ paths:
         - Triggers
       summary: Count triggers
       operationId: countTriggers
+      x-iam-action: triggers:ListTriggers
       parameters:
         - name: project_id
           in: query
@@ -211,6 +214,7 @@ paths:
         - Triggers
       summary: Get a trigger
       operationId: getTrigger
+      x-iam-action: triggers:GetTrigger
       parameters:
         - name: trigger_id
           in: path
@@ -261,6 +265,7 @@ paths:
         - Triggers
       summary: Update a trigger
       operationId: updateTrigger
+      x-iam-action: triggers:UpdateTrigger
       parameters:
         - name: trigger_id
           in: path
@@ -316,6 +321,7 @@ paths:
         - Triggers
       summary: Delete a trigger
       operationId: deleteTrigger
+      x-iam-action: triggers:DeleteTrigger
       parameters:
         - name: trigger_id
           in: path
@@ -360,6 +366,7 @@ paths:
         - Triggers
       summary: Fire a trigger
       operationId: fireTrigger
+      x-iam-action: triggers:FireTrigger
       parameters:
         - name: trigger_id
           in: path
@@ -423,6 +430,7 @@ paths:
         - Triggers
       summary: Get trigger secret
       operationId: getTriggerSecret
+      x-iam-action: triggers:GetTriggerSecret
       x-soat-agent-exclude: true
       parameters:
         - name: trigger_id
@@ -473,6 +481,7 @@ paths:
         - Triggers
       summary: Rotate trigger secret
       operationId: rotateTriggerSecret
+      x-iam-action: triggers:RotateTriggerSecret
       x-soat-agent-exclude: true
       parameters:
         - name: trigger_id
@@ -523,6 +532,7 @@ paths:
         - Triggers
       summary: List trigger firings
       operationId: listTriggerFirings
+      x-iam-action: triggers:ListTriggerFirings
       parameters:
         - name: trigger_id
           in: query
@@ -571,6 +581,7 @@ paths:
         - Triggers
       summary: Get a trigger firing
       operationId: getTriggerFiring
+      x-iam-action: triggers:GetTriggerFiring
       parameters:
         - name: firing_id
           in: path
@@ -893,9 +904,11 @@ components:
           nullable: true
           description: >-
             `<event_id>:<trigger_id>` for an `event` firing, where `event_id`
-            is the `id` in `input`; null for every other source. The same event reaching the same trigger twice
+            is the `id` in `input`; `<v1>:<trigger_id>` for a `webhook` firing
+            whose delivery carried the timestamped `t=,v1=` signature; null
+            otherwise. The same event reaching the same trigger twice
             produces one firing under this key, so a consumer reading firings
-            can recognise a redelivery.
+            can recognise a redelivery; a replayed signed delivery is refused.
         attempts:
           type: integer
           description: >-

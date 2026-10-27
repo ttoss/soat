@@ -253,6 +253,7 @@ type StreamRunArgs = {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
+  toolsAuthHeader: string | undefined;
   typedAgent: TypedAgent;
   toolChoice: TurnToolChoice;
   generationId: string;
@@ -290,6 +291,7 @@ const settleStreamedClientCalls = (args: {
     rootTraceId: run.rootTraceId ?? null,
     allMessages: run.allMessages,
     resolvedTools: run.resolvedTools,
+    toolsAuthHeader: run.toolsAuthHeader,
     model: run.model,
     typedAgent: run.typedAgent,
     agentId: run.agentId,

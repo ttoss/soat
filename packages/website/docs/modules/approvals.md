@@ -129,6 +129,19 @@ approved action and on every tool call of the continuation turn, exactly as on
 a generation. Use it when the credential is minted at decision time, since a
 per-turn token may have expired while the item waited.
 
+The approver's `tool_context` does not reach the arguments. A
+[preset](./tools.md#preset-parameters) is executed with the value the proposal
+resolved and froze into `proposed_action.arguments`, over edited arguments too;
+a `{{context:<key>}}` token the proposal could not resolve fails the action
+with `MISSING_TOOL_CONTEXT_KEY`.
+
+An approved `builtin` action is held to the proposing agent's
+[`boundary_policy`](./agents.md#soat-action-permissions) as it stands at
+decision time, against the same resource SRN and tags as the agent's own calls.
+A denied action does not run; its result is
+`{"error": "Forbidden: boundary policy denies <action>"}`. An agent that no
+longer exists bounds nothing in, so its approved `builtin` actions are refused.
+
 ### Duplicate proposals (dedup)
 
 Tool-call items carry a `dedup_key` derived from agent, tool, action and
@@ -162,6 +175,10 @@ Expiry is enforced server-side in **both directions**:
   `approvals.expired`.
 - The resolution path re-checks `expires_at` at decision time; an expired item
   returns `409 APPROVAL_EXPIRED` and never executes.
+
+A decision is written only while the item is still `pending`, so of concurrent
+approve or reject calls exactly one wins and resumes the producer; the others
+answer `409 APPROVAL_ALREADY_RESOLVED`.
 
 ### Approve, reject, edit-then-approve
 

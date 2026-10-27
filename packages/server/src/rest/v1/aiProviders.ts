@@ -4,6 +4,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { redactAiProviderSecrets } from 'src/lib/aiProviderConfigSecrets';
 import { listAiProviderModels } from 'src/lib/aiProviderModels';
 import {
   createAiProvider,
@@ -59,10 +60,11 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
     resourceType: 'aiProvider',
   });
 
-  ctx.body = await listAiProviders({
+  const page = await listAiProviders({
     projectIds: projectIds ?? [],
     ...parsePagination(ctx),
   });
+  ctx.body = { ...page, data: page.data.map(redactAiProviderSecrets) };
 });
 
 aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
@@ -90,7 +92,7 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
     });
   }
 
-  ctx.body = provider;
+  ctx.body = redactAiProviderSecrets(provider);
 });
 
 type ProviderPriceBody = {
@@ -215,7 +217,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   });
 
   ctx.status = 201;
-  ctx.body = provider;
+  ctx.body = redactAiProviderSecrets(provider);
 });
 
 aiProvidersRouter.patch(
@@ -281,7 +283,7 @@ aiProvidersRouter.patch(
       config: body.config,
     });
 
-    ctx.body = updated;
+    ctx.body = updated && redactAiProviderSecrets(updated);
   }
 );
 

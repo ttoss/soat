@@ -8,7 +8,7 @@ import {
   type UnpricedRow,
 } from './costEnforceability';
 import { resolveGenerationEndUser } from './generationAttribution';
-import type { WindowedQuotaBreach } from './quotaBreach';
+import { quotaBreachError, type WindowedQuotaBreach } from './quotaBreach';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
@@ -362,7 +362,7 @@ const blackoutBreach = (args: {
 // only for `enforce` — a `monitor` breach webhooks without blocking.
 const evaluateGenerationQuota = async (args: {
   quota: QuotaInstance;
-  agentInternalId: number;
+  agentInternalId: number | null;
   actorInternalId: number | null;
   projectId: number;
   now: Date;
@@ -415,6 +415,51 @@ const evaluateGenerationQuota = async (args: {
     : null;
 };
 
+const evaluateSpendQuotas = async (args: {
+  projectId: number;
+  agent: { id: number; publicId: string } | null;
+  actor: { id: number; publicId: string } | null;
+}): Promise<WindowedQuotaBreach | null> => {
+  const now = new Date();
+  const { projectId, agent, actor } = args;
+
+  const quotas = (await db.Quota.findAll({
+    where: { projectId, metric: ['tokens', 'cost_usd'] },
+  })) as QuotaInstance[];
+
+  const matching = quotas.filter((quota) => {
+    if (quota.scope === 'project') return quota.scopeRef == null;
+    if (quota.scope === 'agent') {
+      if (!agent) return false;
+      return quota.scopeRef == null || quota.scopeRef === agent.publicId;
+    }
+    if (quota.scope === 'actor') {
+      if (!actor) return false;
+      return quota.scopeRef == null || quota.scopeRef === actor.publicId;
+    }
+    return false; // api_key token/cost is never aggregatable
+  });
+
+  const breaches: WindowedQuotaBreach[] = [];
+  for (const quota of matching) {
+    const breach = await evaluateGenerationQuota({
+      quota,
+      agentInternalId: agent?.id ?? null,
+      actorInternalId: actor?.id ?? null,
+      projectId,
+      now,
+    });
+    if (breach) breaches.push(breach);
+  }
+
+  if (breaches.length === 0) return null;
+
+  breaches.sort((a, b) => {
+    return scopeRank(b.scope) - scopeRank(a.scope);
+  });
+  return breaches[0];
+};
+
 /**
  * The pre-generation token/cost check: the current window aggregate for every
  * matching `tokens`/`cost_usd` quota against its limit. A breach fires the
@@ -445,8 +490,6 @@ export const evaluateGenerationQuotas = async (args: {
   sessionId?: string;
   actorId?: string;
 }): Promise<WindowedQuotaBreach | null> => {
-  const now = new Date();
-
   // A turn run in a named project is capped by that project's quotas, whoever
   // owns the agent; the context builder settles whether it may run there.
   const agentWhere: Record<string, unknown> = { publicId: args.agentId };
@@ -460,7 +503,6 @@ export const evaluateGenerationQuotas = async (args: {
   if (!agent) return null;
   const projectId = args.runProjectId ?? agent.projectId;
 
-  const agentPublicId = agent.publicId;
   // Scoped to the agent's project so an id from another tenant can never pull
   // an actor into this project's enforcement; no end user matches no actor quota.
   const { actor } = await resolveGenerationEndUser({
@@ -469,40 +511,26 @@ export const evaluateGenerationQuotas = async (args: {
     actorId: args.actorId,
   });
 
-  const quotas = (await db.Quota.findAll({
-    where: { projectId, metric: ['tokens', 'cost_usd'] },
-  })) as QuotaInstance[];
-
-  const matching = quotas.filter((quota) => {
-    if (quota.scope === 'project') return quota.scopeRef == null;
-    if (quota.scope === 'agent') {
-      return quota.scopeRef == null || quota.scopeRef === agentPublicId;
-    }
-    if (quota.scope === 'actor') {
-      if (!actor) return false;
-      return quota.scopeRef == null || quota.scopeRef === actor.publicId;
-    }
-    return false; // api_key token/cost is never aggregatable
+  return evaluateSpendQuotas({
+    projectId,
+    agent: { id: agent.id, publicId: agent.publicId },
+    actor: actor ? { id: actor.id, publicId: actor.publicId } : null,
   });
+};
 
-  const breaches: WindowedQuotaBreach[] = [];
-  for (const quota of matching) {
-    const breach = await evaluateGenerationQuota({
-      quota,
-      agentInternalId: agent.id,
-      actorInternalId: actor?.id ?? null,
-      projectId,
-      now,
-    });
-    if (breach) breaches.push(breach);
-  }
-
-  if (breaches.length === 0) return null;
-
-  breaches.sort((a, b) => {
-    return scopeRank(b.scope) - scopeRank(a.scope);
+/**
+ * The token/cost check for model spend no agent runs — a chat completion, an
+ * eval judge. Only `project`-scope quotas match: an `agent` or `actor` quota
+ * caps work attributed to one, and this spend is attributed to neither.
+ */
+export const evaluateProjectSpendQuotas = (args: {
+  projectId: number;
+}): Promise<WindowedQuotaBreach | null> => {
+  return evaluateSpendQuotas({
+    projectId: args.projectId,
+    agent: null,
+    actor: null,
   });
-  return breaches[0];
 };
 
 /**
@@ -524,4 +552,20 @@ export const checkGenerationQuota = async (args: {
     log('checkGenerationQuota: failing open %O', error);
     return null;
   }
+};
+
+/**
+ * Refuses agentless model spend over an `enforce` token/cost budget; fails open
+ * like `checkGenerationQuota`.
+ */
+export const assertProjectSpendWithinQuota = async (args: {
+  projectId: number;
+}): Promise<void> => {
+  let breach: WindowedQuotaBreach | null = null;
+  try {
+    breach = await evaluateProjectSpendQuotas(args);
+  } catch (error) {
+    log('assertProjectSpendWithinQuota: failing open %O', error);
+  }
+  if (breach) throw quotaBreachError(breach);
 };

@@ -31,6 +31,7 @@ paths:
       summary: Create a tool
       description: Creates a new tool in the project.
       operationId: createTool
+      x-iam-action: tools:CreateTool
       requestBody:
         required: true
         content:
@@ -226,6 +227,7 @@ paths:
       summary: List tools
       description: Returns all tools in the project.
       operationId: listTools
+      x-iam-action: tools:ListTools
       parameters:
         - name: project_id
           in: query
@@ -277,6 +279,7 @@ paths:
         is shared with, through an accepted share, reads its `id`, `name`,
         `description` and `parameters` only.
       operationId: getTool
+      x-iam-action: tools:GetTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -323,6 +326,7 @@ paths:
       summary: Update a tool
       description: Updates an existing tool.
       operationId: updateTool
+      x-iam-action: tools:UpdateTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -383,6 +387,7 @@ paths:
         deleted; an ingestion rule keeps its `tool_id` and fails the documents
         it matches with `CONVERTER_FAILED` until repointed.
       operationId: deleteTool
+      x-iam-action: tools:DeleteTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -476,6 +481,7 @@ paths:
         `publisher_project_id`, and the tool receives the calling project as
         the `calling_project_id` tool context key.
       operationId: callTool
+      x-iam-action: tools:CallTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -653,8 +659,9 @@ components:
             a 2xx body as `{ content_type, filename, data_base64 }` — the same
             file shape `multipart` accepts, so a pipeline step can relay a
             downloaded file. `filename` comes from `Content-Disposition` and is
-            omitted when the target names none; a body over
-            `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`.
+            omitted when the target names none. In either mode a 2xx body over
+            `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`; a non-2xx
+            body over it is cut to it.
 
 
             `auth` adds a computed request credential, for targets whose
@@ -1083,8 +1090,9 @@ components:
         a 2xx body as `{ content_type, filename, data_base64 }` — the same
         file shape `multipart` accepts, so a pipeline step can relay a
         downloaded file. `filename` comes from `Content-Disposition` and is
-        omitted when the target names none; a body over
-        `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`.
+        omitted when the target names none. In either mode a 2xx body over
+        `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`; a non-2xx
+        body over it is cut to it.
 
 
         `auth` adds a computed request credential, for targets whose
@@ -1196,15 +1204,15 @@ components:
         region:
           type: string
           nullable: true
-          description: "`aws_sigv4`: the signing region, e.g. `us-east-1`."
+          description: '`aws_sigv4`: the signing region, e.g. `us-east-1`.'
         service:
           type: string
           nullable: true
-          description: "`aws_sigv4`: the signing service, e.g. `execute-api`."
+          description: '`aws_sigv4`: the signing service, e.g. `execute-api`.'
         access_key_id:
           type: string
           nullable: true
-          description: "`aws_sigv4`: the access key id."
+          description: '`aws_sigv4`: the access key id.'
         secret_access_key:
           type: string
           nullable: true
@@ -1228,7 +1236,7 @@ components:
           nullable: true
           items:
             type: string
-          description: "`gcp_service_account`: the OAuth scopes to mint the token for."
+          description: '`gcp_service_account`: the OAuth scopes to mint the token for.'
     ToolMcpConfig:
       type: object
       nullable: true

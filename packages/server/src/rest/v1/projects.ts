@@ -17,7 +17,12 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination, requireAdmin, requireAuth } from './helpers';
+import {
+  parsePagination,
+  requireAdmin,
+  requireAuth,
+  requireProjectAdmin,
+} from './helpers';
 
 const projectsRouter = new Router<Context>();
 
@@ -146,7 +151,11 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
 };
 
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
-  requireAdmin(ctx, 'projects:UpdateProject');
+  await requireProjectAdmin({
+    ctx,
+    projectPublicId: ctx.params.project_id,
+    action: 'projects:UpdateProject',
+  });
   const fields = parseProjectPatchFields(
     ctx.request.body as Record<string, unknown>
   );
@@ -207,7 +216,11 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
 });
 
 projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
-  requireAdmin(ctx, 'projects:DeleteProject');
+  await requireProjectAdmin({
+    ctx,
+    projectPublicId: ctx.params.project_id,
+    action: 'projects:DeleteProject',
+  });
   const force = ctx.query.force === 'true';
 
   await deleteProject({ id: ctx.params.project_id, force });

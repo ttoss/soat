@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { readCappedBody } from './cappedBody';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { buildEventEnvelope, envelopeEventId } from './eventEnvelope';
@@ -261,10 +262,15 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
       signal: controller.signal,
     });
 
-    const responseBody = await response
-      .text()
-      .then((text) => {
-        return text.slice(0, MAX_RESPONSE_BODY_CHARS);
+    // A UTF-8 character is at most 4 bytes, so this many bytes always decode
+    // to at least `MAX_RESPONSE_BODY_CHARS` characters when the body has them.
+    const responseBody = await readCappedBody({
+      response,
+      maxBytes: 4 * MAX_RESPONSE_BODY_CHARS,
+      onOverflow: 'cut',
+    })
+      .then((body) => {
+        return new TextDecoder().decode(body).slice(0, MAX_RESPONSE_BODY_CHARS);
       })
       .catch(() => {
         return null;

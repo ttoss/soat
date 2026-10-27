@@ -453,6 +453,40 @@ describe('Webhook delivery', () => {
       expect(delivery.response_body).toHaveLength(1024);
     });
 
+    test('an oversized answer is read only as far as the stored prefix', async () => {
+      const url = 'https://example.com/delivery-oversized';
+      let pulled = 0;
+      const oversized = () => {
+        return new ReadableStream<Uint8Array>({
+          pull: (controller) => {
+            if (pulled >= 8 * 1024 * 1024) return controller.close();
+            pulled += 65_536;
+            controller.enqueue(new Uint8Array(65_536).fill(120));
+          },
+        });
+      };
+      fetchMock.mockImplementation((calledUrl: string) => {
+        return Promise.resolve(
+          calledUrl === url
+            ? new Response(oversized(), { status: 502 })
+            : new Response('{}', { status: 200 })
+        );
+      });
+      const webhook = await createWebhook({ url, events: ['files.created'] });
+
+      const fileId = await createFile();
+      const delivery = await waitForDelivery({
+        webhookId: webhook.id,
+        fileId,
+        done: (d) => {
+          return d.attempts === 1;
+        },
+      });
+
+      expect(delivery.response_body).toBe('x'.repeat(1024));
+      expect(pulled).toBeLessThan(1024 * 1024);
+    });
+
     test('an answer whose body cannot be read is recorded without one', async () => {
       const url = 'https://example.com/delivery-unreadable';
       fetchMock.mockImplementation((calledUrl: string) => {

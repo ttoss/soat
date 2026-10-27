@@ -141,8 +141,13 @@ Security invariants:
   action (`orchestrations:StartRun`, `agents:CreateAgentGeneration`, or
   `tools:CallTool`); the check re-runs at every fire, and
   [`PATCH /api/v1/triggers/{trigger_id}`](/docs/api/triggers/update-trigger)
-  re-asks it whenever `target_type` or `target_id` changes. An updater who
-  could not start the new target gets `403` and the trigger keeps its target.
+  re-asks it whenever a request changes `target_type` or `target_id` or sends
+  `action`, `input`, `tool_context` or `policy_id`. An updater who could not
+  start the effective target gets `403` and the trigger is unchanged.
+  [`POST /api/v1/triggers/{trigger_id}/fire`](/docs/api/triggers/fire-trigger)
+  asks it of the firer whenever the body carries a non-empty `input` or
+  `tool_context`; a firer who sends neither fires the stored firing with
+  `triggers:FireTrigger` alone.
 - **No recursion.** Trigger-scoped credentials cannot call the fire endpoint
   (`403`).
 - **Fail closed.** A deleted creator keeps the trigger but firing fails with
@@ -164,19 +169,27 @@ POST /hooks/triggers/{trigger_id}
 ```
 
 No bearer token, no snake→camel transform of the payload, not in the generated
-SDK/CLI/MCP surface. The caller signs the **raw request body** (the header is prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)):
+SDK/CLI/MCP surface. The caller signs a Unix timestamp and the **raw request body** (the header is prefixed by [`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix)):
 
 ```
-X-Soat-Signature: sha256=<hex(HMAC-SHA256(secret, body))>
+X-Soat-Signature: t=<unix seconds>,v1=<hex(HMAC-SHA256(secret, "<t>.<body>"))>
 ```
+
+- `t` more than 300 seconds from the server clock, either way, is `401`.
+- Each signed delivery fires once: the same `t=,v1=` again is
+  `409 HOOK_DELIVERY_REPLAYED`. A retry is signed at a new `t`. The firing's
+  `idempotency_key` is `<v1>:<trigger_id>`.
+- `sha256=<hex(HMAC-SHA256(secret, body))>` is also accepted. It has no
+  timestamp, so it has no replay protection.
 
 Responses:
 
 | Condition                                   | Status | Body                                    |
 | ------------------------------------------- | ------ | --------------------------------------- |
 | Unknown or non-webhook trigger              | `404`  | Existence is not leaked                 |
-| Missing or bad signature                    | `401`  |                                         |
+| Missing or bad signature, or `t` too far    | `401`  |                                         |
 | Inactive trigger (after a valid signature)  | `409`  |                                         |
+| Signed delivery already accepted            | `409`  | `HOOK_DELIVERY_REPLAYED`                |
 | Invalid JSON body                           | `400`  |                                         |
 | Orchestration `input_schema` violation      | `400`  | With details                            |
 | Accepted                                    | `202`  | `{ firing_id, trigger_id, status }`     |
@@ -545,7 +558,8 @@ curl -X POST https://api.example.com/api/v1/triggers/trg_ABC/fire \
 
 ```bash
 BODY='{"event":"push","ref":"main"}'
-SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')"
+T=$(date +%s)
+SIG="t=$T,v1=$(printf '%s' "$T.$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')"
 
 curl -X POST https://api.example.com/hooks/triggers/trg_ABC \
   -H "Content-Type: application/json" \

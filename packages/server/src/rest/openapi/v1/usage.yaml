@@ -49,6 +49,7 @@ paths:
         the filter, so a mistyped narrowing can never widen the list past what
         was asked for.
       operationId: listUsageEvents
+      x-iam-action: usage:ListEvents
       parameters:
         - name: agent_id
           in: query
@@ -254,6 +255,7 @@ paths:
         and never the bucketing: omit `group_by` and `totals` is unchanged
         while `groups` is empty.
       operationId: getUsageAggregate
+      x-iam-action: usage:GetAggregate
       parameters:
         - name: project_id
           in: query
@@ -509,6 +511,7 @@ paths:
         over a calendar-month or rolling-24h window crosses the configured
         value.
       operationId: listUsageThresholds
+      x-iam-action: usage:ListThresholds
       parameters:
         - name: project_id
           in: query
@@ -558,6 +561,7 @@ paths:
         apart from deletion — to change one, delete and recreate it (which
         resets its fire state).
       operationId: createUsageThreshold
+      x-iam-action: usage:ManageThresholds
       requestBody:
         required: true
         content:
@@ -605,6 +609,7 @@ paths:
         Deletes a usage threshold, resetting its fire state. Recreating a
         threshold starts its once-per-window / hysteresis state fresh.
       operationId: deleteUsageThreshold
+      x-iam-action: usage:ManageThresholds
       x-soat-resource:
         kind: usage
         from: threshold_id
@@ -656,6 +661,7 @@ paths:
         plus totals). Exactly one of generation_id or orchestration_run_id must
         be supplied.
       operationId: getUsageReceipt
+      x-iam-action: usage:GetReceipt
       parameters:
         - name: generation_id
           in: query
@@ -714,6 +720,7 @@ paths:
         prices used to compute usage cost at write time. Readable by any
         authenticated user.
       operationId: getPriceBook
+      x-iam-action: usage:GetPriceBook
       responses:
         '200':
           description: The current price book
@@ -745,6 +752,7 @@ paths:
         rows. A first price, with no row in this scope or any broader one, may
         be dated now or earlier.
       operationId: upsertPriceBook
+      x-iam-action: usage:ManagePriceBook
       requestBody:
         required: true
         content:

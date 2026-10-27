@@ -1,4 +1,5 @@
 import {
+  boundKeyPolicyIds,
   createApiKey,
   deleteApiKey,
   getApiKey,
@@ -7,6 +8,27 @@ import {
 import { lookupPolicyInternalIds } from '../formationLookups';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
+
+/** `undefined` when the template omits `policy_ids`. */
+const readPolicyPublicIds = (
+  properties: Record<string, unknown>
+): string[] | undefined => {
+  const raw = properties.policy_ids;
+  if (raw === undefined) return undefined;
+  return Array.isArray(raw)
+    ? raw.filter((id): id is string => {
+        return typeof id === 'string';
+      })
+    : [];
+};
+
+const lookupPolicyIds = async (
+  publicIds: string[] | undefined
+): Promise<number[] | undefined> => {
+  return publicIds === undefined
+    ? undefined
+    : lookupPolicyInternalIds(publicIds);
+};
 
 export const apiKeysFormationModule = defineFormationModule({
   resourceType: 'api_key',
@@ -23,14 +45,16 @@ export const apiKeysFormationModule = defineFormationModule({
   // any caller who can deploy a formation escalate to the owner's access.
   // Owning it themselves, they gain nothing they did not already have.
   create: async ({ properties, projectId, actor }) => {
-    const rawPolicyIds = properties.policy_ids;
-    const policyPublicIds = Array.isArray(rawPolicyIds)
-      ? (rawPolicyIds as string[])
-      : [];
-    const policyIds =
-      policyPublicIds.length > 0
-        ? await lookupPolicyInternalIds(policyPublicIds)
-        : undefined;
+    const policyPublicIds = readPolicyPublicIds(properties);
+    const policyIds = await boundKeyPolicyIds({
+      boundaryPolicyIds: actor.keyPolicyBoundary,
+      requestedPolicyPublicIds: policyPublicIds,
+      requestedPolicyIds: await lookupPolicyIds(policyPublicIds),
+      inheritWhenOmitted: true,
+      onRefused: () => {
+        actor.recordRefusal('api-keys:CreateApiKey');
+      },
+    });
 
     return createApiKey({
       userId: actor.userId,
@@ -40,15 +64,17 @@ export const apiKeysFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
-    let policyIds: number[] | undefined;
-    const rawPolicyIds = properties.policy_ids;
-    if (rawPolicyIds !== undefined) {
-      const publicIds = Array.isArray(rawPolicyIds)
-        ? (rawPolicyIds as string[])
-        : [];
-      policyIds = await lookupPolicyInternalIds(publicIds);
-    }
+  update: async ({ properties, physicalResourceId, actor }) => {
+    const policyPublicIds = readPolicyPublicIds(properties);
+    const policyIds = await boundKeyPolicyIds({
+      boundaryPolicyIds: actor.keyPolicyBoundary,
+      requestedPolicyPublicIds: policyPublicIds,
+      requestedPolicyIds: await lookupPolicyIds(policyPublicIds),
+      inheritWhenOmitted: false,
+      onRefused: () => {
+        actor.recordRefusal('api-keys:UpdateApiKey');
+      },
+    });
 
     await updateApiKey({
       id: physicalResourceId,

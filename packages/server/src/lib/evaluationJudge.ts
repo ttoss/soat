@@ -18,6 +18,7 @@ import { DomainError } from '../errors';
 import { meterCompletion, routedMaxRetries } from './modelRoutes';
 import { isPlainObject } from './plainObject';
 import { resolveProjectScopedModel } from './projectScopedModel';
+import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 
 const log = createDebug('soat:evaluations');
 
@@ -174,6 +175,7 @@ export const runJudgeCompletion = async (args: {
     aiProviderId,
     model: pinnedModel,
   });
+  await assertProjectSpendWithinQuota({ projectId: args.projectId });
 
   const prompt = renderJudgePrompt({
     prompt: String(args.scorer.prompt),

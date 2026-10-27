@@ -44,6 +44,8 @@ Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in resp
 | `admin` | Full access to all resources and operations. Bypasses policy evaluation. |
 | `user`  | Access determined by the [policies](./policies.md) attached to the account. |
 
+Managing users, policies and the price book, and creating projects, take an admin credential with no boundary of its own: a login token, or an admin's key with no `project_id` and no `policy_ids` — see [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
+
 ### Bootstrap
 
 The [`POST /api/v1/users/bootstrap`](/docs/api/users/bootstrap-user) creates the first admin user, unauthenticated, only while the user table is empty (`409 Conflict` otherwise). Or bootstrap on startup with:

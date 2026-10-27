@@ -234,7 +234,7 @@ Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choic
 
 **Every turn of a chain uses the agent's `tool_choice`**, continuations included; a turn ending on the step budget reports `stop_reason: "max_steps"`.
 
-**A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_store_id`), even after a server restart.
+**A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_store_id`), even after a server restart. Its tools call with the credential of the caller who submits the outputs, not the one who started the turn.
 
 ### Step Rules
 
@@ -625,7 +625,7 @@ Listing agents stays project-scoped: [`GET /api/v1/agents`](/docs/api/agents/lis
 
 ### SOAT Action Permissions
 
-A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply.
+A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply. An [approved](./approvals.md#continuation-identity) `builtin` action is held to the boundary too.
 
 A `boundary_policy` that is not a valid policy document allows nothing — it fails closed, so a malformed boundary denies every action rather than widening one. Its `condition` keys are held to the same rule as a stored policy's ([IAM — Condition Keys](./iam.md#condition-keys)): a key the platform does not supply invalidates the document.
 

@@ -223,4 +223,134 @@ describe('API key policy boundary', () => {
       expect(res.body.policy_ids).toEqual([readPolicyId]);
     });
   });
+
+  describe('an api_key formation resource', () => {
+    let deployPolicyId: string;
+
+    const deployKeyStack = async (args: {
+      token: string;
+      name: string;
+      policyIds?: string[];
+    }) => {
+      return authenticatedTestClient(args.token)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: args.name,
+          template: {
+            resources: {
+              Key: {
+                type: 'api_key',
+                properties: {
+                  name: args.name,
+                  ...(args.policyIds ? { policy_ids: args.policyIds } : {}),
+                },
+              },
+            },
+          },
+        });
+    };
+
+    const keyNamed = async (name: string) => {
+      const keys = await authenticatedTestClient(userToken).get(
+        '/api/v1/api-keys?limit=100'
+      );
+      return (keys.body.data as { name: string; policy_ids: string[] }[]).find(
+        (key) => {
+          return key.name === name;
+        }
+      );
+    };
+
+    beforeAll(async () => {
+      const deployPolicy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['formations:*', 'api-keys:*'] },
+            ],
+          },
+        });
+      deployPolicyId = deployPolicy.body.id;
+    });
+
+    test('omitting policy_ids mints a key carrying the deployer boundary', async () => {
+      const narrowed = await mintKey({
+        token: userToken,
+        policyIds: [deployPolicyId],
+      });
+
+      const res = await deployKeyStack({
+        token: narrowed.key,
+        name: 'fbound-inherit',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect((await keyNamed('fbound-inherit'))?.policy_ids).toEqual([
+        deployPolicyId,
+      ]);
+    });
+
+    test('a policy outside the deployer boundary is refused', async () => {
+      const narrowed = await mintKey({
+        token: userToken,
+        policyIds: [deployPolicyId],
+      });
+
+      const res = await deployKeyStack({
+        token: narrowed.key,
+        name: 'fbound-wider',
+        policyIds: [otherPolicyId],
+      });
+
+      expect(res.body.status).not.toBe('active');
+      expect(JSON.stringify(res.body)).toContain('API_KEY_POLICY_BOUNDARY');
+      expect(await keyNamed('fbound-wider')).toBeUndefined();
+    });
+
+    test('an update clearing policy_ids is refused', async () => {
+      const narrowed = await mintKey({
+        token: userToken,
+        policyIds: [deployPolicyId],
+      });
+      const created = await deployKeyStack({
+        token: narrowed.key,
+        name: 'fbound-clear',
+        policyIds: [deployPolicyId],
+      });
+      expect(created.body.status).toBe('active');
+
+      const res = await authenticatedTestClient(narrowed.key)
+        .put(`/api/v1/formations/${created.body.id}`)
+        .send({
+          template: {
+            resources: {
+              Key: {
+                type: 'api_key',
+                properties: { name: 'fbound-clear', policy_ids: [] },
+              },
+            },
+          },
+        });
+
+      expect(res.body.status).not.toBe('active');
+      expect(JSON.stringify(res.body)).toContain('API_KEY_POLICY_BOUNDARY');
+      expect((await keyNamed('fbound-clear'))?.policy_ids).toEqual([
+        deployPolicyId,
+      ]);
+    });
+
+    test('a deployer with no boundary is unaffected', async () => {
+      const res = await deployKeyStack({
+        token: userToken,
+        name: 'fbound-plain',
+        policyIds: [otherPolicyId],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+    });
+  });
 });

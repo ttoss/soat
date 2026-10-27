@@ -48,7 +48,7 @@ export const createFiringRecord = async (args: {
   projectId: number;
   source: string;
   input: Record<string, unknown> | null;
-  /** Set only by the event path; see `TriggerFiring.idempotencyKey`. */
+  /** See `TriggerFiring.idempotencyKey`. */
   idempotencyKey?: string | null;
   /** Set only by the event path; see `TriggerFiring.causationChain`. */
   causationChain?: readonly string[] | null;

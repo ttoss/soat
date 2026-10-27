@@ -26,6 +26,7 @@ paths:
       summary: List quotas
       description: Returns the quotas defined in a project
       operationId: listQuotas
+      x-iam-action: quotas:ListQuotas
       parameters:
         - name: project_id
           in: query
@@ -94,6 +95,7 @@ paths:
         create — with `409 QUOTA_STORAGE_EXCEEDED` and no `Retry-After`, since
         no window reset clears a footprint.
       operationId: createQuota
+      x-iam-action: quotas:CreateQuota
       requestBody:
         required: true
         content:
@@ -244,6 +246,7 @@ paths:
       summary: Get a quota
       description: Returns a specific quota, including current window usage
       operationId: getQuota
+      x-iam-action: quotas:GetQuota
       x-soat-resource:
         kind: quota
         from: quota_id
@@ -292,6 +295,7 @@ paths:
       summary: Update a quota
       description: Updates a quota's limit and/or mode. Other fields are immutable.
       operationId: updateQuota
+      x-iam-action: quotas:UpdateQuota
       x-soat-resource:
         kind: quota
         from: quota_id
@@ -370,6 +374,7 @@ paths:
       summary: Delete a quota
       description: Deletes a quota and drops its window counters
       operationId: deleteQuota
+      x-iam-action: quotas:DeleteQuota
       x-soat-resource:
         kind: quota
         from: quota_id

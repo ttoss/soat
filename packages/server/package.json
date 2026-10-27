@@ -66,6 +66,7 @@
     "json-logic-engine": "^5.0.7",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.1",
+    "undici": "^7.29.1",
     "unpdf": "^1.8.1"
   },
   "devDependencies": {

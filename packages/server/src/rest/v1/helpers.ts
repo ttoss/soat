@@ -29,8 +29,7 @@ import { recordAuthorizationDecision } from 'src/middleware/audit';
  * Throws an actionable `API_KEY_PROJECT_SCOPE` error when a project-scoped
  * credential explicitly targets a different project than the one it is bound
  * to. This binding is enforced independently of the owner's role: an
- * admin-owned key can create projects freely but is still confined to its own
- * project for resource operations.
+ * admin-owned key is confined to its own project like any other.
  *
  * The denial is recorded before it is thrown. This check short-circuits ahead
  * of `resolveProjectIds`, so the audit wrapper never observes it — without the
@@ -196,10 +195,25 @@ export const requireAuth: (
 };
 
 /**
- * Gates a route on the caller's role being `admin` — the hard, non-IAM gate
- * used by global (non-project-scoped) admin operations (users, policies,
- * projects, the price book) where no policy can grant access; only the
- * `admin` role itself can. Throws `UNAUTHORIZED`/`FORBIDDEN`.
+ * An admin acting through a credential that carries no boundary of its own: a
+ * login token, or a key bound to no project and narrowed by no policy. Every
+ * project-scoped JWT (OAuth, trigger, run token) carries `prj`, which sets
+ * `oauthProjectPublicId`.
+ */
+export const isUnrestrictedAdmin = (authUser: AuthUser): boolean => {
+  if (authUser.role !== 'admin') return false;
+  if (authUser.apiKeyPublicId !== undefined) {
+    return authUser.isControlPlaneKey === true;
+  }
+  return authUser.oauthProjectPublicId === undefined;
+};
+
+/**
+ * Gates a global (non-project-scoped) admin operation — users, policies,
+ * project creation, the price book — on {@link isUnrestrictedAdmin}: no policy
+ * can grant it, and a credential narrowed by project, policies or consent
+ * cannot reach it even when its user is an admin. Throws
+ * `UNAUTHORIZED`/`FORBIDDEN`.
  *
  * Records the decision for the audit log via `recordAuthorizationDecision` —
  * this comparison bypasses `isAllowed`/`resolveProjectIds` entirely, so
@@ -209,7 +223,40 @@ export const requireAuth: (
 export const requireAdmin = (ctx: Context, action: string): void => {
   requireAuth(ctx);
 
-  const allowed = ctx.authUser.role === 'admin';
+  const allowed = isUnrestrictedAdmin(ctx.authUser);
+  recordAuthorizationDecision(ctx, { action, allowed });
+
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+};
+
+/**
+ * Gates an admin operation on one project: the caller's role is `admin`, its
+ * credential is bound to this project or to none, and its own boundary
+ * (key policies, OAuth consent) allows the action there. Throws
+ * `UNAUTHORIZED`/`API_KEY_PROJECT_SCOPE`/`FORBIDDEN`.
+ */
+export const requireProjectAdmin = async (args: {
+  ctx: Context;
+  projectPublicId: string;
+  action: string;
+}): Promise<void> => {
+  const { ctx, projectPublicId, action } = args;
+  requireAuth(ctx);
+  assertCredentialProjectScope({
+    ctx,
+    requestedProjectPublicId: projectPublicId,
+    action,
+  });
+
+  const allowed =
+    ctx.authUser.role === 'admin' &&
+    (await ctx.authUser.isAllowed({
+      projectPublicId,
+      action,
+      resource: `srn:${projectPublicId}:*:*`,
+    }));
   recordAuthorizationDecision(ctx, { action, allowed });
 
   if (!allowed) {

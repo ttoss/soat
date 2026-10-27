@@ -677,6 +677,7 @@ describe('Agent Generation Routes', () => {
           promptCaching: null,
         },
         resolvedTools: {},
+        toolsAuthHeader: `Bearer ${userToken}`,
       };
       await createGenerationRecord({
         publicId: 'gen_stub_pending',
@@ -804,6 +805,13 @@ describe('Agent Generation Routes', () => {
         where: { publicId: otherProjectRes.body.id },
       });
 
+      // A credential confined to the stub project, which is what makes the
+      // caller's project set a real boundary rather than "every project this
+      // user's policy reaches".
+      const scopedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Foreign Probe Key', project_id: projectPublicId });
+
       pendingGenerations.set('gen_foreign_pending', {
         agentId,
         projectId: otherProject!.id as number,
@@ -834,14 +842,8 @@ describe('Agent Generation Routes', () => {
           promptCaching: null,
         },
         resolvedTools: {},
+        toolsAuthHeader: `Bearer ${scopedKeyRes.body.key}`,
       });
-
-      // A credential confined to the stub project, which is what makes the
-      // caller's project set a real boundary rather than "every project this
-      // user's policy reaches".
-      const scopedKeyRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/api-keys')
-        .send({ name: 'Foreign Probe Key', project_id: projectPublicId });
 
       const response = await authenticatedTestClient(scopedKeyRes.body.key)
         .post(
@@ -1206,6 +1208,7 @@ describe('Agent Generation Routes', () => {
               }),
             }),
           },
+          toolsAuthHeader: `Bearer ${userToken}`,
         };
         await createGenerationRecord({
           publicId: 'gen_text_encoded_continuation',

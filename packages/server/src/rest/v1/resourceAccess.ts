@@ -37,7 +37,7 @@
  */
 import type { Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
-import { buildSrn, extractProjectIdsFromPolicies } from 'src/lib/iam';
+import { buildSrn, extractProjectIdsFromPolicySets } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { findSharedUse } from 'src/lib/resourceReferences';
 import { findGranteeScope } from 'src/lib/shares';
@@ -74,9 +74,9 @@ export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
  * project that tool is in. Reading that as a tenant boundary would hide a
  * sibling the caller *can* see — the very refusal that must be stated plainly.
  *
- * `extractProjectIdsFromPolicies` asks the first question directly, over the
- * effective documents for this request, and answers `undefined` for a statement
- * that names no project at all — an unrestricted grant, or an admin.
+ * `extractProjectIdsFromPolicySets` asks the first question directly, over the
+ * effective policy sets for this request, and answers `undefined` when no set
+ * names a project at all — an unrestricted grant, or an admin.
  *
  * A caller whose policies name **no** project is beyond every boundary rather
  * than inside none: nothing they hold concerns this project, so the least
@@ -95,7 +95,7 @@ const beyondReach = async (args: {
   ctx: AuthenticatedContext;
   projectPublicId: string;
 }): Promise<boolean> => {
-  const named = extractProjectIdsFromPolicies(
+  const named = extractProjectIdsFromPolicySets(
     await args.ctx.authUser.getPolicies(args.projectPublicId)
   );
 

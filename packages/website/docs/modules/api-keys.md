@@ -79,9 +79,9 @@ JWT auth is unchanged: a write omitting `project_id` returns `400`; a project is
 
 ### Project scope is a hard boundary, even for admins
 
-The `project_id` binding is enforced **before**, and independently of, the owner's role. An `admin`-owned key can create and delete projects (role-gated, not project-tied), but for resource operations (secrets, formations, files, webhooks, etc.) it stays confined to its project.
+The `project_id` binding is enforced **before**, and independently of, the owner's role. An `admin`-owned scoped key stays confined to its project: it may update or delete that project, but a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource in another project addressed by id is `404`, as an id that names nothing is.
 
-So one scoped key cannot both create a project **and** provision inside it: create the project, then mint a key scoped to it (or use an unscoped key). A resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`; a resource in another project addressed by id is `404`, as an id that names nothing is.
+The instance-wide admin operations — [users](./users.md), [policies](./policies.md), creating a project, the [price book](./usage.md) and `policy` resources in a [formation](./formations.md) — take an admin credential with no boundary of its own: a login token, or an admin's key with no `project_id` and no `policy_ids`. An admin's scoped key, policy-narrowed key or OAuth token gets `403`.
 
 ### The boundary covers key management itself
 
@@ -121,7 +121,7 @@ Key management is self-service, so the boundary also guards the key being writte
 | Either with `policy_ids: []`, or naming `pol_C` | `403 API_KEY_POLICY_BOUNDARY` |
 | [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) with no `policy_ids` | Leaves the stored list unchanged |
 
-`meta` carries `boundary_policy_ids` and `requested_policy_ids`. Otherwise a narrowed key could mint a policy-less key for the same owner and act with the owner's full permissions.
+`meta` carries `boundary_policy_ids` and `requested_policy_ids`. Otherwise a narrowed key could mint a policy-less key for the same owner and act with the owner's full permissions. An `api_key` [formation](./formations.md) resource follows the same table.
 
 ### Revoking a Key
 

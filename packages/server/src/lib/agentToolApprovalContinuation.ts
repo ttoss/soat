@@ -52,6 +52,29 @@ const resolveContinuationAuthHeader = async (args: {
   });
 };
 
+/** Refuses every action: what an agent that no longer resolves is bounded by. */
+const DENY_ALL_BOUNDARY = {
+  statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
+};
+
+/**
+ * The proposing agent's `boundary_policy` as it stands now, the same config
+ * the agent's own calls are held to.
+ */
+const proposingAgentBoundary = async (args: {
+  item: MappedApproval;
+  projectInternalId: number;
+}): Promise<unknown> => {
+  const agent = args.item.agent_id
+    ? await agentReferences.find({
+        id: args.item.agent_id,
+        projectId: args.projectInternalId,
+        reach: 'project',
+      })
+    : null;
+  return agent ? agent.boundaryPolicy : DENY_ALL_BOUNDARY;
+};
+
 /**
  * Executes the frozen (or edited) proposed action at resolution time and returns
  * its output as the decision `result`. Runs through the normal persisted-tool
@@ -100,6 +123,15 @@ const executeApprovedAction = async (args: {
     authHeader: args.authHeader,
     toolContext: args.toolContext,
     attribution: { generationId: args.item.generation_id },
+    signedOff: {
+      frozenArguments: isPlainObject(proposed.arguments)
+        ? proposed.arguments
+        : {},
+      boundaryPolicy: await proposingAgentBoundary({
+        item: args.item,
+        projectInternalId: args.projectInternalId,
+      }),
+    },
   });
 
   return isPlainObject(rawResult) ? rawResult : { output: rawResult };

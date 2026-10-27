@@ -17,6 +17,7 @@ describe('MCP protocol fidelity', () => {
   const MCP_URL = 'http://localhost:19999/mcp';
   const TRANSPORT = {
     url: MCP_URL,
+    urlSecrets: new Map<string, string>(),
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',

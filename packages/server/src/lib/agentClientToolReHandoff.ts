@@ -66,6 +66,7 @@ const seedReHandoffPending = (args: {
     typedAgent: args.ctx.typedAgent,
     agentId: args.agentId,
     resolvedTools: args.ctx.resolvedTools,
+    toolsAuthHeader: args.ctx.toolsAuthHeader,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: null,
   });

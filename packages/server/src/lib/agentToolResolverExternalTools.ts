@@ -123,6 +123,43 @@ export const executeSoatTool = async (args: {
   }
 };
 
+type IsSoatActionAllowedByBoundary = (args: {
+  boundaryPolicy: unknown;
+  iamAction: string;
+  resource?: string;
+  context?: Record<string, string>;
+}) => boolean;
+
+/**
+ * The refusal an agent's `boundary_policy` gives one builtin call, or `null`
+ * when it admits it. Every path that runs a builtin action for an agent asks
+ * here, with the arguments the call will carry.
+ */
+export const soatActionBoundaryRefusal = async (args: {
+  def: (typeof soatTools)[number];
+  rawArgs: Record<string, unknown>;
+  boundaryPolicy: unknown;
+  isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
+}): Promise<{ error: string } | null> => {
+  const iamAction = args.def.iamAction ?? args.def.name;
+  // The SRN and tags of whatever this call names, so a boundary scoped to one
+  // resource means what it says. `null` leaves the resource-less `*`, which
+  // matches no scoped statement, so the unresolved case refuses.
+  const scope = await resolveSoatActionBoundaryScope({
+    resourceRef: args.def.resource,
+    toolArgs: args.rawArgs,
+    boundaryPolicy: args.boundaryPolicy,
+  });
+  const allowed = args.isSoatActionAllowedByBoundary({
+    boundaryPolicy: args.boundaryPolicy,
+    iamAction,
+    ...(scope ?? {}),
+  });
+  return allowed
+    ? null
+    : { error: `Forbidden: boundary policy denies ${iamAction}` };
+};
+
 /**
  * The generation's project, pinned onto every builtin action that names one.
  *
@@ -160,12 +197,7 @@ const buildSoatActionTool = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByBoundary: (args: {
-    boundaryPolicy: unknown;
-    iamAction: string;
-    resource?: string;
-    context?: Record<string, string>;
-  }) => boolean;
+  isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
   const pinned = pinnedProjectParameters(args.projectPublicId);
@@ -177,7 +209,6 @@ const buildSoatActionTool = (args: {
     description: args.toolDescription ?? args.def.description,
     inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown) => {
-      const iamAction = args.def.iamAction ?? args.def.name;
       // Merged before the boundary check, not after: a preset or the pinned
       // project can be what names the target, and a check run on the model's
       // arguments alone would refuse a call whose resource the operator
@@ -194,25 +225,13 @@ const buildSoatActionTool = (args: {
         },
         input: toolArgs,
       });
-      // The SRN and tags of whatever this call names, so a boundary scoped to
-      // one resource means what it says. `null` when the operation names no
-      // resource (a listing, a create) or the id resolves to nothing, which
-      // leaves the resource-less `*` — and `*` matches no scoped statement, so
-      // the unresolved case refuses rather than admits.
-      const scope = await resolveSoatActionBoundaryScope({
-        resourceRef: args.def.resource,
-        toolArgs: rawArgs,
+      const refusal = await soatActionBoundaryRefusal({
+        def: args.def,
+        rawArgs,
         boundaryPolicy: args.boundaryPolicy,
+        isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
       });
-      if (
-        !args.isSoatActionAllowedByBoundary({
-          boundaryPolicy: args.boundaryPolicy,
-          iamAction,
-          ...(scope ?? {}),
-        })
-      ) {
-        return { error: `Forbidden: boundary policy denies ${iamAction}` };
-      }
+      if (refusal) return refusal;
       return executeSoatTool({
         toolName: args.toolName,
         def: args.def,
@@ -254,12 +273,7 @@ export const resolveSoatTools = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByBoundary: (args: {
-    boundaryPolicy: unknown;
-    iamAction: string;
-    resource?: string;
-    context?: Record<string, string>;
-  }) => boolean;
+  isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
   logToolCallingError: LogToolCallingError;
 }): Record<string, Tool> => {
   const result: Record<string, Tool> = {};

@@ -29,6 +29,7 @@ paths:
       summary: List playbooks
       description: Returns the playbooks defined in a project, newest first.
       operationId: listPlaybooks
+      x-iam-action: playbooks:ListPlaybooks
       parameters:
         - name: project_id
           in: query
@@ -91,6 +92,7 @@ paths:
         PLAYBOOK_AUTHOR_UNAVAILABLE`: those carry their boundary in the token,
         so no run can act as them.
       operationId: createPlaybook
+      x-iam-action: playbooks:CreatePlaybook
       requestBody:
         required: true
         content:
@@ -153,6 +155,7 @@ paths:
         `playbooks:ListPlaybooks` on the project. Without it, only the
         definition's own graph is checked.
       operationId: validatePlaybook
+      x-iam-action: playbooks:ValidatePlaybook
       requestBody:
         required: true
         content:
@@ -206,6 +209,7 @@ paths:
       summary: Get a playbook
       description: Returns a playbook with its current definition and version.
       operationId: getPlaybook
+      x-iam-action: playbooks:GetPlaybook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -254,6 +258,7 @@ paths:
         `EXECUTOR_NOT_FOUND` problem for one that does not exist, `409
         PLAYBOOK_AUTHOR_UNAVAILABLE` for a trigger or OAuth token.
       operationId: updatePlaybook
+      x-iam-action: playbooks:UpdatePlaybook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -315,6 +320,7 @@ paths:
         current definition declares as an upstream with
         `409 PLAYBOOK_HAS_DEPENDENTS`.
       operationId: deletePlaybook
+      x-iam-action: playbooks:DeletePlaybook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -363,6 +369,7 @@ paths:
         Returns the playbook's archived definitions, newest first. A version is
         written on create and on every write that changes `definition`.
       operationId: listPlaybookVersions
+      x-iam-action: playbooks:ListPlaybookVersions
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -411,6 +418,7 @@ paths:
         Returns the definition a version held: what a case pinned to it is
         evaluated against.
       operationId: getPlaybookVersion
+      x-iam-action: playbooks:GetPlaybookVersion
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -458,6 +466,7 @@ paths:
         Restoring the definition the playbook already holds is a no-op. The
         caller authors the new version, checked as on create.
       operationId: restorePlaybookVersion
+      x-iam-action: playbooks:RestorePlaybookVersion
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -524,6 +533,7 @@ paths:
         `400 PLAYBOOK_CASE_UPSTREAM_INVALID`. The binding is fixed for the
         life of the case.
       operationId: createPlaybookCase
+      x-iam-action: playbooks:CreatePlaybookCase
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -582,6 +592,7 @@ paths:
         Returns a project's cases, newest first, without node states; read one
         case for those.
       operationId: listPlaybookCases
+      x-iam-action: playbooks:ListPlaybookCases
       parameters:
         - name: project_id
           in: query
@@ -668,6 +679,7 @@ paths:
         Returns a case with every node's state, computed from its entries on
         each read and never stored.
       operationId: getPlaybookCase
+      x-iam-action: playbooks:GetPlaybookCase
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -710,6 +722,7 @@ paths:
         bound to as their upstream is refused with
         `409 PLAYBOOK_CASE_HAS_DEPENDENTS`.
       operationId: deletePlaybookCase
+      x-iam-action: playbooks:DeletePlaybookCase
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -772,6 +785,7 @@ paths:
         generation made, or by the work of a case reading it as an upstream, at
         any depth, is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
+      x-iam-action: playbooks:WritePlaybookCaseInputs
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -842,6 +856,7 @@ paths:
         to, each with that case's `case_id`, so one read lists everything to
         ask and each answer is written to its own case.
       operationId: getPlaybookCaseMissing
+      x-iam-action: playbooks:GetPlaybookCaseMissing
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -894,6 +909,7 @@ paths:
         Returns every value written to the case, newest first. Entries are never
         rewritten, so this is the case's full history.
       operationId: listPlaybookCaseEntries
+      x-iam-action: playbooks:ListPlaybookCaseEntries
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -980,6 +996,7 @@ paths:
         waiting on a person or a timer, settles the node when it closes or
         ends.
       operationId: runPlaybookCaseNode
+      x-iam-action: playbooks:RunPlaybookCaseNode
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1044,6 +1061,7 @@ paths:
       summary: List a case's executions
       description: Returns every run of the case's nodes, newest first.
       operationId: listPlaybookCaseExecutions
+      x-iam-action: playbooks:ListPlaybookCaseExecutions
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1097,6 +1115,7 @@ paths:
       summary: Get an execution
       description: Returns one run of a case's node.
       operationId: getPlaybookCaseExecution
+      x-iam-action: playbooks:GetPlaybookCaseExecution
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1157,6 +1176,7 @@ paths:
         background; with `wait: true` it answers once each has its file or its
         error.
       operationId: exportPlaybookCaseNode
+      x-iam-action: playbooks:ExportPlaybookCaseNode
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1233,6 +1253,7 @@ paths:
       summary: List a case's exports
       description: Returns every file rendered from the case's final nodes, newest first.
       operationId: listPlaybookCaseExports
+      x-iam-action: playbooks:ListPlaybookCaseExports
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1292,6 +1313,7 @@ paths:
       summary: Get an export
       description: Returns one file rendered from a case's final node.
       operationId: getPlaybookCaseExport
+      x-iam-action: playbooks:GetPlaybookCaseExport
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1356,6 +1378,7 @@ paths:
         case's own work, or that of a case reading it as an upstream, runs as
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: upgradePlaybookCase
+      x-iam-action: playbooks:UpgradePlaybookCase
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1423,6 +1446,7 @@ paths:
       summary: List a case's upgrades
       description: Returns every version change of the case, newest first.
       operationId: listPlaybookCaseUpgrades
+      x-iam-action: playbooks:ListPlaybookCaseUpgrades
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1474,6 +1498,7 @@ paths:
         settle. Input writes are still accepted. Pausing a paused case keeps the
         first pause.
       operationId: pausePlaybookCase
+      x-iam-action: playbooks:PausePlaybookCase
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1523,6 +1548,7 @@ paths:
         one in a paused project is `409 PROJECT_PAUSED` and stays paused until
         the project resumes.
       operationId: resumePlaybookCase
+      x-iam-action: playbooks:ResumePlaybookCase
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1592,6 +1618,7 @@ paths:
         case's own work, or that of a case reading it as an upstream, runs as
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: confirmPlaybookCaseNode
+      x-iam-action: playbooks:ConfirmPlaybookCaseNode
       x-soat-resource:
         kind: playbook_case
         from: case_id

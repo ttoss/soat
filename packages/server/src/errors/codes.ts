@@ -554,7 +554,7 @@ export const ERROR_CODES = {
   TOOL_EGRESS_BLOCKED: {
     httpStatus: 403,
     description:
-      "An outbound request the deployment makes to a URL a tenant chose — an http- or mcp-type tool's target, a webhook's `url`, an AI provider's `base_url`, a service-account key file's `token_uri` — names a destination that is not publicly routable: a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address, and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url` and, when known, the offending `tool_address`. A webhook delivery refused this way is closed rather than retried, with the reason on the delivery row.",
+      "An outbound request the deployment makes to a URL a tenant chose — an http- or mcp-type tool's target, a webhook's `url`, an AI provider's `base_url`, a service-account key file's `token_uri` — names a destination that is not publicly routable: a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address, and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url`, a `{{secret:}}` value in it shown as its reference, and, when known, the offending `tool_address`. A webhook delivery refused this way is closed rather than retried, with the reason on the delivery row.",
   },
   TOOL_HTTP_ERROR: {
     httpStatus: 502,
@@ -564,7 +564,7 @@ export const ERROR_CODES = {
   TOOL_RESPONSE_TOO_LARGE: {
     httpStatus: 502,
     description:
-      "An http-type tool with `execute.response_mode: base64` answered with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default). The body is refused while it streams, so nothing was buffered. The error `meta` carries `tool_url` and `max_bytes`.",
+      "An http-type tool answered 2xx with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default), in either `response_mode`. The body is refused while it streams, so nothing was buffered. A non-2xx body over the ceiling is cut to it and stays `TOOL_HTTP_ERROR`. The error `meta` carries `tool_url` and `max_bytes`.",
   },
   MCP_TOOL_ERROR: {
     httpStatus: 502,
@@ -646,6 +646,11 @@ export const ERROR_CODES = {
   HOOK_INVALID_JSON: {
     httpStatus: 400,
     description: 'The inbound hook request body is not valid JSON.',
+  },
+  HOOK_DELIVERY_REPLAYED: {
+    httpStatus: 409,
+    description:
+      'The inbound hook already accepted a delivery with this timestamped signature. A new delivery is signed at its own timestamp.',
   },
   APPROVAL_NOT_FOUND: {
     httpStatus: 404,

@@ -32,6 +32,7 @@ paths:
         - Tasks
       summary: List tasks
       operationId: listTasks
+      x-iam-action: tasks:ListTasks
       parameters:
         - name: project_id
           in: query
@@ -142,6 +143,7 @@ paths:
         - Tasks
       summary: Create a task
       operationId: createTask
+      x-iam-action: tasks:CreateTask
       parameters:
         - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
       requestBody:
@@ -216,6 +218,7 @@ paths:
         - Tasks
       summary: Get a task
       operationId: getTask
+      x-iam-action: tasks:GetTask
       parameters:
         - name: task_id
           in: path
@@ -266,6 +269,7 @@ paths:
         - Tasks
       summary: Update a task
       operationId: updateTask
+      x-iam-action: tasks:UpdateTask
       parameters:
         - name: task_id
           in: path
@@ -321,6 +325,7 @@ paths:
         - Tasks
       summary: Delete a task
       operationId: deleteTask
+      x-iam-action: tasks:DeleteTask
       parameters:
         - name: task_id
           in: path
@@ -368,6 +373,7 @@ paths:
         - Tasks
       summary: List a task's transitions
       operationId: listTaskTransitions
+      x-iam-action: tasks:GetTask
       parameters:
         - name: task_id
           in: path
@@ -426,6 +432,7 @@ paths:
         - Tasks
       summary: Transition a task
       operationId: transitionTask
+      x-iam-action: tasks:TransitionTask
       parameters:
         - name: task_id
           in: path
@@ -500,6 +507,7 @@ paths:
         - Tasks
       summary: Migrate a task to a newer workflow version
       operationId: migrateTask
+      x-iam-action: tasks:MigrateTask
       parameters:
         - name: task_id
           in: path
@@ -586,6 +594,7 @@ paths:
         - Tasks
       summary: Pause a task
       operationId: pauseTask
+      x-iam-action: tasks:PauseTask
       parameters:
         - name: task_id
           in: path
@@ -653,6 +662,7 @@ paths:
         - Tasks
       summary: Resume a task
       operationId: resumeTask
+      x-iam-action: tasks:ResumeTask
       parameters:
         - name: task_id
           in: path
@@ -704,6 +714,7 @@ paths:
         - Tasks
       summary: Get task history
       operationId: getTaskHistory
+      x-iam-action: tasks:GetTask
       parameters:
         - name: task_id
           in: path

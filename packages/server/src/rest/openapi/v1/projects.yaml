@@ -30,6 +30,7 @@ paths:
         - JWT regular user: returns only projects granted by the user's policies.
         - API key scoped to a project: returns only that project.
       operationId: listProjects
+      x-iam-action: projects:ListProjects
       security:
         - bearerAuth: []
       parameters:
@@ -66,6 +67,7 @@ paths:
       summary: Create a project
       description: Creates a new project. Requires admin role.
       operationId: createProject
+      x-iam-action: projects:CreateProject
       requestBody:
         required: true
         content:
@@ -126,6 +128,7 @@ paths:
       summary: Get a project
       description: Returns details of a specific project.
       operationId: getProject
+      x-iam-action: projects:GetProject
       parameters:
         - name: project_id
           in: path
@@ -184,6 +187,7 @@ paths:
         role. Detaching a guardrail (removing an id) additionally requires
         guardrails:DetachGuardrail.
       operationId: updateProject
+      x-iam-action: projects:UpdateProject
       parameters:
         - name: project_id
           in: path
@@ -376,6 +380,7 @@ paths:
         it runs. Audit log entries are the one exception: they outlive the
         project, keeping their record with `project_id` cleared.
       operationId: deleteProject
+      x-iam-action: projects:DeleteProject
       parameters:
         - name: project_id
           in: path
@@ -449,6 +454,7 @@ paths:
         Idempotent: pausing a paused project answers it unchanged and keeps the
         first `reason`. Emits `projects.paused`.
       operationId: pauseProject
+      x-iam-action: projects:PauseProject
       parameters:
         - name: project_id
           in: path
@@ -515,6 +521,7 @@ paths:
         before the project was paused keeps its own pause. Eval runs continue
         from the item they stopped at. Emits `projects.resumed`.
       operationId: resumeProject
+      x-iam-action: projects:ResumeProject
       x-soat-agent-exclude: true
       parameters:
         - name: project_id
@@ -573,6 +580,7 @@ paths:
         these, and these win over the global default. Authorized by the caller's
         access to the project.
       operationId: getProjectPrices
+      x-iam-action: projects:GetProjectPrices
       parameters:
         - name: project_id
           in: path
@@ -625,6 +633,7 @@ paths:
         corrections ship as new future-dated rows. A first price, with no row for
         the project or the global default, may be dated now or earlier.
       operationId: updateProjectPrices
+      x-iam-action: projects:ManageProjectPrices
       x-soat-agent-exclude: true
       parameters:
         - name: project_id

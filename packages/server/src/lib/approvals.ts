@@ -731,6 +731,42 @@ const assertEditMatchesToolSchema = async (args: {
 };
 
 /**
+ * Writes a decision only while the item is still `pending` and unexpired, so
+ * of concurrent decisions exactly one resumes the producer; a loser gets the
+ * error its re-read state calls for.
+ */
+const claimResolution = async (args: {
+  item: ApprovalInstance;
+  verb: string;
+  fields: {
+    status: 'approved' | 'rejected';
+    resolvedByPrincipalType: string;
+    resolvedByPrincipalId: string;
+    editedArguments?: object | null;
+    resolutionReason?: string;
+  };
+}): Promise<void> => {
+  const now = new Date();
+  const [claimed] = await db.ApprovalItem.update(args.fields, {
+    where: {
+      id: args.item.id,
+      status: 'pending',
+      expiresAt: { [Op.gt]: now },
+    },
+  });
+  if (claimed === 1) return;
+
+  const current = await findApprovalOrThrow(args.item.publicId);
+  assertResolvable(current);
+  // Still pending, so the guard refused it for its deadline.
+  await expireApprovalIfDue({ id: current.publicId, now });
+  throw new DomainError(
+    'APPROVAL_EXPIRED',
+    `Approval '${current.publicId}' has expired and cannot be ${args.verb}.`
+  );
+};
+
+/**
  * Re-fetches the resolved item with all provenance includes, emits the given
  * lifecycle event, and returns the mapped item plus its decision output.
  */
@@ -789,11 +825,16 @@ export const approveApproval = async (args: {
     projectId: item.projectId,
   });
 
-  item.status = 'approved';
-  item.resolvedByPrincipalType = args.resolvedBy.principalType;
-  item.resolvedByPrincipalId = args.resolvedBy.principalId;
-  item.editedArguments = args.editedArguments ?? null;
-  await item.save();
+  await claimResolution({
+    item,
+    verb: 'approved',
+    fields: {
+      status: 'approved',
+      resolvedByPrincipalType: args.resolvedBy.principalType,
+      resolvedByPrincipalId: args.resolvedBy.principalId,
+      editedArguments: args.editedArguments ?? null,
+    },
+  });
 
   return finalizeResolution({
     id: args.id,
@@ -824,11 +865,16 @@ export const rejectApproval = async (args: {
   assertResolvable(item);
   await assertNotExpiredOrExpire(item, 'rejected');
 
-  item.status = 'rejected';
-  item.resolvedByPrincipalType = args.resolvedBy.principalType;
-  item.resolvedByPrincipalId = args.resolvedBy.principalId;
-  item.resolutionReason = args.reason;
-  await item.save();
+  await claimResolution({
+    item,
+    verb: 'rejected',
+    fields: {
+      status: 'rejected',
+      resolvedByPrincipalType: args.resolvedBy.principalType,
+      resolvedByPrincipalId: args.resolvedBy.principalId,
+      resolutionReason: args.reason,
+    },
+  });
 
   return finalizeResolution({
     id: args.id,

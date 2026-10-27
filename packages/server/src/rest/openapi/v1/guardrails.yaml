@@ -38,6 +38,7 @@ paths:
         `guard`) reference must resolve to the `args.*` / `context.*` / `runtime.*`
         namespaces — an out-of-catalog `runtime.*` key is rejected with 400.
       operationId: createGuardrail
+      x-iam-action: guardrails:CreateGuardrail
       requestBody:
         required: true
         content:
@@ -105,6 +106,7 @@ paths:
       summary: List guardrails
       description: Returns all guardrails in the project.
       operationId: listGuardrails
+      x-iam-action: guardrails:ListGuardrails
       parameters:
         - name: project_id
           in: query
@@ -153,6 +155,7 @@ paths:
       summary: Get a guardrail
       description: Returns a single guardrail by ID.
       operationId: getGuardrail
+      x-iam-action: guardrails:GetGuardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -204,6 +207,7 @@ paths:
         re-writing the document the guardrail already holds, leave the version
         untouched.
       operationId: updateGuardrail
+      x-iam-action: guardrails:UpdateGuardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -265,6 +269,7 @@ paths:
       summary: Delete a guardrail
       description: Deletes a guardrail and its archived versions by ID.
       operationId: deleteGuardrail
+      x-iam-action: guardrails:DeleteGuardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -321,6 +326,7 @@ paths:
         Metadata-only edits (name, description, context binding) do not archive a
         version. See [Versioning](/docs/modules/guardrails#versioning).
       operationId: listGuardrailVersions
+      x-iam-action: guardrails:ListGuardrailVersions
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -381,6 +387,7 @@ paths:
         exceptions record the version that governed them, so the audit chain
         survives edits.
       operationId: getGuardrailVersion
+      x-iam-action: guardrails:GetGuardrailVersion
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -448,6 +455,7 @@ paths:
         document is re-validated; restoring the policy the guardrail already
         holds is a no-op and archives nothing.
       operationId: restoreGuardrailVersion
+      x-iam-action: guardrails:RestoreGuardrailVersion
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -524,6 +532,7 @@ paths:
         production-shaped calls before attaching it — or before editing a
         widely-attached one. Pass an optional `tool_id` to resolve `runtime.tools.*`.
       operationId: evaluateGuardrail
+      x-iam-action: guardrails:EvaluateGuardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id

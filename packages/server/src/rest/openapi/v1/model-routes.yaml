@@ -26,6 +26,7 @@ paths:
       summary: List model routes
       description: Returns the model routes defined in a project
       operationId: listModelRoutes
+      x-iam-action: model-routes:ListModelRoutes
       parameters:
         - name: project_id
           in: query
@@ -82,6 +83,7 @@ paths:
         10 (400 naming the computed total). A duplicate `name` in the project is
         rejected with 409.
       operationId: createModelRoute
+      x-iam-action: model-routes:CreateModelRoute
       requestBody:
         required: true
         content:
@@ -184,6 +186,7 @@ paths:
       summary: Get a model route
       description: Returns a specific model route
       operationId: getModelRoute
+      x-iam-action: model-routes:GetModelRoute
       x-soat-resource:
         kind: model_route
         from: route_id
@@ -234,6 +237,7 @@ paths:
         Updates a model route's name, targets, retry classes, or breaker
         configuration. Omitted fields are left unchanged.
       operationId: updateModelRoute
+      x-iam-action: model-routes:UpdateModelRoute
       x-soat-resource:
         kind: model_route
         from: route_id
@@ -322,6 +326,7 @@ paths:
         a routed agent has no pinned provider to fall back on, so the reference
         must be repointed or the agent deleted first.
       operationId: deleteModelRoute
+      x-iam-action: model-routes:DeleteModelRoute
       x-soat-resource:
         kind: model_route
         from: route_id

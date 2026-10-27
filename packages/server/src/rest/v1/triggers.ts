@@ -196,44 +196,65 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   ctx.body = trigger;
 });
 
-/**
- * A firing runs with the *creator's* authority, so the target is what decides
- * what a trigger can do — which makes repointing one the same privilege
- * question the create route asks.
- *
- * Both halves of the target count. Asking only when `target_type` changed left
- * the ordinary shape of a repoint — swapping one orchestration for another —
- * unchecked, so a principal holding `UpdateTrigger` plus `FireTrigger` could
- * aim someone else's trigger at a target they could not start themselves.
- *
- * The check reads the *effective* pair, so a request that changes only the id
- * is still checked against the type the trigger already has.
- */
-const assertMayStartUpdatedTarget = async (args: {
+/** A caller-supplied object that lays something over the stored firing. */
+const carriesFields = (value: unknown): boolean => {
+  return (
+    typeof value === 'object' && value !== null && Object.keys(value).length > 0
+  );
+};
+
+/** The caller must be able to start the target themselves; `403` otherwise. */
+const assertCallerMayStart = async (args: {
   authUser: AuthUser;
-  trigger: { project_id?: string; target_type?: unknown; target_id?: unknown };
-  body: { target_type?: string; target_id?: string };
+  projectPublicId: string;
+  targetType: string;
+  targetId: string;
 }): Promise<void> => {
-  const { authUser, trigger, body } = args;
-  const retypes =
-    body.target_type !== undefined && body.target_type !== trigger.target_type;
-  const repoints =
-    body.target_id !== undefined && body.target_id !== trigger.target_id;
-  if (!retypes && !repoints) return;
-
-  const projectPublicId = trigger.project_id!;
-  const targetType = body.target_type ?? (trigger.target_type as string);
-  const targetId = body.target_id ?? (trigger.target_id as string);
-
   const canStartTarget = await mayStartTarget({
-    isAllowed: authUser.isAllowed,
-    projectPublicId,
-    targetType,
-    targetId,
+    isAllowed: args.authUser.isAllowed,
+    projectPublicId: args.projectPublicId,
+    targetType: args.targetType,
+    targetId: args.targetId,
   });
   if (!canStartTarget) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
+};
+
+/**
+ * A firing runs as the creator, so every field that shapes what it does asks
+ * the create route's question again, against the effective target pair.
+ */
+const assertMayShapeUpdatedFiring = async (args: {
+  authUser: AuthUser;
+  trigger: { project_id?: string; target_type?: unknown; target_id?: unknown };
+  body: {
+    target_type?: string;
+    target_id?: string;
+    action?: string | null;
+    input?: Record<string, unknown> | null;
+    policy_id?: string | null;
+  };
+  toolContext: Record<string, string> | null | undefined;
+}): Promise<void> => {
+  const { authUser, trigger, body, toolContext } = args;
+  const retypes =
+    body.target_type !== undefined && body.target_type !== trigger.target_type;
+  const repoints =
+    body.target_id !== undefined && body.target_id !== trigger.target_id;
+  const reshapes = [body.action, body.input, toolContext, body.policy_id].some(
+    (field) => {
+      return field !== undefined;
+    }
+  );
+  if (!retypes && !repoints && !reshapes) return;
+
+  await assertCallerMayStart({
+    authUser,
+    projectPublicId: trigger.project_id!,
+    targetType: body.target_type ?? (trigger.target_type as string),
+    targetId: body.target_id ?? (trigger.target_id as string),
+  });
 };
 
 triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
@@ -257,7 +278,14 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     policy_id?: string | null;
   };
 
-  await assertMayStartUpdatedTarget({ authUser: ctx.authUser, trigger, body });
+  const toolContext = parseNullableToolContextBody(body.tool_context);
+
+  await assertMayShapeUpdatedFiring({
+    authUser: ctx.authUser,
+    trigger,
+    body,
+    toolContext,
+  });
 
   const policyId =
     body.policy_id === undefined
@@ -272,7 +300,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     targetId: body.target_id,
     action: body.action,
     input: body.input,
-    toolContext: parseNullableToolContextBody(body.tool_context),
+    toolContext,
     cron: body.cron,
     eventPattern: body.event_pattern,
     active: body.active,
@@ -313,6 +341,17 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     tool_context?: unknown;
   };
 
+  const toolContext = parseToolContextBody(body.tool_context);
+
+  if (carriesFields(body.input) || carriesFields(toolContext)) {
+    await assertCallerMayStart({
+      authUser: ctx.authUser,
+      projectPublicId: trigger.project_id!,
+      targetType: trigger.target_type as string,
+      targetId: trigger.target_id as string,
+    });
+  }
+
   const firing = await fireTriggerNow({
     triggerPublicId: ctx.params.trigger_id,
     source: 'manual',
@@ -321,9 +360,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     // target is a tool reaches it with no generation in between — so the
     // reserved identity keys are stripped here, where the caller's bytes
     // arrive, rather than trusted.
-    fireToolContext: sanitizeCallerToolContext(
-      parseToolContextBody(body.tool_context)
-    ),
+    fireToolContext: sanitizeCallerToolContext(toolContext),
   });
 
   ctx.status = 200;
