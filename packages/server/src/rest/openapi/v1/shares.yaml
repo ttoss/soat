@@ -582,7 +582,7 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            `SHARE_IN_USE`: the grantee's resources still name the shared
+            `SHARE_IN_USE`: the grantee's resources still reach the shared
             resource. `error.meta.references` lists them.
           content:
             application/json:
@@ -600,11 +600,15 @@ paths:
         - Shares
       summary: List a grantee's references to a shared resource
       description: >-
-        The grantee project's own resources that name the resource the share
-        grants: agents binding a shared tool, pipelines stepping through it,
-        ingestion rules converting with it, orchestrations, triggers and
-        formations naming it. What degrades if the project revokes its
-        acceptance, and what `409 SHARE_IN_USE` lists. The grantee is named by
+        The grantee project's own resources a run reaches the resource the
+        share grants from: those naming it (agents binding a shared tool,
+        pipelines stepping through it, ingestion rules converting with it,
+        orchestrations, playbooks, triggers and formations naming it) and,
+        transitively, those naming one of them (deciders and evals on such an
+        agent, workflows dispatching it, triggers firing such an
+        orchestration). Each is listed once, grouped by `type` in the enum's
+        order. What degrades if the project revokes its acceptance, and what
+        `409 SHARE_IN_USE` lists. The grantee is named by
         `project_id` or by its scoped credential; the publisher holds none of
         these and is answered `400`.
       operationId: listShareReferences
@@ -846,7 +850,9 @@ components:
           description: The fixed window the calls are counted in
     ShareReference:
       type: object
-      description: One of the grantee project's resources naming the shared resource.
+      description: >-
+        One of the grantee project's resources a run reaches the shared
+        resource from.
       required:
         - type
         - id
@@ -856,8 +862,12 @@ components:
           enum:
             - agent
             - tool
+            - decider
             - ingestion_rule
             - orchestration
+            - workflow
+            - playbook
+            - eval
             - trigger
             - formation
           description: The kind of the grantee's resource.
