@@ -146,6 +146,17 @@ describe('List filters compile every policy set the caller holds', () => {
       expect(ids).not.toContain(deniedDocId);
     });
 
+    test('GET /documents without project_id keeps the owner Deny', async () => {
+      const res =
+        await authenticatedTestClient(rawKey).get('/api/v1/documents');
+      expect(res.status).toBe(200);
+      const ids = (res.body.data as Array<{ id: string }>).map((d) => {
+        return d.id;
+      });
+      expect(ids).toContain(openDocId);
+      expect(ids).not.toContain(deniedDocId);
+    });
+
     test('GET /documents/export keeps the owner Deny', async () => {
       const ids = await exportIds(rawKey);
       expect(ids).toContain(openDocId);

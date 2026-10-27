@@ -1,11 +1,11 @@
 import { Op } from '@ttoss/postgresdb';
-import type { PolicyDocument } from 'src/lib/iam';
+import type { PolicySets } from 'src/lib/iam';
 import { type CompiledPolicy, compilePolicy } from 'src/lib/policyCompiler';
 import { findProjectPublicIds } from 'src/lib/projects';
 
 import type { AuthenticatedContext } from './helpers';
 
-type ScopePolicySet = { projectPublicId: string; policies: PolicyDocument[] };
+type ScopePolicySet = { projectPublicId: string; policies: PolicySets };
 
 /**
  * The distinct policy sets a list or search spans: the named project's, or,

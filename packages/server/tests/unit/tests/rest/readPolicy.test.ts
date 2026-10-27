@@ -48,7 +48,7 @@ describe('compileAcrossPolicySets', () => {
   test('one set without access denies the whole read', () => {
     expect(
       compile([
-        { projectPublicId: 'proj_a', policies: [allowAll] },
+        { projectPublicId: 'proj_a', policies: [[allowAll]] },
         { projectPublicId: 'proj_b', policies: [] },
       ])
     ).toEqual({ where: {}, hasAccess: false });
@@ -56,18 +56,34 @@ describe('compileAcrossPolicySets', () => {
 
   test('distinct sets require every row to pass each set', () => {
     const denyWhere = compilePolicy({
-      policies: [denyPrivate],
+      policies: [[denyPrivate]],
       action: ACTION,
       resourceType: 'readPolicyResource',
       projectPublicId: 'proj_b',
     }).where;
 
     const result = compile([
-      { projectPublicId: 'proj_a', policies: [allowAll] },
-      { projectPublicId: 'proj_b', policies: [denyPrivate] },
+      { projectPublicId: 'proj_a', policies: [[allowAll]] },
+      { projectPublicId: 'proj_b', policies: [[denyPrivate]] },
     ]);
 
     expect(result.hasAccess).toBe(true);
     expect(result.where).toEqual({ [Op.and]: [{}, denyWhere] });
+  });
+
+  test("an owner set's Deny holds though the key set allows the row", () => {
+    const denyWhere = compilePolicy({
+      policies: [[denyPrivate]],
+      action: ACTION,
+      resourceType: 'readPolicyResource',
+      projectPublicId: 'proj_b',
+    }).where;
+
+    const result = compile([
+      { projectPublicId: 'proj_b', policies: [[denyPrivate], [allowAll]] },
+    ]);
+
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual(denyWhere);
   });
 });
