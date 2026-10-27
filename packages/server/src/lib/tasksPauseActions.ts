@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { emitTaskEvent } from './taskEvents';
 import {
@@ -87,7 +87,7 @@ export const pauseTask = async (args: {
  */
 export const resumeTask = async (args: {
   id: string;
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
 }): Promise<ReturnType<typeof mapTask>> => {
   log('resumeTask: id=%s', args.id);
 

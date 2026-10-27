@@ -5,7 +5,7 @@ import { DomainError } from '../errors';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { runStateAutomation } from './tasksAutomation';
 import {
@@ -170,7 +170,7 @@ export const dispatchOnEnter = (args: {
   state: WorkflowState;
   // A task dispatch is request-less, so without this its `soat` tool nodes and
   // tools have no credential.
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
 }): void => {
   if (!args.state.onEnter || args.state.kind === 'human') return;
   const promise = runStateAutomation({
@@ -223,7 +223,7 @@ const finalizeCreatedTask = async (args: {
   projectId: number;
   entryState: WorkflowState;
   closed: boolean;
-  startingPrincipal: RequestPrincipal | null;
+  startingPrincipal: StartingPrincipal | null;
 }) => {
   const created = await findTaskInstance({ id: args.taskPublicId });
   const mapped = mapTask(created!);
@@ -289,7 +289,7 @@ export type CreateTaskArgs = {
    * The identity the entry state's dispatch runs as, by
    * `resolveStartingPrincipal`'s rule; `principal` is only who is credited.
    */
-  startingPrincipal: RequestPrincipal | null;
+  startingPrincipal: StartingPrincipal | null;
 };
 
 const insertTask = async (args: CreateTaskArgs) => {

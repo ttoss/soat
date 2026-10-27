@@ -8,7 +8,7 @@ import { executeToolNode } from './orchestrationNodeExecutors';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import { buildRunAuthHeader } from './orchestrationRunToken';
 import type { MappedOrchestrationRun } from './orchestrations';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import type { WorkflowDispatch } from './workflowsValidation';
 
 // Unlike a failed generation, a failed/cancelled/expired run resolves normally
@@ -125,7 +125,7 @@ const runAgentDispatch = async (args: {
   projectId: number;
   taskPublicId: string;
   inputs: Record<string, unknown>;
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
   toolContext?: Record<string, string>;
   onDispatchStarted?: DispatchStarted;
 }): Promise<DispatchResult> => {
@@ -191,7 +191,7 @@ const runToolDispatch = async (args: {
   taskContext: Record<string, unknown>;
   projectId: number;
   taskPublicId: string;
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
   // A `tool` dispatch carries the same bag its `agent`/`orchestration` siblings
   // do; without it a tool naming a `{{context:}}` header or preset cannot be
   // dispatched from a workflow at all.
@@ -253,7 +253,7 @@ export const runDispatch = async (args: {
    */
   taskContext: Record<string, unknown>;
   // The identity the dispatch runs as, for every kind; see `dispatchOnEnter`.
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
   /**
    * The task's caller context, forwarded as `X-Soat-Context-*` headers on the
    * tool calls this dispatch makes. For an orchestration dispatch it is

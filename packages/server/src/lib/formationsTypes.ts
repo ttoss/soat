@@ -1,6 +1,6 @@
 import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import type { RequestPrincipal } from './principals';
+import type { RequestPrincipal, StartingPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
   type StoredError,
@@ -105,7 +105,7 @@ export type FormationActor = {
   userId: number;
   /** Who a version the deploy writes names as its author. */
   author: RequestPrincipal;
-  principal: RequestPrincipal | null;
+  principal: StartingPrincipal | null;
   isAllowed: IsAllowedFn;
   /**
    * The deploying key's `policy_ids` (`undefined` when it carries none), so an

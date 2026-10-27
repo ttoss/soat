@@ -2,8 +2,8 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { readRetrievalMode } from 'src/lib/conversationRetrieval';
+import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
-import { principalFromAuthUser } from 'src/lib/principals';
 import { pauseProject, resumeProject } from 'src/lib/projectPauseActions';
 import {
   createProject,
@@ -261,7 +261,8 @@ projectsRouter.post('/projects/:project_id/resume', async (ctx: Context) => {
     id: projectPublicId,
     // A task's suppressed dispatch runs as whoever resumed: the resume is the
     // decision to spend again.
-    principal: principalFromAuthUser(ctx.authUser),
+    principal:
+      resolveStartingPrincipal({ authUser: ctx.authUser }) ?? undefined,
   });
 });
 
