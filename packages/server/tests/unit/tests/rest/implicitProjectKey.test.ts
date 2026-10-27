@@ -255,9 +255,9 @@ describe('Implicit projectId via project-scoped API key', () => {
 
   /**
    * The key's project binding is a hard boundary that the owner's `admin` role
-   * does NOT lift. An admin-owned, project-scoped key can create a project (an
-   * admin-gated op) yet is still confined to its own project for resource
-   * writes — and the refusal is actionable rather than a bare `Forbidden`.
+   * does NOT lift: an admin-owned, project-scoped key is confined to its own
+   * project for resource writes, and the refusal is actionable rather than a
+   * bare `Forbidden`.
    */
   describe('admin-owned project-scoped key stays project-bound', () => {
     let adminScopedKey: string;
@@ -276,13 +276,12 @@ describe('Implicit projectId via project-scoped API key', () => {
       adminScopedKey = keyRes.body.key;
     });
 
-    test('can create a project (admin gate is role-based, not scope-bound)', async () => {
+    test('cannot create a project', async () => {
       const res = await authenticatedTestClient(adminScopedKey)
         .post('/api/v1/projects')
         .send({ name: 'Created by admin scoped key' });
 
-      expect(res.status).toBe(201);
-      expect(res.body.id).toBeDefined();
+      expect(res.status).toBe(403);
     });
 
     test('cross-project secret write still returns the actionable scope error', async () => {
