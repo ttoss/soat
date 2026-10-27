@@ -41,8 +41,8 @@ Knowledge a module legitimately owns stays in the module; `modules.md`
 3. **What the shared form forces** — a required argument beats a defaulted one,
    so a new site states its answer instead of inheriting one silently.
 4. **Every behavior change it implies** — the sites that were wrong now change.
-   Name each, and forward the ones touching security, a public contract or data
-   loss (`open-questions.md`).
+   Name each, and run the ones touching security, a public contract or data
+   loss through `open-questions.md`.
 5. **The enforcement that keeps it consolidated** — a test that fails when a new
    site bypasses the chokepoint: structure in `tests/harness/`, behavior at the
    entry point (`tests.md`). Deterministic enforcement outranks prose

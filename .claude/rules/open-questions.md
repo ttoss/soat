@@ -1,13 +1,15 @@
 # Open Questions Gate
 
 Run every open question (design choice, option A vs B, ambiguity) through two
-tests before forwarding it to the user.
+tests before forwarding it to the user. **A Pareto optimum is decided by you,
+never forwarded — whatever the class, high-risk included.**
 
 ## Test 1 — Pareto optimum
 
 An option is dominant when it improves at least one of these dimensions and you
 checked in this session that it worsens nothing (name what was checked; an
-unverified premise is a cost). Exactly one dominant option → choose it. Uncertain → Test 2.
+unverified premise is a cost). Exactly one dominant option → choose it and
+record it; do not ask. Uncertain → Test 2.
 
 | Dimension | Asks |
 | --- | --- |
@@ -29,12 +31,14 @@ boundaries. A clear winner → choose it.
 
 ## Forward only
 
+Only a question Test 1 did not settle:
+
 | Class | Why |
 |---|---|
 | Genuine trade | Every option worsens something another improves |
 | Unverifiable premise | Hinges on a fact not checkable this session |
 | Product intent | Language, theme, scope, stack, business rules |
-| High-risk | Security, auth, permissions, privacy, billing, data loss, migrations, public API contracts — always forwarded |
+| High-risk | Security, auth, permissions, privacy, billing, data loss, migrations, public API contracts — forwarded even when Test 2 has a winner |
 
 Forward in trade format: each option, what it worsens, the open premise, a
 recommendation with its activation condition (`worth doing when <pain>`).
