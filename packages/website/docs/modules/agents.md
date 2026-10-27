@@ -625,7 +625,7 @@ Listing agents stays project-scoped: [`GET /api/v1/agents`](/docs/api/agents/lis
 
 ### SOAT Action Permissions
 
-A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply.
+A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply. An [approved](./approvals.md#continuation-identity) `builtin` action is held to the boundary too.
 
 A `boundary_policy` that is not a valid policy document allows nothing — it fails closed, so a malformed boundary denies every action rather than widening one. Its `condition` keys are held to the same rule as a stored policy's ([IAM — Condition Keys](./iam.md#condition-keys)): a key the platform does not supply invalidates the document.
 
