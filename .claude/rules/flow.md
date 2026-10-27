@@ -5,8 +5,8 @@ The maintainers' work in this repo lives in the Flow project
 parameters (`.claude/flow.md`) and pins the `flow` skills (`skills-lock.json`):
 add that repo to read them. A maintainer's session follows
 [Get Things Flowing](https://flow.ttoss.dev/docs/agents/protocol.md), the
-delivery process of the `flow` skill (`references/process.md`) and those
-parameters, started by `/flow` or not:
+[delivery process](https://raw.githubusercontent.com/ttoss/ttoss/main/docs/website/docs/engineering/workflow/process.md)
+and those parameters, started by `/flow` or not:
 
 - Work through a task: the one you were given, or one you find (`list-tasks`
   with `query`) or propose before changing anything. Your run holds the task
