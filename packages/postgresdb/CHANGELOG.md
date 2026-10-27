@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.97.0](https://github.com/ttoss/soat/compare/v0.96.1...v0.97.0) (2026-10-27)
+
+### Bug Fixes
+
+* **triggers:** inbound hook verifies a timestamped signature and refuses replays ([#1759](https://github.com/ttoss/soat/issues/1759)) ([ff3fed4](https://github.com/ttoss/soat/commit/ff3fed49ce0f2499f7aa1a9ea6c20af85bc5e16b))
+
 ## [0.96.1](https://github.com/ttoss/soat/compare/v0.96.0...v0.96.1) (2026-10-27)
 
 **Note:** Version bump only for package @soat/postgresdb
