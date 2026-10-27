@@ -150,6 +150,8 @@ Security invariants:
   `triggers:FireTrigger` alone.
 - **No recursion.** Trigger-scoped credentials cannot call the fire endpoint
   (`403`).
+- **Deleting the trigger stops its firings.** A run-as token whose trigger no
+  longer exists authorizes nothing: every call is `403 FORBIDDEN`.
 - **Fail closed.** A deleted creator keeps the trigger but firing fails with
   `409 TRIGGER_CREATOR_UNAVAILABLE`. A referenced policy cannot be deleted
   (`409 POLICY_HAS_DEPENDENTS`). A deleted target makes the firing record the

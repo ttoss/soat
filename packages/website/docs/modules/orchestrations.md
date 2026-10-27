@@ -274,7 +274,7 @@ Runs execute in a **queue-backed durable worker**, detached from the starting re
 **Run identity.** Each run persists its starting principal (user or API key); every background drive re-mints a short-lived **run-as token** from it, confined to the run's project, so a [`builtin` tool](./tools.md#builtin) node can call the platform from a durable run.
 
 - **Identity only, not permissions.** Authorization is evaluated per call against current policies; revoking access affects a run in flight.
-- **Never wider than the starting credential.** A key-started run is bounded by the key's policies; revoking the key stops it, with no fallback to the owner's access.
+- **Never wider than the starting credential.** A key-started run is bounded by the key's policies; revoking the key stops it, with no fallback to the owner's access: a drive already under way gets `403 FORBIDDEN` on every call.
 - **Attributed to the key, not its owner.** A key-started run names the key (`key_…`) in [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and the principal a later automation hop inherits.
 - **Trigger- and OAuth-started runs record no principal.** They execute inline with the original token (the trigger's attached policy, the consented scope); their platform self-calls are unauthenticated and fail with `TOOL_HTTP_ERROR` carrying the upstream 401.
 
