@@ -226,6 +226,23 @@ describe('Orchestration output_mapping', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test.each(['__proto__.polluted', 'a.constructor', 'prototype'])(
+      'create refuses an output_mapping key %s',
+      async (key) => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: 'Bad Mapping',
+            nodes: nodes('b'),
+            edges: edges('b'),
+            output_mapping: { [key]: 'yes' },
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    );
+
     test('update refuses a non-object output_mapping', async () => {
       const orch = await createOrchestration({});
       const res = await authenticatedTestClient(userToken)

@@ -1330,6 +1330,7 @@ components:
             `{ "summary": {"var": "output.content"} }` writes the artifact's
             `content` field to `state.summary`. The same evaluator as
             input_mapping/transform/condition; only the context differs.
+            No key segment may be `__proto__`, `constructor` or `prototype`.
             An `agent` node's artifact always carries both `content` (the text
             response) and `object` (the parsed value when a schema applied,
             `null` otherwise), so `output.content` reads the same whether or
@@ -1549,7 +1550,8 @@ components:
       description: >-
         The shape of a completed run's `output`, owned by the orchestration
         rather than by its terminal node ids. Each key is an output field (a
-        dotted key such as `summary.title` builds a nested object); each value
+        dotted key such as `summary.title` builds a nested object, and no
+        segment may be `__proto__`, `constructor` or `prototype`); each value
         is JSON Logic (https://jsonlogic.com) evaluated against
         `{ "state": <final run state> }`, which includes `state.input` and
         `state.nodes.<id>`. A missing path maps to `null`; a mapping that

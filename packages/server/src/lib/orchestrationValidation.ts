@@ -6,6 +6,7 @@ import {
   computeDominators,
   transitivePredecessors,
 } from './orchestrationGraphAnalysis';
+import { checkUnsafeStateMappingPaths } from './orchestrationMappingPath';
 import {
   checkNodeShapes,
   type OrchestrationValidationIssue,
@@ -299,6 +300,7 @@ export const validateOrchestrationGraph = (args: {
 
   errors.push(...checkNodeShapes(nodes));
   errors.push(...checkReservedNodeNamespace({ nodes }));
+  errors.push(...checkUnsafeStateMappingPaths({ nodes }));
 
   const nodeIds = nodes
     .map((n) => {

@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { assertSafeMappingPath } from './orchestrationMappingPath';
 import type {
   NodeRetryPolicy,
   OrchestrationEdge,
@@ -217,7 +218,12 @@ export const parseOutputMapping = (
   raw: unknown
 ): Record<string, unknown> | null | undefined => {
   if (raw === undefined || raw === null) return raw;
-  if (isPlainObject(raw)) return raw;
+  if (isPlainObject(raw)) {
+    for (const path of Object.keys(raw)) {
+      assertSafeMappingPath({ path, field: 'output_mapping' });
+    }
+    return raw;
+  }
   throw new DomainError(
     'VALIDATION_FAILED',
     'output_mapping must be an object mapping output fields to JSON Logic'

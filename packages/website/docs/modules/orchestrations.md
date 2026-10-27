@@ -401,7 +401,7 @@ A project-scoped caller gets project rows for its own projects only, `queue_dept
 ### State and Mappings
 
 - **`input_mapping`** — node input keys resolved against run state before execution; each value is [JSON Logic](https://jsonlogic.com) ([Input Mapping](#input-mapping-json-logic)).
-- **`state_mapping`** — projects the artifact into state after execution. Each **key** is a write path starting with `state.` (normalized if missing). Each **value** is JSON Logic over `{ "output": <the node's artifact>, "state": <run state> }`, the same evaluator as `input_mapping`/`transform`/`condition`. A literal is written as-is; a **dotted** target such as `"state.proposed.action_id"` builds a nested object, read back with `{"var": "proposed.action_id"}`; `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a total.
+- **`state_mapping`** — projects the artifact into state after execution. Each **key** is a write path starting with `state.` (normalized if missing). Each **value** is JSON Logic over `{ "output": <the node's artifact>, "state": <run state> }`, the same evaluator as `input_mapping`/`transform`/`condition`. A literal is written as-is; a **dotted** target such as `"state.proposed.action_id"` builds a nested object, read back with `{"var": "proposed.action_id"}`, and no segment may be `__proto__`, `constructor` or `prototype`; `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a total.
 
   ```json
   { "id": "summarise", "type": "agent", "agent_id": "agent_xyz", "state_mapping": { "state.summary": { "var": "output.content" } } }
@@ -411,7 +411,7 @@ Run **state** = the run input ([Run input](#run-input)) + every upstream `state_
 
 #### Run output
 
-A completed run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
+A completed run's `output` is what a caller, a parent `sub_orchestration` node and a `loop` read. Declare `output_mapping` to own its shape: each key is an output field (a dotted key such as `"summary.title"` builds a nested object; a `__proto__`, `constructor` or `prototype` segment is `400 VALIDATION_FAILED`), each value JSON Logic over `{ "state": <final run state> }` — so `state.input`, every `state_mapping` write and `state.nodes.<id>` are all in reach.
 
 ```json
 {
@@ -527,6 +527,7 @@ Graphs are validated **before** persistence: `create-orchestration` / `update-or
 | `UNWRITTEN_STATE_KEY` | Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
 | `NODE_NOT_UPSTREAM` | Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |
 | `RESERVED_STATE_KEY` | Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
+| `UNSAFE_PATH_SEGMENT` | Prototype path segment | a `state_mapping` key has a `__proto__`, `constructor` or `prototype` segment |
 
 **Warnings (never block):**
 
