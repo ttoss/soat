@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { resolveCompletionModel } from './completionModel';
 import { meterCompletion, routedMaxRetries } from './modelRoutes';
+import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 
 const log = createDebug('soat:memory-extraction');
 
@@ -30,6 +31,11 @@ export const runExtractionCompletion = async (args: {
     aiProviderId: args.aiProviderId,
     model: args.model,
   });
+  const breach = await checkGenerationQuota({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+  });
+  if (breach) throw quotaBreachError(breach);
 
   log(
     'runExtractionCompletion: agentId=%s model=%s',
