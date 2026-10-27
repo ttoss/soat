@@ -268,9 +268,9 @@ A search with a `query` embeds it once, billed to the first project in scope, by
 
 ### Policy Conditions Narrow the Candidate Set
 
-With `project_id`, the caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `soat:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
+The caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `soat:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
 
-Without `project_id` there is no single project policy to compile, and the search is scoped by project only.
+Without `project_id` the same filter applies across every project in scope.
 
 ### Result ceiling
 

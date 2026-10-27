@@ -132,6 +132,20 @@ export const findProjectPublicId = async (args: {
   return project.publicId;
 };
 
+/** The public ids of the projects held by these internal row ids. */
+export const findProjectPublicIds = async (args: {
+  ids: number[];
+}): Promise<string[]> => {
+  if (args.ids.length === 0) return [];
+  const projects = await db.Project.findAll({
+    where: { id: args.ids },
+    attributes: ['publicId'],
+  });
+  return projects.map((project) => {
+    return project.publicId;
+  });
+};
+
 export const listProjects = async (args: {
   authUser: AuthUser;
   limit?: number;

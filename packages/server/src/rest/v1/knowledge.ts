@@ -4,7 +4,6 @@ import { DomainError } from 'src/errors';
 import { projectEmbeddingBilling } from 'src/lib/embedding';
 import type { KnowledgePolicyWhere } from 'src/lib/knowledge';
 import { searchKnowledge } from 'src/lib/knowledge';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import {
   hasMetadataFilter,
   type MetadataFilter,
@@ -13,10 +12,12 @@ import {
 import { hasTagFilter, readTagBag } from 'src/lib/tags';
 
 import {
+  type AuthenticatedContext,
   requireAuth,
   resolveEmbeddingSpendProjectId,
   resolveReadProjectIds,
 } from './helpers';
+import { compileAcrossPolicySets, readScopePolicySets } from './readPolicy';
 
 const knowledgeRouter = new Router<Context>();
 
@@ -72,22 +73,25 @@ const hasSearchFilters = (
 
 /**
  * Compiles the caller's `knowledge:SearchKnowledge` policy once per store the
- * search reads. `hasAccess` answers the action alone, so it is the same for all
- * three: no Allow for the action means the whole search returns nothing.
+ * search reads, over every project it spans. `hasAccess` answers the action
+ * alone, so it is the same for all three: no Allow for the action means the
+ * whole search returns nothing.
  */
-const resolvePolicyWhere = async (
-  ctx: Context,
-  body: KnowledgeSearchBody
-): Promise<{ forbidden: boolean; policyWhere?: KnowledgePolicyWhere }> => {
-  if (!body.project_id) return { forbidden: false };
-  const policies = await ctx.authUser!.getPolicies(body.project_id);
-  const compileFor = (args: { resourceType: string; columnRoot?: string }) => {
-    return compilePolicy({
-      policies,
+const resolvePolicyWhere = async (args: {
+  ctx: AuthenticatedContext;
+  projectPublicId: string | undefined;
+  projectIds: number[] | undefined;
+}): Promise<{ forbidden: boolean; policyWhere?: KnowledgePolicyWhere }> => {
+  const policySets = await readScopePolicySets(args);
+  const compileFor = (compileArgs: {
+    resourceType: string;
+    columnRoot?: string;
+  }) => {
+    return compileAcrossPolicySets({
+      policySets,
       action: 'knowledge:SearchKnowledge',
-      resourceType: args.resourceType,
-      projectPublicId: body.project_id!,
-      columnRoot: args.columnRoot,
+      resourceType: compileArgs.resourceType,
+      columnRoot: compileArgs.columnRoot,
     });
   };
 
@@ -145,7 +149,11 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     resourceType: 'document',
   });
 
-  const { forbidden, policyWhere } = await resolvePolicyWhere(ctx, body);
+  const { forbidden, policyWhere } = await resolvePolicyWhere({
+    ctx,
+    projectPublicId: body.project_id,
+    projectIds,
+  });
   if (forbidden) {
     ctx.body = { results: [] };
     return;
