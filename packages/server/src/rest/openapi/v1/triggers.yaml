@@ -893,9 +893,11 @@ components:
           nullable: true
           description: >-
             `<event_id>:<trigger_id>` for an `event` firing, where `event_id`
-            is the `id` in `input`; null for every other source. The same event reaching the same trigger twice
+            is the `id` in `input`; `<v1>:<trigger_id>` for a `webhook` firing
+            whose delivery carried the timestamped `t=,v1=` signature; null
+            otherwise. The same event reaching the same trigger twice
             produces one firing under this key, so a consumer reading firings
-            can recognise a redelivery.
+            can recognise a redelivery; a replayed signed delivery is refused.
         attempts:
           type: integer
           description: >-

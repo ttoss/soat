@@ -429,13 +429,14 @@ SECRET=$(curl -s "$SOAT_BASE_URL/api/v1/triggers/$WEBHOOK_TRIGGER_ID/secret" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.secret')
 
 # An external system fires the trigger by POSTing to the public inbound endpoint,
-# signing the raw body with HMAC-SHA256 using the secret above. No bearer token.
+# signing "<timestamp>.<raw body>" with HMAC-SHA256 using the secret above. No bearer token.
 BODY='{"cycle":"from-webhook"}'
-SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
+T=$(date +%s)
+SIG=$(printf '%s' "$T.$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
 
 curl -s -X POST "$SOAT_BASE_URL/hooks/triggers/$WEBHOOK_TRIGGER_ID" \
   -H "Content-Type: application/json" \
-  -H "X-Soat-Signature: sha256=$SIG" \
+  -H "X-Soat-Signature: t=$T,v1=$SIG" \
   -d "$BODY"
 # → 202 Accepted { "firing_id": "...", "trigger_id": "...", "status": "running" }
 ```
@@ -444,7 +445,8 @@ curl -s -X POST "$SOAT_BASE_URL/hooks/triggers/$WEBHOOK_TRIGGER_ID" \
 </Tabs>
 
 `POST /hooks/triggers/{trigger_id}` is made by the external system with no bearer
-token; it is authenticated by the `X-Soat-Signature` HMAC header over the raw body.
+token; it is authenticated by the `X-Soat-Signature` HMAC header over the timestamp and
+the raw body, and a replay of the same signed delivery is refused.
 
 ---
 
