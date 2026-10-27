@@ -32,6 +32,7 @@ paths:
         Returns a list of errors and warnings. Accepts the template as a
         JSON object or as a YAML/JSON string.
       operationId: validateFormation
+      x-iam-action: formations:ValidateFormation
       requestBody:
         required: true
         content:
@@ -84,6 +85,7 @@ paths:
         Computes a diff between the desired template and the current stack state
         without making any changes. Returns the list of planned actions.
       operationId: planFormation
+      x-iam-action: formations:PlanFormation
       requestBody:
         required: true
         content:
@@ -157,6 +159,7 @@ paths:
       summary: List formations
       description: Returns all formation stacks for a project
       operationId: listFormations
+      x-iam-action: formations:ListFormations
       parameters:
         - name: project_id
           in: query
@@ -214,6 +217,7 @@ paths:
         the deploy was attempted, not that it worked. The `builtin` CLI exits
         non-zero on that body so `create-formation && …` does not lie.
       operationId: createFormation
+      x-iam-action: formations:CreateFormation
       requestBody:
         required: true
         content:
@@ -305,6 +309,7 @@ paths:
       summary: Get a specific formation
       description: Returns the formation stack including its current resources.
       operationId: getFormation
+      x-iam-action: formations:GetFormation
       parameters:
         - name: formation_id
           in: path
@@ -367,6 +372,7 @@ paths:
         realised, and `error.meta.failures` names every resource still live. The
         next deploy retries the disposal.
       operationId: updateFormation
+      x-iam-action: formations:UpdateFormation
       parameters:
         - name: formation_id
           in: path
@@ -472,6 +478,7 @@ paths:
         formation is left in `delete_failed`. The error message states which
         happened.
       operationId: deleteFormation
+      x-iam-action: formations:DeleteFormation
       parameters:
         - name: formation_id
           in: path
@@ -540,6 +547,7 @@ paths:
         Returns all operations (create, update, delete) with their event logs
         for the formation, ordered chronologically.
       operationId: listFormationEvents
+      x-iam-action: formations:ListFormationEvents
       parameters:
         - name: formation_id
           in: path

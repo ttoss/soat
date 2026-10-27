@@ -26,6 +26,7 @@ paths:
       summary: List memory stores
       description: Returns a list of memory store configurations for a project
       operationId: listMemoryStores
+      x-iam-action: memories:ListMemoryStores
       parameters:
         - name: project_id
           in: query
@@ -77,6 +78,7 @@ paths:
       summary: Create a memory store
       description: Creates a new memory store configuration in a project
       operationId: createMemoryStore
+      x-iam-action: memories:CreateMemoryStore
       requestBody:
         required: true
         content:
@@ -177,6 +179,7 @@ paths:
       summary: Get a memory store
       description: Returns a single memory store configuration by ID
       operationId: getMemoryStore
+      x-iam-action: memories:GetMemoryStore
       x-soat-resource:
         kind: memory_store
         from: memory_store_id
@@ -228,6 +231,7 @@ paths:
       summary: Update a memory store
       description: Updates an existing memory store configuration
       operationId: updateMemoryStore
+      x-iam-action: memories:UpdateMemoryStore
       x-soat-resource:
         kind: memory_store
         from: memory_store_id
@@ -335,6 +339,7 @@ paths:
       summary: Delete a memory store
       description: Deletes a memory store configuration
       operationId: deleteMemoryStore
+      x-iam-action: memories:DeleteMemoryStore
       x-soat-resource:
         kind: memory_store
         from: memory_store_id
@@ -494,6 +499,7 @@ paths:
         the file holds what the store currently asserts. The rows are the rows
         the listing returns for the same caller.
       operationId: exportMemories
+      x-iam-action: memories:ExportMemories
       x-soat-resource:
         kind: memory_store
         from: memory_store_id

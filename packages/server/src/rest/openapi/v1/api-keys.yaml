@@ -34,6 +34,7 @@ paths:
           authority over it, and a key's metadata names its owner, prefix and attached
           policies.
       operationId: listApiKeys
+      x-iam-action: api-keys:ListApiKeys
       security:
         - bearerAuth: []
       parameters:
@@ -76,6 +77,7 @@ paths:
         - When the request is authenticated with a **project-scoped credential**, the new key is confined to that same project: omitting `project_id` defaults to it, naming a different project returns `403 API_KEY_PROJECT_SCOPE`, and `project_id: null` (an unscoped key) is likewise refused. Minting an unscoped key requires an unscoped credential.
         - When the request is authenticated with an **API key narrowed by `policy_ids`**, the new key stays inside that boundary: omitting `policy_ids` inherits the caller's own, a non-empty subset of them is accepted, and an empty list or any other policy returns `403 API_KEY_POLICY_BOUNDARY`.
       operationId: createApiKey
+      x-iam-action: api-keys:CreateApiKey
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -142,6 +144,7 @@ paths:
       summary: Get an API key
       description: Returns details of an API key. Only the owner or an admin can access it, and a project-scoped credential can only reach keys in its own project.
       operationId: getApiKey
+      x-iam-action: api-keys:GetApiKey
       x-soat-agent-exclude: true
       parameters:
         - name: api_key_id
@@ -188,6 +191,7 @@ paths:
       summary: Update an API key
       description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise).
       operationId: updateApiKey
+      x-iam-action: api-keys:UpdateApiKey
       x-soat-agent-exclude: true
       parameters:
         - name: api_key_id
@@ -264,6 +268,7 @@ paths:
       summary: Delete an API key
       description: Deletes an API key. Only the owner or an admin can delete it, and a project-scoped credential can only delete keys in its own project.
       operationId: deleteApiKey
+      x-iam-action: api-keys:DeleteApiKey
       x-soat-agent-exclude: true
       parameters:
         - name: api_key_id

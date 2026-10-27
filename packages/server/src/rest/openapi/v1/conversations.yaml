@@ -26,6 +26,7 @@ paths:
       summary: List conversations
       description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. project keys are scoped to a single project automatically.
       operationId: listConversations
+      x-iam-action: conversations:ListConversations
       parameters:
         - name: project_id
           in: query
@@ -81,6 +82,7 @@ paths:
       summary: Create a conversation
       description: Creates a new conversation. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createConversation
+      x-iam-action: conversations:CreateConversation
       requestBody:
         required: true
         content:
@@ -152,6 +154,7 @@ paths:
       summary: Get a conversation by ID
       description: Returns a conversation by its ID
       operationId: getConversation
+      x-iam-action: conversations:GetConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -200,6 +203,7 @@ paths:
       summary: Update a conversation
       description: Updates the status of a conversation
       operationId: updateConversation
+      x-iam-action: conversations:UpdateConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -278,6 +282,7 @@ paths:
       summary: Delete a conversation
       description: Deletes a conversation by its ID
       operationId: deleteConversation
+      x-iam-action: conversations:DeleteConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -323,6 +328,7 @@ paths:
       summary: List conversation messages
       description: Returns all messages (documents) attached to a conversation, ordered by position
       operationId: listConversationMessages
+      x-iam-action: conversations:GetConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -387,6 +393,7 @@ paths:
       summary: Add a message to a conversation
       description: Creates a document from the message text and attaches it to the conversation at the given position. If position is omitted, it is appended at the end.
       operationId: addConversationMessage
+      x-iam-action: conversations:UpdateConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -503,6 +510,7 @@ paths:
         caller must submit tool outputs via the Agents module and re-invoke
         generate — so a flow using client tools should pass `?wait=true`.
       operationId: generateConversationMessage
+      x-iam-action: conversations:GenerateConversationMessage
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -637,6 +645,7 @@ paths:
       summary: Remove a message from a conversation
       description: Removes a document from a conversation
       operationId: removeConversationMessage
+      x-iam-action: conversations:UpdateConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -689,6 +698,7 @@ paths:
       summary: Get conversation tags
       description: Returns all tags attached to the conversation
       operationId: getConversationTags
+      x-iam-action: conversations:GetConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -737,6 +747,7 @@ paths:
       summary: Replace conversation tags
       description: Replaces all tags on the conversation with the provided tags
       operationId: replaceConversationTags
+      x-iam-action: conversations:UpdateConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id
@@ -793,6 +804,7 @@ paths:
       summary: Merge conversation tags
       description: Merges provided tags into the conversation's existing tags (existing tags are preserved unless overridden)
       operationId: mergeConversationTags
+      x-iam-action: conversations:UpdateConversation
       x-soat-resource:
         kind: conversation
         from: conversation_id

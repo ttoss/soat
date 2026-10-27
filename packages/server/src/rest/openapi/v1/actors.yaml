@@ -26,6 +26,7 @@ paths:
       summary: List actors
       description: Returns all actors the caller has access to. If projectId is provided, returns only actors in that project. project keys are scoped to a single project automatically. JWT users without projectId receive actors across all their accessible projects.
       operationId: listActors
+      x-iam-action: actors:ListActors
       parameters:
         - name: project_id
           in: query
@@ -111,6 +112,7 @@ paths:
       summary: Create an actor
       description: Creates a new actor. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createActor
+      x-iam-action: actors:CreateActor
       requestBody:
         required: true
         content:
@@ -191,6 +193,7 @@ paths:
       summary: Get an actor by ID
       description: Returns an actor by its ID
       operationId: getActor
+      x-iam-action: actors:GetActor
       x-soat-resource:
         kind: actor
         from: actor_id
@@ -239,6 +242,7 @@ paths:
       summary: Delete an actor
       description: Deletes an actor by its ID
       operationId: deleteActor
+      x-iam-action: actors:DeleteActor
       x-soat-resource:
         kind: actor
         from: actor_id
@@ -290,6 +294,7 @@ paths:
       summary: Update an actor
       description: Updates an actor's properties
       operationId: updateActor
+      x-iam-action: actors:UpdateActor
       x-soat-resource:
         kind: actor
         from: actor_id
@@ -371,6 +376,7 @@ paths:
       summary: Get actor tags
       description: Returns all tags attached to the actor
       operationId: getActorTags
+      x-iam-action: actors:GetActor
       x-soat-resource:
         kind: actor
         from: actor_id
@@ -419,6 +425,7 @@ paths:
       summary: Replace actor tags
       description: Replaces all tags on the actor with the provided tags (not merged)
       operationId: replaceActorTags
+      x-iam-action: actors:UpdateActor
       x-soat-resource:
         kind: actor
         from: actor_id
@@ -475,6 +482,7 @@ paths:
       summary: Merge actor tags
       description: Merges provided tags into the actor's existing tags (existing tags are preserved unless overridden)
       operationId: mergeActorTags
+      x-iam-action: actors:UpdateActor
       x-soat-resource:
         kind: actor
         from: actor_id

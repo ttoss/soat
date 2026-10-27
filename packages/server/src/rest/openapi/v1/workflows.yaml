@@ -30,6 +30,7 @@ paths:
         - Workflows
       summary: List workflows
       operationId: listWorkflows
+      x-iam-action: workflows:ListWorkflows
       parameters:
         - name: project_id
           in: query
@@ -75,6 +76,7 @@ paths:
         - Workflows
       summary: Create a workflow
       operationId: createWorkflow
+      x-iam-action: workflows:CreateWorkflow
       requestBody:
         required: true
         content:
@@ -126,6 +128,7 @@ paths:
         - Workflows
       summary: Get a workflow
       operationId: getWorkflow
+      x-iam-action: workflows:GetWorkflow
       parameters:
         - name: workflow_id
           in: path
@@ -172,6 +175,7 @@ paths:
         - Workflows
       summary: Update a workflow
       operationId: updateWorkflow
+      x-iam-action: workflows:UpdateWorkflow
       parameters:
         - name: workflow_id
           in: path
@@ -230,6 +234,7 @@ paths:
         - Workflows
       summary: Delete a workflow
       operationId: deleteWorkflow
+      x-iam-action: workflows:DeleteWorkflow
       parameters:
         - name: workflow_id
           in: path
@@ -283,6 +288,7 @@ paths:
         - Workflows
       summary: List a workflow's versions
       operationId: listWorkflowVersions
+      x-iam-action: workflows:ListWorkflowVersions
       parameters:
         - name: workflow_id
           in: path
@@ -341,6 +347,7 @@ paths:
         - Workflows
       summary: Fetch an archived workflow version
       operationId: getWorkflowVersion
+      x-iam-action: workflows:GetWorkflowVersion
       parameters:
         - name: workflow_id
           in: path
@@ -412,6 +419,7 @@ paths:
         - Workflows
       summary: Restore an archived workflow state machine
       operationId: restoreWorkflowVersion
+      x-iam-action: workflows:RestoreWorkflowVersion
       parameters:
         - name: workflow_id
           in: path
@@ -486,6 +494,7 @@ paths:
         - Workflows
       summary: Migrate a workflow's open tasks to one of its versions
       operationId: createWorkflowMigration
+      x-iam-action: workflows:MigrateWorkflowTasks
       parameters:
         - name: workflow_id
           in: path
@@ -547,6 +556,7 @@ paths:
         - Workflows
       summary: Get a workflow migration
       operationId: getWorkflowMigration
+      x-iam-action: workflows:GetWorkflowMigration
       parameters:
         - name: workflow_id
           in: path

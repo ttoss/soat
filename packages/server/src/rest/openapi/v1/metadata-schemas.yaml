@@ -32,6 +32,7 @@ paths:
         Returns the declarations in scope, oldest first. `resource_type`
         narrows them to one governed resource.
       operationId: listMetadataSchemas
+      x-iam-action: metadata-schemas:ListMetadataSchemas
       parameters:
         - name: project_id
           in: query
@@ -98,6 +99,7 @@ paths:
         `/.system` cannot be governed: a platform-written document carries no
         caller metadata.
       operationId: createMetadataSchema
+      x-iam-action: metadata-schemas:CreateMetadataSchema
       requestBody:
         required: true
         content:
@@ -196,6 +198,7 @@ paths:
         resource's own write path, because a check a writer has to call is
         advisory and the writer who skips it is the one the rule exists for.
       operationId: validateMetadata
+      x-iam-action: metadata-schemas:ListMetadataSchemas
       requestBody:
         required: true
         content:

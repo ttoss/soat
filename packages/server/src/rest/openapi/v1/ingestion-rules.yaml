@@ -29,6 +29,7 @@ paths:
       summary: List ingestion rules
       description: Returns the ingestion rules for a project
       operationId: listIngestionRules
+      x-iam-action: ingestion-rules:ListIngestionRules
       parameters:
         - name: project_id
           in: query
@@ -81,6 +82,7 @@ paths:
         Creates a rule mapping a content_type glob to a converter. Exactly one
         of tool_id or agent_id must be set.
       operationId: createIngestionRule
+      x-iam-action: ingestion-rules:CreateIngestionRule
       requestBody:
         required: true
         content:
@@ -195,6 +197,7 @@ paths:
       summary: Get an ingestion rule
       description: Returns a specific ingestion rule
       operationId: getIngestionRule
+      x-iam-action: ingestion-rules:GetIngestionRule
       x-soat-resource:
         kind: ingestionRule
         from: ingestion_rule_id
@@ -243,6 +246,7 @@ paths:
       summary: Update an ingestion rule
       description: Updates fields of an ingestion rule
       operationId: updateIngestionRule
+      x-iam-action: ingestion-rules:UpdateIngestionRule
       x-soat-resource:
         kind: ingestionRule
         from: ingestion_rule_id
@@ -349,6 +353,7 @@ paths:
       summary: Delete an ingestion rule
       description: Deletes an ingestion rule
       operationId: deleteIngestionRule
+      x-iam-action: ingestion-rules:DeleteIngestionRule
       x-soat-resource:
         kind: ingestionRule
         from: ingestion_rule_id

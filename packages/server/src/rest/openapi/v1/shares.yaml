@@ -33,6 +33,7 @@ paths:
         with `403 PUBLIC_SHARES_DISABLED` unless the deployment sets
         `SHARES_ALLOW_PUBLIC=true`.
       operationId: createShare
+      x-iam-action: shares:CreateShare
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -127,6 +128,7 @@ paths:
         shares it accepted, each with the project's own `acceptance`. A public
         share the project never accepted is not listed.
       operationId: listShares
+      x-iam-action: shares:ListShares
       parameters:
         - name: project_id
           in: query
@@ -197,6 +199,7 @@ paths:
         named by `project_id` or by its scoped credential, reads a share
         addressed to it or a public one, with its own `acceptance`.
       operationId: getShare
+      x-iam-action: shares:GetShare
       parameters:
         - $ref: '#/components/parameters/share_id'
         - name: project_id
@@ -247,6 +250,7 @@ paths:
         Changes a share's `cap`, as its publisher. The next call through the
         share reads the new cap; a changed `window` starts a fresh count.
       operationId: updateShare
+      x-iam-action: shares:UpdateShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -311,6 +315,7 @@ paths:
         Deletes a share and every acceptance of it. Each project whose
         acceptance was active gets a `share_revoked` activity entry.
       operationId: deleteShare
+      x-iam-action: shares:DeleteShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -353,6 +358,7 @@ paths:
         `403 SHARE_REVOKED` until the publisher deletes that acceptance. A
         suspended share can be accepted and grants nothing until resumed.
       operationId: acceptShare
+      x-iam-action: shares:AcceptShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -420,6 +426,7 @@ paths:
         any. Reversible with resume; nobody re-accepts. Each project with an
         active acceptance gets a `share_suspended` activity entry. Idempotent.
       operationId: suspendShare
+      x-iam-action: shares:SuspendShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -463,6 +470,7 @@ paths:
         Clears `suspended_at`. Each project with an active acceptance gets a
         `share_resumed` activity entry. Idempotent.
       operationId: resumeShare
+      x-iam-action: shares:SuspendShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -512,6 +520,7 @@ paths:
         that answers `409 SHARE_IN_USE` unless `force=true`. A publisher's
         revoke is never refused on that account. Idempotent.
       operationId: revokeShare
+      x-iam-action: shares:RevokeShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -599,6 +608,7 @@ paths:
         `project_id` or by its scoped credential; the publisher holds none of
         these and is answered `400`.
       operationId: listShareReferences
+      x-iam-action: shares:GetShare
       parameters:
         - $ref: '#/components/parameters/share_id'
         - name: project_id
@@ -651,6 +661,7 @@ paths:
       summary: List a share's acceptances
       description: The projects that accepted the share, for its publisher.
       operationId: listShareAcceptances
+      x-iam-action: shares:ListShares
       parameters:
         - $ref: '#/components/parameters/share_id'
         - name: status
@@ -712,6 +723,7 @@ paths:
         `403 SHARE_REVOKED` until the publisher deletes it. The project gets a
         `share_revoked` activity entry if the acceptance was active.
       operationId: revokeShareAcceptance
+      x-iam-action: shares:RevokeShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -757,6 +769,7 @@ paths:
         revoked accept again. The project gets a `share_revoked` activity entry
         if the acceptance was active.
       operationId: deleteShareAcceptance
+      x-iam-action: shares:DeleteShare
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'

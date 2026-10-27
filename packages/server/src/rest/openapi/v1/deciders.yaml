@@ -29,6 +29,7 @@ paths:
       summary: List deciders
       description: Returns the deciders defined in a project, newest first.
       operationId: listDeciders
+      x-iam-action: deciders:ListDeciders
       parameters:
         - name: project_id
           in: query
@@ -85,6 +86,7 @@ paths:
         the create is refused with `400 DECIDER_TOOL_NOT_CALLABLE`. A duplicate
         `name` in the project is `409 NAME_CONFLICT`.
       operationId: createDecider
+      x-iam-action: deciders:CreateDecider
       requestBody:
         required: true
         content:
@@ -136,6 +138,7 @@ paths:
       summary: Get a decider
       description: Returns a decider with its current question set and version.
       operationId: getDecider
+      x-iam-action: deciders:GetDecider
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -180,6 +183,7 @@ paths:
         leaves `version` where it is. A new backend is held to the same rules as
         on create.
       operationId: updateDecider
+      x-iam-action: deciders:UpdateDecider
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -239,6 +243,7 @@ paths:
         Deletes a decider and its version archive. Its decisions remain and keep
         naming the decider's ID.
       operationId: deleteDecider
+      x-iam-action: deciders:DeleteDecider
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -281,6 +286,7 @@ paths:
         Returns the decider's archived question sets, newest first. A version is
         written on create and on every write that changes `questions`.
       operationId: listDeciderVersions
+      x-iam-action: deciders:ListDeciderVersions
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -330,6 +336,7 @@ paths:
         `decider_version` it was answered under, so this is how its criteria
         are read after the decider has changed.
       operationId: getDeciderVersion
+      x-iam-action: deciders:GetDeciderVersion
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -376,6 +383,7 @@ paths:
         archives it again as a new version rather than rewinding the counter.
         Restoring the question set the decider already holds is a no-op.
       operationId: restoreDeciderVersion
+      x-iam-action: deciders:RestoreDeciderVersion
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -459,6 +467,7 @@ paths:
         `decisions.completed` and `decisions.failed`. With `wait: true` it is
         `201` with the decision settled.
       operationId: createDecision
+      x-iam-action: deciders:CreateDecision
       x-soat-resource:
         kind: decider
         from: decider_id
@@ -536,6 +545,7 @@ paths:
         `wait` and the tool contract are those of
         `POST /api/v1/deciders/{decider_id}/decisions`.
       operationId: createInlineDecision
+      x-iam-action: deciders:CreateInlineDecision
       requestBody:
         required: true
         content:
@@ -589,6 +599,7 @@ paths:
       summary: List decisions
       description: Returns the decisions in a project, newest first.
       operationId: listDecisions
+      x-iam-action: deciders:ListDecisions
       parameters:
         - name: project_id
           in: query
@@ -658,6 +669,7 @@ paths:
         Returns a decision. Poll it after a `wait: false` request until
         `status` is `completed` or `failed`.
       operationId: getDecision
+      x-iam-action: deciders:GetDecision
       x-soat-resource:
         kind: decision
         from: decision_id

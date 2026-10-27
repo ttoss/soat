@@ -28,6 +28,7 @@ paths:
       summary: List datasets
       description: Returns the datasets defined in a project
       operationId: listDatasets
+      x-iam-action: evaluations:ListDatasets
       parameters:
         - name: project_id
           in: query
@@ -85,6 +86,7 @@ paths:
         never deletes or mutates a dataset item, so erasing a generation cannot
         silently stop a test suite from being runnable.
       operationId: createDataset
+      x-iam-action: evaluations:CreateDataset
       requestBody:
         required: true
         content:
@@ -157,6 +159,7 @@ paths:
       summary: Get a dataset
       description: Returns a specific dataset
       operationId: getDataset
+      x-iam-action: evaluations:GetDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -205,6 +208,7 @@ paths:
       summary: Update a dataset
       description: Updates a dataset's name and/or description
       operationId: updateDataset
+      x-iam-action: evaluations:CreateDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -283,6 +287,7 @@ paths:
         runs that already scored those items keep their frozen copies of the
         input and expected output.
       operationId: deleteDataset
+      x-iam-action: evaluations:DeleteDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -328,6 +333,7 @@ paths:
       summary: List dataset items
       description: Returns the test cases in a dataset, oldest first
       operationId: listDatasetItems
+      x-iam-action: evaluations:ListDatasets
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -386,6 +392,7 @@ paths:
         Adds one test case. `input` is replayed verbatim as the generation's
         messages, so it must be a non-empty array of `{ role, content }`.
       operationId: createDatasetItem
+      x-iam-action: evaluations:CreateDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -499,6 +506,7 @@ paths:
         it (`409 GENERATION_CONTENT_UNAVAILABLE`). Generations that predate input
         recording answer the same way.
       operationId: createDatasetItemFromGeneration
+      x-iam-action: evaluations:CreateDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -598,6 +606,7 @@ paths:
         Updates a test case. Runs that already scored it are unaffected — each
         result carries its own frozen copy of the input and expected output.
       operationId: updateDatasetItem
+      x-iam-action: evaluations:CreateDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -680,6 +689,7 @@ paths:
         Deletes a test case. Results of runs that already scored it stay
         readable; their `dataset_item_id` becomes null.
       operationId: deleteDatasetItem
+      x-iam-action: evaluations:CreateDataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -732,6 +742,7 @@ paths:
       summary: List evals
       description: Returns the evals defined in a project
       operationId: listEvals
+      x-iam-action: evaluations:ListEvals
       parameters:
         - name: project_id
           in: query
@@ -791,6 +802,7 @@ paths:
         criteria and their comparison measures the agent instead of the config
         drifting underneath it. Each scorer `type` may appear at most once.
       operationId: createEval
+      x-iam-action: evaluations:CreateEval
       requestBody:
         required: true
         content:
@@ -890,6 +902,7 @@ paths:
       summary: Get an eval
       description: Returns a specific eval
       operationId: getEval
+      x-iam-action: evaluations:GetEval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -941,6 +954,7 @@ paths:
         the new agent, since an `output_schema` scorer that was legal against
         the old one may not be.
       operationId: updateEval
+      x-iam-action: evaluations:CreateEval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1034,6 +1048,7 @@ paths:
       summary: Delete an eval
       description: Deletes an eval, its runs, and their results
       operationId: deleteEval
+      x-iam-action: evaluations:DeleteEval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1079,6 +1094,7 @@ paths:
       summary: List eval runs
       description: Returns an eval's runs, newest first
       operationId: listEvalRuns
+      x-iam-action: evaluations:ListEvals
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1164,6 +1180,7 @@ paths:
         delta over a shifted dataset is therefore never presented as a clean
         comparison.
       operationId: startEvalRun
+      x-iam-action: evaluations:RunEval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1318,6 +1335,7 @@ paths:
       summary: Get an eval run
       description: Returns a run's status, counts, and aggregate scores
       operationId: getEvalRun
+      x-iam-action: evaluations:GetEval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1374,6 +1392,7 @@ paths:
       summary: List eval run results
       description: Returns the per-item results of a run, oldest first
       operationId: listEvalResults
+      x-iam-action: evaluations:ListEvals
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1450,6 +1469,7 @@ paths:
 
         A run that has already finished is rejected with 400.
       operationId: cancelEvalRun
+      x-iam-action: evaluations:RunEval
       x-soat-resource:
         kind: eval
         from: eval_id

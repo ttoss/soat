@@ -34,6 +34,7 @@ paths:
         match (e.g. `srn:{project}:secret:` matches every secret action); every
         other filter is exact.
       operationId: listAuditEntries
+      x-iam-action: audit:ListAuditEntries
       parameters:
         - name: project_id
           in: query
@@ -141,6 +142,7 @@ paths:
         required: the export is per-project by design. Filters behave exactly as
         they do on the list endpoint.
       operationId: exportAuditEntries
+      x-iam-action: audit:ExportAuditEntries
       # Not a tool, for two independent reasons. The response is a stream, which
       # has no JSON projection; and an export is deliberately unbounded — it has
       # no `limit` — so the callable form of "read the audit log" is
@@ -230,6 +232,7 @@ paths:
       summary: Get an audit entry
       description: Returns a single audit-log entry, including its `detail` payload
       operationId: getAuditEntry
+      x-iam-action: audit:GetAuditEntry
       x-soat-resource:
         kind: audit
         from: entry_id

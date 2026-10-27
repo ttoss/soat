@@ -31,6 +31,7 @@ paths:
       summary: Create a tool
       description: Creates a new tool in the project.
       operationId: createTool
+      x-iam-action: tools:CreateTool
       requestBody:
         required: true
         content:
@@ -226,6 +227,7 @@ paths:
       summary: List tools
       description: Returns all tools in the project.
       operationId: listTools
+      x-iam-action: tools:ListTools
       parameters:
         - name: project_id
           in: query
@@ -277,6 +279,7 @@ paths:
         is shared with, through an accepted share, reads its `id`, `name`,
         `description` and `parameters` only.
       operationId: getTool
+      x-iam-action: tools:GetTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -323,6 +326,7 @@ paths:
       summary: Update a tool
       description: Updates an existing tool.
       operationId: updateTool
+      x-iam-action: tools:UpdateTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -383,6 +387,7 @@ paths:
         deleted; an ingestion rule keeps its `tool_id` and fails the documents
         it matches with `CONVERTER_FAILED` until repointed.
       operationId: deleteTool
+      x-iam-action: tools:DeleteTool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -476,6 +481,7 @@ paths:
         `publisher_project_id`, and the tool receives the calling project as
         the `calling_project_id` tool context key.
       operationId: callTool
+      x-iam-action: tools:CallTool
       x-soat-resource:
         kind: tool
         from: tool_id

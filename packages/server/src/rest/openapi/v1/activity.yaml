@@ -38,6 +38,7 @@ paths:
         `cursor` to fetch the next one; a `null` `next_cursor` means there is
         no more data.
       operationId: listActivity
+      x-iam-action: activity:ListActivity
       parameters:
         - name: project_id
           in: query
@@ -148,6 +149,7 @@ paths:
         start to end. `project_id` is required: the export is per-project by
         design. Filters behave exactly as they do on the list endpoint.
       operationId: exportActivity
+      x-iam-action: activity:ExportActivity
       # Not a tool: the response is a stream with no JSON projection, and an
       # export is deliberately unbounded, so the callable form of "read the
       # activity feed" is `listActivity`, which is paged.

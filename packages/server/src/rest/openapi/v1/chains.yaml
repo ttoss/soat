@@ -40,6 +40,7 @@ paths:
         `status` to find the chains that may still be spending (`active`) or the
         ones a budget stopped (`budget_exhausted`).
       operationId: listChains
+      x-iam-action: chains:ListChains
       parameters:
         - name: project_id
           in: query
@@ -112,6 +113,7 @@ paths:
         Returns a single continuation chain. To read the generations in it, list
         generations filtered by `chain_id`.
       operationId: getChain
+      x-iam-action: chains:GetChain
       x-soat-resource:
         kind: chain
         from: chain_id
