@@ -13,6 +13,7 @@ const log = createDebug('soat:advisory-locks');
 const ADVISORY_LOCK_NAMESPACES = {
   projectConcurrency: 0x50a7_c000,
   conversationWrites: 0x50a7_c001,
+  firstAdminBootstrap: 0x50a7_c002,
 } as const;
 
 /**

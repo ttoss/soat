@@ -2,9 +2,11 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   comparePassword,
+  DUMMY_PASSWORD_HASH,
   hashPassword,
   signUserToken,
 } from '../middleware/auth';
+import { lockForTransaction } from './advisoryLocks';
 import { paginatedList } from './pagination';
 
 const mapUser = (user: InstanceType<(typeof db)['User']>) => {
@@ -47,16 +49,12 @@ export const loginUser = async (args: {
 }) => {
   const user = await db.User.findOne({ where: { username: args.username } });
 
-  if (!user) {
-    return null;
-  }
-
   const valid = await comparePassword(
     args.password,
-    user.passwordHash as string
+    user ? (user.passwordHash as string) : DUMMY_PASSWORD_HASH
   );
 
-  if (!valid) {
+  if (!user || !valid) {
     return null;
   }
 
@@ -87,20 +85,33 @@ export const createFirstAdminUser = async (args: {
   username: string;
   password: string;
 }) => {
-  const count = await db.User.count();
-
-  if (count > 0) {
+  // Refuse before hashing, so a bootstrapped server answers this unauthenticated
+  // route without paying for a hash. The count under the lock is the binding one.
+  if ((await db.User.count()) > 0) {
     return null;
   }
 
   const passwordHash = await hashPassword(args.password);
-  const user = await db.User.create({
-    username: args.username,
-    passwordHash,
-    role: 'admin',
+
+  const user = await db.sequelize.transaction(async (transaction) => {
+    await lockForTransaction({
+      sequelize: db.sequelize,
+      transaction,
+      namespace: 'firstAdminBootstrap',
+      id: 0,
+    });
+
+    if ((await db.User.count({ transaction })) > 0) {
+      return null;
+    }
+
+    return db.User.create(
+      { username: args.username, passwordHash, role: 'admin' },
+      { transaction }
+    );
   });
 
-  return mapUser(user);
+  return user ? mapUser(user) : null;
 };
 
 export const deleteUser = async (args: { id: string }) => {
