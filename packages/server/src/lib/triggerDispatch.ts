@@ -266,6 +266,8 @@ export const prepareFiring = async (args: {
   source: string;
   fireInput?: Record<string, unknown> | null;
   fireToolContext?: Record<string, string> | null;
+  /** See `TriggerFiring.idempotencyKey`. */
+  idempotencyKey?: string | null;
 }): Promise<PreparedFiring> => {
   log('prepareFiring: trigger=%s source=%s', args.triggerPublicId, args.source);
 
@@ -301,6 +303,7 @@ export const prepareFiring = async (args: {
     projectId: trigger.projectId as number,
     source: args.source,
     input: effectiveInput,
+    idempotencyKey: args.idempotencyKey,
   });
 
   return { firing, trigger, effectiveInput, effectiveToolContext, authHeader };

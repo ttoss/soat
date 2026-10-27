@@ -647,6 +647,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The inbound hook request body is not valid JSON.',
   },
+  HOOK_DELIVERY_REPLAYED: {
+    httpStatus: 409,
+    description:
+      'The inbound hook already accepted a delivery with this timestamped signature. A new delivery is signed at its own timestamp.',
+  },
   APPROVAL_NOT_FOUND: {
     httpStatus: 404,
     description: 'The approval item does not exist or is not accessible.',

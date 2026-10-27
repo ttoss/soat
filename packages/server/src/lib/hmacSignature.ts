@@ -44,3 +44,57 @@ export const timestampedSignature = (args: {
     value: `${timestamp}.${args.payload}`,
   })}`;
 };
+
+/** How far a timestamp may sit from the receiver's clock, either way. */
+export const SIGNATURE_TOLERANCE_SECONDS = 300;
+
+const digestsEqual = (args: { a: string; b: string }): boolean => {
+  const a = Buffer.from(args.a);
+  const b = Buffer.from(args.b);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
+
+/**
+ * Verifies a {@link timestampedSignature} header over `rawBody`. Answers the
+ * `v1` digest when it matches and `t` is within
+ * {@link SIGNATURE_TOLERANCE_SECONDS} of `now`, else `null`.
+ */
+export const verifyTimestampedSignature = (args: {
+  secret: string;
+  rawBody: string;
+  header: string;
+  now?: Date;
+}): string | null => {
+  const elements = new Map(
+    args.header.split(',').map((part) => {
+      const separator = part.indexOf('=');
+      return [part.slice(0, separator).trim(), part.slice(separator + 1)];
+    })
+  );
+  const timestamp = elements.get('t');
+  const digest = elements.get('v1');
+  if (!timestamp || !/^\d+$/.test(timestamp) || !digest) return null;
+
+  const nowSeconds = Math.floor((args.now ?? new Date()).getTime() / 1000);
+  if (Math.abs(nowSeconds - Number(timestamp)) > SIGNATURE_TOLERANCE_SECONDS) {
+    return null;
+  }
+
+  const expected = hmacHex({
+    secret: args.secret,
+    value: `${timestamp}.${args.rawBody}`,
+  });
+  return digestsEqual({ a: digest, b: expected }) ? digest : null;
+};
+
+/** Verifies `sha256=<hex>` over the bare body; carries no timestamp. */
+export const verifyBareBodySignature = (args: {
+  secret: string;
+  rawBody: string;
+  header: string;
+}): boolean => {
+  return digestsEqual({
+    a: args.header,
+    b: `sha256=${hmacHex({ secret: args.secret, value: args.rawBody })}`,
+  });
+};
