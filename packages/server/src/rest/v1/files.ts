@@ -7,7 +7,6 @@ import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
 import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
@@ -19,6 +18,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { compileReadPolicy } from './readPolicy';
 
 type Next = () => Promise<unknown>;
 
@@ -46,46 +46,6 @@ const requireAuthBeforeUpload = (ctx: Context, next: Next) => {
 
 const filesRouter = new Router<Context>();
 
-const listFilesWithPolicy = async (args: {
-  authUser: NonNullable<Context['authUser']>;
-  projectPublicId: string;
-  projectIds: number[];
-  pathPrefix?: string;
-  tags?: Record<string, string>;
-  limit?: number;
-  cursor?: string;
-}) => {
-  const {
-    authUser,
-    projectPublicId,
-    projectIds,
-    pathPrefix,
-    tags,
-    limit,
-    cursor,
-  } = args;
-  const policies = await authUser.getPolicies(projectPublicId);
-  const { where: policyWhere, hasAccess } = compilePolicy({
-    policies,
-    action: 'files:GetFile',
-    resourceType: 'file',
-    projectPublicId,
-  });
-
-  if (!hasAccess) {
-    return emptyPage({ limit, cursor });
-  }
-
-  return listFiles({
-    projectIds,
-    policyWhere,
-    pathPrefix,
-    tags,
-    limit,
-    cursor,
-  });
-};
-
 filesRouter.get('/files', async (ctx: Context) => {
   requireAuth(ctx);
 
@@ -101,21 +61,21 @@ filesRouter.get('/files', async (ctx: Context) => {
     resourceType: 'file',
   });
 
-  if (projectPublicId) {
-    ctx.body = await listFilesWithPolicy({
-      authUser: ctx.authUser,
-      projectPublicId,
-      projectIds: projectIds ?? [],
-      pathPrefix,
-      tags,
-      limit,
-      cursor,
-    });
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds,
+    action: 'files:GetFile',
+    resourceType: 'file',
+  });
+  if (!hasAccess) {
+    ctx.body = emptyPage({ limit, cursor });
     return;
   }
 
   ctx.body = await listFiles({
-    projectIds: projectIds ?? undefined,
+    projectIds,
+    policyWhere,
     pathPrefix,
     tags,
     limit,

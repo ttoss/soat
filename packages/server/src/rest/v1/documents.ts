@@ -41,6 +41,7 @@ import {
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 import { sendNdjson } from './ndjsonResponse';
+import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -139,35 +140,21 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     ? await relatedDocumentRowIds({ documentId: relatedTo, projectIds })
     : undefined;
 
-  // Compile SQL-level policy filter when a specific project is requested
-  if (projectPublicId) {
-    const policies = await ctx.authUser!.getPolicies(projectPublicId);
-    const { where: policyWhere, hasAccess } = compilePolicy({
-      policies,
-      action: 'documents:ListDocuments',
-      resourceType: 'document',
-      projectPublicId,
-    });
-    if (!hasAccess) {
-      ctx.body = emptyPage({ limit, cursor });
-      return;
-    }
-    ctx.body = await listDocuments({
-      projectIds,
-      policyWhere,
-      pathPrefix,
-      relatedRowIds,
-      tags,
-      metadata,
-      includeWithdrawn,
-      limit,
-      cursor,
-    });
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds,
+    action: 'documents:ListDocuments',
+    resourceType: 'document',
+  });
+  if (!hasAccess) {
+    ctx.body = emptyPage({ limit, cursor });
     return;
   }
 
   ctx.body = await listDocuments({
     projectIds,
+    policyWhere,
     pathPrefix,
     relatedRowIds,
     tags,

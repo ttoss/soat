@@ -205,6 +205,56 @@ describe('Tag-conditioned policies filter list and search surfaces', () => {
     expect(searchIds).toEqual(expect.arrayContaining([engDocId, financeDocId]));
   });
 
+  // With no `project_id` the read spans every project the caller reaches, and
+  // the row filter must hold there exactly as it does for one named project.
+  describe('without project_id', () => {
+    test('GET /documents omits a document the condition excludes', async () => {
+      const response =
+        await authenticatedTestClient(restrictedToken).get('/api/v1/documents');
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((d: { id: string }) => {
+        return d.id;
+      });
+      expect(ids).toContain(engDocId);
+      expect(ids).not.toContain(financeDocId);
+    });
+
+    test('GET /files omits a file the condition excludes', async () => {
+      const response =
+        await authenticatedTestClient(restrictedToken).get('/api/v1/files');
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((f: { id: string }) => {
+        return f.id;
+      });
+      expect(ids).toContain(engFileId);
+      expect(ids).not.toContain(financeFileId);
+    });
+
+    test('POST /knowledge/search omits chunks of an excluded document', async () => {
+      const response = await authenticatedTestClient(restrictedToken)
+        .post('/api/v1/knowledge/search')
+        .send({ document_paths: ['/handbook/'] });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.results.map((r: { document_id: string }) => {
+        return r.document_id;
+      });
+      expect(ids).toContain(engDocId);
+      expect(ids).not.toContain(financeDocId);
+    });
+
+    test('admin, unrestricted, still sees both', async () => {
+      const documents =
+        await authenticatedTestClient(adminToken).get('/api/v1/documents');
+      const ids = documents.body.data.map((d: { id: string }) => {
+        return d.id;
+      });
+      expect(ids).toEqual(expect.arrayContaining([engDocId, financeDocId]));
+    });
+  });
+
   describe('a path-scoped Deny, which compiles to a joined-column reference', () => {
     let pathDenyToken: string;
 
@@ -239,6 +289,31 @@ describe('Tag-conditioned policies filter list and search surfaces', () => {
       expect(response.status).toBe(200);
       const paths = response.body.data.map((d: { path: string }) => {
         return d.path;
+      });
+      expect(paths).toContain('/handbook/oncall.txt');
+      expect(paths).not.toContain('/private/secrets.txt');
+    });
+
+    test('GET /documents without project_id omits the denied directory', async () => {
+      const response =
+        await authenticatedTestClient(pathDenyToken).get('/api/v1/documents');
+
+      expect(response.status).toBe(200);
+      const paths = response.body.data.map((d: { path: string }) => {
+        return d.path;
+      });
+      expect(paths).toContain('/handbook/oncall.txt');
+      expect(paths).not.toContain('/private/secrets.txt');
+    });
+
+    test('POST /knowledge/search without project_id omits the denied directory', async () => {
+      const response = await authenticatedTestClient(pathDenyToken)
+        .post('/api/v1/knowledge/search')
+        .send({ document_paths: ['/'] });
+
+      expect(response.status).toBe(200);
+      const paths = response.body.results.map((r: { path?: string }) => {
+        return r.path;
       });
       expect(paths).toContain('/handbook/oncall.txt');
       expect(paths).not.toContain('/private/secrets.txt');
