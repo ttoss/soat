@@ -23,6 +23,19 @@ const log = createDebug('soat:traces');
 
 const OMITTED_PREFIX = '[omitted:';
 
+const withoutProviderModel = (step: unknown): unknown => {
+  if (!step || typeof step !== 'object' || Array.isArray(step)) return step;
+  const { model: _model, ...rest } = Object.fromEntries(Object.entries(step));
+  const { response } = rest;
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    return rest;
+  }
+  const { modelId: _modelId, ...responseRest } = Object.fromEntries(
+    Object.entries(response)
+  );
+  return { ...rest, response: responseRest };
+};
+
 /**
  * Serializes trace steps so that Error objects (which serialize to `{}` by
  * default) are converted to plain objects with `message`, `name`, and any
@@ -30,9 +43,12 @@ const OMITTED_PREFIX = '[omitted:';
  *
  * A file's `data_base64` (a tool's file argument or `response_mode: base64`
  * answer) is replaced by its size: a trace records the call, not the file.
+ *
+ * A step's `model` and `response.modelId` are dropped: they name the provider's
+ * own model id, not the model the generation was asked for.
  */
 export const serializeSteps = (steps: unknown[]): unknown[] => {
-  return JSON.parse(
+  const parsed = JSON.parse(
     JSON.stringify(steps, (key, value: unknown) => {
       // Steps already serialized pass through again on resume; keep the size.
       if (
@@ -52,6 +68,7 @@ export const serializeSteps = (steps: unknown[]): unknown[] => {
       return value;
     })
   ) as unknown[];
+  return parsed.map(withoutProviderModel);
 };
 
 /** Redaction columns stamped on a row whose content was never written. Reuses

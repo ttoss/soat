@@ -47,7 +47,7 @@ When a generation fails (e.g. a provider error), the structured error is recorde
 
 ### Step Serialization and File Linkage
 
-Raw step objects from the Vercel AI SDK `generateText` call are stored at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it (downloadable via the Files API). `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties).
+Raw step objects from the Vercel AI SDK `generateText` call are stored at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it (downloadable via the Files API). `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties). Each step's `model` and `response.modelId` are dropped: they carry the provider's own model id, not the generation's `model`.
 
 ### Reading a Turn Back
 

@@ -1,6 +1,11 @@
 import { db } from 'src/db';
 import { saveTrace } from 'src/lib/traces';
 
+import {
+  type ChatCompletionsStub,
+  startChatCompletionsStub,
+  textCompletion,
+} from '../../fixtures/chatCompletionsStub';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Traces REST API', () => {
@@ -687,5 +692,76 @@ describe('Traces REST API', () => {
         first.body.content_redacted_at
       );
     });
+  });
+});
+
+describe('the steps object a generation stores', () => {
+  let stub: ChatCompletionsStub;
+  let adminToken: string;
+  let agentId: string;
+
+  beforeAll(async () => {
+    stub = await startChatCompletionsStub();
+    stub.reply(textCompletion('ok'));
+
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'tracesadmin', password: 'supersecret' });
+    adminToken = await loginAs('tracesadmin', 'supersecret');
+
+    const project = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Trace Steps Project' });
+    const provider = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: project.body.id,
+        name: 'Trace Steps Provider',
+        provider: 'ollama',
+        default_model: 'stub-model',
+        base_url: stub.baseUrl,
+      });
+    const agent = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: project.body.id,
+        ai_provider_id: provider.body.id,
+        name: 'Trace Steps Agent',
+      });
+    agentId = agent.body.id;
+  });
+
+  afterAll(async () => {
+    await stub.close();
+  });
+
+  test('carries no provider or provider model id', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+      .send({ messages: [{ role: 'user', content: 'hi' }] });
+    expect(res.status).toBe(200);
+
+    const trace = await authenticatedTestClient(adminToken).get(
+      `/api/v1/traces/${res.body.trace_id}`
+    );
+    const download = await authenticatedTestClient(adminToken)
+      .get(`/api/v1/files/${trace.body.file_id}/download`)
+      .buffer(true)
+      .parse((response, callback) => {
+        let text = '';
+        response.on('data', (chunk: Buffer) => {
+          text += chunk.toString('utf8');
+        });
+        response.on('end', () => {
+          callback(null, text);
+        });
+      });
+    expect(download.status).toBe(200);
+
+    expect(download.body).not.toContain('stub-model');
+    const steps: Array<Record<string, unknown>> = JSON.parse(download.body);
+    expect(steps).toHaveLength(1);
+    expect(steps[0].model).toBeUndefined();
+    expect(steps[0].content).toEqual([{ type: 'text', text: 'ok' }]);
   });
 });
