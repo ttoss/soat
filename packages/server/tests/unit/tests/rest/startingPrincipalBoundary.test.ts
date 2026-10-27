@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
+import { flushProjectResumes } from 'src/lib/projectPauseActions';
 import { type ActiveDispatch, flushTaskAutomations } from 'src/lib/tasks';
 import { JWT_SECRET } from 'src/middleware/auth';
 
@@ -43,6 +44,8 @@ beforeAll(async () => {
       'tasks:TransitionTask',
       'tasks:PauseTask',
       'tasks:ResumeTask',
+      'projects:PauseProject',
+      'projects:ResumeProject',
     ],
     createNoPermUser: false,
   });
@@ -203,6 +206,26 @@ describe('a task dispatch', () => {
         .post(`/api/v1/tasks/${taskId}/resume`)
         .send({});
       expect(resumed.status).toBe(200);
+      expect(await dispatchPrincipalOf(taskId)).toEqual(expected());
+    });
+
+    test('a project resume runs the suppressed dispatch as the starting principal', async () => {
+      const taskId = await createTask({ token: userToken, state: 'idle' });
+      const paused = await authenticatedTestClient(userToken)
+        .post(`/api/v1/projects/${projectId}/pause`)
+        .send({ reason: 'startprin' });
+      expect(paused.status).toBe(200);
+      const moved = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${taskId}/transitions`)
+        .send({ transition: 'to_rerun' });
+      expect(moved.status).toBe(200);
+      await flushTaskAutomations();
+
+      const resumed = await authenticatedTestClient(tokenOf())
+        .post(`/api/v1/projects/${projectId}/resume`)
+        .send({});
+      expect(resumed.status).toBe(200);
+      await flushProjectResumes();
       expect(await dispatchPrincipalOf(taskId)).toEqual(expected());
     });
   });

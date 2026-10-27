@@ -27,6 +27,17 @@ export type RequestPrincipal = {
   principalId: string;
 };
 
+declare const startingPrincipalBrand: unique symbol;
+
+/**
+ * The principal durable work records as having started it, which a later drive
+ * re-mints a run token from. Only `orchestrationRunToken.ts` produces one, so
+ * every writer of a starting principal is held to `resolveStartingPrincipal`.
+ */
+export type StartingPrincipal = RequestPrincipal & {
+  readonly [startingPrincipalBrand]: true;
+};
+
 /**
  * The one derivation of "who is acting" from an authenticated caller.
  *
@@ -57,7 +68,7 @@ export const principalFromAuthUser = (authUser: {
  * an already-long record literal.
  */
 export const startedByPrincipalColumns = (
-  principal: RequestPrincipal | null
+  principal: StartingPrincipal | null
 ): {
   startedByPrincipalType: string | null;
   startedByPrincipalId: string | null;

@@ -49,7 +49,7 @@ import {
 } from './orchestrationRunPause';
 import {
   buildRunAuthHeader,
-  readRunTokenPrincipal,
+  resolveStartingPrincipal,
 } from './orchestrationRunToken';
 import type {
   MappedOrchestrationRun,
@@ -62,7 +62,7 @@ import {
   resolveStartRunProjectScope,
 } from './orchestrationStartRun';
 import { kickWorker } from './orchestrationWorker';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { acceptStoredToolContext } from './toolContextCarrier';
 
@@ -500,12 +500,12 @@ const driveRunToRest = async (args: {
  * redriven from the queue would have none.
  */
 const resolveRunPrincipal = (args: {
-  principal?: RequestPrincipal | null;
+  principal?: StartingPrincipal | null;
   authHeader?: string;
 }): { principalKind: string | null; principalId: string | null } => {
   const principal =
     args.principal === undefined
-      ? readRunTokenPrincipal(args.authHeader)
+      ? resolveStartingPrincipal({ authHeader: args.authHeader })
       : args.principal;
   return {
     principalKind: principal?.principalType ?? null,
@@ -573,7 +573,7 @@ const createRunRecord = async (args: {
   toolContext?: Record<string, string>;
   metadata?: Record<string, unknown>;
   triggerId?: string;
-  principal?: RequestPrincipal | null;
+  principal?: StartingPrincipal | null;
   authHeader?: string;
   wait?: boolean;
   parent?: NestedRunParent;
@@ -682,7 +682,7 @@ export type StartOrchestrationRunArgs = {
   // Persisted so the background worker can re-establish it later. When omitted,
   // a child run inherits its parent's identity from `authHeader`; `null`
   // records none (see `resolveStartingPrincipal`).
-  principal?: RequestPrincipal | null;
+  principal?: StartingPrincipal | null;
   // Fires as soon as the run row exists, before any blocking execution, so a
   // caller can persist the id — a workflow task records `active_dispatch.id`
   // here so cancellation-on-exit can reach a still-running run.

@@ -25,7 +25,6 @@ import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
 import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
-import { startedByPrincipalColumns } from './principals';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { admitSharedCall } from './shareCaps';
@@ -160,7 +159,7 @@ const resolveContextAndRecord = async (
     rootTraceId: args.rootTraceId,
     rootGenerationId: args.rootGenerationId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
-    ...startedByPrincipalColumns(principal),
+    startedBy: principal,
     // Typed FK columns, not metadata keys: this is identity the platform
     // enforces and caps spend on, so it must not live in a caller-writable bag.
     sessionId: args.sessionId ?? null,

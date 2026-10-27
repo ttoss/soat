@@ -6,8 +6,7 @@ import { savePendingGeneration } from './agentGenerationHelpers';
 import type { MappedApproval } from './approvals';
 import { resolveChainLineage } from './generationChain';
 import { createGenerationRecord } from './generations';
-import { readRunTokenPrincipal } from './orchestrationRunToken';
-import { startedByPrincipalColumns } from './principals';
+import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { toolReferences } from './resourceReferences';
 
 const log = createDebug('soat:approvals');
@@ -166,7 +165,7 @@ export const emitClientToolReHandoff = async (args: {
     traceId,
     ...lineage,
     initiatorGenerationId: args.item.generation_id ?? null,
-    ...startedByPrincipalColumns(readRunTokenPrincipal(args.authHeader)),
+    startedBy: resolveStartingPrincipal({ authHeader: args.authHeader }),
     // Keeps the continuation's usage attributed to the same end user as the
     // turn that produced the approval; the actor is derived from the session.
     sessionId: args.item.session_id,

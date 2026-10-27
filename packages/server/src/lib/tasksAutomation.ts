@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
-import type { RequestPrincipal } from './principals';
+import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
 import { mapTask, transitionTask } from './tasks';
@@ -405,7 +405,7 @@ export const runStateAutomation = async (args: {
   projectId: number;
   stateName: string;
   onEnter: OnEnter;
-  principal?: RequestPrincipal;
+  principal?: StartingPrincipal;
 }): Promise<void> => {
   const dispatch = args.onEnter.dispatch;
   const dispatchKind = dispatchKindOf(dispatch.kind);
