@@ -141,8 +141,13 @@ Security invariants:
   action (`orchestrations:StartRun`, `agents:CreateAgentGeneration`, or
   `tools:CallTool`); the check re-runs at every fire, and
   [`PATCH /api/v1/triggers/{trigger_id}`](/docs/api/triggers/update-trigger)
-  re-asks it whenever `target_type` or `target_id` changes. An updater who
-  could not start the new target gets `403` and the trigger keeps its target.
+  re-asks it whenever a request changes `target_type` or `target_id` or sends
+  `action`, `input`, `tool_context` or `policy_id`. An updater who could not
+  start the effective target gets `403` and the trigger is unchanged.
+  [`POST /api/v1/triggers/{trigger_id}/fire`](/docs/api/triggers/fire-trigger)
+  asks it of the firer whenever the body carries a non-empty `input` or
+  `tool_context`; a firer who sends neither fires the stored firing with
+  `triggers:FireTrigger` alone.
 - **No recursion.** Trigger-scoped credentials cannot call the fire endpoint
   (`403`).
 - **Fail closed.** A deleted creator keeps the trigger but firing fails with
