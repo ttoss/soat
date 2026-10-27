@@ -22,6 +22,7 @@ import {
 } from './modelRoutes';
 import { type Page, paginatedList } from './pagination';
 import { assertProjectAcceptsWork } from './projectPause';
+import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 import { makeResourceAccessor } from './resourceAccessor';
 import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
 
@@ -341,6 +342,7 @@ const prepareChatCompletion = async (args: ChatCompletionArgs) => {
         model: args.model,
       });
   await assertProjectAcceptsWork({ projectId: resolvedModel.projectId });
+  await assertProjectSpendWithinQuota({ projectId: resolvedModel.projectId });
 
   return {
     fallbackModel: args.model ?? typedChat?.model ?? undefined,

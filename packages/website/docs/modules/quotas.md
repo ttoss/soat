@@ -190,6 +190,8 @@ Whatever the posture, a `cost_usd` check that finds AI usage no price row covere
 
 A generation **in flight is never killed**, so a budget may overshoot by at most one generation. A `project` quota aggregates the whole project; an `agent` quota with a `scope_ref` only that agent; an `actor` quota only the end user behind the generation (see [Actor scope](#actor-scope)). The check reads the meter, not a separate counter, so quotas and usage never disagree.
 
+The same check runs before every model call, not only agent generations: decider answers and built-in memory extraction match like a generation of their agent; [chat completions](./chats.md) and `llm_judge` scorers run no agent, so only `project` quotas refuse them. A refused judge errors its item; a refused extraction proposes no memories.
+
 ### Meter scope
 
 A `cost_usd` quota sums every priced meter by default, so a newly priced platform meter would consume a cap set to bound *model* spend. `meter_type` names the meter a cap answers for:
