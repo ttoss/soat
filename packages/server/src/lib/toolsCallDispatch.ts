@@ -6,10 +6,14 @@
 import { DomainError } from '../errors';
 import {
   buildHttpToolExecute,
+  isSoatActionAllowedByBoundary,
   parseHttpExecuteConfig,
   toHttpToolDomainError,
 } from './agentToolResolver';
-import { executeSoatTool } from './agentToolResolverExternalTools';
+import {
+  executeSoatTool,
+  soatActionBoundaryRefusal,
+} from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
 import { McpToolError } from './mcpProtocol';
@@ -17,7 +21,7 @@ import { fetchMcpToolListing } from './mcpToolListing';
 import { type McpTransport, openMcpTransport } from './mcpTransport';
 import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
-import type { CallableToolDefinition } from './toolsCall';
+import type { CallableToolDefinition, SignedOffCall } from './toolsCall';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
 const noopLogToolCallingError = () => {};
@@ -70,7 +74,7 @@ export const callHttpTool = (
   });
 };
 
-export const callSoatTool = (
+export const callSoatTool = async (
   tool: CallableToolDefinition,
   args: {
     action?: string;
@@ -78,6 +82,7 @@ export const callSoatTool = (
     meter: ToolExecutionMeter;
     authHeader?: string;
     toolContext?: Record<string, string>;
+    signedOff?: SignedOffCall;
   }
 ): Promise<unknown> => {
   const { authHeader } = args;
@@ -110,6 +115,15 @@ export const callSoatTool = (
       'VALIDATION_FAILED',
       `action "${action}" is not a known SOAT action.`
     );
+  }
+  if (args.signedOff) {
+    const refusal = await soatActionBoundaryRefusal({
+      def,
+      rawArgs: mergedInput,
+      boundaryPolicy: args.signedOff.boundaryPolicy,
+      isSoatActionAllowedByBoundary,
+    });
+    if (refusal) return refusal;
   }
   return executeSoatTool({
     toolName: tool.name,
@@ -280,6 +294,7 @@ export const dispatchDirectTool = async (args: {
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
+  signedOff?: SignedOffCall;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(
@@ -297,6 +312,7 @@ export const dispatchDirectTool = async (args: {
       meter: args.meter,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
+      signedOff: args.signedOff,
     });
   }
   throw new DomainError(

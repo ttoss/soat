@@ -163,7 +163,12 @@ describe('MCP bindings over a deferred server', () => {
     }) => {
       return resolveMcpTools({
         meter: UNMETERED,
-        transport: { url: mcpUrl, headers: MCP_HEADERS, identity: null },
+        transport: {
+          url: mcpUrl,
+          urlSecrets: new Map<string, string>(),
+          headers: MCP_HEADERS,
+          identity: null,
+        },
         typedTool: lists,
         logToolCallingError: jest.fn(),
       });

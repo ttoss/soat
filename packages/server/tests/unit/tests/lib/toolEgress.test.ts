@@ -126,6 +126,22 @@ describe('toolEgress', () => {
     });
 
     test.each([
+      '::127.0.0.1',
+      '::a9fe:a9fe',
+      '::8.8.8.8',
+      '2002:7f00:1::',
+      '2002:a9fe:a9fe::1',
+      '2002:808:808::1',
+      '64:ff9b:1::a9fe:a9fe',
+      '64:ff9b:1::808:808',
+    ])(
+      'refuses %s: IPv4-compatible, 6to4 and local-use NAT64 are not public',
+      (address) => {
+        expect(isPublicAddress(address)).toBe(false);
+      }
+    );
+
+    test.each([
       'not-an-ip',
       '',
       '1.2.3',
@@ -712,6 +728,164 @@ describe('toolEgress', () => {
           { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         expect(response.status).toBe(304);
+      } finally {
+        await closeServer(server);
+      }
+    });
+  });
+
+  // A URL's `{{secret:}}` references are resolved before the guard sees it, and
+  // a refusal's message and meta reach the caller: neither may carry the value.
+  describe('fetchWithEgressGuard secret redaction', () => {
+    const SECRET_ID = 'sec_redactme01';
+    const SECRET = 'Sk-Live-Token9';
+    const secrets = new Map([[SECRET_ID, SECRET]]);
+    const none = parseEgressAllowlist(undefined);
+
+    const expectRedacted = async (call: Promise<unknown>): Promise<void> => {
+      const error: unknown = await call.then(
+        () => {
+          throw new Error('expected a refusal');
+        },
+        (error_: unknown) => {
+          return error_;
+        }
+      );
+      expect(error).toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
+      const text = JSON.stringify({
+        message: error instanceof Error ? error.message : undefined,
+        meta:
+          error instanceof Error && 'meta' in error ? error.meta : undefined,
+      });
+      expect(text.toLowerCase()).not.toContain(SECRET.toLowerCase());
+      expect(text).toContain(`{{secret:${SECRET_ID}}}`);
+    };
+
+    test('an invalid URL', async () => {
+      await expectRedacted(
+        fetchWithEgressGuard(
+          `http://[${SECRET}/x`,
+          {},
+          {
+            allowlist: none,
+            secrets,
+          }
+        )
+      );
+    });
+
+    test('a literal address that is not publicly routable', async () => {
+      await expectRedacted(
+        fetchWithEgressGuard(
+          `http://127.0.0.1:1/x?key=${SECRET}`,
+          {},
+          {
+            allowlist: none,
+            secrets,
+          }
+        )
+      );
+    });
+
+    test('a host that does not resolve', async () => {
+      await expectRedacted(
+        fetchWithEgressGuard(
+          `http://${SECRET}.invalid/x`,
+          {},
+          {
+            allowlist: none,
+            secrets,
+          }
+        )
+      );
+    });
+
+    test('a host that resolves to a private address', async () => {
+      answerDns({ checked: '10.0.0.1', connected: '10.0.0.1' });
+      await expectRedacted(
+        fetchWithEgressGuard(
+          `http://${SECRET}.example/x`,
+          {},
+          {
+            allowlist: none,
+            secrets,
+          }
+        )
+      );
+    });
+
+    test('a host that resolves to a private address at connect', async () => {
+      answerDns({ checked: '8.8.8.8', connected: '127.0.0.1' });
+      await expectRedacted(
+        fetchWithEgressGuard(
+          `http://${SECRET}.example:8080/x`,
+          {},
+          {
+            allowlist: none,
+            secrets,
+          }
+        )
+      );
+    });
+
+    test('a redirect to an invalid Location', async () => {
+      const { server, origin } = await startServer((_req, res) => {
+        res.writeHead(302, { Location: 'http://[bad' });
+        res.end();
+      });
+      try {
+        await expectRedacted(
+          fetchWithEgressGuard(
+            `${origin}/x?key=${SECRET}`,
+            {},
+            {
+              allowlist: parseEgressAllowlist('127.0.0.1'),
+              secrets,
+            }
+          )
+        );
+      } finally {
+        await closeServer(server);
+      }
+    });
+
+    test('a redirect hop that leaves the allowlist', async () => {
+      const { server, origin, port } = await startServer((req, res) => {
+        res.writeHead(302, { Location: `http://10.255.255.1${req.url}` });
+        res.end();
+      });
+      try {
+        await expectRedacted(
+          fetchWithEgressGuard(
+            `${origin}/${SECRET}`,
+            {},
+            {
+              allowlist: parseEgressAllowlist(`127.0.0.1:${port}`),
+              secrets,
+            }
+          )
+        );
+      } finally {
+        await closeServer(server);
+      }
+    });
+
+    test('too many redirects', async () => {
+      const { server, origin } = await startServer((req, res) => {
+        res.writeHead(302, { Location: req.url ?? '/' });
+        res.end();
+      });
+      try {
+        await expectRedacted(
+          fetchWithEgressGuard(
+            `${origin}/loop?key=${SECRET}`,
+            {},
+            {
+              allowlist: parseEgressAllowlist('127.0.0.1'),
+              secrets,
+            }
+          )
+        );
       } finally {
         await closeServer(server);
       }

@@ -21,6 +21,7 @@ import {
   type CallableToolDefinition,
   callResolvedTool,
   type InlineToolDefinition,
+  type SignedOffCall,
 } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
 import { assertValidToolTemplateTokens } from './toolTemplates';
@@ -464,6 +465,8 @@ export const callTool = async (args: {
    * the ids it holds rather than dropping them by omission.
    */
   attribution: ToolCallAttribution;
+  /** See {@link SignedOffCall}. */
+  signedOff?: SignedOffCall;
 }): Promise<unknown> => {
   const referenced = await toolReferences.find({
     id: args.id,
@@ -488,6 +491,7 @@ export const callTool = async (args: {
     idempotencyKey: args.idempotencyKey,
     toolContext: args.toolContext,
     attribution: args.attribution,
+    signedOff: args.signedOff,
   });
 };
 

@@ -27,10 +27,12 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
   let projectInternalId: number;
   let agentId: string;
   let httpToolId: string;
+  let presetToolId: string;
 
   let toolServer: http.Server;
   let modelServer: http.Server;
   let toolRequests: http.IncomingHttpHeaders[] = [];
+  let accountBodies: Record<string, unknown>[] = [];
 
   const TOOL_NAME = 'approvalctx-refund';
 
@@ -101,9 +103,16 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     projectInternalId = project!.id as number;
 
     toolServer = createServer((req, res) => {
-      req.on('data', () => {});
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += chunk;
+      });
       req.on('end', () => {
-        toolRequests.push(req.headers);
+        if (req.url === '/account') {
+          accountBodies.push(JSON.parse(raw) as Record<string, unknown>);
+        } else {
+          toolRequests.push(req.headers);
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       });
@@ -150,6 +159,26 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     expect(toolRes.status).toBe(201);
     httpToolId = toolRes.body.id as string;
 
+    const presetToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'approvalctx-charge',
+        type: 'http',
+        description: 'Charge an account',
+        parameters: {
+          type: 'object',
+          properties: {
+            amount: { type: 'number' },
+            account: { type: 'string' },
+          },
+        },
+        preset_parameters: { account: '{{context:account}}' },
+        execute: { url: `${toolBaseUrl}/account`, method: 'POST' },
+      });
+    expect(presetToolRes.status).toBe(201);
+    presetToolId = presetToolRes.body.id as string;
+
     const agentRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/agents')
       .send({
@@ -169,6 +198,7 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
 
   beforeEach(() => {
     toolRequests = [];
+    accountBodies = [];
   });
 
   const seed = async () => {
@@ -270,6 +300,58 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     });
     expect(row!.status).toBe('pending');
     expect(toolRequests).toHaveLength(0);
+  });
+
+  describe('a preset the proposal resolved', () => {
+    const seedCharge = () => {
+      return emitApproval({
+        projectId: projectInternalId,
+        origin: 'tool_call',
+        proposedAction: {
+          toolId: presetToolId,
+          arguments: { amount: 5, account: 'acct-proposer' },
+        },
+        expiresInSeconds: 3600,
+        agentId,
+      });
+    };
+
+    const waitForCharge = async () => {
+      for (let i = 0; i < 120 && accountBodies.length < 1; i += 1) {
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 25);
+        });
+      }
+      return accountBodies[0];
+    };
+
+    test("keeps its value under the approver's bag", async () => {
+      const item = await seedCharge();
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/approvals/${item.id}/approve`)
+        .send({ tool_context: { account: 'acct-approver' } });
+      expect(res.status).toBe(200);
+
+      expect(await waitForCharge()).toEqual({
+        amount: 5,
+        account: 'acct-proposer',
+      });
+    });
+
+    test('keeps its value under edited arguments', async () => {
+      const item = await seedCharge();
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/approvals/${item.id}/approve`)
+        .send({ arguments: { amount: 7, account: 'acct-edited' } });
+      expect(res.status).toBe(200);
+
+      expect(await waitForCharge()).toEqual({
+        amount: 7,
+        account: 'acct-proposer',
+      });
+    });
   });
 
   test('user without permission returns 404', async () => {

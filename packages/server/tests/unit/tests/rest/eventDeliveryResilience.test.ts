@@ -208,11 +208,16 @@ describe('Event delivery resilience', () => {
   describe('POST /api/v1/files → the webhook subscription lookup', () => {
     test('a transient failure does not lose the delivery', async () => {
       const before = droppedEventCount({ stage: 'webhook_lookup' });
-      jest
+      const blip = jest
         .spyOn(db.Webhook, 'findAll')
         .mockRejectedValueOnce(new Error('connection terminated'));
 
       const fileId = await createFile();
+      // `Webhook.findOne` runs through `findAll`, so the deliveries read below
+      // would take the rejection if it ran before the event pipeline's lookup.
+      await until(() => {
+        return blip.mock.calls.length > 0;
+      });
       await settledDelivery(fileId);
 
       expect(await deliveriesFor(fileId)).toHaveLength(1);

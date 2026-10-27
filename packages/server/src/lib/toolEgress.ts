@@ -11,6 +11,7 @@ import {
   isPublicAddress,
   toBytes,
 } from './egressAddress';
+import { redactEgressSecrets } from './egressSecretRedaction';
 
 export type { EgressCidr } from './egressAddress';
 export { isPublicAddress } from './egressAddress';
@@ -422,23 +423,23 @@ const sendHop = async (args: {
   }
 };
 
-/**
- * `fetch` with the egress guard applied to the initial URL and to every
- * redirect hop. Redirects are followed manually — `redirect: 'follow'` would
- * reach the `Location` target without any check.
- */
-export const fetchWithEgressGuard = async (
+type EgressFetchOptions = {
+  allowlist?: EgressAllowlist;
+  noun?: string;
+  // Called right before each hop goes on the wire, after its check passed.
+  onRequest?: () => void;
+  // Headers of the caller's own that carry a credential, dropped with
+  // `CREDENTIAL_HEADERS` on a redirect to another origin.
+  credentialHeaders?: readonly string[];
+  // The `{{secret:}}` values resolved into `url`, by secret id: a refusal's
+  // message and meta carry the reference in their place.
+  secrets?: ReadonlyMap<string, string>;
+};
+
+const followRedirects = async (
   url: string,
-  init: RequestInit = {},
-  options: {
-    allowlist?: EgressAllowlist;
-    noun?: string;
-    // Called right before each hop goes on the wire, after its check passed.
-    onRequest?: () => void;
-    // Headers of the caller's own that carry a credential, dropped with
-    // `CREDENTIAL_HEADERS` on a redirect to another origin.
-    credentialHeaders?: readonly string[];
-  } = {}
+  init: RequestInit,
+  options: EgressFetchOptions
 ): Promise<Response> => {
   const allowlist = options.allowlist ?? getEgressAllowlist();
   const noun = options.noun ?? DEFAULT_NOUN;
@@ -494,4 +495,21 @@ export const fetchWithEgressGuard = async (
     `${noun} exceeded ${MAX_REDIRECTS} redirects; giving up rather than following further.`,
     { tool_url: url }
   );
+};
+
+/**
+ * `fetch` with the egress guard applied to the initial URL and to every
+ * redirect hop. Redirects are followed manually — `redirect: 'follow'` would
+ * reach the `Location` target without any check.
+ */
+export const fetchWithEgressGuard = async (
+  url: string,
+  init: RequestInit = {},
+  options: EgressFetchOptions = {}
+): Promise<Response> => {
+  try {
+    return await followRedirects(url, init, options);
+  } catch (error) {
+    throw redactEgressSecrets({ error, secrets: options.secrets });
+  }
 };

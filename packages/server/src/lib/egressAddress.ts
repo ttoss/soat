@@ -135,9 +135,16 @@ const NON_PUBLIC_V4 = [
   '240.0.0.0/4',
 ].map(cidr);
 
+/**
+ * `::/96` (IPv4-compatible), `2002::/16` (6to4) and `64:ff9b:1::/48`
+ * (local-use NAT64) each embed an IPv4 address; they are refused whole rather
+ * than unwrapped, since none is a destination a tool needs to reach.
+ */
 const NON_PUBLIC_V6 = [
-  '::/128',
+  '::/96',
   '::1/128',
+  '2002::/16',
+  '64:ff9b:1::/48',
   'fc00::/7',
   'fe80::/10',
   'ff00::/8',
