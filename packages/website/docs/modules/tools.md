@@ -135,6 +135,8 @@ Called with `{ "user_id": "123", "post_id": "456" }`, the server issues `DELETE 
 
 `{{secret:...}}` works in `execute.url` and `execute.headers` values, resolved right before the outbound request; the stored tool and every `GET`/`LIST` keep the reference. The secret must exist in the same project (`400 SECRET_NOT_FOUND` at create/update).
 
+A tool sends a secret it names wherever it points, so writing one needs `secrets:UseSecret` on each secret it names, besides `tools:CreateTool` / `tools:UpdateTool`: a reference in `execute`, `mcp` or an inline [pipeline](#pipeline) step without it is `403 FORBIDDEN`, `meta.secret_ids` naming each secret refused. Grant it per secret with a resource such as `srn:<project_id>:secret:sec_01HXYZ`. An update that leaves `execute`, `mcp` and `pipeline` untouched needs no secret permission, and calling the tool needs only `tools:CallTool`. A [formation](./formations.md) that declares such a tool asks the same: a literal id is refused before anything is applied, an id resolved at deploy fails the apply.
+
 Secret and [context](#context-references-in-headers) references are the only valid double-curly forms; any other `{{...}}` in `execute` or `mcp` is `400 INVALID_TEMPLATE_TOKEN` at create/update. [URL path placeholders](#http) use single braces (`{param}`). Full reference: [Expressions & Templating](../advanced/expressions-and-templating.md).
 
 #### Context references in headers

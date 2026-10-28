@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { assertGuardrailsExist } from './guardrails';
 import { validateHttpExecute } from './httpToolResponse';
 import type { ResourceIncludes } from './modelIncludes';
@@ -24,7 +25,13 @@ import {
   type SignedOffCall,
 } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
+import { assertToolSecretUseAllowed } from './toolSecretUse';
 import { assertValidToolTemplateTokens } from './toolTemplates';
+import {
+  assertToolTypeSupported,
+  type ToolUpdateArgs,
+  validateToolUpdate,
+} from './toolWriteValidation';
 import type { ToolCallAttribution } from './usageToolRecording';
 
 const log = createDebug('soat:tools');
@@ -138,23 +145,6 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
 
 // ── Shared Tool Definition Validation ────────────────────────────────────────
 
-/**
- * The complete set of tool types the server can resolve and execute. An
- * unlisted type has no resolver branch, so it would silently vanish from an
- * agent's toolset and fail at call time with a misleading error — reject it at
- * write time instead.
- */
-const TOOL_TYPES = ['http', 'client', 'mcp', 'builtin', 'pipeline'] as const;
-
-const assertToolTypeSupported = (type: string): void => {
-  if (!(TOOL_TYPES as readonly string[]).includes(type)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `Unsupported tool type '${type}'. Supported types: ${TOOL_TYPES.join(', ')}.`
-    );
-  }
-};
-
 export const validateToolDefinition = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
@@ -217,7 +207,14 @@ export const validateToolDefinition = async (args: {
   });
 };
 
-export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
+export const createTool = async (
+  args: CreateToolArgs & { isAllowed: IsAllowedFn }
+): Promise<MappedTool> => {
+  await assertToolSecretUseAllowed({
+    tool: args,
+    projectId: args.projectId,
+    isAllowed: args.isAllowed,
+  });
   await validateToolDefinition({ definition: args, projectId: args.projectId });
   await assertGuardrailsExist({
     guardrailIds: args.guardrailIds,
@@ -303,98 +300,16 @@ const buildToolUpdates = (args: {
   return updates;
 };
 
-type ToolUpdateArgs = {
-  projectIds?: number[];
-  id: string;
-  type?: string;
-  name?: string;
-  description?: string | null;
-  parameters?: object | null;
-  execute?: object | null;
-  mcp?: object | null;
-  actions?: string[] | null;
-  deniedActions?: string[] | null;
-  contextKeys?: string[] | null;
-  presetParameters?: object | null;
-  pipeline?: object | null;
-  outputMapping?: object | null;
-  guardrailIds?: string[] | null;
-};
-
-/**
- * The template-token and credential checks for an update, over whichever of the
- * three token-bearing fields the PATCH actually touches.
- *
- * `preset_parameters` is checked on its own, not only alongside an `execute` /
- * `mcp` change: a PATCH that touches nothing but the presets is exactly the
- * write that introduces a malformed token there.
- */
-const validateToolUpdateTemplates = async (params: {
-  args: ToolUpdateArgs;
-  projectId: number;
-}): Promise<void> => {
-  const { args } = params;
-  const touchesConfig = args.execute !== undefined || args.mcp !== undefined;
-  if (!touchesConfig && args.presetParameters === undefined) return;
-
-  assertValidToolTemplateTokens({
-    execute: args.execute,
-    mcp: args.mcp,
-    presetParameters: args.presetParameters,
-  });
-  if (touchesConfig) {
-    await assertSecretRefsExist({
-      value: { execute: args.execute, mcp: args.mcp },
-      projectId: params.projectId,
-    });
-  }
-};
-
-/**
- * Checked against the tool the write leaves behind, so switching to `http` or
- * clearing `execute` cannot leave an http tool without a target.
- */
-const validateUpdatedExecute = (params: {
-  args: ToolUpdateArgs;
-  tool: InstanceType<typeof db.Tool>;
-}): void => {
-  const { args, tool } = params;
-  if (args.type === undefined && args.execute === undefined) return;
-  validateHttpExecute({
-    type: args.type ?? tool.type,
-    execute: args.execute === undefined ? tool.execute : args.execute,
-  });
-};
-
-/** Runs the per-type validation for an update against the existing tool row. */
-const validateToolUpdate = async (params: {
-  args: ToolUpdateArgs;
-  tool: InstanceType<typeof db.Tool>;
-}): Promise<void> => {
-  const { args, tool } = params;
-  if (args.type !== undefined) {
-    assertToolTypeSupported(args.type);
-  }
-  assertNoLiteralCredentials(args);
-  if (args.pipeline !== undefined && args.pipeline !== null) {
-    const config = validatePipelineConfig(args.pipeline);
-    await assertPipelineStepToolsValid({
-      steps: config.steps,
-      projectId: tool.projectId,
-    });
-  }
-  if (args.actions !== undefined && (args.type ?? tool.type) === 'builtin') {
-    validateSoatActions(args.actions);
-  }
-  if (args.contextKeys !== undefined) {
-    assertValidToolContextAllowlist(args.contextKeys);
-  }
-  validateUpdatedExecute({ args, tool });
-  await validateToolUpdateTemplates({ args, projectId: tool.projectId });
-};
-
-export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
+export const updateTool = async (
+  args: ToolUpdateArgs & { isAllowed: IsAllowedFn }
+): Promise<MappedTool> => {
   const tool = await tools.getByPublicId(args);
+
+  await assertToolSecretUseAllowed({
+    tool: args,
+    projectId: tool.projectId,
+    isAllowed: args.isAllowed,
+  });
 
   await validateToolUpdate({ args, tool });
   await assertGuardrailsExist({

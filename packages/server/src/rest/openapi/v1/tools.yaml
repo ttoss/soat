@@ -29,7 +29,7 @@ paths:
       tags:
         - Tools
       summary: Create a tool
-      description: Creates a new tool in the project.
+      description: Creates a new tool in the project. A `{{secret:...}}` reference in `execute`, `mcp` or a pipeline step also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: createTool
       x-iam-action: tools:CreateTool
       requestBody:
@@ -324,7 +324,7 @@ paths:
       tags:
         - Tools
       summary: Update a tool
-      description: Updates an existing tool.
+      description: Updates an existing tool. A `{{secret:...}}` reference in `execute`, `mcp` or a pipeline step also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: updateTool
       x-iam-action: tools:UpdateTool
       x-soat-resource:

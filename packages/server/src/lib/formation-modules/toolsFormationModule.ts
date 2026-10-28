@@ -19,6 +19,7 @@ import {
   literalCredentialPaths,
   redactToolSecrets,
 } from '../toolSecretRedaction';
+import { SECRET_USE_ACTION, toolSecretIds } from '../toolSecretUse';
 import {
   describeToolTemplateTokenProblems,
   findInvalidTemplateTokens,
@@ -138,6 +139,16 @@ export const toolsFormationModule = defineFormationModule({
     create: 'tools:CreateTool',
     update: 'tools:UpdateTool',
     delete: 'tools:DeleteTool',
+    references: (properties) => {
+      if (!isObjectRecord(properties)) return [];
+      return toolSecretIds(properties).map((resourceId) => {
+        return {
+          action: SECRET_USE_ACTION,
+          srnResourceType: 'secret',
+          resourceId,
+        };
+      });
+    },
   },
 
   extraChecks: ({ properties, basePath, errors }) => {
@@ -227,8 +238,9 @@ export const toolsFormationModule = defineFormationModule({
     });
   },
 
-  create: ({ properties, projectId }) => {
+  create: ({ properties, projectId, actor }) => {
     return createTool({
+      isAllowed: actor.isAllowed,
       projectId,
       name: properties.name as string,
       type: toOptionalString(properties.type),
@@ -250,8 +262,9 @@ export const toolsFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     await updateTool({
+      isAllowed: actor.isAllowed,
       id: physicalResourceId,
       name: toOptionalString(properties.name),
       type: toOptionalString(properties.type),

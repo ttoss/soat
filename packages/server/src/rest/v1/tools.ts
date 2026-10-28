@@ -159,7 +159,9 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', TOOL_JSON_FIELDS_ERROR);
   }
 
+  requireAuth(ctx);
   const result = await createTool({
+    isAllowed: ctx.authUser.isAllowed,
     projectId: Number(targetProjectId),
     name,
     type: parseStringOrUndefined(type),
@@ -293,7 +295,9 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     });
   }
 
+  requireAuth(ctx);
   const result = await updateTool({
+    isAllowed: ctx.authUser.isAllowed,
     projectIds,
     id: ctx.params.tool_id,
     name: parseStringOrUndefined(name),

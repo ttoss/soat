@@ -124,6 +124,7 @@ describe('Formations', () => {
                 'secrets:CreateSecret',
                 'secrets:UpdateSecret',
                 'secrets:DeleteSecret',
+                'secrets:UseSecret',
                 'tools:CreateTool',
                 'tools:UpdateTool',
                 'tools:DeleteTool',

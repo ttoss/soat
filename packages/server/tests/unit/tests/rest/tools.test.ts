@@ -26,6 +26,7 @@ describe('Tools', () => {
         'tools:UpdateTool',
         'tools:DeleteTool',
         'tools:CallTool',
+        'secrets:UseSecret',
       ],
     });
 
