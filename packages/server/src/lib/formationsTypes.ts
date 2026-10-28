@@ -169,6 +169,12 @@ export type FormationModuleAuthorization =
        * formation path weaker than the route it mirrors (`policy`).
        */
       adminOnly?: true;
+      /**
+       * Actions a create or update also needs on resources the declared
+       * properties name by literal id (a tool's `secrets:UseSecret`). An id
+       * resolved only at deploy is refused by the module's own lib call.
+       */
+      references?: (properties: unknown) => FormationReferenceAuthorization[];
     }
   | {
       /**
@@ -181,6 +187,12 @@ export type FormationModuleAuthorization =
     };
 
 export type FormationResourceOperation = 'create' | 'update' | 'delete';
+
+export type FormationReferenceAuthorization = {
+  action: string;
+  srnResourceType: string;
+  resourceId: string;
+};
 
 /** One per-resource authorization question the apply/teardown path must ask. */
 export type FormationAuthorizationRequest = {

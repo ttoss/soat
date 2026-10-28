@@ -72,6 +72,22 @@ const buildAuthorizationRequest = (args: {
   };
 };
 
+/** What applying `decl` also needs on resources its properties name. */
+const buildReferenceRequests = (args: {
+  request: FormationAuthorizationRequest;
+  decl: FormationTemplate['resources'][string];
+}): FormationAuthorizationRequest[] => {
+  const authorization = getFormationModule({
+    resourceType: args.request.resourceType,
+  })?.authorization;
+  if (!authorization || 'operatorRegistered' in authorization) return [];
+  return (authorization.references?.(args.decl.properties) ?? []).map(
+    (reference) => {
+      return { ...args.request, ...reference, adminOnly: false };
+    }
+  );
+};
+
 /**
  * A ledger row the engine would delete: it has something to delete, has not
  * been deleted already, and is not retained. Mirrors the conditions
@@ -112,7 +128,8 @@ export const collectApplyAuthorizationRequests = (args: {
       operation: creating ? 'create' : 'update',
       physicalResourceId: creating ? null : existing?.physicalResourceId,
     });
-    if (request) requests.push(request);
+    if (!request) continue;
+    requests.push(request, ...buildReferenceRequests({ request, decl }));
   }
 
   for (const resource of args.existingResources) {

@@ -216,7 +216,7 @@ const collectStrings = (value: unknown): string[] => {
  * Collects the public IDs of all secrets referenced by `{{secret:...}}`
  * tokens anywhere inside a value (deep-walks strings, arrays, and objects).
  */
-const collectSecretRefs = (value: unknown): string[] => {
+export const collectSecretRefs = (value: unknown): string[] => {
   return collectStrings(value).flatMap((text) => {
     return [...text.matchAll(SECRET_REF_RE)].map((m) => {
       return m[1];

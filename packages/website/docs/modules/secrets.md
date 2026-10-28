@@ -65,6 +65,8 @@ Supported fields:
 
 Updating the secret's value rotates the credential for every referencing tool on its next call.
 
+Writing a tool that references a secret needs `secrets:UseSecret` on that secret (`srn:<project_id>:secret:<secret_id>`); see [Secret references in `execute`](./tools.md#secret-references-in-execute).
+
 For referencing a secret created in the same [Formation](./formations.md) template, see [Sub Expressions](./formations.md#sub-expressions).
 
 ### Deletion
