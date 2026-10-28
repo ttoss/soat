@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.98.0](https://github.com/ttoss/soat/compare/v0.97.0...v0.98.0) (2026-10-28)
+
+* fix(tools)!: require secrets:UseSecret to write a tool that references a secret (#1772) ([7624b24](https://github.com/ttoss/soat/commit/7624b24271cd35bb46c53426668fc09f2b3aad13)), closes [#1772](https://github.com/ttoss/soat/issues/1772)
+
+### BREAKING CHANGES
+
+* a policy granting tools:CreateTool or tools:UpdateTool without secrets:UseSecret can no longer write a tool that references a secret; such writes answer 403 FORBIDDEN with meta.secret_ids. Existing tools keep running.
+
 # [0.97.0](https://github.com/ttoss/soat/compare/v0.96.1...v0.97.0) (2026-10-27)
 
 ### Bug Fixes
