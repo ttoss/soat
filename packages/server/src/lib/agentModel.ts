@@ -14,7 +14,15 @@ import { wrapLanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
-import { assertAmbientCredentialsAllowed } from './ambientCredentials';
+import {
+  assertAmbientCredentialsAllowed,
+  usesAnthropicTenantEndpoint,
+} from './ambientCredentials';
+import {
+  ANTHROPIC_API_URL,
+  requireAnthropicFederationSettings,
+  withAnthropicFederatedToken,
+} from './anthropicFederation';
 import { egressGuardedFetch } from './egressFetch';
 import { bedrockModelCaches, withoutBedrockCachePoints } from './promptCaching';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
@@ -368,6 +376,28 @@ const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
  * it. A `base_url` on the provider record is the tenant-written half, and that
  * is what an allowlist has to answer for.
  */
+/**
+ * A record that links no secret and names no endpoint of its own signs with
+ * the deployment's federated identity, on the operator's opt-in.
+ */
+const buildAnthropicModel = (args: BuildModelArgs): LanguageModel => {
+  if (args.secretValue !== null || usesAnthropicTenantEndpoint(args)) {
+    return createAnthropic({
+      apiKey: args.secretValue ?? '',
+      baseURL: args.baseUrl,
+      fetch: egressGuardedFetch,
+    })(args.model);
+  }
+  assertAmbientCredentialsAllowed({ provider: 'anthropic' });
+  requireAnthropicFederationSettings();
+  return createAnthropic({
+    apiKey: '',
+    // Pinned: the token is minted for Anthropic, so no setting may redirect it.
+    baseURL: `${ANTHROPIC_API_URL}/v1`,
+    fetch: withAnthropicFederatedToken({ fetchImpl: egressGuardedFetch }),
+  })(args.model);
+};
+
 const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
   const base =
     args.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
@@ -410,13 +440,7 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
       fetch: egressGuardedFetch,
     })(a.model);
   },
-  anthropic: (a) => {
-    return createAnthropic({
-      apiKey: a.secretValue ?? '',
-      baseURL: a.baseUrl,
-      fetch: egressGuardedFetch,
-    })(a.model);
-  },
+  anthropic: buildAnthropicModel,
   google: (a) => {
     return createGoogleGenerativeAI({
       apiKey: a.secretValue ?? '',

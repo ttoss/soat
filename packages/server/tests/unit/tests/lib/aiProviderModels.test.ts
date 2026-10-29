@@ -224,6 +224,91 @@ describe('enumerateProviderModels — anthropic', () => {
   });
 });
 
+describe('enumerateProviderModels — anthropic with no linked secret', () => {
+  const MODELS_URL = 'https://api.anthropic.com/v1/models';
+
+  const withAmbient = async (
+    value: string | undefined,
+    body: () => Promise<void>
+  ) => {
+    const previous = process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS;
+    if (value === undefined) {
+      delete process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS;
+    } else {
+      process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS = value;
+    }
+    try {
+      await body();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS;
+      } else {
+        process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS = previous;
+      }
+    }
+  };
+
+  test('lists with the federated token as Bearer', async () => {
+    await withAmbient('true', async () => {
+      const { fetchImpl, calls } = fakeFetch({
+        [MODELS_URL]: { body: { data: [{ id: 'claude-opus-5-5' }] } },
+      });
+      const models = await enumerateProviderModels({
+        provider: 'anthropic',
+        secretValue: null,
+        fetchImpl,
+        anthropicAccessToken: async () => {
+          return 'sk-ant-oat01-federated';
+        },
+      });
+
+      expect(calls[0].headers.get('authorization')).toBe(
+        'Bearer sk-ant-oat01-federated'
+      );
+      expect(calls[0].headers.get('x-api-key')).toBeNull();
+      expect(models).toEqual([
+        { id: 'claude-opus-5-5', vendor: 'anthropic', streaming: true },
+      ]);
+    });
+  });
+
+  test('is refused unless the operator allows ambient credentials', async () => {
+    await withAmbient(undefined, async () => {
+      const { fetchImpl, calls } = fakeFetch({});
+      await expect(
+        enumerateProviderModels({
+          provider: 'anthropic',
+          secretValue: null,
+          fetchImpl,
+          anthropicAccessToken: async () => {
+            return 'never-used';
+          },
+        })
+      ).rejects.toMatchObject({ code: 'AI_PROVIDER_MISCONFIGURED' });
+      expect(calls).toHaveLength(0);
+    });
+  });
+
+  // A tenant's endpoint must never receive the deployment's token.
+  test('with a base_url still needs a key of its own', async () => {
+    await withAmbient('true', async () => {
+      const { fetchImpl, calls } = fakeFetch({});
+      await expect(
+        enumerateProviderModels({
+          provider: 'anthropic',
+          secretValue: null,
+          baseUrl: 'https://proxy.example.com/v1',
+          fetchImpl,
+          anthropicAccessToken: async () => {
+            return 'sk-ant-oat01-federated';
+          },
+        })
+      ).rejects.toMatchObject({ code: 'AI_PROVIDER_MISCONFIGURED' });
+      expect(calls).toHaveLength(0);
+    });
+  });
+});
+
 // A service-account key file, the credential a vertex record links to list
 // with. The token itself comes from `accessTokenProvider` in these tests; what
 // the key decides is that the record signs as itself rather than as whatever

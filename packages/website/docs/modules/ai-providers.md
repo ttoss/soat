@@ -162,6 +162,14 @@ The provider's `config` object accepts two fields:
 
 An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, as for `bedrock`.
 
+### Anthropic authentication
+
+An `anthropic` record authenticates with the API key in its linked secret. A record that links no secret and sets no `base_url` signs with the **deployment's** Anthropic identity through [workload identity federation](https://platform.claude.com/docs/en/manage-claude/workload-identity-federation): SOAT exchanges an OIDC token for a short-lived Anthropic access token, caches it until shortly before it expires, and sends it as `Authorization: Bearer` on generation and model listing. No key material is stored.
+
+The OIDC token is read from `ANTHROPIC_IDENTITY_TOKEN_FILE` when set (a Kubernetes projected token, for example); otherwise AWS STS `GetWebIdentityToken` signs one for the identity the AWS default credential chain resolves to (on ECS, the task role), with audience `https://api.anthropic.com`. That needs outbound web identity federation enabled on the AWS account, `sts:GetWebIdentityToken` on the role, and `AWS_REGION` on the process. The federation itself is configured by [environment variables](../self-hosting/configuration.md#provider-credentials).
+
+These are the deployment's credentials, so the mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, or without the federation variables, such a record is `400 AI_PROVIDER_MISCONFIGURED` when it generates or lists models; it is still accepted at create and update, so a secret can be linked afterwards. A record with a `base_url` never receives the federated token: it needs a key of its own.
+
 ### Listing the models a provider can run
 
 [`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Reachable models are a property of the **credential**, not the slug.
@@ -173,13 +181,13 @@ The response is the [list envelope](../api/index.md#pagination). `?q=` keeps mod
 | Provider | Listing | Credential the listing uses |
 |---|---|---|
 | `openai`, `groq`, `xai`, `gateway`, `custom` | `GET {base_url}/models`, so a self-hosted or proxied endpoint works too | the linked secret — **required** |
-| `anthropic` | `GET /v1/models` | the linked secret — **required** |
+| `anthropic` | `GET /v1/models` | the linked secret, else the deployment's [federated identity](#anthropic-authentication) |
 | `google` | AI Studio's model list | the linked secret — **required** |
 | `vertex` | the Google publisher models the `config.location` region serves | the linked service-account key, else [ADC](https://cloud.google.com/docs/authentication/application-default-credentials) |
 | `bedrock` | `ListFoundationModels` in the provider's `config.region` | the linked secret's IAM keys or API key, else the AWS default credential chain |
 | `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" | — |
 
-Listing resolves credentials exactly as generation does, so a record that can generate can list — the deployment's own credentials included, on the same terms: a `bedrock` or `vertex` record that links none cannot list either, unless the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials).
+Listing resolves credentials exactly as generation does, so a record that can generate can list — the deployment's own credentials included, on the same terms: a `bedrock`, `vertex` or `anthropic` record that links none cannot list either, unless the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials).
 
 - **A Vertex record needs no `config.project` when its secret is a service-account key**; the key file names its project. `config.project` still overrides it.
 - **Vertex express mode cannot list.** The publisher-model listing rejects API keys (Google answers `401 UNAUTHENTICATED`, "API keys are not supported by this API") and an express-mode record holds no other credential. Listing returns `MODEL_LISTING_UNSUPPORTED` naming the reason rather than forwarding that 401.

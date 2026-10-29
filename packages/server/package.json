@@ -48,6 +48,7 @@
     "@aws-sdk/client-bedrock": "^3.1146.0",
     "@aws-sdk/client-s3": "^3.1146.0",
     "@aws-sdk/client-sqs": "^3.1146.0",
+    "@aws-sdk/client-sts": "^3.1146.0",
     "@aws-sdk/credential-providers": "^3.1146.0",
     "@soat/postgresdb": "workspace:*",
     "@ttoss/auth-core": "^0.16.1",
