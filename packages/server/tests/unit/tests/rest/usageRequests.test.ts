@@ -261,6 +261,46 @@ describe('Usage — API-request metering', () => {
     expect(written).toBe(1);
   });
 
+  // A deleted project's events cascade away with it, so its pending count has
+  // nothing to be written against and is dropped rather than retried.
+  test('a counter whose project was deleted is dropped, not retried', async () => {
+    const project = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'usagereq deleted project' });
+    expect(project.status).toBe(201);
+    const deletedProjectId = project.body.id as string;
+    const key = await adminKey(deletedProjectId);
+
+    resetRequestCounters();
+    expect(
+      (
+        await authenticatedTestClient(key).get(
+          '/api/v1/usage/events?meter_type=api_request'
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await authenticatedTestClient(adminToken).delete(
+          `/api/v1/projects/${deletedProjectId}?force=true`
+        )
+      ).status
+    ).toBe(204);
+
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {
+      return undefined;
+    });
+    try {
+      expect(await flushRequestCounters({ now: new Date() })).toBe(0);
+      const insert = jest.spyOn(usageEventWrite, 'insertUsageEvent');
+      expect(await flushRequestCounters({ now: new Date() })).toBe(0);
+      expect(insert).not.toHaveBeenCalled();
+      expect(errorLog).not.toHaveBeenCalled();
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
   test('an admin’s unscoped key is not refused by a project’s exhausted request quota', async () => {
     // A project of its own, so the exhausted quota blocks no other spec.
     const project = await authenticatedTestClient(adminToken)

@@ -166,7 +166,8 @@ const writeCounter = async (
  * mid-flush land in the next window rather than being lost. Priced at write time
  * from a `soat`/`request` row (`cost_usd = null` otherwise). Returns the number
  * of events written. Never throws — a counter whose write fails is reported and
- * folded back into the live window, so the next flush writes its count.
+ * folded back into the live window, so the next flush writes its count; one
+ * whose project no longer exists is dropped.
  * Scheduler tick and graceful shutdown are its only callers (no HTTP entry).
  */
 export const flushRequestCounters = async (args?: {
@@ -188,6 +189,15 @@ export const flushRequestCounters = async (args?: {
       const created = await writeCounter(counter, windowStartIso, now);
       if (created) written += 1;
     } catch (error) {
+      // A deleted project's events cascade away with it, so its count has
+      // nothing to be written against; retrying it would fail every flush.
+      if (!(await db.Project.findByPk(counter.projectId))) {
+        log(
+          'flushRequestCounters: dropped counter of deleted project=%d',
+          counter.projectId
+        );
+        continue;
+      }
       reportLostUsageEvent({
         recorder: 'flushRequestCounters',
         detail: `project=${counter.projectId}`,
