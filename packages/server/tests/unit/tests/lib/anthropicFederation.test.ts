@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  anthropicFederatedAccessToken,
   type AnthropicFederationSettings,
   createAnthropicTokenSource,
   readAnthropicFederationSettings,
@@ -83,6 +84,20 @@ describe('readAnthropicFederationSettings', () => {
     };
     env[missing] = '';
     expect(readAnthropicFederationSettings(env)).toBeUndefined();
+  });
+
+  test('a token is refused on an unconfigured deployment', async () => {
+    const previous = process.env.ANTHROPIC_FEDERATION_RULE_ID;
+    delete process.env.ANTHROPIC_FEDERATION_RULE_ID;
+    try {
+      await expect(anthropicFederatedAccessToken()).rejects.toMatchObject({
+        code: 'AI_PROVIDER_MISCONFIGURED',
+      });
+    } finally {
+      if (previous !== undefined) {
+        process.env.ANTHROPIC_FEDERATION_RULE_ID = previous;
+      }
+    }
   });
 
   test('requiring it refuses an unconfigured deployment', () => {
