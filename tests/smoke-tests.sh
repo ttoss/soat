@@ -1984,7 +1984,7 @@ ORCH_REJECT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration-invalid" \
   --nodes '[{"id":"a","type":"transform","expression":1},{"id":"b","type":"transform","expression":1}]' \
-  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' || true)
+  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' 2>&1 || true)
 if ! printf '%s\n' "$ORCH_REJECT_RESP" | jq -e '.error.code == "ORCHESTRATION_VALIDATION_FAILED"' >/dev/null 2>&1; then
   echo "create-orchestration did not reject a cyclic graph"
   printf '%s\n' "$ORCH_REJECT_RESP"
