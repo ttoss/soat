@@ -51,7 +51,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.22.1'
+          node-version: '26.13.0'
           cache: 'pnpm'
 
       - name: Cache Turbo
@@ -93,7 +93,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.22.1'
+          node-version: '26.13.0'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -131,7 +131,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.22.1'
+          node-version: '26.13.0'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -174,7 +174,7 @@ jobs:
       # so the workspace install here read nothing.
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.22.1'
+          node-version: '26.13.0'
 
       - name: Setup Ollama
         uses: ./.github/actions/setup-ollama
@@ -246,7 +246,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.22.1'
+          node-version: '26.13.0'
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
