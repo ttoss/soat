@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.99.0](https://github.com/ttoss/soat/compare/v0.98.0...v0.99.0) (2026-10-29)
+
+### Features
+
+* **ai-providers:** sign a credential-less anthropic record through workload identity federation ([#1775](https://github.com/ttoss/soat/issues/1775)) ([34cb59a](https://github.com/ttoss/soat/commit/34cb59a52426f8cbc2155c81203ed7a1f07a6a77))
+
 # [0.98.0](https://github.com/ttoss/soat/compare/v0.97.0...v0.98.0) (2026-10-28)
 
 * fix(tools)!: require secrets:UseSecret to write a tool that references a secret (#1772) ([7624b24](https://github.com/ttoss/soat/commit/7624b24271cd35bb46c53426668fc09f2b3aad13)), closes [#1772](https://github.com/ttoss/soat/issues/1772)
