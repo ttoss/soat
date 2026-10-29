@@ -5,30 +5,20 @@ import { describe, test } from 'node:test';
 import * as url from 'node:url';
 
 /**
- * The Dockerfile installs pnpm with an explicit `corepack prepare pnpm@X`
- * pin, once per build stage, while `package.json` declares the version
- * everything else uses through `packageManager` (CI resolves it via
- * `pnpm/action-setup`, which reads that field and takes no version input).
- *
- * Nothing tied the two together, so they drifted: the published
- * `ttoss/soat:latest` image shipped pnpm 10.33.2 against a `packageManager`
- * of 11.5.2 — 15 open advisories baked into every image layer that ran an
- * install, three of which Docker Scout surfaced on the tag page (one
- * critical). The drift is invisible locally, because a contributor's pnpm
- * comes from `packageManager` and never from the Dockerfile.
- *
- * A version bump is only as good as the thing that keeps the copies equal,
- * so assert equality rather than any particular version: this fails on the
- * next stage added with a stale pin, and on a `packageManager` bump that
- * forgets the image.
+ * The Dockerfile installs pnpm with an explicit `npm install -g pnpm@X` pin,
+ * once per build stage, while `package.json` declares the version everything
+ * else uses through `packageManager` (CI resolves it via `pnpm/action-setup`).
+ * A stale image pin ships a pnpm, and its advisories, that no contributor
+ * runs, so the copies must stay equal. Node images from 25 on ship no
+ * corepack, so a `corepack` step fails the image build.
  */
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const ROOT = path.resolve(__dirname, '../..');
 
-/** Matches the pin in `RUN corepack enable && corepack prepare pnpm@X --activate`. */
-const COREPACK_PIN = /corepack prepare pnpm@(\S+?)(?:\s|$)/g;
+/** Matches the pin in `RUN npm install -g pnpm@X`. */
+const NPM_PIN = /npm install -g pnpm@(\S+?)(?:\s|$)/g;
 
 const readPackageManagerVersion = () => {
   const manifest = JSON.parse(
@@ -46,17 +36,27 @@ const readPackageManagerVersion = () => {
 };
 
 describe('Dockerfile pnpm pins', () => {
-  test('every corepack pin matches the declared packageManager', () => {
+  test('no stage relies on corepack', () => {
+    const dockerfile = fs.readFileSync(path.join(ROOT, 'Dockerfile'), 'utf-8');
+
+    assert.doesNotMatch(
+      dockerfile,
+      /^\s*RUN\b.*\bcorepack\b/m,
+      'the Node base image ships no corepack; install pnpm with `npm install -g pnpm@…`'
+    );
+  });
+
+  test('every pnpm pin matches the declared packageManager', () => {
     const expected = readPackageManagerVersion();
     const dockerfile = fs.readFileSync(path.join(ROOT, 'Dockerfile'), 'utf-8');
 
-    const pins = [...dockerfile.matchAll(COREPACK_PIN)].map((match) => {
+    const pins = [...dockerfile.matchAll(NPM_PIN)].map((match) => {
       return match[1];
     });
 
     assert.ok(
       pins.length > 0,
-      'expected the Dockerfile to install pnpm via `corepack prepare pnpm@…`'
+      'expected the Dockerfile to install pnpm via `npm install -g pnpm@…`'
     );
 
     for (const pin of pins) {

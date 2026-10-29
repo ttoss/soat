@@ -7,7 +7,7 @@ FROM --platform=$BUILDPLATFORM node:26.13.0-slim AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
+RUN npm install -g pnpm@12.4.1
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -47,7 +47,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl jq \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
+RUN npm install -g pnpm@12.4.1
 
 # Copy workspace manifests and lock file
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -76,7 +76,7 @@ FROM node:26.13.0-slim AS production
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
+RUN npm install -g pnpm@12.4.1
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
