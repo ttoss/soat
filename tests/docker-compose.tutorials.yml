@@ -40,7 +40,7 @@ services:
   # everything else (embeddings included) to the real Ollama.
   # See tests/mocks/ollamaToolChoiceProxy.mjs.
   ollama-tool-choice:
-    image: node:24.22.1-alpine
+    image: node:26.13.0-alpine
     depends_on:
       ollama:
         condition: service_healthy
@@ -93,7 +93,7 @@ services:
   # the tutorial sent against the checked-in fixtures before returning canned
   # text, so a broken tutorial fails loudly. See tests/mocks/mock-providers.mjs.
   mock-providers:
-    image: node:24.22.1-alpine
+    image: node:26.13.0-alpine
     volumes:
       - ./mocks/mock-providers.mjs:/mock-providers.mjs:ro
       - ../packages/website/docs/tutorials/fixtures:/fixtures:ro

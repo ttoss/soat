@@ -1984,7 +1984,7 @@ ORCH_REJECT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration-invalid" \
   --nodes '[{"id":"a","type":"transform","expression":1},{"id":"b","type":"transform","expression":1}]' \
-  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' || true)
+  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' 2>&1 || true)
 if ! printf '%s\n' "$ORCH_REJECT_RESP" | jq -e '.error.code == "ORCHESTRATION_VALIDATION_FAILED"' >/dev/null 2>&1; then
   echo "create-orchestration did not reject a cyclic graph"
   printf '%s\n' "$ORCH_REJECT_RESP"
@@ -7489,8 +7489,17 @@ if ! printf '%s\n' "$DATASET_ITEM_ID" | grep -q '^dsit_'; then
 fi
 
 # Curating a real turn into a fixture. Uses its own dataset so the eval run
-# below still scores exactly the hand-authored item it was written for.
-echo "--- Curating a dataset item from generation $GEN_ID ---"
+# below still scores exactly the hand-authored item it was written for, and
+# its own generation because `$GEN_ID`'s content is purged above.
+CURATED_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"Say hello."}]' | sanitize_json)
+CURATED_GEN_ID=$(printf '%s\n' "$CURATED_GEN_RESP" | jq -r 'select(.status == "completed") | .id')
+if [ -z "$CURATED_GEN_ID" ]; then
+  echo "ERROR: the generation to curate did not complete" >&2
+  printf '%s\n' "$CURATED_GEN_RESP" >&2
+  exit 1
+fi
+echo "--- Curating a dataset item from generation $CURATED_GEN_ID ---"
 CURATED_DATASET_RESP=$($SOAT_CLI create-dataset \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-curated-dataset" \
@@ -7504,13 +7513,13 @@ fi
 
 CURATED_ITEM_RESP=$($SOAT_CLI create-dataset-item-from-generation \
   --dataset_id "$CURATED_DATASET_ID" \
-  --generation_id "$GEN_ID" | sanitize_json)
+  --generation_id "$CURATED_GEN_ID" | sanitize_json)
 # The turn's input is replayed into `input` and its own answer becomes the
 # reference output; neither is asserted for content, since the model's wording
 # is not deterministic. What must hold is the provenance link and that a
 # non-empty message array came back.
 if ! printf '%s\n' "$CURATED_ITEM_RESP" | jq -e \
-  --arg gen "$GEN_ID" \
+  --arg gen "$CURATED_GEN_ID" \
   '.source_generation_id == $gen and (.input | type == "array" and length > 0) and (.input[0].role | type == "string")' >/dev/null 2>&1; then
   echo "ERROR: create-dataset-item-from-generation did not curate the generation's turn" >&2
   printf '%s\n' "$CURATED_ITEM_RESP" | jq . >&2
@@ -7521,7 +7530,7 @@ echo "Curated dataset item: OK"
 echo "--- Curating with an explicit expected_output ---"
 CURATED_OVERRIDE_RESP=$($SOAT_CLI create-dataset-item-from-generation \
   --dataset_id "$CURATED_DATASET_ID" \
-  --generation_id "$GEN_ID" \
+  --generation_id "$CURATED_GEN_ID" \
   --expected_output "a fixed reference answer" \
   --metadata '{"topic":"curated"}' | sanitize_json)
 if ! printf '%s\n' "$CURATED_OVERRIDE_RESP" | jq -e \

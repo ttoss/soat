@@ -2,12 +2,12 @@
 # tsdown build can hang without output. Its dist/ output is platform-
 # independent, so only dist/ leaves this stage
 # (tests/harness/dockerfileBuildPlatform.test.mjs).
-FROM --platform=$BUILDPLATFORM node:24.22.1-slim AS builder
+FROM --platform=$BUILDPLATFORM node:26.13.0-slim AS builder
 
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
+RUN npm install -g pnpm@12.4.1
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -40,14 +40,14 @@ RUN pnpm --filter @soat/app build
 RUN pnpm --filter @soat/server build
 
 # ---- Smoke-test image ----
-FROM node:24.22.1-slim AS smoke-test
+FROM node:26.13.0-slim AS smoke-test
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl jq \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
+RUN npm install -g pnpm@12.4.1
 
 # Copy workspace manifests and lock file
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -72,11 +72,11 @@ COPY tests/smoke-tests.sh /smoke-tests.sh
 CMD ["sh", "/smoke-tests.sh"]
 
 # ---- Production image ----
-FROM node:24.22.1-slim AS production
+FROM node:26.13.0-slim AS production
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
+RUN npm install -g pnpm@12.4.1
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
