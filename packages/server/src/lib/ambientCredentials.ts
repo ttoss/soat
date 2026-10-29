@@ -3,14 +3,17 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import { DomainError } from '../errors';
 
 /**
- * The two provider slugs whose SDK signs with a credential nobody put on the
+ * The provider slugs whose SDK signs with a credential nobody put on the
  * record: `bedrock` walks the AWS default credential chain, `vertex` resolves
- * Application Default Credentials (an AWS-federated ADC file included). Every
- * other slug carries its key in the record or takes none at all.
+ * Application Default Credentials (an AWS-federated ADC file included), and
+ * `anthropic` exchanges the deployment's identity through Anthropic workload
+ * identity federation. Every other slug carries its key in the record or takes
+ * none at all.
  */
 const AMBIENT_CREDENTIAL_SOURCE = {
   bedrock: 'the AWS default credential chain',
   vertex: 'Application Default Credentials',
+  anthropic: 'Anthropic workload identity federation',
 } as const;
 
 type AmbientProvider = keyof typeof AMBIENT_CREDENTIAL_SOURCE;
@@ -22,6 +25,16 @@ const isAmbientProvider = (
 };
 
 const SETTING = 'AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS';
+
+/**
+ * An `anthropic` record with a `base_url` names a tenant's endpoint, which must
+ * never receive the deployment's federated token, so it is never ambient.
+ */
+export const usesAnthropicTenantEndpoint = (args: {
+  baseUrl?: string | null;
+}): boolean => {
+  return Boolean(args.baseUrl);
+};
 
 /**
  * Whether a provider record may authenticate with the deployment's own cloud
@@ -69,7 +82,11 @@ export const assertAiProviderCarriesCredential = (args: {
   secretId?: number | null;
   config?: Record<string, unknown> | null;
 }): void => {
-  if (!isAmbientProvider(args.provider)) return;
+  // A credential-less `anthropic` record is accepted so a secret can be linked
+  // after create; it is refused only where it would sign.
+  if (!isAmbientProvider(args.provider) || args.provider === 'anthropic') {
+    return;
+  }
   if (args.secretId) return;
   // Both slugs accept `config.apiKey` as a credential fallback for a record
   // that links no secret, so one is a credential the record carries.

@@ -44,6 +44,9 @@ describe('assertAmbientCredentialsAllowed', () => {
       expect(() => {
         return assertAmbientCredentialsAllowed({ provider: 'bedrock' });
       }).toThrow(/AWS default credential chain/);
+      expect(() => {
+        return assertAmbientCredentialsAllowed({ provider: 'anthropic' });
+      }).toThrow(/Anthropic workload identity federation/);
     });
   });
 

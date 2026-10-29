@@ -699,3 +699,105 @@ describe('a record that links no credential of its own', () => {
     }
   );
 });
+
+const FEDERATION_ENV = {
+  ANTHROPIC_FEDERATION_RULE_ID: 'fdrl_rule',
+  ANTHROPIC_ORGANIZATION_ID: '00000000-0000-0000-0000-000000000000',
+  ANTHROPIC_SERVICE_ACCOUNT_ID: 'svac_account',
+};
+
+const withEnv = (
+  vars: Record<string, string | undefined>,
+  body: () => void
+) => {
+  const previous = Object.fromEntries(
+    Object.keys(vars).map((name) => {
+      return [name, process.env[name]];
+    })
+  );
+  const apply = (values: Record<string, string | undefined>) => {
+    for (const [name, value] of Object.entries(values)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  };
+  apply(vars);
+  try {
+    body();
+  } finally {
+    apply(previous);
+  }
+};
+
+describe('buildModel — anthropic with no linked secret', () => {
+  const build = (args: { baseUrl?: string } = {}) => {
+    return asConfigured(
+      buildModel({
+        provider: 'anthropic',
+        secretValue: null,
+        model: 'claude-sonnet-4-5',
+        baseUrl: args.baseUrl,
+      })
+    );
+  };
+
+  test('is refused unless the operator allows ambient credentials', () => {
+    withEnv(
+      { AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS: undefined, ...FEDERATION_ENV },
+      () => {
+        expect(() => {
+          return build();
+        }).toThrow(
+          expect.objectContaining({
+            code: 'AI_PROVIDER_MISCONFIGURED',
+            message: expect.stringMatching(
+              /Anthropic workload identity federation/
+            ),
+          })
+        );
+      }
+    );
+  });
+
+  test('is refused when the deployment configures no federation', () => {
+    withEnv(
+      {
+        AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS: 'true',
+        ANTHROPIC_FEDERATION_RULE_ID: undefined,
+      },
+      () => {
+        expect(() => {
+          return build();
+        }).toThrow(
+          expect.objectContaining({
+            code: 'AI_PROVIDER_MISCONFIGURED',
+            message: expect.stringMatching(/ANTHROPIC_FEDERATION_RULE_ID/),
+          })
+        );
+      }
+    );
+  });
+
+  test('signs with the federated token where both are set', () => {
+    withEnv(
+      { AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS: 'true', ...FEDERATION_ENV },
+      () => {
+        const model = build();
+        expect(model.modelId).toBe('claude-sonnet-4-5');
+        expect(model.config.fetch).not.toBe(egressGuardedFetch);
+        expect(model.config.baseURL).toBe('https://api.anthropic.com/v1');
+      }
+    );
+  });
+
+  // A tenant's endpoint must never receive the deployment's token.
+  test('with a base_url never federates', () => {
+    withEnv(
+      { AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS: 'true', ...FEDERATION_ENV },
+      () => {
+        const model = build({ baseUrl: 'https://proxy.example.com/v1' });
+        expect(model.config.fetch).toBe(egressGuardedFetch);
+      }
+    );
+  });
+});

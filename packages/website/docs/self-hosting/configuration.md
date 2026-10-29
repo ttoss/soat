@@ -263,16 +263,25 @@ base URL: it dispatches in-process under the caller's permissions.
 | Variable                                | Default | Description                                                                               |
 | --------------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
 | `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS` | `false` | Whether an AI provider record that links no credential may sign with the deployment's own |
+| `ANTHROPIC_FEDERATION_RULE_ID`          | —       | Anthropic federation rule (`fdrl_...`) the deployment's OIDC token is exchanged under     |
+| `ANTHROPIC_ORGANIZATION_ID`             | —       | Anthropic organization UUID                                                               |
+| `ANTHROPIC_SERVICE_ACCOUNT_ID`          | —       | Anthropic service account (`svac_...`) the token acts as                                  |
+| `ANTHROPIC_WORKSPACE_ID`                | —       | Workspace (`wrkspc_...`) to scope the token to; required when the rule spans several      |
+| `ANTHROPIC_IDENTITY_TOKEN_FILE`         | —       | Path to the OIDC token to exchange; unset, AWS STS `GetWebIdentityToken` signs one        |
 
-`bedrock` and `vertex` [AI provider](../modules/ai-providers.md) SDKs fall back
-to the **deployment's** credentials: Bedrock walks the AWS default credential
-chain (environment, instance or task role), Vertex resolves
-[Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
+`bedrock`, `vertex` and `anthropic` [AI provider](../modules/ai-providers.md)
+SDKs fall back to the **deployment's** credentials: Bedrock walks the AWS
+default credential chain (environment, instance or task role), Vertex resolves
+[Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials),
+and `anthropic` (with no `base_url`) exchanges the deployment's identity through
+[Anthropic workload identity federation](../modules/ai-providers.md#anthropic-authentication)
+when the `ANTHROPIC_*` variables above are set.
 Unless this is `true`, a tenant-written provider record must carry its own
 credential:
 
 - `400 VALIDATION_FAILED` on create or update with neither a linked secret nor a
-  `config.apiKey`;
+  `config.apiKey` (`bedrock` and `vertex`; an `anthropic` record is checked only
+  at use);
 - `400 AI_PROVIDER_MISCONFIGURED` when such a record generates or lists models,
   so one that reached the table another way fails closed.
 

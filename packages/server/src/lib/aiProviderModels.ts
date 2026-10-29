@@ -19,6 +19,11 @@ import {
   requireSecret,
 } from './aiProviderModelsHttp';
 import { resolveAiProviderSecret } from './aiProviders';
+import {
+  assertAmbientCredentialsAllowed,
+  usesAnthropicTenantEndpoint,
+} from './ambientCredentials';
+import { anthropicFederatedAccessToken } from './anthropicFederation';
 import type {
   BedrockListArgs,
   BedrockModelSummary,
@@ -73,6 +78,8 @@ export type EnumerateProviderModelsArgs = {
   fetchImpl?: FetchLike;
   /** Injectable Google access token, so Vertex is testable without GCP. */
   accessTokenProvider?: (args?: VertexAccessTokenArgs) => Promise<string>;
+  /** Injectable federated token, so Anthropic is testable without AWS. */
+  anthropicAccessToken?: () => Promise<string>;
   /** Injectable AWS control-plane call, so Bedrock is testable without AWS. */
   listFoundationModels?: (
     args: BedrockListArgs
@@ -112,6 +119,25 @@ const enumerateOpenAiCompatible = async (
   });
 };
 
+/**
+ * An API key goes on Anthropic's own header — a key sent as Bearer comes back
+ * as an unhelpful 401 — while a federated token is a Bearer token.
+ */
+const anthropicAuthHeader = async (
+  args: EnumerateProviderModelsArgs
+): Promise<Record<string, string>> => {
+  const linksSecret =
+    args.secretValue !== null && args.secretValue !== undefined;
+  if (linksSecret || usesAnthropicTenantEndpoint(args)) {
+    return { 'x-api-key': requireSecret(args) };
+  }
+  assertAmbientCredentialsAllowed({ provider: 'anthropic' });
+  const token = await (
+    args.anthropicAccessToken ?? anthropicFederatedAccessToken
+  )();
+  return { authorization: `Bearer ${token}` };
+};
+
 const enumerateAnthropic = async (
   args: EnumerateProviderModelsArgs & { fetchImpl: FetchLike }
 ): Promise<ProviderModel[]> => {
@@ -120,9 +146,7 @@ const enumerateAnthropic = async (
     fetchImpl: args.fetchImpl,
     url: `${base.replace(/\/$/, '')}/models`,
     headers: {
-      // Anthropic authenticates on its own header and requires a pinned API
-      // version; a Bearer token here comes back as an unhelpful 401.
-      'x-api-key': requireSecret(args),
+      ...(await anthropicAuthHeader(args)),
       'anthropic-version': ANTHROPIC_VERSION,
     },
     provider: args.provider,
