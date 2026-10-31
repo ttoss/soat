@@ -269,18 +269,22 @@ const buildTagFragments = (
 };
 
 /**
- * The resource segment a pattern names in this project: `'*'` when it is
- * unrestricted, `undefined` when it names another project — whose rows it is
- * not about, as `statementMatches` finds.
+ * The resource segment a pattern names for this project and type: `'*'` when
+ * it is unrestricted, `undefined` when it names another project or type —
+ * whose rows it is not about, as `statementMatches` finds.
  */
-const resourceSegmentInProject = (args: {
+const resourceSegmentInScope = (args: {
   srnPattern: string;
   projectPublicId: string;
+  resourceType: string;
 }): string | undefined => {
   if (args.srnPattern === '*') return '*';
   const parts = args.srnPattern.split(':');
   if (parts.length < 4) return '*';
-  if (!matchesPattern({ pattern: parts[1], value: args.projectPublicId })) {
+  if (
+    !matchesPattern({ pattern: parts[1], value: args.projectPublicId }) ||
+    !matchesPattern({ pattern: parts[2], value: args.resourceType })
+  ) {
     return undefined;
   }
   return parts.slice(3).join(':');
@@ -288,7 +292,7 @@ const resourceSegmentInProject = (args: {
 
 /**
  * Process resources for a statement and determine if it's unrestricted. A
- * statement whose every pattern names another project does not apply.
+ * statement whose every pattern names another project or type does not apply.
  */
 const processStatementResources = (args: {
   resources: string[] | undefined;
@@ -302,15 +306,16 @@ const processStatementResources = (args: {
   const { fieldMap } = args;
   const resources = args.resources ?? ['*'];
   const frags: Array<Record<string, unknown>> = [];
-  let otherProjectOnly = resources.length > 0;
+  let outOfScopeOnly = resources.length > 0;
 
   for (const srnPattern of resources) {
-    const segment = resourceSegmentInProject({
+    const segment = resourceSegmentInScope({
       srnPattern,
       projectPublicId: args.projectPublicId,
+      resourceType: fieldMap.resourceType,
     });
     if (segment === undefined) continue;
-    otherProjectOnly = false;
+    outOfScopeOnly = false;
 
     const frag = buildResourceFragment(segment, fieldMap);
     if (frag === null) return { frags, unrestricted: true, applies: true };
@@ -318,7 +323,7 @@ const processStatementResources = (args: {
     frags.push(frag);
   }
 
-  return { frags, unrestricted: false, applies: !otherProjectOnly };
+  return { frags, unrestricted: false, applies: !outOfScopeOnly };
 };
 
 /**
