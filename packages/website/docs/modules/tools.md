@@ -80,14 +80,14 @@ A **tool ID** (`tool_k8x2f3np`) is used in [`tool_bindings`](./agents.md#tool-bi
 
 ### Tool Name Resolution
 
-| Tool type | Name the model sees    | Example                                              |
-| --------- | ---------------------- | ---------------------------------------------------- |
-| `http`    | `{name}`               | `search`                                             |
-| `client`  | `{name}`               | `read_local_file`                                    |
-| `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
-| `builtin` | `{name}_{action}`      | `platform_get-document`, `platform_search-knowledge` |
+| Tool type | Name the model sees | Example                                              |
+| --------- | ------------------- | ---------------------------------------------------- |
+| `http`    | `{name}`            | `search`                                             |
+| `client`  | `{name}`            | `read_local_file`                                    |
+| `mcp`     | `{mcpToolName}`     | `create_issue`, `list_repos`                         |
+| `builtin` | `{name}_{action}`   | `platform_get-document`, `platform_search-knowledge` |
 
-For `mcp` and `builtin`, `name` is a prefix joined with `_` to each sub-tool name (`github_search` vs `jira_search`).
+For `builtin`, `name` is a prefix joined with `_` to each action. A name that more than one of an agent's bindings resolves to is offered once per binding as `{name}_{that name}` (`github_search` and `jira_search` for two `mcp` servers that both list `search`), each running with its own binding's `preset_parameters`; a `_2`, `_3`… suffix follows when that is taken too. Names no other binding resolves are left as they are.
 
 ### http
 
@@ -462,6 +462,7 @@ When the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration), every r
 The JWT is signed with EdDSA (Ed25519). The public key is published, unauthenticated, at `GET /.well-known/tool-assertion-jwks.json` under the header's `kid` (the key's RFC 7638 thumbprint); with no key configured the set is empty and no header is sent.
 
 {/* single-client: the key set is a public well-known document, not an API operation */}
+
 ```bash
 curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 ```

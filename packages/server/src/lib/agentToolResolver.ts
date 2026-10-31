@@ -19,6 +19,7 @@ import {
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
+import { type BindingTools, mergeBindingTools } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
@@ -1316,7 +1317,7 @@ const resolveReferenceBinding = async (args: {
   resolveArgs: ResolveToolByTypeArgs;
   guardrail: ResolverGuardrailContext;
   activity: ActivityCallContext;
-}): Promise<Record<string, Tool>> => {
+}): Promise<BindingTools> => {
   // The agent's project, never the caller's scope: a credential reaching
   // several projects must not widen what an agent's binding resolves to.
   const agentTool = await toolReferences.find({
@@ -1336,7 +1337,7 @@ const resolveReferenceBinding = async (args: {
       activity: args.activity,
     });
     args.resolveArgs.unavailable?.({ toolName: args.toolPublicId });
-    return {};
+    return { bindingName: args.toolPublicId, tools: {} };
   }
 
   const typedTool = agentTool as unknown as AgentToolRow;
@@ -1384,7 +1385,7 @@ const resolveReferenceBinding = async (args: {
       : wrapToolsWithOutputMapping({ tools, typedTool });
 
   // Guardrails are the single tool-call gating mechanism.
-  return gateResolvedToolsWithGuardrails({
+  const gated = gateResolvedToolsWithGuardrails({
     tools: mapped,
     toolId: typedTool.publicId,
     toolType: typedTool.type,
@@ -1402,6 +1403,7 @@ const resolveReferenceBinding = async (args: {
     rawParameters: localInjectableSchema(typedTool),
     context: args.guardrail,
   });
+  return { bindingName: typedTool.name, tools: gated };
 };
 
 export const resolveAgentTools = async (args: {
@@ -1441,11 +1443,10 @@ export const resolveAgentTools = async (args: {
   // Who the turn's tool executions are metered against.
   attribution: ToolCallAttribution;
 }): Promise<Record<string, Tool>> => {
-  const resolvedTools: Record<string, Tool> = {};
+  const bindings: BindingTools[] = [];
 
   for (const toolPublicId of args.toolIds) {
-    Object.assign(
-      resolvedTools,
+    bindings.push(
       await resolveReferenceBinding({
         toolPublicId,
         projectId: args.projectId,
@@ -1475,8 +1476,8 @@ export const resolveAgentTools = async (args: {
       unavailable: args.unavailable,
       attribution: args.attribution,
     });
-    Object.assign(resolvedTools, ephemeralTools);
+    bindings.push({ bindingName: definition.name, tools: ephemeralTools });
   }
 
-  return resolvedTools;
+  return mergeBindingTools({ bindings });
 };
