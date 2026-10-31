@@ -9,8 +9,8 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Recovery resolves the agent through the caller's project scope and reads an
- * agent outside it as missing. Every entry point authorizes the agent in that
+ * Recovery reads the generation through the caller's project scope and reads
+ * one outside it as missing. Every entry point authorizes the agent in that
  * same scope first, so none can reach the refusal; it is driven directly. The
  * rebuilt turn and the refusals an entry point can produce are in
  * `rest/generationRecovery.test.ts`.
@@ -50,7 +50,7 @@ describe('recoverPendingFromDb', () => {
     agentId = agentRes.body.id;
   });
 
-  test('returns undefined when the agent is out of the requested project scope', async () => {
+  test('returns undefined when the generation is out of the requested project scope', async () => {
     await createGenerationRecord({
       publicId: 'gen_scope_miss',
       projectId: projectDbId,
