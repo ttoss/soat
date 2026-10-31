@@ -5100,9 +5100,13 @@ fi
 # A mid-turn soat-type tool call must not answer "Unknown field(s):
 # parent_trace_id, root_trace_id, max_call_depth": injecting those fields into
 # every soat action's request body reaches ones whose schema (like list-projects)
-# doesn't declare them.
-if echo "$SOAT_GEN_CONTENT" | grep -qi "VALIDATION_FAILED\|Unknown field"; then
-  echo "ERROR: SOAT agent output leaked a tool validation error" >&2
+# doesn't declare them. Assert on the tool results: the model's prose can
+# contain any text.
+SOAT_TOOL_RESULTS=$(printf '%s\n' "$SOAT_GEN_RESP" | jq -c \
+  '[.output.response_messages[]? | select(.role == "tool") | .content[]?.output]')
+if echo "$SOAT_TOOL_RESULTS" | grep -qi "VALIDATION_FAILED\|Unknown field"; then
+  echo "ERROR: SOAT agent tool call returned a validation error" >&2
+  echo "$SOAT_TOOL_RESULTS" >&2
   exit 1
 fi
 echo "SOAT agent mid-turn tool call did not leak a validation error: OK"
