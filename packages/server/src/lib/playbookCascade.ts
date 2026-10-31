@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { PARKING_EXECUTOR_TYPES } from './playbookCaseAutomation';
 import {
   caseDefinition,
   caseNodeStates,
@@ -179,10 +180,10 @@ export const advancePlaybookCase = async (args: {
 };
 
 /**
- * Recovers a `running` execution past its lease. One with no run of its own
- * was running in a process that stopped, and fails as interrupted rather than
- * running twice; one waiting on a task or run reads it again, which settles it
- * when the event that would have was never delivered.
+ * Recovers a `running` execution past its lease. One parked on a task or run
+ * reads it again, which settles it when the event that would have was never
+ * delivered; any other was running in a process that stopped, and fails as
+ * interrupted rather than running twice.
  */
 export const recoverPlaybookExecutions = createSweep<ExecutionRow>({
   log,
@@ -212,7 +213,12 @@ export const recoverPlaybookExecutions = createSweep<ExecutionRow>({
     return claimed === 1;
   },
   handle: async ({ row }) => {
-    if (row.runId) {
+    const parked =
+      row.runId !== null &&
+      PARKING_EXECUTOR_TYPES.some((type) => {
+        return type === row.executorType;
+      });
+    if (parked) {
       await settleFromRun({ execution: row });
       return;
     }

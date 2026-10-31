@@ -203,6 +203,38 @@ describe('recoverPlaybookExecutions', () => {
     });
   });
 
+  test('fails, as interrupted, an agent execution a stopped process left mid-turn', async () => {
+    const caseId = await newCase(COLLECT);
+    await writeAmount(caseId);
+    const [queued] = await executionsOf(caseId);
+    // An agent names its generation in `run_id` while the turn runs.
+    await db.PlaybookExecution.update(
+      {
+        status: 'running',
+        executorType: 'agent',
+        executorId: 'agt_interrupted',
+        runId: 'gen_interrupted',
+        leaseExpiresAt: new Date(Date.now() - 1000),
+      },
+      { where: { publicId: queued.id } }
+    );
+
+    expect(await recoverPlaybookExecutions({ now: new Date() })).toBe(1);
+
+    const [recovered] = await pollUntil({
+      read: () => {
+        return executionsOf(caseId);
+      },
+      done: (rows) => {
+        return rows[0].status !== 'running';
+      },
+    });
+    expect(recovered).toMatchObject({
+      status: 'failed',
+      error: { code: 'PLAYBOOK_EXECUTION_INTERRUPTED' },
+    });
+  });
+
   test('settles an execution whose run ended without an event', async () => {
     const caseId = await newCase({
       nodes: [
