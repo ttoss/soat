@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.99.1](https://github.com/ttoss/soat/compare/v0.99.0...v0.99.1) (2026-10-31)
+
+### Bug Fixes
+
+* **playbooks:** recover an interrupted agent execution as interrupted ([#1782](https://github.com/ttoss/soat/issues/1782)) ([33720c6](https://github.com/ttoss/soat/commit/33720c6a2909334acadcea00b7272eb0d72dc6b6))
+* **playbooks:** refuse an mcp tool executor whose action a run could not call ([#1781](https://github.com/ttoss/soat/issues/1781)) ([a4b530b](https://github.com/ttoss/soat/commit/a4b530bc51d17385b70ad66fe35efd0daaa9d387))
+
 # [0.99.0](https://github.com/ttoss/soat/compare/v0.98.0...v0.99.0) (2026-10-29)
 
 ### Bug Fixes
