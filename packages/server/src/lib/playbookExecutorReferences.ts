@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { PlaybookExecutor } from './playbookDefinition';
 import { agentReferences, toolReferences } from './resourceReferences';
+import { isActionBound } from './toolsCallDispatch';
 
 const log = createDebug('soat:playbooks');
 
@@ -36,6 +37,43 @@ const RESOLVES: Record<
       (await db.Orchestration.count({ where: { publicId: id, projectId } })) > 0
     );
   },
+};
+
+/**
+ * Why a run could not call the action a `tool` executor names, or null: an
+ * `mcp` tool takes no call without an action, nor one its binding withholds.
+ */
+export const executorActionProblem = async (args: {
+  executor: PlaybookExecutor;
+  projectId: number;
+}): Promise<{
+  code: 'EXECUTOR_ACTION_REQUIRED' | 'EXECUTOR_ACTION_UNAVAILABLE';
+  message: string;
+} | null> => {
+  const { executor, projectId } = args;
+  if (executor.type !== 'tool') return null;
+  const tool = await toolReferences.find({
+    id: executor.id,
+    projectId,
+    reach: 'shares',
+  });
+  if (tool?.type !== 'mcp') return null;
+  const action = executor.operation_id;
+  if (action === undefined) {
+    log('executorActionProblem: %s has no operation_id', executor.id);
+    return {
+      code: 'EXECUTOR_ACTION_REQUIRED',
+      message: `mcp tool '${executor.id}' needs the action to call in operation_id.`,
+    };
+  }
+  if (!isActionBound({ tool, action })) {
+    log('executorActionProblem: %s withholds %s', executor.id, action);
+    return {
+      code: 'EXECUTOR_ACTION_UNAVAILABLE',
+      message: `action '${action}' is not available on tool '${executor.id}'.`,
+    };
+  }
+  return null;
 };
 
 /** Whether `executor` names something a run in `projectId` could start. */

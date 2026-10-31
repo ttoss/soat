@@ -33,6 +33,7 @@ const executesOnAmount = (executor: Record<string, unknown>) => {
 describe('Playbook execute node on an mcp tool', () => {
   let turn: AgentToolTurn;
   let mcpToolId: string;
+  let mcpUrl: string;
   const calls: McpCall[] = [];
 
   const admin = () => {
@@ -79,6 +80,7 @@ describe('Playbook execute node on an mcp tool', () => {
   beforeAll(async () => {
     turn = await startAgentToolTurn({ prefix: 'playbookmcpexecutor' });
     const path = `/${turn.unique('mcp')}`;
+    mcpUrl = `${turn.target.baseUrl}${path}`;
     turn.target.reply(path, async (body) => {
       if (body.method === 'tools/list') {
         const inputSchema = {
@@ -106,7 +108,7 @@ describe('Playbook execute node on an mcp tool', () => {
       type: 'mcp',
       execute: undefined,
       parameters: undefined,
-      mcp: { url: `${turn.target.baseUrl}${path}` },
+      mcp: { url: mcpUrl },
     });
     mcpToolId = tool.id;
   });
@@ -137,11 +139,21 @@ describe('Playbook execute node on an mcp tool', () => {
       expect(node?.state).toBe('done');
     });
 
-    test('fails the node when an mcp tool executor names no action', async () => {
+    test('fails the node when the tool withholds its action after the playbook was written', async () => {
+      const tool = await turn.createTool({
+        type: 'mcp',
+        execute: undefined,
+        parameters: undefined,
+        mcp: { url: mcpUrl },
+      });
       const playbook = await createPlaybook(
-        executesOnAmount({ type: 'tool', id: mcpToolId })
+        executesOnAmount({ type: 'tool', id: tool.id, operation_id: 'negate' })
       );
       expect(playbook.status).toBe(201);
+      const withheld = await admin()
+        .patch(`/api/v1/tools/${tool.id}`)
+        .send({ denied_actions: ['negate'] });
+      expect(withheld.status).toBe(200);
 
       const node = await runCase(playbook.body.id);
 
