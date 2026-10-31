@@ -23,7 +23,6 @@ import {
   updateMemoryStore,
   updateMemoryStoreTags,
 } from 'src/lib/memoryStores';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import {
   assertNoSystemTagKeys,
   readNullableTagBag,
@@ -40,6 +39,7 @@ import {
   resolveWriteProjectId,
 } from './helpers';
 import { requireMemoryStore } from './memoryStoreAccess';
+import { compileReadPolicy } from './readPolicy';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const memoryStoresRouter = new Router<Context>();
@@ -135,31 +135,19 @@ memoryStoresRouter.get('/memory-stores', async (ctx: Context) => {
     resourceType: 'memory_store',
   });
 
-  // Without a single project there is no policy to compile against: the caller
-  // spans several, each with its own statements. The listing stays scoped by
-  // project, as it was before conditions reached memory stores.
-  if (projectPublicId) {
-    const policies = await ctx.authUser.getPolicies(projectPublicId);
-    const { where: policyWhere, hasAccess } = compilePolicy({
-      policies,
-      action: 'memories:ListMemoryStores',
-      resourceType: 'memory_store',
-      projectPublicId,
-    });
-    ctx.body = await listMemoryStores({
-      // No Allow statement matches the action in this project, so the caller
-      // reads nothing here — an empty scope, not an error, as on every listing.
-      projectIds: hasAccess ? (projectIds ?? []) : [],
-      tags,
-      policyWhere,
-      ...parsePagination(ctx),
-    });
-    return;
-  }
-
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds,
+    action: 'memories:ListMemoryStores',
+    resourceType: 'memory_store',
+  });
   ctx.body = await listMemoryStores({
-    projectIds: projectIds ?? [],
+    // No Allow statement matches the action, so the caller reads nothing: an
+    // empty scope, not an error, as on every listing.
+    projectIds: hasAccess ? (projectIds ?? []) : [],
     tags,
+    policyWhere,
     ...parsePagination(ctx),
   });
 });

@@ -18,7 +18,6 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { readMetadataQuery } from 'src/lib/structuredFilter';
 import {
@@ -185,12 +184,12 @@ documentsRouter.get('/documents/export', async (ctx: Context) => {
     resourceType: 'document',
   });
 
-  const policies = await ctx.authUser!.getPolicies(projectPublicId);
-  const { where: policyWhere, hasAccess } = compilePolicy({
-    policies,
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds: undefined,
     action: 'documents:ExportDocuments',
     resourceType: 'document',
-    projectPublicId,
   });
 
   sendNdjson({

@@ -308,7 +308,7 @@ A condition applies differently to one resource than to a listing:
 | Route shape | How the condition applies |
 |---|---|
 | One resource ([`GET /sessions/{id}`](/docs/api/sessions/get-session), the tag sub-endpoints) | The resource is loaded before the policy is evaluated, so its tags are the context: an `Allow` or a `Deny` condition decides the request |
-| A listing ([`GET /sessions?project_id=`](/docs/api/sessions/list-sessions)) | The caller is authorized for the resource type with no tag context, then the conditions compile into the query, where a `Deny` condition removes rows. Without `?project_id=` there is no single project policy to compile and the listing is scoped by project only |
+| A listing ([`GET /sessions?project_id=`](/docs/api/sessions/list-sessions)) | The caller is authorized for the resource type with no tag context, then the conditions compile into the query, where a `Deny` condition removes rows. Without `?project_id=` the policy of every project in scope compiles, and a row must pass each |
 
 ```json
 {

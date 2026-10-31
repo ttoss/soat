@@ -20,7 +20,6 @@ import { retractMemory } from 'src/lib/memoryRetraction';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { getMemoryTags, updateMemoryTags } from 'src/lib/memoryTags';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import {
   assertNoSystemTagKeys,
   buildResourceTagContext,
@@ -42,6 +41,7 @@ import {
   validateTagsBag,
 } from './memoriesRequestBody';
 import { sendNdjson } from './ndjsonResponse';
+import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -208,12 +208,12 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
   // The memory store itself already passed the check above; this narrows the listing
   // by each entry's own tags, which the container check cannot see.
   const projectPublicId = memoryStore.project_id!;
-  const policies = await ctx.authUser.getPolicies(projectPublicId);
-  const { where: policyWhere, hasAccess } = compilePolicy({
-    policies,
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds: undefined,
     action: 'memories:ListMemories',
     resourceType: 'memory',
-    projectPublicId,
   });
 
   ctx.body = await listMemories({
@@ -240,12 +240,12 @@ memoriesRouter.get(
     );
 
     const projectPublicId = memoryStore.project_id!;
-    const policies = await ctx.authUser.getPolicies(projectPublicId);
-    const { where: policyWhere, hasAccess } = compilePolicy({
-      policies,
+    const { where: policyWhere, hasAccess } = await compileReadPolicy({
+      ctx,
+      projectPublicId,
+      projectIds: undefined,
       action: 'memories:ExportMemories',
       resourceType: 'memory',
-      projectPublicId,
     });
 
     sendNdjson({
