@@ -145,7 +145,7 @@ memoryStoresRouter.get('/memory-stores', async (ctx: Context) => {
   ctx.body = await listMemoryStores({
     // No Allow statement matches the action, so the caller reads nothing: an
     // empty scope, not an error, as on every listing.
-    projectIds: hasAccess ? (projectIds ?? []) : [],
+    projectIds: hasAccess ? projectIds : [],
     tags,
     policyWhere,
     ...parsePagination(ctx),

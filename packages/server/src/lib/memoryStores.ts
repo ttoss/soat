@@ -65,15 +65,19 @@ export const createMemoryStore = async (args: {
 };
 
 export const listMemoryStores = async (args: {
-  projectIds: number[];
+  /** `undefined` spans every project (an unrestricted caller). */
+  projectIds?: number[];
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
   cursor?: string;
 }) => {
-  if (args.projectIds.length === 0) return emptyPage(args);
+  if (args.projectIds !== undefined && args.projectIds.length === 0) {
+    return emptyPage(args);
+  }
 
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = {};
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
   applyTagFilter({ where, tags: args.tags });
   if (hasPolicyConstraints(args.policyWhere)) {
     Object.assign(where, args.policyWhere);
