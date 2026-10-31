@@ -80,14 +80,14 @@ A **tool ID** (`tool_k8x2f3np`) is used in [`tool_bindings`](./agents.md#tool-bi
 
 ### Tool Name Resolution
 
-| Tool type | Name the model sees    | Example                                              |
-| --------- | ---------------------- | ---------------------------------------------------- |
-| `http`    | `{name}`               | `search`                                             |
-| `client`  | `{name}`               | `read_local_file`                                    |
-| `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
-| `builtin` | `{name}_{action}`      | `platform_get-document`, `platform_search-knowledge` |
+| Tool type | Name the model sees | Example                                              |
+| --------- | ------------------- | ---------------------------------------------------- |
+| `http`    | `{name}`            | `search`                                             |
+| `client`  | `{name}`            | `read_local_file`                                    |
+| `mcp`     | `{mcpToolName}`     | `create_issue`, `list_repos`                         |
+| `builtin` | `{name}_{action}`   | `platform_get-document`, `platform_search-knowledge` |
 
-For `mcp` and `builtin`, `name` is a prefix joined with `_` to each sub-tool name (`github_search` vs `jira_search`).
+For `builtin`, `name` is a prefix joined with `_` to each action. A name that more than one of an agent's bindings resolves to is offered once per binding as `{name}_{that name}` (`github_search` and `jira_search` for two `mcp` servers that both list `search`), each running with its own binding's `preset_parameters`; a `_2`, `_3`… suffix follows when that is taken too. Names no other binding resolves are left as they are.
 
 ### http
 

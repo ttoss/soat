@@ -223,6 +223,56 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
       expect(schema?.required).toEqual(['query']);
     });
 
+    test('an action two bindings both expose is offered once per binding, each with its own presets', async () => {
+      const calls: Array<{ server: string; arguments: object }> = [];
+      const caseServer = (server: string, caseId: string) => {
+        return mcpTool({
+          tools: [
+            {
+              name: 'get_case',
+              inputSchema: {
+                type: 'object',
+                properties: { case_id: { type: 'string' } },
+              },
+            },
+            { name: `only_${server}` },
+          ],
+          onCall: (params) => {
+            calls.push({ server, arguments: params.arguments });
+            return { body: { jsonrpc: '2.0', id: 2, result: { content: [] } } };
+          },
+          tool: { preset_parameters: { case_id: caseId } },
+        });
+      };
+      const first = await caseServer('first', 'case_1');
+      const second = await caseServer('second', 'case_2');
+      const agentId = await bindAgent([first.id, second.id]);
+
+      await turn.generate({
+        agentId,
+        calls: [
+          { name: `${first.name}_get_case`, args: {} },
+          { name: `${second.name}_get_case`, args: {} },
+        ],
+      });
+
+      expect(offeredToolNames(turn.model).sort()).toEqual(
+        [
+          `${first.name}_get_case`,
+          `${second.name}_get_case`,
+          'only_first',
+          'only_second',
+        ].sort()
+      );
+      expect(calls).toHaveLength(2);
+      expect(calls).toEqual(
+        expect.arrayContaining([
+          { server: 'first', arguments: { case_id: 'case_1' } },
+          { server: 'second', arguments: { case_id: 'case_2' } },
+        ])
+      );
+    });
+
     test('an SSE-framed listing resolves its tools', async () => {
       const server = await mcpTool({
         onList: (body) => {
