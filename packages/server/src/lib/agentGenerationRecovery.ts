@@ -17,7 +17,7 @@ import {
   getGenerationPendingState,
   notAwaitingToolOutputs,
 } from './generationPendingState';
-import { getGeneration, updateGenerationRecord } from './generations';
+import { generations, updateGenerationRecord } from './generations';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
 
@@ -273,16 +273,20 @@ export const recoverPendingFromDb = async (args: {
   authHeader?: string;
 }): Promise<PendingGeneration | undefined> => {
   const [gen, storedState] = await Promise.all([
-    getGeneration({ publicId: args.generationId }),
+    generations.findByPublicId({
+      id: args.generationId,
+      projectIds: args.projectIds,
+    }),
     getGenerationPendingState({ publicId: args.generationId }),
   ]);
   const pendingState = (storedState ?? undefined) as PendingStateDb | undefined;
 
-  if (!gen || gen.agent_id !== args.agentId) return undefined;
+  if (!gen?.trace || gen.agentPublicId !== args.agentId) return undefined;
 
+  // The turn resumes in the project it ran in, which a shared agent's is not.
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
-    projectIds: args.projectIds,
+    runProjectId: gen.projectId,
   });
   if (!typedAgent) return undefined;
   // After the scope check, so a refusal never confirms a generation the caller
@@ -298,7 +302,7 @@ export const recoverPendingFromDb = async (args: {
     projectIds: args.projectIds,
     authHeader: args.authHeader,
     typedAgent,
-    traceId: gen.trace_id,
+    traceId: gen.trace.publicId,
     pendingState,
   });
 };

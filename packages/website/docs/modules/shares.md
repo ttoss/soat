@@ -162,7 +162,7 @@ A call through a share:
 
 Once a project accepts a share of an agent, the agent runs in that project from:
 
-- [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), with a key or OAuth token scoped to the grantee project;
+- [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), with a key or OAuth token scoped to the grantee project, and [`POST /api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) to resume a turn it paused there;
 - a conversation's generation, naming it as `agent_id`, and a message it authors;
 - a [session](./sessions.md), opened with a key or OAuth token scoped to the grantee project;
 - an orchestration `agent` node;

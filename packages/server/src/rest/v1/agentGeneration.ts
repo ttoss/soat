@@ -277,10 +277,20 @@ agentGenerationRouter.post(
 agentGenerationRouter.post(
   '/agents/:agent_id/generate/:generation_id/tool-outputs',
   async (ctx: Context) => {
-    const { projectIds } = await authorizeAgentWrite({
+    const shared = await authorizeSharedUse({
       ctx,
+      resourceType: 'agent',
+      resourceId: ctx.params.agent_id,
       action: 'agents:CreateAgentGeneration',
     });
+    const projectIds = shared
+      ? [shared.projectId]
+      : (
+          await authorizeAgentWrite({
+            ctx,
+            action: 'agents:CreateAgentGeneration',
+          })
+        ).projectIds;
 
     const { tool_outputs: toolOutputs } = ctx.request.body as {
       tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
