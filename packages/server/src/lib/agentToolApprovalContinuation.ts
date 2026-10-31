@@ -127,11 +127,11 @@ const executeApprovedAction = async (args: {
       frozenArguments: isPlainObject(proposed.arguments)
         ? proposed.arguments
         : {},
-      boundaryPolicy: await proposingAgentBoundary({
-        item: args.item,
-        projectInternalId: args.projectInternalId,
-      }),
     },
+    boundaryPolicy: await proposingAgentBoundary({
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+    }),
   });
 
   return isPlainObject(rawResult) ? rawResult : { output: rawResult };
