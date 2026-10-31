@@ -15,6 +15,6 @@ and those parameters, started by `/flow` or not:
   `Merge rule`; `Intake` for what you notice; `Decisions` for open choices.
 - The change carries the task's URL and the tasks it settles; before you stop,
   the task carries the change as an `implements` reference, what integrating
-  leaves, and its wait on the gates. After the verdict, the manager's tick
-  writes the task.
+  leaves, and its wait on the gates. After the verdict, the tick writes the
+  task.
 - Friction with a skill, GTF or a Flow tool → `flow-friction`, then continue.
