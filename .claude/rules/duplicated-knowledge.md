@@ -45,8 +45,9 @@ Knowledge a module legitimately owns stays in the module; `modules.md`
    loss through `open-questions.md`.
 5. **The enforcement that keeps it consolidated** — a test that fails when a new
    site bypasses the chokepoint: structure in `tests/harness/`, behavior at the
-   entry point (`tests.md`). Deterministic enforcement outranks prose
-   (`open-questions.md` Test 2), and a consolidation with no test reopens.
+   entry point (`tests.md`). Deterministic enforcement outranks prose (the
+   long-term test, `open-questions.md`), and a consolidation with no test
+   reopens.
 
 ## Landing it
 
