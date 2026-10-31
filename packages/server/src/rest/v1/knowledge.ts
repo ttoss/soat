@@ -72,16 +72,21 @@ const hasSearchFilters = (
 };
 
 /**
- * Compiles the caller's `knowledge:SearchKnowledge` policy once per store the
- * search reads, over every project it spans. `hasAccess` answers the action
- * alone, so it is the same for all three: no Allow for the action means the
- * whole search returns nothing.
+ * Compiles the caller's `knowledge:SearchKnowledge` policy once per resource
+ * type the search reads, over every project it spans. A statement reaches only
+ * the types its SRN names, so each type answers access on its own: no access
+ * to documents returns nothing, and no access to memories or their stores
+ * leaves the memory half out.
  */
 const resolvePolicyWhere = async (args: {
   ctx: AuthenticatedContext;
   projectPublicId: string | undefined;
   projectIds: number[] | undefined;
-}): Promise<{ forbidden: boolean; policyWhere?: KnowledgePolicyWhere }> => {
+}): Promise<{
+  forbidden: boolean;
+  memoriesForbidden?: boolean;
+  policyWhere?: KnowledgePolicyWhere;
+}> => {
   const policySets = await readScopePolicySets(args);
   const compileFor = (compileArgs: {
     resourceType: string;
@@ -110,6 +115,7 @@ const resolvePolicyWhere = async (args: {
 
   return {
     forbidden: false,
+    memoriesForbidden: !memoryStore.hasAccess || !memory.hasAccess,
     policyWhere: {
       document: document.where,
       memoryStore: memoryStore.where,
@@ -149,11 +155,12 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     resourceType: 'document',
   });
 
-  const { forbidden, policyWhere } = await resolvePolicyWhere({
-    ctx,
-    projectPublicId: body.project_id,
-    projectIds,
-  });
+  const { forbidden, memoriesForbidden, policyWhere } =
+    await resolvePolicyWhere({
+      ctx,
+      projectPublicId: body.project_id,
+      projectIds,
+    });
   if (forbidden) {
     ctx.body = { results: [] };
     return;
@@ -179,7 +186,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     tags,
     metadata,
     includeDocuments: body.include_documents,
-    includeMemories: body.include_memories,
+    includeMemories: memoriesForbidden ? false : body.include_memories,
   });
   ctx.body = { results };
 });
