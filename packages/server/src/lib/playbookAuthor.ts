@@ -14,7 +14,10 @@ import type {
   PlaybookExecutor,
   PlaybookNode,
 } from './playbookDefinition';
-import { executorResolves } from './playbookExecutorReferences';
+import {
+  executorActionProblem,
+  executorResolves,
+} from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
 import type { StartingPrincipal } from './principals';
 import { mayStart, START_ACTIONS } from './startActions';
@@ -88,7 +91,7 @@ export const assertExecutorsStartable = async (args: {
 
 /**
  * Every executor `isAllowed` may start that names nothing a run in the project
- * could start. One it may not start is left to the permission check, so the
+ * could start, or a tool action a run could not call. One it may not start is left to the permission check, so the
  * answer never tells a caller whether a resource it cannot start exists.
  */
 export const executorReferenceProblems = async (args: {
@@ -106,14 +109,27 @@ export const executorReferenceProblems = async (args: {
         type: executor.type,
         id: executor.id,
       });
-      if (
-        allowed &&
-        !(await executorResolves({ executor, projectId: args.projectId }))
-      ) {
+      if (!allowed) continue;
+      if (!(await executorResolves({ executor, projectId: args.projectId }))) {
         problems.push({
           code: 'EXECUTOR_NOT_FOUND',
           path: `definition.nodes[${index}].${field}`,
           message: `Node '${node.id}' starts ${executor.type} '${executor.id}', which does not exist in the project.`,
+        });
+        continue;
+      }
+      const actionProblem =
+        executor === node.executor
+          ? await executorActionProblem({
+              executor,
+              projectId: args.projectId,
+            })
+          : null;
+      if (actionProblem) {
+        problems.push({
+          ...actionProblem,
+          path: `definition.nodes[${index}].executor.operation_id`,
+          message: `Node '${node.id}': ${actionProblem.message}`,
         });
       }
     }
