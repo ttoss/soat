@@ -14,7 +14,11 @@ const MISSING: Record<ExecutorType, string> = {
   orchestration: 'orch_doesnotexist000',
 };
 
-const definitionOf = (executor: { type: string; id: string }) => {
+const definitionOf = (executor: {
+  type: string;
+  id: string;
+  operation_id?: string;
+}) => {
   return {
     nodes: [
       {
@@ -42,6 +46,8 @@ describe('Playbook executor references', () => {
   let otherProjectId: string;
   let toolId: string;
   let otherToolId: string;
+  let mcpToolId: string;
+  let scopedMcpToolId: string;
   const existing = {} as Record<ExecutorType, string>;
   let seq = 0;
 
@@ -95,6 +101,20 @@ describe('Playbook executor references', () => {
     otherProjectId = setup.otherProjectId!;
 
     toolId = await httpTool(projectId);
+    mcpToolId = await create('/api/v1/tools', {
+      name: 'ref-mcp-tool',
+      type: 'mcp',
+      description: 'An MCP server',
+      mcp: { url: 'http://127.0.0.1:9/mcp' },
+    });
+    scopedMcpToolId = await create('/api/v1/tools', {
+      name: 'ref-scoped-mcp-tool',
+      type: 'mcp',
+      description: 'An MCP server bound to two actions',
+      mcp: { url: 'http://127.0.0.1:9/mcp' },
+      actions: ['search', 'delete'],
+      denied_actions: ['delete'],
+    });
     otherToolId = await httpTool(otherProjectId);
     const providerId = await create('/api/v1/ai-providers', {
       name: 'refs-provider',
@@ -172,6 +192,54 @@ describe('Playbook executor references', () => {
       ]);
     });
 
+    test('refuses an mcp tool executor without an operation_id', async () => {
+      const res = await createPlaybook(
+        definitionOf({ type: 'tool', id: mcpToolId })
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_VALIDATION_FAILED');
+      expect(codesOf(res.body.error.meta.problems)).toEqual([
+        {
+          code: 'EXECUTOR_ACTION_REQUIRED',
+          path: 'definition.nodes[0].executor.operation_id',
+        },
+      ]);
+    });
+
+    test.each(['lookup', 'delete'])(
+      "refuses an mcp tool executor whose operation_id '%s' the tool does not allow",
+      async (operationId) => {
+        const res = await createPlaybook(
+          definitionOf({
+            type: 'tool',
+            id: scopedMcpToolId,
+            operation_id: operationId,
+          })
+        );
+        expect(res.status).toBe(400);
+        expect(codesOf(res.body.error.meta.problems)).toEqual([
+          {
+            code: 'EXECUTOR_ACTION_UNAVAILABLE',
+            path: 'definition.nodes[0].executor.operation_id',
+          },
+        ]);
+      }
+    );
+
+    test.each(['unscoped', 'scoped'])(
+      'accepts an %s mcp tool executor naming an allowed action',
+      async (scope) => {
+        const res = await createPlaybook(
+          definitionOf({
+            type: 'tool',
+            id: scope === 'scoped' ? scopedMcpToolId : mcpToolId,
+            operation_id: 'search',
+          })
+        );
+        expect(res.status).toBe(201);
+      }
+    );
+
     test("refuses another project's tool", async () => {
       const res = await createPlaybook(
         definitionOf({ type: 'tool', id: otherToolId })
@@ -214,6 +282,24 @@ describe('Playbook executor references', () => {
     });
   });
 
+  test('PATCH refuses an mcp tool executor without an operation_id', async () => {
+    const created = await createPlaybook(
+      definitionOf({ type: 'tool', id: mcpToolId, operation_id: 'search' })
+    );
+    expect(created.status).toBe(201);
+
+    const res = await asAdmin()
+      .patch(`/api/v1/playbooks/${created.body.id}`)
+      .send({ definition: definitionOf({ type: 'tool', id: mcpToolId }) });
+    expect(res.status).toBe(400);
+    expect(codesOf(res.body.error.meta.problems)).toEqual([
+      {
+        code: 'EXECUTOR_ACTION_REQUIRED',
+        path: 'definition.nodes[0].executor.operation_id',
+      },
+    ]);
+  });
+
   describe('POST /api/v1/playbooks/validate', () => {
     const validate = (body: Record<string, unknown>, token = adminToken) => {
       return authenticatedTestClient(token)
@@ -250,6 +336,21 @@ describe('Playbook executor references', () => {
         expect(res.body).toEqual({ valid: true, problems: [] });
       }
     );
+
+    test('reports an mcp tool executor without an operation_id', async () => {
+      const res = await validate({
+        project_id: projectId,
+        definition: definitionOf({ type: 'tool', id: mcpToolId }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(codesOf(res.body.problems)).toEqual([
+        {
+          code: 'EXECUTOR_ACTION_REQUIRED',
+          path: 'definition.nodes[0].executor.operation_id',
+        },
+      ]);
+    });
 
     test('reports an unknown upstream playbook in the named project', async () => {
       const res = await validate({

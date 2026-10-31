@@ -143,20 +143,29 @@ export const callSoatTool = async (
   });
 };
 
+/** Absent `actions` means the whole surface; the denylist wins. */
+export const isActionBound = (args: {
+  tool: { actions?: string[] | null; deniedActions?: string[] | null };
+  action: string;
+}): boolean => {
+  const { tool, action } = args;
+  return (
+    (tool.actions == null || tool.actions.includes(action)) &&
+    (tool.deniedActions == null || !tool.deniedActions.includes(action))
+  );
+};
+
 /**
  * Enforced before the outbound request: a scoped tool must reject a denied
  * action at the capability boundary, not merely omit it from the model's tool
- * surface. Absent `actions` means the whole surface; the denylist wins.
+ * surface.
  */
 const assertActionBound = (args: {
   tool: CallableToolDefinition;
   action: string;
 }): void => {
   const { tool, action } = args;
-  if (
-    (tool.actions != null && !tool.actions.includes(action)) ||
-    (tool.deniedActions != null && tool.deniedActions.includes(action))
-  ) {
+  if (!isActionBound({ tool, action })) {
     throw new DomainError(
       'VALIDATION_FAILED',
       `action "${action}" is not available on this tool.`
