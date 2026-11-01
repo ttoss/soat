@@ -5,7 +5,23 @@ import { DomainError } from '../errors';
 import type { OnBehalfOf } from './onBehalfOf';
 import { casesWithUpstreams } from './playbookCaseUpstreams';
 
-/** The cases `work` runs for: the case it names, or that of each execution in flight it names. */
+/**
+ * `work` and, when it is a `loop` / `sub_orchestration` child run, each run
+ * above it: a child resumed on its own is driven on a token naming itself.
+ */
+const workLineage = async (args: { work: string }): Promise<string[]> => {
+  const lineage = [args.work];
+  for (;;) {
+    const run = await db.OrchestrationRun.findOne({
+      where: { publicId: lineage[lineage.length - 1] },
+      attributes: ['parentRunId'],
+    });
+    if (!run?.parentRunId) return lineage;
+    lineage.push(run.parentRunId);
+  }
+};
+
+/** The cases `work` runs for: the case it names, or that of each execution in flight it, or a run above it, names. */
 const casesOfWork = async (args: { work: string }): Promise<number[]> => {
   const named = await db.PlaybookCase.findOne({
     where: { publicId: args.work },
@@ -14,7 +30,10 @@ const casesOfWork = async (args: { work: string }): Promise<number[]> => {
   const executions = await db.PlaybookExecution.findAll({
     where: {
       status: ['queued', 'running'],
-      [Op.or]: [{ publicId: args.work }, { runId: args.work }],
+      [Op.or]: [
+        { publicId: args.work },
+        { runId: await workLineage({ work: args.work }) },
+      ],
     },
     attributes: ['caseId'],
   });
