@@ -104,7 +104,7 @@ export class MemoryRule extends Model {
    * against an event that already carries them, and because a rule naming an
    * agent must not keep that agent from being deleted.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare sourceAgentIds: string[] | null;
 
   /** Handler; mutually exclusive with `toolId`. Both null is the built-in extractor. */
@@ -141,7 +141,7 @@ export class MemoryRule extends Model {
   declare action: string | null;
 
   /** Merged into a tool handler's input before invocation. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare presetParameters: Record<string, unknown> | null;
 
   /** Built-in extractor overrides — the retired `ExtractionConfig` fields. */

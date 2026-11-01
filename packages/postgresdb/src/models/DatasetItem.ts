@@ -65,7 +65,7 @@ export class DatasetItem extends Model {
   declare dataset: Dataset;
 
   /** Array of `{ role, content }` messages, replayed verbatim into the agent. */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare input: unknown;
 
   /** Reference answer for `exact_match` / `llm_judge`. */
@@ -73,7 +73,7 @@ export class DatasetItem extends Model {
   declare expectedOutput: string | null;
 
   /** Free-form tags, e.g. `{"topic": "billing"}`. Opaque to the platform. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: object | null;
 
   /**

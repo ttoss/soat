@@ -69,13 +69,13 @@ export class OrchestrationNodeExecution extends Model {
   declare status:
     'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare input: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare output: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
   @Column({ type: DataType.DATE, allowNull: true })

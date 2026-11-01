@@ -92,7 +92,7 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare position: number;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'idempotency_key' })
@@ -108,7 +108,7 @@ export class ConversationMessage extends Model {
   declare idempotencyDigest: string | null;
 
   @Column({
-    type: DataType.JSONB,
+    type: DataType.JSON,
     allowNull: true,
     field: 'response_messages',
   })

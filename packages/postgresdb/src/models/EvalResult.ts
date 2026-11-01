@@ -87,7 +87,7 @@ export class EvalResult extends Model {
   declare datasetItem: DatasetItem | null;
 
   /** Frozen copy of the item's `input` at run time. */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare input: unknown;
 
   /** Frozen copy of the item's `expectedOutput` at run time. */
@@ -114,7 +114,7 @@ export class EvalResult extends Model {
   declare output: string | null;
 
   /** `[{ scorer, score, passed, reasoning? }]`, one entry per scorer. */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare scores: unknown;
 
   /** AND over the per-scorer `passed` flags. */
@@ -125,7 +125,7 @@ export class EvalResult extends Model {
    * Item-level failure reason, `{ code, message, meta? }`. Set instead of
    * scoring, never alongside it.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
   @Column({ type: DataType.DATE })

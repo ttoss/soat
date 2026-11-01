@@ -15,6 +15,6 @@ export class OauthClient extends Model {
   @Column({ type: DataType.TEXT, allowNull: false })
   declare clientId: string;
 
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare clientData: object;
 }

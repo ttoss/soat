@@ -74,7 +74,7 @@ export class EvalRun extends Model {
    * name and resolved at run start for the same reason as `agentVersion`.
    * Null when the eval has no decider scorer.
    */
-  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare deciderVersions: Record<string, number> | null;
 
   /** `queued` | `running` | `completed` | `failed` | `cancelled`. */
@@ -97,7 +97,7 @@ export class EvalRun extends Model {
   declare baselineRun: EvalRun | null;
 
   /** Per-scorer mean and pass rate; null until the run is terminal. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare aggregateScores: object | null;
 
   /** Null when the Eval carries no `passThreshold`. */
@@ -134,7 +134,7 @@ export class EvalRun extends Model {
    * (`agent_version`, `baseline_run_id`, `wait`), so without this column a CI
    * caller has nowhere to record what a run is measuring.
    */
-  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
 
   /**
@@ -151,7 +151,7 @@ export class EvalRun extends Model {
    * state — a finished run outlives the work by a long way and nothing reads
    * the bag once the last item has run.
    */
-  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare toolContext: Record<string, string> | null;
 
   @Column({ type: DataType.DATE, allowNull: true })

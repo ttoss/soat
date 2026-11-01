@@ -70,7 +70,7 @@ export class FormationResource extends Model {
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'delete' })
   declare deletionPolicy: string;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare lastAppliedProperties: Record<string, unknown> | null;
 
   /**
@@ -79,7 +79,7 @@ export class FormationResource extends Model {
    * the resource live and owned by nothing — the ledger has already
    * moved to the replacement, so nothing else would ever name it again.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare pendingCleanupPhysicalResourceIds: string[] | null;
 
   @Column({ type: DataType.DATE })

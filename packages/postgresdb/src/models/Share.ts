@@ -76,7 +76,7 @@ export class Share extends Model {
   @Column({ type: DataType.STRING(32), allowNull: false })
   declare resourceId: string;
 
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare actions: string[];
 
   // A project public id, or `*`. Not a foreign key: a share names its grantee
@@ -85,7 +85,7 @@ export class Share extends Model {
   declare grantee: string;
 
   /** `{ calls, window }`: the calls each acceptance may make per window. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare cap: { calls: number; window: string } | null;
 
   @Column({ type: DataType.DATE, allowNull: true })

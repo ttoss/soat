@@ -113,7 +113,7 @@ export class Memory extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare tags: Record<string, string> | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
   /**

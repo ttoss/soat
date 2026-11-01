@@ -109,7 +109,7 @@ export class IngestionRule extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare action: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare presetParameters: object | null;
 
   @Column({
@@ -135,7 +135,7 @@ export class IngestionRule extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare chunkOverlap: number | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: object | null;
 
   @Column({ type: DataType.DATE })

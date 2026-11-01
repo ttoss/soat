@@ -33,7 +33,7 @@ export class Project extends Model {
   declare name: string;
 
   // The baseline floor governing every tool call by every agent in the project.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare guardrailIds: string[] | null;
 
   // Concurrently-driven runs allowed, `null` for unlimited. Enforced at queue

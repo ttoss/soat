@@ -63,7 +63,7 @@ export class WebhookDelivery extends Model {
   declare eventType: string;
 
   @Column({
-    type: DataType.JSONB,
+    type: DataType.JSON,
     allowNull: false,
   })
   declare payload: object;

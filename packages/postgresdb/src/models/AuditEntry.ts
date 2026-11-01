@@ -118,7 +118,7 @@ export class AuditEntry extends Model {
    * `generation_id`, `session_id`, `actor_id`), verified from the request's
    * `On-Behalf-Of` assertion; null for a write made as the credential alone.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare onBehalfOf: Record<string, string | null> | null;
 
   /** The permission-action string that authorized the request. */
@@ -154,7 +154,7 @@ export class AuditEntry extends Model {
   declare userAgent: string | null;
 
   /** Kind-specific payload; guardrail evaluation records live here. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare detail: Record<string, unknown> | null;
 
   @Column({ type: DataType.DATE })

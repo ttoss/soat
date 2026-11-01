@@ -59,11 +59,11 @@ export class ModelRoute extends Model {
    * `{ ai_provider_id, model, timeout_seconds?, max_retries? }`. The array is
    * copied as a value by the lib mapper — nothing walks its keys.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare targets: object[];
 
   /** Subset of `provider_error` | `timeout` | `rate_limited`. */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare retryOn: string[];
 
   /** Consecutive retryable failures before a target is skipped. */

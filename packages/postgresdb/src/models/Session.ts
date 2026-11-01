@@ -169,7 +169,7 @@ export class Session extends Model {
   declare autoGenerate: boolean;
 
   @Column({
-    type: DataType.JSONB,
+    type: DataType.JSON,
     allowNull: true,
     defaultValue: null,
     field: 'tool_context',

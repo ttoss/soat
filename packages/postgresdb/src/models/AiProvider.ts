@@ -88,7 +88,7 @@ export class AiProvider extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare baseUrl: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare config: Record<string, unknown> | null;
 
   @Column({ type: DataType.DATE })

@@ -48,6 +48,7 @@ import { playbookCaseActor } from './2026-10-20-playbookCaseActor';
 import { listKeysetIndexes } from './2026-10-23-listKeysetIndexes';
 import { memoryContentNormalizedHash } from './2026-10-23-memoryContentNormalizedHash';
 import { modelFacingSchemasJson } from './2026-11-01-modelFacingSchemasJson';
+import { payloadsKeepKeyOrder } from './2026-11-01-payloadsKeepKeyOrder';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -117,4 +118,5 @@ export const MIGRATIONS: Migration[] = [
   memoryContentNormalizedHash,
   listKeysetIndexes,
   modelFacingSchemasJson,
+  payloadsKeepKeyOrder,
 ];

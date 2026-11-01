@@ -56,13 +56,13 @@ export class FormationOperation extends Model {
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'queued' })
   declare status: string;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare events: object[] | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare plan: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
   @Column({ type: DataType.DATE })

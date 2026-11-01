@@ -16,66 +16,9 @@ const serverSrcDir = path.join(repoRoot, 'packages/server/src');
  */
 const ROLES = {
   order: [
-    'Agent.outputSchema',
-    'Decider.questions',
-    'DeciderVersion.config',
-    'Decision.questions',
-    'Playbook.definition',
-    'PlaybookEntry.value',
-    'PlaybookExecution.input',
-    'PlaybookExecution.output',
-    'PlaybookVersion.config',
-    'Tool.parameters',
-  ],
-  query: [
-    'Actor.tags',
-    'Conversation.tags',
-    'Document.metadata',
-    'Document.tags',
-    'File.tags',
-    'Memory.tags',
-    'MemoryStore.tags',
-    'Session.tags',
-    'Task.metadata',
-    'UsageEvent.guardrailIds',
-  ],
-};
-
-/**
- * `JSONB` columns not yet held to the rule, by the change that settles them.
- * `definitions` move to `JSON` (`order`); each of `remaining` is
- * classified `order` or `query` and stored as its role says. Empty when done.
- */
-const PENDING = {
-  /** Resource definitions and the versions a restore replays. */
-  definitions: [
-    'Agent.activeToolIds',
-    'Agent.boundaryPolicy',
-    'Agent.guardrailIds',
-    'Agent.knowledgeConfig',
-    'Agent.promptCaching',
-    'Agent.reasoning',
-    'Agent.stepRules',
-    'Agent.stopConditions',
-    'Agent.toolBindings',
-    'Agent.toolChoice',
-    'AgentVersion.config',
-    'Guardrail.document',
-    'GuardrailVersion.config',
-    'Orchestration.edges',
-    'Orchestration.inputSchema',
-    'Orchestration.nodes',
-    'Orchestration.outputMapping',
-    'Orchestration.stateSchema',
-    'OrchestrationVersion.config',
-    'Workflow.payloadSchema',
-    'Workflow.states',
-    'Workflow.transitions',
-    'WorkflowVersion.config',
-  ],
-  remaining: [
     'ActivityEntry.detail',
     'Agent.activeRelease',
+    'Agent.outputSchema',
     'AiProvider.config',
     'ApprovalItem.editedArguments',
     'ApprovalItem.evidence',
@@ -87,9 +30,12 @@ const PENDING = {
     'ConversationMessage.responseMessages',
     'DatasetItem.input',
     'DatasetItem.metadata',
+    'Decider.questions',
+    'DeciderVersion.config',
     'Decision.answers',
     'Decision.error',
     'Decision.metadata',
+    'Decision.questions',
     'Document.error',
     'DocumentVersion.config',
     'Eval.scorers',
@@ -148,15 +94,20 @@ const PENDING = {
     'OrchestrationRun.state',
     'OrchestrationRun.toolContext',
     'OrchestrationRun.wakeContext',
+    'Playbook.definition',
     'PlaybookEntry.basis',
     'PlaybookEntry.onBehalfOf',
+    'PlaybookEntry.value',
     'PlaybookExecution.basis',
     'PlaybookExecution.error',
+    'PlaybookExecution.input',
     'PlaybookExecution.onBehalfOf',
+    'PlaybookExecution.output',
     'PlaybookExport.error',
     'PlaybookExport.onBehalfOf',
     'PlaybookUpgrade.diff',
     'PlaybookUpgrade.onBehalfOf',
+    'PlaybookVersion.config',
     'Policy.document',
     'PriceBook.quantity',
     'Project.guardrailIds',
@@ -174,6 +125,7 @@ const PENDING = {
     'Tool.guardrailIds',
     'Tool.mcp',
     'Tool.outputMapping',
+    'Tool.parameters',
     'Tool.pipeline',
     'Tool.presetParameters',
     'Trace.error',
@@ -187,6 +139,51 @@ const PENDING = {
     'WebhookDelivery.payload',
     'WorkflowMigration.items',
     'WorkflowMigration.stateMap',
+  ],
+  query: [
+    'Actor.tags',
+    'Conversation.tags',
+    'Document.metadata',
+    'Document.tags',
+    'File.tags',
+    'Memory.tags',
+    'MemoryStore.tags',
+    'Session.tags',
+    'Task.metadata',
+    'UsageEvent.guardrailIds',
+  ],
+};
+
+/**
+ * `JSONB` columns not yet held to the rule, by the change that settles them.
+ * `definitions` move to `JSON` (`order`). Empty when done.
+ */
+const PENDING = {
+  /** Resource definitions and the versions a restore replays. */
+  definitions: [
+    'Agent.activeToolIds',
+    'Agent.boundaryPolicy',
+    'Agent.guardrailIds',
+    'Agent.knowledgeConfig',
+    'Agent.promptCaching',
+    'Agent.reasoning',
+    'Agent.stepRules',
+    'Agent.stopConditions',
+    'Agent.toolBindings',
+    'Agent.toolChoice',
+    'AgentVersion.config',
+    'Guardrail.document',
+    'GuardrailVersion.config',
+    'Orchestration.edges',
+    'Orchestration.inputSchema',
+    'Orchestration.nodes',
+    'Orchestration.outputMapping',
+    'Orchestration.stateSchema',
+    'OrchestrationVersion.config',
+    'Workflow.payloadSchema',
+    'Workflow.states',
+    'Workflow.transitions',
+    'WorkflowVersion.config',
   ],
 };
 

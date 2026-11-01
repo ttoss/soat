@@ -103,7 +103,7 @@ export class Trigger extends Model {
   declare action: string | null;
 
   // Static input shallow-merged under fire-time input.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare input: Record<string, unknown> | null;
 
   /**
@@ -116,7 +116,7 @@ export class Trigger extends Model {
    * reference, which keeps the credential in the secret store and leaves only
    * its name here.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare toolContext: Record<string, string> | null;
 
   // 5-field cron expression (UTC); present only for schedule triggers.

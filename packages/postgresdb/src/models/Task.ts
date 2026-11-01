@@ -120,13 +120,13 @@ export class Task extends Model {
   // Mutable task data; input to guards and dispatch mappings. 100%
   // caller-owned — the engine never writes a key into it except the workflow
   // author's declared `payload_writes`.
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: {} })
   declare payload: Record<string, unknown>;
 
   // Server-owned: the result of the current state's last completed dispatch,
   // overwritten on every dispatch. Exposed to guards as `task.last_result` —
   // a namespace callers cannot write, unlike the payload bag.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare lastResult: unknown;
 
   // Forwarded as `X-Soat-Context-*` headers on the next dispatch's tool calls,
@@ -137,7 +137,7 @@ export class Task extends Model {
   // multi-actor, so a readable field would park one principal's credential
   // where every other principal on the board can read it. Cleared on reaching
   // a terminal state.
-  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare toolContext: Record<string, string> | null;
 
   // Caller-owned labels (tenant, ticket, import batch), supplied at creation.
@@ -152,7 +152,7 @@ export class Task extends Model {
   declare assignee: string | null;
 
   // Provenance of the current state's automation: { kind, id, status }.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare activeDispatch: Record<string, unknown> | null;
 
   // running | completed | failed | unrouted for the current state's dispatch.

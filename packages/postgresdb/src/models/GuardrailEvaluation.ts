@@ -96,7 +96,7 @@ export class GuardrailEvaluation extends Model {
   declare contextSource: string;
 
   // Flat map of only the referenced vars (fully-qualified paths → frozen values).
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: {} })
   declare contextSnapshot: object;
 
   @Column({ type: DataType.STRING, allowNull: true })

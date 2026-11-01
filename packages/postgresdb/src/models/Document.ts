@@ -214,7 +214,7 @@ export class Document extends Model {
   declare indexedChunks: number | null;
 
   /** `{ code, message, meta? }` when `status` is `failed`. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
   @Column({ type: DataType.DATE })

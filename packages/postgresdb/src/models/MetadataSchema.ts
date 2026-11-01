@@ -82,7 +82,7 @@ export class MetadataSchema extends Model {
    * are never case-converted. Every stored value compiles, because one that
    * does not is refused when it is declared.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare schema: Record<string, unknown>;
 
   @Column({ type: DataType.DATE })
