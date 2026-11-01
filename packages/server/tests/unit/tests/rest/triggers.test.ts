@@ -455,6 +455,31 @@ describe('Triggers', () => {
       expect(res.body.action).toBe('someTool');
     });
 
+    test('creates a builtin tool trigger whose action arrives with the call', async () => {
+      const builtinTool = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'triggers-builtin-tool',
+          type: 'builtin',
+          actions: ['list-tools'],
+        });
+      expect(builtinTool.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'builtin-noaction',
+          type: 'manual',
+          target_type: 'tool',
+          target_id: builtinTool.body.id,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.action).toBeNull();
+    });
+
     test('rejects a client tool target (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')

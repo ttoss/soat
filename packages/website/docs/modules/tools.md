@@ -373,7 +373,7 @@ A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`co
 
 `pipeline` has `steps` and an optional `output`:
 
-- **`steps[]`** — each step names a tool by **`tool_id`** or an inline **`tool`** ([Create Tool](#data-model) body minus `project_id`, no Tool row, not itself `pipeline`), never both; in a [formation](./formations.md) template `tool_id` may be `{ "ref": "ResourceName" }` to another template tool, resolved at deploy. Optional **`action`** for `builtin`/`mcp` step tools. **`input`** maps keys to [JSON Logic](https://jsonlogic.com) expressions over `{ input, steps }`:
+- **`steps[]`** — each step names a tool by **`tool_id`** or an inline **`tool`** ([Create Tool](#data-model) body minus `project_id`, no Tool row, not itself `pipeline`), never both; in a [formation](./formations.md) template `tool_id` may be `{ "ref": "ResourceName" }` to another template tool, resolved at deploy. **`action`** names the step tool's action: required for `mcp`; a `builtin` step may take it from its input instead. **`input`** maps keys to [JSON Logic](https://jsonlogic.com) expressions over `{ input, steps }`:
   - `{ "var": "input.<field>" }` reads the pipeline's own input; `{ "var": "steps.<id>.<path>" }` an earlier step's output.
   - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) resolve recursively at any depth.
   - A value is an expression only when it is a single-key object whose key is a real JSON Logic operator; `preserve` returns its argument unevaluated for a literal that looks like one: `{ "preserve": { "var": "some.var" } }`.

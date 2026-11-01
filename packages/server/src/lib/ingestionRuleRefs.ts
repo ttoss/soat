@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { ConverterTool } from './ingestionRuleValidation';
 import { agentReferences, toolReferences } from './resourceReferences';
 
 /**
@@ -58,24 +59,29 @@ export const resolveConverterRefs = async (args: {
 };
 
 /**
- * Looks up the converter's tool type (needed by `validateIngestionRule`) and
+ * Looks up the converter's tool (needed by `validateIngestionRule`) and
  * confirms the referenced tool/agent still exists.
  */
-export const resolveConverterToolType = async (args: {
+export const resolveConverterTool = async (args: {
   toolId?: number | null;
   agentId?: number | null;
-}): Promise<string | null> => {
+}): Promise<ConverterTool | null> => {
   // The internal ids arrive already resolved in the rule's reach — its own
   // project or an accepted share — so only their existence is read here.
   if (args.toolId) {
-    const tool = await db.Tool.findByPk(args.toolId, { attributes: ['type'] });
+    const tool = await db.Tool.findByPk(args.toolId, {
+      attributes: ['type', 'presetParameters'],
+    });
     if (!tool) {
       throw new DomainError(
         'TOOL_NOT_FOUND',
         `Tool '${args.toolId}' not found.`
       );
     }
-    return tool.type;
+    return {
+      type: tool.type,
+      presetParameters: (tool.presetParameters as object | null) ?? null,
+    };
   }
   if (args.agentId) {
     const agent = await db.Agent.findByPk(args.agentId, {

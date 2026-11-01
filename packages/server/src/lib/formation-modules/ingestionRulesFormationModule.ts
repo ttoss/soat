@@ -20,9 +20,9 @@ import {
 import { defineFormationModule } from './defineFormationModule';
 import { isFormationExpression } from './formationSpecLoader';
 
-// Two of `validateIngestionRule`'s rules need the converter's tool type, which
+// Two of `validateIngestionRule`'s rules need the converter's tool, which
 // is only knowable after a DB lookup — so this pure stage passes
-// `toolType: null` and leaves them to the lib's authoritative check.
+// `tool: null` and leaves them to the lib's authoritative check.
 
 const asRefPresence = (value: unknown): string | undefined => {
   if (value === undefined || value === null) return undefined;
@@ -97,7 +97,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
     const message = validateIngestionRule({
       toolId: asRefPresence(properties.tool_id),
       agentId: asRefPresence(properties.agent_id),
-      toolType: null,
+      tool: null,
       action: toNullableString(properties.action) ?? undefined,
       contentTypeGlob:
         typeof rawGlob === 'string' && !isFormationExpression(rawGlob)

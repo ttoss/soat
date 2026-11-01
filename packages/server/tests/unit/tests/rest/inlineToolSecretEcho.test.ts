@@ -226,6 +226,7 @@ describe('a literal credential in a tool definition', () => {
                   type: 'mcp',
                   mcp: mcpWith(reference),
                 },
+                action: 'search',
               },
             ],
           },

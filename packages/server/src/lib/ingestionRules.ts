@@ -6,7 +6,7 @@ import {
   compareGlobSpecificity,
   matchesContentTypeGlob,
 } from './ingestionRuleMatching';
-import { resolveConverterToolType } from './ingestionRuleRefs';
+import { resolveConverterTool } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
 import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -201,7 +201,7 @@ export const createIngestionRule = async (args: {
     args.agentId
   );
 
-  const toolType = await resolveConverterToolType({
+  const tool = await resolveConverterTool({
     toolId: args.toolId,
     agentId: args.agentId,
   });
@@ -209,7 +209,7 @@ export const createIngestionRule = async (args: {
   const validationError = validateIngestionRule({
     toolId: args.toolId,
     agentId: args.agentId,
-    toolType,
+    tool,
     action: args.action,
     contentTypeGlob: args.contentTypeGlob,
     presetParameters: args.presetParameters,
@@ -344,7 +344,7 @@ export const updateIngestionRule = async (args: {
   const finalChunkStrategy =
     args.chunkStrategy !== undefined ? args.chunkStrategy : rule.chunkStrategy;
 
-  const toolType = await resolveConverterToolType({
+  const tool = await resolveConverterTool({
     toolId: finalToolId,
     agentId: finalAgentId,
   });
@@ -352,7 +352,7 @@ export const updateIngestionRule = async (args: {
   const validationError = validateIngestionRule({
     toolId: finalToolId,
     agentId: finalAgentId,
-    toolType,
+    tool,
     action: finalAction,
     contentTypeGlob: finalContentTypeGlob,
     presetParameters: finalPresetParameters,

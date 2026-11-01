@@ -6,6 +6,7 @@ import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { agentReferences, toolReferences } from './resourceReferences';
 import { SOAT_EVENT_TYPES } from './soatEvents';
 import { mayStart, type StartableType } from './startActions';
+import { serverSideToolProblem } from './toolsCallDispatch';
 
 export const TRIGGER_TYPES = [
   'manual',
@@ -290,17 +291,22 @@ export const resolveAndValidateTarget = async (args: {
     label: 'Tool',
   });
 
-  const toolType = tool!.type as string;
-  if (toolType === 'client') {
+  const problem = serverSideToolProblem({
+    tool: tool!,
+    action: args.action,
+    // A firing's input is the event or request that fires it.
+    input: 'open',
+  });
+  if (problem === 'runs_on_client') {
     throw new DomainError(
       'TRIGGER_ACTION_NOT_ALLOWED',
       'client tools cannot be executed server-side and cannot be a trigger target.'
     );
   }
-  if ((toolType === 'builtin' || toolType === 'mcp') && !args.action) {
+  if (problem === 'action_required') {
     throw new DomainError(
       'TRIGGER_ACTION_NOT_ALLOWED',
-      `${toolType} tool targets require an 'action'.`
+      `${tool!.type} tool targets require an 'action'.`
     );
   }
 };

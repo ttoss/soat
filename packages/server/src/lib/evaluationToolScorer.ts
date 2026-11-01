@@ -15,6 +15,7 @@ import type { ToolScorerVerdict } from './evaluationToolScorerContract';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { callTool } from './tools';
+import { serverSideToolProblem } from './toolsCallDispatch';
 
 const log = createDebug('soat:evaluations');
 
@@ -142,16 +143,24 @@ export const validateToolScorerRefs = async (args: {
         `scorer '${name}': tool_id '${toolId}' does not reference a tool in this project.`
       );
     }
-    if (tool.type === 'client') {
+    const problem = serverSideToolProblem({
+      tool,
+      action: typeof raw.action === 'string' ? raw.action : undefined,
+      // The call's input is these presets plus reserved context keys.
+      input: isPlainObject(raw.preset_parameters)
+        ? raw.preset_parameters
+        : null,
+    });
+    if (problem === 'runs_on_client') {
       throw new DomainError(
         'VALIDATION_FAILED',
         `scorer '${name}': client tools cannot be used as scorers; they are executed by the calling client, but an eval run scores server-side.`
       );
     }
-    if ((tool.type === 'builtin' || tool.type === 'mcp') && !raw.action) {
+    if (problem === 'action_required') {
       throw new DomainError(
         'VALIDATION_FAILED',
-        `scorer '${name}': action is required when the scorer tool type is soat or mcp.`
+        `scorer '${name}': action is required when the scorer tool type is soat or mcp, unless preset_parameters names it.`
       );
     }
   }

@@ -121,7 +121,7 @@ paths:
                   example: agent_V1StGXR8Z5jdHi6B
                 action:
                   type: string
-                  description: Operation id, required for builtin/mcp tool converters
+                  description: Operation id, required for mcp tool converters, and for builtin unless a preset_parameters (the rule's or the tool's) names action
                 preset_parameters:
                   type: object
                   description: Merged into the tool input before invocation (tool converters only)

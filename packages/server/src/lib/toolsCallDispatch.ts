@@ -289,6 +289,33 @@ export const callMcpTool = async (args: {
   });
 };
 
+export type ServerSideToolProblem = 'runs_on_client' | 'action_required';
+
+const hasPresetAction = (presets: object | null | undefined): boolean => {
+  return presets != null && typeof Reflect.get(presets, 'action') === 'string';
+};
+
+/**
+ * Why a server-side caller could not run this tool, answered as the
+ * dispatcher answers it: an `mcp` call takes only an explicit action, a
+ * `builtin` call also takes `action` from its merged input. `input` is the
+ * caller's fixed presets, or `'open'` when the input arrives with each call.
+ */
+export const serverSideToolProblem = (args: {
+  tool: { type: string; presetParameters: object | null | undefined };
+  action: string | null | undefined;
+  input: object | null | undefined | 'open';
+}): ServerSideToolProblem | null => {
+  const { tool, action, input } = args;
+  if (tool.type === 'client') return 'runs_on_client';
+  if (action) return null;
+  if (tool.type === 'mcp') return 'action_required';
+  if (tool.type !== 'builtin' || input === 'open') return null;
+  return hasPresetAction(tool.presetParameters) || hasPresetAction(input)
+    ? null
+    : 'action_required';
+};
+
 /**
  * Dispatches an `http` or `builtin` tool to its executor; an `mcp` tool goes
  * through `prepareMcpCall` and `callMcpTool`. `client` tools (and any unknown
