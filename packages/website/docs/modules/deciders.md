@@ -281,7 +281,7 @@ An array whose every entry carries `role` is read as messages and held to that s
 
 A decider can point at a [tool](./tools.md) instead of an agent. SOAT calls it as it calls any tool — with its [egress](./tools.md#where-a-tool-may-reach-egress) rules, [preset parameters](./tools.md#preset-parameters), [output mapping](./tools.md#output-mapping) and guardrails — and reads its answer against the questions.
 
-Only `http` and `pipeline` tools can back a decider. A `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry: wrap it in a [`pipeline`](./tools.md#pipeline) step, which names one. A tool whose `preset_parameters` pin `input` or `questions` is refused as well, since presets are merged over what the decider sends. Each is `400 DECIDER_TOOL_NOT_CALLABLE`, checked when the decider is written and again when a decision is requested. A decider keeps its tool from being deleted: [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` with `meta.decider_count`.
+A decider's tool runs server-side with no `action`. A `client` tool has no caller to hand the call to, and an `mcp` tool, or a `builtin` tool whose `preset_parameters` name no `action`, needs one a decider does not carry: wrap it in a [`pipeline`](./tools.md#pipeline) step, which names one. A tool whose `preset_parameters` pin `input` or `questions` is refused as well, since presets are merged over what the decider sends. Each is `400 DECIDER_TOOL_NOT_CALLABLE`, checked when the decider is written and again when a decision is requested. A decider keeps its tool from being deleted: [`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` with `meta.decider_count`.
 
 The tool runs as whoever requested the decision. A `builtin` pipeline step calls the API with the requester's credential, so it reads and writes only what the requester may: a step whose call the requester may not make fails the decision with `PIPELINE_STEP_FAILED`.
 
@@ -621,7 +621,7 @@ A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) 
 | Code                          | Status | When                                                                              |
 | ----------------------------- | ------ | --------------------------------------------------------------------------------- |
 | `DECIDER_AGENT_NOT_TOOL_LESS` | 400    | The agent has a tool surface, on a decider write or a decision request            |
-| `DECIDER_TOOL_NOT_CALLABLE`   | 400    | The tool is not `http` or `pipeline`, or pins `input` or `questions`              |
+| `DECIDER_TOOL_NOT_CALLABLE`   | 400    | The tool needs an action it is not given, or pins `input` or `questions`          |
 | `AGENT_NOT_FOUND`             | 400    | `agent_id` names no agent in the project                                          |
 | `TOOL_NOT_FOUND`              | 400    | `tool_id` names no tool in the project                                            |
 | `VALIDATION_FAILED`           | 400    | Invalid questions or `input`, a write naming both backends, or one naming neither |

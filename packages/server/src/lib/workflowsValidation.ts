@@ -2,6 +2,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { agentReferences, toolReferences } from './resourceReferences';
+import { serverSideToolValidationProblem } from './serverSideToolValidation';
 import type { ValidationProblem } from './validationProblems';
 import { DISPATCH_REQUIRED_ID, refuseWorkflow } from './workflowsStructure';
 import type {
@@ -28,38 +29,68 @@ export {
   workflowCollectionToSnake,
 } from './workflowsWire';
 
-/** How each dispatch kind's target is found in the workflow's project. */
-const DISPATCH_TARGET_LOOKUPS: Record<
+type DispatchTarget = {
+  id: string;
+  projectId: number;
+  dispatch: WorkflowDispatch;
+  /** The dispatch's wire path, `states[i].on_enter.dispatch`. */
+  path: string;
+  stateName: string;
+};
+
+const targetNotFound = (
+  args: DispatchTarget & { noun: string }
+): ValidationProblem => {
+  const { wireName } = DISPATCH_REQUIRED_ID[args.dispatch.kind];
+  return {
+    code: 'TARGET_NOT_FOUND',
+    path: `${args.path}.${wireName}`,
+    message: `State '${args.stateName}' references ${args.noun} '${args.id}', which does not exist in this project.`,
+  };
+};
+
+/** Why each dispatch kind's target cannot be dispatched, or null. */
+const DISPATCH_TARGET_PROBLEMS: Record<
   WorkflowDispatch['kind'],
-  {
-    noun: string;
-    find: (args: { id: string; projectId: number }) => Promise<unknown>;
-  }
+  (args: DispatchTarget) => Promise<ValidationProblem | null>
 > = {
-  agent: {
-    noun: 'agent',
-    find: ({ id, projectId }) => {
-      return agentReferences.find({ id, projectId, reach: 'project' });
-    },
+  agent: async (args) => {
+    const agent = await agentReferences.find({
+      id: args.id,
+      projectId: args.projectId,
+      reach: 'project',
+    });
+    return agent ? null : targetNotFound({ ...args, noun: 'agent' });
   },
-  tool: {
-    noun: 'tool',
-    find: ({ id, projectId }) => {
-      return toolReferences.find({ id, projectId, reach: 'project' });
-    },
+  tool: async (args) => {
+    const tool = await toolReferences.find({
+      id: args.id,
+      projectId: args.projectId,
+      reach: 'project',
+    });
+    if (!tool) return targetNotFound({ ...args, noun: 'tool' });
+    return serverSideToolValidationProblem({
+      tool,
+      action: args.dispatch.operationId,
+      toolPath: `${args.path}.tool_id`,
+      actionPath: `${args.path}.operation_id`,
+    });
   },
-  orchestration: {
-    noun: 'orchestration',
-    find: ({ id, projectId }) => {
-      return db.Orchestration.findOne({ where: { publicId: id, projectId } });
-    },
+  orchestration: async (args) => {
+    const orchestration = await db.Orchestration.findOne({
+      where: { publicId: args.id, projectId: args.projectId },
+    });
+    return orchestration
+      ? null
+      : targetNotFound({ ...args, noun: 'orchestration' });
   },
 };
 
 /**
  * Verifies every on_enter dispatch target (agent / tool / orchestration) exists
- * in the owning project. Kept separate from the pure structural checks so the
- * definition can be validated without a project context where needed.
+ * in the owning project, and that a tool target runs server-side. Kept separate
+ * from the pure structural checks so the definition can be validated without a
+ * project context where needed.
  */
 export const assertDispatchTargetsValid = async (args: {
   projectId: number;
@@ -70,22 +101,17 @@ export const assertDispatchTargetsValid = async (args: {
     const dispatch = state.onEnter?.dispatch;
     if (!dispatch) continue;
 
-    const { field, wireName } = DISPATCH_REQUIRED_ID[dispatch.kind];
-    const targetId = dispatch[field];
+    const targetId = dispatch[DISPATCH_REQUIRED_ID[dispatch.kind].field];
     if (!targetId) continue;
 
-    const lookup = DISPATCH_TARGET_LOOKUPS[dispatch.kind];
-    const target = await lookup.find({
+    const problem = await DISPATCH_TARGET_PROBLEMS[dispatch.kind]({
       id: targetId,
       projectId: args.projectId,
+      dispatch,
+      path: `states[${index}].on_enter.dispatch`,
+      stateName: state.name,
     });
-    if (!target) {
-      problems.push({
-        code: 'TARGET_NOT_FOUND',
-        path: `states[${index}].on_enter.dispatch.${wireName}`,
-        message: `State '${state.name}' references ${lookup.noun} '${targetId}', which does not exist in this project.`,
-      });
-    }
+    if (problem) problems.push(problem);
   }
   if (problems.length > 0) refuseWorkflow(problems);
 };

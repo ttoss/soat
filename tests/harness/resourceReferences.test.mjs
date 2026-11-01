@@ -34,6 +34,8 @@ describe('tool and agent references', () => {
     'lib/ingestionRuleRefs.ts':
       'reads the type of a converter already resolved to an internal id',
     'lib/knowledgeConfigBackfill.ts': 'a schema backfill over every row',
+    'lib/memoryRules.ts':
+      'reads the type of a handler already resolved to an internal id',
     'lib/modelRouteDefaults.ts': "lists a route's dependents",
     'lib/modelRoutes.ts': "lists a route's dependents",
     'lib/projectDependents.ts': "counts a project's dependents",

@@ -52,7 +52,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   DECIDER_AGENT_NOT_TOOL_LESS:
     "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `PATCH /api/v1/agents/{agent_id}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
   DECIDER_TOOL_NOT_CALLABLE:
-    'Point the decider at an `http` or `pipeline` tool with no `input` or `questions` in its `preset_parameters`. Reach an `mcp` or `builtin` tool through a `pipeline` step, which names its own `action`.',
+    'Point the decider at an `http`, `pipeline` or `builtin` tool with no `input` or `questions` in its `preset_parameters`; a `builtin` tool names its `action` there. Reach an `mcp` tool through a `pipeline` step, which names its own `action`.',
   DECISION_ANSWER_INVALID:
     "Make the tool answer `{ answers: [{ name, probability | choice | score, probabilities?, confidence? }] }`, one per question, as OpenAI's Decisions API does; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
   TOOL_HAS_DEPENDENTS:

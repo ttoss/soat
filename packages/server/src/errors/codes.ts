@@ -178,7 +178,7 @@ export const ERROR_CODES = {
   DECIDER_TOOL_NOT_CALLABLE: {
     httpStatus: 400,
     description:
-      "The tool a decider evaluates with cannot answer a decision. Only `http` and `pipeline` tools can: a `client` tool has no caller to hand the call to, and an `mcp` or `builtin` tool needs an `action` a decider does not carry. A tool whose `preset_parameters` pin `input` or `questions` is refused too, since presets are merged over the call input and would replace the caller's input or the questions. `meta.tool_id` names the tool, with `meta.type` or `meta.pinned`.",
+      "The tool a decider evaluates with cannot answer a decision: a `client` tool has no caller to hand the call to, and an `mcp` tool, or a `builtin` tool whose `preset_parameters` name no `action`, needs an `action` a decider does not carry. A tool whose `preset_parameters` pin `input` or `questions` is refused too, since presets are merged over the call input and would replace the caller's input or the questions. `meta.tool_id` names the tool, with `meta.type` or `meta.pinned`.",
   },
   DECISION_ANSWER_INVALID: {
     httpStatus: 502,

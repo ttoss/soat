@@ -81,8 +81,9 @@ paths:
         the decider's project. An agent must carry no tool surface — no tool
         binding left active by `active_tool_ids` and no
         `knowledge_config.write_memory_store_id` — or the create is refused with
-        `400 DECIDER_AGENT_NOT_TOOL_LESS`. A tool must be `http` or `pipeline`
-        and must not pin `input` or `questions` in its `preset_parameters`, or
+        `400 DECIDER_AGENT_NOT_TOOL_LESS`. A tool must run server-side with no
+        `action` (not `client` or `mcp`; a `builtin` tool names its `action` in
+        `preset_parameters`) and must not pin `input` or `questions` there, or
         the create is refused with `400 DECIDER_TOOL_NOT_CALLABLE`. A duplicate
         `name` in the project is `409 NAME_CONFLICT`.
       operationId: createDecider
@@ -851,7 +852,7 @@ components:
           x-soat-ref: tools
           type: string
           nullable: true
-          description: The http or pipeline tool that answers; null when an agent does
+          description: The tool that answers, run with no action; null when an agent does
           example: tool_V1StGXR8Z5jdHi6B
         version:
           type: integer
@@ -895,7 +896,7 @@ components:
         tool_id:
           x-soat-ref: tools
           type: string
-          description: An http or pipeline tool that answers
+          description: A tool that answers, run with no action
           example: tool_V1StGXR8Z5jdHi6B
         questions:
           $ref: '#/components/schemas/DeciderQuestions'
@@ -1032,7 +1033,7 @@ components:
         tool_id:
           x-soat-ref: tools
           type: string
-          description: An http or pipeline tool that answers
+          description: A tool that answers, run with no action
           example: tool_V1StGXR8Z5jdHi6B
         questions:
           $ref: '#/components/schemas/DeciderQuestions'
