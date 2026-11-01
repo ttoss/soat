@@ -87,7 +87,7 @@ export class ApprovalItem extends Model {
   // Frozen at emit time, including the resolved `action`, so the platform can
   // execute the exact proposed call at resolution time. Null for a producer
   // whose proposal is not a tool call.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare proposedAction: {
     toolId: string;
     action?: string;
@@ -97,7 +97,7 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare reasoning: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare evidence: object | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
@@ -159,7 +159,7 @@ export class ApprovalItem extends Model {
 
   // The payload a parked transition carries, merged into the task under the
   // transition's lock when the approval fires it, so a rejection writes none.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare taskPayload: Record<string, unknown> | null;
 
   @Column({ type: DataType.STRING(64), allowNull: true })
@@ -182,7 +182,7 @@ export class ApprovalItem extends Model {
   declare resolutionReason: string | null;
 
   // Set on edit-then-approve; the original stays in `proposedAction`.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare editedArguments: object | null;
 
   @Column({ type: DataType.DATE })

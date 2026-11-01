@@ -107,19 +107,19 @@ export class OrchestrationRun extends Model {
     | 'cancelled'
     | 'expired';
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: {} })
   declare state: object;
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare activeNodes: string[];
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: {} })
   declare artifacts: object;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare requiredAction: object | null;
 
   @Column({ type: DataType.STRING(32), allowNull: true })
@@ -165,7 +165,7 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare wakeAt: Date | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare wakeContext: object | null;
 
   // Crash recovery: refreshed each round while the driver makes progress, so a
@@ -191,7 +191,7 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare pausedByProject: boolean;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare input: object | null;
 
   // Forwarded as `X-Soat-Context-*` headers on the tool calls of every
@@ -204,7 +204,7 @@ export class OrchestrationRun extends Model {
   // read. Echoing it would make reading a run the one way to read a secret the
   // secret store itself never returns.
   @Column({
-    type: DataType.JSONB,
+    type: DataType.JSON,
     allowNull: true,
     defaultValue: null,
     field: 'tool_context',
@@ -214,14 +214,14 @@ export class OrchestrationRun extends Model {
   // Caller-owned labels (tenant, batch, ticket), round-tripped verbatim and
   // never read by the engine. A column of its own rather than part of
   // `input`, whose `input_schema` may legitimately reject unknown keys.
-  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
 
   // The caller's deduplication key, claimed for as long as this row exists.
   @Column({ type: DataType.STRING(255), allowNull: true })
   declare idempotencyKey: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare output: object | null;
 
   @Column({ type: DataType.DATE, allowNull: true })

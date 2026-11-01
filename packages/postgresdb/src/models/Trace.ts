@@ -133,12 +133,12 @@ export class Trace extends Model {
   // steps, and a re-writing generation rewrites only its own slice.
   // Skeleton, not content, but reset by a purge because the object it indexes
   // is deleted.
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare stepSegments: { generationId: string; stepCount: number }[];
 
   // Content, not skeleton: an error payload can carry a tool's request and
   // response bodies, so a purge clears it.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: Record<string, unknown> | null;
 
   // The row survives a purge as an auditable skeleton, so a purge is provable

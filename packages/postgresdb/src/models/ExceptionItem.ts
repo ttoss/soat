@@ -107,7 +107,7 @@ export class ExceptionItem extends Model {
   declare title: string;
 
   // Structured context (tool, args digest, error message, guardrail version …).
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare detail: object | null;
 
   // The identity repeated occurrences fold into while the item is open. Null for

@@ -27,10 +27,10 @@ export class OrchestrationCheckpoint extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare nodeId: string;
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: {} })
   declare state: object;
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: {} })
   declare artifacts: object;
 
   @Column({ type: DataType.DATE })

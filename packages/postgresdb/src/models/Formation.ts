@@ -60,32 +60,32 @@ export class Formation extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare name: string;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare template: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare outputs: Record<string, string> | null;
 
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'creating' })
   declare status: string;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
   // The resolved view of `template.metadata`, which keeps the raw expressions
   // (mirrors how `outputs` relates to `template.outputs`).
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare resolvedMetadata: Record<string, unknown> | null;
 
   // Parameter values applied at the last deploy, for auditability. `no_echo`
   // parameters are masked.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare resolvedParameters: Record<string, string> | null;
 
   // Written on entering `failed`/`delete_failed` and cleared on the next
   // successful apply, so reading a failed formation tells the caller why
   // without a second call.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: Record<string, unknown> | null;
 
   @Column({ type: DataType.DATE })

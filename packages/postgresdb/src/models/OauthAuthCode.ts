@@ -15,7 +15,7 @@ export class OauthAuthCode extends Model {
   @Column({ type: DataType.TEXT, allowNull: false })
   declare code: string;
 
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare codeData: object;
 
   @Column({ type: DataType.DATE, allowNull: false })

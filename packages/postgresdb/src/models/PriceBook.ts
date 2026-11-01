@@ -134,7 +134,7 @@ export class PriceBook extends Model {
   declare resource: string | null;
 
   // JSON Logic over the call's context giving the quantity; absent prices one.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare quantity: unknown;
 
   // The row with the latest effectiveFrom <= now() prices a call.

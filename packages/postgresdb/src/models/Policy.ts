@@ -39,7 +39,7 @@ export class Policy extends Model {
   declare description: string | null;
 
   @Column({
-    type: DataType.JSONB,
+    type: DataType.JSON,
     allowNull: false,
   })
   declare document: object;

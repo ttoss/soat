@@ -57,34 +57,34 @@ export class Tool extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare parameters: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare execute: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare mcp: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare actions: string[] | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare deniedActions: string[] | null;
 
   // `null` forwards every key (pre-existing rows); `[]` forwards none. The
   // server-pinned identity keys are always forwarded regardless.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare contextKeys: string[] | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare presetParameters: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare pipeline: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare outputMapping: object | null;
 
   // Governs this tool wherever it is used, by any agent.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare guardrailIds: string[] | null;
 
   @Column({ type: DataType.DATE })

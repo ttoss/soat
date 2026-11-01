@@ -24,7 +24,8 @@ export const fileMetadataJsonb = defineMigration({
               WHERE table_name = 'files' AND column_name = 'metadata'`,
     });
 
-    return column?.data_type === 'jsonb';
+    // `json` once `2026-11-01-payloads-keep-key-order` has run.
+    return column?.data_type === 'jsonb' || column?.data_type === 'json';
   },
   up: async (context) => {
     context.say('converting files.metadata to jsonb');

@@ -16,6 +16,8 @@ const serverSrcDir = path.join(repoRoot, 'packages/server/src');
  */
 const ROLES = {
   order: [
+    'ActivityEntry.detail',
+    'Agent.activeRelease',
     'Agent.activeToolIds',
     'Agent.boundaryPolicy',
     'Agent.guardrailIds',
@@ -28,51 +30,6 @@ const ROLES = {
     'Agent.toolBindings',
     'Agent.toolChoice',
     'AgentVersion.config',
-    'Decider.questions',
-    'DeciderVersion.config',
-    'Decision.questions',
-    'Guardrail.document',
-    'GuardrailVersion.config',
-    'Orchestration.edges',
-    'Orchestration.inputSchema',
-    'Orchestration.nodes',
-    'Orchestration.outputMapping',
-    'Orchestration.stateSchema',
-    'OrchestrationVersion.config',
-    'Playbook.definition',
-    'PlaybookEntry.value',
-    'PlaybookExecution.input',
-    'PlaybookExecution.output',
-    'PlaybookVersion.config',
-    'Tool.parameters',
-    'Workflow.payloadSchema',
-    'Workflow.states',
-    'Workflow.transitions',
-    'WorkflowVersion.config',
-  ],
-  query: [
-    'Actor.tags',
-    'Conversation.tags',
-    'Document.metadata',
-    'Document.tags',
-    'File.tags',
-    'Memory.tags',
-    'MemoryStore.tags',
-    'Session.tags',
-    'Task.metadata',
-    'UsageEvent.guardrailIds',
-  ],
-};
-
-/**
- * `JSONB` columns not yet held to the rule, by the change that settles them.
- * Each of `remaining` is classified `order` or `query` and stored as its
- * role says. Empty when done.
- */
-const PENDING = {
-  remaining: [
-    'ActivityEntry.detail',
-    'Agent.activeRelease',
     'AiProvider.config',
     'ApprovalItem.editedArguments',
     'ApprovalItem.evidence',
@@ -84,9 +41,12 @@ const PENDING = {
     'ConversationMessage.responseMessages',
     'DatasetItem.input',
     'DatasetItem.metadata',
+    'Decider.questions',
+    'DeciderVersion.config',
     'Decision.answers',
     'Decision.error',
     'Decision.metadata',
+    'Decision.questions',
     'Document.error',
     'DocumentVersion.config',
     'Eval.scorers',
@@ -119,7 +79,9 @@ const PENDING = {
     'Generation.retrieval',
     'Generation.routing',
     'Generation.toolSurface',
+    'Guardrail.document',
     'GuardrailEvaluation.contextSnapshot',
+    'GuardrailVersion.config',
     'IngestionRule.metadata',
     'IngestionRule.presetParameters',
     'Memory.metadata',
@@ -130,6 +92,11 @@ const PENDING = {
     'ModelRoute.targets',
     'OauthAuthCode.codeData',
     'OauthClient.clientData',
+    'Orchestration.edges',
+    'Orchestration.inputSchema',
+    'Orchestration.nodes',
+    'Orchestration.outputMapping',
+    'Orchestration.stateSchema',
     'OrchestrationCheckpoint.artifacts',
     'OrchestrationCheckpoint.state',
     'OrchestrationNodeExecution.error',
@@ -145,15 +112,21 @@ const PENDING = {
     'OrchestrationRun.state',
     'OrchestrationRun.toolContext',
     'OrchestrationRun.wakeContext',
+    'OrchestrationVersion.config',
+    'Playbook.definition',
     'PlaybookEntry.basis',
     'PlaybookEntry.onBehalfOf',
+    'PlaybookEntry.value',
     'PlaybookExecution.basis',
     'PlaybookExecution.error',
+    'PlaybookExecution.input',
     'PlaybookExecution.onBehalfOf',
+    'PlaybookExecution.output',
     'PlaybookExport.error',
     'PlaybookExport.onBehalfOf',
     'PlaybookUpgrade.diff',
     'PlaybookUpgrade.onBehalfOf',
+    'PlaybookVersion.config',
     'Policy.document',
     'PriceBook.quantity',
     'Project.guardrailIds',
@@ -171,6 +144,7 @@ const PENDING = {
     'Tool.guardrailIds',
     'Tool.mcp',
     'Tool.outputMapping',
+    'Tool.parameters',
     'Tool.pipeline',
     'Tool.presetParameters',
     'Trace.error',
@@ -182,13 +156,29 @@ const PENDING = {
     'TriggerFiring.input',
     'TriggerFiring.result',
     'WebhookDelivery.payload',
+    'Workflow.payloadSchema',
+    'Workflow.states',
+    'Workflow.transitions',
     'WorkflowMigration.items',
     'WorkflowMigration.stateMap',
+    'WorkflowVersion.config',
+  ],
+  query: [
+    'Actor.tags',
+    'Conversation.tags',
+    'Document.metadata',
+    'Document.tags',
+    'File.tags',
+    'Memory.tags',
+    'MemoryStore.tags',
+    'Session.tags',
+    'Task.metadata',
+    'UsageEvent.guardrailIds',
   ],
 };
 
 /** The storage each class must have. */
-const EXPECTED_TYPE = { order: 'JSON', query: 'JSONB', pending: 'JSONB' };
+const EXPECTED_TYPE = { order: 'JSON', query: 'JSONB' };
 
 /** `<Model>.<attribute>` → `JSON` | `JSONB`, read from each `@Column`'s type. */
 const modelColumns = () => {
@@ -215,11 +205,6 @@ const classified = [
   ...ROLES.query.map((column) => {
     return [column, 'query'];
   }),
-  ...Object.values(PENDING)
-    .flat()
-    .map((column) => {
-      return [column, 'pending'];
-    }),
 ];
 
 describe('JSON column roles', () => {

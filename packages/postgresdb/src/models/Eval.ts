@@ -96,7 +96,7 @@ export class Eval extends Model {
   declare dataset: Dataset;
 
   /** Array of scorer configs — a discriminated union on `type`. */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare scorers: unknown;
 
   /**

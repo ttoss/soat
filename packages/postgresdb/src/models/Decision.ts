@@ -83,17 +83,17 @@ export class Decision extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare status: string;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare answers: object | null;
 
   /** `{ code, message }` for a `failed` decision. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare generationId: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
 
   /** Until when the evaluating process owns an unsettled decision. */

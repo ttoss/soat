@@ -179,7 +179,7 @@ export class Agent extends Model {
    * never this row — so the live columns act as a draft that ongoing traffic
    * does not see. Null means all traffic serves this row.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare activeRelease: object | null;
 
   @Column({ type: DataType.DATE })

@@ -85,15 +85,15 @@ export class TriggerFiring extends Model {
   declare status: string;
 
   // Effective (post-merge) input snapshot.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare input: Record<string, unknown> | null;
 
   // { target_type, result_id, status, output } — output truncated.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare result: Record<string, unknown> | null;
 
   // { code, message, meta }.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: Record<string, unknown> | null;
 
   /**
@@ -118,7 +118,7 @@ export class TriggerFiring extends Model {
    * firing would dispatch with an empty chain, and the loop guard that refused
    * the cycle in the first place would not refuse it again.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare causationChain: string[] | null;
 
   /** Dispatch attempts started. Bounds redelivery of a firing that kills its process. */

@@ -83,7 +83,7 @@ export class DocumentVersion extends Model {
    * withdrawal and restore one mechanism rather than a second lifecycle
    * column for every reader to remember.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare config: object;
 
   /** Optional human tag for this version, e.g. `corrected`. */

@@ -119,13 +119,15 @@ const UP_SQL = `
    WHERE json_typeof(questions) = 'object';
 `;
 
+// `answers::jsonb`: the column is `json` once `2026-11-01-payloads-keep-key-order`
+// has run, and this probe answers either way.
 const PENDING_SQL = `
   SELECT 1 FROM deciders WHERE json_typeof(questions) = 'object'
   UNION ALL
   SELECT 1 FROM decider_versions
    WHERE json_typeof(config->'questions') = 'object'
   UNION ALL
-  SELECT 1 FROM decisions WHERE jsonb_typeof(answers) = 'object'
+  SELECT 1 FROM decisions WHERE jsonb_typeof(answers::jsonb) = 'object'
   LIMIT 1
 `;
 

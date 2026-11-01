@@ -135,9 +135,10 @@ const JSON_SQL: Record<string, string> = {
 };
 
 const PENDING_SQL: Record<string, string> = {
+  // `events::jsonb`: `json` once `2026-11-01-payloads-keep-key-order` has run.
   'formation_operations.events': `SELECT 1 FROM formation_operations
-    WHERE jsonb_typeof(events) = 'array'
-      AND jsonb_path_exists(events, '$[*] ? (@.status == "succeeded")')`,
+    WHERE jsonb_typeof(events::jsonb) = 'array'
+      AND jsonb_path_exists(events::jsonb, '$[*] ? (@.status == "succeeded")')`,
   'trigger_firings.result': `SELECT 1 FROM trigger_firings
     WHERE result->>'status' = 'succeeded'`,
   'webhooks.events': `SELECT 1 FROM webhooks WHERE '${OLD_EVENT}' = ANY(events)`,

@@ -62,7 +62,7 @@ export class PlaybookUpgrade extends Model {
   declare toVersion: number;
 
   /** The nodes added, removed and changed between the two versions. */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare diff: object;
 
   @Column({ type: DataType.STRING(16), allowNull: true })
@@ -76,7 +76,7 @@ export class PlaybookUpgrade extends Model {
    * `generation_id`, `session_id`, `actor_id`), verified from the request's
    * `On-Behalf-Of` assertion; null for a write made as the credential alone.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare onBehalfOf: Record<string, string | null> | null;
 
   @Column({ type: DataType.DATE })

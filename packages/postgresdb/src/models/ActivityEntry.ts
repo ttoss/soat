@@ -120,7 +120,7 @@ export class ActivityEntry extends Model {
   declare summary: string;
 
   // Tool, args digest, policy version, or other kind-specific context.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare detail: object | null;
 
   // ── Provenance (producer-dependent, held as public ids — no FK) ──────────
@@ -131,8 +131,8 @@ export class ActivityEntry extends Model {
   declare agentId: string | null;
 
   // A column rather than a `detail` key, so "what happened during this
-  // generation?" is one indexed predicate instead of a JSONB probe the feed's
-  // indexes cannot serve.
+  // generation?" is one indexed predicate instead of a probe into `detail` the
+  // feed's indexes cannot serve.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare generationId: string | null;
 

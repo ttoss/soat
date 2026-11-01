@@ -248,7 +248,7 @@ export class Generation extends Model {
 
   // Structured error payload recorded when the generation fails
   // (e.g. upstream AI provider errors).
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare error: Record<string, unknown> | null;
 
   // Usage attribution, copied onto the UsageEvent at metering time. Typed
@@ -286,17 +286,17 @@ export class Generation extends Model {
 
   // The model route's own record of which target served the generation and
   // every attempt it burned getting there. Written by modelRouteMetadata.ts.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare routing: Record<string, unknown> | null;
 
   // Memory-extraction summary written on completion (memoryExtraction.ts).
   // Derived from the generation's content, so a content purge clears it.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare extraction: Record<string, unknown> | null;
 
   // Recovery state for a generation paused on a client tool. Its own column
   // rather than an exclusion rule on `metadata`, so it cannot reach a response.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare pendingState: Record<string, unknown> | null;
 
   // What the turn's tool definitions cost to send (`toolSurfaceMeasure.ts`).
@@ -304,7 +304,7 @@ export class Generation extends Model {
   // survives a purge, which is what keeps it readable on a zero-retention
   // project. Written once at turn start; a resumed turn re-resolves the same
   // surface and does not rewrite it.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare toolSurface: Record<string, unknown> | null;
 
   // What `knowledge_config` retrieval injected (`knowledgeRetrievalRecord.ts`):
@@ -312,12 +312,12 @@ export class Generation extends Model {
   // purge and is written under zero retention — it is the audit trail of what
   // the turn read. Null when no retrieval ran; empty when it ran and matched
   // nothing.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare retrieval: Array<Record<string, unknown>> | null;
 
   // Caller-owned. The server writes nothing here, so there is no reserved-key
   // list to maintain and no key a caller sets that reaches platform state.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
   // The resolved messages this turn answered, without the agent's instructions
@@ -325,13 +325,13 @@ export class Generation extends Model {
   // and replaying them as messages would double them up. Recorded so a real
   // turn can be promoted into an eval dataset item. Counts as content, so
   // zero-retention never writes it and a purge clears it.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare inputMessages: unknown[] | null;
 
   // The part types the turn's input carried (`text`, `image`, `file`,
   // `audio`), never their content, so zero retention still writes it: a price
   // row reads it after the content is gone.
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare inputModalities: string[];
 
   // The caller's deduplication key, claimed for as long as this row exists.

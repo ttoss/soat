@@ -75,13 +75,13 @@ export class WorkflowMigration extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare toVersion: number;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare stateMap: Record<string, string> | null;
 
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare status: 'queued' | 'running' | 'completed';
 
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare items: WorkflowMigrationItem[];
 
   @Column({ type: DataType.STRING(16), allowNull: true })
