@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.99.3](https://github.com/ttoss/soat/compare/v0.99.2...v0.99.3) (2026-11-01)
+
+### Bug Fixes
+
+* **policies:** refuse deleting a policy a trigger names with 409 ([#1796](https://github.com/ttoss/soat/issues/1796)) ([afede61](https://github.com/ttoss/soat/commit/afede614242fb8ca43d0aec8268982d9711002b6))
+* **server:** read mcp, model listing, gcp token and formation handler answers within a cap ([#1795](https://github.com/ttoss/soat/issues/1795)) ([0778e0f](https://github.com/ttoss/soat/commit/0778e0f0451b75aa7f57ac37a147e55fe2c54ab7))
+* **shares:** list references through served versions, guardrail context tools and tool presets ([#1801](https://github.com/ttoss/soat/issues/1801)) ([8ba2aa3](https://github.com/ttoss/soat/commit/8ba2aa39e043619bc521a539128286dc73c76caa))
+* **tools:** drop secret-bearing mcp headers on a cross-origin redirect ([#1791](https://github.com/ttoss/soat/issues/1791)) ([61f2de9](https://github.com/ttoss/soat/commit/61f2de9d802a5fad06947587b4e71f263018e230))
+* **tools:** drop the sigv4 session token on a cross-origin redirect ([#1794](https://github.com/ttoss/soat/issues/1794)) ([222b80e](https://github.com/ttoss/soat/commit/222b80ed7c75fd83775fd6dd01cf815adaaad146))
+* **tools:** name an mcp tool's authored url in its errors and logs ([#1793](https://github.com/ttoss/soat/issues/1793)) ([bd2437e](https://github.com/ttoss/soat/commit/bd2437ed9c264d46d71da0946bb9152944ba2202))
+
 ## [0.99.2](https://github.com/ttoss/soat/compare/v0.99.1...v0.99.2) (2026-11-01)
 
 ### Bug Fixes
