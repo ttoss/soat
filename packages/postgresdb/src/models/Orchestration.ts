@@ -65,23 +65,23 @@ export class Orchestration extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare version: number;
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare nodes: object[];
 
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare edges: object[];
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare stateSchema: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare inputSchema: object | null;
 
   /**
    * JSON Logic over the final run state, one entry per `output` field. Null
    * keeps `output` keyed by terminal node id.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare outputMapping: Record<string, unknown> | null;
 
   @HasMany(() => {

@@ -80,7 +80,7 @@ export class WorkflowVersion extends Model {
    * denote the same machine, and the version number is exactly what a task cites
    * to say which machine it is living in.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare config: object;
 
   /** Optional human tag for this version, e.g. `rewired`. */

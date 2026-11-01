@@ -103,7 +103,7 @@ const backfillAgentVersions = async (): Promise<number> => {
     const wire = toWireKnowledgeConfig(config.knowledge_config);
     if (!wire) continue;
     // Reassign the whole column: Sequelize does not track mutations inside a
-    // JSONB value, so an in-place edit would never be written.
+    // JSON value, so an in-place edit would never be written.
     version.config = { ...config, knowledge_config: wire };
     await version.save();
     updated += 1;

@@ -73,7 +73,7 @@ export class AgentVersion extends Model {
    * agent response, so a new API field lands in new snapshots automatically and
    * the two can never drift.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare config: object;
 
   /** Optional human tag for this version, e.g. `tone-change`. */

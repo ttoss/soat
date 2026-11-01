@@ -79,7 +79,7 @@ export class GuardrailVersion extends Model {
    * make two version numbers denote the same policy, and the version number is
    * exactly what an evaluation record cites to say which policy governed it.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare config: object;
 
   /** Optional human tag for this version, e.g. `tightened`. */
