@@ -75,6 +75,38 @@ describe('POST /api/v1/tools/{tool_id}/call — http redirects', () => {
     expect(request.headers['x-plain']).toBe('plain');
   });
 
+  test('an aws_sigv4 session token is not sent to another origin', async () => {
+    const name = turn.unique('sigv4');
+    turn.target.reply(`/${name}`, {
+      status: 307,
+      headers: { Location: `${elsewhere.baseUrl}/landing` },
+    });
+    const tool = await turn.createTool({
+      name,
+      parameters: { type: 'object', properties: {} },
+      execute: {
+        url: `${turn.target.baseUrl}/${name}`,
+        method: 'POST',
+        auth: {
+          type: 'aws_sigv4',
+          region: 'us-east-1',
+          service: 'execute-api',
+          access_key_id: `{{secret:${secretId}}}`,
+          secret_access_key: `{{secret:${secretId}}}`,
+          session_token: `{{secret:${secretId}}}`,
+        },
+      },
+    });
+
+    expect((await call(tool.id)).status).toBe(200);
+
+    const [first] = turn.target.requestsAt(`/${name}`);
+    expect(first.headers['x-amz-security-token']).toBe('SUPER-SECRET-VALUE');
+    const [request] = elsewhere.requestsAt('/landing');
+    expect(request.headers['x-amz-security-token']).toBeUndefined();
+    expect(request.headers.authorization).toBeUndefined();
+  });
+
   test('a secret-bearing header follows a same-origin redirect', async () => {
     const tool = await redirectingTool({
       location: `${turn.target.baseUrl}/landing`,
