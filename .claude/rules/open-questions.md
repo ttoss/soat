@@ -10,6 +10,9 @@ This project adds:
 
 - **Reserved to a person**, beyond the default: permissions and privacy.
   Product intent covers language, theme, scope, stack and business rules.
+- **Consolidation is decided.** Consolidating duplicated knowledge
+  (`duplicated-knowledge.md`) versus leaving it is not open: consolidate. Fewer
+  lines answering one question is the robustness this codebase optimises for.
 - **Dominance** is measured on these dimensions; "worsens nothing" names which
   were checked in the run.
 
