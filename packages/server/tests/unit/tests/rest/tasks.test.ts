@@ -564,6 +564,29 @@ describe('Tasks', () => {
       ).toEqual(['triage', 'review', 'draft', 'review']);
     });
 
+    test('a move lists after the row before it even when both carry the same stamp', async () => {
+      const task = (await createTask()).body;
+      const taskRow = await db.Task.findOne({ where: { publicId: task.id } });
+      // A stamp ahead of the clock stands in for a same-millisecond tie, which
+      // the random public-id tiebreak would order either way.
+      await db.TaskTransition.update(
+        { createdAt: new Date(Date.now() + 60_000) },
+        { where: { taskId: taskRow!.id as number }, silent: true }
+      );
+      await transition(task.id, 'to_review');
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${task.id}/history`
+        )
+      ).body.data;
+      expect(
+        history.map((h: { to_state: string }) => {
+          return h.to_state;
+        })
+      ).toEqual(['triage', 'review']);
+    });
+
     test('history pages oldest first with the list envelope', async () => {
       const task = (await createTask()).body;
       await transition(task.id, 'to_review');

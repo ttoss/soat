@@ -76,6 +76,30 @@ export const executorActionProblem = async (args: {
   return null;
 };
 
+/**
+ * Why a run could not call a transformation's tool, or null: an `mcp` tool
+ * takes no call without an action, and a transformation names none.
+ */
+export const transformationToolProblem = async (args: {
+  toolId: string;
+  projectId: number;
+}): Promise<{
+  code: 'TRANSFORMATION_TOOL_UNSUPPORTED';
+  message: string;
+} | null> => {
+  const tool = await toolReferences.find({
+    id: args.toolId,
+    projectId: args.projectId,
+    reach: 'shares',
+  });
+  if (tool?.type !== 'mcp') return null;
+  log('transformationToolProblem: %s is an mcp tool', args.toolId);
+  return {
+    code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
+    message: `mcp tool '${args.toolId}' cannot be a transformation's tool: a transformation names no action to call.`,
+  };
+};
+
 /** Whether `executor` names something a run in `projectId` could start. */
 export const executorResolves = async (args: {
   executor: PlaybookExecutor;
