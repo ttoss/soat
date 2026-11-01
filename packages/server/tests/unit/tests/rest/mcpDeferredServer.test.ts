@@ -166,6 +166,7 @@ describe('MCP bindings over a deferred server', () => {
         transport: {
           url: mcpUrl,
           urlSecrets: new Map<string, string>(),
+          credentialHeaders: [],
           headers: MCP_HEADERS,
           identity: null,
         },

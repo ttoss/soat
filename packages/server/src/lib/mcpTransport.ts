@@ -12,7 +12,10 @@ import {
 } from './toolAssertion';
 import { buildContextHeaders } from './toolContext';
 import { fetchWithEgressGuard } from './toolEgress';
-import { resolveToolHeaderTemplates } from './toolTemplates';
+import {
+  resolveToolHeaderTemplates,
+  secretBearingHeaderNames,
+} from './toolTemplates';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
 const log = createDebug('soat:mcpTransport');
@@ -29,6 +32,8 @@ export type McpTransport = {
   // The `{{secret:}}` values resolved into `url`, by secret id.
   urlSecrets: ReadonlyMap<string, string>;
   headers: Record<string, string>;
+  // The `headers` whose template names a secret: never sent to another origin.
+  credentialHeaders: readonly string[];
   identity: ToolAssertionIdentity | null;
 };
 
@@ -81,8 +86,9 @@ export const openMcpTransport = async (args: {
       contextKeys: args.contextKeys,
     }),
   });
+  const credentialHeaders = secretBearingHeaderNames(args.mcp.headers);
   if (!isToolAssertionConfigured()) {
-    return { url, urlSecrets, headers, identity: null };
+    return { url, urlSecrets, headers, credentialHeaders, identity: null };
   }
   // Validated here so a bad name fails before the first request, not on it.
   toolAssertionHeaderName();
@@ -92,7 +98,7 @@ export const openMcpTransport = async (args: {
     identity.toolId,
     identity.projectId
   );
-  return { url, urlSecrets, headers, identity };
+  return { url, urlSecrets, headers, credentialHeaders, identity };
 };
 
 /**
@@ -135,10 +141,13 @@ export const postMcp = (args: {
       signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
       body: args.body,
     },
-    // Its `aud` is this URL, so another origin holding it could replay it here.
+    // The assertion's `aud` is this URL, so another origin could replay it here.
     {
       onRequest: args.onRequest,
-      credentialHeaders: Object.keys(assertion),
+      credentialHeaders: [
+        ...transport.credentialHeaders,
+        ...Object.keys(assertion),
+      ],
       secrets: transport.urlSecrets,
     }
   );
