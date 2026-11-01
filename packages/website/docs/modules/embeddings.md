@@ -65,7 +65,7 @@ All embeddings from one deployment share a vector space, so cosine similarity be
 
 ### Metering
 
-Every embedding call is metered as an `llm_tokens` usage event with `source` `embedding`, whatever the origin: this endpoint, ingestion, a memory write, an `embedding_similarity` scorer, or a knowledge-search query. Spend appears in [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and counts towards `cost_usd` and `tokens` [quotas](./quotas.md).
+Every embedding call is metered as an `llm_tokens` usage event with `source` `embedding`, whatever the origin: this endpoint, ingestion, a memory write, an `embedding_similarity` scorer, or a knowledge-search query. Spend appears in [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and counts towards `cost_usd` and `tokens` [quotas](./quotas.md), which refuse it with `429` at the [caller-facing entry points](./quotas.md#token-and-cost-enforcement).
 
 A batch the provider serves in several calls meters every call that completed, even when a later one fails the batch.
 

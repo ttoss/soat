@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { getEmbeddings, projectEmbeddingBilling } from './embedding';
+import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 
 const log = createDebug('soat:embeddings');
 
@@ -19,6 +20,22 @@ const resolveBillingProjectId = async (args: {
     where: { publicId: args.projectPublicId },
   });
   return (project?.id as number | undefined) ?? null;
+};
+
+/**
+ * Embeddings a caller asks for, billed to `projectId` and refused by its
+ * `enforce` token/cost quotas before the provider is called.
+ */
+export const embedForProject = async (args: {
+  projectId: number;
+  texts: string[];
+}): Promise<number[][]> => {
+  await assertProjectSpendWithinQuota({ projectId: args.projectId });
+  return getEmbeddings({
+    texts: args.texts,
+    billing: projectEmbeddingBilling({ projectId: args.projectId }),
+    subject: null,
+  });
 };
 
 export const createEmbeddings = async (args: {
@@ -38,15 +55,17 @@ export const createEmbeddings = async (args: {
     );
   }
 
-  const embeddings = await getEmbeddings({
-    texts: args.inputs,
-    billing: projectEmbeddingBilling({
-      projectId: await resolveBillingProjectId({
-        projectPublicId: args.projectPublicId,
-      }),
-    }),
-    subject: null,
+  const projectId = await resolveBillingProjectId({
+    projectPublicId: args.projectPublicId,
   });
+  const embeddings =
+    projectId === null
+      ? await getEmbeddings({
+          texts: args.inputs,
+          billing: projectEmbeddingBilling({ projectId: null }),
+          subject: null,
+        })
+      : await embedForProject({ projectId, texts: args.inputs });
 
   log('createEmbeddings: done count=%d', embeddings.length);
   return embeddings;

@@ -19,6 +19,7 @@ import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { readMetadataQuery } from 'src/lib/structuredFilter';
 import {
@@ -250,6 +251,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     projectId: Number(targetProjectId),
     addedBytes: contentBytes(body.content),
   });
+  await assertProjectSpendWithinQuota({ projectId: Number(targetProjectId) });
   const doc = await createDocument({
     projectId: Number(targetProjectId),
     content: body.content,

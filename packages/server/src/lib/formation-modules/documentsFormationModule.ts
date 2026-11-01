@@ -6,6 +6,7 @@ import {
   getDocumentSourceContent,
   updateDocument,
 } from '../documents';
+import { assertProjectSpendWithinQuota } from '../quotaEnforcement';
 import { assertStorageQuota, contentBytes } from '../quotaStorage';
 import {
   toNullableNumber,
@@ -39,6 +40,7 @@ export const documentsFormationModule = defineFormationModule({
       projectId,
       addedBytes: contentBytes(content),
     });
+    await assertProjectSpendWithinQuota({ projectId });
 
     return createDocument({
       projectId,

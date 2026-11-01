@@ -4,6 +4,7 @@ import { DomainError } from 'src/errors';
 import { projectEmbeddingBilling } from 'src/lib/embedding';
 import type { KnowledgePolicyWhere } from 'src/lib/knowledge';
 import { searchKnowledge } from 'src/lib/knowledge';
+import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import {
   hasMetadataFilter,
   type MetadataFilter,
@@ -170,6 +171,9 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   const billedProjectId = body.query
     ? await resolveEmbeddingSpendProjectId({ ctx, scope: projectIds })
     : null;
+  if (billedProjectId !== null) {
+    await assertProjectSpendWithinQuota({ projectId: billedProjectId });
+  }
 
   const results = await searchKnowledge({
     projectIds,

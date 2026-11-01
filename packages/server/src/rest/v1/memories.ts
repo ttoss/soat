@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
+  assertMemorySpendWithinQuota,
   assertMemoryStorageQuota,
   deleteMemory,
   findMemoryRowId,
@@ -318,6 +319,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     memoryStoreId: memoryStoreRowId,
     content: body.content,
   });
+  await assertMemorySpendWithinQuota({ memoryStoreId: memoryStoreRowId });
 
   const result = await writeMemory({
     memoryStoreId: memoryStoreRowId,
