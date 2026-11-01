@@ -16,6 +16,7 @@ import {
 } from './agentStopConditions';
 import {
   type AgentToolBinding,
+  type BindingSecretUse,
   readAgentToolBindings,
   resolveBindingsForCreate,
   resolveBindingsForUpdate,
@@ -211,6 +212,7 @@ export const createAgent = async (
     guardrailIds?: string[] | null;
     traceContentMode?: string | null;
     onApprovalExpiry?: string | null;
+    secretUse: BindingSecretUse;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
@@ -361,6 +363,7 @@ export const updateAgent = async (
   args: {
     projectIds?: number[];
     id: string;
+    secretUse: BindingSecretUse;
   } & AgentUpdateFields &
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
@@ -403,6 +406,7 @@ export const updateAgent = async (
   const bindingsUpdate = await resolveBindingsForUpdate({
     projectId: agent.projectId,
     toolBindings: args.toolBindings,
+    secretUse: args.secretUse,
   });
 
   const updates = buildAgentUpdates(args);

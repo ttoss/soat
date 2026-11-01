@@ -56,6 +56,11 @@ the deployment's egress rule, evaluated per request against the resolved address
 [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), as for
 an `http` tool's target.
 
+A record with both a `base_url` and a `secret_id` sends the secret to that URL, so a
+create or update that sets either one, leaving the record with both, needs
+`secrets:UseSecret` on the secret; without it the write is `403 FORBIDDEN`,
+`meta.secret_ids` naming the secret.
+
 A model listing the provider rejects, or answers with more than 8 MiB, answers
 `MODEL_LISTING_FAILED` with the provider's status. The provider's response **body** goes to the server log, not to the caller: the
 host that wrote it is one the record named.

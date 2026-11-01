@@ -65,7 +65,7 @@ Supported fields:
 
 Updating the secret's value rotates the credential for every referencing tool on its next call.
 
-Writing a tool that references a secret needs `secrets:UseSecret` on that secret (`srn:<project_id>:secret:<secret_id>`); see [Secret references in `execute`](./tools.md#secret-references-in-execute).
+Storing a reference the server later sends outward needs `secrets:UseSecret` on that secret (`srn:<project_id>:secret:<secret_id>`): a [tool](./tools.md#secret-references-in-execute), an [agent's inline tool](./agents.md#inline-ephemeral-tool-definitions), a [trigger's `tool_context`](./triggers.md#carrying-tool-context), and an [AI provider](./ai-providers.md) whose `base_url` receives its linked secret. Without it the write is `403 FORBIDDEN`, `meta.secret_ids` naming each secret refused.
 
 For referencing a secret created in the same [Formation](./formations.md) template, see [Sub Expressions](./formations.md#sub-expressions).
 

@@ -67,6 +67,7 @@ describe('AI Providers', () => {
         'ai-providers:ListAiProviderModels',
         'ai-providers:GetAiProviderPrices',
         'ai-providers:ManageAiProviderPrices',
+        'secrets:UseSecret',
       ],
       createOtherProject: true,
     });

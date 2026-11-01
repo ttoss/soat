@@ -32,7 +32,7 @@ paths:
       tags:
         - Agents
       summary: Create an agent
-      description: Creates a new agent bound to an AI provider.
+      description: Creates a new agent bound to an AI provider. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: createAgent
       x-iam-action: agents:CreateAgent
       requestBody:
@@ -193,7 +193,7 @@ paths:
       tags:
         - Agents
       summary: Update an agent
-      description: Updates an existing agent. Identical to PATCH — both perform partial updates.
+      description: Updates an existing agent. Identical to PATCH — both perform partial updates. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: updateAgent
       x-iam-action: agents:UpdateAgent
       x-soat-resource:
@@ -247,7 +247,7 @@ paths:
       tags:
         - Agents
       summary: Partially update an agent
-      description: Partially updates an existing agent. Identical to PUT — both perform partial updates.
+      description: Partially updates an existing agent. Identical to PUT — both perform partial updates. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: patchAgent
       x-iam-action: agents:UpdateAgent
       x-soat-resource:

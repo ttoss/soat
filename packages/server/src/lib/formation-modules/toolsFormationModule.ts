@@ -12,6 +12,7 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { SECRET_USE_ACTION, toolSecretIds } from '../secretUse';
 import { assertValidToolContextAllowlist } from '../toolContext';
 import { deleteTool, findToolDeletionBlocker } from '../toolDelete';
 import { createTool, getTool, updateTool } from '../tools';
@@ -19,7 +20,6 @@ import {
   literalCredentialPaths,
   redactToolSecrets,
 } from '../toolSecretRedaction';
-import { SECRET_USE_ACTION, toolSecretIds } from '../toolSecretUse';
 import {
   describeToolTemplateTokenProblems,
   findInvalidTemplateTokens,

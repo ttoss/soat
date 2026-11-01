@@ -4,11 +4,13 @@ import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import {
   decryptStoredSecret,
   encryptValue,
   generateSecretValue,
 } from './secrets';
+import { assertSecretUseAllowed, secretRefIds } from './secretUse';
 import {
   acceptStoredToolContext,
   acceptStoredToolContextUpdate,
@@ -224,6 +226,7 @@ type CreateTriggerArgs = {
   cron?: string | null;
   eventPattern?: string | null;
   active?: boolean;
+  isAllowed: IsAllowedFn;
 };
 
 /**
@@ -305,6 +308,7 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     toolContext: args.toolContext,
     projectId: args.projectId,
     secretRefs: 'resolved',
+    isAllowed: args.isAllowed,
   });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
 
@@ -331,6 +335,7 @@ type UpdateTriggerArgs = {
   cron?: string | null;
   eventPattern?: string | null;
   active?: boolean;
+  isAllowed: IsAllowedFn;
 };
 
 /**
@@ -377,6 +382,21 @@ const applyUpdateFields = (
   }
 };
 
+/** Retargeting sends the stored bag's secrets to the new target. */
+const assertRetargetSecretUse = async (params: {
+  trigger: InstanceType<(typeof db)['Trigger']>;
+  args: UpdateTriggerArgs;
+  targetChanged: boolean;
+}): Promise<void> => {
+  // A new bag in the same write is checked by its own ingress.
+  if (!params.targetChanged || params.args.toolContext !== undefined) return;
+  await assertSecretUseAllowed({
+    secretIds: secretRefIds(params.trigger.toolContext),
+    projectId: params.trigger.projectId as number,
+    isAllowed: params.args.isAllowed,
+  });
+};
+
 export const updateTrigger = async (args: UpdateTriggerArgs) => {
   log('updateTrigger: id=%s', args.id);
 
@@ -405,7 +425,9 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     toolContext: args.toolContext,
     projectId: trigger.projectId as number,
     secretRefs: 'resolved',
+    isAllowed: args.isAllowed,
   });
+  await assertRetargetSecretUse({ trigger, args, targetChanged });
 
   if (args.name !== undefined && args.name !== trigger.name) {
     await assertNameAvailable({

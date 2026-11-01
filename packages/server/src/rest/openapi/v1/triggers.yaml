@@ -87,7 +87,7 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     post:
-      description: Creates a new trigger for a project
+      description: Creates a new trigger for a project. A `{{secret:...}}` reference in `tool_context` also needs `secrets:UseSecret` on that secret, else `403`.
       tags:
         - Triggers
       summary: Create a trigger
@@ -261,6 +261,9 @@ paths:
         the trigger creator's authority rather than the updater's. A caller who
         could not start the new target is answered `403` and the trigger keeps the
         target it had.
+        A `{{secret:...}}` reference in a written `tool_context`, or in the stored
+        one when the target changes, also needs `secrets:UseSecret` on that
+        secret, else `403`.
       tags:
         - Triggers
       summary: Update a trigger

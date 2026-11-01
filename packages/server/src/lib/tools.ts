@@ -15,6 +15,7 @@ import { assertProjectAcceptsWork } from './projectPause';
 import { makeResourceAccessor } from './resourceAccessor';
 import { type ReferenceReach, toolReferences } from './resourceReferences';
 import { assertSecretRefsExist } from './secrets';
+import { assertToolSecretUseAllowed } from './secretUse';
 import { validateSoatActions } from './soatActionValidation';
 import type { ToolCallGuardrailMode } from './toolCallGuardrail';
 import { assertValidToolContextAllowlist } from './toolContext';
@@ -25,7 +26,6 @@ import {
   type SignedOffCall,
 } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
-import { assertToolSecretUseAllowed } from './toolSecretUse';
 import { assertValidToolTemplateTokens } from './toolTemplates';
 import {
   assertToolTypeSupported,

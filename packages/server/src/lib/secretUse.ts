@@ -6,42 +6,43 @@ import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { buildSrn } from './iam';
 import { collectSecretRefs } from './secrets';
 
-const log = createDebug('soat:tools');
+const log = createDebug('soat:secrets');
 
 export const SECRET_USE_ACTION = 'secrets:UseSecret';
 
+/** Every distinct `{{secret:...}}` id in `value`. */
+export const secretRefIds = (value: unknown): string[] => {
+  return [...new Set(collectSecretRefs(value))];
+};
+
 /**
  * The secrets a tool sends wherever it points: every `{{secret:...}}` id in
- * its `execute`, `mcp` and `pipeline` (inline steps are tools too). Writing a
- * tool that names one needs `secrets:UseSecret` on it.
+ * its `execute`, `mcp` and `pipeline` (inline steps are tools too).
  */
 export const toolSecretIds = (args: {
   execute?: unknown;
   mcp?: unknown;
   pipeline?: unknown;
 }): string[] => {
-  return [
-    ...new Set(
-      collectSecretRefs({
-        execute: args.execute,
-        mcp: args.mcp,
-        pipeline: args.pipeline,
-      })
-    ),
-  ];
+  return secretRefIds({
+    execute: args.execute,
+    mcp: args.mcp,
+    pipeline: args.pipeline,
+  });
 };
 
 /**
- * Throws `FORBIDDEN` naming every secret the tool references that `isAllowed`
+ * The one gate for a write that stores a secret the server later sends
+ * outward: throws `FORBIDDEN` naming every id in `secretIds` that `isAllowed`
  * may not use. Asked before the secrets are looked up, so a refused caller
  * learns nothing about which ids exist.
  */
-export const assertToolSecretUseAllowed = async (args: {
-  tool: { execute?: unknown; mcp?: unknown; pipeline?: unknown };
+export const assertSecretUseAllowed = async (args: {
+  secretIds: string[];
   projectId: number;
   isAllowed: IsAllowedFn;
 }): Promise<void> => {
-  const ids = toolSecretIds(args.tool);
+  const ids = [...new Set(args.secretIds)];
   if (ids.length === 0) return;
 
   const project = await db.Project.findByPk(args.projectId, {
@@ -64,10 +65,23 @@ export const assertToolSecretUseAllowed = async (args: {
   }
   if (denied.length === 0) return;
 
-  log('assertToolSecretUseAllowed: denied secrets=%d', denied.length);
+  log('assertSecretUseAllowed: denied secrets=%d', denied.length);
   throw new DomainError(
     'FORBIDDEN',
-    `Referencing a secret in a tool requires ${SECRET_USE_ACTION} on it: ${denied.join(', ')}.`,
+    `Referencing a secret requires ${SECRET_USE_ACTION} on it: ${denied.join(', ')}.`,
     { action: SECRET_USE_ACTION, secret_ids: denied }
   );
+};
+
+/** {@link assertSecretUseAllowed} over the secrets a tool definition names. */
+export const assertToolSecretUseAllowed = (args: {
+  tool: { execute?: unknown; mcp?: unknown; pipeline?: unknown };
+  projectId: number;
+  isAllowed: IsAllowedFn;
+}): Promise<void> => {
+  return assertSecretUseAllowed({
+    secretIds: toolSecretIds(args.tool),
+    projectId: args.projectId,
+    isAllowed: args.isAllowed,
+  });
 };
