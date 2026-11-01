@@ -63,6 +63,7 @@ describe('Agent knowledge', () => {
     scope: Scope;
     knowledgeConfig?: Record<string, unknown> | null;
     boundaryPolicy?: Record<string, unknown>;
+    toolBindings?: Array<Record<string, unknown>>;
   }): Promise<string> => {
     return create('/api/v1/agents', {
       project_id: args.scope.projectId,
@@ -74,6 +75,7 @@ describe('Agent knowledge', () => {
         ? {}
         : { knowledge_config: args.knowledgeConfig }),
       ...(args.boundaryPolicy ? { boundary_policy: args.boundaryPolicy } : {}),
+      ...(args.toolBindings ? { tool_bindings: args.toolBindings } : {}),
     });
   };
 
@@ -610,6 +612,31 @@ describe('Agent knowledge', () => {
           return tool.function.name;
         })
       ).toContain('write_memory');
+    });
+
+    test('a bound tool resolving to the same name is offered beside it, not replaced', async () => {
+      const boundToolId = await create('/api/v1/tools', {
+        project_id: scope.projectId,
+        name: 'write_memory',
+        type: 'client',
+        description: 'A client-side note taker',
+        parameters: { type: 'object', properties: {} },
+      });
+      const agentId = await createAgent({
+        scope,
+        knowledgeConfig: { write_memory_store_id: storeId },
+        toolBindings: [{ tool_id: boundToolId }],
+      });
+
+      const { requests } = await generate({ agentId });
+
+      expect(
+        (requests[0].tools ?? [])
+          .map((tool) => {
+            return tool.function.name;
+          })
+          .sort()
+      ).toEqual(['knowledge_write_memory', 'write_memory_write_memory']);
     });
 
     test('a target store deleted after the agent was configured is an error for the model', async () => {

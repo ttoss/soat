@@ -48,8 +48,8 @@ export const readAgentToolBindings = (
 
 /**
  * Splits bindings into the reference ids and inline definitions that
- * `resolveAgentTools` takes as two separate arguments. Internal plumbing only —
- * `tool_bindings` is the single attachment field on the wire.
+ * `resolveAgentToolBindings` takes as two separate arguments. Internal
+ * plumbing only — `tool_bindings` is the single attachment field on the wire.
  *
  * Ordering invariant: each side is emitted in binding order.
  */
