@@ -241,13 +241,13 @@ Deleting a project with any dependent resource returns `409 Conflict`, code `PRO
 - actors, chats, conversations, sessions, [generations](./generations.md), [traces](./traces.md)
 - [datasets and evals](./evaluations.md), [workflows and tasks](./workflows.md), [triggers](./triggers.md), [orchestrations](./orchestrations.md) and their runs
 - [formations](./formations.md), [memories](./memories.md), [secrets](./secrets.md), [files](./files.md), [guardrails](./guardrails.md), [quotas](./quotas.md)
-- [usage](./usage.md) history, and the [activity](./activity.md), [approval](./approvals.md), [exception](./exceptions.md) and guardrail-evaluation records of past runs
+- priced [usage](./usage.md) history, and the [activity](./activity.md), [approval](./approvals.md), [exception](./exceptions.md) and guardrail-evaluation records of past runs
 
 `?force=true` deletes all dependents in one transaction, including billing/usage history and the stored bytes of [files](./files.md).
 
 The [audit log](./audit-log.md) is the exception: entries outlive the project with `project_id` cleared.
 
-A deleted formation is not a dependent: a delete without `force` removes it with the project.
+A deleted formation and a usage event with no `cost_usd` (or a zero one) are not dependents: a delete without `force` removes them with the project.
 
 ### Common Errors
 

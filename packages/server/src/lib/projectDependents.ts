@@ -18,6 +18,8 @@ import { deleteStorageObjects } from './fileStorage';
 
 const log = createDebug('soat:projects');
 
+type RowFilter = Record<string | symbol, unknown>;
+
 const collectIds = (rows: { id?: number }[]): number[] => {
   return rows.map((row) => {
     return (row as unknown as { id: number }).id;
@@ -131,9 +133,8 @@ type ProjectScopedModelName = (typeof PROJECT_CASCADE_ORDER)[number];
  * `projectId` FK is RESTRICT/NO ACTION, i.e. those that would actually block
  * the destroy, plus UsageEvent as a deliberate exception. UsageEvent's FK is
  * `onDelete: 'CASCADE'` like Webhook/ApiKey (which stay excluded, since they
- * carry no financial meaning), but it is the project's billing history:
- * counting it forces `force=true` before a project with usage history can be
- * deleted, so the cascade cannot happen invisibly.
+ * carry no financial meaning), but a priced event is billing history: counting
+ * it forces `force=true` before the cascade can erase spend.
  *
  * AuditEntry is absent for the opposite reason — its `projectId` is nullable
  * and `ON DELETE SET NULL`, so the audit trail deliberately outlives the
@@ -179,14 +180,17 @@ export const PROJECT_COUNTED_MODELS = [
 type ProjectCountedModelName = (typeof PROJECT_COUNTED_MODELS)[number];
 
 /**
- * The status a counted model leaves on a row it deleted but kept. Such a row
- * is history, not a dependent: the count skips it and a plain delete removes it
- * with the project.
+ * The rows of a counted model that are not dependents: the count skips them and
+ * a plain delete removes them with the project. A deleted-but-kept formation is
+ * history; a usage event carrying no cost holds no spend to protect.
  */
-export const PROJECT_TOMBSTONE_STATUSES: Partial<
-  Record<ProjectCountedModelName, string>
+export const PROJECT_NON_DEPENDENT_ROWS: Partial<
+  Record<ProjectCountedModelName, RowFilter>
 > = {
-  Formation: 'deleted',
+  Formation: { status: 'deleted' },
+  UsageEvent: {
+    [Op.or]: [{ costUsd: null }, { costUsd: { [Op.lte]: 0 } }],
+  },
 };
 
 /**
@@ -212,11 +216,9 @@ export const PROJECT_PARENT_SCOPED_MODELS = [
  * that let eight models go missing from both.
  */
 type ProjectScopedModel = {
-  count: (options: {
-    where: { projectId: number; status?: { [Op.ne]: string } };
-  }) => Promise<number>;
+  count: (options: { where: RowFilter }) => Promise<number>;
   destroy: (options: {
-    where: { projectId: number; status?: string };
+    where: RowFilter;
     transaction?: Transaction;
   }) => Promise<number>;
 };
@@ -234,14 +236,12 @@ export const countProjectDependents = async (args: {
 
   const counts = await Promise.all(
     PROJECT_COUNTED_MODELS.map((name) => {
-      const tombstone = PROJECT_TOMBSTONE_STATUSES[name];
+      const nonDependent = PROJECT_NON_DEPENDENT_ROWS[name];
       return projectScopedModel(name).count({
-        where: {
-          projectId,
-          ...(tombstone === undefined
-            ? {}
-            : { status: { [Op.ne]: tombstone } }),
-        },
+        where:
+          nonDependent === undefined
+            ? { projectId }
+            : { projectId, [Op.not]: nonDependent },
       });
     })
   );
@@ -251,8 +251,9 @@ export const countProjectDependents = async (args: {
   }, 0);
 };
 
-// The project has no dependents, so only tombstones can hold a RESTRICT FK on it.
-export const deleteProjectWithTombstones = async (args: {
+// The project has no dependents, so only non-dependent rows can hold a RESTRICT
+// FK on it.
+export const deleteProjectWithNonDependents = async (args: {
   project: InstanceType<typeof db.Project>;
   projectId: number;
 }): Promise<void> => {
@@ -260,10 +261,10 @@ export const deleteProjectWithTombstones = async (args: {
 
   await db.sequelize.transaction(async (transaction) => {
     for (const name of PROJECT_COUNTED_MODELS) {
-      const status = PROJECT_TOMBSTONE_STATUSES[name];
-      if (status === undefined) continue;
+      const nonDependent = PROJECT_NON_DEPENDENT_ROWS[name];
+      if (nonDependent === undefined) continue;
       await projectScopedModel(name).destroy({
-        where: { projectId, status },
+        where: { [Op.and]: [{ projectId }, nonDependent] },
         transaction,
       });
     }

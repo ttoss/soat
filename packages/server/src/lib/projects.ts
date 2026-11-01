@@ -13,7 +13,7 @@ import {
 import { emptyPage, paginatedList } from './pagination';
 import {
   countProjectDependents,
-  deleteProjectWithTombstones,
+  deleteProjectWithNonDependents,
   forceDeleteProjectWithDependents,
 } from './projectDependents';
 import {
@@ -395,6 +395,6 @@ export const deleteProject = async (args: {
 
     await forceDeleteProjectWithDependents({ project, projectId });
   } else {
-    await deleteProjectWithTombstones({ project, projectId });
+    await deleteProjectWithNonDependents({ project, projectId });
   }
 };

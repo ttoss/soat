@@ -376,10 +376,11 @@ paths:
         routes, tools, ingestion rules, actors, chats, conversations, sessions,
         generations, traces, datasets, evals, workflows, tasks, triggers,
         orchestrations and their runs, formations, memory stores, secrets, files,
-        guardrails, quotas, usage history — and the activity, approval,
+        guardrails, quotas, priced usage history — and the activity, approval,
         exception and guardrail-evaluation records a project accumulates while
         it runs. Audit log entries are the one exception: they outlive the
-        project, keeping their record with `project_id` cleared.
+        project, keeping their record with `project_id` cleared. A deleted
+        formation and a usage event with no cost go with the project.
       operationId: deleteProject
       x-iam-action: projects:DeleteProject
       parameters:
