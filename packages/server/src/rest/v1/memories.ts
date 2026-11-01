@@ -4,8 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
-  assertMemorySpendWithinQuota,
-  assertMemoryStorageQuota,
+  assertMemoryWriteQuotas,
   deleteMemory,
   findMemoryRowId,
   findMemoryStoreRowId,
@@ -316,11 +315,10 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     supersedeThreshold,
   });
 
-  await assertMemoryStorageQuota({
+  await assertMemoryWriteQuotas({
     memoryStoreId: memoryStoreRowId,
     content: body.content,
   });
-  await assertMemorySpendWithinQuota({ memoryStoreId: memoryStoreRowId });
 
   const result = await writeMemory({
     memoryStoreId: memoryStoreRowId,
@@ -413,8 +411,7 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
       memoryId: ctx.params.memory_id,
     });
     if (memoryStoreId !== null) {
-      await assertMemoryStorageQuota({ memoryStoreId, content: body.content });
-      await assertMemorySpendWithinQuota({ memoryStoreId });
+      await assertMemoryWriteQuotas({ memoryStoreId, content: body.content });
     }
   }
 

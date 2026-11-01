@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertCorpusWriteQuotas } from './corpusWriteQuotas';
 import { findDocumentProjectId } from './documentLoaders';
 import { updateDocument } from './documents';
 import {
@@ -8,8 +9,7 @@ import {
 } from './documentVersionSnapshot';
 import { emitDocumentRestored, isWithdrawn } from './documentWithdrawal';
 import type { RequestPrincipal } from './principals';
-import { assertProjectSpendWithinQuota } from './quotaEnforcement';
-import { assertStorageQuota, contentBytes } from './quotaStorage';
+import { contentBytes } from './quotaStorage';
 import {
   type ArchivedVersionRow,
   configNumber,
@@ -129,8 +129,10 @@ const documentVersionArchive = makeVersionArchive({
 
     // A restore re-embeds and stores the archived text, like any content edit.
     const projectId = await findDocumentProjectId({ id: args.id });
-    await assertStorageQuota({ projectId, addedBytes: contentBytes(content) });
-    await assertProjectSpendWithinQuota({ projectId });
+    await assertCorpusWriteQuotas({
+      projectId,
+      addedBytes: contentBytes(content),
+    });
 
     const document = await loadDocumentRef({ id: args.id });
     const restored = await updateDocument({

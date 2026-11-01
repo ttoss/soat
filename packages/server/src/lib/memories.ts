@@ -1,5 +1,6 @@
 import type { MemorySource } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
@@ -8,7 +9,6 @@ import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { paginatedList } from 'src/lib/pagination';
 import { registerResourceFieldMap } from 'src/lib/policyCompiler';
 import { hasPolicyConstraints } from 'src/lib/policyWhere';
-import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { applyTagFilter } from 'src/lib/tags';
 import {
@@ -49,13 +49,9 @@ const resolveMemoryStoreProjectId = async (args: {
 };
 
 /**
- * The project's `storage_bytes` cap applied to a caller-driven write.
- *
- * Called from the REST route, the formation resource and a memory rule's
- * firing rather than from `writeMemory` itself: the `write_memory` tool reaches
- * that function mid-turn, and a refusal there would fail a generation already
- * under way — the corpus cap is a request-boundary refusal by design. A
- * rule runs after the turn completes, so it has nothing in flight to break.
+ * The `storage_bytes` cap alone, for a memory rule's firing: it runs after the
+ * turn, so it has nothing in flight to break, but its embedding is a run's and
+ * exempt from the spend budget.
  */
 export const assertMemoryStorageQuota = async (args: {
   memoryStoreId: number;
@@ -72,15 +68,22 @@ export const assertMemoryStorageQuota = async (args: {
 };
 
 /**
- * The token/cost check on a caller-driven write, which embeds the content.
- * Never called from `writeMemory`: `write_memory` runs mid-turn.
+ * Both corpus caps on a caller-driven write. Never called from `writeMemory`:
+ * the `write_memory` tool reaches it mid-turn, and the caps are a
+ * request-boundary refusal that must not fail a generation under way.
  */
-export const assertMemorySpendWithinQuota = async (args: {
+export const assertMemoryWriteQuotas = async (args: {
   memoryStoreId: number;
+  content: string;
 }): Promise<void> => {
-  const projectId = await resolveMemoryStoreProjectId(args);
+  const projectId = await resolveMemoryStoreProjectId({
+    memoryStoreId: args.memoryStoreId,
+  });
   if (projectId == null) return;
-  await assertProjectSpendWithinQuota({ projectId });
+  await assertCorpusWriteQuotas({
+    projectId,
+    addedBytes: contentBytes(args.content),
+  });
 };
 
 /**

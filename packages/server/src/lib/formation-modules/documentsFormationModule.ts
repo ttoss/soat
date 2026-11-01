@@ -1,4 +1,5 @@
 import type { ChunkStrategy } from '../chunking';
+import { assertCorpusWriteQuotas } from '../corpusWriteQuotas';
 import {
   createDocument,
   deleteDocument,
@@ -6,8 +7,7 @@ import {
   getDocumentSourceContent,
   updateDocument,
 } from '../documents';
-import { assertProjectSpendWithinQuota } from '../quotaEnforcement';
-import { assertStorageQuota, contentBytes } from '../quotaStorage';
+import { contentBytes } from '../quotaStorage';
 import {
   toNullableNumber,
   toNullableObject,
@@ -36,11 +36,10 @@ export const documentsFormationModule = defineFormationModule({
 
   create: async ({ properties, projectId, actor }) => {
     const content = properties.content as string;
-    await assertStorageQuota({
+    await assertCorpusWriteQuotas({
       projectId,
       addedBytes: contentBytes(content),
     });
-    await assertProjectSpendWithinQuota({ projectId });
 
     return createDocument({
       projectId,
@@ -67,11 +66,10 @@ export const documentsFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId, projectId, actor }) => {
     const content = toOptionalString(properties.content) ?? undefined;
     if (content !== undefined) {
-      await assertStorageQuota({
+      await assertCorpusWriteQuotas({
         projectId,
         addedBytes: contentBytes(content),
       });
-      await assertProjectSpendWithinQuota({ projectId });
     }
 
     await updateDocument({

@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
+import { assertCorpusWriteQuotas } from './corpusWriteQuotas';
 import { DOCUMENT_FAILURES, ingestionFailure } from './documentFailures';
 import {
   type ChunkConfigInput,
@@ -23,8 +24,6 @@ import {
   type GenerationEndUser,
 } from './generationAttribution';
 import { resolveIngestionRule } from './ingestionRules';
-import { assertProjectSpendWithinQuota } from './quotaEnforcement';
-import { assertStorageQuota } from './quotaStorage';
 import {
   resolveSourcePages,
   SUPPORTED_CONTENT_TYPES,
@@ -307,8 +306,7 @@ export const enqueueDocumentIngestion = async (args: {
   // ingestion adds is chunk text and vectors, produced after this answer and
   // measured by the next snapshot — so the refusal is on the footprint as last
   // measured, which is what stops an over-cap project from indexing more.
-  await assertStorageQuota({ projectId: args.projectId, addedBytes: 0 });
-  await assertProjectSpendWithinQuota({ projectId: args.projectId });
+  await assertCorpusWriteQuotas({ projectId: args.projectId, addedBytes: 0 });
 
   const filename = file.filename ?? 'document';
   const docPath = normalizePath(
@@ -407,8 +405,7 @@ export const reingestDocument = async (args: {
     assertSyncIngestible(file);
   }
 
-  await assertStorageQuota({ projectId: file.projectId, addedBytes: 0 });
-  await assertProjectSpendWithinQuota({ projectId: file.projectId });
+  await assertCorpusWriteQuotas({ projectId: file.projectId, addedBytes: 0 });
 
   log(
     'reingestDocument: id=%s wait=%s strategy=%s',

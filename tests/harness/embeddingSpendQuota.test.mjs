@@ -46,20 +46,33 @@ const exportedFunction = (file, name) => {
   return source.slice(start, next === -1 ? undefined : next);
 };
 
-const CHECK = /\bassert(?:Project|Memory)SpendWithinQuota\(/;
+// A corpus write stores and embeds, so it checks both caps through one call.
+const CORPUS_CHECK = /\bassert(?:Corpus|Memory)WriteQuotas\(/;
+const CHECK = new RegExp(
+  `\\bassertProjectSpendWithinQuota\\(|${CORPUS_CHECK.source}`
+);
 
-// Caller-facing calls that embed and check nothing themselves.
-const UNCHECKED_ENTRY =
-  /\b(?:createDocument|updateDocument|writeMemory|createMemory|updateMemory|searchKnowledge)\(/;
+// Caller-facing calls that store and embed and check nothing themselves.
+const CORPUS_ENTRY =
+  /\b(?:createDocument|updateDocument|writeMemory|createMemory|updateMemory)\(/;
+// Caller-facing calls that only embed.
+const EMBED_ENTRY = /\bsearchKnowledge\(/;
+
+const checkedBefore = (block, entryPattern, checkPattern) => {
+  const entry = block.search(entryPattern);
+  if (entry === -1) return true;
+  const check = block.search(checkPattern);
+  return check !== -1 && check < entry;
+};
 
 /** The handlers in `file` reaching an unchecked entry with no check before it. */
 const uncheckedHandlers = (file) => {
   return handlerBlocks(file)
     .filter((block) => {
-      const entry = block.search(UNCHECKED_ENTRY);
-      if (entry === -1) return false;
-      const check = block.search(CHECK);
-      return check === -1 || check > entry;
+      return (
+        !checkedBefore(block, CORPUS_ENTRY, CORPUS_CHECK) ||
+        !checkedBefore(block, EMBED_ENTRY, CHECK)
+      );
     })
     .map((block) => {
       return `${file}: ${block.split('\n')[0].trim()}`;
@@ -116,6 +129,16 @@ describe('embedding spend quota', () => {
       for (const name of names) {
         assert.match(exportedFunction(file, name), CHECK, `${file} ${name}`);
       }
+    }
+  });
+
+  test('ingestion checks both corpus caps', () => {
+    for (const name of CHECKED_INSIDE['lib/documentIngestion.ts']) {
+      assert.match(
+        exportedFunction('lib/documentIngestion.ts', name),
+        CORPUS_CHECK,
+        name
+      );
     }
   });
 
