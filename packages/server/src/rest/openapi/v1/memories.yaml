@@ -387,7 +387,15 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          $ref: './concurrency.yaml#/components/responses/VersionConflict'
+          description: >-
+            The memory has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`), or new `content`
+            would exceed the project's `storage_bytes` quota
+            (`QUOTA_STORAGE_EXCEEDED`, no `Retry-After`). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     delete:
       tags:
         - Memories

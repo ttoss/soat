@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
+import { findDocumentProjectId } from 'src/lib/documentLoaders';
 import { relatedDocumentRowIds } from 'src/lib/documentRelations';
 import {
   createDocument,
@@ -308,6 +309,18 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     metadata?: unknown;
     tags?: unknown;
   };
+
+  const projectId =
+    body.content === undefined
+      ? null
+      : await findDocumentProjectId({ id: ctx.params.document_id });
+  if (projectId !== null) {
+    await assertStorageQuota({
+      projectId,
+      addedBytes: contentBytes(body.content),
+    });
+    await assertProjectSpendWithinQuota({ projectId });
+  }
 
   const updated = await updateDocument({
     id: ctx.params.document_id,

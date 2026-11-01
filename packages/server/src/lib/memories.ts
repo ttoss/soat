@@ -192,6 +192,17 @@ export const findMemoryRowId = async (args: {
   return (entry?.id as number | undefined) ?? null;
 };
 
+/** The internal id of the store holding a memory, which the quota checks take. */
+export const findMemoryStoreRowId = async (args: {
+  memoryId: string;
+}): Promise<number | null> => {
+  const entry = await db.Memory.findOne({
+    where: { publicId: args.memoryId },
+    attributes: ['memoryStoreId'],
+  });
+  return (entry?.memoryStoreId as number | undefined) ?? null;
+};
+
 export const updateMemory = async (args: {
   id: string;
   content?: string;

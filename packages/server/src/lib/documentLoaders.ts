@@ -38,6 +38,14 @@ export const fetchDocumentWithContext = (
   }) as Promise<LoadedDoc | null>;
 };
 
+/** The internal id of the project a document's backing file belongs to. */
+export const findDocumentProjectId = async (args: {
+  id: string;
+}): Promise<number | null> => {
+  const doc = await fetchDocumentWithContext(args.id);
+  return (doc?.file?.projectId as number | undefined) ?? null;
+};
+
 export const fetchDocumentByIdWithContext = (
   id: number,
   transaction?: Transaction

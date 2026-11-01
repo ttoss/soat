@@ -64,11 +64,20 @@ export const documentsFormationModule = defineFormationModule({
   // Re-chunk when the strategy (or content) changes so the deployed document
   // reflects the template instead of keeping its original chunking until an
   // out-of-band reingest.
-  update: async ({ properties, physicalResourceId, actor }) => {
+  update: async ({ properties, physicalResourceId, projectId, actor }) => {
+    const content = toOptionalString(properties.content) ?? undefined;
+    if (content !== undefined) {
+      await assertStorageQuota({
+        projectId,
+        addedBytes: contentBytes(content),
+      });
+      await assertProjectSpendWithinQuota({ projectId });
+    }
+
     await updateDocument({
       id: physicalResourceId,
       createdBy: actor.author,
-      content: toOptionalString(properties.content) ?? undefined,
+      content,
       path: toOptionalString(properties.path) ?? undefined,
       title: toOptionalString(properties.title) ?? undefined,
       metadata: (toNullableObject(properties.metadata) ?? undefined) as
