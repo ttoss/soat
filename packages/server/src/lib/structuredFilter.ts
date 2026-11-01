@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { asJsonb, jsonbFn } from './jsonbQuery';
 import { isPlainObject } from './plainObject';
 
 /**
@@ -222,18 +223,14 @@ const boundWhere = (args: {
   operator: RangeOperator;
   value: Orderable;
 }) => {
-  const path = db.sequelize.literal(
-    `${args.column} -> ${db.sequelize.escape(args.field)}`
-  );
+  const source = {
+    sql: `${args.column} -> ${db.sequelize.escape(args.field)}`,
+  };
+  const path = asJsonb(source);
   return {
     [Op.and]: [
       db.sequelize.where(
-        db.sequelize.fn(
-          'jsonb_typeof',
-          db.sequelize.literal(
-            `${args.column} -> ${db.sequelize.escape(args.field)}`
-          )
-        ),
+        jsonbFn({ fn: 'typeof', source }),
         jsonTypeOf(args.value)
       ),
       db.sequelize.where(path, {

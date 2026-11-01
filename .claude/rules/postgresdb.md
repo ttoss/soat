@@ -18,8 +18,8 @@ externally. The UUID `id` is for joins only. New model: register a prefix in
 ## Migrations
 
 A change `sync` cannot make is a migration in `src/migrations/`, appended to
-`MIGRATIONS` in that folder's `index.ts`. See the README's *Migrations `sync`
-cannot perform*: they run **before** the sync here, every one declares
+`MIGRATIONS` in that folder's `index.ts`. See the README's _Migrations `sync`
+cannot perform_: they run **before** the sync here, every one declares
 `isApplied`, a step that must not half-land is a single `context.run`, and a
 name is permanent once merged.
 
@@ -35,7 +35,12 @@ name is permanent once merged.
 - `sync({ alter: true })` never drops an index. When renaming or removing one,
   state the previous name in the PR description for a manual
   `DROP INDEX CONCURRENTLY IF EXISTS <name>` (or `ALTER TABLE … DROP CONSTRAINT
-  IF EXISTS <name>`; never `CASCADE`). Use the name Postgres stored: column
+IF EXISTS <name>`; never `CASCADE`). Use the name Postgres stored: column
   `unique` is `<table>_<column>_key`, unnamed entries are the field list
   truncated at 63. See `packages/postgresdb/README.md`; `schemaDrift.test.ts`
   only catches leftovers on a long-lived database.
+
+## JSON or JSONB
+
+By role (README _JSON or JSONB_): key order matters → `JSON`; queried or
+indexed → `JSONB`. Classify a new column in `tests/harness/jsonColumnRoles.test.mjs`.

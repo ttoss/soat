@@ -1,13 +1,13 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { jsonbFn } from './jsonbQuery';
 import { parseActiveRelease } from './releaseAssignment';
 
 type Where = ReturnType<typeof db.sequelize.where>;
 export type Condition = Where | Record<string, unknown>;
 
-type Json =
-  ReturnType<typeof db.sequelize.col> | ReturnType<typeof db.sequelize.fn>;
+type Json = ReturnType<typeof db.sequelize.col> | ReturnType<typeof jsonbFn>;
 
 // A public id is only ever stored as a JSON string, so its quoted form found in
 // the JSON's text is the id itself and never a prefix of another.
@@ -40,12 +40,11 @@ export const jsonNames = (columns: string[], ids: string[]): Condition[] => {
 const configNames = (keys: string[], ids: string[]): Condition[] => {
   return textNames(
     keys.map((key) => {
-      // `config` is `JSON` on some version tables and `JSONB` on others.
-      return db.sequelize.fn(
-        'jsonb_extract_path',
-        db.sequelize.cast(db.sequelize.col('config'), 'jsonb'),
-        key
-      );
+      return jsonbFn({
+        fn: 'extract_path',
+        source: { column: 'config' },
+        params: [key],
+      });
     }),
     ids
   );
