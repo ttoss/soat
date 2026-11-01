@@ -35,6 +35,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.',
   API_KEY_POLICY_BOUNDARY:
     "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `boundary_policy_ids`; a wider key requires a credential that carries that permission.",
+  API_KEY_SCOPED_TOKEN:
+    'Create or update the key with a user token or an API key; a project-scoped token (OAuth, trigger or run) cannot write API keys.',
   API_KEY_PROJECT_SCOPE:
     "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
   RESOURCE_NOT_FOUND:
@@ -55,6 +57,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Make the tool answer `{ answers: [{ name, probability | choice | score, probabilities?, confidence? }] }`, one per question, as OpenAI's Decisions API does; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
   TOOL_HAS_DEPENDENTS:
     'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
+  POLICY_HAS_DEPENDENTS:
+    'Detach the policy from the triggers `meta.sample` lists with `PATCH /api/v1/triggers/{trigger_id}` and `policy_id: null`, or delete them, then delete the policy.',
   SHARE_CAP_EXCEEDED:
     "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",
   SHARE_IN_USE:

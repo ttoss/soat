@@ -14,10 +14,11 @@
 import type { Tool } from 'ai';
 
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
-import { buildKnowledgeTools } from './agentKnowledge';
+import { buildKnowledgeBindings } from './agentKnowledge';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
-import { resolveAgentTools } from './agentToolResolver';
+import { mergeBindingTools } from './agentToolNames';
+import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
 
@@ -62,11 +63,11 @@ export const resolveAgentToolSurface = async (args: {
   const ownerId = ownerProjectId(args.typedAgent);
   const unavailable = collectUnavailableTools();
 
-  // No branch on presence — resolveAgentTools no-ops on empty input, so this
-  // covers "no tools at all".
+  // No branch on presence — resolveAgentToolBindings no-ops on empty input, so
+  // this covers "no tools at all".
   const bound = splitToolBindings(readAgentToolBindings(args.typedAgent));
 
-  const resolvedTools = await resolveAgentTools({
+  const bindings = await resolveAgentToolBindings({
     // `active_tool_ids` narrows the bound set before resolution — filtering ids
     // here rather than resolved tools afterwards avoids needing an id→name map
     // on this path. A resumed run is restricted exactly like the run it resumes.
@@ -110,21 +111,20 @@ export const resolveAgentToolSurface = async (args: {
     attribution: { generationId: args.generationId, agentId: args.agentId },
   });
 
-  // Mutates `resolvedTools` in place, adding the tools derived from the agent's
-  // `knowledge_config` (`write_memory`) on top of the bound ones.
   // A shared agent's memory store is its owner's: the grantee's turn is never
   // written into it.
-  if (ownerId === projectId)
-    buildKnowledgeTools({
-      agentId: args.agentId,
-      // The generation was already required here for the guardrail and activity
-      // contexts; forwarding it is what lets a `write_memory` call record which
-      // turn asserted the fact.
-      generationId: args.generationId,
-      projectIds: args.projectIds,
-      typedAgent: args.typedAgent,
-      resolvedTools,
-    });
+  const knowledgeBindings =
+    ownerId === projectId
+      ? buildKnowledgeBindings({
+          agentId: args.agentId,
+          generationId: args.generationId,
+          projectIds: args.projectIds,
+          typedAgent: args.typedAgent,
+        })
+      : [];
 
-  return { tools: resolvedTools, unavailableToolNames: unavailable.names };
+  return {
+    tools: mergeBindingTools({ bindings: [...bindings, ...knowledgeBindings] }),
+    unavailableToolNames: unavailable.names,
+  };
 };

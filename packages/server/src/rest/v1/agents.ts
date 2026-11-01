@@ -10,6 +10,7 @@ import { buildSrn } from 'src/lib/iam';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { redactAgentToolSecrets } from 'src/lib/toolSecretRedaction';
 import { setAuditResourceHint } from 'src/middleware/audit';
+import type { IsAllowedFn } from 'src/middleware/authProjectResolvers';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
 import { agentGenerationRouter } from './agentGeneration';
@@ -161,11 +162,13 @@ const buildCreateAgentArgs = (args: {
   projectId: number;
   body: CreateAgentBody;
   createdBy: RequestPrincipal | null;
+  secretUse: IsAllowedFn;
 }): Parameters<typeof createAgent>[0] => {
   const { projectId, body, createdBy } = args;
   return {
     projectId,
     createdBy,
+    secretUse: args.secretUse,
     versionLabel: parseNullableString(body.version_label),
     ...parseModelBinding(body),
     name: typeof body.name === 'string' ? body.name : undefined,
@@ -232,6 +235,7 @@ const runAgentUpdate = async (args: {
     expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
     createdBy: requestPrincipalFromCtx(ctx),
+    secretUse: ctx.authUser.isAllowed,
   });
 };
 
@@ -256,6 +260,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
       projectId: targetProjectId,
       body: reqBody,
       createdBy: requestPrincipalFromCtx(ctx),
+      secretUse: ctx.authUser.isAllowed,
     })
   );
 

@@ -153,7 +153,7 @@ export const ERROR_CODES = {
   MODEL_LISTING_FAILED: {
     httpStatus: 502,
     description:
-      "The provider rejected the model listing request, or answered it with something other than JSON. The provider's own status and message are carried in the error message.",
+      "The provider rejected the model listing request, or answered it with something other than JSON or with more than 8 MiB. The provider's own status and message are carried in the error message.",
   },
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
@@ -225,6 +225,11 @@ export const ERROR_CODES = {
     description:
       'The project has one or more dependent resources (agents, ai providers, tools, etc.) and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  POLICY_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The policy is the `policy_id` boundary of one or more triggers and cannot be deleted. `meta.triggers` counts them and `meta.sample` lists up to five trigger IDs.',
+  },
   PROJECT_PAUSED: {
     httpStatus: 409,
     description:
@@ -262,6 +267,11 @@ export const ERROR_CODES = {
     httpStatus: 403,
     description:
       'The credential is an API key narrowed by `policy_ids`, and the request would write an API key outside that boundary: no `policy_ids`, an empty list, or a policy the credential does not carry. A narrowed key may only mint or update keys whose `policy_ids` are a non-empty subset of its own. The error meta reports `boundary_policy_ids` and `requested_policy_ids`.',
+  },
+  API_KEY_SCOPED_TOKEN: {
+    httpStatus: 403,
+    description:
+      'The credential is a project-scoped token (an OAuth access token, a trigger run-as token or a run token), whose boundary lives in the token and cannot be carried by an API key. Such a token never creates or updates an API key, directly or through an `api_key` formation resource.',
   },
   API_KEY_PROJECT_SCOPE: {
     httpStatus: 403,
@@ -564,7 +574,7 @@ export const ERROR_CODES = {
   TOOL_RESPONSE_TOO_LARGE: {
     httpStatus: 502,
     description:
-      "An http-type tool answered 2xx with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default), in either `response_mode`. The body is refused while it streams, so nothing was buffered. A non-2xx body over the ceiling is cut to it and stays `TOOL_HTTP_ERROR`. The error `meta` carries `tool_url` and `max_bytes`.",
+      "An http or mcp tool answered 2xx with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default), in either `response_mode`. The body is refused while it streams, so nothing was buffered. A non-2xx body over the ceiling is cut to it and stays `TOOL_HTTP_ERROR`. The error `meta` carries `tool_url` and `max_bytes`.",
   },
   MCP_TOOL_ERROR: {
     httpStatus: 502,

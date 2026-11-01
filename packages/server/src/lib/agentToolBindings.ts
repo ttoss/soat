@@ -1,8 +1,10 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
+import { assertToolSecretUseAllowed } from './secretUse';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -48,8 +50,8 @@ export const readAgentToolBindings = (
 
 /**
  * Splits bindings into the reference ids and inline definitions that
- * `resolveAgentTools` takes as two separate arguments. Internal plumbing only —
- * `tool_bindings` is the single attachment field on the wire.
+ * `resolveAgentToolBindings` takes as two separate arguments. Internal
+ * plumbing only — `tool_bindings` is the single attachment field on the wire.
  *
  * Ordering invariant: each side is emitted in binding order.
  */
@@ -73,11 +75,19 @@ export const splitToolBindings = (
 
 // ── Validation ────────────────────────────────────────────────────────────
 
+/**
+ * Who answers `secrets:UseSecret` for an inline tool a write stores: the
+ * caller, or `'archived'` when the write replays an archived version, whose
+ * bindings the write that archived them already answered for.
+ */
+export type BindingSecretUse = IsAllowedFn | 'archived';
+
 // An inline binding tool must be a plain object of an ephemeral-supported
 // type, carrying a definition that is valid within the project.
 const validateInlineBindingTool = async (args: {
   tool: unknown;
   projectId: number;
+  secretUse: BindingSecretUse;
 }): Promise<void> => {
   if (!isPlainObject(args.tool)) {
     throw new DomainError(
@@ -87,6 +97,13 @@ const validateInlineBindingTool = async (args: {
   }
   const definition = args.tool as InlineToolDefinition;
   assertEphemeralTypeSupported(definition);
+  if (args.secretUse !== 'archived') {
+    await assertToolSecretUseAllowed({
+      tool: definition,
+      projectId: args.projectId,
+      isAllowed: args.secretUse,
+    });
+  }
   await validateToolDefinition({ definition, projectId: args.projectId });
 };
 
@@ -96,6 +113,7 @@ const validateInlineBindingTool = async (args: {
 const validateBindingEntry = async (args: {
   entry: unknown;
   projectId: number;
+  secretUse: BindingSecretUse;
 }): Promise<AgentToolBinding> => {
   const { entry, projectId } = args;
   if (!isPlainObject(entry)) {
@@ -115,7 +133,11 @@ const validateBindingEntry = async (args: {
   }
 
   if (hasInline) {
-    await validateInlineBindingTool({ tool: entry.tool, projectId });
+    await validateInlineBindingTool({
+      tool: entry.tool,
+      projectId,
+      secretUse: args.secretUse,
+    });
   }
 
   const clean: AgentToolBinding = {};
@@ -247,6 +269,7 @@ export const toWireToolBinding = (
 export const validateToolBindings = async (args: {
   projectId: number;
   bindings: AgentToolBinding[];
+  secretUse: BindingSecretUse;
 }): Promise<AgentToolBinding[]> => {
   if (!Array.isArray(args.bindings)) {
     throw new DomainError(
@@ -264,7 +287,11 @@ export const validateToolBindings = async (args: {
   const sanitized: AgentToolBinding[] = [];
   for (const entry of args.bindings) {
     sanitized.push(
-      await validateBindingEntry({ entry, projectId: args.projectId })
+      await validateBindingEntry({
+        entry,
+        projectId: args.projectId,
+        secretUse: args.secretUse,
+      })
     );
   }
   await toolReferences.requireMany({
@@ -281,11 +308,13 @@ export const validateToolBindings = async (args: {
 export const resolveBindingsForCreate = async (args: {
   projectId: number;
   toolBindings?: AgentToolBinding[] | null;
+  secretUse: BindingSecretUse;
 }): Promise<AgentToolBinding[] | null> => {
   if (!args.toolBindings) return null;
   return validateToolBindings({
     projectId: args.projectId,
     bindings: args.toolBindings,
+    secretUse: args.secretUse,
   });
 };
 
@@ -297,11 +326,13 @@ export const resolveBindingsForCreate = async (args: {
 export const resolveBindingsForUpdate = async (args: {
   projectId: number;
   toolBindings?: AgentToolBinding[] | null;
+  secretUse: BindingSecretUse;
 }): Promise<AgentToolBinding[] | null | undefined> => {
   if (args.toolBindings === undefined) return undefined;
   if (args.toolBindings === null) return null;
   return validateToolBindings({
     projectId: args.projectId,
     bindings: args.toolBindings,
+    secretUse: args.secretUse,
   });
 };

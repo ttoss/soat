@@ -7,6 +7,7 @@ import { claimIdempotencyKey } from './idempotencyClaim';
 import { readStoredStartingPrincipal } from './orchestrationRunToken';
 import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
+import { appendTaskHistory } from './taskHistory';
 import {
   type ActiveDispatch,
   computeStallDeadline,
@@ -249,8 +250,8 @@ const appendHistory = async (args: {
     transitionArgs: a,
     transitionName: args.transition.name,
   });
-  await db.TaskTransition.create(
-    {
+  await appendTaskHistory({
+    row: {
       taskId: args.taskId,
       fromState: args.fromState,
       toState: args.transition.to,
@@ -262,8 +263,8 @@ const appendHistory = async (args: {
       idempotencyKey: a.idempotency?.key ?? null,
       idempotencyDigest: a.idempotency?.digest ?? null,
     },
-    { transaction: args.transaction }
-  );
+    transaction: args.transaction,
+  });
 };
 
 // Runs the atomic state change under a row lock: re-reads the committed state,

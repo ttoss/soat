@@ -1,5 +1,5 @@
 ---
-description: "File upload, download, metadata, and deletion over a pluggable storage backend — local filesystem, S3, or GCS."
+description: 'File upload, download, metadata, and deletion over a pluggable storage backend — local filesystem, S3, or GCS.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -23,18 +23,18 @@ Files belong to a project and are persisted through the configured backend (loca
 
 ## Data Model
 
-| Field          | Type                     | Description                                                                                                         |
-| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `id`           | string                   | Public identifier                                                                                                   |
-| `prefix`       | string                   | Directory within the project (e.g. `/assets`). Optional on write; defaults to `/` (root). Read-only on the record (derived from `path`). |
-| `filename`     | string                   | Original / download name and the key's leaf segment (e.g. `logo.png`). Optional on write; defaults to the uploaded file's name. |
-| `path`         | string \| null           | **Read-only.** Full key = `prefix` + `/` + `filename` (e.g. `/assets/logo.png`). Unique per project; the file's identity and the resource ID segment in path-based SRNs. |
-| `content_type` | string                   | MIME type                                                                                                           |
-| `size`         | number                   | File size in bytes                                                                                                  |
-| `metadata`     | object           | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata) |
-| `project_id`   | string                   | ID of the owning project. Present on [`GET /files/:id`](/docs/api/files/get-file) and on file events; absent on the other operations' records. |
-| `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
-| `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
+| Field          | Type           | Description                                                                                                                                                              |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`           | string         | Public identifier                                                                                                                                                        |
+| `prefix`       | string         | Directory within the project (e.g. `/assets`). Optional on write; defaults to `/` (root). Read-only on the record (derived from `path`).                                 |
+| `filename`     | string         | Original / download name and the key's leaf segment (e.g. `logo.png`). Optional on write; defaults to the uploaded file's name.                                          |
+| `path`         | string \| null | **Read-only.** Full key = `prefix` + `/` + `filename` (e.g. `/assets/logo.png`). Unique per project; the file's identity and the resource ID segment in path-based SRNs. |
+| `content_type` | string         | MIME type                                                                                                                                                                |
+| `size`         | number         | File size in bytes                                                                                                                                                       |
+| `metadata`     | object         | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata)                                                  |
+| `project_id`   | string         | ID of the owning project. Present on [`GET /files/:id`](/docs/api/files/get-file) and on file events; absent on the other operations' records.                           |
+| `created_at`   | string         | ISO 8601 creation timestamp                                                                                                                                              |
+| `updated_at`   | string         | ISO 8601 last-updated timestamp                                                                                                                                          |
 
 `path` is normalized at write time, unique per project, and the target of path-based SRNs. Change `prefix` to **move**, `filename` to **rename**; either rebuilds `path`. A collision returns `409 NAME_CONFLICT`.
 
@@ -54,10 +54,10 @@ Every surface carries the same object. [`PATCH /api/v1/files/{file_id}/metadata`
 
 Bytes are handled by a **storage provider** selected with `FILES_STORAGE_PROVIDER` (default `local`); the API is identical across backends. Each file records its backend, so reads and deletes route correctly after the active backend changes.
 
-| Provider | `FILES_STORAGE_PROVIDER` | Where bytes live |
-| -------- | ------------------------ | ---------------- |
-| Local filesystem | `local` (default) | A project-scoped directory tree under `FILES_STORAGE_DIR` |
-| S3 / S3-compatible | `s3` | Objects in the bucket named by `FILES_S3_BUCKET` |
+| Provider           | `FILES_STORAGE_PROVIDER` | Where bytes live                                          |
+| ------------------ | ------------------------ | --------------------------------------------------------- |
+| Local filesystem   | `local` (default)        | A project-scoped directory tree under `FILES_STORAGE_DIR` |
+| S3 / S3-compatible | `s3`                     | Objects in the bucket named by `FILES_S3_BUCKET`          |
 
 Both use the layout `{projectPublicId}/{category}/{fileId}{ext}`:
 
@@ -86,10 +86,10 @@ s3://my-bucket/proj_1a123a/reports/file_abc123.txt
 Every module that saves a file or document on your behalf files it under
 `/.system/<module>/`, one directory per module:
 
-| Path | Written by |
-| --- | --- |
+| Path                                                         | Written by                                      |
+| ------------------------------------------------------------ | ----------------------------------------------- |
 | `/.system/conversations/{conversation_id}/{document_id}.txt` | Each [conversation](./conversations.md) message |
-| `/.system/traces/{trace_id}.json` | Each [trace](./traces.md)'s raw steps |
+| `/.system/traces/{trace_id}.json`                            | Each [trace](./traces.md)'s raw steps           |
 
 The root is yours to read and not to write. A `POST`, a path move or a tag write
 that lands under it is refused with `400 RESERVED_PATH`, so the marker cannot be
@@ -110,8 +110,8 @@ by `file_id` needs no prefix. See [Debug Session, Generation, and Trace History 
 
 Policies can target files by `path`; with a `path` set, **both** the id-based and path-based SRN are evaluated:
 
-| SRN form                              | Matches                                   |
-| ------------------------------------- | ----------------------------------------- |
+| SRN form                             | Matches                                   |
+| ------------------------------------ | ----------------------------------------- |
 | `srn:proj_ABC:file:file_XYZ`         | Specific file by ID                       |
 | `srn:proj_ABC:file:/assets/logo.png` | File at the exact path `/assets/logo.png` |
 | `srn:proj_ABC:file:/exports/*`       | All files under `/exports/`               |
@@ -139,6 +139,7 @@ A token is invalidated after one successful upload: reuse `409`, expired `410`, 
 MCP payloads above ~100 KB are truncated, so `upload-file-base64` cannot carry a large file. Use the token flow: `create-presigned-url` (an MCP tool) is small; do step 2 **out-of-band** (`curl`, a `fetch`/HTTP tool, or the SDK) with `multipart/form-data` streamed from disk:
 
 {/* single-client: streamed multipart upload; the CLI and SDK send base64 JSON */}
+
 ```bash
 # Step 1 returned upload_url = /api/v1/files/upload/upt_xxx
 curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx"
@@ -146,17 +147,17 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 
 ## Configuration
 
-| Environment Variable | Required | Description                                                                                             |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `FILES_STORAGE_PROVIDER` | No   | Storage backend: `local` (default) or `s3`. Selects where new files are written. |
-| `FILES_STORAGE_DIR`  | For `local` | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. Required when the provider is `local`. |
-| `FILES_S3_BUCKET`    | For `s3` | Name of the S3 bucket that stores file objects. Required when the provider is `s3`. |
-| `FILES_S3_REGION`    | No       | AWS region of the bucket. Falls back to `AWS_REGION` if unset. |
-| `FILES_S3_KEY_PREFIX` | No      | Key prefix prepended to every object, to namespace files within a shared bucket (e.g. `soat/`). |
-| `FILES_S3_ENDPOINT`  | No       | Custom endpoint URL for S3-compatible stores (e.g. MinIO, Cloudflare R2). Omit for AWS S3. |
-| `FILES_S3_FORCE_PATH_STYLE` | No | Set to `true` to use path-style bucket addressing (required by some S3-compatible stores). |
-| `FILE_UPLOAD_MAX_BYTES` | No    | Ceiling on a multipart upload, in bytes. Defaults to `26214400` (25 MB). A larger body is refused with `UPLOAD_TOO_LARGE` (`413`) while it is still streaming, so nothing is buffered or stored. |
-| `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
+| Environment Variable        | Required    | Description                                                                                                                                                                                      |
+| --------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FILES_STORAGE_PROVIDER`    | No          | Storage backend: `local` (default) or `s3`. Selects where new files are written.                                                                                                                 |
+| `FILES_STORAGE_DIR`         | For `local` | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. Required when the provider is `local`.                                                   |
+| `FILES_S3_BUCKET`           | For `s3`    | Name of the S3 bucket that stores file objects. Required when the provider is `s3`.                                                                                                              |
+| `FILES_S3_REGION`           | No          | AWS region of the bucket. Falls back to `AWS_REGION` if unset.                                                                                                                                   |
+| `FILES_S3_KEY_PREFIX`       | No          | Key prefix prepended to every object, to namespace files within a shared bucket (e.g. `soat/`).                                                                                                  |
+| `FILES_S3_ENDPOINT`         | No          | Custom endpoint URL for S3-compatible stores (e.g. MinIO, Cloudflare R2). Omit for AWS S3.                                                                                                       |
+| `FILES_S3_FORCE_PATH_STYLE` | No          | Set to `true` to use path-style bucket addressing (required by some S3-compatible stores).                                                                                                       |
+| `FILE_UPLOAD_MAX_BYTES`     | No          | Ceiling on a multipart upload, in bytes. Defaults to `26214400` (25 MB). A larger body is refused with `UPLOAD_TOO_LARGE` (`413`) while it is still streaming, so nothing is buffered or stored. |
+| `SOAT_BASE_URL`             | No          | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed.   |
 
 AWS credentials for `s3` resolve through the standard AWS SDK chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, shared profile, or instance/task role).
 
@@ -207,7 +208,10 @@ soat upload-file-base64 \
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.files.uploadFileBase64({
   body: {

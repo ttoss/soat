@@ -22,11 +22,14 @@ export type TestDatabaseConnection = {
 };
 
 /**
- * Schema-only database every test file is cloned from. Built once by
- * `globalSetup`; never connected to afterwards, because a session on the
- * template blocks `CREATE DATABASE ... TEMPLATE`.
+ * Name of the schema-only database every test file is cloned from. Built once
+ * by `globalSetup`; never connected to afterwards, because a session on the
+ * template blocks `CREATE DATABASE ... TEMPLATE`. Unique per run, so runs
+ * sharing a `TEST_DB_HOST` never drop each other's template.
  */
-export const TEMPLATE_DATABASE = 'soat_test_template';
+export const createTemplateDatabaseName = () => {
+  return `soat_test_template_${randomUUID().replaceAll('-', '')}`;
+};
 
 /** Maintenance database used for `CREATE`/`DROP DATABASE`, which cannot run
  * from inside the database they target. */
@@ -79,7 +82,9 @@ export const withAdminClient = async <T>(args: {
  */
 export const publishTestDatabaseConnection = (args: {
   connection: TestDatabaseConnection;
+  template: string;
 }) => {
+  process.env.SOAT_TEST_DB_TEMPLATE = args.template;
   process.env.SOAT_TEST_DB_HOST = args.connection.host;
   process.env.SOAT_TEST_DB_PORT = String(args.connection.port);
   process.env.SOAT_TEST_DB_USERNAME = args.connection.username;
@@ -104,6 +109,19 @@ export const readTestDatabaseConnection = (): TestDatabaseConnection => {
   };
 };
 
+export const readTemplateDatabase = (): string => {
+  const template = process.env.SOAT_TEST_DB_TEMPLATE;
+
+  if (!template) {
+    throw new Error(
+      'SOAT_TEST_DB_TEMPLATE is unset — the template database was never ' +
+        'published. Run the suite through its Jest config so globalSetup executes.'
+    );
+  }
+
+  return template;
+};
+
 /**
  * Clone the template into a database of its own for one test file.
  *
@@ -115,6 +133,7 @@ export const readTestDatabaseConnection = (): TestDatabaseConnection => {
  */
 export const createTestDatabase = async (args: {
   connection: TestDatabaseConnection;
+  template: string;
 }): Promise<string> => {
   const database = `soat_test_${randomUUID().replaceAll('-', '')}`;
 
@@ -124,7 +143,7 @@ export const createTestDatabase = async (args: {
       for (let attempt = 1; ; attempt += 1) {
         try {
           await client.query(
-            `CREATE DATABASE "${database}" TEMPLATE "${TEMPLATE_DATABASE}"`
+            `CREATE DATABASE "${database}" TEMPLATE "${args.template}"`
           );
           return;
         } catch (error) {

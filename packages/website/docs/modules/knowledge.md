@@ -270,6 +270,8 @@ A search with a `query` embeds it once, billed to the first project in scope, by
 
 The caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `soat:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
 
+Each statement reaches only the resource type its SRN names. The memory half needs the action on both `memory_store` and `memory`: a policy allowing `knowledge:SearchKnowledge` on `srn:<project_id>:document:*` alone searches documents and no memories, and a `Deny` on `srn:<project_id>:memory:*` removes memories without touching documents.
+
 Without `project_id` the same filter applies across every project in scope.
 
 ### Result ceiling

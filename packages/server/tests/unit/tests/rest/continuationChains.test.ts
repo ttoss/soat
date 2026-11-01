@@ -189,21 +189,6 @@ describe('Continuation chains', () => {
     expect(res.status).toBe(200);
   };
 
-  /** One hop: resumes from `generationId` and answers the continuation's id. */
-  const hop = async (args: {
-    fixture: Fixture;
-    generationId: string;
-  }): Promise<string> => {
-    await resumeFrom(args);
-    const continuation = await waitFor({
-      probe: async () => {
-        return (await continuationsOf(args.generationId))[0];
-      },
-      describe: `a continuation of ${args.generationId}`,
-    });
-    return continuation.id;
-  };
-
   type Chain = {
     id: string;
     status: string;
@@ -218,6 +203,47 @@ describe('Continuation chains', () => {
     );
     expect(res.status).toBe(200);
     return res.body as Chain;
+  };
+
+  /**
+   * A continuation is listed before its creation recounts the chain and before
+   * it settles, while production holds the next call only during its run; a
+   * hop is done once the chain counts every member it lists and has concluded.
+   */
+  const chainSettles = (chainId: string): Promise<Chain> => {
+    return waitFor({
+      probe: async () => {
+        const members = await authenticatedTestClient(adminToken)
+          .get('/api/v1/generations')
+          .query({ chain_id: chainId });
+        expect(members.status).toBe(200);
+        const chain = await getChain(chainId);
+        return chain.status === 'concluded' &&
+          chain.generation_count === members.body.data.length
+          ? chain
+          : undefined;
+      },
+      describe: `chain ${chainId} to count its members and conclude`,
+    });
+  };
+
+  /** One hop: resumes from `generationId` and answers the continuation's id. */
+  const hop = async (args: {
+    fixture: Fixture;
+    generationId: string;
+  }): Promise<string> => {
+    await resumeFrom(args);
+    const continuation = await waitFor({
+      probe: async () => {
+        return (await continuationsOf(args.generationId))[0];
+      },
+      describe: `a continuation of ${args.generationId}`,
+    });
+    if (!continuation.chain_id) {
+      throw new Error(`${continuation.id} names no chain`);
+    }
+    await chainSettles(continuation.chain_id);
+    return continuation.id;
   };
 
   const chainReaches = (args: {
@@ -460,7 +486,6 @@ describe('Continuation chains', () => {
       const fixture = await createFixture({});
       const [root, first, second] = await growChain({ fixture, hops: 2 });
       const chainId = await chainIdOf(first);
-      await chainReaches({ chainId, status: 'concluded' });
 
       const chain = await refusedHop({
         fixture,
@@ -681,7 +706,6 @@ describe('Continuation chains', () => {
       const fixture = await createFixture({});
       const [, first] = await growChain({ fixture, hops: 1 });
       const chainId = await chainIdOf(first);
-      await chainReaches({ chainId, status: 'concluded' });
       await holdCallOn({ fixture, generationId: first, expiresInSeconds: -10 });
 
       await expireDueApprovals();

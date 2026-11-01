@@ -4,9 +4,11 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
+  assertMemorySpendWithinQuota,
   assertMemoryStorageQuota,
   deleteMemory,
   findMemoryRowId,
+  findMemoryStoreRowId,
   findThresholdOrderError,
   getMemory,
   listMemories,
@@ -318,6 +320,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     memoryStoreId: memoryStoreRowId,
     content: body.content,
   });
+  await assertMemorySpendWithinQuota({ memoryStoreId: memoryStoreRowId });
 
   const result = await writeMemory({
     memoryStoreId: memoryStoreRowId,
@@ -403,6 +406,16 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   const validationError = validateTagsBag(body, { allowNull: true });
   if (validationError) {
     throw new DomainError('VALIDATION_FAILED', validationError);
+  }
+
+  if (body.content !== undefined) {
+    const memoryStoreId = await findMemoryStoreRowId({
+      memoryId: ctx.params.memory_id,
+    });
+    if (memoryStoreId !== null) {
+      await assertMemoryStorageQuota({ memoryStoreId, content: body.content });
+      await assertMemorySpendWithinQuota({ memoryStoreId });
+    }
   }
 
   ctx.body = await updateMemory({

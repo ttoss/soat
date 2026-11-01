@@ -7,6 +7,7 @@ import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
 import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
+import { appendTaskHistory } from './taskHistory';
 import { runStateAutomation } from './tasksAutomation';
 import {
   findCreatedTask,
@@ -356,16 +357,18 @@ const insertTask = async (args: CreateTaskArgs) => {
       : computeStallDeadline({ state: entryState, enteredStateAt }),
   });
 
-  await db.TaskTransition.create({
-    taskId: task.id as number,
-    fromState: null,
-    toState: entryState.name,
-    transition: null,
-    principalType: args.principal.kind,
-    principalId: args.principal.id,
-    generationId: null,
-    orchestrationRunId: null,
-    note: null,
+  await appendTaskHistory({
+    row: {
+      taskId: task.id as number,
+      fromState: null,
+      toState: entryState.name,
+      transition: null,
+      principalType: args.principal.kind,
+      principalId: args.principal.id,
+      generationId: null,
+      orchestrationRunId: null,
+      note: null,
+    },
   });
 
   return finalizeCreatedTask({

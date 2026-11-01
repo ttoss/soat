@@ -176,6 +176,8 @@ Neither or both is `400 VALIDATION_FAILED`. A `tool_id` names a tool in the agen
 
 `tool` takes the [Create Tool](./tools.md#data-model) body minus `project_id` (`{{secret:...}}` resolves in the agent's project), stored on the agent and resolved at generation time with no Tool resource: absent from [`GET /tools`](/docs/api/tools/list-tools), untargetable by `active_tool_ids` or `step_rules`, never of type `pipeline` (bind a persisted one by `tool_id`).
 
+An inline definition sends each secret it names wherever it points, so writing one needs `secrets:UseSecret` on that secret, as [writing a tool](./tools.md#secret-references-in-execute) does: without it the create or update is `403 FORBIDDEN`, `meta.secret_ids` naming each secret refused. Restoring or releasing an archived version asks no secret permission.
+
 A credential in an inline definition is a `{{secret:...}}` reference; a literal is refused with `400 LITERAL_CREDENTIAL` ([Credentials Are References, Never Literals](./tools.md#credentials-are-references-never-literals)). A literal stored before the rule is masked on every agent read, in [version history](#versioning-and-staged-rollout) and in `agents.*` webhook payloads, and restoring or releasing a version that holds one is refused the same way. An archived version cannot be edited, so such a credential is rotated, not removed.
 
 #### A binding that cannot be resolved
@@ -625,7 +627,7 @@ Listing agents stays project-scoped: [`GET /api/v1/agents`](/docs/api/agents/lis
 
 ### SOAT Action Permissions
 
-A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply. An [approved](./approvals.md#continuation-identity) `builtin` action is held to the boundary too.
+A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply. An [approved](./approvals.md#continuation-identity) `builtin` action is held to the boundary too, and so is every `builtin` step of a [pipeline tool](./tools.md#pipeline) the agent calls, nested pipelines included.
 
 A `boundary_policy` that is not a valid policy document allows nothing — it fails closed, so a malformed boundary denies every action rather than widening one. Its `condition` keys are held to the same rule as a stored policy's ([IAM — Condition Keys](./iam.md#condition-keys)): a key the platform does not supply invalidates the document.
 

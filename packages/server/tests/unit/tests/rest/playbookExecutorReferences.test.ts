@@ -48,6 +48,7 @@ describe('Playbook executor references', () => {
   let otherToolId: string;
   let mcpToolId: string;
   let scopedMcpToolId: string;
+  let clientToolId: string;
   const existing = {} as Record<ExecutorType, string>;
   let seq = 0;
 
@@ -114,6 +115,12 @@ describe('Playbook executor references', () => {
       mcp: { url: 'http://127.0.0.1:9/mcp' },
       actions: ['search', 'delete'],
       denied_actions: ['delete'],
+    });
+    clientToolId = await create('/api/v1/tools', {
+      name: 'ref-client-tool',
+      type: 'client',
+      description: 'Runs in the calling client',
+      parameters: { type: 'object', properties: {} },
     });
     otherToolId = await httpTool(otherProjectId);
     const providerId = await create('/api/v1/ai-providers', {
@@ -187,6 +194,64 @@ describe('Playbook executor references', () => {
       expect(codesOf(res.body.error.meta.problems)).toEqual([
         {
           code: 'EXECUTOR_NOT_FOUND',
+          path: 'definition.nodes[0].transformations[0].tool',
+        },
+      ]);
+    });
+
+    test('refuses an mcp tool as a transformation tool', async () => {
+      const definition = definitionOf({ type: 'tool', id: toolId });
+      const res = await createPlaybook({
+        nodes: [
+          {
+            ...definition.nodes[0],
+            transformations: [
+              { name: 'doc', format: 'pdf', tool: toolId },
+              { name: 'mcp', format: 'pdf', tool: mcpToolId },
+            ],
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_VALIDATION_FAILED');
+      expect(codesOf(res.body.error.meta.problems)).toEqual([
+        {
+          code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
+          path: 'definition.nodes[0].transformations[1].tool',
+        },
+      ]);
+    });
+
+    test('refuses a client tool executor', async () => {
+      const res = await createPlaybook(
+        definitionOf({ type: 'tool', id: clientToolId })
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_VALIDATION_FAILED');
+      expect(codesOf(res.body.error.meta.problems)).toEqual([
+        {
+          code: 'EXECUTOR_TOOL_UNSUPPORTED',
+          path: 'definition.nodes[0].executor.id',
+        },
+      ]);
+    });
+
+    test('refuses a client tool as a transformation tool', async () => {
+      const definition = definitionOf({ type: 'tool', id: toolId });
+      const res = await createPlaybook({
+        nodes: [
+          {
+            ...definition.nodes[0],
+            transformations: [
+              { name: 'doc', format: 'pdf', tool: clientToolId },
+            ],
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(codesOf(res.body.error.meta.problems)).toEqual([
+        {
+          code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
           path: 'definition.nodes[0].transformations[0].tool',
         },
       ]);
@@ -300,6 +365,24 @@ describe('Playbook executor references', () => {
     ]);
   });
 
+  test('PATCH refuses a client tool executor', async () => {
+    const created = await createPlaybook(
+      definitionOf({ type: 'tool', id: toolId })
+    );
+    expect(created.status).toBe(201);
+
+    const res = await asAdmin()
+      .patch(`/api/v1/playbooks/${created.body.id}`)
+      .send({ definition: definitionOf({ type: 'tool', id: clientToolId }) });
+    expect(res.status).toBe(400);
+    expect(codesOf(res.body.error.meta.problems)).toEqual([
+      {
+        code: 'EXECUTOR_TOOL_UNSUPPORTED',
+        path: 'definition.nodes[0].executor.id',
+      },
+    ]);
+  });
+
   describe('POST /api/v1/playbooks/validate', () => {
     const validate = (body: Record<string, unknown>, token = adminToken) => {
       return authenticatedTestClient(token)
@@ -348,6 +431,46 @@ describe('Playbook executor references', () => {
         {
           code: 'EXECUTOR_ACTION_REQUIRED',
           path: 'definition.nodes[0].executor.operation_id',
+        },
+      ]);
+    });
+
+    test('reports a client tool executor', async () => {
+      const res = await validate({
+        project_id: projectId,
+        definition: definitionOf({ type: 'tool', id: clientToolId }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(codesOf(res.body.problems)).toEqual([
+        {
+          code: 'EXECUTOR_TOOL_UNSUPPORTED',
+          path: 'definition.nodes[0].executor.id',
+        },
+      ]);
+    });
+
+    test('reports an mcp tool as a transformation tool', async () => {
+      const definition = definitionOf({ type: 'tool', id: toolId });
+      const res = await validate({
+        project_id: projectId,
+        definition: {
+          nodes: [
+            {
+              ...definition.nodes[0],
+              transformations: [
+                { name: 'doc', format: 'pdf', tool: scopedMcpToolId },
+              ],
+            },
+          ],
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(codesOf(res.body.problems)).toEqual([
+        {
+          code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
+          path: 'definition.nodes[0].transformations[0].tool',
         },
       ]);
     });

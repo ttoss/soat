@@ -4,9 +4,9 @@ A rule that lives in N places is enforced N ways. The copies drift, and the
 drift is only visible on the request that exploits it — which is why defects
 cluster wherever one question is answered more than once.
 
-**Propose consolidating it whenever you find it**, in the change you are already
-making. Landing it is a separate decision: put the proposal up first, unless the
-consolidation sits inside the change you were asked for and alters no behavior.
+**Consolidate it whenever you find it**, in the change you are already making
+or a task of its own. Whether to consolidate is not an open choice
+(`open-questions.md`); only a behavior change it implies may be (item 4 below).
 
 ## Recognising it
 

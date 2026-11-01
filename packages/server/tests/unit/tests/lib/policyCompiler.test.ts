@@ -708,6 +708,69 @@ describe('compilePolicy project segment', () => {
   });
 });
 
+describe('compilePolicy type segment', () => {
+  const compile = (statement: PolicyDocument['statement']) => {
+    return compilePolicy({
+      policies: [[{ statement }]],
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+  };
+
+  test('an Allow naming another type grants nothing', () => {
+    const result = compile([
+      {
+        effect: 'Allow',
+        action: ['test:Do'],
+        resource: ['srn:prj_1:otherResource:*'],
+      },
+    ]);
+    expect(result.hasAccess).toBe(false);
+  });
+
+  test('a Deny naming another type does not narrow', () => {
+    const result = compile([
+      { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+      {
+        effect: 'Deny',
+        action: ['test:Do'],
+        resource: ['srn:prj_1:otherResource:*'],
+      },
+    ]);
+    expect(result).toEqual({ where: {}, hasAccess: true });
+  });
+
+  test('keeps only the resources whose type matches', () => {
+    const result = compile([
+      {
+        effect: 'Allow',
+        action: ['test:Do'],
+        resource: [
+          'srn:prj_1:testResource:res_a',
+          'srn:prj_1:otherResource:res_b',
+        ],
+      },
+    ]);
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ publicId: 'res_a' }] }] }],
+    });
+  });
+
+  test('a type glob matches', () => {
+    const result = compile([
+      {
+        effect: 'Allow',
+        action: ['test:Do'],
+        resource: ['srn:prj_1:test*:res_a'],
+      },
+    ]);
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ publicId: 'res_a' }] }] }],
+    });
+  });
+});
+
 describe('compilePolicy policy sets', () => {
   const allowAll: PolicyDocument = {
     statement: [{ effect: 'Allow', action: ['test:Do'], resource: ['*'] }],

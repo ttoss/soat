@@ -112,6 +112,8 @@ export type FormationActor = {
    * `api_key` resource cannot be minted wider than the credential deploying it.
    */
   keyPolicyBoundary: number[] | undefined;
+  /** A project-scoped token (OAuth, trigger, run), which writes no API key. */
+  scopedToken: boolean;
   /** Records a refusal the module makes before any `isAllowed` call. */
   recordRefusal: (action: string) => void;
 };

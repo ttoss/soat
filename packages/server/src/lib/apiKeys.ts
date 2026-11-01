@@ -109,17 +109,29 @@ const resolveKeyPolicyBoundary = async (args: {
 
 /**
  * The one boundary check every key write runs — `POST`/`PUT /api-keys` and the
- * `api_key` formation module — refusing with `API_KEY_POLICY_BOUNDARY`. Returns
- * the `policy_ids` to store. `onRefused` runs first: the refusal precedes any
- * `isAllowed` call, so the audit wrapper would otherwise never see it.
+ * `api_key` formation module. Returns the `policy_ids` to store. A project-scoped
+ * token is refused outright (`API_KEY_SCOPED_TOKEN`): its boundary is inline in
+ * the token, and a key without it would carry the owner's full permissions.
+ * `onRefused` runs first: the refusal precedes any `isAllowed` call, so the
+ * audit wrapper would otherwise never see it.
  */
 export const boundKeyPolicyIds = async (args: {
+  scopedToken: boolean;
   boundaryPolicyIds: number[] | undefined;
   requestedPolicyIds: number[] | undefined;
   requestedPolicyPublicIds: string[] | undefined;
   inheritWhenOmitted: boolean;
   onRefused: () => void;
 }): Promise<number[] | undefined> => {
+  if (args.scopedToken) {
+    args.onRefused();
+    throw new DomainError(
+      'API_KEY_SCOPED_TOKEN',
+      'A project-scoped token (OAuth, trigger or run) cannot create or ' +
+        'update an API key.'
+    );
+  }
+
   const boundary = await resolveKeyPolicyBoundary(args);
   if (boundary.allowed) return boundary.policyIds;
 

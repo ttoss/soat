@@ -15,8 +15,9 @@ import type {
   PlaybookNode,
 } from './playbookDefinition';
 import {
-  executorActionProblem,
   executorResolves,
+  toolCallProblem,
+  type ToolStart,
 } from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
 import type { StartingPrincipal } from './principals';
@@ -52,15 +53,22 @@ export const assertExecutorStartable = async (args: {
  */
 const startsOf = (
   node: PlaybookNode
-): { executor: PlaybookExecutor; field: string }[] => {
+): { executor: PlaybookExecutor; field: string; start: ToolStart }[] => {
   return [
     ...(node.executor
-      ? [{ executor: node.executor, field: 'executor.id' }]
+      ? [
+          {
+            executor: node.executor,
+            field: 'executor.id',
+            start: 'executor' as const,
+          },
+        ]
       : []),
     ...(node.transformations ?? []).map((transformation, index) => {
       return {
         executor: { type: 'tool' as const, id: transformation.tool },
         field: `transformations[${index}].tool`,
+        start: 'transformation' as const,
       };
     }),
   ];
@@ -91,8 +99,9 @@ export const assertExecutorsStartable = async (args: {
 
 /**
  * Every executor `isAllowed` may start that names nothing a run in the project
- * could start, or a tool action a run could not call. One it may not start is left to the permission check, so the
- * answer never tells a caller whether a resource it cannot start exists.
+ * could start, or a tool or tool action a run could not call. One it may not
+ * start is left to the permission check, so the answer never tells a caller
+ * whether a resource it cannot start exists.
  */
 export const executorReferenceProblems = async (args: {
   definition: PlaybookDefinition;
@@ -102,7 +111,7 @@ export const executorReferenceProblems = async (args: {
 }): Promise<ValidationProblem[]> => {
   const problems: ValidationProblem[] = [];
   for (const [index, node] of args.definition.nodes.entries()) {
-    for (const { executor, field } of startsOf(node)) {
+    for (const { executor, field, start } of startsOf(node)) {
       const allowed = await mayStart({
         isAllowed: args.isAllowed,
         projectPublicId: args.projectPublicId,
@@ -118,18 +127,18 @@ export const executorReferenceProblems = async (args: {
         });
         continue;
       }
-      const actionProblem =
-        executor === node.executor
-          ? await executorActionProblem({
-              executor,
-              projectId: args.projectId,
-            })
-          : null;
-      if (actionProblem) {
+      const callProblem = await toolCallProblem({
+        executor,
+        start,
+        projectId: args.projectId,
+      });
+      if (callProblem) {
         problems.push({
-          ...actionProblem,
-          path: `definition.nodes[${index}].executor.operation_id`,
-          message: `Node '${node.id}': ${actionProblem.message}`,
+          code: callProblem.code,
+          path: `definition.nodes[${index}].${
+            callProblem.on === 'tool' ? field : 'executor.operation_id'
+          }`,
+          message: `Node '${node.id}': ${callProblem.message}`,
         });
       }
     }

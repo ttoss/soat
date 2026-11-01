@@ -56,8 +56,13 @@ the deployment's egress rule, evaluated per request against the resolved address
 [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), as for
 an `http` tool's target.
 
-A model listing the provider rejects answers `MODEL_LISTING_FAILED` with the provider's
-status. The provider's response **body** goes to the server log, not to the caller: the
+A record with both a `base_url` and a `secret_id` sends the secret to that URL, so a
+create or update that sets either one, leaving the record with both, needs
+`secrets:UseSecret` on the secret; without it the write is `403 FORBIDDEN`,
+`meta.secret_ids` naming the secret.
+
+A model listing the provider rejects, or answers with more than 8 MiB, answers
+`MODEL_LISTING_FAILED` with the provider's status. The provider's response **body** goes to the server log, not to the caller: the
 host that wrote it is one the record named.
 
 ### Provider Slugs
@@ -104,11 +109,11 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 > **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. A bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-A record that links no secret and sets no `config.apiKey` would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
+A record that links no secret would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
 
 A record that links a secret holding neither an `apiKey` nor a complete key pair never falls back to the deployment's credentials, whatever the setting: it is `400 AI_PROVIDER_MISCONFIGURED` at create, update, generation and model listing.
 
-The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production. Every read — the provider routes, and a formation's template and plan — returns `config.apiKey` as `{ "no_echo": true }`. An update that sends `config` replaces it whole, so it carries the key again as a string; sending the mask back is `400 VALIDATION_FAILED` on `config.apiKey`.
+The `region` field in `config` defaults to `us-east-1`.
 
 ### Bedrock request path
 
@@ -160,7 +165,9 @@ The provider's `config` object accepts two fields:
 
 `config.project` overrides the key file's `project_id`, so one service account can serve models from several projects. When no project can be resolved (no `config.project`, and either no secret or one without `project_id`), creating a generation fails with `AI_PROVIDER_MISCONFIGURED` (`400`).
 
-An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, as for `bedrock`.
+### Credentials live in a secret
+
+A provider's credential is its linked secret alone, for every `provider`. `config.apiKey` is refused with `400 VALIDATION_FAILED` (`meta.field: "config.apiKey"`) on create, on update, and in a formation's `ai_provider` resource; move the key into a [secret](./secrets.md) and link it with `secret_id`. A stored record carrying one reads it as `{ "no_echo": true }` and takes no update until `config` drops it; a `bedrock` or `vertex` one is refused at generation and model listing with `400 AI_PROVIDER_MISCONFIGURED` rather than signing with the deployment's credentials.
 
 ### Anthropic authentication
 
@@ -194,7 +201,7 @@ Listing resolves credentials exactly as generation does, so a record that can ge
 - **The Vertex list is a per-location publisher catalogue, not a per-project reachability check.** The listing is rooted at `publishers/google`, so `config.location` selects the endpoint and the credential's project decides only who is billed and quota'd. Every location Vertex serves can be listed, including the non-regional ones: `global`, where several current Gemini models are served and which 404s in a region, and the `eu` / `us` data-residency multi-regions. A listed model can still fail at generation time if that project cannot serve it.
 - **The Vertex list is advisory.** The endpoint publishes embedding, TTS and classification models next to Gemini with no field distinguishing them, so nothing is filtered out; a listed id can 404 at generation time. For `vertex`, `input_modalities` and `output_modalities` are never reported (the API has no modality field), `streaming` is never reported, and `lifecycle` is `active` only for a model Google marks `GA` — a preview or experimental model reports no `lifecycle`.
 
-Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or, for the API-key providers above, a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
+Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or, for the API-key providers above, a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON or over 8 MiB — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
 
 #### Listing models before you hold credentials
 

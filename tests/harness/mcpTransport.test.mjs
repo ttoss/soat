@@ -52,4 +52,12 @@ describe('mcp transport chokepoint', () => {
       ['mcpTransport.ts']
     );
   });
+
+  // `fetchUrl` carries resolved `{{secret:}}` values; every other site reads
+  // the authored `url`, so an error or log line never shows a secret.
+  test('the resolved MCP URL is read only by mcpTransport.ts', () => {
+    assert.deepEqual(filesMatching(/\btransport\.fetchUrl\b/), [
+      'mcpTransport.ts',
+    ]);
+  });
 });

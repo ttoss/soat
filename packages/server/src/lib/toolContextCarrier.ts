@@ -1,4 +1,6 @@
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { assertSecretRefsExist, resolveSecretRefsInString } from './secrets';
+import { assertSecretUseAllowed, secretRefIds } from './secretUse';
 import { sanitizeCallerToolContext } from './toolContext';
 
 /**
@@ -36,12 +38,13 @@ import { sanitizeCallerToolContext } from './toolContext';
  *
  * The ref check is what the row's own schedule makes necessary: a stored value
  * is read on a firing nobody is watching, so a ref that names nothing has to
- * fail on the write that declared it.
+ * fail on the write that declared it. A resolved ref sends the secret to the
+ * target, so the writer also needs `secrets:UseSecret` on it.
  *
  * Returns `undefined` when nothing survives, so "no bag" has one representation.
  */
-// A union rather than an optional `projectId`: the project is what a ref is
-// checked against, so a carrier cannot declare `resolved` without naming one.
+// A union rather than an optional `projectId`: the project and the writer are
+// what a ref is checked against, so `resolved` cannot be declared without them.
 type AcceptToolContextArgs =
   | {
       toolContext?: Record<string, string> | null;
@@ -51,6 +54,7 @@ type AcceptToolContextArgs =
       toolContext?: Record<string, string> | null;
       secretRefs: 'resolved';
       projectId: number;
+      isAllowed: IsAllowedFn;
     };
 
 export const acceptStoredToolContext = async (
@@ -60,6 +64,11 @@ export const acceptStoredToolContext = async (
   if (!accepted) return undefined;
 
   if (args.secretRefs === 'resolved') {
+    await assertSecretUseAllowed({
+      secretIds: secretRefIds(accepted),
+      projectId: args.projectId,
+      isAllowed: args.isAllowed,
+    });
     await assertSecretRefsExist({ value: accepted, projectId: args.projectId });
   }
 

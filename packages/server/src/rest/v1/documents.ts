@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
+import { findDocumentProjectId } from 'src/lib/documentLoaders';
 import { relatedDocumentRowIds } from 'src/lib/documentRelations';
 import {
   createDocument,
@@ -18,6 +19,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
+import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { readMetadataQuery } from 'src/lib/structuredFilter';
 import {
@@ -249,6 +251,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     projectId: Number(targetProjectId),
     addedBytes: contentBytes(body.content),
   });
+  await assertProjectSpendWithinQuota({ projectId: Number(targetProjectId) });
   const doc = await createDocument({
     projectId: Number(targetProjectId),
     content: body.content,
@@ -305,6 +308,17 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     metadata?: unknown;
     tags?: unknown;
   };
+
+  if (body.content !== undefined) {
+    const projectId = await findDocumentProjectId({
+      id: ctx.params.document_id,
+    });
+    await assertStorageQuota({
+      projectId,
+      addedBytes: contentBytes(body.content),
+    });
+    await assertProjectSpendWithinQuota({ projectId });
+  }
 
   const updated = await updateDocument({
     id: ctx.params.document_id,

@@ -13,6 +13,7 @@ import type { LanguageModel } from 'ai';
 import { wrapLanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
+import { assertNoConfigCredential } from './aiProviderConfigSecrets';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import {
   assertAmbientCredentialsAllowed,
@@ -109,12 +110,11 @@ const refuseUnusableLinkedSecret = (args: {
 
 /**
  * Resolves the Bedrock credential precedence: a secret-linked apiKey wins over
- * `config.apiKey`, which wins over a complete access-key/secret-key pair.
- * Pulled out of `buildBedrockModel` so the rules can be asserted directly
- * rather than through the opaque model object they configure.
+ * a complete access-key/secret-key pair. Pulled out of `buildBedrockModel` so
+ * the rules can be asserted directly rather than through the opaque model
+ * object they configure.
  *
- * A record that links no secret and no `config.apiKey` falls back to the AWS
- * default credential chain (`fromNodeProviderChain`) so role-based auth works.
+ * A record that links no secret falls back to the AWS default credential chain (`fromNodeProviderChain`) so role-based auth works.
  * `@ai-sdk/amazon-bedrock` does NOT walk that chain on its own (vercel/ai#2216)
  * — passing no credentials makes it throw a SigV4 error instead.
  *
@@ -128,6 +128,10 @@ export const resolveBedrockCredentials = (args: {
   config?: Record<string, unknown>;
   allowAmbientCredentials?: boolean;
 }): BedrockCredentials => {
+  assertNoConfigCredential({
+    config: args.config,
+    code: 'AI_PROVIDER_MISCONFIGURED',
+  });
   const secret = parseBedrockSecret(args.secretValue);
   const region =
     readUrlConfigValue({
@@ -135,11 +139,8 @@ export const resolveBedrockCredentials = (args: {
       key: 'region',
       value: args.config?.region,
     }) ?? 'us-east-1';
-  // config.apiKey is accepted as a credential fallback when no secret is linked
-  const configApiKey = args.config?.apiKey as string | undefined;
-  const resolvedApiKey = secret.apiKey ?? configApiKey;
-  if (resolvedApiKey) {
-    return { region, apiKey: resolvedApiKey };
+  if (secret.apiKey) {
+    return { region, apiKey: secret.apiKey };
   }
   if (secret.accessKeyId && secret.secretAccessKey) {
     return {
@@ -275,11 +276,13 @@ export const resolveVertexSettings = (args: {
   secretValue: string | null;
   config?: Record<string, unknown>;
 }): VertexSettings => {
+  assertNoConfigCredential({
+    config: args.config,
+    code: 'AI_PROVIDER_MISCONFIGURED',
+  });
   const secret = parseVertexSecret(args.secretValue);
-  // config.apiKey is accepted as a credential fallback when no secret is linked
-  const apiKey = secret.apiKey ?? (args.config?.apiKey as string | undefined);
-  if (apiKey) {
-    return { apiKey };
+  if (secret.apiKey) {
+    return { apiKey: secret.apiKey };
   }
 
   const googleAuthOptions = readServiceAccountAuth(secret);
@@ -328,9 +331,8 @@ const SECRET_HOLDS_CREDENTIAL = {
 export const assertLinkedSecretUsable = (args: {
   provider: AiProviderSlug;
   secretValue: string | null;
-  config?: Record<string, unknown> | null;
 }): void => {
-  if (args.secretValue === null || args.config?.apiKey) return;
+  if (args.secretValue === null) return;
   if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
   if (SECRET_HOLDS_CREDENTIAL[args.provider](args.secretValue)) return;
   refuseUnusableLinkedSecret({

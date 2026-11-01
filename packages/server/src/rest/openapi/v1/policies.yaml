@@ -246,7 +246,9 @@ paths:
       tags:
         - Policies
       summary: Delete a policy
-      description: Deletes a global policy. Requires admin role.
+      description: >-
+        Deletes a global policy. Requires admin role. Refused with `409
+        POLICY_HAS_DEPENDENTS` while a trigger's `policy_id` names it.
       operationId: deletePolicy
       x-iam-action: policies:DeletePolicy
       x-soat-agent-exclude: true
@@ -277,6 +279,14 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            `POLICY_HAS_DEPENDENTS`: a trigger's `policy_id` still names the
+            policy. Detach it from those triggers or delete them first.
           content:
             application/json:
               schema:

@@ -564,9 +564,10 @@ paths:
         '409':
           description: >-
             The document has moved past the version this write read
-            (`VERSION_CONFLICT`, with `meta.current_version`), or `path` is held
-            by another file in the project (`NAME_CONFLICT`). Nothing is
-            written.
+            (`VERSION_CONFLICT`, with `meta.current_version`), `path` is held
+            by another file in the project (`NAME_CONFLICT`), or new `content`
+            would exceed the project's `storage_bytes` quota
+            (`QUOTA_STORAGE_EXCEEDED`, no `Retry-After`). Nothing is written.
           content:
             application/json:
               schema:
@@ -1126,9 +1127,11 @@ paths:
         '409':
           description: >-
             Another write took the document's version first
-            (`VERSION_CONFLICT`, with `meta.current_version`), or the restored
-            `path` is held by another file in the project (`NAME_CONFLICT`).
-            Nothing is written.
+            (`VERSION_CONFLICT`, with `meta.current_version`), the restored
+            `path` is held by another file in the project (`NAME_CONFLICT`), or
+            the restored content would exceed the project's `storage_bytes`
+            quota (`QUOTA_STORAGE_EXCEEDED`, no `Retry-After`). Nothing is
+            written.
           content:
             application/json:
               schema:

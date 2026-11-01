@@ -21,9 +21,9 @@ pnpm --filter @soat/server test --testPathPatterns="projects.test.ts|agents.test
 pnpm --filter @soat/server test          # full suite; only for cross-cutting changes
 ```
 
-`globalSetup` starts one Postgres, builds the schema into `soat_test_template`,
-and each file clones it in `beforeAll`. Never connect to the template. Without
-Docker, `TEST_DB_HOST` / `TEST_DB_PORT` / `TEST_DB_USERNAME` / `TEST_DB_PASSWORD`
+`globalSetup` starts one Postgres, builds the schema into a template named per
+run, and each file clones it in `beforeAll`. Never connect to the template.
+Without Docker, `TEST_DB_HOST` / `TEST_DB_PORT` / `TEST_DB_USERNAME` / `TEST_DB_PASSWORD`
 reuse a server whose account has `CREATEDB`.
 
 ## Location

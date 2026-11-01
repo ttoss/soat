@@ -12,7 +12,10 @@ import {
 } from './toolAssertion';
 import { buildContextHeaders } from './toolContext';
 import { fetchWithEgressGuard } from './toolEgress';
-import { resolveToolHeaderTemplates } from './toolTemplates';
+import {
+  resolveToolHeaderTemplates,
+  secretBearingHeaderNames,
+} from './toolTemplates';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
 const log = createDebug('soat:mcpTransport');
@@ -25,10 +28,15 @@ const log = createDebug('soat:mcpTransport');
  * of `lib/` off the network for MCP.
  */
 export type McpTransport = {
+  // As authored, `{{secret:}}` references kept: what errors and logs name.
   url: string;
-  // The `{{secret:}}` values resolved into `url`, by secret id.
+  // `url` with its references resolved: what is sent, and nothing else.
+  fetchUrl: string;
+  // The `{{secret:}}` values resolved into `fetchUrl`, by secret id.
   urlSecrets: ReadonlyMap<string, string>;
   headers: Record<string, string>;
+  // The `headers` whose template names a secret: never sent to another origin.
+  credentialHeaders: readonly string[];
   identity: ToolAssertionIdentity | null;
 };
 
@@ -64,9 +72,9 @@ export const openMcpTransport = async (args: {
   contextKeys?: string[] | null;
 }): Promise<McpTransport> => {
   const { projectId } = args.meter;
-  const { value: url, secrets: urlSecrets } = await resolveSecretRefsWithValues(
-    { value: args.mcp.url, projectId }
-  );
+  const { url } = args.mcp;
+  const { value: fetchUrl, secrets: urlSecrets } =
+    await resolveSecretRefsWithValues({ value: url, projectId });
   const resolved = await resolveToolHeaderTemplates({
     record: args.mcp.headers ?? undefined,
     projectId,
@@ -81,8 +89,16 @@ export const openMcpTransport = async (args: {
       contextKeys: args.contextKeys,
     }),
   });
+  const credentialHeaders = secretBearingHeaderNames(args.mcp.headers);
   if (!isToolAssertionConfigured()) {
-    return { url, urlSecrets, headers, identity: null };
+    return {
+      url,
+      fetchUrl,
+      urlSecrets,
+      headers,
+      credentialHeaders,
+      identity: null,
+    };
   }
   // Validated here so a bad name fails before the first request, not on it.
   toolAssertionHeaderName();
@@ -92,7 +108,7 @@ export const openMcpTransport = async (args: {
     identity.toolId,
     identity.projectId
   );
-  return { url, urlSecrets, headers, identity };
+  return { url, fetchUrl, urlSecrets, headers, credentialHeaders, identity };
 };
 
 /**
@@ -120,7 +136,7 @@ export const postMcp = (args: {
   const assertion = transport.identity
     ? toolAssertionHeaders({
         identity: transport.identity,
-        url: transport.url,
+        url: transport.fetchUrl,
         body: args.body,
       })
     : {};
@@ -128,17 +144,20 @@ export const postMcp = (args: {
     ? { ...withoutAssertionHeader(transport.headers), ...assertion }
     : transport.headers;
   return fetchWithEgressGuard(
-    transport.url,
+    transport.fetchUrl,
     {
       method: 'POST',
       headers,
       signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
       body: args.body,
     },
-    // Its `aud` is this URL, so another origin holding it could replay it here.
+    // The assertion's `aud` is this URL, so another origin could replay it here.
     {
       onRequest: args.onRequest,
-      credentialHeaders: Object.keys(assertion),
+      credentialHeaders: [
+        ...transport.credentialHeaders,
+        ...Object.keys(assertion),
+      ],
       secrets: transport.urlSecrets,
     }
   );

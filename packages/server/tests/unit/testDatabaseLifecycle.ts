@@ -8,6 +8,7 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import {
   createTestDatabase,
   dropTestDatabase,
+  readTemplateDatabase,
   readTestDatabaseConnection,
 } from './testDatabase';
 
@@ -29,12 +30,13 @@ export const installTestDatabase = (args?: {
   onReady?: (sequelize: Sequelize) => void;
 }) => {
   const connection = readTestDatabaseConnection();
+  const template = readTemplateDatabase();
   let sequelize: Sequelize | undefined;
   let database: string | undefined;
 
   beforeAll(async () => {
     try {
-      database = await createTestDatabase({ connection });
+      database = await createTestDatabase({ connection, template });
 
       const db = await initialize({
         models,

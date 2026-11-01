@@ -214,6 +214,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     defaultModel: body.default_model!,
     baseUrl: body.base_url,
     config: body.config,
+    isAllowed: ctx.authUser.isAllowed,
   });
 
   ctx.status = 201;
@@ -281,6 +282,7 @@ aiProvidersRouter.patch(
       defaultModel: body.default_model,
       baseUrl: body.base_url,
       config: body.config,
+      isAllowed: ctx.authUser.isAllowed,
     });
 
     ctx.body = updated && redactAiProviderSecrets(updated);

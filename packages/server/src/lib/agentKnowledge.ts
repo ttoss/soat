@@ -3,6 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
+import type { BindingTools } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import type { EmbeddingBilling } from './embedding';
 import { buildSrn } from './iam';
@@ -464,26 +465,33 @@ export const buildWriteMemoryTool = (args: {
   });
 };
 
+const KNOWLEDGE_BINDING_NAME = 'knowledge';
+
 /**
- * Attaches the `write_memory` tool to an agent's resolved tools when its
- * knowledge config names a write target. Lives here alongside the tool it
- * builds; called from the generation pipeline.
+ * The `write_memory` binding when the agent's knowledge config names a write
+ * target. It merges with the bound tools like any other binding, so a bound
+ * tool resolving to `write_memory` is offered beside it, never replaced.
  */
-export const buildKnowledgeTools = (args: {
+export const buildKnowledgeBindings = (args: {
   agentId: string;
   generationId: string;
   projectIds?: number[];
   typedAgent: TypedAgent;
-  resolvedTools: Record<string, unknown>;
-}): void => {
+}): BindingTools[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
-  if (knowledgeConfig?.writeMemoryStoreId) {
-    args.resolvedTools['write_memory'] = buildWriteMemoryTool({
-      writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
-      agentId: args.agentId,
-      generationId: args.generationId,
-      projectIds: args.projectIds,
-      boundaryPolicy: args.typedAgent.boundaryPolicy,
-    });
-  }
+  if (!knowledgeConfig?.writeMemoryStoreId) return [];
+  return [
+    {
+      bindingName: KNOWLEDGE_BINDING_NAME,
+      tools: {
+        write_memory: buildWriteMemoryTool({
+          writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
+          agentId: args.agentId,
+          generationId: args.generationId,
+          projectIds: args.projectIds,
+          boundaryPolicy: args.typedAgent.boundaryPolicy,
+        }),
+      },
+    },
+  ];
 };

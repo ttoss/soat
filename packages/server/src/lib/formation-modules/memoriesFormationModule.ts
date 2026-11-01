@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../../errors';
 import { lookupMemoryStoreInternalId } from '../formationLookups';
 import {
+  assertMemorySpendWithinQuota,
   assertMemoryStorageQuota,
   createMemory,
   deleteMemory,
@@ -36,6 +37,7 @@ export const memoriesFormationModule = defineFormationModule({
 
     const content = properties.content as string;
     await assertMemoryStorageQuota({ memoryStoreId, content });
+    await assertMemorySpendWithinQuota({ memoryStoreId });
 
     return createMemory({
       memoryStoreId,
@@ -66,12 +68,19 @@ export const memoriesFormationModule = defineFormationModule({
       );
     }
 
+    const content = toOptionalString(properties.content);
+    if (content !== undefined) {
+      const memoryStoreId = entry.memoryStoreId as number;
+      await assertMemoryStorageQuota({ memoryStoreId, content });
+      await assertMemorySpendWithinQuota({ memoryStoreId });
+    }
+
     // Through the lib rather than the row: a content change re-points the
     // memory at the store's shared row for the new text, which this module
     // must not reimplement.
     await updateMemory({
       id: physicalResourceId,
-      content: toOptionalString(properties.content),
+      content,
       tags:
         properties.tags === undefined
           ? undefined

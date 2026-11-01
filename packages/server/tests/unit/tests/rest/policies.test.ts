@@ -486,6 +486,48 @@ describe('Policies', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('returns 409 while a trigger names the policy, 204 once detached', async () => {
+      const client = authenticatedTestClient(adminToken);
+      const policyRes = await client.post('/api/v1/policies').send(sendDoc());
+      const policyId = policyRes.body.id;
+      const projectRes = await client
+        .post('/api/v1/projects')
+        .send({ name: 'policy-dependents' });
+      const orchestrationRes = await client
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectRes.body.id,
+          name: 'policy-dependents-orchestration',
+          nodes: [{ id: 'start', type: 'transform', expression: { var: '' } }],
+          edges: [],
+        });
+      const triggerRes = await client.post('/api/v1/triggers').send({
+        project_id: projectRes.body.id,
+        name: 'policy-dependents-trigger',
+        type: 'manual',
+        target_type: 'orchestration',
+        target_id: orchestrationRes.body.id,
+        policy_id: policyId,
+      });
+      expect(triggerRes.status).toBe(201);
+
+      const refused = await client.delete(`/api/v1/policies/${policyId}`);
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('POLICY_HAS_DEPENDENTS');
+      expect(refused.body.error.meta).toEqual({
+        triggers: 1,
+        sample: [triggerRes.body.id],
+      });
+
+      const detached = await client
+        .patch(`/api/v1/triggers/${triggerRes.body.id}`)
+        .send({ policy_id: null });
+      expect(detached.status).toBe(200);
+
+      const deleted = await client.delete(`/api/v1/policies/${policyId}`);
+      expect(deleted.status).toBe(204);
+    });
   });
 
   describe('PUT /api/v1/users/:userId/policies', () => {

@@ -16,7 +16,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
-import { getEmbeddings, projectEmbeddingBilling } from './embedding';
+import { embedForProject } from './embeddings';
 import {
   type DeciderScoring,
   runDeciderScorerCall,
@@ -133,11 +133,7 @@ const buildScorerRunners = (args: {
     // same one document ingestion uses), so the only thing bound here is the
     // project the scorer's embeddings are billed to.
     runEmbeddings: (embed: { texts: string[] }) => {
-      return getEmbeddings({
-        ...embed,
-        billing: projectEmbeddingBilling({ projectId: args.projectId }),
-        subject: null,
-      });
+      return embedForProject({ projectId: args.projectId, texts: embed.texts });
     },
     runDecider: (call: { scorer: Record<string, unknown>; input: unknown }) => {
       return runDeciderScorerCall({

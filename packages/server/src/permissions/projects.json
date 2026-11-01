@@ -19,7 +19,7 @@
     {
       "operationId": "updateProject",
       "action": "projects:UpdateProject",
-      "description": "Rename a project (admin only)"
+      "description": "Update a project's settings"
     },
     {
       "operationId": "deleteProject",

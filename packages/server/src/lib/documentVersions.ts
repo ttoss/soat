@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { findDocumentProjectId } from './documentLoaders';
 import { updateDocument } from './documents';
 import {
   documentVersionStore,
@@ -7,6 +8,8 @@ import {
 } from './documentVersionSnapshot';
 import { emitDocumentRestored, isWithdrawn } from './documentWithdrawal';
 import type { RequestPrincipal } from './principals';
+import { assertProjectSpendWithinQuota } from './quotaEnforcement';
+import { assertStorageQuota, contentBytes } from './quotaStorage';
 import {
   type ArchivedVersionRow,
   configNumber,
@@ -123,6 +126,11 @@ const documentVersionArchive = makeVersionArchive({
         `Document '${args.id}' has an archived version with no content.`
       );
     }
+
+    // A restore re-embeds and stores the archived text, like any content edit.
+    const projectId = await findDocumentProjectId({ id: args.id });
+    await assertStorageQuota({ projectId, addedBytes: contentBytes(content) });
+    await assertProjectSpendWithinQuota({ projectId });
 
     const document = await loadDocumentRef({ id: args.id });
     const restored = await updateDocument({

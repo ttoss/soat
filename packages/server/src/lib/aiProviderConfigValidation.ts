@@ -1,7 +1,7 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 
 import { DomainError } from '../errors';
-import { assertConfigCredentialsAreStrings } from './aiProviderConfigSecrets';
+import { assertNoConfigCredential } from './aiProviderConfigSecrets';
 import { assertTenantHttpUrl } from './tenantUrl';
 
 /**
@@ -73,7 +73,7 @@ export const assertAiProviderConfig = (args: {
   // so it is checked for shape and left to the request-time guard for the rest.
   if (args.baseUrl)
     assertTenantHttpUrl({ url: args.baseUrl, field: 'base_url' });
-  assertConfigCredentialsAreStrings(args.config);
+  assertNoConfigCredential({ config: args.config, code: 'VALIDATION_FAILED' });
 
   const keys = URL_CONFIG_KEYS[args.provider];
   if (!keys || !args.config) return;

@@ -124,10 +124,30 @@ describe('assertAiProviderConfig', () => {
     expect(() => {
       return assertAiProviderConfig({
         provider: 'bedrock',
-        config: { apiKey: 'ABSK-not/a/label', region: 'us-east-1' },
+        config: { modelFamily: 'not/a/label', region: 'us-east-1' },
       });
     }).not.toThrow();
   });
+
+  // The credential is the linked secret alone: a key left in `config` would be
+  // stored unencrypted, and dropping it silently would leave a `bedrock` or
+  // `vertex` record reaching for the deployment's credentials.
+  test.each(['bedrock', 'vertex', 'openai', 'anthropic'] as const)(
+    'refuses config.apiKey on a %s provider',
+    (provider) => {
+      expect(() => {
+        return assertAiProviderConfig({
+          provider,
+          config: { apiKey: 'sk-in-config' },
+        });
+      }).toThrow(
+        expect.objectContaining({
+          code: 'VALIDATION_FAILED',
+          meta: { field: 'config.apiKey' },
+        })
+      );
+    }
+  );
 
   test('accepts an absent config and an absent base_url', () => {
     expect(() => {

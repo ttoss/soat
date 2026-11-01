@@ -64,3 +64,10 @@ export const MAX_CONTENT_TYPE_GLOB_WILDCARDS = 4;
 
 /** Longest `content_type_glob` accepted, well past any real MIME type. */
 export const MAX_CONTENT_TYPE_GLOB_LENGTH = 255;
+
+/**
+ * A protocol answer from a host this server calls that is not a tool's
+ * payload: a model listing, a token exchange, a formation handler's reply.
+ * Sized past the largest real model listing, so it bounds only a hostile host.
+ */
+export const PROTOCOL_ANSWER_MAX_BYTES = 8 * 1024 * 1024;

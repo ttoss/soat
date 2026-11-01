@@ -190,6 +190,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     cron: body.cron,
     eventPattern: body.event_pattern,
     active: body.active,
+    isAllowed: ctx.authUser!.isAllowed,
   });
 
   ctx.status = 201;
@@ -305,6 +306,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     eventPattern: body.event_pattern,
     active: body.active,
     policyId: body.policy_id === null ? null : policyId,
+    isAllowed: ctx.authUser!.isAllowed,
   });
 
   ctx.body = updated;

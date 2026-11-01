@@ -138,12 +138,10 @@ const adjudicate = async (gateArgs: {
 /**
  * A call a human signed off on. Its presets are the values the proposal froze
  * into `frozenArguments`, never re-resolved from the resolving request's
- * `tool_context`, and a `builtin` action stays within the proposing agent's
- * `boundaryPolicy`.
+ * `tool_context`.
  */
 export type SignedOffCall = {
   frozenArguments: Record<string, unknown>;
-  boundaryPolicy: unknown;
 };
 
 /**
@@ -198,6 +196,11 @@ type CallResolvedToolArgs = {
   // Who the call's executions are metered against; a pipeline's steps inherit it.
   attribution: ToolCallAttribution;
   signedOff?: SignedOffCall;
+  /**
+   * The `boundary_policy` of the agent whose call this is. Every `builtin`
+   * action the call reaches is held to it, a pipeline's steps included.
+   */
+  boundaryPolicy?: unknown;
 };
 
 /**
@@ -221,6 +224,7 @@ const callPipelineStep = (args: {
     authHeader: pipeline.authHeader,
     remainingDepth: step.remainingDepth,
     toolContext: pipeline.toolContext,
+    boundaryPolicy: pipeline.boundaryPolicy,
     attribution,
   };
   if (step.tool) {

@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { emitTaskEvent } from './taskEvents';
+import { appendTaskHistory } from './taskHistory';
 import {
   type ActiveDispatch,
   computeStallDeadline,
@@ -224,8 +225,8 @@ const performMigrationTxn = async (args: {
     });
     await task.save({ transaction: t });
 
-    await db.TaskTransition.create(
-      {
+    await appendTaskHistory({
+      row: {
         taskId: task.id as number,
         fromState,
         toState: target.name,
@@ -238,8 +239,8 @@ const performMigrationTxn = async (args: {
         fromWorkflowVersion: fromVersion,
         toWorkflowVersion: a.toVersion,
       },
-      { transaction: t }
-    );
+      transaction: t,
+    });
     return { fromState, fromVersion };
   });
 };

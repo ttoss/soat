@@ -50,6 +50,7 @@ describe('Triggers', () => {
         'evaluations:RunEval',
         'evaluations:GetEval',
         'secrets:CreateSecret',
+        'secrets:UseSecret',
         'formations:CreateFormation',
       ],
       createOtherProject: true,

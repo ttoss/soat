@@ -87,7 +87,7 @@ A **tool ID** (`tool_k8x2f3np`) is used in [`tool_bindings`](./agents.md#tool-bi
 | `mcp`     | `{mcpToolName}`     | `create_issue`, `list_repos`                         |
 | `builtin` | `{name}_{action}`   | `platform_get-document`, `platform_search-knowledge` |
 
-For `builtin`, `name` is a prefix joined with `_` to each action. A name that more than one of an agent's bindings resolves to is offered once per binding as `{name}_{that name}` (`github_search` and `jira_search` for two `mcp` servers that both list `search`), each running with its own binding's `preset_parameters`; a `_2`, `_3`… suffix follows when that is taken too. Names no other binding resolves are left as they are.
+For `builtin`, `name` is a prefix joined with `_` to each action. A name that more than one of an agent's bindings resolves to is offered once per binding as `{name}_{that name}` (`github_search` and `jira_search` for two `mcp` servers that both list `search`), each running with its own binding's `preset_parameters`; a `_2`, `_3`… suffix follows when that is taken too. Names no other binding resolves are left as they are. The `write_memory` tool from [`knowledge_config.write_memory_store_id`](./agents.md#knowledge-config) counts as a binding named `knowledge`: beside a bound tool named `write_memory`, the model sees `knowledge_write_memory` and `write_memory_write_memory`.
 
 ### http
 
@@ -204,7 +204,7 @@ Credential values take [secret references](./secrets.md#secret-references-secret
 - **Signing happens last**, over the final method, URL, headers and body. Only SOAT-controlled headers are signed (`host`, `content-type`, `x-amz-*`); [context headers](#context-headers-x-soat-context-) and `Idempotency-Key` go unsigned (AWS permits it).
 - **`aws_sigv4` with `body_mode: "multipart"`** is `400 VALIDATION_FAILED` at create/update: the body bytes are unknown at signing time.
 - **Path encoding follows the service**: segments are URI-encoded twice except for `s3` (once), per the SigV4 spec.
-- **GCP tokens are cached** per service account, token endpoint and scope set, refreshed shortly before expiry.
+- **GCP tokens are cached** per service account, token endpoint and scope set, refreshed shortly before expiry. A token response over 8 MiB is `502 TOOL_AUTH_FAILED`.
 - **`service` and `region` are signed**, not just routing; a mismatch is rejected by the target.
 - **Credential failures are `502 TOOL_AUTH_FAILED`** (distinct from `502 TOOL_HTTP_ERROR`, the target rejecting the call); a token endpoint's status and body land in error `meta` as `upstream_status` and `upstream_body`.
 
@@ -307,7 +307,9 @@ Discovery follows `nextCursor` until the catalogue is exhausted, so a paginated 
 
 A call's `structured_content` is the result when the server sends one; otherwise the `content` blocks, text blocks joined and parsed as JSON when they are JSON, and handed over as the block array when any block is not text (an image is never flattened away).
 
-A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
+A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`, a `{{secret:}}` value in the URL shown as its reference. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
+
+An answer over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is refused while it streams: a listing resolves nothing, a call is `502 TOOL_RESPONSE_TOO_LARGE`.
 
 #### Scoping an MCP tool to a subset of actions
 
@@ -451,7 +453,7 @@ A literal stored before the rule reads back as `{"no_echo": true}` wherever the 
 
 An `http` or `mcp` tool's target is bounded by the deployment, not the tool definition. Default: any publicly routable address. Loopback, `10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata), CGNAT and IPv6 ULA fail with `403 TOOL_EGRESS_BLOCKED`, the refused address in `meta.tool_address` and the URL in `meta.tool_url`, a `{{secret:}}` value in it shown as its reference.
 
-The resolved address is checked on the first request and every redirect hop, and again on the address the connection dials, so a hostname that resolves differently at connect is refused too; credential headers (`Authorization`, `Cookie`, and on an `http` tool every `execute.headers` entry whose value names a `{{secret:...}}`) are dropped when a redirect changes origin. A public hostname resolving to `169.254.169.254` and a `302 Location: http://169.254.169.254/…` are both refused.
+The resolved address is checked on the first request and every redirect hop, and again on the address the connection dials, so a hostname that resolves differently at connect is refused too; credential headers (`Authorization`, `Cookie`, `Proxy-Authorization`, the `aws_sigv4` session token `X-Amz-Security-Token`, and every `execute.headers` or `mcp.headers` entry whose value names a `{{secret:...}}`) are dropped when a redirect changes origin. A public hostname resolving to `169.254.169.254` and a `302 Location: http://169.254.169.254/…` are both refused.
 
 The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), deployment-wide, not per project. For SOAT's own API use a [`builtin` tool](#builtin): in-process, under the caller's permissions.
 
@@ -495,7 +497,7 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 - A target neither publicly routable nor in `TOOL_EGRESS_ALLOWED_HOSTS` is `403 TOOL_EGRESS_BLOCKED` before any connection is opened — [Where a Tool May Reach](#where-a-tool-may-reach-egress).
 - A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries `tool_status_code`, `tool_response_body` (cut to [`TOOL_RESPONSE_MAX_BYTES`](#configuration)), `tool_url` and `tool_method`.
 - A 2xx body over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is `502 TOOL_RESPONSE_TOO_LARGE`, in either `response_mode`, refused while it streams.
-- A target that never answers (the host does not resolve, refuses or drops the connection, or times out) is `502 TOOL_UNREACHABLE`; the message names the network failure and error `meta` carries `tool_url` and `tool_method`. The same holds for an `mcp` tool's server.
+- A target that never answers (the host does not resolve, refuses or drops the connection, or times out) is `502 TOOL_UNREACHABLE`; the message names the network failure and error `meta` carries `tool_url` and `tool_method`. The same holds for an `mcp` tool's server, whose `tool_url` shows a `{{secret:}}` value as its reference.
 - [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`.
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
@@ -543,7 +545,7 @@ Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-t
 
 | Environment Variable         | Required | Description                                                                                                                                                                                                                   |
 | ---------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TOOL_RESPONSE_MAX_BYTES`    | No       | Ceiling on an http tool's response body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger 2xx body is `502 TOOL_RESPONSE_TOO_LARGE`; a larger non-2xx body is cut to it. |
+| `TOOL_RESPONSE_MAX_BYTES`    | No       | Ceiling on an http or mcp tool's response body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger 2xx body is `502 TOOL_RESPONSE_TOO_LARGE`; a larger non-2xx body is cut to it. |
 | `TOOL_ASSERTION_PRIVATE_KEY` | No       | PEM (PKCS #8) Ed25519 private key that signs [tool assertions](#tool-assertions); `\n` escapes are accepted. Unset sends none. Any other key type fails the call before it is sent.                                           |
 
 ## Examples

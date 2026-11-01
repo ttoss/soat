@@ -96,7 +96,7 @@ Key creation is self-service, so the binding also guards the credential being wr
 | [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) moving a `proj_A` key to `proj_B`, or clearing its scope | `403` — both ends of a re-scope are checked |
 | [`GET /api-keys`](/docs/api/api-keys/list-api-keys) (list) | Returns the caller's own keys in `proj_A`, or every key in `proj_A` when the credential holds `api-keys:ListApiKeys` on the project |
 
-Otherwise a key confined to `proj_A` could mint an unscoped key for the same owner and operate anywhere. Rotation still works within the key's own project.
+Otherwise a key confined to `proj_A` could mint an unscoped key for the same owner and operate anywhere. Rotation still works within the key's own project. A project-scoped token writes no key at all; see [A project-scoped token writes no key](#a-project-scoped-token-writes-no-key).
 
 Owner-or-admin applies on top: the project check decides *which* keys are visible, the owner check whether the caller may act on them. The listing is narrowed to the caller's own keys by default (confinement to a project is not authority over it); a credential holding `api-keys:ListApiKeys` on the project reads the whole inventory.
 
@@ -122,6 +122,10 @@ Key management is self-service, so the boundary also guards the key being writte
 | [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) with no `policy_ids` | Leaves the stored list unchanged |
 
 `meta` carries `boundary_policy_ids` and `requested_policy_ids`. Otherwise a narrowed key could mint a policy-less key for the same owner and act with the owner's full permissions. An `api_key` [formation](./formations.md) resource follows the same table.
+
+### A project-scoped token writes no key
+
+An OAuth access token, a trigger run-as token and a run token carry their boundary inside the token (the consented scope, the trigger's policy, the starting key's policies), and a key cannot carry it. Under any of them, [`POST /api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` [formation](./formations.md) resource return `403 API_KEY_SCOPED_TOKEN`. Create and update keys with a user token or an API key; reading, listing and deleting keys are unaffected.
 
 ### Revoking a Key
 

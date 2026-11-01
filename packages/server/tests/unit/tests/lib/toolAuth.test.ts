@@ -3,6 +3,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { DomainError } from '../../../../src/errors';
+import { PROTOCOL_ANSWER_MAX_BYTES } from '../../../../src/lib/requestBounds';
 import {
   applyHttpToolAuth,
   mergeAuthHeaders,
@@ -742,6 +743,21 @@ describe('toolAuth', () => {
       expect(JSON.stringify(caught)).not.toContain(
         'secret-from-an-internal-service'
       );
+    });
+
+    test('refuses a token response over PROTOCOL_ANSWER_MAX_BYTES', async () => {
+      tokenResponse = {
+        status: 200,
+        body: {
+          access_token: 'ya29.big',
+          padding: 'x'.repeat(PROTOCOL_ANSWER_MAX_BYTES),
+        },
+      };
+
+      await expectAuthFailure({
+        credentials: credentialsFor('big@p.iam.gserviceaccount.com'),
+        message: `exceeds ${PROTOCOL_ANSWER_MAX_BYTES} bytes`,
+      });
     });
 
     test('rejects a token response with no access_token', async () => {

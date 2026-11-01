@@ -213,6 +213,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   }
 
   const boundedPolicyIds = await boundKeyPolicyIds({
+    scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
     boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
     requestedPolicyPublicIds: policyIds,
     requestedPolicyIds: policyResult.ids,
@@ -317,6 +318,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   const boundedPolicyIds = await boundKeyPolicyIds({
+    scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
     boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
     requestedPolicyPublicIds: policyIds,
     requestedPolicyIds: policyResult.ids,

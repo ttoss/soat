@@ -5,10 +5,12 @@ import { findModelRoutesReferencingProvider } from 'src/lib/modelRouteReferences
 import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { decryptValue } from 'src/lib/secrets';
+import type { IsAllowedFn } from 'src/middleware/authProjectResolvers';
 
 import { assertLinkedSecretUsable } from './agentModel';
 import { assertAiProviderConfig } from './aiProviderConfigValidation';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
+import { assertSecretUseAllowed } from './secretUse';
 
 const getAiProviderIncludes = () => {
   return [
@@ -89,14 +91,34 @@ const readLinkedSecretValue = async (
 const assertProviderCredential = async (args: {
   provider: AiProviderSlug;
   secretId?: number | null;
-  config?: Record<string, unknown> | null;
 }) => {
   assertAiProviderCarriesCredential(args);
   if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
   assertLinkedSecretUsable({
     provider: args.provider,
     secretValue: await readLinkedSecretValue(args.secretId),
-    config: args.config,
+  });
+};
+
+/**
+ * A `base_url` the caller chose receives the linked secret as its credential,
+ * so linking the two needs `secrets:UseSecret` on the secret.
+ */
+const assertEndpointSecretUse = async (args: {
+  secretId?: number | null;
+  baseUrl?: string | null;
+  projectId: number;
+  isAllowed: IsAllowedFn;
+}): Promise<void> => {
+  if (!args.secretId || !args.baseUrl) return;
+  const secret = await db.Secret.findByPk(args.secretId, {
+    attributes: ['publicId'],
+  });
+  if (!secret) return;
+  await assertSecretUseAllowed({
+    secretIds: [secret.publicId],
+    projectId: args.projectId,
+    isAllowed: args.isAllowed,
   });
 };
 
@@ -108,7 +130,9 @@ export const createAiProvider = async (args: {
   defaultModel: string;
   baseUrl?: string;
   config?: Record<string, unknown>;
+  isAllowed: IsAllowedFn;
 }) => {
+  await assertEndpointSecretUse(args);
   assertAiProviderConfig({
     provider: args.provider,
     baseUrl: args.baseUrl,
@@ -117,7 +141,6 @@ export const createAiProvider = async (args: {
   await assertProviderCredential({
     provider: args.provider,
     secretId: args.secretId,
-    config: args.config,
   });
 
   const instance = await db.AiProvider.create({
@@ -140,6 +163,7 @@ export const updateAiProvider = async (args: {
   defaultModel?: string;
   baseUrl?: string | null;
   config?: Record<string, unknown> | null;
+  isAllowed: IsAllowedFn;
 }) => {
   const instance = await aiProviders.findByPublicId({ id: args.id });
   if (!instance) return null;
@@ -152,6 +176,15 @@ export const updateAiProvider = async (args: {
   if (args.config !== undefined) instance.config = args.config;
   if (args.secretId !== undefined) instance.secretId = args.secretId;
 
+  if (args.secretId !== undefined || args.baseUrl !== undefined) {
+    await assertEndpointSecretUse({
+      secretId: instance.secretId,
+      baseUrl: instance.baseUrl,
+      projectId: instance.projectId,
+      isAllowed: args.isAllowed,
+    });
+  }
+
   // Read off the instance rather than off `args`: an update that changes only
   // `config` still has to be checked against the provider the record already
   // is, and one that changes only `provider` against the config it already has.
@@ -163,7 +196,6 @@ export const updateAiProvider = async (args: {
   await assertProviderCredential({
     provider: instance.provider,
     secretId: instance.secretId,
-    config: instance.config,
   });
 
   await instance.save();

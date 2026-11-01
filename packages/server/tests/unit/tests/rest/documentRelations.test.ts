@@ -225,19 +225,25 @@ describe('Document relations', () => {
           .query(query);
       };
 
+      const ids = (body: { data: Array<{ to_document_id: string }> }) => {
+        return body.data.map((row) => {
+          return row.to_document_id;
+        });
+      };
+
       test('the default page carries every edge and the envelope', async () => {
         const response = await list();
 
         expect(response.status).toBe(200);
         expect(response.body.next_cursor).toBeNull();
-        expect(
-          response.body.data.map((r: { to_document_id: string }) => {
-            return r.to_document_id;
-          })
-        ).toEqual(targets);
+        expect([...ids(response.body)].sort()).toEqual([...targets].sort());
       });
 
-      test('an explicit page answers that slice, oldest first', async () => {
+      // Edges created in one millisecond tie on `createdAt` and fall back to
+      // the random `publicId` tiebreak, so a page's slice is fixed by the
+      // default page's order, not by creation order.
+      test('an explicit page answers that slice of the default order', async () => {
+        const all = await list();
         const first = await list({ limit: 1 });
         const response = await list({
           limit: 1,
@@ -246,11 +252,12 @@ describe('Document relations', () => {
 
         expect(response.status).toBe(200);
         expect(typeof response.body.next_cursor).toBe('string');
-        expect(response.body.data).toHaveLength(1);
-        expect(response.body.data[0].to_document_id).toBe(targets[1]);
+        expect(ids(first.body)).toEqual(ids(all.body).slice(0, 1));
+        expect(ids(response.body)).toEqual(ids(all.body).slice(1, 2));
       });
 
       test('the last page holds the remainder', async () => {
+        const all = await list();
         const first = await list({ limit: 2 });
         const response = await list({
           limit: 2,
@@ -259,8 +266,8 @@ describe('Document relations', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.next_cursor).toBeNull();
-        expect(response.body.data).toHaveLength(1);
-        expect(response.body.data[0].to_document_id).toBe(targets[2]);
+        expect(ids(first.body)).toEqual(ids(all.body).slice(0, 2));
+        expect(ids(response.body)).toEqual(ids(all.body).slice(2));
       });
 
       test('a limit above the ceiling is clamped to it', async () => {

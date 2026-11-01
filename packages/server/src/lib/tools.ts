@@ -15,6 +15,7 @@ import { assertProjectAcceptsWork } from './projectPause';
 import { makeResourceAccessor } from './resourceAccessor';
 import { type ReferenceReach, toolReferences } from './resourceReferences';
 import { assertSecretRefsExist } from './secrets';
+import { assertToolSecretUseAllowed } from './secretUse';
 import { validateSoatActions } from './soatActionValidation';
 import type { ToolCallGuardrailMode } from './toolCallGuardrail';
 import { assertValidToolContextAllowlist } from './toolContext';
@@ -25,7 +26,6 @@ import {
   type SignedOffCall,
 } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
-import { assertToolSecretUseAllowed } from './toolSecretUse';
 import { assertValidToolTemplateTokens } from './toolTemplates';
 import {
   assertToolTypeSupported,
@@ -382,6 +382,8 @@ export const callTool = async (args: {
   attribution: ToolCallAttribution;
   /** See {@link SignedOffCall}. */
   signedOff?: SignedOffCall;
+  /** The calling agent's `boundary_policy`, held over every `builtin` action. */
+  boundaryPolicy?: unknown;
 }): Promise<unknown> => {
   const referenced = await toolReferences.find({
     id: args.id,
@@ -407,6 +409,7 @@ export const callTool = async (args: {
     toolContext: args.toolContext,
     attribution: args.attribution,
     signedOff: args.signedOff,
+    boundaryPolicy: args.boundaryPolicy,
   });
 };
 

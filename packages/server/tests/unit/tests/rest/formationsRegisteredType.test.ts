@@ -5,6 +5,7 @@ import {
   registerFormationResourceTypes,
   unregisterFormationResourceTypes,
 } from 'src/lib/formationsRegistry';
+import { PROTOCOL_ANSWER_MAX_BYTES } from 'src/lib/requestBounds';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
@@ -348,6 +349,25 @@ describe('POST /api/v1/formations — operator-registered type', () => {
     expect(res.body.status).toBe('failed');
     expect(res.body.error.message).toMatch(
       /^Formation handler for 'test_channel' failed on create/
+    );
+  });
+
+  test('a 2xx body over PROTOCOL_ANSWER_MAX_BYTES fails the deploy', async () => {
+    handler.replies.create = {
+      status: 200,
+      body: {
+        physical_resource_id: 'ext_big',
+        padding: 'x'.repeat(PROTOCOL_ANSWER_MAX_BYTES),
+      },
+    };
+
+    const res = await createFormation(
+      channelTemplate({ name: 'A', kind: 'whatsapp' })
+    );
+
+    expect(res.body.status).toBe('failed');
+    expect(res.body.error.message).toBe(
+      `Formation handler for 'test_channel' failed on create: response body exceeds ${PROTOCOL_ANSWER_MAX_BYTES} bytes`
     );
   });
 

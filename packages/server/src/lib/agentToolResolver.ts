@@ -19,7 +19,7 @@ import {
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
-import { type BindingTools, mergeBindingTools } from './agentToolNames';
+import type { BindingTools } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
@@ -1011,6 +1011,7 @@ const resolvePipelineTool = (
     authHeader?: string;
     remainingDepth?: number;
     attribution: ToolCallAttribution;
+    boundaryPolicy?: unknown;
   }
 ): Tool => {
   const parameters =
@@ -1041,6 +1042,7 @@ const resolvePipelineTool = (
         authHeader: args.authHeader,
         remainingDepth: args.remainingDepth,
         attribution: args.attribution,
+        boundaryPolicy: args.boundaryPolicy,
       });
     },
   });
@@ -1112,6 +1114,7 @@ const resolveToolByType = async (
           authHeader: args.authHeader,
           remainingDepth: args.remainingDepth,
           attribution: args.attribution,
+          boundaryPolicy: args.boundaryPolicy,
         }),
       };
     case 'mcp':
@@ -1307,8 +1310,8 @@ const admitSharedBinding = (args: {
 };
 
 // Resolves one persisted-tool binding into its (output-mapped, optionally
-// guardrail-gated) AI-SDK tools. Extracted so `resolveAgentTools` stays within
-// its complexity budget.
+// guardrail-gated) AI-SDK tools. Extracted so `resolveAgentToolBindings`
+// stays within its complexity budget.
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
   projectId: number;
@@ -1406,7 +1409,7 @@ const resolveReferenceBinding = async (args: {
   return { bindingName: typedTool.name, tools: gated };
 };
 
-export const resolveAgentTools = async (args: {
+export const resolveAgentToolBindings = async (args: {
   toolIds: string[];
   tools: InlineToolDefinition[];
   /** The agent's project: every binding resolves in it. */
@@ -1442,7 +1445,7 @@ export const resolveAgentTools = async (args: {
   unavailable?: UnavailableToolSink;
   // Who the turn's tool executions are metered against.
   attribution: ToolCallAttribution;
-}): Promise<Record<string, Tool>> => {
+}): Promise<BindingTools[]> => {
   const bindings: BindingTools[] = [];
 
   for (const toolPublicId of args.toolIds) {
@@ -1479,5 +1482,5 @@ export const resolveAgentTools = async (args: {
     bindings.push({ bindingName: definition.name, tools: ephemeralTools });
   }
 
-  return mergeBindingTools({ bindings });
+  return bindings;
 };

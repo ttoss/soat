@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { type Page, pageOf } from './pagination';
+import { parseActiveRelease } from './releaseAssignment';
 import { shares } from './shares';
 
 const log = createDebug('soat:shares');
@@ -12,6 +13,7 @@ export type ShareReference = {
   type:
     | 'agent'
     | 'tool'
+    | 'guardrail'
     | 'decider'
     | 'ingestion_rule'
     | 'orchestration'
@@ -26,21 +28,131 @@ export type ShareReference = {
 type Where = ReturnType<typeof db.sequelize.where>;
 type Condition = Where | Record<string, unknown>;
 
+type Json =
+  ReturnType<typeof db.sequelize.col> | ReturnType<typeof db.sequelize.fn>;
+
 // A public id is only ever stored as a JSON string, so its quoted form found in
-// the column's text is the id itself and never a prefix of another.
-const jsonNames = (columns: string[], ids: string[]): Condition[] => {
-  return columns.flatMap((column) => {
+// the JSON's text is the id itself and never a prefix of another.
+const textNames = (values: Json[], ids: string[]): Condition[] => {
+  return values.flatMap((value) => {
     return ids.map((id) => {
       return db.sequelize.where(
         db.sequelize.fn(
           'strpos',
-          db.sequelize.cast(db.sequelize.col(column), 'text'),
+          db.sequelize.cast(value, 'text'),
           JSON.stringify(id)
         ),
         Op.gt,
         0
       );
     });
+  });
+};
+
+const jsonNames = (columns: string[], ids: string[]): Condition[] => {
+  return textNames(
+    columns.map((column) => {
+      return db.sequelize.col(column);
+    }),
+    ids
+  );
+};
+
+/** Where an archived `config` names an id under one of `keys`. */
+const configNames = (keys: string[], ids: string[]): Condition[] => {
+  return textNames(
+    keys.map((key) => {
+      return db.sequelize.fn(
+        'jsonb_extract_path',
+        db.sequelize.col('config'),
+        key
+      );
+    }),
+    ids
+  );
+};
+
+// The agent's columns and its archived config's keys share these names.
+const AGENT_NAMING_FIELDS = [
+  'tool_bindings',
+  'active_tool_ids',
+  'step_rules',
+  'guardrail_ids',
+];
+
+/**
+ * Agents whose release serves an archived version naming an id: while a
+ * release is set, generations run those versions, never the live row.
+ */
+const servedAgentRowIds = async (args: {
+  projectId: number;
+  ids: string[];
+}): Promise<number[]> => {
+  const released = await db.Agent.findAll({
+    where: { projectId: args.projectId, activeRelease: { [Op.ne]: null } },
+    attributes: ['id', 'activeRelease'],
+  });
+  const served = released.flatMap((agent) => {
+    const release = parseActiveRelease(agent.activeRelease);
+    if (!release) return [];
+    return [
+      {
+        agentId: agent.id,
+        version: [release.stable_version, release.canary_version],
+      },
+    ];
+  });
+  if (served.length === 0) return [];
+  const versions = await db.AgentVersion.findAll({
+    where: {
+      [Op.and]: [
+        { [Op.or]: served },
+        { [Op.or]: configNames(AGENT_NAMING_FIELDS, args.ids) },
+      ],
+    },
+    attributes: ['agentId'],
+  });
+  return versions.map((version) => {
+    return version.agentId;
+  });
+};
+
+/**
+ * Workflows with an open task pinned to an archived version naming an id: the
+ * task transitions on that version's machine, never the live row.
+ */
+const pinnedWorkflowRowIds = async (args: {
+  projectId: number;
+  ids: string[];
+}): Promise<number[]> => {
+  const pins = await db.Task.findAll({
+    where: {
+      projectId: args.projectId,
+      status: 'open',
+      workflowVersion: { [Op.ne]: null },
+    },
+    attributes: ['workflowId', 'workflowVersion'],
+    group: ['workflowId', 'workflowVersion'],
+  });
+  if (pins.length === 0) return [];
+  const versions = await db.WorkflowVersion.findAll({
+    where: {
+      [Op.and]: [
+        {
+          [Op.or]: pins.map((pin) => {
+            return {
+              workflowId: pin.workflowId,
+              version: pin.workflowVersion,
+            };
+          }),
+        },
+        { [Op.or]: configNames(['states'], args.ids) },
+      ],
+    },
+    attributes: ['workflowId'],
+  });
+  return versions.map((version) => {
+    return version.workflowId;
   });
 };
 
@@ -65,7 +177,10 @@ type Holder = {
   type: ShareReference['type'];
   find: (where: HolderWhere) => Promise<Row[]>;
   /** Where a row of this type names something in the frontier. */
-  names: (frontier: Frontier) => Condition[];
+  names: (
+    frontier: Frontier,
+    projectId: number
+  ) => Condition[] | Promise<Condition[]>;
 };
 
 /**
@@ -78,8 +193,11 @@ const HOLDERS: Holder[] = [
     find: (where) => {
       return db.Agent.findAll({ where, ...ROW });
     },
-    names: ({ ids }) => {
-      return jsonNames(['tool_bindings', 'active_tool_ids', 'step_rules'], ids);
+    names: async ({ ids }, projectId) => {
+      return [
+        ...jsonNames(AGENT_NAMING_FIELDS, ids),
+        ...rowIdIn('id', await servedAgentRowIds({ projectId, ids })),
+      ];
     },
   },
   {
@@ -88,7 +206,16 @@ const HOLDERS: Holder[] = [
       return db.Tool.findAll({ where, ...ROW });
     },
     names: ({ ids }) => {
-      return jsonNames(['pipeline'], ids);
+      return jsonNames(['pipeline', 'preset_parameters', 'guardrail_ids'], ids);
+    },
+  },
+  {
+    type: 'guardrail',
+    find: (where) => {
+      return db.Guardrail.findAll({ where, ...ROW });
+    },
+    names: ({ ids }) => {
+      return [{ contextToolId: ids }];
     },
   },
   {
@@ -126,8 +253,11 @@ const HOLDERS: Holder[] = [
     find: (where) => {
       return db.Workflow.findAll({ where, ...ROW });
     },
-    names: ({ ids }) => {
-      return jsonNames(['states'], ids);
+    names: async ({ ids }, projectId) => {
+      return [
+        ...jsonNames(['states'], ids),
+        ...rowIdIn('id', await pinnedWorkflowRowIds({ projectId, ids })),
+      ];
     },
   },
   {
@@ -176,7 +306,7 @@ const findNaming = async (args: {
   projectId: number;
   frontier: Frontier;
 }): Promise<Row[]> => {
-  const names = args.holder.names(args.frontier);
+  const names = await args.holder.names(args.frontier, args.projectId);
   if (names.length === 0) return [];
   return args.holder.find({ projectId: args.projectId, [Op.or]: names });
 };
