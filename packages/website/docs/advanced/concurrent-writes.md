@@ -1,5 +1,5 @@
 ---
-description: "Optimistic concurrency on versioned resources: expected_version or If-Match refuses a stale write, and writes to one resource are serialized."
+description: 'Optimistic concurrency on versioned resources: expected_version or If-Match refuses a stale write, and writes to one resource are serialized.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -35,7 +35,10 @@ soat patch-agent --agent-id agent_01 --expected-version 3 --model claude-sonnet-
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.agents.patchAgent({
   path: { agent_id: 'agent_01' },
@@ -60,6 +63,7 @@ curl -X PATCH "$SOAT_URL/api/v1/agents/agent_01" \
 Or as an HTTP entity tag, which is the same precondition:
 
 {/* single-client: the CLI cannot send an If-Match header */}
+
 ```bash
 curl -X PATCH "$SOAT_URL/api/v1/agents/agent_01" \
   -H "Authorization: Bearer $SOAT_API_KEY" \
@@ -68,10 +72,10 @@ curl -X PATCH "$SOAT_URL/api/v1/agents/agent_01" \
   -d '{"model": "claude-sonnet-5"}'
 ```
 
-| Form | Where | Notes |
-| --- | --- | --- |
-| `expected_version` | request body | An integer ≥ 1. Declared in the spec, so the SDK and CLI carry it. |
-| `If-Match` | request header | `3` or `"3"`. `*` states no precondition beyond the resource existing. |
+| Form               | Where          | Notes                                                                  |
+| ------------------ | -------------- | ---------------------------------------------------------------------- |
+| `expected_version` | request body   | An integer ≥ 1. Declared in the spec, so the SDK and CLI carry it.     |
+| `If-Match`         | request header | `3` or `"3"`. `*` states no precondition beyond the resource existing. |
 
 Sending both with different versions is `400 VALIDATION_FAILED`: they are one precondition, so a disagreement is a contradiction rather than a precedence question.
 

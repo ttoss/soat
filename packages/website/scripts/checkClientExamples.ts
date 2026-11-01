@@ -92,6 +92,15 @@ const enclosingClientTab = (stack: TabsFrame[]): string | undefined => {
   return undefined;
 };
 
+/** The nearest non-blank line above a fence; Prettier pads the marker with a blank line. */
+const markerLine = (args: { fenceIndex: number; lines: string[] }): string => {
+  for (let i = args.fenceIndex - 1; i >= 0; i -= 1) {
+    const line = args.lines[i] ?? '';
+    if (line.trim() !== '') return line;
+  }
+  return '';
+};
+
 type Fence = {
   language: string;
   line: number;
@@ -238,7 +247,9 @@ export const checkSource = (args: {
       state.openFence = {
         language: fence[1] ?? '',
         line: index + 1,
-        singleClient: SINGLE_CLIENT.test(lines[index - 1] ?? ''),
+        singleClient: SINGLE_CLIENT.test(
+          markerLine({ lines, fenceIndex: index })
+        ),
         text: [],
       };
     } else if (state.openFence) {
