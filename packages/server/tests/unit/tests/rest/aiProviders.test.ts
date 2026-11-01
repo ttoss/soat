@@ -257,29 +257,6 @@ describe('AI Providers', () => {
       }
     );
 
-    // `config.apiKey` is the other credential a record can carry, so dropping
-    // it leaves the record reaching for the deployment's.
-    test('refuses an update that drops the only credential', async () => {
-      const created = await authenticatedTestClient(userToken)
-        .post('/api/v1/ai-providers')
-        .send({
-          project_id: projectId,
-          name: 'Bedrock Config Key',
-          provider: 'bedrock',
-          default_model: 'model-x',
-          config: { apiKey: 'ABSKexample', region: 'us-east-1' },
-        });
-      expect(created.status).toBe(201);
-
-      const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/ai-providers/${created.body.id}`)
-        .send({ config: { region: 'us-east-1' } });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.meta.field).toBe('secret_id');
-    });
-
     // The rule is keyed on the provider, so switching an existing record onto
     // one of the two slugs is the same door as creating it there.
     test('refuses an update that moves a credential-less record onto bedrock', async () => {

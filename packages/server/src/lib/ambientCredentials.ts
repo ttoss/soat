@@ -80,7 +80,6 @@ export const assertAmbientCredentialsAllowed = (args: {
 export const assertAiProviderCarriesCredential = (args: {
   provider: AiProviderSlug;
   secretId?: number | null;
-  config?: Record<string, unknown> | null;
 }): void => {
   // A credential-less `anthropic` record is accepted so a secret can be linked
   // after create; it is refused only where it would sign.
@@ -88,9 +87,6 @@ export const assertAiProviderCarriesCredential = (args: {
     return;
   }
   if (args.secretId) return;
-  // Both slugs accept `config.apiKey` as a credential fallback for a record
-  // that links no secret, so one is a credential the record carries.
-  if (args.config?.apiKey) return;
   if (ambientCredentialsAllowed()) return;
 
   throw new DomainError(

@@ -279,14 +279,12 @@ when the `ANTHROPIC_*` variables above are set.
 Unless this is `true`, a tenant-written provider record must carry its own
 credential:
 
-- `400 VALIDATION_FAILED` on create or update with neither a linked secret nor a
-  `config.apiKey` (`bedrock` and `vertex`; an `anthropic` record is checked only
-  at use);
+- `400 VALIDATION_FAILED` on create or update with no linked secret (`bedrock`
+  and `vertex`; an `anthropic` record is checked only at use);
 - `400 AI_PROVIDER_MISCONFIGURED` when such a record generates or lists models,
   so one that reached the table another way fails closed.
 
-The fallback applies only to a record that links no secret and sets no
-`config.apiKey`. A record whose linked secret holds no usable credential is
+The fallback applies only to a record that links no secret. A record whose linked secret holds no usable credential is
 `400 AI_PROVIDER_MISCONFIGURED` at write and at use, whatever this is set to.
 
 Set `true` only on a **single-tenant** deployment (an EC2 instance profile or

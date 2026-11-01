@@ -116,22 +116,6 @@ describe('assertAiProviderCarriesCredential', () => {
     }
   );
 
-  // `config.apiKey` is a documented credential fallback for both providers, so
-  // a record carrying one is not reaching for the deployment's.
-  test.each(['bedrock', 'vertex'] as const)(
-    'accepts a %s record carrying config.apiKey',
-    (provider) => {
-      withFlag(undefined, () => {
-        expect(() => {
-          return assertAiProviderCarriesCredential({
-            provider,
-            config: { apiKey: 'ABSKexample' },
-          });
-        }).not.toThrow();
-      });
-    }
-  );
-
   test('accepts a credential-less record once the operator opted in', () => {
     withFlag('true', () => {
       expect(() => {

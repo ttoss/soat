@@ -82,7 +82,7 @@ paths:
                               description: Custom base URL for the provider. Absent when the record sets none.
                             config:
                               type: object
-                              description: 'Additional provider-specific configuration. Absent when the record sets none. A `config.apiKey` reads as `{"no_echo": true}`.'
+                              description: 'Additional provider-specific configuration. Absent when the record sets none. Never carries a credential.'
                             project_id:
                               x-soat-ref: projects
                               type: string
@@ -121,8 +121,10 @@ paths:
       description: |
         Creates a new LLM provider configuration.
 
-        A `bedrock` or `vertex` record must carry a credential of its own — a
-        linked `secret_id`, or an `apiKey` in `config`. Without one the provider
+        A provider's credential is its linked `secret_id`; `config.apiKey` is
+        refused with `400 VALIDATION_FAILED`.
+
+        A `bedrock` or `vertex` record must link one. Without it the provider
         SDK signs with the server's own credentials (the AWS default credential
         chain, Google Application Default Credentials), which is refused with
         `400 VALIDATION_FAILED` unless the deployment allows it.
@@ -174,14 +176,14 @@ paths:
                 secret_id:
                   x-soat-ref: secrets
                   type: string
-                  description: Secret ID containing API credentials. Required for `bedrock` and `vertex` unless `config.apiKey` carries one.
+                  description: Secret ID containing API credentials. Required for `bedrock` and `vertex`.
                   example: sec_V1StGXR8Z5jdHi6B
                 base_url:
                   type: string
                   description: Custom base URL for the provider
                 config:
                   type: object
-                  description: 'Additional provider-specific configuration. `config.apiKey`, when set, must be a string; every read returns it as `{"no_echo": true}`.'
+                  description: 'Additional provider-specific configuration. `apiKey` is refused: the credential goes in the linked secret.'
       responses:
         '201':
           description: AI provider created successfully
@@ -278,7 +280,7 @@ paths:
                     type: string
                   config:
                     type: object
-                    description: 'Additional provider-specific configuration. A `config.apiKey` reads as `{"no_echo": true}`.'
+                    description: 'Additional provider-specific configuration. Never carries a credential.'
                   created_at:
                     type: string
                     format: date-time
@@ -361,7 +363,7 @@ paths:
                   type: string
                 config:
                   type: object
-                  description: 'Replaces the whole configuration, so a `config.apiKey` the record keeps is sent again as a string; the masked `{"no_echo": true}` a read returns is refused.'
+                  description: 'Replaces the whole configuration. `apiKey` is refused: the credential goes in the linked secret.'
       responses:
         '200':
           description: AI provider updated successfully
