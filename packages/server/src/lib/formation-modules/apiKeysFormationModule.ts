@@ -47,6 +47,7 @@ export const apiKeysFormationModule = defineFormationModule({
   create: async ({ properties, projectId, actor }) => {
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
+      scopedToken: actor.scopedToken,
       boundaryPolicyIds: actor.keyPolicyBoundary,
       requestedPolicyPublicIds: policyPublicIds,
       requestedPolicyIds: await lookupPolicyIds(policyPublicIds),
@@ -67,6 +68,7 @@ export const apiKeysFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId, actor }) => {
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
+      scopedToken: actor.scopedToken,
       boundaryPolicyIds: actor.keyPolicyBoundary,
       requestedPolicyPublicIds: policyPublicIds,
       requestedPolicyIds: await lookupPolicyIds(policyPublicIds),

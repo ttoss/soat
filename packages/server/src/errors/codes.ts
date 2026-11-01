@@ -268,6 +268,11 @@ export const ERROR_CODES = {
     description:
       'The credential is an API key narrowed by `policy_ids`, and the request would write an API key outside that boundary: no `policy_ids`, an empty list, or a policy the credential does not carry. A narrowed key may only mint or update keys whose `policy_ids` are a non-empty subset of its own. The error meta reports `boundary_policy_ids` and `requested_policy_ids`.',
   },
+  API_KEY_SCOPED_TOKEN: {
+    httpStatus: 403,
+    description:
+      'The credential is a project-scoped token (an OAuth access token, a trigger run-as token or a run token), whose boundary lives in the token and cannot be carried by an API key. Such a token never creates or updates an API key, directly or through an `api_key` formation resource.',
+  },
   API_KEY_PROJECT_SCOPE: {
     httpStatus: 403,
     description:
