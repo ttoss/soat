@@ -80,6 +80,7 @@ const formationActorOf = (
     author: requestPrincipalFromCtx(ctx),
     ...playbookAuthorOf(ctx),
     keyPolicyBoundary: ctx.authUser.apiKeyPolicyIds,
+    scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
     recordRefusal: (action) => {
       recordAuthorizationDecision(ctx, { action, allowed: false });
     },
