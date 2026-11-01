@@ -862,6 +862,7 @@ components:
           enum:
             - agent
             - tool
+            - guardrail
             - decider
             - ingestion_rule
             - orchestration
