@@ -7,6 +7,7 @@
  * (`agentToolResolverMcp.ts`) share one reading of the protocol rather than
  * each keeping the subset it happened to need.
  */
+import { readToolResponseBody } from './httpToolResponse';
 import { isPlainObject } from './plainObject';
 
 /**
@@ -50,11 +51,18 @@ const parseSseFramedMessage = (raw: string): unknown => {
   return JSON.parse(payload);
 };
 
-/** Reads a JSON-RPC answer whichever of the two framings it arrived in. */
-export const parseJsonRpcBody = async (
-  response: Response
-): Promise<unknown> => {
-  const raw = await response.text();
+/**
+ * Reads a JSON-RPC answer whichever of the two framings it arrived in, refused
+ * over `TOOL_RESPONSE_MAX_BYTES` like any other tool target's answer.
+ */
+export const parseJsonRpcBody = async (args: {
+  response: Response;
+  url: string;
+}): Promise<unknown> => {
+  const { response } = args;
+  const raw = new TextDecoder().decode(
+    await readToolResponseBody({ response, url: args.url })
+  );
   return (response.headers.get('content-type') ?? '').includes(
     'text/event-stream'
   )

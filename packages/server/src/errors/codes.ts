@@ -153,7 +153,7 @@ export const ERROR_CODES = {
   MODEL_LISTING_FAILED: {
     httpStatus: 502,
     description:
-      "The provider rejected the model listing request, or answered it with something other than JSON. The provider's own status and message are carried in the error message.",
+      "The provider rejected the model listing request, or answered it with something other than JSON or with more than 8 MiB. The provider's own status and message are carried in the error message.",
   },
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
@@ -564,7 +564,7 @@ export const ERROR_CODES = {
   TOOL_RESPONSE_TOO_LARGE: {
     httpStatus: 502,
     description:
-      "An http-type tool answered 2xx with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default), in either `response_mode`. The body is refused while it streams, so nothing was buffered. A non-2xx body over the ceiling is cut to it and stays `TOOL_HTTP_ERROR`. The error `meta` carries `tool_url` and `max_bytes`.",
+      "An http or mcp tool answered 2xx with a body over the deployment's ceiling (`TOOL_RESPONSE_MAX_BYTES`, the file upload ceiling by default), in either `response_mode`. The body is refused while it streams, so nothing was buffered. A non-2xx body over the ceiling is cut to it and stays `TOOL_HTTP_ERROR`. The error `meta` carries `tool_url` and `max_bytes`.",
   },
   MCP_TOOL_ERROR: {
     httpStatus: 502,

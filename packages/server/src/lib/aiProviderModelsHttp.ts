@@ -2,7 +2,9 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { readCappedText } from './cappedBody';
 import { egressGuardedFetch } from './egressFetch';
+import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
 
 const log = createDebug('soat:provider-models:http');
 
@@ -10,21 +12,17 @@ const log = createDebug('soat:provider-models:http');
 export const ANTHROPIC_VERSION = '2023-06-01';
 
 /**
- * The slice of `fetch` this module uses. Narrow on purpose: it is the seam the
- * tests replace, and a narrow shape is one a fake can satisfy without pulling
- * in the whole `Response` surface.
+ * The slice of `fetch` this module uses, and the seam the tests replace. It
+ * answers a whole `Response` because the body is read as a stream, within
+ * `PROTOCOL_ANSWER_MAX_BYTES`.
  */
 export type FetchLike = (
   url: string,
   init?: { method?: string; headers?: Record<string, string> }
-) => Promise<{
-  ok: boolean;
-  status: number;
-  text: () => Promise<string>;
-}>;
+) => Promise<Response>;
 
 /**
- * Adapts the guarded `fetch` to the narrow shape above. Guarded rather than
+ * The default `FetchLike`: the guarded `fetch`. Guarded rather than
  * plain: `base_url` is tenant-written and this is a `GET` the server performs
  * on their behalf, so it can name the deployment's own network exactly as an
  * `http` tool's target can.
@@ -70,7 +68,16 @@ export const readJson = async (args: {
     method: 'GET',
     headers: args.headers,
   });
-  const body = await response.text();
+  const body = await readCappedText({
+    response,
+    maxBytes: PROTOCOL_ANSWER_MAX_BYTES,
+    refusal: () => {
+      return new DomainError(
+        'MODEL_LISTING_FAILED',
+        `The ${args.provider} provider answered the model listing request with more than ${PROTOCOL_ANSWER_MAX_BYTES} bytes.`
+      );
+    },
+  });
 
   if (!response.ok) {
     // The status is carried through; the body is not. `base_url` names the host

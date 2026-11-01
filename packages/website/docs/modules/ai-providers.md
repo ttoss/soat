@@ -56,8 +56,8 @@ the deployment's egress rule, evaluated per request against the resolved address
 [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), as for
 an `http` tool's target.
 
-A model listing the provider rejects answers `MODEL_LISTING_FAILED` with the provider's
-status. The provider's response **body** goes to the server log, not to the caller: the
+A model listing the provider rejects, or answers with more than 8 MiB, answers
+`MODEL_LISTING_FAILED` with the provider's status. The provider's response **body** goes to the server log, not to the caller: the
 host that wrote it is one the record named.
 
 ### Provider Slugs
@@ -194,7 +194,7 @@ Listing resolves credentials exactly as generation does, so a record that can ge
 - **The Vertex list is a per-location publisher catalogue, not a per-project reachability check.** The listing is rooted at `publishers/google`, so `config.location` selects the endpoint and the credential's project decides only who is billed and quota'd. Every location Vertex serves can be listed, including the non-regional ones: `global`, where several current Gemini models are served and which 404s in a region, and the `eu` / `us` data-residency multi-regions. A listed model can still fail at generation time if that project cannot serve it.
 - **The Vertex list is advisory.** The endpoint publishes embedding, TTS and classification models next to Gemini with no field distinguishing them, so nothing is filtered out; a listed id can 404 at generation time. For `vertex`, `input_modalities` and `output_modalities` are never reported (the API has no modality field), `streaming` is never reported, and `lifecycle` is `active` only for a model Google marks `GA` — a preview or experimental model reports no `lifecycle`.
 
-Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or, for the API-key providers above, a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
+Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or, for the API-key providers above, a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON or over 8 MiB — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
 
 #### Listing models before you hold credentials
 

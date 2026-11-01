@@ -204,7 +204,7 @@ Credential values take [secret references](./secrets.md#secret-references-secret
 - **Signing happens last**, over the final method, URL, headers and body. Only SOAT-controlled headers are signed (`host`, `content-type`, `x-amz-*`); [context headers](#context-headers-x-soat-context-) and `Idempotency-Key` go unsigned (AWS permits it).
 - **`aws_sigv4` with `body_mode: "multipart"`** is `400 VALIDATION_FAILED` at create/update: the body bytes are unknown at signing time.
 - **Path encoding follows the service**: segments are URI-encoded twice except for `s3` (once), per the SigV4 spec.
-- **GCP tokens are cached** per service account, token endpoint and scope set, refreshed shortly before expiry.
+- **GCP tokens are cached** per service account, token endpoint and scope set, refreshed shortly before expiry. A token response over 8 MiB is `502 TOOL_AUTH_FAILED`.
 - **`service` and `region` are signed**, not just routing; a mismatch is rejected by the target.
 - **Credential failures are `502 TOOL_AUTH_FAILED`** (distinct from `502 TOOL_HTTP_ERROR`, the target rejecting the call); a token endpoint's status and body land in error `meta` as `upstream_status` and `upstream_body`.
 
@@ -308,6 +308,8 @@ Discovery follows `nextCursor` until the catalogue is exhausted, so a paginated 
 A call's `structured_content` is the result when the server sends one; otherwise the `content` blocks, text blocks joined and parsed as JSON when they are JSON, and handed over as the block array when any block is not text (an image is never flattened away).
 
 A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
+
+An answer over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is refused while it streams: a listing resolves nothing, a call is `502 TOOL_RESPONSE_TOO_LARGE`.
 
 #### Scoping an MCP tool to a subset of actions
 
@@ -543,7 +545,7 @@ Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-t
 
 | Environment Variable         | Required | Description                                                                                                                                                                                                                   |
 | ---------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TOOL_RESPONSE_MAX_BYTES`    | No       | Ceiling on an http tool's response body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger 2xx body is `502 TOOL_RESPONSE_TOO_LARGE`; a larger non-2xx body is cut to it. |
+| `TOOL_RESPONSE_MAX_BYTES`    | No       | Ceiling on an http or mcp tool's response body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger 2xx body is `502 TOOL_RESPONSE_TOO_LARGE`; a larger non-2xx body is cut to it. |
 | `TOOL_ASSERTION_PRIVATE_KEY` | No       | PEM (PKCS #8) Ed25519 private key that signs [tool assertions](#tool-assertions); `\n` escapes are accepted. Unset sends none. Any other key type fails the call before it is sent.                                           |
 
 ## Examples

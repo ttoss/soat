@@ -137,6 +137,35 @@ describe('MCP protocol fidelity', () => {
         reason: 'tools/list answered 500',
       });
     });
+
+    test('refuses a listing over TOOL_RESPONSE_MAX_BYTES', async () => {
+      process.env.TOOL_RESPONSE_MAX_BYTES = '1024';
+      try {
+        stubMcpServer({
+          pages: [
+            {
+              tools: [{ name: 'big', description: 'x'.repeat(2048) }],
+            },
+          ],
+        });
+        const reportResolutionFailure = jest.fn();
+
+        const result = await resolveMcpTools({
+          meter: UNMETERED,
+          transport: TRANSPORT,
+          typedTool: {},
+          logToolCallingError: jest.fn(),
+          reportResolutionFailure,
+        });
+
+        expect(Object.keys(result)).toHaveLength(0);
+        expect(reportResolutionFailure).toHaveBeenCalledWith({
+          reason: 'Tool target response exceeds 1024 bytes.',
+        });
+      } finally {
+        delete process.env.TOOL_RESPONSE_MAX_BYTES;
+      }
+    });
   });
 
   describe('tools/list fidelity', () => {
@@ -196,6 +225,25 @@ describe('MCP protocol fidelity', () => {
   });
 
   describe('tools/call failures', () => {
+    test('a result over TOOL_RESPONSE_MAX_BYTES fails the tool call', async () => {
+      stubMcpServer({
+        pages: [{ tools: [{ name: 'big' }] }],
+        call: {
+          result: { content: [{ type: 'text', text: 'x'.repeat(2048) }] },
+        },
+      });
+      const tools = await resolve();
+      process.env.TOOL_RESPONSE_MAX_BYTES = '1024';
+      try {
+        await expect(executeOnly(tools)).rejects.toMatchObject({
+          code: 'TOOL_RESPONSE_TOO_LARGE',
+          meta: { tool_url: MCP_URL, max_bytes: 1024 },
+        });
+      } finally {
+        delete process.env.TOOL_RESPONSE_MAX_BYTES;
+      }
+    });
+
     test('an isError result fails the tool call', async () => {
       stubMcpServer({
         pages: [{ tools: [{ name: 'flaky' }] }],

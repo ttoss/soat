@@ -113,7 +113,10 @@ export const buildMcpToolExecute = (args: {
             },
           });
           return readMcpCallResult({
-            body: await parseJsonRpcBody(callResponse),
+            body: await parseJsonRpcBody({
+              response: callResponse,
+              url: args.transport.url,
+            }),
             toolName: args.mcpToolName,
             url: args.transport.url,
           });

@@ -9,6 +9,7 @@ import {
   isModelListingSupported,
 } from 'src/lib/aiProviderModels';
 import { toBedrockClientConfig } from 'src/lib/bedrockModelCatalog';
+import { PROTOCOL_ANSWER_MAX_BYTES } from 'src/lib/requestBounds';
 
 /**
  * A `fetch` stand-in. The HTTP call to a model provider is the one boundary
@@ -30,13 +31,11 @@ const fakeFetch = (
     if (!response) {
       return Promise.reject(new Error(`unexpected request to ${url}`));
     }
-    return Promise.resolve({
-      ok: (response.status ?? 200) < 400,
-      status: response.status ?? 200,
-      text: () => {
-        return Promise.resolve(JSON.stringify(response.body));
-      },
-    });
+    return Promise.resolve(
+      new Response(JSON.stringify(response.body), {
+        status: response.status ?? 200,
+      })
+    );
   };
   return { fetchImpl, calls };
 };
@@ -77,8 +76,14 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
     server = createServer((req, res) => {
       seenAuthorization = req.headers.authorization;
       res.writeHead(200, { 'content-type': 'application/json' });
+      const padding = req.url?.startsWith('/oversized/')
+        ? 'x'.repeat(PROTOCOL_ANSWER_MAX_BYTES)
+        : '';
       res.end(
-        JSON.stringify({ data: [{ id: 'local-model', owned_by: 'me' }] })
+        JSON.stringify({
+          data: [{ id: 'local-model', owned_by: 'me' }],
+          ...(padding ? { padding } : {}),
+        })
       );
     });
     await new Promise<void>((resolve) => {
@@ -110,6 +115,19 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
     expect(models).toEqual([
       { id: 'local-model', vendor: 'me', streaming: true },
     ]);
+  });
+
+  test('refuses a listing over PROTOCOL_ANSWER_MAX_BYTES', async () => {
+    const listing = enumerateProviderModels({
+      provider: 'custom',
+      baseUrl: baseUrl.replace('/v1', '/oversized/v1'),
+      secretValue: 'sk-local',
+    });
+
+    await expect(listing).rejects.toMatchObject({
+      code: 'MODEL_LISTING_FAILED',
+      message: `The custom provider answered the model listing request with more than ${PROTOCOL_ANSWER_MAX_BYTES} bytes.`,
+    });
   });
 });
 
@@ -654,13 +672,9 @@ describe('enumerateProviderModels — malformed payloads', () => {
 
   test('treats a non-JSON body as a listing failure', async () => {
     const fetchImpl: FetchLike = () => {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        text: () => {
-          return Promise.resolve('<html>gateway timeout</html>');
-        },
-      });
+      return Promise.resolve(
+        new Response('<html>gateway timeout</html>', { status: 200 })
+      );
     };
 
     await expect(

@@ -1,7 +1,9 @@
 import createDebug from 'debug';
 import jwt from 'jsonwebtoken';
 
+import { readCappedText } from './cappedBody';
 import { isPlainObject } from './plainObject';
+import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
 import {
   asString,
   type GcpServiceAccountAuthConfig,
@@ -112,7 +114,16 @@ const exchangeAssertionForToken = async (args: {
     }).toString(),
   });
 
-  const text = await response.text();
+  const text = await readCappedText({
+    response,
+    maxBytes: PROTOCOL_ANSWER_MAX_BYTES,
+    refusal: () => {
+      return authFailed({
+        message: `The GCP token endpoint response exceeds ${PROTOCOL_ANSWER_MAX_BYTES} bytes.`,
+        meta: { upstream_status: response.status },
+      });
+    },
+  });
 
   if (!response.ok) {
     // The body goes to the server log, not to the caller: the endpoint that
