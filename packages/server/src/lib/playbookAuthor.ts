@@ -17,6 +17,7 @@ import type {
 import {
   executorActionProblem,
   executorResolves,
+  transformationToolProblem,
 } from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
 import type { StartingPrincipal } from './principals';
@@ -91,7 +92,7 @@ export const assertExecutorsStartable = async (args: {
 
 /**
  * Every executor `isAllowed` may start that names nothing a run in the project
- * could start, or a tool action a run could not call. One it may not start is left to the permission check, so the
+ * could start, or a tool or tool action a run could not call. One it may not start is left to the permission check, so the
  * answer never tells a caller whether a resource it cannot start exists.
  */
 export const executorReferenceProblems = async (args: {
@@ -118,18 +119,18 @@ export const executorReferenceProblems = async (args: {
         });
         continue;
       }
-      const actionProblem =
-        executor === node.executor
-          ? await executorActionProblem({
-              executor,
-              projectId: args.projectId,
-            })
-          : null;
-      if (actionProblem) {
+      const isExecutor = executor === node.executor;
+      const callProblem = isExecutor
+        ? await executorActionProblem({ executor, projectId: args.projectId })
+        : await transformationToolProblem({
+            toolId: executor.id,
+            projectId: args.projectId,
+          });
+      if (callProblem) {
         problems.push({
-          ...actionProblem,
-          path: `definition.nodes[${index}].executor.operation_id`,
-          message: `Node '${node.id}': ${actionProblem.message}`,
+          ...callProblem,
+          path: `definition.nodes[${index}].${isExecutor ? 'executor.operation_id' : field}`,
+          message: `Node '${node.id}': ${callProblem.message}`,
         });
       }
     }

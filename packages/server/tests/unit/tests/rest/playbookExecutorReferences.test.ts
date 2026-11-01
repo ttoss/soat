@@ -192,6 +192,29 @@ describe('Playbook executor references', () => {
       ]);
     });
 
+    test('refuses an mcp tool as a transformation tool', async () => {
+      const definition = definitionOf({ type: 'tool', id: toolId });
+      const res = await createPlaybook({
+        nodes: [
+          {
+            ...definition.nodes[0],
+            transformations: [
+              { name: 'doc', format: 'pdf', tool: toolId },
+              { name: 'mcp', format: 'pdf', tool: mcpToolId },
+            ],
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_VALIDATION_FAILED');
+      expect(codesOf(res.body.error.meta.problems)).toEqual([
+        {
+          code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
+          path: 'definition.nodes[0].transformations[1].tool',
+        },
+      ]);
+    });
+
     test('refuses an mcp tool executor without an operation_id', async () => {
       const res = await createPlaybook(
         definitionOf({ type: 'tool', id: mcpToolId })
@@ -348,6 +371,31 @@ describe('Playbook executor references', () => {
         {
           code: 'EXECUTOR_ACTION_REQUIRED',
           path: 'definition.nodes[0].executor.operation_id',
+        },
+      ]);
+    });
+
+    test('reports an mcp tool as a transformation tool', async () => {
+      const definition = definitionOf({ type: 'tool', id: toolId });
+      const res = await validate({
+        project_id: projectId,
+        definition: {
+          nodes: [
+            {
+              ...definition.nodes[0],
+              transformations: [
+                { name: 'doc', format: 'pdf', tool: scopedMcpToolId },
+              ],
+            },
+          ],
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(codesOf(res.body.problems)).toEqual([
+        {
+          code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
+          path: 'definition.nodes[0].transformations[0].tool',
         },
       ]);
     });

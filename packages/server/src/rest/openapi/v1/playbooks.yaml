@@ -90,7 +90,8 @@ paths:
         PLAYBOOK_VALIDATION_FAILED`, an `EXECUTOR_NOT_FOUND` problem). A
         `tool` executor on an `mcp` tool must name in `operation_id` an action
         the tool's binding allows (`EXECUTOR_ACTION_REQUIRED`,
-        `EXECUTOR_ACTION_UNAVAILABLE`). A definition with executors written with a trigger or OAuth token is `409
+        `EXECUTOR_ACTION_UNAVAILABLE`); a transformation's tool cannot be an
+        `mcp` tool (`TRANSFORMATION_TOOL_UNSUPPORTED`). A definition with executors written with a trigger or OAuth token is `409
         PLAYBOOK_AUTHOR_UNAVAILABLE`: those carry their boundary in the token,
         so no run can act as them.
       operationId: createPlaybook
@@ -154,7 +155,8 @@ paths:
         would check them: the upstreams against that project's playbooks, and
         each executor the caller may start must exist (`EXECUTOR_NOT_FOUND`)
         and name an action its `mcp` tool allows (`EXECUTOR_ACTION_REQUIRED`,
-        `EXECUTOR_ACTION_UNAVAILABLE`). The caller needs both `playbooks:ValidatePlaybook` and
+        `EXECUTOR_ACTION_UNAVAILABLE`), and each transformation's tool must not
+        be an `mcp` tool (`TRANSFORMATION_TOOL_UNSUPPORTED`). The caller needs both `playbooks:ValidatePlaybook` and
         `playbooks:ListPlaybooks` on the project. Without it, only the
         definition's own graph is checked.
       operationId: validatePlaybook
@@ -260,7 +262,8 @@ paths:
         PLAYBOOK_EXECUTOR_FORBIDDEN` for an executor it may not start, an
         `EXECUTOR_NOT_FOUND` problem for one that does not exist,
         `EXECUTOR_ACTION_REQUIRED` or `EXECUTOR_ACTION_UNAVAILABLE` for an
-        `mcp` tool action a run could not call, `409
+        `mcp` tool action a run could not call, `TRANSFORMATION_TOOL_UNSUPPORTED`
+        for an `mcp` transformation tool, `409
         PLAYBOOK_AUTHOR_UNAVAILABLE` for a trigger or OAuth token.
       operationId: updatePlaybook
       x-iam-action: playbooks:UpdatePlaybook
@@ -2073,7 +2076,7 @@ components:
             (`UNKNOWN_UPSTREAM`, and the `MISSING_NODE` and `UNKNOWN_FIELD` of
             what an upstream node pulls) and the executors
             (`EXECUTOR_NOT_FOUND`, `EXECUTOR_ACTION_REQUIRED`,
-            `EXECUTOR_ACTION_UNAVAILABLE`).
+            `EXECUTOR_ACTION_UNAVAILABLE`, `TRANSFORMATION_TOOL_UNSUPPORTED`).
           example: proj_V1StGXR8Z5jdHi6B
         playbook_id:
           type: string
@@ -2101,8 +2104,8 @@ components:
             `EXECUTOR_REQUIRED`, `EXECUTOR_FORBIDDEN`,
             `TRANSFORMATIONS_NOT_FINAL`, `DUPLICATE_TRANSFORMATION`, `CYCLE`,
             and, with `project_id`, `UNKNOWN_UPSTREAM`, `UPSTREAM_CYCLE`,
-            `EXECUTOR_NOT_FOUND`, `EXECUTOR_ACTION_REQUIRED` or
-            `EXECUTOR_ACTION_UNAVAILABLE`. The same items a refused write lists under
+            `EXECUTOR_NOT_FOUND`, `EXECUTOR_ACTION_REQUIRED`,
+            `EXECUTOR_ACTION_UNAVAILABLE` or `TRANSFORMATION_TOOL_UNSUPPORTED`. The same items a refused write lists under
             `meta.problems`.
           items:
             $ref: './errors.yaml#/components/schemas/ValidationProblem'
