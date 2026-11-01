@@ -107,7 +107,7 @@ Accepting a suspended share records the acceptance, which grants nothing until t
 | `trigger`        | `target_id`                                                       |
 | `formation`      | `template`                                                        |
 
-An agent is also listed when a version its [release](./agents.md#staged-rollout) serves names it, and a workflow when a version an open task is pinned to does; other archived versions are not.
+An agent is also listed when a version its [release](./agents.md#staged-rollout) serves names it; a workflow, an orchestration or a playbook when a version an open task, an unfinished run or a case is pinned to does. Other archived versions are not.
 
 So a shared tool bound by a local agent lists that agent, the orchestrations and workflows running it, and the triggers and playbooks starting those. Each resource is listed once, grouped by `type` in the table's order. The list is paged with `limit` (default 50, max 100) and `cursor` in the [list envelope](../api/index.md#pagination). `409 SHARE_IN_USE` lists every one, unpaged. The publisher's revoke is never refused.
 

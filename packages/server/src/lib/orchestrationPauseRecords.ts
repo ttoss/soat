@@ -81,3 +81,24 @@ export const recordHumanInputResumption = async (args: {
     }
   );
 };
+
+/**
+ * Fails a parked node's `requires_action` entry when what it waited for settled
+ * as a failure: a `child_run` node whose child did not complete.
+ */
+export const recordParkedNodeFailure = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodeId: string;
+  error: object;
+}): Promise<void> => {
+  await db.OrchestrationNodeExecution.update(
+    { status: 'failed', error: args.error, completedAt: new Date() },
+    {
+      where: {
+        orchestrationRunId: args.runRecord.id as number,
+        nodeId: args.nodeId,
+        status: 'requires_action',
+      },
+    }
+  );
+};

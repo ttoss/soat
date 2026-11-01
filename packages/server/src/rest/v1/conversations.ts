@@ -11,7 +11,6 @@ import {
   updateConversation,
 } from 'src/lib/conversations';
 import { emptyPage } from 'src/lib/pagination';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import { readTagQuery } from 'src/lib/tags';
 
 import { checkConversationAccess } from './conversationHelpers';
@@ -22,6 +21,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 
 const conversationsRouter = new Router<Context>();
@@ -41,20 +41,16 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     resourceType: 'conversation',
   });
 
-  let policyWhere: Record<string, unknown> | undefined;
-  if (projectPublicId) {
-    const policies = await ctx.authUser!.getPolicies(projectPublicId);
-    const compiled = compilePolicy({
-      policies,
-      action: 'conversations:ListConversations',
-      resourceType: 'conversation',
-      projectPublicId,
-    });
-    if (!compiled.hasAccess) {
-      ctx.body = emptyPage({ limit, cursor });
-      return;
-    }
-    policyWhere = compiled.where;
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds,
+    action: 'conversations:ListConversations',
+    resourceType: 'conversation',
+  });
+  if (!hasAccess) {
+    ctx.body = emptyPage({ limit, cursor });
+    return;
   }
 
   ctx.body = await listConversations({

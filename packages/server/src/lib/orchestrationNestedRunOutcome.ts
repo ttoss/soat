@@ -12,11 +12,18 @@
  * The same semantics a workflow `on_enter` dispatch already has
  * (`ORCHESTRATION_DISPATCH_FAILED`): a non-success *terminal* status is the
  * node's failure. A child that parked (`awaiting_input`, `sleeping`) has not
- * settled and is deliberately not covered here.
+ * settled: the node parks its own run on it (`orchestrationChildRunWake.ts`).
  */
 import { DomainError, ERROR_CODES, type ErrorCode } from '../errors';
 
 const NON_SUCCESS_TERMINAL_STATUSES = ['failed', 'cancelled', 'expired'];
+
+/** Whether a child run has reached a status it never leaves. */
+export const isNestedRunSettled = (status: string): boolean => {
+  return (
+    status === 'completed' || NON_SUCCESS_TERMINAL_STATUSES.includes(status)
+  );
+};
 
 const readErrorField = (
   error: object | null,

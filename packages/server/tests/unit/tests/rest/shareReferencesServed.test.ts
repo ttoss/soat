@@ -3,7 +3,8 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 /**
  * A run reaches a shared resource through more than head definitions: the
  * agent version a release serves, the workflow version an open task is pinned
- * to, a guardrail's context tool and a tool's preset parameters.
+ * to, the orchestration version an unfinished run and the playbook version a
+ * case is pinned to, a guardrail's context tool and a tool's preset parameters.
  */
 describe('Share references through served versions and attachments', () => {
   let adminToken: string;
@@ -177,6 +178,154 @@ describe('Share references through served versions and attachments', () => {
     expect(await references(tool.shareId)).toEqual([
       { type: 'agent', id: agent },
       { type: 'workflow', id: pinned },
+    ]);
+  });
+
+  test('lists an orchestration an unfinished run executes on a version calling the shared tool', async () => {
+    const tool = await sharedTool('calledByPinnedRun');
+    const orchestration = async (name: string) => {
+      return createIn(granteeId, '/api/v1/orchestrations', {
+        name,
+        nodes: [
+          { id: 'approval', type: 'human', prompt: 'Go?', options: ['go'] },
+          { id: 'call', type: 'tool', tool_id: tool.id },
+        ],
+        edges: [{ from: 'approval', to: 'call' }],
+      });
+    };
+    const startRun = async (orchestrationId: string) => {
+      const run = await admin()
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchestrationId, input: {} });
+      expect(run.status).toBe(201);
+      expect(run.body.status).toBe('awaiting_input');
+      return run.body.id as string;
+    };
+    const pinned = await orchestration('pinned-by-a-run');
+    const finished = await orchestration('pinned-by-a-cancelled-run');
+    const idle = await orchestration('no-run');
+    await startRun(pinned);
+    const cancelled = await admin().post(
+      `/api/v1/orchestration-runs/${await startRun(finished)}/cancel`
+    );
+    expect(cancelled.status).toBe(200);
+    for (const id of [pinned, finished, idle]) {
+      await update('patch', `/api/v1/orchestrations/${id}`, {
+        nodes: [
+          { id: 'approval', type: 'human', prompt: 'Go?', options: ['go'] },
+        ],
+        edges: [],
+      });
+    }
+
+    expect(await references(tool.shareId)).toEqual([
+      { type: 'orchestration', id: pinned },
+    ]);
+  });
+
+  test('lists a playbook a case evaluates on a version executing a reaching agent', async () => {
+    const tool = await sharedTool('executedByPinnedCase');
+    const agent = await createIn(granteeId, '/api/v1/agents', {
+      name: 'Executes for the case',
+      ai_provider_id: granteeProvider,
+      tool_bindings: [{ tool_id: tool.id }],
+    });
+    const collect = {
+      id: 'brief',
+      title: 'Brief',
+      kind: 'collect',
+      inputs: [
+        {
+          name: 'brief',
+          schema: { type: 'string' },
+          required: true,
+          source: 'manual',
+        },
+      ],
+    };
+    const definition = (execute: boolean) => {
+      return {
+        nodes: execute
+          ? [
+              collect,
+              {
+                id: 'run',
+                title: 'Run',
+                kind: 'execute',
+                final: true,
+                inputs: [
+                  {
+                    name: 'brief',
+                    schema: { type: 'string' },
+                    required: true,
+                    source: { node_id: 'brief', field: 'output.brief' },
+                  },
+                ],
+                executor: { type: 'agent', id: agent },
+              },
+            ]
+          : [{ ...collect, final: true }],
+      };
+    };
+    const playbook = async (name: string) => {
+      return createIn(granteeId, '/api/v1/playbooks', {
+        name,
+        definition: definition(true),
+      });
+    };
+    const pinned = await playbook('pinned-by-a-case');
+    const unpinned = await playbook('no-case');
+    const opened = await admin()
+      .post(`/api/v1/playbooks/${pinned}/cases`)
+      .send({ subject: 'pinned' });
+    expect(opened.status).toBe(201);
+    for (const id of [pinned, unpinned]) {
+      await update('patch', `/api/v1/playbooks/${id}`, {
+        definition: definition(false),
+      });
+    }
+
+    expect(await references(tool.shareId)).toEqual([
+      { type: 'agent', id: agent },
+      { type: 'playbook', id: pinned },
+    ]);
+  });
+
+  test('lists an agent beside a playbook case whose version names nothing shared', async () => {
+    const tool = await sharedTool('besideUnrelatedCase');
+    const playbook = await createIn(granteeId, '/api/v1/playbooks', {
+      name: 'unrelated-case',
+      definition: {
+        nodes: [
+          {
+            id: 'brief',
+            title: 'Brief',
+            kind: 'collect',
+            final: true,
+            inputs: [
+              {
+                name: 'brief',
+                schema: { type: 'string' },
+                required: true,
+                source: 'manual',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const opened = await admin()
+      .post(`/api/v1/playbooks/${playbook}/cases`)
+      .send({ subject: 'unrelated' });
+    expect(opened.status).toBe(201);
+    const agent = await createIn(granteeId, '/api/v1/agents', {
+      name: 'Beside the case',
+      ai_provider_id: granteeProvider,
+      tool_bindings: [{ tool_id: tool.id }],
+    });
+
+    expect(await references(tool.shareId)).toEqual([
+      { type: 'agent', id: agent },
     ]);
   });
 

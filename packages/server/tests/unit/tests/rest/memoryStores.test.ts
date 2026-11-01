@@ -126,13 +126,17 @@ describe('MemoryStores', () => {
       expect(response.status).toBe(403);
     });
 
-    test('admin without project scoping gets an empty list', async () => {
+    test('admin without project scoping lists every project', async () => {
       const response = await authenticatedTestClient(adminToken).get(
         '/api/v1/memory-stores'
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.data).toEqual([]);
+      expect(response.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ project_id: projectId }),
+        ])
+      );
     });
   });
 
