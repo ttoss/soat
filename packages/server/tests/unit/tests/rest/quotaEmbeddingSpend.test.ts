@@ -1,5 +1,6 @@
 import { db } from 'src/db';
-import { embedForProject } from 'src/lib/embeddings';
+import { createEmbeddings, embedForProject } from 'src/lib/embeddings';
+import { assertMemorySpendWithinQuota } from 'src/lib/memories';
 import { EMBEDDING_USAGE_SOURCE } from 'src/lib/usageEmbeddingRecording';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -150,6 +151,18 @@ describe('token and cost quotas on embedding spend', () => {
 
       expect(res.status).toBe(200);
     });
+
+    test('an embedding billed to no project has no budget to refuse', async () => {
+      await expect(
+        createEmbeddings({ inputs: ['hello world'], projectPublicId: null })
+      ).resolves.toHaveLength(1);
+      await expect(
+        createEmbeddings({
+          inputs: ['hello world'],
+          projectPublicId: 'proj_unknown',
+        })
+      ).resolves.toHaveLength(1);
+    });
   });
 
   describe('POST /api/v1/knowledge/search', () => {
@@ -256,6 +269,12 @@ describe('token and cost quotas on embedding spend', () => {
 
       expectRefused(res, quotaId);
       expect(await embeddingMeters(ctx)).toBe(0);
+    });
+
+    test('a store with no project has no budget to refuse', async () => {
+      await expect(
+        assertMemorySpendWithinQuota({ memoryStoreId: 2147483647 })
+      ).resolves.toBeUndefined();
     });
   });
 
