@@ -1,6 +1,6 @@
 import { db } from 'src/db';
 import { createEmbeddings, embedForProject } from 'src/lib/embeddings';
-import { assertMemorySpendWithinQuota } from 'src/lib/memories';
+import { assertMemoryWriteQuotas } from 'src/lib/memories';
 import { EMBEDDING_USAGE_SOURCE } from 'src/lib/usageEmbeddingRecording';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -273,7 +273,7 @@ describe('token and cost quotas on embedding spend', () => {
 
     test('a store with no project has no budget to refuse', async () => {
       await expect(
-        assertMemorySpendWithinQuota({ memoryStoreId: 2147483647 })
+        assertMemoryWriteQuotas({ memoryStoreId: 2147483647, content: 'x' })
       ).resolves.toBeUndefined();
     });
   });

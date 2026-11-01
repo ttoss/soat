@@ -4,8 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../../errors';
 import { lookupMemoryStoreInternalId } from '../formationLookups';
 import {
-  assertMemorySpendWithinQuota,
-  assertMemoryStorageQuota,
+  assertMemoryWriteQuotas,
   createMemory,
   deleteMemory,
   getMemory,
@@ -36,8 +35,7 @@ export const memoriesFormationModule = defineFormationModule({
     });
 
     const content = properties.content as string;
-    await assertMemoryStorageQuota({ memoryStoreId, content });
-    await assertMemorySpendWithinQuota({ memoryStoreId });
+    await assertMemoryWriteQuotas({ memoryStoreId, content });
 
     return createMemory({
       memoryStoreId,
@@ -71,8 +69,7 @@ export const memoriesFormationModule = defineFormationModule({
     const content = toOptionalString(properties.content);
     if (content !== undefined) {
       const memoryStoreId = entry.memoryStoreId as number;
-      await assertMemoryStorageQuota({ memoryStoreId, content });
-      await assertMemorySpendWithinQuota({ memoryStoreId });
+      await assertMemoryWriteQuotas({ memoryStoreId, content });
     }
 
     // Through the lib rather than the row: a content change re-points the
