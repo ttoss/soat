@@ -392,6 +392,12 @@ not resolve) or names a secret that does not exist in the project
 (`400 SECRET_NOT_FOUND`) is refused when the trigger is written rather than at
 3am on a firing nobody is watching.
 
+A firing sends each referenced secret to the target, so writing a reference
+needs `secrets:UseSecret` on that secret, besides `triggers:CreateTrigger` /
+`triggers:UpdateTrigger`; so does changing the target of a trigger whose stored
+bag holds one. Without it the write is `403 FORBIDDEN`, `meta.secret_ids`
+naming each secret refused.
+
 The bag is **write-only** — accepted on create and update, never returned by a
 read — so the record cannot be used to recover a value. A manual
 [`fire`](/docs/api/triggers/fire-trigger) may pass its own `tool_context`,

@@ -169,6 +169,7 @@ const agentVersionArchive = makeVersionArchive({
       ...archivedConfigToUpdateArgs(args.config),
       versionLabel: args.label,
       createdBy: args.createdBy,
+      secretUse: 'archived',
     });
   },
 });

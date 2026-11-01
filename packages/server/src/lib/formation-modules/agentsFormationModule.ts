@@ -160,6 +160,7 @@ export const agentsFormationModule = defineFormationModule({
     return createAgent({
       projectId,
       createdBy: actor.author,
+      secretUse: actor.isAllowed,
       ...mapAgentProperties(properties),
     });
   },
@@ -168,6 +169,7 @@ export const agentsFormationModule = defineFormationModule({
     await updateAgent({
       id: physicalResourceId,
       createdBy: actor.author,
+      secretUse: actor.isAllowed,
       // REST PATCH semantics: an explicit `null` clears the binding, an
       // undeclared field leaves it alone.
       aiProviderId: toNullableString(properties.ai_provider_id),

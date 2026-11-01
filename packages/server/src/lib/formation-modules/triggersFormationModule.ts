@@ -4,6 +4,7 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { SECRET_USE_ACTION, secretRefIds } from '../secretUse';
 import { toStoredToolContext } from '../toolContext';
 import {
   createTrigger,
@@ -17,6 +18,7 @@ import {
 import { defineFormationModule } from './defineFormationModule';
 import {
   isFormationExpression,
+  isObjectRecord,
   pushStringBagValueErrors,
 } from './formationSpecLoader';
 
@@ -100,6 +102,16 @@ export const triggersFormationModule = defineFormationModule({
     create: 'triggers:CreateTrigger',
     update: 'triggers:UpdateTrigger',
     delete: 'triggers:DeleteTrigger',
+    references: (properties) => {
+      if (!isObjectRecord(properties)) return [];
+      return secretRefIds(properties.tool_context).map((resourceId) => {
+        return {
+          action: SECRET_USE_ACTION,
+          srnResourceType: 'secret',
+          resourceId,
+        };
+      });
+    },
   },
 
   extraChecks: (args) => {
@@ -131,10 +143,11 @@ export const triggersFormationModule = defineFormationModule({
       cron: toOptionalString(properties.cron) ?? undefined,
       eventPattern: toOptionalString(properties.event_pattern) ?? undefined,
       active: toOptionalBoolean(properties.active),
+      isAllowed: actor.isAllowed,
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     const policyPublicId = toOptionalString(properties.policy_id);
     const policyId = policyPublicId
       ? (await lookupPolicyInternalIds([policyPublicId]))[0]
@@ -153,6 +166,7 @@ export const triggersFormationModule = defineFormationModule({
       cron: toNullableString(properties.cron),
       eventPattern: toNullableString(properties.event_pattern),
       active: toOptionalBoolean(properties.active),
+      isAllowed: actor.isAllowed,
     });
   },
 

@@ -124,6 +124,10 @@ paths:
         A provider's credential is its linked `secret_id`; `config.apiKey` is
         refused with `400 VALIDATION_FAILED`.
 
+        A record with both `base_url` and `secret_id` sends the secret to that
+        URL, so creating one also needs `secrets:UseSecret` on the secret, else
+        `403`.
+
         A `bedrock` or `vertex` record must link one. Without it the provider
         SDK signs with the server's own credentials (the AWS default credential
         chain, Google Application Default Credentials), which is refused with
@@ -315,7 +319,7 @@ paths:
       tags:
         - AI Providers
       summary: Update an AI provider
-      description: Updates an AI provider configuration
+      description: Updates an AI provider configuration. Setting `base_url` or `secret_id` so the record holds both also needs `secrets:UseSecret` on the secret, else `403`.
       operationId: updateAiProvider
       x-iam-action: ai-providers:UpdateAiProvider
       parameters:

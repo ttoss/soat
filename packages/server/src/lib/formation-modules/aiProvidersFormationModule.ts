@@ -16,7 +16,9 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { SECRET_USE_ACTION } from '../secretUse';
 import { defineFormationModule } from './defineFormationModule';
+import { isObjectRecord } from './formationSpecLoader';
 
 export const aiProvidersFormationModule = defineFormationModule({
   resourceType: 'ai_provider',
@@ -25,6 +27,21 @@ export const aiProvidersFormationModule = defineFormationModule({
     create: 'ai-providers:CreateAiProvider',
     update: 'ai-providers:UpdateAiProvider',
     delete: 'ai-providers:DeleteAiProvider',
+    references: (properties) => {
+      if (!isObjectRecord(properties)) return [];
+      const { secret_id: secretId, base_url: baseUrl } = properties;
+      if (typeof secretId !== 'string' || typeof baseUrl !== 'string') {
+        return [];
+      }
+      if (secretId === '' || baseUrl === '') return [];
+      return [
+        {
+          action: SECRET_USE_ACTION,
+          srnResourceType: 'secret',
+          resourceId: secretId,
+        },
+      ];
+    },
   },
   propertiesLabel: 'AI provider',
 
@@ -40,7 +57,7 @@ export const aiProvidersFormationModule = defineFormationModule({
     }
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actor }) => {
     const secretPublicId = toNullableString(properties.secret_id);
     const secretId = secretPublicId
       ? await lookupSecretInternalId({ publicId: secretPublicId, projectId })
@@ -56,10 +73,11 @@ export const aiProvidersFormationModule = defineFormationModule({
       config:
         (toNullableObject(properties.config) as Record<string, unknown>) ??
         undefined,
+      isAllowed: actor.isAllowed,
     });
   },
 
-  update: async ({ properties, physicalResourceId, projectId }) => {
+  update: async ({ properties, physicalResourceId, projectId, actor }) => {
     let secretId: number | undefined;
     const rawSecretId = properties.secret_id;
     if (rawSecretId !== undefined) {
@@ -82,6 +100,7 @@ export const aiProvidersFormationModule = defineFormationModule({
       baseUrl: toNullableString(properties.base_url),
       config: toNullableObject(properties.config) as
         Record<string, unknown> | null | undefined,
+      isAllowed: actor.isAllowed,
     });
   },
 
