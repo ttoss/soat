@@ -3,7 +3,6 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { agents } from 'src/lib/agentAccessor';
 import { buildSrn } from 'src/lib/iam';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import { readMaxContextMessages } from 'src/lib/sessionContextWindow';
 import {
   createSession,
@@ -29,6 +28,7 @@ import {
   requireAuth,
   requireProjectAccess,
 } from './helpers';
+import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { sessionSubResourcesRouter } from './sessionSubResources';
 import { authorizeSharedUse } from './sharedAccess';
@@ -177,21 +177,18 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
 
   // A list authorizes before it has rows, so the policy is compiled into the
   // query instead: `soat:ResourceTag` conditions become JSONB predicates on the
-  // same column `?tags=` reads. One project at a time — a policy is read per
-  // project — so an unnarrowed listing stays project-level, as on `GET /actors`.
-  let policyWhere: Record<string, unknown> | undefined;
-  if (projectPublicId) {
-    const compiled = compilePolicy({
-      policies: await ctx.authUser.getPolicies(projectPublicId),
-      action: 'agents:ListSessions',
-      resourceType: 'session',
-      projectPublicId,
-    });
-    if (!compiled.hasAccess) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
-    policyWhere = compiled.where;
+  // same column `?tags=` reads.
+  const compiled = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds,
+    action: 'agents:ListSessions',
+    resourceType: 'session',
+  });
+  if (!compiled.hasAccess) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
+  const policyWhere = compiled.where;
 
   ctx.body = await listSessions({
     projectIds,

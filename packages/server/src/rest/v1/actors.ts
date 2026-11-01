@@ -13,7 +13,6 @@ import {
   validateActorExclusivity,
 } from 'src/lib/actors';
 import { emptyPage } from 'src/lib/pagination';
-import { compilePolicy } from 'src/lib/policyCompiler';
 import { readTagQuery } from 'src/lib/tags';
 
 import {
@@ -22,6 +21,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { compileReadPolicy } from './readPolicy';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const actorsRouter = new Router<Context>();
@@ -71,20 +71,16 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     resourceType: 'actor',
   });
 
-  let policyWhere: Record<string, unknown> | undefined;
-  if (projectPublicId) {
-    const policies = await ctx.authUser!.getPolicies(projectPublicId);
-    const compiled = compilePolicy({
-      policies,
-      action: 'actors:ListActors',
-      resourceType: 'actor',
-      projectPublicId,
-    });
-    if (!compiled.hasAccess) {
-      ctx.body = emptyPage({ limit, cursor });
-      return;
-    }
-    policyWhere = compiled.where;
+  const { where: policyWhere, hasAccess } = await compileReadPolicy({
+    ctx,
+    projectPublicId,
+    projectIds,
+    action: 'actors:ListActors',
+    resourceType: 'actor',
+  });
+  if (!hasAccess) {
+    ctx.body = emptyPage({ limit, cursor });
+    return;
   }
 
   ctx.body = await listActors({
