@@ -1,5 +1,5 @@
 ---
-description: "A CloudFormation-inspired declarative layer that provisions an entire AI agent stack from a single JSON or YAML template."
+description: 'A CloudFormation-inspired declarative layer that provisions an entire AI agent stack from a single JSON or YAML template.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -64,46 +64,46 @@ One template replaces the separate API calls that create an AI provider, memory 
 
 ### Formation
 
-| Field        | Type     | Description                                                                    |
-| ------------ | -------- | ------------------------------------------------------------------------------ |
-| `id`         | string   | Public ID (`form_` prefix)                                                       |
-| `project_id` | string   | Project public ID                                                              |
-| `name`       | string   | Formation name (unique per project)                                            |
-| `template`   | object   | The last applied template (raw — substitution expressions preserved)          |
-| `outputs`    | object   | Resolved output values                                                         |
-| `status`     | string   | `creating` \| `active` \| `updating` \| `failed` \| `deleting` \| `deleted` \| `delete_failed` |
-| `metadata`   | object   | Static annotations stored on the record (supplied at create/update), per [Tags and metadata](iam.md#tags-and-metadata). Not a substitution site — `sub`/`param`/`ref` expressions are rejected (use `template.metadata` instead) |
-| `resolved_metadata`   | object   | The template's top-level `metadata` after `sub`/`param`/`ref` substitution at the last deploy (null when the template declares no metadata) |
-| `resolved_parameters` | object   | Parameter values applied at the last deploy, for auditability (`no_echo` values masked as `***`; null when the template declares no parameters) |
-| `error`      | object   | Why the formation is `failed` / `delete_failed`, as `{ code, message, meta }` — the same shape an error response uses. Null in every other status, and cleared by the next successful deploy |
-| `resources`  | array    | Resources managed by the formation                                             |
-| `created_at` | string   | ISO 8601 creation timestamp                                                    |
-| `updated_at` | string   | ISO 8601 last-updated timestamp                                                |
+| Field                 | Type   | Description                                                                                                                                                                                                                      |
+| --------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                  | string | Public ID (`form_` prefix)                                                                                                                                                                                                       |
+| `project_id`          | string | Project public ID                                                                                                                                                                                                                |
+| `name`                | string | Formation name (unique per project)                                                                                                                                                                                              |
+| `template`            | object | The last applied template (raw — substitution expressions preserved)                                                                                                                                                             |
+| `outputs`             | object | Resolved output values                                                                                                                                                                                                           |
+| `status`              | string | `creating` \| `active` \| `updating` \| `failed` \| `deleting` \| `deleted` \| `delete_failed`                                                                                                                                   |
+| `metadata`            | object | Static annotations stored on the record (supplied at create/update), per [Tags and metadata](iam.md#tags-and-metadata). Not a substitution site — `sub`/`param`/`ref` expressions are rejected (use `template.metadata` instead) |
+| `resolved_metadata`   | object | The template's top-level `metadata` after `sub`/`param`/`ref` substitution at the last deploy (null when the template declares no metadata)                                                                                      |
+| `resolved_parameters` | object | Parameter values applied at the last deploy, for auditability (`no_echo` values masked as `***`; null when the template declares no parameters)                                                                                  |
+| `error`               | object | Why the formation is `failed` / `delete_failed`, as `{ code, message, meta }` — the same shape an error response uses. Null in every other status, and cleared by the next successful deploy                                     |
+| `resources`           | array  | Resources managed by the formation                                                                                                                                                                                               |
+| `created_at`          | string | ISO 8601 creation timestamp                                                                                                                                                                                                      |
+| `updated_at`          | string | ISO 8601 last-updated timestamp                                                                                                                                                                                                  |
 
 ### FormationResource
 
-| Field                  | Type   | Description                                                         |
-| ---------------------- | ------ | ------------------------------------------------------------------- |
-| `id`                   | string | Public ID (`form_res_` prefix)                                           |
-| `logical_id`           | string | Logical ID from the template                                        |
-| `resource_type`        | string | Resource type (`agent`, `tool`, `memory_store`, etc.)                     |
-| `physical_resource_id` | string | Public ID of the physical SOAT resource                             |
-| `status`               | string | `pending` \| `created` \| `updated` \| `deleted` \| `failed`        |
+| Field                  | Type   | Description                                                  |
+| ---------------------- | ------ | ------------------------------------------------------------ |
+| `id`                   | string | Public ID (`form_res_` prefix)                               |
+| `logical_id`           | string | Logical ID from the template                                 |
+| `resource_type`        | string | Resource type (`agent`, `tool`, `memory_store`, etc.)        |
+| `physical_resource_id` | string | Public ID of the physical SOAT resource                      |
+| `status`               | string | `pending` \| `created` \| `updated` \| `deleted` \| `failed` |
 
 ### FormationOperation
 
 One record per deploy (create, update, delete); [`GET /api/v1/formations/{formation_id}/events`](/docs/api/formations/list-formation-events) returns the full history.
 
-| Field            | Type   | Description                                           |
-| ---------------- | ------ | ----------------------------------------------------- |
-| `id`             | string | Public ID (`form_op_` prefix)                             |
-| `operation_type` | string | `create` \| `update` \| `delete`                      |
-| `status`         | string | `queued` \| `running` \| `completed` \| `failed`     |
-| `plan`           | object | Planned changes computed before execution             |
-| `events`         | array  | Per-resource event log with timestamp, action, status; a `failed` event carries its `error` as `{ code, message, meta? }` |
+| Field            | Type   | Description                                                                                                                                          |
+| ---------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | string | Public ID (`form_op_` prefix)                                                                                                                        |
+| `operation_type` | string | `create` \| `update` \| `delete`                                                                                                                     |
+| `status`         | string | `queued` \| `running` \| `completed` \| `failed`                                                                                                     |
+| `plan`           | object | Planned changes computed before execution                                                                                                            |
+| `events`         | array  | Per-resource event log with timestamp, action, status; a `failed` event carries its `error` as `{ code, message, meta? }`                            |
 | `error`          | object | Why this operation failed, as `{ code, message, meta }` — the same bag the formation carries while that failure is its current state. Null otherwise |
-| `created_at`     | string | ISO 8601 creation timestamp                           |
-| `updated_at`     | string | ISO 8601 last-updated timestamp                       |
+| `created_at`     | string | ISO 8601 creation timestamp                                                                                                                          |
+| `updated_at`     | string | ISO 8601 last-updated timestamp                                                                                                                      |
 
 ## Key Concepts
 
@@ -111,12 +111,12 @@ One record per deploy (create, update, delete); [`GET /api/v1/formations/{format
 
 A template has four top-level keys. Complete 14-resource template: [Deploy a Multi-Agent App with Agent Formation — Step 3 (Write the formation template)](/docs/tutorials/formations#step-3--write-the-formation-template).
 
-| Key          | Required | Description                                                  |
-| ------------ | -------- | ------------------------------------------------------------ |
-| `parameters` | No       | Map of parameter names → parameter declarations              |
-| `resources`  | Yes      | Map of logical resource ID → resource declaration            |
+| Key          | Required | Description                                                                                                                              |
+| ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `parameters` | No       | Map of parameter names → parameter declarations                                                                                          |
+| `resources`  | Yes      | Map of logical resource ID → resource declaration                                                                                        |
 | `outputs`    | No       | Map of output names → values; each value is a string or one `ref`, `param`, `sub` or `ref_attr` expression, else `400 VALIDATION_FAILED` |
-| `metadata`   | No       | Arbitrary metadata; supports `sub`/`param`/`ref` substitution (see [Metadata Substitution](#metadata-substitution)) |
+| `metadata`   | No       | Arbitrary metadata; supports `sub`/`param`/`ref` substitution (see [Metadata Substitution](#metadata-substitution))                      |
 
 A request carrying a template may be up to 10 MB, so documents can be declared with their content inline; every other route keeps a 1 MB body limit.
 
@@ -184,13 +184,13 @@ Parameters inject deploy-time values without changing the template:
 
 #### Parameter Declaration Fields
 
-| Field         | Required | Description                                                                            |
-| ------------- | -------- | -------------------------------------------------------------------------------------- |
-| `type`               | No       | Parameter type; currently only `"string"` is supported                                                                  |
-| `default`            | No       | Default value used when the parameter is not provided at deploy time                                                    |
-| `description`        | No       | Human-readable description of the parameter's purpose                                                                   |
-| `no_echo`            | No       | When `true`, signals that the value is sensitive and should not be logged or displayed                                  |
-| `use_previous_value` | No       | When `true`, omitting the parameter **on update** reuses its previously stored value instead of failing as required     |
+| Field                | Required | Description                                                                                                         |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `type`               | No       | Parameter type; currently only `"string"` is supported                                                              |
+| `default`            | No       | Default value used when the parameter is not provided at deploy time                                                |
+| `description`        | No       | Human-readable description of the parameter's purpose                                                               |
+| `no_echo`            | No       | When `true`, signals that the value is sensitive and should not be logged or displayed                              |
+| `use_previous_value` | No       | When `true`, omitting the parameter **on update** reuses its previously stored value instead of failing as required |
 
 #### Parameter Expressions
 
@@ -229,16 +229,17 @@ Pass values in the `parameters` field of the validate, plan, create, or update r
 
 The CLI takes a repeatable `--parameter` instead of a JSON `--parameters` object, plus `--env-file` to load an `.env` file.
 
-| Syntax | Example | When to use |
-|---|---|---|
-| `Key=literal` | `--parameter AppUrl=https://example.com` | Non-sensitive, static values |
-| `Key=$VAR` or `Key=${VAR}` | `--parameter ApiKey=$API_KEY` | Variable already exported in the shell |
-| `Key=@VAR_NAME` | `--parameter ApiKey=@API_KEY` | Variable in `--env-file`; shell-safe (no expansion) |
-| `KEY` (no `=`) | `--parameter API_KEY` | Read env var by exact name from `--env-file` or shell env |
+| Syntax                     | Example                                  | When to use                                               |
+| -------------------------- | ---------------------------------------- | --------------------------------------------------------- |
+| `Key=literal`              | `--parameter AppUrl=https://example.com` | Non-sensitive, static values                              |
+| `Key=$VAR` or `Key=${VAR}` | `--parameter ApiKey=$API_KEY`            | Variable already exported in the shell                    |
+| `Key=@VAR_NAME`            | `--parameter ApiKey=@API_KEY`            | Variable in `--env-file`; shell-safe (no expansion)       |
+| `KEY` (no `=`)             | `--parameter API_KEY`                    | Read env var by exact name from `--env-file` or shell env |
 
 The shell expands `$VAR` before the CLI starts, so `--env-file` values need `@VAR_NAME` or the bare key. Lookup order: `--env-file`, then `process.env`. An unset `@VAR_NAME` / bare-`KEY` variable is **omitted** from the request (the server reuses the stored value for `use_previous_value: true` parameters or returns `400 Missing required parameters`); an unset `Key=$VAR` / `Key=${VAR}` fails fast in the CLI.
 
 {/* single-client: CLI parameter parsing */}
+
 ```bash
 soat update-formation \
   --formation-id form_6sBFq1eBsCwB16dM \
@@ -351,7 +352,10 @@ The stored header is `Bearer {{secret:sec_01HXYZ}}`; the decrypted value is subs
   "resources": {
     "ApiSecret": {
       "type": "secret",
-      "properties": { "name": "third-party-api-key", "value": { "no_echo": true } }
+      "properties": {
+        "name": "third-party-api-key",
+        "value": { "no_echo": true }
+      }
     }
   }
 }
@@ -417,13 +421,13 @@ The dependency graph is built from explicit `depends_on` entries, implicit `ref`
 
 ### Resource Lifecycle
 
-| Status    | Meaning                                     |
-| --------- | ------------------------------------------- |
-| `pending` | Not yet provisioned                         |
-| `created` | Successfully created by a formation deploy  |
-| `updated` | Successfully updated by a subsequent deploy |
+| Status    | Meaning                                                                      |
+| --------- | ---------------------------------------------------------------------------- |
+| `pending` | Not yet provisioned                                                          |
+| `created` | Successfully created by a formation deploy                                   |
+| `updated` | Successfully updated by a subsequent deploy                                  |
 | `deleted` | Deleted when removed from the template, or rolled back after a failed deploy |
-| `failed`  | Last operation failed                       |
+| `failed`  | Last operation failed                                                        |
 
 A **replaced** resource (see [Custom Resource Types](#custom-resource-types)) stays `updated`, with `physical_resource_id` re-pointed at the replacement. The deploy records a `replace` event and, after every other change in the operation, a `replace-cleanup` event for the disposal of the old resource (`replace-retained` when `deletion_policy` is `retain`).
 
@@ -433,10 +437,10 @@ A `deleted` resource is an audit tombstone: `get-formation` still lists it; `pla
 
 A deploy is a reconciler, so the two failure kinds are reported differently:
 
-| What went wrong | How it is reported |
-| --- | --- |
-| The template's **shape** — an unknown field, a missing required property, a bad `ref` | `400 VALIDATION_FAILED`, nothing is deployed |
-| The **reconciliation** — a resource the platform refused to create or update | `201`/`200` with `status: "failed"` and a populated `error` |
+| What went wrong                                                                       | How it is reported                                          |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| The template's **shape** — an unknown field, a missing required property, a bad `ref` | `400 VALIDATION_FAILED`, nothing is deployed                |
+| The **reconciliation** — a resource the platform refused to create or update          | `201`/`200` with `status: "failed"` and a populated `error` |
 
 **`2xx` means the deploy was attempted, not that it worked**; read `status`, then `error`:
 
@@ -457,6 +461,7 @@ A deploy is a reconciler, so the two failure kinds are reported differently:
 **The CLI exits non-zero on that body.** `create-formation` and `update-formation` print the payload to stdout (`$(…)` capture and `| jq` unaffected), write the reason to stderr and exit `1`:
 
 {/* single-client: CLI exit-code behaviour */}
+
 ```bash
 soat update-formation --formation-id "$F" --template "$T" && echo "deployed"
 # update-formation: the deploy failed at resource 'case1' — the formation is
@@ -499,10 +504,10 @@ An **unforeseeable** error surfaces mid-teardown: resources removed before it st
 
 Each entry in `plan-formation`'s `changes[]` carries a `diff` object alongside `logical_id`, `resource_type`, `action`, and `physical_resource_id`:
 
-| Field           | Type          | Description                                                                          |
-| --------------- | ------------- | ------------------------------------------------------------------------------------- |
-| `diff.desired`  | object        | Resolved desired-state properties, after parameter and `ref`/`sub` substitution — credential-bearing properties read as `{ "no_echo": true }`, see [Secrets in Templates](#secrets-in-templates) |
-| `diff.current`  | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read) |
+| Field          | Type           | Description                                                                                                                                                                                      |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `diff.desired` | object         | Resolved desired-state properties, after parameter and `ref`/`sub` substitution — credential-bearing properties read as `{ "no_echo": true }`, see [Secrets in Templates](#secrets-in-templates) |
+| `diff.current` | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read)                                                |
 
 For a type whose live state can be read back (most), `diff.current` is the resource as it exists today; for a write-only type (currently only `secret`), it is the last-applied snapshot on the formation resource, which `update-formation` also diffs against.
 
@@ -604,20 +609,20 @@ One signed `POST` to the registration's URL per operation, with a JSON body:
 
 Two headers travel with every call ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
 
-| Header | Meaning |
-| --- | --- |
-| `X-Soat-Signature` | `t=<unix>,v1=<hex hmac-sha256 of "{t}.{body}">`, keyed with the registration's secret — the same scheme [webhooks](./webhooks.md) are signed with. Verify over the **raw** body bytes, and reject a stale `t`. |
-| `X-Soat-Idempotency-Key` | Stable per (resource, operation) across re-applies, distinct between resources. A handler that has already completed this key can answer with the same result instead of acting twice. |
+| Header                   | Meaning                                                                                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X-Soat-Signature`       | `t=<unix>,v1=<hex hmac-sha256 of "{t}.{body}">`, keyed with the registration's secret — the same scheme [webhooks](./webhooks.md) are signed with. Verify over the **raw** body bytes, and reject a stale `t`. |
+| `X-Soat-Idempotency-Key` | Stable per (resource, operation) across re-applies, distinct between resources. A handler that has already completed this key can answer with the same result instead of acting twice.                         |
 
 What a 2xx must answer with, per operation:
 
-| `request_type` | Response body |
-| --- | --- |
-| `create` | `{ "physical_resource_id": "…", "outputs": { … } }` — the id is required |
-| `update` | the same shape; a **different** `physical_resource_id` means the resource was replaced |
-| `delete` | `{}` — and it must be idempotent: deleting an already-gone resource is a 2xx |
-| `validate` | `{ "errors": [{ "path": "properties.kind", "message": "…" }] }` — an empty list means valid |
-| `read` | `{ "exists": true, "physical_resource_id": "…", "properties": { … }, "outputs": { … } }`, or `{ "exists": false }` |
+| `request_type` | Response body                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `create`       | `{ "physical_resource_id": "…", "outputs": { … } }` — the id is required                                           |
+| `update`       | the same shape; a **different** `physical_resource_id` means the resource was replaced                             |
+| `delete`       | `{}` — and it must be idempotent: deleting an already-gone resource is a 2xx                                       |
+| `validate`     | `{ "errors": [{ "path": "properties.kind", "message": "…" }] }` — an empty list means valid                        |
+| `read`         | `{ "exists": true, "physical_resource_id": "…", "properties": { … }, "outputs": { … } }`, or `{ "exists": false }` |
 
 To refuse, answer 4xx/5xx with `{ "message": "…" }`; the message is relayed verbatim on the deploy event. Any non-2xx, unreachable host, timeout, 2xx body over 8 MiB, or body outside the protocol fails the deploy with `FORMATION_HANDLER_FAILED` and enters the ordinary [rollback](#rollback-on-a-failed-deploy) path.
 
@@ -664,9 +669,9 @@ The un-deleted id stays on the record as pending cleanup; the next deploy and th
 
 ## Configuration
 
-| Environment Variable | Required | Description |
-| --- | --- | --- |
-| `FORMATION_RESOURCE_TYPES_CONFIG` | No | Path to a JSON file registering [custom resource types](#custom-resource-types). Unset (the default) means the built-in types are the whole set. |
+| Environment Variable              | Required | Description                                                                                                                                      |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FORMATION_RESOURCE_TYPES_CONFIG` | No       | Path to a JSON file registering [custom resource types](#custom-resource-types). Unset (the default) means the built-in types are the whole set. |
 
 ```json
 {
@@ -719,7 +724,10 @@ soat create-formation \
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.formations.createFormation({
   body: {
@@ -729,7 +737,11 @@ const { data, error } = await soat.formations.createFormation({
       resources: {
         MyProvider: {
           type: 'ai_provider',
-          properties: { name: 'GPT-4o', provider: 'openai', default_model: 'gpt-4o' },
+          properties: {
+            name: 'GPT-4o',
+            provider: 'openai',
+            default_model: 'gpt-4o',
+          },
         },
         MyAgent: {
           type: 'agent',
@@ -800,7 +812,7 @@ soat update-formation \
 const { data, error } = await soat.formations.updateFormation({
   path: { formation_id: 'form_01' },
   body: {
-    template: { /* updated template */ },
+    template: {/* updated template */},
     parameters: { AppUrl: 'https://staging.example.com' },
   },
 });

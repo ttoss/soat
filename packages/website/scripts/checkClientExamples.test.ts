@@ -88,6 +88,12 @@ test('a block marked single-client with a reason passes', () => {
   assert.deepEqual(checkSource({ file: 'advanced/a.md', source }), []);
 });
 
+test('blank lines between a single-client marker and its fence are skipped', () => {
+  const source =
+    '{/* single-client: CLI flag parsing */}\n\n```bash\nsoat create-formation --env-file .env\n```\n';
+  assert.deepEqual(checkSource({ file: 'advanced/a.md', source }), []);
+});
+
 test('a single-client marker without a reason fails', () => {
   const source =
     '{/* single-client: */}\n```bash\nsoat create-formation\n```\n';
