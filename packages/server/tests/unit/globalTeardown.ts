@@ -1,6 +1,6 @@
 import {
+  readTemplateDatabase,
   readTestDatabaseConnection,
-  TEMPLATE_DATABASE,
   withAdminClient,
 } from './testDatabase';
 
@@ -20,7 +20,7 @@ const globalTeardown = async () => {
     connection: readTestDatabaseConnection(),
     run: async (client) => {
       await client.query(
-        `DROP DATABASE IF EXISTS "${TEMPLATE_DATABASE}" WITH (FORCE)`
+        `DROP DATABASE IF EXISTS "${readTemplateDatabase()}" WITH (FORCE)`
       );
     },
   });
