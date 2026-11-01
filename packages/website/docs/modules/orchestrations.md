@@ -296,7 +296,7 @@ A worker holds the lease for as long as its drive takes, re-arming it every thir
 
 **Crash recovery.** A `running` run holds a **lease** (`lease_expires_at`), refreshed after every completed round. A reaper reclaims expired leases and enqueues a `continue` task; completed nodes are skipped and only the unfinished frontier re-executes.
 
-**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`completed`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
+**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`completed`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs are driven inline so their output can be aggregated; one that parks [parks its parent](#a-parked-child-parks-its-parent). See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
 
 **Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.completed`, `orchestration_runs.failed`.
 
@@ -507,7 +507,25 @@ This bounds **recursion**, not total work: a `loop` fans out, so `N` children pe
 
 ### A child run's failure fails its parent
 
-A `loop` / `sub_orchestration` child settling **non-success terminal** (`failed`, `cancelled`, `expired`) fails the node that started it and so the parent run, as a [workflow `on_enter` dispatch](./workflows.md) does. The parent's `error.code` is the **child's own code** where it has one; `error.meta` names the child run and node, so `parent_orchestration_run_id` walks down to the failure. A parked child (`awaiting_input`, `sleeping`) is unaffected.
+A `loop` / `sub_orchestration` child settling **non-success terminal** (`failed`, `cancelled`, `expired`) fails the node that started it and so the parent run, as a [workflow `on_enter` dispatch](./workflows.md) does. The parent's `error.code` is the **child's own code** where it has one; `error.meta` names the child run and node, so `parent_orchestration_run_id` walks down to the failure.
+
+### A parked child parks its parent
+
+A `loop` / `sub_orchestration` child that parks (`awaiting_input`, `sleeping`) parks the parent `awaiting_input` on that node:
+
+```json
+{
+  "type": "child_run",
+  "node_id": "sub",
+  "prompt": "Node 'sub' waits for its child runs to settle.",
+  "context": { "orchestration_run_ids": ["orr_..."] }
+}
+```
+
+Resolve the child (its own `submit-human-input`, approval or wake). When every listed child has settled, the parent resumes from the node: it takes the child's `output` (a `loop`, its `results` in item order), or fails as [above](#a-child-runs-failure-fails-its-parent). A `loop` keeps starting its remaining batches while an item is parked.
+
+- `submit-human-input` on the parent's node is `400 ORCHESTRATION_HUMAN_NODE_MISMATCH`: only the children's settle satisfies it.
+- A parent [paused](#pausing-a-run) when its child settles stays parked; its `resume` takes the settled outcome instead of starting the child again.
 
 ### Static Validation
 
@@ -876,7 +894,7 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 | `ORCHESTRATION_RUN_NOT_PAUSABLE`   | `409`  | The run has already settled, so there is nothing left to pause                                | Nothing to do — a settled run keeps its result; pause only applies while a run is `queued`, `running`, `sleeping` or `awaiting_input` — see [Pausing a run](#pausing-a-run) |
 | `ORCHESTRATION_RUN_PAUSED`         | `409`  | `submit-human-input` was called while an operator pause is in force                           | Resume the run first, then submit the payload — an operator pause is not liftable by satisfying the node behind it — see [Pausing a run](#pausing-a-run) |
 
-**A run stuck non-terminal:** `queued` — no worker claimed its task; confirm one runs (the API process does unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` — a `delay`/`poll` wait or retry backoff (`active_nodes` names the node); resumes on its own. `awaiting_input` — waits for `submit-human-input`, or [`resume-orchestration-run`](#pausing-a-run) when `required_action.type` is `paused`. `running` too long self-heals: the reaper reclaims the run once its lease is older than `ORCHESTRATION_RUN_LEASE_TTL_MS` ([Durable Background Execution](#durable-background-execution)).
+**A run stuck non-terminal:** `queued` — no worker claimed its task; confirm one runs (the API process does unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` — a `delay`/`poll` wait or retry backoff (`active_nodes` names the node); resumes on its own. `awaiting_input` — waits for `submit-human-input`, or [`resume-orchestration-run`](#pausing-a-run) when `required_action.type` is `paused`, or the runs in `required_action.context.orchestration_run_ids` when it is `child_run`. `running` too long self-heals: the reaper reclaims the run once its lease is older than `ORCHESTRATION_RUN_LEASE_TTL_MS` ([Durable Background Execution](#durable-background-execution)).
 
 ### Who may act on an orchestration
 

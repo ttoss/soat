@@ -8,11 +8,18 @@ import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import { getOrchestrationQueueDriver } from './orchestration-queue-drivers';
 import {
+  isParkedOnChildRuns,
+  type ParkedChildRuns,
+  resumeRunParkedOnChildren,
+  wakeAfterSettle,
+} from './orchestrationChildRunWake';
+import {
   emitRunLifecycleEvent,
   lifecycleEventForStatus,
 } from './orchestrationEvents';
 import { findStartNodes, resolveNextNodes } from './orchestrationGraph';
 import { newLeaseExpiry } from './orchestrationLease';
+import { nestedNodeArtifact } from './orchestrationNestedNodes';
 import type { NestedRunParent } from './orchestrationNestedRun';
 import {
   applyStateMapping,
@@ -24,7 +31,10 @@ import {
 } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import type { RequiredAction, ScheduledWait } from './orchestrationNodeTypes';
-import { recordHumanInputResumption } from './orchestrationPauseRecords';
+import {
+  recordHumanInputResumption,
+  recordParkedNodeFailure,
+} from './orchestrationPauseRecords';
 import { nextRunDepthOrRefuse } from './orchestrationRunDepth';
 import { resolveRunGraph } from './orchestrationRunGraph';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
@@ -186,25 +196,16 @@ const buildResumeEntry = async (args: {
 };
 
 /**
- * Settles a run into a terminal or awaiting_input state: persists the final record
- * (including the run's resolved trace id), emits the matching lifecycle webhook
- * event, and returns the mapped run.
+ * Files the ApprovalItem an `approval` park froze, stamping its id back on the
+ * `required_action`. Emitted at settle because the run record is in scope; the
+ * bulky frozen spec is dropped after emit — the ApprovalItem is its durable home.
  */
-const settleRun = async (args: {
+const emitParkedApproval = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   runStatus: MappedOrchestrationRun['status'];
   requiredAction: RequiredAction | null;
-  runError: object | null;
-  state: Record<string, unknown>;
-  artifacts: Record<string, unknown>;
-  nodes: OrchestrationNode[];
-  edges: OrchestrationEdge[];
-  traceId: string | null;
-}): Promise<MappedOrchestrationRun> => {
-  const { runRecord, requiredAction, state, artifacts, traceId } = args;
-
-  // Emitted here because the run record is in scope. The bulky frozen spec is
-  // dropped after emit — the ApprovalItem is its durable home.
+}): Promise<void> => {
+  const { runRecord, requiredAction } = args;
   if (
     args.runStatus === 'awaiting_input' &&
     requiredAction?.type === 'approval' &&
@@ -241,6 +242,31 @@ const settleRun = async (args: {
     }
     requiredAction.approvalSpec = undefined;
   }
+};
+
+/**
+ * Settles a run into a terminal or awaiting_input state: persists the final record
+ * (including the run's resolved trace id), emits the matching lifecycle webhook
+ * event, and returns the mapped run.
+ */
+const settleRun = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  runStatus: MappedOrchestrationRun['status'];
+  requiredAction: RequiredAction | null;
+  runError: object | null;
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  traceId: string | null;
+}): Promise<MappedOrchestrationRun> => {
+  const { runRecord, requiredAction, state, artifacts, traceId } = args;
+
+  await emitParkedApproval({
+    runRecord,
+    runStatus: args.runStatus,
+    requiredAction,
+  });
 
   const { runStatus, runError, output } = await resolveSettledOutput(args);
   await updateRunRecord({
@@ -264,6 +290,9 @@ const settleRun = async (args: {
       run: mapped,
     });
   }
+
+  const woken = await wakeAfterSettle({ run: runRecord });
+  if (woken) return woken;
 
   return attachRequiredActionToRun({ mapped, runStatus, requiredAction });
 };
@@ -1007,6 +1036,46 @@ export const wakeRun = async (args: {
 };
 
 /**
+ * Records the outcome a node parked on its children takes once they settled,
+ * or marks it failed and rethrows, which settles the run `failed`.
+ */
+const applyChildRunsOutcome = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+  childRuns: ParkedChildRuns;
+  nodes: OrchestrationNode[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+}): Promise<void> => {
+  const { run, childRuns, nodes } = args;
+  const node = nodes.find((n) => {
+    return n.id === childRuns.nodeId;
+  })!;
+  let artifact: Record<string, unknown>;
+  try {
+    artifact = nestedNodeArtifact({ node, runs: childRuns.runs });
+  } catch (error: unknown) {
+    await recordParkedNodeFailure({
+      runRecord: run,
+      nodeId: node.id,
+      error: buildRunError(error),
+    });
+    throw error;
+  }
+  applyHumanInputToState({
+    humanNodeId: node.id,
+    humanOutput: artifact,
+    nodes,
+    state: args.state,
+    artifacts: args.artifacts,
+  });
+  await recordHumanInputResumption({
+    runRecord: run,
+    humanNodeId: node.id,
+    humanOutput: artifact,
+  });
+};
+
+/**
  * Applies a resumed node's outcome to run state. For a class-C-approved `tool`
  * node it re-dispatches the tool with the frozen/edited args (gate skipped, Q4)
  * and records the tool result as the node artifact so downstream nodes read the
@@ -1020,11 +1089,17 @@ const applyResumeNodeOutcome = async (args: {
   humanOutput?: Record<string, unknown>;
   decisionLabel?: string;
   approvedArguments?: Record<string, unknown> | null;
+  childRuns?: ParkedChildRuns;
   nodes: OrchestrationNode[];
   state: Record<string, unknown>;
   artifacts: Record<string, unknown>;
 }): Promise<void> => {
   const { run, resumedNode, humanNodeId, humanOutput, decisionLabel } = args;
+
+  if (args.childRuns) {
+    await applyChildRunsOutcome({ ...args, childRuns: args.childRuns });
+    return;
+  }
 
   if (resumedNode?.type === 'tool' && decisionLabel === 'approved') {
     const execResult = await executeToolNode({
@@ -1085,6 +1160,7 @@ const applyResumeOutcomeOrSettleFailure = async (args: {
   humanOutput?: Record<string, unknown>;
   decisionLabel?: string;
   approvedArguments?: Record<string, unknown> | null;
+  childRuns?: ParkedChildRuns;
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
   state: Record<string, unknown>;
@@ -1183,6 +1259,25 @@ const restoreSleepingRun = async (args: {
   return mapRunWithIncludes(run.id as number);
 };
 
+/**
+ * Lifts `run`'s operator pause, answering for the runs `resume` must not
+ * re-drive: one paused mid-timer, and one parked on children, where re-driving
+ * the node would start them again. `null` when the frontier is to be re-driven.
+ */
+const liftRunPause = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<MappedOrchestrationRun | null> => {
+  const { run } = args;
+  await clearRunPause({ runRecord: run });
+  const restored = await restoreSleepingRun({ run });
+  if (restored) return restored;
+  if (!isParkedOnChildRuns(run)) return null;
+  return (
+    (await resumeRunParkedOnChildren({ run })) ??
+    mapRunWithIncludes(run.id as number)
+  );
+};
+
 export const resumeOrchestrationRunExecution = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
   humanNodeId?: string;
@@ -1201,8 +1296,11 @@ export const resumeOrchestrationRunExecution = async (args: {
    * standing, and its own caller refuses while one is in force.
    */
   liftPause?: boolean;
+  /** Set by `resumeRunParkedOnChildren`: the settled children of the parked node. */
+  childRuns?: ParkedChildRuns;
 }): Promise<MappedOrchestrationRun> => {
-  const { run, humanNodeId, humanOutput, decisionLabel } = args;
+  const { run, humanOutput, decisionLabel, childRuns } = args;
+  const humanNodeId = args.humanNodeId ?? childRuns?.nodeId;
   log('resumeOrchestrationRunExecution %o', {
     orchestrationRunId: run.id,
     humanNodeId,
@@ -1214,9 +1312,8 @@ export const resumeOrchestrationRunExecution = async (args: {
   // Cleared before the drive, so the loop does not re-park on the flag
   // it just read.
   if (args.liftPause) {
-    await clearRunPause({ runRecord: run });
-    const restored = await restoreSleepingRun({ run });
-    if (restored) return restored;
+    const lifted = await liftRunPause({ run });
+    if (lifted) return lifted;
   }
 
   // `onMissing: 'throw'` — this path answers an HTTP request, so a deleted
@@ -1242,6 +1339,7 @@ export const resumeOrchestrationRunExecution = async (args: {
     humanOutput,
     decisionLabel,
     approvedArguments: args.approvedArguments,
+    childRuns,
     nodes,
     edges,
     state,

@@ -178,10 +178,10 @@ export const flagRunTreePaused = async (args: {
 /**
  * Lifts the pause on one run.
  *
- * Deliberately not a tree walk, unlike {@link flagRunTreePaused}: a child that
- * parked has already handed its parent an outcome, so the parent's `resume`
- * re-drives the parent's own frontier and a descendant is resumed by its own
- * id (reachable through `parent_orchestration_run_id`). Stopping fans out
+ * Deliberately not a tree walk, unlike {@link flagRunTreePaused}: the parent's
+ * `resume` re-drives the parent's own frontier (or takes its settled children's
+ * outcome) and a descendant is resumed by its own id (reachable through
+ * `parent_orchestration_run_id`). Stopping fans out
  * because spend does; restarting does not, because each run's checkpoint is its
  * own.
  */

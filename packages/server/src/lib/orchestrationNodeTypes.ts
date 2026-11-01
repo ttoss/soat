@@ -43,6 +43,13 @@ export type WaitResume =
   | { kind: 'poll'; attempt: number }
   | { kind: 'retry'; attempt: number };
 
+/**
+ * `child_run` parks a `loop` / `sub_orchestration` node on child runs that have
+ * not settled; their settle resumes it, never a caller's payload.
+ */
+export type RequiredActionType =
+  'human_input' | 'webhook_receive' | 'approval' | 'child_run';
+
 export type NodeExecutionResult =
   | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }
   | { kind: 'condition'; label: string }
@@ -57,7 +64,7 @@ export type NodeExecutionResult =
     }
   | {
       kind: 'requires_action';
-      type: 'human_input' | 'webhook_receive' | 'approval';
+      type: RequiredActionType;
       nodeId: string;
       prompt: string;
       context: Record<string, unknown>;
@@ -76,7 +83,7 @@ export type NodeExecutionResult =
     };
 
 export type RequiredAction = {
-  type: 'human_input' | 'webhook_receive' | 'approval';
+  type: RequiredActionType;
   nodeId: string;
   prompt: string;
   context: Record<string, unknown>;

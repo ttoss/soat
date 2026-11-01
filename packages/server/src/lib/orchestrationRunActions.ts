@@ -6,6 +6,10 @@ import {
   type OrchestrationRunRow,
   orchestrationRuns,
 } from './orchestrationAccessor';
+import {
+  isParkedOnChildRuns,
+  wakeParentOfSettledRun,
+} from './orchestrationChildRunWake';
 import { resumeOrchestrationRunExecution } from './orchestrationEngine';
 import { findStartNodes } from './orchestrationGraph';
 import { resolveRunGraph } from './orchestrationRunGraph';
@@ -71,6 +75,7 @@ export const cancelOrchestrationRun = async (args: {
     completedAt: new Date(),
     toolContext: null,
   });
+  await wakeParentOfSettledRun({ run });
 
   return mapOrchestrationRun(run);
 };
@@ -191,8 +196,9 @@ export const submitHumanInput = async (args: {
       `Run '${args.runPublicId}' is paused; resume it before submitting human input.`
     );
 
+  // A node parked on child runs takes their outcome, never a caller's payload.
   const activeNodes = run.activeNodes as string[];
-  if (!activeNodes.includes(args.nodeId))
+  if (!activeNodes.includes(args.nodeId) || isParkedOnChildRuns(run))
     throw new DomainError(
       'ORCHESTRATION_HUMAN_NODE_MISMATCH',
       `Node '${args.nodeId}' is not the active human node for run '${args.runPublicId}'.`
