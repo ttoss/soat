@@ -553,7 +553,7 @@ describe('2026-09-16-memory-rules-from-agent-extraction', () => {
       sql: `SELECT mr.prompt, mr.model, aip.public_id AS provider
               FROM memory_rules mr
               LEFT JOIN ai_providers aip ON aip.id = mr.ai_provider_id
-             WHERE mr.source_agent_ids = '["agent_tuned"]'::jsonb`,
+             WHERE mr.source_agent_ids::jsonb = '["agent_tuned"]'::jsonb`,
     });
 
     expect(row).toEqual({

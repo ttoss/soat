@@ -69,9 +69,12 @@ const HAS_KEYED_NODE = (nodes: string): string => {
      WHERE json_typeof(n) = 'object' AND n->'key' IS NOT NULL)`;
 };
 
-const HAS_NODE_CHANGE = `jsonb_typeof(diff->'changed') = 'array'
+// `diff::jsonb`: the column is `json` once `2026-11-01-payloads-keep-key-order`
+// has run, and this probe answers either way.
+const HAS_NODE_CHANGE = `jsonb_typeof(diff::jsonb->'changed') = 'array'
   AND EXISTS (
-    SELECT 1 FROM jsonb_array_elements(diff->'changed') AS c WHERE c ? 'node')`;
+    SELECT 1 FROM jsonb_array_elements(diff::jsonb->'changed') AS c
+     WHERE c ? 'node')`;
 
 const TABLES = [
   {

@@ -1,4 +1,17 @@
+import type { MigrationContext } from '@ttoss/postgresdb';
 import { defineMigration } from '@ttoss/postgresdb';
+
+import { memoryRulesFromAgentExtraction } from './2026-09-16-memoryRulesFromAgentExtraction';
+import { triggerToolContext } from './2026-09-20-triggerToolContext';
+import { durableEventFirings } from './2026-09-21-durableEventFirings';
+import { fileMetadataJsonb } from './2026-09-22-fileMetadataJsonb';
+import { evalRunDeciderVersions } from './2026-09-29-evalRunDeciderVersions';
+import { generationInputModalities } from './2026-10-01-generationInputModalities';
+import { priceBookResource } from './2026-10-01-priceBookResource';
+import { shareCap } from './2026-10-01-shareCap';
+import { failureReasonsStoredError } from './2026-10-17-failureReasonsStoredError';
+import { onBehalfOf } from './2026-10-17-onBehalfOf';
+import { approvalItemTaskPayload } from './2026-10-19-approvalItemTaskPayload';
 
 /**
  * Payload, record and configuration columns to `json`, which keeps an object's
@@ -106,13 +119,27 @@ const PAYLOAD_COLUMNS: Record<string, string[]> = {
   workflow_migrations: ['items', 'state_map'],
 };
 
-type Context = {
-  select: <T>(args: { sql: string }) => Promise<T[]>;
-};
+/**
+ * The migrations that leave a listed column `jsonb`. Every probe runs before
+ * any `up`, so while one of them is pending this one is too.
+ */
+const JSONB_WRITERS = [
+  memoryRulesFromAgentExtraction,
+  triggerToolContext,
+  durableEventFirings,
+  fileMetadataJsonb,
+  evalRunDeciderVersions,
+  generationInputModalities,
+  priceBookResource,
+  shareCap,
+  failureReasonsStoredError,
+  onBehalfOf,
+  approvalItemTaskPayload,
+];
 
 /** The listed columns still `jsonb`, by table. */
 const jsonbColumns = async (args: {
-  context: Context;
+  context: MigrationContext;
 }): Promise<Map<string, string[]>> => {
   const rows = await args.context.select<{
     table_name: string;
@@ -138,6 +165,9 @@ export const payloadsKeepKeyOrder = defineMigration({
   description:
     'Payload, record and configuration columns from jsonb to json, so an object reads back in the key order it was written.',
   isApplied: async (context) => {
+    for (const writer of JSONB_WRITERS) {
+      if (!(await writer.isApplied?.(context))) return false;
+    }
     return (await jsonbColumns({ context })).size === 0;
   },
   up: async (context) => {

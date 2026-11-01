@@ -15,6 +15,7 @@ import {
 jest.setTimeout(180_000);
 
 const DATABASE = `soat_migration_payloads_key_order_${process.pid}`;
+const PENDING_DATABASE = `soat_migration_payloads_key_order_pending_${process.pid}`;
 const NAME = '2026-11-01-payloads-keep-key-order';
 
 const runnerFor = (args: { client: Sequelize }) => {
@@ -33,6 +34,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await dropDatabase(DATABASE);
+  await dropDatabase(PENDING_DATABASE);
   await stopDatabaseServer();
 });
 
@@ -114,5 +116,25 @@ describe(NAME, () => {
       });
       expect(Object.keys(run.input)).toEqual(['zebra', 'apple']);
     });
+  });
+});
+
+describe(`${NAME} before a migration that adds a listed column as jsonb`, () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    client = await createDatabase(PENDING_DATABASE);
+    await client.query('CREATE TABLE shares (id serial PRIMARY KEY)');
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('it is not recognised as applied, so it runs after that one', async () => {
+    const result = await runnerFor({ client }).run({ names: [NAME] });
+
+    expect(result.detected).toEqual([]);
+    expect(result.applied).toEqual([NAME]);
   });
 });
