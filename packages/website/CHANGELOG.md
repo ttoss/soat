@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.99.2](https://github.com/ttoss/soat/compare/v0.99.1...v0.99.2) (2026-11-01)
+
+### Bug Fixes
+
+* **agents:** offer an action two tool bindings share once per binding ([#1783](https://github.com/ttoss/soat/issues/1783)) ([75001eb](https://github.com/ttoss/soat/commit/75001ebe3bafdbb7cbcbb8cb6fd305568e04ec71))
+* **agents:** resume a shared agent's paused turn through tool-outputs ([#1785](https://github.com/ttoss/soat/issues/1785)) ([8f9cc5e](https://github.com/ttoss/soat/commit/8f9cc5e8e089d3df94606eea7ff18705dfd924df))
+* **iam:** policy compiler matches the srn resource type ([#1787](https://github.com/ttoss/soat/issues/1787)) ([ea23fd8](https://github.com/ttoss/soat/commit/ea23fd8ef1a4df459cd801ff904f251577e01051))
+* **tools:** hold a pipeline's builtin steps to the calling agent's boundary ([#1788](https://github.com/ttoss/soat/issues/1788)) ([90f36aa](https://github.com/ttoss/soat/commit/90f36aa8e4154790a6273f418093231680a44a5e))
+
 ## [0.99.1](https://github.com/ttoss/soat/compare/v0.99.0...v0.99.1) (2026-10-31)
 
 ### Bug Fixes
