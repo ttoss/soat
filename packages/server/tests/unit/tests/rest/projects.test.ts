@@ -997,6 +997,43 @@ describe('Projects', () => {
       expect(getProjectRes.status).toBe(200);
     });
 
+    test.each([
+      ['unpriced', null],
+      ['zero-cost', '0'],
+    ])(
+      'deletes without force a project whose only usage is %s',
+      async (label, costUsd) => {
+        const projRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: `Unpriced Usage Project ${label}` });
+        const unpricedProjectId = projRes.body.id;
+
+        const project = await db.Project.findOne({
+          where: { publicId: unpricedProjectId },
+        });
+
+        const usageEvent = await db.UsageEvent.create({
+          projectId: project?.get('id'),
+          meterType: 'api_request',
+          provider: 'soat',
+          model: 'api_request',
+          costUsd,
+          idempotencyKey: `${label}-usage-${unpricedProjectId}`,
+        });
+
+        const response = await authenticatedTestClient(adminToken).delete(
+          `/api/v1/projects/${unpricedProjectId}`
+        );
+        expect(response.status).toBe(204);
+
+        expect(
+          await db.UsageEvent.findOne({
+            where: { publicId: usageEvent.get('publicId') as string },
+          })
+        ).toBeNull();
+      }
+    );
+
     test('force=true deletes a project along with its usage history', async () => {
       const projRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
