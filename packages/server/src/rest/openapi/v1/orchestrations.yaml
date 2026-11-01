@@ -2044,10 +2044,13 @@ components:
             - webhook_receive
             - approval
             - paused
+            - child_run
           description: >-
             Discriminator identifying the kind of pause. Open enum — new pause
             kinds may be added in minor releases; clients must tolerate unknown
-            values.
+            values. `child_run` is a `loop` or `sub_orchestration` node whose
+            child runs, listed in `context.orchestration_run_ids`, have not
+            settled; their settle resumes it, and it accepts no human input.
         node_id:
           type: string
           description: >-

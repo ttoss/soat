@@ -12,6 +12,7 @@ import { applyInputMapping } from './jsonLogicMapping';
 import { type NestedRunParent, startNestedRun } from './orchestrationNestedRun';
 import {
   assertNestedRunCompleted,
+  isNestedRunSettled,
   readNestedRunFailure,
 } from './orchestrationNestedRunOutcome';
 import { requireNodeField } from './orchestrationNodeFields';
@@ -36,6 +37,73 @@ const resolveLoopCollection = (args: {
   return Array.isArray(cursor) ? cursor : [];
 };
 
+/** A child run as the node reads it, whether just started or loaded back. */
+export type NestedRunResult = {
+  id: string;
+  status: string;
+  output: Record<string, unknown> | null;
+  error: object | null;
+};
+
+/**
+ * The artifact a `loop` / `sub_orchestration` node takes from its settled
+ * child runs (in item order), or the throw that fails it. The one reading both
+ * the inline drive and a parked node's wake use.
+ */
+export const nestedNodeArtifact = (args: {
+  node: Pick<OrchestrationNode, 'id' | 'type' | 'onItemError'>;
+  runs: NestedRunResult[];
+}): Record<string, unknown> => {
+  const { node, runs } = args;
+  if (node.type !== 'loop') {
+    assertNestedRunCompleted({ run: runs[0], nodeId: node.id });
+    return runs[0].output ?? {};
+  }
+  let failedCount = 0;
+  const results = runs.map((run) => {
+    if ((node.onItemError ?? 'fail') === 'fail') {
+      assertNestedRunCompleted({ run, nodeId: node.id });
+      return run.output;
+    }
+    const failure = readNestedRunFailure({ run, nodeId: node.id });
+    if (!failure) return run.output;
+    failedCount += 1;
+    return {
+      error: { code: failure.code, message: failure.message },
+      orchestration_run_id: run.id,
+    };
+  });
+  return { results, failed_count: failedCount };
+};
+
+/**
+ * The node's result once its children ran: its artifact, or a park on the
+ * children that have not settled, which their settle resumes.
+ */
+const settleNestedNode = (args: {
+  node: OrchestrationNode;
+  runs: NestedRunResult[];
+}): NodeExecutionResult => {
+  const { node, runs } = args;
+  const parked = runs.some((run) => {
+    return !isNestedRunSettled(run.status);
+  });
+  if (!parked) {
+    return { kind: 'artifact', artifact: nestedNodeArtifact({ node, runs }) };
+  }
+  return {
+    kind: 'requires_action',
+    type: 'child_run',
+    nodeId: node.id,
+    prompt: `Node '${node.id}' waits for its child runs to settle.`,
+    context: {
+      orchestration_run_ids: runs.map((run) => {
+        return run.id;
+      }),
+    },
+  };
+};
+
 const runLoopBatches = async (args: {
   items: unknown[];
   parallelism: number;
@@ -46,7 +114,7 @@ const runLoopBatches = async (args: {
   authHeader?: string;
   toolContext?: Record<string, string>;
   parent: NestedRunParent;
-}): Promise<{ results: unknown[]; failedCount: number }> => {
+}): Promise<NestedRunResult[]> => {
   const {
     items,
     parallelism,
@@ -58,8 +126,7 @@ const runLoopBatches = async (args: {
     toolContext,
     parent,
   } = args;
-  const results: unknown[] = [];
-  let failedCount = 0;
+  const runs: NestedRunResult[] = [];
   for (let i = 0; i < items.length; i += parallelism) {
     const batch = items.slice(i, i + parallelism);
     const batchResults = await Promise.all(
@@ -75,29 +142,21 @@ const runLoopBatches = async (args: {
           // Every item's run is attributable to the node that fanned it out, so
           // the loop's real cost is the sum of its children.
           parent,
-          // Nested runs must complete synchronously so their output can be
-          // aggregated into this loop node's artifact.
+          // Each item runs to a resting point: a settled one feeds this node's
+          // artifact, a parked one parks the node (`settleNestedNode`).
           wait: true,
         });
       })
     );
-    results.push(
-      ...batchResults.map((run) => {
-        if (onItemError === 'fail') {
-          assertNestedRunCompleted({ run, nodeId: parent.nodeId });
-          return run.output;
-        }
-        const failure = readNestedRunFailure({ run, nodeId: parent.nodeId });
-        if (!failure) return run.output;
-        failedCount += 1;
-        return {
-          error: { code: failure.code, message: failure.message },
-          orchestration_run_id: run.id,
-        };
-      })
-    );
+    // Under `fail`, a settled failure stops the next batch from starting.
+    if (onItemError === 'fail') {
+      for (const run of batchResults) {
+        assertNestedRunCompleted({ run, nodeId: parent.nodeId });
+      }
+    }
+    runs.push(...batchResults);
   }
-  return { results, failedCount };
+  return runs;
 };
 
 export const executeLoopNode = async (args: {
@@ -118,7 +177,7 @@ export const executeLoopNode = async (args: {
   const itemVariable = node.itemVariable ?? 'item';
   const parallelism = node.parallelism ?? 5;
   const items = resolveLoopCollection({ collectionPath, state });
-  const { results, failedCount } = await runLoopBatches({
+  const runs = await runLoopBatches({
     items,
     parallelism,
     itemVariable,
@@ -133,10 +192,7 @@ export const executeLoopNode = async (args: {
     parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
   });
 
-  return {
-    kind: 'artifact',
-    artifact: { results, failed_count: failedCount },
-  };
+  return settleNestedNode({ node, runs });
 };
 
 export const executeSubOrchestrationNode = async (args: {
@@ -168,12 +224,10 @@ export const executeSubOrchestrationNode = async (args: {
     }),
     // The child is this node's work: its spend rolls up to this run.
     parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
-    // A sub-orchestration is a synchronous child: its terminal output feeds this
-    // node's artifact, so it must run to completion before continuing.
+    // Driven to a resting point: a settled child feeds this node's artifact,
+    // a parked one parks the node (`settleNestedNode`).
     wait: true,
   });
 
-  assertNestedRunCompleted({ run, nodeId: node.id });
-
-  return { kind: 'artifact', artifact: run.output ?? {} };
+  return settleNestedNode({ node, runs: [run] });
 };
