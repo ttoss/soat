@@ -77,6 +77,8 @@ All projects: a wildcard project segment:
 
 Authorization is policy-only; a project-scoped grant is honored by every project endpoint, including [`GET /projects/{id}`](/docs/api/projects/get-project). See [IAM](./iam.md).
 
+Creating and deleting a project are admin-only. [`PATCH /projects/{id}`](/docs/api/projects/update-project) is `projects:UpdateProject`: a policy granting it on `srn:<project-id>:*:*` lets a non-admin user, or a key it mints for that project, change the project's settings. Detaching a guardrail additionally needs `guardrails:DetachGuardrail`.
+
 ### Default Model Route
 
 `default_model_route_id` names the [model route](./model-routes.md) inherited by every consumer binding neither `model_route_id` nor `ai_provider_id`, giving agents, chats, and memory completions failover without editing each:
@@ -249,7 +251,7 @@ The [audit log](./audit-log.md) is the exception: entries outlive the project wi
 
 | Status | Body                                            | Cause                                                                                                   | What to do                                                                                             |
 | ------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `403`  | `{ "error": "Forbidden" }`                       | Caller isn't the `admin` role — creating, updating, and deleting a project are admin-only. Creating also refuses an admin credential bound to a project or narrowed by policies; updating and deleting refuse one whose policies or consent do not allow the action | Authenticate as the admin user, or use an admin key with no `project_id` and no `policy_ids` |
+| `403`  | `{ "error": "Forbidden" }`                       | Caller isn't the `admin` role — creating and deleting a project are admin-only. Creating also refuses an admin credential bound to a project or narrowed by policies; deleting refuses one whose policies or consent do not allow the action. Updating needs `projects:UpdateProject` on the project, from the `admin` role or a policy | Authenticate as the admin user, use an admin key with no `project_id` and no `policy_ids`, or, to update, attach a policy granting `projects:UpdateProject` on `srn:<project-id>:*:*` |
 | `403`  | `{ "error": "Forbidden" }`                       | [`GET /projects/{id}`](/docs/api/projects/get-project) (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `srn:<this-project-id>:*:*`, or use a key scoped to this project — see [Project Access via Policies](#project-access-via-policies) |
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |

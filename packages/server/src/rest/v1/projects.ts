@@ -18,6 +18,7 @@ import {
   parseGuardrailIds,
 } from './guardrailAttach';
 import {
+  assertCredentialProjectScope,
   parsePagination,
   requireAdmin,
   requireAuth,
@@ -151,11 +152,13 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
 };
 
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
-  await requireProjectAdmin({
+  requireAuth(ctx);
+  assertCredentialProjectScope({
     ctx,
-    projectPublicId: ctx.params.project_id,
+    requestedProjectPublicId: ctx.params.project_id,
     action: 'projects:UpdateProject',
   });
+  await authorizeProjectAction({ ctx, action: 'projects:UpdateProject' });
   const fields = parseProjectPatchFields(
     ctx.request.body as Record<string, unknown>
   );
