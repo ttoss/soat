@@ -307,7 +307,7 @@ Discovery follows `nextCursor` until the catalogue is exhausted, so a paginated 
 
 A call's `structured_content` is the result when the server sends one; otherwise the `content` blocks, text blocks joined and parsed as JSON when they are JSON, and handed over as the block array when any block is not text (an image is never flattened away).
 
-A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
+A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`, a `{{secret:}}` value in the URL shown as its reference. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
 
 #### Scoping an MCP tool to a subset of actions
 
@@ -495,7 +495,7 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 - A target neither publicly routable nor in `TOOL_EGRESS_ALLOWED_HOSTS` is `403 TOOL_EGRESS_BLOCKED` before any connection is opened — [Where a Tool May Reach](#where-a-tool-may-reach-egress).
 - A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries `tool_status_code`, `tool_response_body` (cut to [`TOOL_RESPONSE_MAX_BYTES`](#configuration)), `tool_url` and `tool_method`.
 - A 2xx body over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is `502 TOOL_RESPONSE_TOO_LARGE`, in either `response_mode`, refused while it streams.
-- A target that never answers (the host does not resolve, refuses or drops the connection, or times out) is `502 TOOL_UNREACHABLE`; the message names the network failure and error `meta` carries `tool_url` and `tool_method`. The same holds for an `mcp` tool's server.
+- A target that never answers (the host does not resolve, refuses or drops the connection, or times out) is `502 TOOL_UNREACHABLE`; the message names the network failure and error `meta` carries `tool_url` and `tool_method`. The same holds for an `mcp` tool's server, whose `tool_url` shows a `{{secret:}}` value as its reference.
 - [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`.
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
