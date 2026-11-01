@@ -120,7 +120,7 @@ As with [`QUOTA_UNENFORCEABLE`](#unpriced-usage), waiting is no remedy, so `409`
 
 #### Where the cap acts
 
-Enforced on the caller-facing corpus writes, all creates, so a refusal leaves nothing half-written:
+Enforced on the caller-facing corpus writes before anything is written, so a refusal leaves nothing half-written:
 
 | Path | Delta counted |
 | --- | --- |
@@ -129,9 +129,11 @@ Enforced on the caller-facing corpus writes, all creates, so a refusal leaves no
 | [`POST /api/v1/documents`](/docs/api/documents/create-document) | the `content` bytes |
 | [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | none — the source file is already stored and measured; what ingestion adds is chunk text and vectors, produced after the response |
 | [`POST /api/v1/memories`](/docs/api/memories/create-memory) | the `content` bytes |
+| [`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document), [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) with `content` | the new `content` bytes; an edit without `content` is not checked |
+| [`POST /api/v1/documents/{document_id}/versions/{version}/restore`](/docs/api/documents/restore-document-version) | the restored `content` bytes |
 | [`POST /api/v1/datasets/{dataset_id}/items`](/docs/api/evaluations/create-dataset-item), [`/items/from-generation`](/docs/api/evaluations/create-dataset-item-from-generation) | the serialized `input`, `expected_output` and `metadata` |
 
-The `file`, `document`, `memory` and `dataset_item` [formation](./formations.md) resources are held to the same cap.
+The `file`, `document`, `memory` and `dataset_item` [formation](./formations.md) resources are held to the same cap, and so is a `document` or `memory` update that carries `content`.
 
 **Writes driven from inside a generation or run are exempt**, since a refusal would leave the turn or run half persisted: [conversation](./conversations.md) messages (each a `Document` with chunks and embeddings), memories from the `write_memory` tool, and [`eval_results`](./evaluations.md) rows. The cap bounds deliberate ingest; `monitor`-mode data says whether that is enough.
 
@@ -192,7 +194,7 @@ A generation **in flight is never killed**, so a budget may overshoot by at most
 
 The same check runs before every model call, not only agent generations: decider answers and built-in memory extraction match like a generation of their agent; [chat completions](./chats.md) and `llm_judge` scorers run no agent, so only `project` quotas refuse them. A refused judge errors its item; a refused extraction proposes no memories.
 
-[Embedding](./embeddings.md#metering) spend is refused by `project` quotas at the caller-facing entry points, with `429` before anything is written: [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) billed to a project, [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a `query`, [`POST /api/v1/documents`](/docs/api/documents/create-document), [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document), [`POST /api/v1/memories`](/docs/api/memories/create-memory) and the `document` and `memory` [formation](./formations.md) resources. A refused `embedding_similarity` scorer errors its item. Embeddings a generation or run makes are exempt, the same line the [storage cap](#storage-enforcement) draws.
+[Embedding](./embeddings.md#metering) spend is refused by `project` quotas at the caller-facing entry points, with `429` before anything is written: [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) billed to a project, [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a `query`, [`POST /api/v1/documents`](/docs/api/documents/create-document), [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document), [`POST /api/v1/memories`](/docs/api/memories/create-memory), a content edit ([`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document) or [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) with `content`, [`POST /api/v1/documents/{document_id}/versions/{version}/restore`](/docs/api/documents/restore-document-version)) and the `document` and `memory` [formation](./formations.md) resources, created or updated. A refused `embedding_similarity` scorer errors its item. Embeddings a generation or run makes are exempt, the same line the [storage cap](#storage-enforcement) draws.
 
 ### Meter scope
 

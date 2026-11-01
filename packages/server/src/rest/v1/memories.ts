@@ -8,6 +8,7 @@ import {
   assertMemoryStorageQuota,
   deleteMemory,
   findMemoryRowId,
+  findMemoryStoreRowId,
   findThresholdOrderError,
   getMemory,
   listMemories,
@@ -405,6 +406,16 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   const validationError = validateTagsBag(body, { allowNull: true });
   if (validationError) {
     throw new DomainError('VALIDATION_FAILED', validationError);
+  }
+
+  if (body.content !== undefined) {
+    const memoryStoreId = await findMemoryStoreRowId({
+      memoryId: ctx.params.memory_id,
+    });
+    if (memoryStoreId !== null) {
+      await assertMemoryStorageQuota({ memoryStoreId, content: body.content });
+      await assertMemorySpendWithinQuota({ memoryStoreId });
+    }
   }
 
   ctx.body = await updateMemory({

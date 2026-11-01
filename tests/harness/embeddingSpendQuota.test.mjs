@@ -50,7 +50,7 @@ const CHECK = /\bassert(?:Project|Memory)SpendWithinQuota\(/;
 
 // Caller-facing calls that embed and check nothing themselves.
 const UNCHECKED_ENTRY =
-  /\b(?:createDocument|writeMemory|createMemory|searchKnowledge)\(/;
+  /\b(?:createDocument|updateDocument|writeMemory|createMemory|updateMemory|searchKnowledge)\(/;
 
 /** The handlers in `file` reaching an unchecked entry with no check before it. */
 const uncheckedHandlers = (file) => {
@@ -105,6 +105,10 @@ describe('embedding spend quota', () => {
       return uncheckedHandlers(file);
     });
     assert.deepEqual(unchecked, []);
+  });
+
+  test('a version restore checks spend before re-embedding', () => {
+    assert.deepEqual(uncheckedHandlers('lib/documentVersions.ts'), []);
   });
 
   test('the entry points that check inside run the check', () => {
