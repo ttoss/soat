@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.101.1](https://github.com/ttoss/soat/compare/v0.101.0...v0.101.1) (2026-11-01)
+
+### Bug Fixes
+
+* **postgresdb:** payload and record columns keep the key order they are written in ([#1824](https://github.com/ttoss/soat/issues/1824)) ([6c91c9b](https://github.com/ttoss/soat/commit/6c91c9b6ca9288453789ae6dd090fd13fd9cd0f1))
+* **tools:** every authoring caller that runs a tool asks the server-side chokepoint ([#1827](https://github.com/ttoss/soat/issues/1827)) ([529ccf2](https://github.com/ttoss/soat/commit/529ccf28fa966d71f142b6b25bf94e4767edc2f5))
+* **tools:** one chokepoint for which tools a server-side caller can run ([#1823](https://github.com/ttoss/soat/issues/1823)) ([30edc38](https://github.com/ttoss/soat/commit/30edc38c6af6676718d9285388a56cbebdb22155))
+
 # [0.101.0](https://github.com/ttoss/soat/compare/v0.100.0...v0.101.0) (2026-11-01)
 
 * fix(secrets)!: require secrets:UseSecret on every write that sends a secret outward (#1817) ([76a7ff7](https://github.com/ttoss/soat/commit/76a7ff716f010a0ca1ec210c756f7b97a2e127cc)), closes [#1817](https://github.com/ttoss/soat/issues/1817)
