@@ -18,6 +18,7 @@ describe('MCP protocol fidelity', () => {
   const TRANSPORT = {
     url: MCP_URL,
     urlSecrets: new Map<string, string>(),
+    credentialHeaders: [],
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
