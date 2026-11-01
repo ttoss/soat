@@ -579,14 +579,15 @@ describe('2026-09-16-memory-rules-from-agent-extraction', () => {
     expect(
       await countRows({
         client,
-        sql: `SELECT count(*) FROM agents WHERE knowledge_config ? 'extraction'`,
+        sql: `SELECT count(*) FROM agents
+               WHERE knowledge_config::jsonb ? 'extraction'`,
       })
     ).toBe(0);
     expect(
       await countRows({
         client,
         sql: `SELECT count(*) FROM agent_versions
-               WHERE config -> 'knowledge_config' ? 'extraction'`,
+               WHERE config::jsonb -> 'knowledge_config' ? 'extraction'`,
       })
     ).toBe(0);
   });

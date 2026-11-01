@@ -152,7 +152,7 @@ const loadArchivedConfig = async (args: {
   if (!archived) return null;
 
   const config = archived.config;
-  /* istanbul ignore next -- the column is JSONB NOT NULL and only ever written
+  /* istanbul ignore next -- the column is NOT NULL and only ever written
      from buildAgentConfigSnapshot, so no entry point can produce a non-object
      here; the narrowing exists to keep the return type honest. */
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {

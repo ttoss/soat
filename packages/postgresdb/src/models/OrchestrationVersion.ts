@@ -80,7 +80,7 @@ export class OrchestrationVersion extends Model {
    * same topology, and the version number is exactly what a run cites to say
    * which topology it executed.
    */
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare config: object;
 
   /** Optional human tag for this version, e.g. `rewired`. */

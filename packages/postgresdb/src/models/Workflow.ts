@@ -75,15 +75,15 @@ export class Workflow extends Model {
   declare version: number;
 
   // State definitions (§5): { name, initial?, terminal?, kind?, on_enter?, stalled_after? }.
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare states: object[];
 
   // Allowed moves (§5): { name, from: string[], to, guard?, requires_approval? }.
-  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare transitions: object[];
 
   // Optional JSON Schema validated against a task's payload.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare payloadSchema: object | null;
 
   @HasMany(() => {

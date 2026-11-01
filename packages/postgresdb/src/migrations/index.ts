@@ -47,6 +47,7 @@ import { taskTransitionWorkflowVersions } from './2026-10-19-taskTransitionWorkf
 import { playbookCaseActor } from './2026-10-20-playbookCaseActor';
 import { listKeysetIndexes } from './2026-10-23-listKeysetIndexes';
 import { memoryContentNormalizedHash } from './2026-10-23-memoryContentNormalizedHash';
+import { definitionsKeepKeyOrder } from './2026-11-01-definitionsKeepKeyOrder';
 import { modelFacingSchemasJson } from './2026-11-01-modelFacingSchemasJson';
 
 /**
@@ -117,4 +118,5 @@ export const MIGRATIONS: Migration[] = [
   memoryContentNormalizedHash,
   listKeysetIndexes,
   modelFacingSchemasJson,
+  definitionsKeepKeyOrder,
 ];

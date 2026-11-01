@@ -157,8 +157,7 @@ const varRoots = (expression: unknown, roots: Set<string>): Set<string> => {
 
 /**
  * The binding names in evaluation order: each after the bindings it reads.
- * Key order cannot decide it, since a stored definition is JSONB, which does
- * not keep the order its keys were written in.
+ * Key order cannot decide it: a binding may read one written after it.
  */
 const bindingOrder = (bindings: Record<string, unknown>): string[] => {
   const names = Object.keys(bindings);
