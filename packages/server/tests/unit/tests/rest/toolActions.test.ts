@@ -70,9 +70,9 @@ describe('GET /api/v1/tools/{tool_id}/actions', () => {
     return { ...created, path };
   };
 
-  const listActions = (toolId: string, token = turn.adminToken) => {
+  const listActions = (toolId: string, token = turn.adminToken, query = '') => {
     return authenticatedTestClient(token).get(
-      `/api/v1/tools/${toolId}/actions`
+      `/api/v1/tools/${toolId}/actions${query}`
     );
   };
 
@@ -125,7 +125,28 @@ describe('GET /api/v1/tools/{tool_id}/actions', () => {
           input_schema: { type: 'object', properties: {} },
         },
       ],
+      next_cursor: null,
     });
+  });
+
+  test('pages the listing by limit and cursor', async () => {
+    const tool = await mcpTool();
+
+    const first = await listActions(tool.id, turn.adminToken, '?limit=2');
+    const second = await listActions(
+      tool.id,
+      turn.adminToken,
+      `?limit=2&cursor=${encodeURIComponent(first.body.next_cursor)}`
+    );
+
+    const names = (body: { data: Array<{ name: string }> }) => {
+      return body.data.map((action) => {
+        return action.name;
+      });
+    };
+    expect(names(first.body)).toEqual(['search', 'delete']);
+    expect(names(second.body)).toEqual(['ping']);
+    expect(second.body.next_cursor).toBeNull();
   });
 
   test('applies actions and denied_actions', async () => {

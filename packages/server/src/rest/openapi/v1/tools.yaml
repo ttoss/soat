@@ -608,7 +608,9 @@ paths:
         action's `name`, `description` and `input_schema`, as a model bound to
         the tool sees them. `actions` and `denied_actions` apply, and a
         `preset_parameters` key an action's schema declares is removed from
-        that schema. Other tool types are `400`.
+        that schema. Other tool types are `400`. The server answers its whole
+        listing in one call; `limit` and `cursor` page what it returned, in its
+        order.
 
         Authorized as a call (`tools:CallTool`), since listing reaches the
         tool's server with its credential.
@@ -621,8 +623,11 @@ paths:
         - name: tool_id
           in: path
           required: true
+          description: The `mcp` tool whose actions to list
           schema:
             type: string
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: The tool's actions
@@ -1125,13 +1130,14 @@ components:
             `preset_parameters` pin. An action the server lists without one
             takes `{"type": "object", "properties": {}}`.
     ToolActionList:
-      type: object
-      required: [data]
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/ToolAction'
+      allOf:
+        - $ref: './pagination.yaml#/components/schemas/Page'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ToolAction'
     CallToolRequest:
       type: object
       properties:

@@ -367,7 +367,11 @@ toolsRouter.get('/tools/:tool_id/actions', async (ctx: Context) => {
     ctx,
     action: 'tools:CallTool',
   });
-  ctx.body = await listToolActions({ projectIds, id: ctx.params.tool_id });
+  ctx.body = await listToolActions({
+    projectIds,
+    id: ctx.params.tool_id,
+    ...parsePagination(ctx),
+  });
 });
 
 /**

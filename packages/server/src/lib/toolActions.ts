@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import { boundMcpTools, exposedMcpInputSchema } from './agentToolResolverMcp';
 import { fetchMcpToolListing } from './mcpToolListing';
 import { openMcpTransport } from './mcpTransport';
+import { type Page, pageOf, type PageRequest } from './pagination';
 import { tools } from './tools';
 
 export type ToolAction = {
@@ -16,10 +17,10 @@ export type ToolAction = {
 
 const noopLogToolCallingError = () => {};
 
-export const listToolActions = async (args: {
-  projectIds?: number[];
-  id: string;
-}): Promise<{ data: ToolAction[] }> => {
+/** The server answers its whole listing at once, so the page applies to what it returned. */
+export const listToolActions = async (
+  args: PageRequest & { projectIds?: number[]; id: string }
+): Promise<Page<ToolAction>> => {
   const tool = await tools.getByPublicId(args);
   const mcp = tool.mcp as {
     url?: string;
@@ -58,8 +59,8 @@ export const listToolActions = async (args: {
   }
 
   const bound = await boundMcpTools({ listing, typedTool: tool, transport });
-  return {
-    data: bound.map((mcpTool) => {
+  return pageOf({
+    items: bound.map((mcpTool) => {
       return {
         name: mcpTool.name,
         description: mcpTool.description ?? null,
@@ -69,5 +70,8 @@ export const listToolActions = async (args: {
         }).inputSchema,
       };
     }),
-  };
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: { toolId: args.id },
+  });
 };
