@@ -183,8 +183,9 @@ paths:
         (`audit_reads_enabled`), its priced-model requirement
         (`require_priced_model`), its trace-content retention window
         (`trace_content_retention_days`), and/or its zero-retention setting
-        (`trace_content_mode`). At least one field is required. Requires admin
-        role. Detaching a guardrail (removing an id) additionally requires
+        (`trace_content_mode`). At least one field is required. Requires
+        projects:UpdateProject on the project, which a project-scoped policy
+        can grant. Detaching a guardrail (removing an id) additionally requires
         guardrails:DetachGuardrail.
       operationId: updateProject
       x-iam-action: projects:UpdateProject
