@@ -579,7 +579,7 @@ export const ERROR_CODES = {
   MCP_TOOL_ERROR: {
     httpStatus: 502,
     description:
-      'An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. The error `meta` carries the tool name and the server URL. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.',
+      'An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. Also a `GET /tools/{tool_id}/actions` whose `tools/list` failed or could not be read. The error `meta` carries the tool name and the server URL. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.',
   },
   TOOL_CALL_FAILED: {
     httpStatus: 500,

@@ -597,6 +597,82 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
+  /api/v1/tools/{tool_id}/actions:
+    get:
+      tags:
+        - Tools
+      summary: List a tool's actions
+      description: >
+        Lists the actions an `mcp` tool exposes, read from its server's
+        `tools/list` with the tool's `mcp.headers` resolved server-side: each
+        action's `name`, `description` and `input_schema`, as a model bound to
+        the tool sees them. `actions` and `denied_actions` apply, and a
+        `preset_parameters` key an action's schema declares is removed from
+        that schema. Other tool types are `400`.
+
+        Authorized as a call (`tools:CallTool`), since listing reaches the
+        tool's server with its credential.
+      operationId: listToolActions
+      x-iam-action: tools:CallTool
+      x-soat-resource:
+        kind: tool
+        from: tool_id
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The tool's actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolActionList'
+        '400':
+          description: >-
+            `VALIDATION_FAILED` — the tool is not an `mcp` tool; or
+            `MISSING_TOOL_CONTEXT_KEY` — its `mcp.headers` name a `{{context:}}`
+            key, which this read has no `tool_context` to resolve.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: >-
+            Forbidden — the caller lacks `tools:CallTool` on the tool, or the
+            server's address is blocked by the deployment's egress policy
+            (`TOOL_EGRESS_BLOCKED`).
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Tool not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          description: >-
+            `MCP_TOOL_ERROR` — the server's `tools/list` failed or could not
+            be read; the message names why and `meta.mcp_url` the server.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1028,6 +1104,34 @@ components:
             type: string
           description: Guardrails attached at the tool scope.
 
+    ToolAction:
+      type: object
+      required: [name, description, input_schema]
+      properties:
+        name:
+          type: string
+          description: The action's name on the MCP server; the `action` of a call.
+          example: search
+        description:
+          type: string
+          nullable: true
+          description: The server's description of the action.
+          example: Search documents
+        input_schema:
+          type: object
+          additionalProperties: true
+          description: >-
+            JSON Schema of the action's input, without the keys the tool's
+            `preset_parameters` pin. An action the server lists without one
+            takes `{"type": "object", "properties": {}}`.
+    ToolActionList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolAction'
     CallToolRequest:
       type: object
       properties:

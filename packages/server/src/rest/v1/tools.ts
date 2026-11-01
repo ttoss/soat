@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { getShareProjection } from 'src/lib/shareableTypes';
+import { listToolActions } from 'src/lib/toolActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { deleteTool } from 'src/lib/toolDelete';
 import {
@@ -351,6 +352,22 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   });
 
   ctx.status = 204;
+});
+
+/**
+ * Authorized as a call: listing reaches the tool's server with its credential.
+ *
+ * @openapi
+ * /api/v1/tools/{tool_id}/actions:
+ *   get:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}~1actions/get'
+ */
+toolsRouter.get('/tools/:tool_id/actions', async (ctx: Context) => {
+  const { projectIds } = await toolAccess.authorizeWrite({
+    ctx,
+    action: 'tools:CallTool',
+  });
+  ctx.body = await listToolActions({ projectIds, id: ctx.params.tool_id });
 });
 
 /**

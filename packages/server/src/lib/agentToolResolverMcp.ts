@@ -13,7 +13,6 @@ import { DomainError } from '../errors';
 import type { LogToolCallingError } from './externalToolCall';
 import { toToolUnreachableError } from './httpToolError';
 import {
-  type DeferredProxy,
   describeDeferredTools,
   findDeferredProxy,
   innerToolName,
@@ -159,6 +158,33 @@ const toolMetadata = (
 };
 
 /**
+ * An action's input schema as the binding exposes it: the presets the schema
+ * declares are pinned, so they are hidden from whoever supplies the input.
+ */
+export const exposedMcpInputSchema = (args: {
+  mcpTool: McpToolListing;
+  presetParameters?: object | null;
+}): {
+  presetParameters: Record<string, unknown> | null;
+  inputSchema: JSONSchema7;
+} => {
+  const presetParameters = presetsDeclaredBy({
+    presetParameters: args.presetParameters,
+    schema: args.mcpTool.inputSchema,
+  });
+  return {
+    presetParameters,
+    inputSchema: stripPresetKeysFromSchema(
+      (args.mcpTool.inputSchema ?? {
+        type: 'object',
+        properties: {},
+      }) as JSONSchema7,
+      presetParameters
+    ),
+  };
+};
+
+/**
  * One listed MCP tool, as the model sees it and as it dispatches. Its schema,
  * its dispatch and its guardrail gate all read the presets this action
  * declares, worked out once here.
@@ -175,23 +201,12 @@ const buildMcpToolEntry = (args: {
   proxyCall?: boolean;
 }): ToolWithGatePresets => {
   const { mcpTool } = args;
-  const presetParameters = presetsDeclaredBy({
-    presetParameters: args.presetParameters,
-    schema: mcpTool.inputSchema,
-  });
+  const { presetParameters, inputSchema } = exposedMcpInputSchema(args);
   const entry = {
     description: mcpTool.description ?? undefined,
     title: mcpTool.title,
     metadata: toolMetadata(mcpTool),
-    inputSchema: jsonSchema(
-      stripPresetKeysFromSchema(
-        (mcpTool.inputSchema ?? {
-          type: 'object',
-          properties: {},
-        }) as JSONSchema7,
-        presetParameters
-      )
-    ),
+    inputSchema: jsonSchema(inputSchema),
     execute: buildMcpToolExecute({
       transport: args.transport,
       mcpToolName: mcpTool.name,
@@ -246,17 +261,18 @@ const buildActionFilter = (typedTool: {
  * proxies themselves are not; without one, the listing is attached as listed
  * and its `call` checks each target against the binding (`allowInner`).
  */
-const boundTools = async (args: {
+export const boundMcpTools = async (args: {
   listing: McpToolListing[];
-  proxy: DeferredProxy | null;
-  actions?: string[] | null;
-  isBound: (name: string) => boolean;
+  typedTool: { actions?: string[] | null; deniedActions?: string[] | null };
   transport: McpTransport;
 }): Promise<McpToolListing[]> => {
+  const isBound = buildActionFilter(args.typedTool);
+  const proxy = findDeferredProxy(args.listing);
+  const { actions } = args.typedTool;
   const listed = args.listing.filter((mcpTool) => {
-    return args.isBound(mcpTool.name);
+    return isBound(mcpTool.name);
   });
-  if (!args.proxy || args.actions == null) return listed;
+  if (!proxy || actions == null) return listed;
 
   const listedNames = new Set(
     args.listing.map((mcpTool) => {
@@ -265,18 +281,18 @@ const boundTools = async (args: {
   );
   const behindProxy = await describeDeferredTools({
     transport: args.transport,
-    proxy: args.proxy,
-    names: args.actions.filter((name) => {
+    proxy,
+    names: actions.filter((name) => {
       return !listedNames.has(name);
     }),
   });
-  const proxyNames = new Set([args.proxy.callName, args.proxy.describeName]);
+  const proxyNames = new Set([proxy.callName, proxy.describeName]);
   return [
     ...listed.filter((mcpTool) => {
       return !proxyNames.has(mcpTool.name);
     }),
     ...behindProxy.filter((mcpTool) => {
-      return args.isBound(mcpTool.name);
+      return isBound(mcpTool.name);
     }),
   ];
 };
@@ -328,11 +344,9 @@ export const resolveMcpTools = async (args: {
     logToolCallingError: args.logToolCallingError,
   };
   const proxy = findDeferredProxy(listing);
-  for (const mcpTool of await boundTools({
+  for (const mcpTool of await boundMcpTools({
     listing,
-    proxy,
-    actions: args.typedTool.actions,
-    isBound,
+    typedTool: args.typedTool,
     transport,
   })) {
     result[mcpTool.name] = buildMcpToolEntry({

@@ -30,6 +30,11 @@
       "operationId": "callTool",
       "action": "tools:CallTool",
       "description": "Call (invoke) a tool directly"
+    },
+    {
+      "operationId": "listToolActions",
+      "action": "tools:CallTool",
+      "description": "List an mcp tool's actions from its server"
     }
   ]
 }
