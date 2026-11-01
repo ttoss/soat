@@ -247,6 +247,8 @@ Deleting a project with any dependent resource returns `409 Conflict`, code `PRO
 
 The [audit log](./audit-log.md) is the exception: entries outlive the project with `project_id` cleared.
 
+A deleted formation is not a dependent: a delete without `force` removes it with the project.
+
 ### Common Errors
 
 | Status | Body                                            | Cause                                                                                                   | What to do                                                                                             |
