@@ -104,11 +104,11 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 > **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. A bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-A record that links no secret and sets no `config.apiKey` would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
+A record that links no secret would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
 
 A record that links a secret holding neither an `apiKey` nor a complete key pair never falls back to the deployment's credentials, whatever the setting: it is `400 AI_PROVIDER_MISCONFIGURED` at create, update, generation and model listing.
 
-The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production. Every read — the provider routes, and a formation's template and plan — returns `config.apiKey` as `{ "no_echo": true }`. An update that sends `config` replaces it whole, so it carries the key again as a string; sending the mask back is `400 VALIDATION_FAILED` on `config.apiKey`.
+The `region` field in `config` defaults to `us-east-1`.
 
 ### Bedrock request path
 
@@ -160,7 +160,9 @@ The provider's `config` object accepts two fields:
 
 `config.project` overrides the key file's `project_id`, so one service account can serve models from several projects. When no project can be resolved (no `config.project`, and either no secret or one without `project_id`), creating a generation fails with `AI_PROVIDER_MISCONFIGURED` (`400`).
 
-An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, as for `bedrock`.
+### Credentials live in a secret
+
+A provider's credential is its linked secret alone, for every `provider`. `config.apiKey` is refused with `400 VALIDATION_FAILED` (`meta.field: "config.apiKey"`) on create, on update, and in a formation's `ai_provider` resource; move the key into a [secret](./secrets.md) and link it with `secret_id`. A stored record carrying one reads it as `{ "no_echo": true }` and takes no update until `config` drops it; a `bedrock` or `vertex` one is refused at generation and model listing with `400 AI_PROVIDER_MISCONFIGURED` rather than signing with the deployment's credentials.
 
 ### Anthropic authentication
 

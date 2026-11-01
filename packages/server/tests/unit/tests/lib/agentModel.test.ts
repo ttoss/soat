@@ -303,23 +303,19 @@ describe('resolveVertexSettings', () => {
     ).toEqual({ apiKey: 'AIzaFromJson' });
   });
 
-  test('falls back to config.apiKey when no secret is provided', () => {
-    expect(
-      resolveVertexSettings({
-        secretValue: null,
-        config: { apiKey: 'AIzaFromConfig' },
-      })
-    ).toEqual({ apiKey: 'AIzaFromConfig' });
-  });
-
-  test('a secret apiKey takes precedence over config.apiKey', () => {
-    expect(
-      resolveVertexSettings({
-        secretValue: JSON.stringify({ apiKey: 'AIzaFromSecret' }),
-        config: { apiKey: 'AIzaFromConfig' },
-      })
-    ).toEqual({ apiKey: 'AIzaFromSecret' });
-  });
+  test.each([null, JSON.stringify({ apiKey: 'AIzaFromSecret' })])(
+    'refuses a stored config.apiKey beside the secret %p',
+    (secretValue) => {
+      expect(() => {
+        return resolveVertexSettings({
+          secretValue,
+          config: { apiKey: 'AIzaFromConfig' },
+        });
+      }).toThrow(
+        expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+      );
+    }
+  );
 
   test('uses service-account credentials from a JSON key file secret', () => {
     expect(
@@ -453,23 +449,19 @@ describe('resolveBedrockCredentials', () => {
     ).toEqual({ region: 'us-east-1', apiKey: 'ABSKsomeplainkey' });
   });
 
-  test('falls back to config.apiKey when no secret is provided', () => {
-    expect(
-      resolveBedrockCredentials({
-        secretValue: null,
-        config: { apiKey: 'ABSKfromconfig' },
-      })
-    ).toEqual({ region: 'us-east-1', apiKey: 'ABSKfromconfig' });
-  });
-
-  test('a secret apiKey takes precedence over config.apiKey', () => {
-    expect(
-      resolveBedrockCredentials({
-        secretValue: JSON.stringify({ apiKey: 'ABSKfromsecret' }),
-        config: { apiKey: 'ABSKfromconfig' },
-      })
-    ).toEqual({ region: 'us-east-1', apiKey: 'ABSKfromsecret' });
-  });
+  test.each([null, JSON.stringify({ apiKey: 'ABSKfromsecret' })])(
+    'refuses a stored config.apiKey beside the secret %p',
+    (secretValue) => {
+      expect(() => {
+        return resolveBedrockCredentials({
+          secretValue,
+          config: { apiKey: 'ABSKfromconfig' },
+        });
+      }).toThrow(
+        expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+      );
+    }
+  );
 });
 
 // The provider SDK builds its endpoint out of the record for these three, so a
@@ -652,17 +644,19 @@ describe('a record that links no credential of its own', () => {
   );
 
   test.each(['bedrock', 'vertex'] as const)(
-    'a %s record linking an unusable secret beside config.apiKey signs with config.apiKey',
+    'a %s record carrying config.apiKey is refused, even where the operator opted in',
     (provider) => {
-      withAmbientCredentials(undefined, () => {
+      withAmbientCredentials('true', () => {
         expect(() => {
           return buildModel({
             provider,
-            secretValue: '{}',
+            secretValue: null,
             model: 'some-model',
             config: { region: 'us-east-1', project: 'p', apiKey: 'k' },
           });
-        }).not.toThrow();
+        }).toThrow(
+          expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+        );
       });
     }
   );

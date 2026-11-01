@@ -1,6 +1,9 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 
-import { redactAiProviderSecrets } from '../aiProviderConfigSecrets';
+import {
+  configCredentialError,
+  redactAiProviderSecrets,
+} from '../aiProviderConfigSecrets';
 import {
   createAiProvider,
   deleteAiProvider,
@@ -24,6 +27,18 @@ export const aiProvidersFormationModule = defineFormationModule({
     delete: 'ai-providers:DeleteAiProvider',
   },
   propertiesLabel: 'AI provider',
+
+  // Refused at validation so neither a plan nor `lastAppliedProperties` ever
+  // holds the credential.
+  extraChecks: ({ properties, basePath, errors }) => {
+    const error = configCredentialError(properties.config);
+    if (error) {
+      errors.push({
+        path: `${basePath}.${error.field}`,
+        message: error.message,
+      });
+    }
+  },
 
   create: async ({ properties, projectId }) => {
     const secretPublicId = toNullableString(properties.secret_id);

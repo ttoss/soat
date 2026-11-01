@@ -89,14 +89,12 @@ const readLinkedSecretValue = async (
 const assertProviderCredential = async (args: {
   provider: AiProviderSlug;
   secretId?: number | null;
-  config?: Record<string, unknown> | null;
 }) => {
   assertAiProviderCarriesCredential(args);
   if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
   assertLinkedSecretUsable({
     provider: args.provider,
     secretValue: await readLinkedSecretValue(args.secretId),
-    config: args.config,
   });
 };
 
@@ -117,7 +115,6 @@ export const createAiProvider = async (args: {
   await assertProviderCredential({
     provider: args.provider,
     secretId: args.secretId,
-    config: args.config,
   });
 
   const instance = await db.AiProvider.create({
@@ -163,7 +160,6 @@ export const updateAiProvider = async (args: {
   await assertProviderCredential({
     provider: instance.provider,
     secretId: instance.secretId,
-    config: instance.config,
   });
 
   await instance.save();
