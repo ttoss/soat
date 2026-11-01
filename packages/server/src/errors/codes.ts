@@ -225,6 +225,11 @@ export const ERROR_CODES = {
     description:
       'The project has one or more dependent resources (agents, ai providers, tools, etc.) and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  POLICY_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The policy is the `policy_id` boundary of one or more triggers and cannot be deleted. `meta.triggers` counts them and `meta.sample` lists up to five trigger IDs.',
+  },
   PROJECT_PAUSED: {
     httpStatus: 409,
     description:
