@@ -43,3 +43,20 @@ export const readCappedBody = async (args: {
   }
   return Buffer.concat(chunks);
 };
+
+/**
+ * A body as text, read within `maxBytes`. A 2xx over it is refused with
+ * `refusal`; any other status's body only explains the status, so it is cut.
+ */
+export const readCappedText = async (args: {
+  response: Response;
+  maxBytes: number;
+  refusal: () => Error;
+}): Promise<string> => {
+  const body = await readCappedBody({
+    response: args.response,
+    maxBytes: args.maxBytes,
+    onOverflow: args.response.ok ? args.refusal : 'cut',
+  });
+  return new TextDecoder().decode(body);
+};

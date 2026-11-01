@@ -75,7 +75,7 @@ export const describeDeferredTools = async (args: {
   let described: unknown;
   try {
     described = readMcpCallResult({
-      body: await parseJsonRpcBody(response),
+      body: await parseJsonRpcBody({ response, url: args.transport.url }),
       toolName: args.proxy.describeName,
       url: args.transport.url,
     });

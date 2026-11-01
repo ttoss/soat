@@ -74,7 +74,9 @@ const requestListingPage = async (args: {
   if (!response.ok) {
     return { failure: `tools/list answered ${response.status}` };
   }
-  return readListingPage(await parseJsonRpcBody(response));
+  return readListingPage(
+    await parseJsonRpcBody({ response, url: args.transport.url })
+  );
 };
 
 /**

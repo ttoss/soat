@@ -619,7 +619,7 @@ What a 2xx must answer with, per operation:
 | `validate` | `{ "errors": [{ "path": "properties.kind", "message": "…" }] }` — an empty list means valid |
 | `read` | `{ "exists": true, "physical_resource_id": "…", "properties": { … }, "outputs": { … } }`, or `{ "exists": false }` |
 
-To refuse, answer 4xx/5xx with `{ "message": "…" }`; the message is relayed verbatim on the deploy event. Any non-2xx, unreachable host, timeout, or body outside the protocol fails the deploy with `FORMATION_HANDLER_FAILED` and enters the ordinary [rollback](#rollback-on-a-failed-deploy) path.
+To refuse, answer 4xx/5xx with `{ "message": "…" }`; the message is relayed verbatim on the deploy event. Any non-2xx, unreachable host, timeout, 2xx body over 8 MiB, or body outside the protocol fails the deploy with `FORMATION_HANDLER_FAILED` and enters the ordinary [rollback](#rollback-on-a-failed-deploy) path.
 
 **The engine never retries**: a timed-out create may have created the resource, and a blind retry would provision a second one nothing has the id for. The idempotency key covers an operator re-running a failed deploy.
 

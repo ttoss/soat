@@ -14,6 +14,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { readCappedText } from './cappedBody';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
 import { soatHeader } from './headerPrefix';
 import {
@@ -22,6 +23,7 @@ import {
   timestampedSignature,
 } from './hmacSignature';
 import { isObjectRecord } from './openapiSchemaFields';
+import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
 
 const log = createDebug('soat:formations:handler');
 
@@ -126,7 +128,17 @@ const parseResponse = async (args: {
   requestType: HandlerRequestType;
 }): Promise<Record<string, unknown>> => {
   const { response, resourceType, requestType } = args;
-  const raw = await response.text();
+  const raw = await readCappedText({
+    response,
+    maxBytes: PROTOCOL_ANSWER_MAX_BYTES,
+    refusal: () => {
+      return handlerError({
+        resourceType,
+        requestType,
+        detail: `response body exceeds ${PROTOCOL_ANSWER_MAX_BYTES} bytes`,
+      });
+    },
+  });
 
   if (!response.ok) {
     throw handlerError({
