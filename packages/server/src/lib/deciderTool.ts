@@ -8,16 +8,17 @@ import { parseToolAnswers } from './deciderToolAnswer';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { callTool } from './tools';
+import { serverSideToolProblem } from './toolsCallDispatch';
 
 const log = createDebug('soat:deciders');
 
 export type DeciderToolRow = InstanceType<(typeof db)['Tool']>;
 
-/**
- * `client` has no caller to hand the call to; `mcp` and `builtin` need an
- * `action`, which a decider does not carry — a `pipeline` step names one.
- */
-const CALLABLE_TOOL_TYPES: ReadonlySet<string> = new Set(['http', 'pipeline']);
+const DECIDER_TOOL_PROBLEMS = {
+  runs_on_client: 'has no caller to hand the call to',
+  action_required:
+    "needs an action a decider does not carry: name it in a builtin tool's preset_parameters or in a pipeline step",
+} as const;
 
 /** The call input keys a decider owns; presets are merged over the input. */
 const DECIDER_INPUT_KEYS = ['input', 'questions'];
@@ -27,10 +28,16 @@ const DECIDER_INPUT_KEYS = ['input', 'questions'];
  * again at admission, since the tool stays editable after a decider names it.
  */
 export const assertDeciderToolCallable = (tool: DeciderToolRow): void => {
-  if (!CALLABLE_TOOL_TYPES.has(tool.type)) {
+  const problem = serverSideToolProblem({
+    tool,
+    action: null,
+    // `{ input, questions }`, which names no action.
+    input: null,
+  });
+  if (problem) {
     throw new DomainError(
       'DECIDER_TOOL_NOT_CALLABLE',
-      `Tool '${tool.publicId}' is a ${tool.type} tool; a decider's tool must be http or pipeline.`,
+      `Tool '${tool.publicId}' is a ${tool.type} tool, which ${DECIDER_TOOL_PROBLEMS[problem]}.`,
       { tool_id: tool.publicId, type: tool.type }
     );
   }

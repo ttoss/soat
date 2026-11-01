@@ -425,7 +425,8 @@ describe('Exceptions', () => {
         .send({
           project_id: projectId,
           name: 'Tripwire Tool',
-          type: 'client',
+          type: 'http',
+          execute: { url: 'https://example.com/tripwire', method: 'POST' },
           guardrail_ids: [guardrailRes.body.id],
         });
       expect(toolRes.status).toBe(201);

@@ -18,7 +18,18 @@ const ROLES = {
   order: [
     'ActivityEntry.detail',
     'Agent.activeRelease',
+    'Agent.activeToolIds',
+    'Agent.boundaryPolicy',
+    'Agent.guardrailIds',
+    'Agent.knowledgeConfig',
     'Agent.outputSchema',
+    'Agent.promptCaching',
+    'Agent.reasoning',
+    'Agent.stepRules',
+    'Agent.stopConditions',
+    'Agent.toolBindings',
+    'Agent.toolChoice',
+    'AgentVersion.config',
     'AiProvider.config',
     'ApprovalItem.editedArguments',
     'ApprovalItem.evidence',
@@ -68,7 +79,9 @@ const ROLES = {
     'Generation.retrieval',
     'Generation.routing',
     'Generation.toolSurface',
+    'Guardrail.document',
     'GuardrailEvaluation.contextSnapshot',
+    'GuardrailVersion.config',
     'IngestionRule.metadata',
     'IngestionRule.presetParameters',
     'Memory.metadata',
@@ -79,6 +92,11 @@ const ROLES = {
     'ModelRoute.targets',
     'OauthAuthCode.codeData',
     'OauthClient.clientData',
+    'Orchestration.edges',
+    'Orchestration.inputSchema',
+    'Orchestration.nodes',
+    'Orchestration.outputMapping',
+    'Orchestration.stateSchema',
     'OrchestrationCheckpoint.artifacts',
     'OrchestrationCheckpoint.state',
     'OrchestrationNodeExecution.error',
@@ -94,6 +112,7 @@ const ROLES = {
     'OrchestrationRun.state',
     'OrchestrationRun.toolContext',
     'OrchestrationRun.wakeContext',
+    'OrchestrationVersion.config',
     'Playbook.definition',
     'PlaybookEntry.basis',
     'PlaybookEntry.onBehalfOf',
@@ -137,8 +156,12 @@ const ROLES = {
     'TriggerFiring.input',
     'TriggerFiring.result',
     'WebhookDelivery.payload',
+    'Workflow.payloadSchema',
+    'Workflow.states',
+    'Workflow.transitions',
     'WorkflowMigration.items',
     'WorkflowMigration.stateMap',
+    'WorkflowVersion.config',
   ],
   query: [
     'Actor.tags',
@@ -154,41 +177,8 @@ const ROLES = {
   ],
 };
 
-/**
- * `JSONB` columns not yet held to the rule, by the change that settles them.
- * `definitions` move to `JSON` (`order`). Empty when done.
- */
-const PENDING = {
-  /** Resource definitions and the versions a restore replays. */
-  definitions: [
-    'Agent.activeToolIds',
-    'Agent.boundaryPolicy',
-    'Agent.guardrailIds',
-    'Agent.knowledgeConfig',
-    'Agent.promptCaching',
-    'Agent.reasoning',
-    'Agent.stepRules',
-    'Agent.stopConditions',
-    'Agent.toolBindings',
-    'Agent.toolChoice',
-    'AgentVersion.config',
-    'Guardrail.document',
-    'GuardrailVersion.config',
-    'Orchestration.edges',
-    'Orchestration.inputSchema',
-    'Orchestration.nodes',
-    'Orchestration.outputMapping',
-    'Orchestration.stateSchema',
-    'OrchestrationVersion.config',
-    'Workflow.payloadSchema',
-    'Workflow.states',
-    'Workflow.transitions',
-    'WorkflowVersion.config',
-  ],
-};
-
 /** The storage each class must have. */
-const EXPECTED_TYPE = { order: 'JSON', query: 'JSONB', pending: 'JSONB' };
+const EXPECTED_TYPE = { order: 'JSON', query: 'JSONB' };
 
 /** `<Model>.<attribute>` → `JSON` | `JSONB`, read from each `@Column`'s type. */
 const modelColumns = () => {
@@ -215,11 +205,6 @@ const classified = [
   ...ROLES.query.map((column) => {
     return [column, 'query'];
   }),
-  ...Object.values(PENDING)
-    .flat()
-    .map((column) => {
-      return [column, 'pending'];
-    }),
 ];
 
 describe('JSON column roles', () => {

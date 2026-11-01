@@ -3,9 +3,13 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { validateMemoryRule } from './memoryRuleValidation';
+import {
+  type MemoryRuleShape,
+  validateMemoryRule,
+} from './memoryRuleValidation';
 import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { serverSideToolProblem } from './toolsCallDispatch';
 
 const log = createDebug('soat:memoryRules');
 
@@ -128,8 +132,35 @@ export type MemoryRuleWriteArgs = {
   enabled?: boolean;
 };
 
-const assertValid = (shape: Parameters<typeof validateMemoryRule>[0]): void => {
-  const message = validateMemoryRule(shape);
+const TOOL_HANDLER_PROBLEMS = {
+  runs_on_client:
+    'a client tool cannot handle a rule: it runs in the caller, and a rule fires server-side',
+  action_required:
+    'action is required when the handler tool type is builtin or mcp, unless a builtin tool names it in preset_parameters',
+} as const;
+
+const toolHandlerProblem = async (shape: {
+  toolId?: number | null;
+  action?: string | null;
+  presetParameters?: object | null;
+}): Promise<string | null> => {
+  if (!shape.toolId) return null;
+  const tool = await db.Tool.findByPk(shape.toolId);
+  if (!tool) return null;
+  const problem = serverSideToolProblem({
+    tool,
+    action: shape.action,
+    // The handler's input is the presets plus the turn's reserved fields.
+    input: shape.presetParameters,
+  });
+  return problem ? TOOL_HANDLER_PROBLEMS[problem] : null;
+};
+
+const assertValid = async (
+  shape: MemoryRuleShape & { toolId?: number | null }
+): Promise<void> => {
+  const message =
+    validateMemoryRule(shape) ?? (await toolHandlerProblem(shape));
   if (message) {
     throw new DomainError('MEMORY_RULE_VALIDATION_FAILED', message);
   }
@@ -146,7 +177,7 @@ export const createMemoryRule = async (
     args.toolId
   );
 
-  assertValid(args);
+  await assertValid(args);
 
   const rule = await db.MemoryRule.create({
     memoryStoreId: args.memoryStoreId,
@@ -260,7 +291,7 @@ export const updateMemoryRule = async (
 
   const rule = await loadRule(args);
 
-  assertValid(effectiveShape({ rule, updates: args }));
+  await assertValid(effectiveShape({ rule, updates: args }));
 
   const updates: Record<string, unknown> = {};
   for (const field of WRITABLE_FIELDS) {

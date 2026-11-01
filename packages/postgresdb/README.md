@@ -103,6 +103,7 @@ The flow they follow is
 | `2026-10-23-memory-content-normalized-hash`          | `memory_contents.normalized_hash` (`hashNormalizedMemoryContent`), the case- and punctuation-insensitive key spellings of one text share, backfilled, `NOT NULL` and indexed per store; no row is merged or rewritten                                                                                                                                                                        |
 | `2026-10-23-list-keyset-indexes`                     | a `(project_id, sort key, public_id)` index on `generations`, `traces`, `audit_entries` and `usage_events`, the keyset a list page reads                                                                                                                                                                                                                                                     |
 | `2026-11-01-model-facing-schemas-json`               | `agents.output_schema` and `tools.parameters` from `jsonb` to `json`, so a schema keeps its key order; a stored row keeps the order `jsonb` gave it                                                                                                                                                                                                                                          |
+| `2026-11-01-definitions-keep-key-order`              | agent, guardrail, orchestration and workflow definitions and their `*_versions.config` from `jsonb` to `json`, so a write keeps its key order; stored values keep the order `jsonb` gave them                                                                                                                                                                                                |
 | `2026-11-01-payloads-keep-key-order`                 | every payload, record and configuration column classified `order` (_JSON or JSONB_) from `jsonb` to `json`, so an object written from then on reads back in its key order                                                                                                                                                                                                                    |
 
 Run them from the server package, which owns the entrypoint:
@@ -281,7 +282,7 @@ which cast it to `jsonb`.
 
 `tests/harness/jsonColumnRoles.test.mjs` classifies every column and fails on an
 unclassified one, on a type its role contradicts, and on a `jsonb_*` call outside
-the helper. Its `PENDING` lists the `JSONB` columns not yet held to the rule.
+the helper.
 
 ### Running Database for Development
 

@@ -2258,7 +2258,7 @@ components:
       description: >-
         Creates a decider — a versioned question set answered against a
         caller's input. Names exactly one backend: `agent_id` (a tool-less
-        agent) or `tool_id` (an `http` or `pipeline` tool), either a `{ "ref":
+        agent) or `tool_id` (a tool run with no action), either a `{ "ref":
         … }` to a resource in the same template. Only a change to `questions`
         archives a new version. Mirrors the deciders REST contract.
       type: object
@@ -2281,7 +2281,7 @@ components:
         tool_id:
           x-soat-ref: tools
           type: string
-          description: The http or pipeline tool that answers
+          description: The tool that answers, run with no action
         questions:
           type: array
           items:

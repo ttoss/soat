@@ -25,6 +25,26 @@ describe('Memory Rules API', () => {
       .send({ memory_store_id: memoryStoreId, ...body });
   };
 
+  const createTypedTool = async (body: Record<string, unknown>) => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: `MemoryRulesTool-${Math.random().toString(36).slice(2)}`,
+        ...body,
+      });
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  };
+
+  const createBuiltinTool = () => {
+    return createTypedTool({
+      type: 'builtin',
+      description: 'Lists tools',
+      actions: ['list-tools'],
+    });
+  };
+
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'memoryrules',
@@ -76,12 +96,13 @@ describe('Memory Rules API', () => {
       .send({
         project_id: projectId,
         name: 'MemoryRulesTool',
-        type: 'client',
+        type: 'http',
         description: 'Proposes facts from a finished turn',
         parameters: {
           type: 'object',
           properties: { transcript: { type: 'string' } },
         },
+        execute: { url: 'https://example.com/extract', method: 'POST' },
       });
     toolId = toolRes.body.id;
 
@@ -175,6 +196,43 @@ describe('Memory Rules API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
+    });
+
+    test('rejects a client tool handler', async () => {
+      const clientTool = await createTypedTool({
+        type: 'client',
+        description: 'Runs in the caller',
+      });
+
+      const res = await createRule({
+        on: 'generations.completed',
+        tool_id: clientTool,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/client/);
+    });
+
+    test('rejects a builtin tool handler with no action', async () => {
+      const res = await createRule({
+        on: 'generations.completed',
+        tool_id: await createBuiltinTool(),
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/action/);
+    });
+
+    test('accepts a builtin tool handler whose presets name the action', async () => {
+      const res = await createRule({
+        on: 'generations.completed',
+        tool_id: await createBuiltinTool(),
+        preset_parameters: { action: 'list-tools' },
+      });
+
+      expect(res.status).toBe(201);
     });
 
     test('rejects an extractor override combined with a handler', async () => {
@@ -388,6 +446,22 @@ describe('Memory Rules API', () => {
       expect(res.status).toBe(200);
       expect(res.body.agent_id).toBe(agentId);
       expect(res.body.prompt).toBeNull();
+    });
+
+    test("clearing a builtin handler's action is refused", async () => {
+      const created = await createRule({
+        on: 'generations.completed',
+        tool_id: await createBuiltinTool(),
+        action: 'list-tools',
+      });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/memory-rules/${created.body.id}`)
+        .send({ action: null });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
     });
 
     test('a handlerless rule cannot be moved onto the message event', async () => {

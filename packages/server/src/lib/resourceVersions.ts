@@ -42,7 +42,7 @@ export type ConfigSnapshot = Record<string, unknown>;
  * columns (`agentId`, `guardrailId`) are exactly what the engine must not name.
  *
  * `config` is deliberately `object` rather than `ConfigSnapshot` — it is what
- * Sequelize declares for a JSONB column, and `readArchivedConfig` is the one
+ * Sequelize declares for a JSON column, and `readArchivedConfig` is the one
  * place it is narrowed.
  */
 export type ArchivedVersionRow = Model & {

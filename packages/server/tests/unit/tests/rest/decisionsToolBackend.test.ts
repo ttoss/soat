@@ -383,6 +383,19 @@ describe('Decisions — tool backend', () => {
       expect(res.body.error.code).toBe('DECIDER_TOOL_NOT_CALLABLE');
     });
 
+    test('a builtin tool whose presets name the action backs a decider', async () => {
+      const toolId = await createTool({
+        type: 'builtin',
+        description: 'Lists tools',
+        actions: ['list-tools'],
+        preset_parameters: { action: 'list-tools' },
+      });
+
+      const res = await postDecider({ tool_id: toolId });
+
+      expect(res.status).toBe(201);
+    });
+
     test('a tool whose presets pin the input is refused with 400', async () => {
       const toolId = await createHttpTool('/engine', {
         preset_parameters: { input: 'always this' },

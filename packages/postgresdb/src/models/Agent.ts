@@ -86,25 +86,25 @@ export class Agent extends Model {
 
   // The pre-`toolBindings` `toolIds`/`tools` columns are gone, so a row that
   // held only those reads as having no tools.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare toolBindings: object[] | null;
 
   @Column({ type: DataType.INTEGER, allowNull: true, defaultValue: 20 })
   declare maxSteps: number | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare toolChoice: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare stopConditions: object[] | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare activeToolIds: string[] | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare stepRules: object[] | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare boundaryPolicy: object | null;
 
   @Column({ type: DataType.FLOAT, allowNull: true })
@@ -117,10 +117,10 @@ export class Agent extends Model {
   declare maxOutputTokens: number | null;
 
   /** `{ effort }` — see `agentModelSettings.ts`. Null is the model's default. */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare reasoning: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare knowledgeConfig: object | null;
 
   @Column({ type: DataType.JSON, allowNull: true })
@@ -132,14 +132,14 @@ export class Agent extends Model {
    * costs more than an uncached token, so an agent whose prefix is never
    * re-read would pay for the privilege.
    */
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare promptCaching: object | null;
 
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare singleSessionPerActor: boolean;
 
   // Governs every tool call the agent makes, across all its bindings.
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare guardrailIds: string[] | null;
 
   /**

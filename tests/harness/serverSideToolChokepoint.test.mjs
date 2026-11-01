@@ -48,6 +48,44 @@ describe('server-side tool chokepoint', () => {
     ]);
   });
 
+  test('every tool lookup that authors a server-side call asks the chokepoint', () => {
+    // A lookup that never authors a server-side call, and why.
+    const NOT_A_SERVER_SIDE_CALL = {
+      // An agent hands a client tool back to its caller instead of running it.
+      'lib/agentClientToolReHandoff.ts': 'agent surface',
+      'lib/agentToolBindings.ts': 'agent surface',
+      'lib/agentToolResolver.ts': 'agent surface',
+      'lib/agentToolSelection.ts': 'agent surface',
+      'lib/agentWriteValidation.ts': 'agent surface',
+      'lib/approvals.ts': 'reads the schema an edit must satisfy',
+      'lib/formationLookups.ts': 'resolves an id; the module validates',
+      'lib/orchestrationToolGuardrail.ts': 'collects guardrails at run',
+      'lib/priceBookResource.ts': 'prices a tool',
+      'lib/tools.ts': 'the call itself; the dispatcher refuses at run',
+      'lib/usageResourcePricing.ts': 'prices a tool',
+      'rest/v1/approvals.ts': 'names the IAM action a proposal needs',
+    };
+    // A lookup whose call is checked in a sibling holding the full shape.
+    const ASKED_IN = {
+      'lib/ingestionRuleRefs.ts': 'lib/ingestionRuleValidation.ts',
+      'lib/memoryRuleRefs.ts': 'lib/memoryRules.ts',
+    };
+    const asks = (entry) => {
+      return /\bserverSideTool(?:Validation)?Problem\(/.test(
+        code(path.join(srcDir, entry))
+      );
+    };
+
+    const unanswered = filesMatching(
+      /\btoolReferences\.(?:find|findMany|requireMany)\(/
+    ).filter((entry) => {
+      if (entry in NOT_A_SERVER_SIDE_CALL) return false;
+      return !asks(ASKED_IN[entry] ?? entry);
+    });
+
+    assert.deepEqual(unanswered, []);
+  });
+
   test('only the dispatcher decides that a tool type needs an action', () => {
     assert.deepEqual(
       filesMatching(/'(?:mcp|builtin)'\)?\s*&&\s*!\s*[\w.]*\baction\b/),

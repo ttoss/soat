@@ -453,6 +453,8 @@ A rule's handler decides *what* is worth remembering. It **proposes candidates a
 | agent | `agent_id` | The agent is generated against the transcript and its reply is parsed as the contract above |
 | tool | `tool_id` (+ `action`) | The tool is called with `{ event, rule_id, agent_id, generation_id, conversation_id, transcript }` plus `preset_parameters`, and its output is parsed as the contract above |
 
+A tool handler runs server-side, so a rule naming a `client` tool, or a `builtin` or `mcp` tool with no `action` (a `builtin` one may name it in `preset_parameters`), is `400 MEMORY_RULE_VALIDATION_FAILED`.
+
 Because the write algorithm has [no model call in it](#write-algorithm), an agent handler and a tool handler behave identically once they return — a tool handler is not a degraded path.
 
 The server then runs each candidate through the standard [write algorithm](#write-algorithm) on the store's effective thresholds, against the project's `storage_bytes` quota, and appends one [assertion](#assertions). **A handler can propose garbage and cannot corrupt the store.** Anyone who wants to bypass the algorithm still has [`POST /api/v1/memories`](/docs/api/memories/create-memory).

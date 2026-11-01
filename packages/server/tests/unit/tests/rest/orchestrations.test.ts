@@ -208,6 +208,87 @@ describe('Orchestrations', () => {
     return keyRes.body.key as string;
   };
 
+  describe('a tool or poll node runs its tool server-side', () => {
+    const createTypedTool = async (body: Record<string, unknown>) => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: `typed-${Math.random().toString(36).slice(2)}`,
+          ...body,
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    const createWithNode = (node: Record<string, unknown>) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: `server-side-${Math.random().toString(36).slice(2)}`,
+          nodes: [node],
+          edges: [],
+        });
+    };
+
+    test('a client tool on a tool node is refused with 400', async () => {
+      const toolId = await createTypedTool({
+        type: 'client',
+        description: 'Runs in the caller',
+      });
+
+      const res = await createWithNode({
+        id: 't',
+        type: 'tool',
+        tool_id: toolId,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
+      expect(res.body.error.meta.problems).toEqual([
+        expect.objectContaining({
+          code: 'TOOL_RUNS_ON_CLIENT',
+          path: 'nodes[0].tool_id',
+        }),
+      ]);
+    });
+
+    test('an mcp tool with no operation_id on a poll node is refused with 400', async () => {
+      const toolId = await createTypedTool({ type: 'mcp' });
+
+      const res = await createWithNode({
+        id: 'p',
+        type: 'poll',
+        tool_id: toolId,
+        exit_condition: true,
+        interval: 60,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
+      expect(res.body.error.meta.problems).toEqual([
+        expect.objectContaining({
+          code: 'MISSING_FIELD',
+          path: 'nodes[0].operation_id',
+        }),
+      ]);
+    });
+
+    test('an mcp tool with its operation_id is accepted', async () => {
+      const toolId = await createTypedTool({ type: 'mcp' });
+
+      const res = await createWithNode({
+        id: 't',
+        type: 'tool',
+        tool_id: toolId,
+        operation_id: 'search',
+      });
+
+      expect(res.status).toBe(201);
+    });
+  });
+
   describe('POST /api/v1/orchestrations', () => {
     test('authenticated user with permission can create an orchestration', async () => {
       const response = await authenticatedTestClient(userToken)

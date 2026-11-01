@@ -56,7 +56,7 @@ export class Guardrail extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare version: number;
 
-  @Column({ type: DataType.JSONB, allowNull: false })
+  @Column({ type: DataType.JSON, allowNull: false })
   declare document: object;
 
   @Column({ type: DataType.STRING, allowNull: true })
