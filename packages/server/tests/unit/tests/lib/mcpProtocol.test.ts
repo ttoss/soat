@@ -17,6 +17,7 @@ describe('MCP protocol fidelity', () => {
   const MCP_URL = 'http://localhost:19999/mcp';
   const TRANSPORT = {
     url: MCP_URL,
+    fetchUrl: MCP_URL,
     urlSecrets: new Map<string, string>(),
     credentialHeaders: [],
     headers: {
