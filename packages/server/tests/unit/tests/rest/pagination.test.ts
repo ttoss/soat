@@ -139,6 +139,27 @@ describe('list pagination', () => {
       return response.body.id as string;
     };
 
+    const ids = (rows: { id: string }[]) => {
+      return rows.map((row) => {
+        return row.id;
+      });
+    };
+
+    /**
+     * A day back, so it sorts before the rows already walked, where an offset
+     * page would repeat one. `createdAt` is wall-clock: a stepped clock sorts a
+     * row created at the real time anywhere.
+     */
+    const createActorInThePast = async (name: string): Promise<string> => {
+      jest.useFakeTimers({ advanceTimers: true });
+      jest.setSystemTime(Date.now() - 24 * 60 * 60 * 1000);
+      try {
+        return await createActor(name);
+      } finally {
+        jest.useRealTimers();
+      }
+    };
+
     test('reaches next_cursor null, and a row inserted between pages repeats none', async () => {
       const before = [
         await createActor('walk-a'),
@@ -155,20 +176,18 @@ describe('list pagination', () => {
           ...(cursor ? { cursor } : {}),
         });
         expect(response.status).toBe(200);
-        seen.push(
-          ...response.body.data.map((row: { id: string }) => {
-            return row.id;
-          })
-        );
-        inserted ??= await createActor('walk-inserted');
+        seen.push(...ids(response.body.data));
+        inserted ??= await createActorInThePast('walk-inserted');
         if (response.body.next_cursor === null) break;
         cursor = response.body.next_cursor as string;
       }
 
-      expect(new Set(seen).size).toBe(seen.length);
+      const listing = ids(
+        (await get('/api/v1/actors', { limit: '100' })).body.data
+      );
+      expect(listing[0]).toBe(inserted);
+      expect(seen).toEqual(listing.slice(1));
       expect(seen).toEqual(expect.arrayContaining(before));
-      // Oldest first, so the row inserted after the first page is its last.
-      expect(seen[seen.length - 1]).toBe(inserted);
     });
 
     test('refuses a cursor sent with other filters', async () => {
