@@ -40,9 +40,10 @@ export const jsonNames = (columns: string[], ids: string[]): Condition[] => {
 const configNames = (keys: string[], ids: string[]): Condition[] => {
   return textNames(
     keys.map((key) => {
+      // `config` is `JSON` on some version tables and `JSONB` on others.
       return db.sequelize.fn(
         'jsonb_extract_path',
-        db.sequelize.col('config'),
+        db.sequelize.cast(db.sequelize.col('config'), 'jsonb'),
         key
       );
     }),

@@ -291,6 +291,44 @@ describe('Share references through served versions and attachments', () => {
     ]);
   });
 
+  test('lists an agent beside a playbook case whose version names nothing shared', async () => {
+    const tool = await sharedTool('besideUnrelatedCase');
+    const playbook = await createIn(granteeId, '/api/v1/playbooks', {
+      name: 'unrelated-case',
+      definition: {
+        nodes: [
+          {
+            id: 'brief',
+            title: 'Brief',
+            kind: 'collect',
+            final: true,
+            inputs: [
+              {
+                name: 'brief',
+                schema: { type: 'string' },
+                required: true,
+                source: 'manual',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const opened = await admin()
+      .post(`/api/v1/playbooks/${playbook}/cases`)
+      .send({ subject: 'unrelated' });
+    expect(opened.status).toBe(201);
+    const agent = await createIn(granteeId, '/api/v1/agents', {
+      name: 'Beside the case',
+      ai_provider_id: granteeProvider,
+      tool_bindings: [{ tool_id: tool.id }],
+    });
+
+    expect(await references(tool.shareId)).toEqual([
+      { type: 'agent', id: agent },
+    ]);
+  });
+
   test('lists a guardrail whose context tool reaches the shared tool, and what attaches it', async () => {
     const tool = await sharedTool('fetchedAsContext');
     const pipeline = await createIn(granteeId, '/api/v1/tools', {
