@@ -39,37 +39,69 @@ const RESOLVES: Record<
   },
 };
 
-/**
- * Why a run could not call the action a `tool` executor names, or null: an
- * `mcp` tool takes no call without an action, nor one its binding withholds.
- */
-export const executorActionProblem = async (args: {
-  executor: PlaybookExecutor;
-  projectId: number;
-}): Promise<{
-  code: 'EXECUTOR_ACTION_REQUIRED' | 'EXECUTOR_ACTION_UNAVAILABLE';
+/** What names the tool a node starts: its executor, or a transformation. */
+export type ToolStart = 'executor' | 'transformation';
+
+export type ToolCallProblem = {
+  code:
+    | 'EXECUTOR_TOOL_UNSUPPORTED'
+    | 'TRANSFORMATION_TOOL_UNSUPPORTED'
+    | 'EXECUTOR_ACTION_REQUIRED'
+    | 'EXECUTOR_ACTION_UNAVAILABLE';
+  /** The field at fault: the one naming the tool, or the executor's action. */
+  on: 'tool' | 'operation_id';
   message: string;
-} | null> => {
-  const { executor, projectId } = args;
-  if (executor.type !== 'tool') return null;
-  const tool = await toolReferences.find({
-    id: executor.id,
-    projectId,
-    reach: 'shares',
-  });
-  if (tool?.type !== 'mcp') return null;
+};
+
+/**
+ * The tool types a run cannot call from each start, with why. A `client` tool
+ * runs only in the calling client; an `mcp` tool needs an action, which only
+ * an executor names.
+ */
+const UNSUPPORTED: Record<
+  ToolStart,
+  {
+    code: ToolCallProblem['code'];
+    label: string;
+    types: Record<string, string>;
+  }
+> = {
+  executor: {
+    code: 'EXECUTOR_TOOL_UNSUPPORTED',
+    label: "a node's executor",
+    types: { client: 'it runs only in the calling client' },
+  },
+  transformation: {
+    code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
+    label: "a transformation's tool",
+    types: {
+      client: 'it runs only in the calling client',
+      mcp: 'a transformation names no action to call',
+    },
+  },
+};
+
+type ToolRow = NonNullable<Awaited<ReturnType<typeof toolReferences.find>>>;
+
+const mcpActionProblem = (args: {
+  tool: ToolRow;
+  executor: PlaybookExecutor;
+}): ToolCallProblem | null => {
+  const { tool, executor } = args;
   const action = executor.operation_id;
   if (action === undefined) {
-    log('executorActionProblem: %s has no operation_id', executor.id);
+    log('toolCallProblem: %s has no operation_id', executor.id);
     return {
       code: 'EXECUTOR_ACTION_REQUIRED',
+      on: 'operation_id',
       message: `mcp tool '${executor.id}' needs the action to call in operation_id.`,
     };
   }
   if (!isActionBound({ tool, action })) {
-    log('executorActionProblem: %s withholds %s', executor.id, action);
+    log('toolCallProblem: %s withholds %s', executor.id, action);
     return {
       code: 'EXECUTOR_ACTION_UNAVAILABLE',
+      on: 'operation_id',
       message: `action '${action}' is not available on tool '${executor.id}'.`,
     };
   }
@@ -77,27 +109,36 @@ export const executorActionProblem = async (args: {
 };
 
 /**
- * Why a run could not call a transformation's tool, or null: an `mcp` tool
- * takes no call without an action, and a transformation names none.
+ * Why a run could not call the tool a node starts, or null: a tool type the
+ * start cannot call (`UNSUPPORTED`), or an `mcp` executor without an action
+ * its binding allows.
  */
-export const transformationToolProblem = async (args: {
-  toolId: string;
+export const toolCallProblem = async (args: {
+  executor: PlaybookExecutor;
+  start: ToolStart;
   projectId: number;
-}): Promise<{
-  code: 'TRANSFORMATION_TOOL_UNSUPPORTED';
-  message: string;
-} | null> => {
+}): Promise<ToolCallProblem | null> => {
+  const { executor, start, projectId } = args;
+  if (executor.type !== 'tool') return null;
   const tool = await toolReferences.find({
-    id: args.toolId,
-    projectId: args.projectId,
+    id: executor.id,
+    projectId,
     reach: 'shares',
   });
-  if (tool?.type !== 'mcp') return null;
-  log('transformationToolProblem: %s is an mcp tool', args.toolId);
-  return {
-    code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
-    message: `mcp tool '${args.toolId}' cannot be a transformation's tool: a transformation names no action to call.`,
-  };
+  if (!tool) return null;
+  const unsupported = UNSUPPORTED[start];
+  const reason = Object.hasOwn(unsupported.types, tool.type)
+    ? unsupported.types[tool.type]
+    : undefined;
+  if (reason !== undefined) {
+    log('toolCallProblem: %s tool %s as %s', tool.type, executor.id, start);
+    return {
+      code: unsupported.code,
+      on: 'tool',
+      message: `${tool.type} tool '${executor.id}' cannot be ${unsupported.label}: ${reason}.`,
+    };
+  }
+  return tool.type === 'mcp' ? mcpActionProblem({ tool, executor }) : null;
 };
 
 /** Whether `executor` names something a run in `projectId` could start. */

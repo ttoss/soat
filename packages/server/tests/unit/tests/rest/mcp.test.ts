@@ -3595,20 +3595,21 @@ describe('MCP tools - happy path', () => {
     };
     let playbookId: string;
     let caseId: string;
-    // A client tool never runs server-side, so a node or an export naming it
-    // fails without a request leaving the process.
-    let clientToolId: string;
+    // An http tool on a closed loopback port, so a node or an export naming it
+    // fails without a request leaving the machine.
+    let downToolId: string;
 
     beforeAll(async () => {
       const toolRes = await mcpCall('create-tool', {
         project_id: projectId,
-        name: 'mcp-playbook-client-tool',
-        type: 'client',
-        description: 'Answered by the caller',
+        name: 'mcp-playbook-down-tool',
+        type: 'http',
+        description: 'Never answers',
         parameters: { type: 'object', properties: {} },
+        execute: { url: 'http://127.0.0.1:9/never', method: 'POST' },
       });
       expect(toolRes.status).toBe(200);
-      clientToolId = parseResult(toolRes).id;
+      downToolId = parseResult(toolRes).id;
 
       const playbookRes = await mcpCall('create-playbook', {
         project_id: projectId,
@@ -3731,7 +3732,7 @@ describe('MCP tools - happy path', () => {
 
     test('run-playbook-case-node retries a failed node and the executions read it back', async () => {
       // Its own playbook, so the shared one keeps the single case the tests
-      // below count and delete. Its tool is a client tool, so the node fails.
+      // below count and delete. Its tool never answers, so the node fails.
       const runPlaybook = await mcpCall('create-playbook', {
         project_id: projectId,
         name: 'mcp-runs',
@@ -3749,7 +3750,7 @@ describe('MCP tools - happy path', () => {
                   source: 'manual',
                 },
               ],
-              executor: { type: 'tool', id: clientToolId },
+              executor: { type: 'tool', id: downToolId },
             },
           ],
         },
@@ -3796,7 +3797,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('export-playbook-case-node waits for the file and the exports read it back', async () => {
-      // Its tool is a client tool, so the export settles failed.
+      // Its tool never answers, so the export settles failed.
       const exportPlaybook = await mcpCall('create-playbook', {
         project_id: projectId,
         name: 'mcp-exports',
@@ -3819,7 +3820,7 @@ describe('MCP tools - happy path', () => {
                 {
                   name: 'proposal',
                   format: 'pdf',
-                  tool: clientToolId,
+                  tool: downToolId,
                 },
               ],
             },
