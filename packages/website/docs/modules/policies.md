@@ -11,7 +11,7 @@ Global, reusable IAM policy documents attached to users and API keys; managed by
 
 ## Overview
 
-A Policy is a named [policy document](./iam.md#policy-documents) stored globally, attached to **users** and **API keys**. Filter the listing by user to see a user's policies. Ids are prefixed `pol_`.
+A Policy is a named [policy document](./iam.md#policy-documents) stored globally, attached to **users** and **API keys**. Filter the listing by user to see a user's policies. Ids are prefixed `pol_`. A policy a trigger names as its `policy_id` cannot be deleted (`409 POLICY_HAS_DEPENDENTS`); detach it from the trigger first.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

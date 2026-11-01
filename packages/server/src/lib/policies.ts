@@ -6,6 +6,8 @@ import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
 import { emptyPage, paginatedList } from './pagination';
 
+const MAX_DEPENDENT_SAMPLE = 5;
+
 const validatePolicy = (
   document: PolicyDocument
 ): { valid: boolean; errors: string[] } => {
@@ -120,6 +122,27 @@ export const deletePolicy = async (args: {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
       `Policy '${args.policyId}' not found.`
+    );
+  }
+
+  const [triggers, triggerCount] = await Promise.all([
+    db.Trigger.findAll({
+      where: { policyId: policy.id },
+      attributes: ['publicId'],
+      limit: MAX_DEPENDENT_SAMPLE,
+    }),
+    db.Trigger.count({ where: { policyId: policy.id } }),
+  ]);
+  if (triggerCount > 0) {
+    throw new DomainError(
+      'POLICY_HAS_DEPENDENTS',
+      `Policy '${args.policyId}' is the policy_id of ${triggerCount} trigger(s); it cannot be deleted.`,
+      {
+        triggers: triggerCount,
+        sample: triggers.map((trigger) => {
+          return trigger.publicId;
+        }),
+      }
     );
   }
 
