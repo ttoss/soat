@@ -9,6 +9,7 @@
  * holding one.
  */
 
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -175,6 +176,19 @@ export const PROJECT_COUNTED_MODELS = [
   'UsageEvent',
 ] as const satisfies readonly ProjectScopedModelName[];
 
+type ProjectCountedModelName = (typeof PROJECT_COUNTED_MODELS)[number];
+
+/**
+ * The status a counted model leaves on a row it deleted but kept. Such a row
+ * is history, not a dependent: the count skips it and a plain delete removes it
+ * with the project.
+ */
+export const PROJECT_TOMBSTONE_STATUSES: Partial<
+  Record<ProjectCountedModelName, string>
+> = {
+  Formation: 'deleted',
+};
+
 /**
  * The models with no `projectId` of their own that the cascade removes by
  * parent id, because their FK to that parent is RESTRICT/NO ACTION rather than
@@ -198,9 +212,11 @@ export const PROJECT_PARENT_SCOPED_MODELS = [
  * that let eight models go missing from both.
  */
 type ProjectScopedModel = {
-  count: (options: { where: { projectId: number } }) => Promise<number>;
+  count: (options: {
+    where: { projectId: number; status?: { [Op.ne]: string } };
+  }) => Promise<number>;
   destroy: (options: {
-    where: { projectId: number };
+    where: { projectId: number; status?: string };
     transaction?: Transaction;
   }) => Promise<number>;
 };
@@ -218,13 +234,42 @@ export const countProjectDependents = async (args: {
 
   const counts = await Promise.all(
     PROJECT_COUNTED_MODELS.map((name) => {
-      return projectScopedModel(name).count({ where: { projectId } });
+      const tombstone = PROJECT_TOMBSTONE_STATUSES[name];
+      return projectScopedModel(name).count({
+        where: {
+          projectId,
+          ...(tombstone === undefined
+            ? {}
+            : { status: { [Op.ne]: tombstone } }),
+        },
+      });
     })
   );
 
   return counts.reduce((sum: number, count: number) => {
     return sum + count;
   }, 0);
+};
+
+// The project has no dependents, so only tombstones can hold a RESTRICT FK on it.
+export const deleteProjectWithTombstones = async (args: {
+  project: InstanceType<typeof db.Project>;
+  projectId: number;
+}): Promise<void> => {
+  const { projectId } = args;
+
+  await db.sequelize.transaction(async (transaction) => {
+    for (const name of PROJECT_COUNTED_MODELS) {
+      const status = PROJECT_TOMBSTONE_STATUSES[name];
+      if (status === undefined) continue;
+      await projectScopedModel(name).destroy({
+        where: { projectId, status },
+        transaction,
+      });
+    }
+
+    await args.project.destroy({ transaction });
+  });
 };
 
 const findProjectDependentIds = async (args: { projectId: number }) => {

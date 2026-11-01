@@ -1220,6 +1220,44 @@ describe('Projects', () => {
       };
     };
 
+    test('a deleted formation does not block deleting its project', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Deleted Formation Project' });
+      const formationProjectId = projRes.body.id;
+
+      const formationRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: formationProjectId,
+          name: 'short-lived',
+          template: {
+            resources: {
+              Store: {
+                type: 'memory_store',
+                properties: { name: 'Short-lived store' },
+              },
+            },
+          },
+        });
+      expect(formationRes.status).toBe(201);
+
+      const deleteFormationRes = await authenticatedTestClient(
+        adminToken
+      ).delete(`/api/v1/formations/${formationRes.body.id}`);
+      expect(deleteFormationRes.status).toBe(200);
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${formationProjectId}`
+      );
+      expect(response.status).toBe(204);
+
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${formationProjectId}`
+      );
+      expect(getProjectRes.status).toBe(404);
+    });
+
     test('returns 409 PROJECT_HAS_DEPENDENTS when the project only holds a dataset', async () => {
       const projRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
