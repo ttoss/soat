@@ -192,6 +192,8 @@ A generation **in flight is never killed**, so a budget may overshoot by at most
 
 The same check runs before every model call, not only agent generations: decider answers and built-in memory extraction match like a generation of their agent; [chat completions](./chats.md) and `llm_judge` scorers run no agent, so only `project` quotas refuse them. A refused judge errors its item; a refused extraction proposes no memories.
 
+[Embedding](./embeddings.md#metering) spend is refused by `project` quotas at the caller-facing entry points, with `429` before anything is written: [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) billed to a project, [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a `query`, [`POST /api/v1/documents`](/docs/api/documents/create-document), [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document), [`POST /api/v1/memories`](/docs/api/memories/create-memory) and the `document` and `memory` [formation](./formations.md) resources. A refused `embedding_similarity` scorer errors its item. Embeddings a generation or run makes are exempt, the same line the [storage cap](#storage-enforcement) draws.
+
 ### Meter scope
 
 A `cost_usd` quota sums every priced meter by default, so a newly priced platform meter would consume a cap set to bound *model* spend. `meter_type` names the meter a cap answers for:

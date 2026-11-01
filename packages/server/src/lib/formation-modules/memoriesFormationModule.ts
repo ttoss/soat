@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../../errors';
 import { lookupMemoryStoreInternalId } from '../formationLookups';
 import {
+  assertMemorySpendWithinQuota,
   assertMemoryStorageQuota,
   createMemory,
   deleteMemory,
@@ -36,6 +37,7 @@ export const memoriesFormationModule = defineFormationModule({
 
     const content = properties.content as string;
     await assertMemoryStorageQuota({ memoryStoreId, content });
+    await assertMemorySpendWithinQuota({ memoryStoreId });
 
     return createMemory({
       memoryStoreId,

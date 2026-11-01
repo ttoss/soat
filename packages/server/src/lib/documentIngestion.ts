@@ -23,6 +23,7 @@ import {
   type GenerationEndUser,
 } from './generationAttribution';
 import { resolveIngestionRule } from './ingestionRules';
+import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 import { assertStorageQuota } from './quotaStorage';
 import {
   resolveSourcePages,
@@ -307,6 +308,7 @@ export const enqueueDocumentIngestion = async (args: {
   // measured by the next snapshot — so the refusal is on the footprint as last
   // measured, which is what stops an over-cap project from indexing more.
   await assertStorageQuota({ projectId: args.projectId, addedBytes: 0 });
+  await assertProjectSpendWithinQuota({ projectId: args.projectId });
 
   const filename = file.filename ?? 'document';
   const docPath = normalizePath(
@@ -406,6 +408,7 @@ export const reingestDocument = async (args: {
   }
 
   await assertStorageQuota({ projectId: file.projectId, addedBytes: 0 });
+  await assertProjectSpendWithinQuota({ projectId: file.projectId });
 
   log(
     'reingestDocument: id=%s wait=%s strategy=%s',

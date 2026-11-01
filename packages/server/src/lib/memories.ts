@@ -8,6 +8,7 @@ import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { paginatedList } from 'src/lib/pagination';
 import { registerResourceFieldMap } from 'src/lib/policyCompiler';
 import { hasPolicyConstraints } from 'src/lib/policyWhere';
+import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { applyTagFilter } from 'src/lib/tags';
 import {
@@ -68,6 +69,18 @@ export const assertMemoryStorageQuota = async (args: {
     projectId,
     addedBytes: contentBytes(args.content),
   });
+};
+
+/**
+ * The token/cost check on a caller-driven write, which embeds the content.
+ * Never called from `writeMemory`: `write_memory` runs mid-turn.
+ */
+export const assertMemorySpendWithinQuota = async (args: {
+  memoryStoreId: number;
+}): Promise<void> => {
+  const projectId = await resolveMemoryStoreProjectId(args);
+  if (projectId == null) return;
+  await assertProjectSpendWithinQuota({ projectId });
 };
 
 /**
