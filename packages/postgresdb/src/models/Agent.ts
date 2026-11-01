@@ -123,7 +123,7 @@ export class Agent extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare knowledgeConfig: object | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare outputSchema: object | null;
 
   /**

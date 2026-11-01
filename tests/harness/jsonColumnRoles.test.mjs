@@ -16,6 +16,7 @@ const serverSrcDir = path.join(repoRoot, 'packages/server/src');
  */
 const ROLES = {
   order: [
+    'Agent.outputSchema',
     'Decider.questions',
     'DeciderVersion.config',
     'Decision.questions',
@@ -24,6 +25,7 @@ const ROLES = {
     'PlaybookExecution.input',
     'PlaybookExecution.output',
     'PlaybookVersion.config',
+    'Tool.parameters',
   ],
   query: [
     'Actor.tags',
@@ -41,12 +43,10 @@ const ROLES = {
 
 /**
  * `JSONB` columns not yet held to the rule, by the change that settles them.
- * `schemas` and `definitions` move to `JSON` (`order`); each of `remaining` is
+ * `definitions` move to `JSON` (`order`); each of `remaining` is
  * classified `order` or `query` and stored as its role says. Empty when done.
  */
 const PENDING = {
-  /** JSON Schemas sent to a provider. */
-  schemas: ['Agent.outputSchema', 'Tool.parameters'],
   /** Resource definitions and the versions a restore replays. */
   definitions: [
     'Agent.activeToolIds',

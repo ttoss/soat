@@ -47,6 +47,7 @@ import { taskTransitionWorkflowVersions } from './2026-10-19-taskTransitionWorkf
 import { playbookCaseActor } from './2026-10-20-playbookCaseActor';
 import { listKeysetIndexes } from './2026-10-23-listKeysetIndexes';
 import { memoryContentNormalizedHash } from './2026-10-23-memoryContentNormalizedHash';
+import { modelFacingSchemasJson } from './2026-11-01-modelFacingSchemasJson';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -115,4 +116,5 @@ export const MIGRATIONS: Migration[] = [
   playbookCaseActor,
   memoryContentNormalizedHash,
   listKeysetIndexes,
+  modelFacingSchemasJson,
 ];

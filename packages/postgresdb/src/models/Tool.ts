@@ -54,7 +54,7 @@ export class Tool extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: true })
+  @Column({ type: DataType.JSON, allowNull: true })
   declare parameters: object | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
