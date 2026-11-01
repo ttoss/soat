@@ -93,18 +93,21 @@ Accepting a suspended share records the acceptance, which grants nothing until t
 
 [`GET /api/v1/shares/{share_id}/references`](/docs/api/shares/list-share-references), with the grantee project as `project_id`, lists the same resources as `{ type, id }`: every resource of that project a run reaches the shared resource from, directly or through a chain of the project's own resources. A resource is listed when it names the shared resource or a listed one:
 
-| `type`           | Names it in                                      |
-| ---------------- | ------------------------------------------------ |
-| `agent`          | `tool_bindings`, `active_tool_ids`, `step_rules` |
-| `tool`           | a `pipeline` step                                |
-| `decider`        | `agent_id`, `tool_id`                            |
-| `ingestion_rule` | `agent_id`, `tool_id`                            |
-| `orchestration`  | a node                                           |
-| `workflow`       | a state's `dispatch`                             |
-| `playbook`       | a node's `executor`                              |
-| `eval`           | `agent_id`, a scorer                             |
-| `trigger`        | `target_id`                                      |
-| `formation`      | `template`                                       |
+| `type`           | Names it in                                                       |
+| ---------------- | ----------------------------------------------------------------- |
+| `agent`          | `tool_bindings`, `active_tool_ids`, `step_rules`, `guardrail_ids` |
+| `tool`           | a `pipeline` step, `preset_parameters`, `guardrail_ids`           |
+| `guardrail`      | `context_tool_id`                                                 |
+| `decider`        | `agent_id`, `tool_id`                                             |
+| `ingestion_rule` | `agent_id`, `tool_id`                                             |
+| `orchestration`  | a node                                                            |
+| `workflow`       | a state's `dispatch`                                              |
+| `playbook`       | a node's `executor`                                               |
+| `eval`           | `agent_id`, a scorer                                              |
+| `trigger`        | `target_id`                                                       |
+| `formation`      | `template`                                                        |
+
+An agent is also listed when a version its [release](./agents.md#staged-rollout) serves names it, and a workflow when a version an open task is pinned to does; other archived versions are not.
 
 So a shared tool bound by a local agent lists that agent, the orchestrations and workflows running it, and the triggers and playbooks starting those. Each resource is listed once, grouped by `type` in the table's order. The list is paged with `limit` (default 50, max 100) and `cursor` in the [list envelope](../api/index.md#pagination). `409 SHARE_IN_USE` lists every one, unpaged. The publisher's revoke is never refused.
 
