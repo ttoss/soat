@@ -10,6 +10,7 @@ import {
   registerApprovalResumeHandler,
 } from './approvals';
 import { emitTaskEvent } from './taskEvents';
+import { appendTaskHistory } from './taskHistory';
 import {
   findTaskInstance,
   mapTask,
@@ -231,16 +232,18 @@ const appendResolutionNote = async (args: {
     args.decision === 'rejected'
       ? `Approval rejected${args.reason ? `: ${args.reason}` : ''}. Transition not applied.`
       : 'Approval expired before a decision; transition not applied.';
-  await db.TaskTransition.create({
-    taskId: task.id as number,
-    fromState: task.state,
-    toState: task.state,
-    transition: null,
-    principalType: 'approval',
-    principalId: args.resolvedBy,
-    generationId: null,
-    orchestrationRunId: null,
-    note,
+  await appendTaskHistory({
+    row: {
+      taskId: task.id as number,
+      fromState: task.state,
+      toState: task.state,
+      transition: null,
+      principalType: 'approval',
+      principalId: args.resolvedBy,
+      generationId: null,
+      orchestrationRunId: null,
+      note,
+    },
   });
 };
 
