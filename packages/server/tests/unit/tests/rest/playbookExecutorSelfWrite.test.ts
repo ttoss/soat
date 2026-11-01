@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { db } from 'src/db';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import {
@@ -23,6 +24,7 @@ describe("Playbook writes from a case's own tool and orchestration executors", (
   let toolId: string;
   let toolPlaybookId: string;
   let orchestrationPlaybookId: string;
+  let nestedPlaybookId: string;
   let seq = 0;
   const writeBacks: WriteBack[] = [];
   const assertions: Record<string, unknown>[] = [];
@@ -203,6 +205,44 @@ describe("Playbook writes from a case's own tool and orchestration executors", (
       });
     expect(orchestration.status).toBe(201);
 
+    // The child parks on `ask`; the parent, holding its execution in flight,
+    // parks on `hold`. Resuming the child drives it on a token minted for it.
+    const child = await admin()
+      .post('/api/v1/orchestrations')
+      .send({
+        project_id: turn.projectId,
+        name: turn.unique('child'),
+        nodes: [
+          { id: 'ask', type: 'human', prompt: 'Write back?' },
+          {
+            id: 'call',
+            type: 'tool',
+            tool_id: toolId,
+            operation_id: 'write_back',
+            input_mapping: { case_id: { var: 'input.case_id' } },
+          },
+        ],
+        edges: [{ from: 'ask', to: 'call' }],
+      });
+    expect(child.status).toBe(201);
+    const parent = await admin()
+      .post('/api/v1/orchestrations')
+      .send({
+        project_id: turn.projectId,
+        name: turn.unique('parent'),
+        nodes: [
+          {
+            id: 'sub',
+            type: 'sub_orchestration',
+            orchestration_id: child.body.id,
+            input_mapping: { case_id: { var: 'input.case_id' } },
+          },
+          { id: 'hold', type: 'human', prompt: 'Hold' },
+        ],
+        edges: [{ from: 'sub', to: 'hold' }],
+      });
+    expect(parent.status).toBe(201);
+
     const playbook = async (executor: Record<string, unknown>) => {
       const res = await admin()
         .post('/api/v1/playbooks')
@@ -223,6 +263,11 @@ describe("Playbook writes from a case's own tool and orchestration executors", (
     orchestrationPlaybookId = await playbook({
       type: 'orchestration',
       id: orchestration.body.id,
+      input: { case_id: { var: 'cid' } },
+    });
+    nestedPlaybookId = await playbook({
+      type: 'orchestration',
+      id: parent.body.id,
       input: { case_id: { var: 'cid' } },
     });
   });
@@ -278,6 +323,65 @@ describe("Playbook writes from a case's own tool and orchestration executors", (
 
         expect(assertions[0].work_id).toEqual(expect.any(String));
       });
+    });
+  });
+  describe('from a sub_orchestration child resumed after it parked', () => {
+    /** Starts `w` against case `target`; its child run parks before writing. */
+    const parkChild = async (args: { caseId: string; target: string }) => {
+      writeBacks.length = 0;
+      const res = await admin()
+        .post(`/api/v1/playbook-cases/${args.caseId}/inputs`)
+        .send({
+          inputs: [
+            {
+              node_id: 'w',
+              name: 'cid',
+              value: args.target,
+              expected_revision: null,
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      await flushPlaybookExecutions();
+      expect(writeBacks).toHaveLength(0);
+      const execution = await db.PlaybookExecution.findOne({
+        where: { node: 'w', status: 'running' },
+        order: [['id', 'DESC']],
+      });
+      const childRun = await db.OrchestrationRun.findOne({
+        where: { parentRunId: execution!.runId, status: 'awaiting_input' },
+      });
+      return childRun!.publicId as string;
+    };
+
+    const resume = async (runId: string) => {
+      const res = await admin()
+        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .send({ node_id: 'ask', output: { ok: true } });
+      expect(res.status).toBe(200);
+      expect(writeBacks).toHaveLength(1);
+      return writeBacks[0];
+    };
+
+    test('refuses a write into the case its parent runs for', async () => {
+      const caseId = await newCase(nestedPlaybookId);
+      const childRunId = await parkChild({ caseId, target: caseId });
+
+      const writeBack = await resume(childRunId);
+
+      expect(writeBack).toEqual({ status: 403, code: 'PLAYBOOK_SELF_WRITE' });
+      const a = await nodeOf({ caseId, node: 'a' });
+      expect(a?.inputs[0].revision).toBeNull();
+    });
+
+    test('admits a write into another case', async () => {
+      const caseId = await newCase(nestedPlaybookId);
+      const other = await newCase(nestedPlaybookId);
+      const childRunId = await parkChild({ caseId, target: other });
+
+      const writeBack = await resume(childRunId);
+
+      expect(writeBack).toEqual({ status: 200 });
     });
   });
 });
