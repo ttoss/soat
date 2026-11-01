@@ -71,6 +71,8 @@ export const setupFormationModuleFixtures = async (args: {
       type: 'builtin',
       description: 'converter tool',
       actions: ['list-tools'],
+      // A guardrail's context call names no action of its own.
+      preset_parameters: { action: 'list-tools' },
     }),
     policyA: await policy('agents:CreateAgentGeneration'),
     policyB: await policy('agents:GetAgent'),

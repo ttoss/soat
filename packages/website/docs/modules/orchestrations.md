@@ -535,7 +535,8 @@ Graphs are validated **before** persistence: `create-orchestration` / `update-or
 
 | `code` | Check | Example |
 | ------ | ----- | ------- |
-| `MISSING_FIELD` | Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression`, a `poll` node without `exit_condition` or `interval` |
+| `MISSING_FIELD` | Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression`, a `poll` node without `exit_condition` or `interval`, a `tool` or `poll` node naming an `mcp` tool without `operation_id` |
+| `TOOL_RUNS_ON_CLIENT` | A `tool` or `poll` node names a `client` tool, which cannot run server-side | |
 | `WRONG_FIELD` | A field named for another node type | a `tool` node with `action` instead of `operation_id` |
 | `INVALID_VALUE` | A field outside its accepted values | a `loop` node's `on_item_error` other than `fail` / `collect` |
 | `INVALID_TYPE` | `nodes` is not an array | |

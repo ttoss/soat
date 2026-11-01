@@ -4069,6 +4069,7 @@ resources:
             name: 'guardrail-context-tool',
             type: 'builtin',
             actions: ['list-tools'],
+            preset_parameters: { action: 'list-tools' },
           },
         },
         BudgetGuardrail: {

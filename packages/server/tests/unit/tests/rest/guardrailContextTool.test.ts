@@ -128,6 +128,46 @@ describe('guardrail context tool', () => {
     });
   });
 
+  describe('POST /api/v1/guardrails', () => {
+    const postGuardrail = (contextToolId: string) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: `guardctx-${Math.random().toString(36).slice(2)}`,
+          document: { class: 'B' },
+          context_tool_id: contextToolId,
+        });
+    };
+
+    test('a client context tool is refused with 400', async () => {
+      const toolId = await createTool({
+        name: `client-context-${Math.random().toString(36).slice(2)}`,
+        type: 'client',
+      });
+
+      const res = await postGuardrail(toolId);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/client/);
+    });
+
+    test('a builtin context tool naming no action is refused with 400', async () => {
+      const toolId = await createTool({
+        name: `builtin-context-${Math.random().toString(36).slice(2)}`,
+        type: 'builtin',
+        actions: ['get-tool'],
+      });
+
+      const res = await postGuardrail(toolId);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/action/);
+    });
+  });
+
   describe('POST /api/v1/tools/{tool_id}/call', () => {
     test('the context tool receives the call with presets applied', async () => {
       const response = await authenticatedTestClient(userToken)

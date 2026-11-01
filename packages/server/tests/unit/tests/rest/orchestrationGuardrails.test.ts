@@ -37,7 +37,8 @@ describe('Orchestration tool-node guardrails', () => {
       .send({
         project_id: projectId,
         name: args.name,
-        type: 'client',
+        type: 'http',
+        execute: { url: 'https://example.com/act', method: 'POST' },
         ...(args.guardrailIds ? { guardrail_ids: args.guardrailIds } : {}),
       });
     expect(res.status).toBe(201);

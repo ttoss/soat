@@ -13,6 +13,7 @@ import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toolReferences } from './resourceReferences';
 import { toResourceRef } from './resourceVersions';
+import { serverSideToolProblem } from './toolsCallDispatch';
 import type { VersionedWrite } from './writePrecondition';
 
 const log = createDebug('soat:guardrails');
@@ -189,6 +190,33 @@ const validateContextMode = (contextMode: unknown): void => {
   }
 };
 
+const CONTEXT_TOOL_PROBLEMS = {
+  runs_on_client:
+    'is a client tool, which cannot run server-side where a guardrail is evaluated',
+  action_required:
+    "needs the action to call in its preset_parameters: a guardrail's call names none",
+} as const;
+
+const assertContextToolRunnable = async (args: {
+  contextToolId: string | null | undefined;
+  projectId: number;
+}): Promise<void> => {
+  const tools = await toolReferences.requireMany({
+    ids: args.contextToolId ? [args.contextToolId] : [],
+    projectId: args.projectId,
+    reach: 'project',
+  });
+  const tool = args.contextToolId ? tools.get(args.contextToolId) : undefined;
+  if (!tool) return;
+  // The call's input is `{ call }`, which names no action.
+  const problem = serverSideToolProblem({ tool, action: null, input: null });
+  if (!problem) return;
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    `Guardrail context_tool_id '${tool.publicId}' ${CONTEXT_TOOL_PROBLEMS[problem]}.`
+  );
+};
+
 export const createGuardrail = async (
   args: {
     projectId: number;
@@ -208,10 +236,9 @@ export const createGuardrail = async (
 
   validateGuardrailDocument(args.document);
   validateContextMode(args.contextMode);
-  await toolReferences.requireMany({
-    ids: args.contextToolId ? [args.contextToolId] : [],
+  await assertContextToolRunnable({
+    contextToolId: args.contextToolId,
     projectId: args.projectId,
-    reach: 'project',
   });
 
   const guardrail = await db.Guardrail.create({
@@ -322,10 +349,9 @@ export const updateGuardrail = async (
   if (args.name !== undefined) updates.name = args.name;
   if (args.description !== undefined) updates.description = args.description;
   if (args.contextToolId !== undefined) {
-    await toolReferences.requireMany({
-      ids: args.contextToolId ? [args.contextToolId] : [],
+    await assertContextToolRunnable({
+      contextToolId: args.contextToolId,
       projectId: guardrail.projectId,
-      reach: 'project',
     });
     updates.contextToolId = args.contextToolId;
   }

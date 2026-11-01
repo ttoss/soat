@@ -216,6 +216,8 @@ A single tool call dispatches directly:
 
 `input_mapping` resolves the arguments; the return value becomes `{result}` and `task.last_result`. The call passes the **same guardrails** as the identical call from an orchestration `tool` node and lands in the activity feed the same way. It settles within the dispatch: `active_dispatch.kind: tool_call` with a null `id`, and the resulting transition carries `tool_id` as provenance.
 
+The tool runs server-side, so a write naming a `client` tool (`TOOL_RUNS_ON_CLIENT` at `tool_id`), or an `mcp` tool with no `operation_id` (`MISSING_FIELD` at `operation_id`), is `400 WORKFLOW_VALIDATION_FAILED`.
+
 Two cases fail the dispatch with `TOOL_DISPATCH_FAILED` and belong behind an **orchestration** dispatch:
 
 - a guardrail routes the tool to **human approval** (class C): a task dispatch has no run to park and resume;

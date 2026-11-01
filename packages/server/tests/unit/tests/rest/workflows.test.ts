@@ -108,6 +108,75 @@ describe('Workflows', () => {
       expect(res.body.error.message).toMatch(/retry max_attempts/);
     });
 
+    describe('a tool dispatch runs its tool server-side', () => {
+      const createTool = async (body: Record<string, unknown>) => {
+        const res = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: `wf-tool-${Math.random().toString(36).slice(2)}`,
+            ...body,
+          });
+        expect(res.status).toBe(201);
+        return res.body.id as string;
+      };
+
+      const createWithDispatch = (dispatch: Record<string, unknown>) => {
+        return createWorkflow(userToken, {
+          states: [
+            { name: 'a', initial: true, on_enter: { dispatch } },
+            { name: 'b', terminal: true },
+          ],
+          transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+        });
+      };
+
+      test('a client tool is refused with 400', async () => {
+        const toolId = await createTool({
+          type: 'client',
+          description: 'Runs in the caller',
+        });
+
+        const res = await createWithDispatch({ kind: 'tool', tool_id: toolId });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
+        expect(res.body.error.meta.problems).toEqual([
+          expect.objectContaining({
+            code: 'TOOL_RUNS_ON_CLIENT',
+            path: 'states[0].on_enter.dispatch.tool_id',
+          }),
+        ]);
+      });
+
+      test('an mcp tool with no operation_id is refused with 400', async () => {
+        const toolId = await createTool({ type: 'mcp' });
+
+        const res = await createWithDispatch({ kind: 'tool', tool_id: toolId });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
+        expect(res.body.error.meta.problems).toEqual([
+          expect.objectContaining({
+            code: 'MISSING_FIELD',
+            path: 'states[0].on_enter.dispatch.operation_id',
+          }),
+        ]);
+      });
+
+      test('an mcp tool with its operation_id is accepted', async () => {
+        const toolId = await createTool({ type: 'mcp' });
+
+        const res = await createWithDispatch({
+          kind: 'tool',
+          tool_id: toolId,
+          operation_id: 'search',
+        });
+
+        expect(res.status).toBe(201);
+      });
+    });
+
     test('rejects a transition referencing an unknown state', async () => {
       const res = await createWorkflow(userToken, {
         states: [{ name: 'a', initial: true }],
