@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.101.1](https://github.com/ttoss/soat/compare/v0.101.0...v0.101.1) (2026-11-01)
+
+### Bug Fixes
+
+* **agents:** model-facing schemas keep their key order ([#1825](https://github.com/ttoss/soat/issues/1825)) ([276a31d](https://github.com/ttoss/soat/commit/276a31dafdde2ef2e8bb2449a0cd034a0d40a2e8))
+* **postgresdb:** payload and record columns keep the key order they are written in ([#1824](https://github.com/ttoss/soat/issues/1824)) ([6c91c9b](https://github.com/ttoss/soat/commit/6c91c9b6ca9288453789ae6dd090fd13fd9cd0f1))
+* **postgresdb:** resource definitions and their versions keep key order ([#1826](https://github.com/ttoss/soat/issues/1826)) ([9aa2856](https://github.com/ttoss/soat/commit/9aa2856f16fd3c98c190b9f50080cadfab32ffaf))
+
 # [0.101.0](https://github.com/ttoss/soat/compare/v0.100.0...v0.101.0) (2026-11-01)
 
 **Note:** Version bump only for package @soat/postgresdb
