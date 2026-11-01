@@ -1,6 +1,6 @@
 import {
+  createTemplateDatabaseName,
   publishTestDatabaseConnection,
-  TEMPLATE_DATABASE,
   type TestDatabaseConnection,
   withAdminClient,
 } from './testDatabase';
@@ -45,15 +45,12 @@ const startPostgres = async (): Promise<TestDatabaseConnection> => {
  */
 const buildTemplateDatabase = async (args: {
   connection: TestDatabaseConnection;
+  template: string;
 }) => {
   await withAdminClient({
     connection: args.connection,
     run: async (client) => {
-      // A reused external server may still hold the previous run's template.
-      await client.query(
-        `DROP DATABASE IF EXISTS "${TEMPLATE_DATABASE}" WITH (FORCE)`
-      );
-      await client.query(`CREATE DATABASE "${TEMPLATE_DATABASE}"`);
+      await client.query(`CREATE DATABASE "${args.template}"`);
     },
   });
 
@@ -65,7 +62,7 @@ const buildTemplateDatabase = async (args: {
     logging: false,
     createVectorExtension: true,
     ...args.connection,
-    database: TEMPLATE_DATABASE,
+    database: args.template,
   });
 
   await db.sequelize.sync({ force: true });
@@ -80,9 +77,11 @@ const globalSetup = async () => {
 
   const connection = await startPostgres();
 
-  await buildTemplateDatabase({ connection });
+  const template = createTemplateDatabaseName();
 
-  publishTestDatabaseConnection({ connection });
+  await buildTemplateDatabase({ connection, template });
+
+  publishTestDatabaseConnection({ connection, template });
 };
 
 export default globalSetup;
