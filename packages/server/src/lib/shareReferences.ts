@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { jsonbFn } from './jsonbQuery';
 import { type Page, pageOf } from './pagination';
 import { parseActiveRelease } from './releaseAssignment';
 import { shares } from './shares';
@@ -28,8 +29,7 @@ export type ShareReference = {
 type Where = ReturnType<typeof db.sequelize.where>;
 type Condition = Where | Record<string, unknown>;
 
-type Json =
-  ReturnType<typeof db.sequelize.col> | ReturnType<typeof db.sequelize.fn>;
+type Json = ReturnType<typeof db.sequelize.col> | ReturnType<typeof jsonbFn>;
 
 // A public id is only ever stored as a JSON string, so its quoted form found in
 // the JSON's text is the id itself and never a prefix of another.
@@ -62,11 +62,11 @@ const jsonNames = (columns: string[], ids: string[]): Condition[] => {
 const configNames = (keys: string[], ids: string[]): Condition[] => {
   return textNames(
     keys.map((key) => {
-      return db.sequelize.fn(
-        'jsonb_extract_path',
-        db.sequelize.col('config'),
-        key
-      );
+      return jsonbFn({
+        fn: 'extract_path',
+        source: { column: 'config' },
+        params: [key],
+      });
     }),
     ids
   );

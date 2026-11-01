@@ -2,6 +2,7 @@ import { Op, Sequelize } from '@ttoss/postgresdb';
 
 import type { PolicyDocument, PolicySets } from './iam';
 import { matchesPattern } from './iam';
+import { jsonbFn } from './jsonbQuery';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -198,7 +199,11 @@ const buildTagLikeFragment = (
     ? `${tagsColumn.alias}.${tagsColumn.column}`
     : tagsColumn.column;
   return Sequelize.where(
-    Sequelize.fn('jsonb_extract_path_text', Sequelize.col(colPath), tagKey),
+    jsonbFn({
+      fn: 'extract_path_text',
+      source: { column: colPath },
+      params: [tagKey],
+    }),
     { [Op.like]: globToLike(expected) }
   ) as unknown as Record<string, unknown>;
 };
