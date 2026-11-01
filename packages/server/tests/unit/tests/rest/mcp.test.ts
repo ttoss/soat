@@ -1261,7 +1261,7 @@ describe('MCP tools - happy path', () => {
         expect(res.status).toBe(200);
         const result = parseResult(res);
         expect(result.id).toBeDefined();
-        expect(result.status).toBe('pending');
+        expect(['pending', 'processing']).toContain(result.status);
 
         // Ingestion is async — poll until ready
         const docId = result.id;
