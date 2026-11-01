@@ -234,7 +234,14 @@ describe('Share references through served versions and attachments', () => {
       id: 'brief',
       title: 'Brief',
       kind: 'collect',
-      inputs: [{ name: 'brief', schema: { type: 'string' }, source: 'manual' }],
+      inputs: [
+        {
+          name: 'brief',
+          schema: { type: 'string' },
+          required: true,
+          source: 'manual',
+        },
+      ],
     };
     const definition = (execute: boolean) => {
       return {
