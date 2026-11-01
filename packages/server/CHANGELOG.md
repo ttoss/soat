@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.101.0](https://github.com/ttoss/soat/compare/v0.100.0...v0.101.0) (2026-11-01)
+
+* fix(secrets)!: require secrets:UseSecret on every write that sends a secret outward (#1817) ([76a7ff7](https://github.com/ttoss/soat/commit/76a7ff716f010a0ca1ec210c756f7b97a2e127cc)), closes [#1817](https://github.com/ttoss/soat/issues/1817)
+
+### Bug Fixes
+
+* **iam:** apply row-level policy filter to entity lists without project_id ([#1786](https://github.com/ttoss/soat/issues/1786)) ([35161c7](https://github.com/ttoss/soat/commit/35161c781fafc4e085f6154e004220d07f0c394c))
+* **orchestrations:** a parked loop or sub_orchestration child parks its parent ([#1820](https://github.com/ttoss/soat/issues/1820)) ([3d74cf0](https://github.com/ttoss/soat/commit/3d74cf07b3bcc903cff4d74a552cd26e4bcf45cf))
+* **projects:** only priced usage events block a project delete ([#1818](https://github.com/ttoss/soat/issues/1818)) ([d9d6f0e](https://github.com/ttoss/soat/commit/d9d6f0ee5affaf545618c8c96e01f07950484f94))
+* **shares:** list orchestrations and playbooks pinned by unfinished runs and cases ([#1811](https://github.com/ttoss/soat/issues/1811)) ([2f6c904](https://github.com/ttoss/soat/commit/2f6c9043eaa18ee8a76830947538dc8ca47e8464))
+
+### BREAKING CHANGES
+
+* a policy granting agents:CreateAgent/UpdateAgent, triggers:CreateTrigger/UpdateTrigger or ai-providers:CreateAiProvider/UpdateAiProvider without secrets:UseSecret can no longer write an inline agent tool or a trigger tool_context that references a secret, retarget a trigger whose tool_context does, or link a secret to a provider with a base_url; such writes answer 403 FORBIDDEN with meta.secret_ids. Existing records keep running.
+
 # [0.100.0](https://github.com/ttoss/soat/compare/v0.99.3...v0.100.0) (2026-11-01)
 
 * fix(ai-providers)!: refuse config.apiKey; the credential is secret_id only (#1809) ([2558483](https://github.com/ttoss/soat/commit/2558483c66ceb7837b7eac4b65d9f5143a7f8d61)), closes [#1809](https://github.com/ttoss/soat/issues/1809)
