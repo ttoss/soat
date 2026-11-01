@@ -310,11 +310,10 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     tags?: unknown;
   };
 
-  const projectId =
-    body.content === undefined
-      ? null
-      : await findDocumentProjectId({ id: ctx.params.document_id });
-  if (projectId !== null) {
+  if (body.content !== undefined) {
+    const projectId = await findDocumentProjectId({
+      id: ctx.params.document_id,
+    });
     await assertStorageQuota({
       projectId,
       addedBytes: contentBytes(body.content),

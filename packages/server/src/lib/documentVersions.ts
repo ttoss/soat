@@ -129,13 +129,8 @@ const documentVersionArchive = makeVersionArchive({
 
     // A restore re-embeds and stores the archived text, like any content edit.
     const projectId = await findDocumentProjectId({ id: args.id });
-    if (projectId !== null) {
-      await assertStorageQuota({
-        projectId,
-        addedBytes: contentBytes(content),
-      });
-      await assertProjectSpendWithinQuota({ projectId });
-    }
+    await assertStorageQuota({ projectId, addedBytes: contentBytes(content) });
+    await assertProjectSpendWithinQuota({ projectId });
 
     const document = await loadDocumentRef({ id: args.id });
     const restored = await updateDocument({

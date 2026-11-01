@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { emitResourceEvent } from './eventBus';
 import type { SoatEventTypeFor } from './soatEvents';
@@ -41,9 +42,16 @@ export const fetchDocumentWithContext = (
 /** The internal id of the project a document's backing file belongs to. */
 export const findDocumentProjectId = async (args: {
   id: string;
-}): Promise<number | null> => {
-  const doc = await fetchDocumentWithContext(args.id);
-  return (doc?.file?.projectId as number | undefined) ?? null;
+}): Promise<number> => {
+  const doc = await db.Document.findOne({
+    where: { publicId: args.id },
+    attributes: ['id'],
+    include: [
+      { model: db.File, as: 'file', attributes: ['projectId'], required: true },
+    ],
+    rejectOnEmpty: new DomainError('RESOURCE_NOT_FOUND', 'Document not found'),
+  });
+  return doc.file.projectId;
 };
 
 export const fetchDocumentByIdWithContext = (
