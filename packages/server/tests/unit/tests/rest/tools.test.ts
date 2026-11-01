@@ -891,6 +891,42 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
     });
 
+    test('rejects a pipeline whose mcp step names no action (400)', async () => {
+      const mcpTool = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({ project_id: projectId, name: 'mcp-step-tool', type: 'mcp' });
+      expect(mcpTool.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'mcp-step-no-action',
+          type: 'pipeline',
+          pipeline: { steps: [{ id: 'a', tool_id: mcpTool.body.id }] },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+      expect(res.body.error.message).toMatch(/action/);
+    });
+
+    test('rejects a pipeline whose inline step is a client tool (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'inline-client-step',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              { id: 'a', tool: { name: 'inline-client', type: 'client' } },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
     test('rejects a pipeline with a forward step reference (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')

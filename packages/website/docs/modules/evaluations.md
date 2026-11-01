@@ -220,7 +220,7 @@ invokes a [tool](./tools.md) you own once per item; it answers with the same
 | --- | --- | --- |
 | `name` | yes | Keys this scorer's outcomes and aggregate buckets. Unique within the eval; must not shadow a built-in type. Several `tool` scorers may coexist under distinct names |
 | `tool_id` | yes | The tool that grades each item. Must belong to the eval's project and be server-callable — `http`, `mcp`, `builtin`, or `pipeline`. A `client` tool is rejected with `400`: it pauses for a calling client, and an eval run scores server-side |
-| `action` | builtin/mcp only | The operation to invoke on a multi-action tool |
+| `action` | `mcp`; `builtin` unless a `preset_parameters` (the scorer's or the tool's) names `action` | The operation to invoke on a multi-action tool |
 | `preset_parameters` | no | Fixed values merged into every call's input at the top level. The engine-injected keys below are reserved and rejected |
 | `pass_threshold` | no | Fallback verdict cutoff; see below |
 

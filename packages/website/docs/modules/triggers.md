@@ -46,7 +46,7 @@ repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in
 | `type`         | `manual` \| `webhook` \| `schedule` \| `event` | Starter type. **Immutable after creation**                                   |
 | `target_type`  | `orchestration` \| `agent` \| `tool` \| `eval` | Kind of resource activated                                                   |
 | `target_id`    | string                                  | Public ID of the target; must exist in the same project at create/update time     |
-| `action`       | string \| null                          | Tool targets only: the action for `builtin`/`mcp` tools (required for those, rejected otherwise) |
+| `action`       | string \| null                          | Tool targets only: the action for `builtin`/`mcp` tools (required for `mcp`; for `builtin`, the firing's input may name it instead; rejected otherwise) |
 | `input`        | object \| null                          | Static input, shallow-merged under fire-time input (fire-time keys win)           |
 | `tool_context` | object \| null                          | Write-only. Caller context every firing forwards to the run it starts, so a context-dependent agent can be scheduled — see [Carrying tool context](#carrying-tool-context) |
 | `cron`         | string \| null                          | 5-field cron expression (UTC). Required iff `type=schedule`, rejected otherwise   |

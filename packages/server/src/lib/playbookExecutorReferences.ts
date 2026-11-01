@@ -3,7 +3,11 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { PlaybookExecutor } from './playbookDefinition';
 import { agentReferences, toolReferences } from './resourceReferences';
-import { isActionBound } from './toolsCallDispatch';
+import {
+  isActionBound,
+  type ServerSideToolProblem,
+  serverSideToolProblem,
+} from './toolsCallDispatch';
 
 const log = createDebug('soat:playbooks');
 
@@ -53,50 +57,33 @@ export type ToolCallProblem = {
   message: string;
 };
 
-/**
- * The tool types a run cannot call from each start, with why. A `client` tool
- * runs only in the calling client; an `mcp` tool needs an action, which only
- * an executor names.
- */
+/** How each start refuses a tool a server-side caller cannot run. */
 const UNSUPPORTED: Record<
   ToolStart,
-  {
-    code: ToolCallProblem['code'];
-    label: string;
-    types: Record<string, string>;
-  }
+  { code: ToolCallProblem['code']; label: string }
 > = {
-  executor: {
-    code: 'EXECUTOR_TOOL_UNSUPPORTED',
-    label: "a node's executor",
-    types: { client: 'it runs only in the calling client' },
-  },
+  executor: { code: 'EXECUTOR_TOOL_UNSUPPORTED', label: "a node's executor" },
   transformation: {
     code: 'TRANSFORMATION_TOOL_UNSUPPORTED',
     label: "a transformation's tool",
-    types: {
-      client: 'it runs only in the calling client',
-      mcp: 'a transformation names no action to call',
-    },
   },
+};
+
+/** An executor names its action in `operation_id`; a transformation cannot. */
+const UNSUPPORTED_REASONS: Record<ServerSideToolProblem, string> = {
+  runs_on_client: 'it runs only in the calling client',
+  action_required: 'a transformation names no action to call',
 };
 
 type ToolRow = NonNullable<Awaited<ReturnType<typeof toolReferences.find>>>;
 
-const mcpActionProblem = (args: {
+const unboundActionProblem = (args: {
   tool: ToolRow;
   executor: PlaybookExecutor;
 }): ToolCallProblem | null => {
   const { tool, executor } = args;
   const action = executor.operation_id;
-  if (action === undefined) {
-    log('toolCallProblem: %s has no operation_id', executor.id);
-    return {
-      code: 'EXECUTOR_ACTION_REQUIRED',
-      on: 'operation_id',
-      message: `mcp tool '${executor.id}' needs the action to call in operation_id.`,
-    };
-  }
+  if (tool.type !== 'mcp' || action === undefined) return null;
   if (!isActionBound({ tool, action })) {
     log('toolCallProblem: %s withholds %s', executor.id, action);
     return {
@@ -109,9 +96,9 @@ const mcpActionProblem = (args: {
 };
 
 /**
- * Why a run could not call the tool a node starts, or null: a tool type the
- * start cannot call (`UNSUPPORTED`), or an `mcp` executor without an action
- * its binding allows.
+ * Why a run could not call the tool a node starts, or null: one a server-side
+ * caller cannot run (`serverSideToolProblem`), or an `mcp` executor's action
+ * its binding withholds.
  */
 export const toolCallProblem = async (args: {
   executor: PlaybookExecutor;
@@ -126,19 +113,30 @@ export const toolCallProblem = async (args: {
     reach: 'shares',
   });
   if (!tool) return null;
-  const unsupported = UNSUPPORTED[start];
-  const reason = Object.hasOwn(unsupported.types, tool.type)
-    ? unsupported.types[tool.type]
-    : undefined;
-  if (reason !== undefined) {
+  const problem = serverSideToolProblem({
+    tool,
+    action: start === 'executor' ? executor.operation_id : undefined,
+    // A node's tool reads the case's records, which arrive with each run.
+    input: 'open',
+  });
+  if (problem === 'action_required' && start === 'executor') {
+    log('toolCallProblem: %s has no operation_id', executor.id);
+    return {
+      code: 'EXECUTOR_ACTION_REQUIRED',
+      on: 'operation_id',
+      message: `${tool.type} tool '${executor.id}' needs the action to call in operation_id.`,
+    };
+  }
+  if (problem) {
+    const unsupported = UNSUPPORTED[start];
     log('toolCallProblem: %s tool %s as %s', tool.type, executor.id, start);
     return {
       code: unsupported.code,
       on: 'tool',
-      message: `${tool.type} tool '${executor.id}' cannot be ${unsupported.label}: ${reason}.`,
+      message: `${tool.type} tool '${executor.id}' cannot be ${unsupported.label}: ${UNSUPPORTED_REASONS[problem]}.`,
     };
   }
-  return tool.type === 'mcp' ? mcpActionProblem({ tool, executor }) : null;
+  return unboundActionProblem({ tool, executor });
 };
 
 /** Whether `executor` names something a run in `projectId` could start. */

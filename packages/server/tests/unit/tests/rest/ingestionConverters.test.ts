@@ -246,6 +246,42 @@ describe('Converter ingestion', () => {
       expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
       expect(res.body.error.message).toMatch(/action is required/);
     });
+
+    test.each([
+      {
+        where: 'rule',
+        glob: 'application/x-rule-preset',
+        rulePresets: { action: 'list-documents' },
+      },
+      {
+        where: 'tool',
+        glob: 'application/x-tool-preset',
+        toolPresets: { action: 'list-documents' },
+      },
+    ])(
+      'accepts a builtin converter whose action is a $where preset',
+      async ({ where, glob, rulePresets, toolPresets }) => {
+        const tool = await asAdmin()
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: `builtin-converter-${where}-preset`,
+            type: 'builtin',
+            actions: ['list-documents'],
+            preset_parameters: toolPresets,
+          });
+        expect(tool.status).toBe(201);
+
+        const res = await asAdmin().post('/api/v1/ingestion-rules').send({
+          project_id: projectId,
+          content_type_glob: glob,
+          tool_id: tool.body.id,
+          preset_parameters: rulePresets,
+        });
+
+        expect(res.status).toBe(201);
+      }
+    );
   });
 
   describe('POST /api/v1/documents/ingest', () => {

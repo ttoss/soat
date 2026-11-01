@@ -7,6 +7,7 @@ import {
   type InlineToolDefinition,
   validateToolDefinition,
 } from './tools';
+import { serverSideToolProblem } from './toolsCallDispatch';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -258,11 +259,35 @@ export const validatePipelineConfig = (pipeline: unknown): PipelineConfig => {
   return { steps, output };
 };
 
+const STEP_TOOL_PROBLEMS = {
+  runs_on_client: 'is a client tool, which cannot run server-side',
+  action_required: 'needs the action to call in `action`',
+} as const;
+
+const assertStepRunsServerSide = (args: {
+  step: PipelineStep;
+  tool: { type: string; presetParameters: object | null | undefined };
+}): void => {
+  const { step } = args;
+  const problem = serverSideToolProblem({
+    tool: args.tool,
+    action: step.action,
+    // A step's input is mapped from the pipeline's input and earlier steps.
+    input: 'open',
+  });
+  if (!problem) return;
+  throw new DomainError(
+    'PIPELINE_INVALID_STEP',
+    `Pipeline step '${step.id}' tool ${STEP_TOOL_PROBLEMS[problem]}.`,
+    { step_id: step.id, tool_id: step.toolId }
+  );
+};
+
 /**
  * Verifies every step is valid: a `tool_id` step must reference a tool that
- * exists in scope and is not a `client` tool (which cannot run server-side);
- * an inline `tool` step must pass the same business-rule validation as a
- * persisted tool (name, secret refs, soat actions — see
+ * exists in scope; either kind must be one a server-side caller can run
+ * (`serverSideToolProblem`); an inline `tool` step must pass the same
+ * business-rule validation as a persisted tool (name, secret refs, soat actions — see
  * `tools.ts#validateToolDefinition`) and cannot itself be of type `pipeline`.
  * `projectId` is the owning pipeline tool's own project: inline steps are
  * validated in it and `tool_id` steps must name a tool in it. Throws
@@ -278,6 +303,13 @@ export const assertPipelineStepToolsValid = async (args: {
       await validateToolDefinition({
         definition: step.tool,
         projectId: args.projectId,
+      });
+      assertStepRunsServerSide({
+        step,
+        tool: {
+          type: step.tool.type ?? 'http',
+          presetParameters: step.tool.presetParameters,
+        },
       });
       continue;
     }
@@ -296,13 +328,7 @@ export const assertPipelineStepToolsValid = async (args: {
         { step_id: step.id, tool_id: step.toolId }
       );
     }
-    if (stepTool.type === 'client') {
-      throw new DomainError(
-        'PIPELINE_INVALID_STEP',
-        `Pipeline step '${step.id}' references client tool '${step.toolId}', which cannot run server-side.`,
-        { step_id: step.id, tool_id: step.toolId }
-      );
-    }
+    assertStepRunsServerSide({ step, tool: stepTool });
   }
 };
 

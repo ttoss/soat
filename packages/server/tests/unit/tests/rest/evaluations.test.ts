@@ -3254,6 +3254,26 @@ describe('Evaluations', () => {
         expect(res.body.error.message).toMatch(/action is required/);
       });
 
+      test('accepts a soat tool whose action is a scorer preset', async () => {
+        const res = await asUser()
+          .post('/api/v1/evals')
+          .send({
+            project_id: projectId,
+            name: 'tool-scorer-soat-preset-action',
+            agent_id: agentId,
+            dataset_id: datasetId,
+            scorers: [
+              {
+                type: 'tool',
+                name: 'tone',
+                tool_id: soatToolId,
+                preset_parameters: { action: 'search-knowledge' },
+              },
+            ],
+          });
+        expect(res.status).toBe(201);
+      });
+
       test('re-validates tool refs on update', async () => {
         const evaluation = await createEval({
           name: 'tool-scorer-update-check',
