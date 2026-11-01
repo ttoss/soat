@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.100.0](https://github.com/ttoss/soat/compare/v0.99.3...v0.100.0) (2026-11-01)
+
+* fix(ai-providers)!: refuse config.apiKey; the credential is secret_id only (#1809) ([2558483](https://github.com/ttoss/soat/commit/2558483c66ceb7837b7eac4b65d9f5143a7f8d61)), closes [#1809](https://github.com/ttoss/soat/issues/1809)
+
+### Bug Fixes
+
+* **api-keys:** refuse key writes from project-scoped tokens ([#1806](https://github.com/ttoss/soat/issues/1806)) ([7353fd5](https://github.com/ttoss/soat/commit/7353fd5519f37df3106ab5e3ba709a7ac29fb04a))
+* **playbooks:** refuse a client tool as an executor or a transformation's tool ([#1812](https://github.com/ttoss/soat/issues/1812)) ([d175873](https://github.com/ttoss/soat/commit/d175873abf9b9abd58b03bb02e17aecc169339a9))
+* **playbooks:** refuse a self-write from a resumed nested child run ([#1804](https://github.com/ttoss/soat/issues/1804)) ([5cf578f](https://github.com/ttoss/soat/commit/5cf578f6abc06255b7a02189b3e303c06f935c3e))
+* **playbooks:** refuse an mcp tool as a transformation's tool ([#1805](https://github.com/ttoss/soat/issues/1805)) ([30b00e8](https://github.com/ttoss/soat/commit/30b00e868addc8594c52b4d244338a0fb2695ffa))
+* **projects:** a deleted formation does not block deleting its project ([#1814](https://github.com/ttoss/soat/issues/1814)) ([326f598](https://github.com/ttoss/soat/commit/326f59880f8ac4aafd02cd8bfce80df34545010a))
+* **quotas:** check storage and spend caps on content edits ([#1813](https://github.com/ttoss/soat/issues/1813)) ([65695a7](https://github.com/ttoss/soat/commit/65695a7748706803d6c0d6e1d9292b661acf4721))
+* **quotas:** refuse embedding spend over a project cost or token quota ([#1807](https://github.com/ttoss/soat/issues/1807)) ([26a1ca7](https://github.com/ttoss/soat/commit/26a1ca72150113f0d8c3cec8fbc8c733d80c61dc))
+
+### Features
+
+* **projects:** grant PATCH /projects/:id by project-scoped policy ([#1808](https://github.com/ttoss/soat/issues/1808)) ([7ed750a](https://github.com/ttoss/soat/commit/7ed750aa7cd64fe6dde94ecc03859c1b586a56f2))
+
+### BREAKING CHANGES
+
+* an AI provider's config.apiKey is refused with 400 VALIDATION_FAILED (meta.field config.apiKey) on create, update and formation ai_provider resources; store the key in a secret and link it with secret_id. A stored bedrock or vertex record carrying one answers 400 AI_PROVIDER_MISCONFIGURED at generation and model listing.
+
 ## [0.99.3](https://github.com/ttoss/soat/compare/v0.99.2...v0.99.3) (2026-11-01)
 
 ### Bug Fixes
