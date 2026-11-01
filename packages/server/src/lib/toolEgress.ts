@@ -62,7 +62,12 @@ const MAX_REDIRECTS = 5;
  * Custom credential headers on a tool cannot be recognized here; a redirect to
  * another origin is why `execute.auth` exists rather than a hand-set header.
  */
-const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization'];
+const CREDENTIAL_HEADERS = [
+  'authorization',
+  'cookie',
+  'proxy-authorization',
+  'x-amz-security-token',
+];
 
 const blocked = (
   message: string,
