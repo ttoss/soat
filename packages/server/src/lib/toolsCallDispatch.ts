@@ -21,7 +21,7 @@ import { fetchMcpToolListing } from './mcpToolListing';
 import { type McpTransport, openMcpTransport } from './mcpTransport';
 import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
-import type { CallableToolDefinition, SignedOffCall } from './toolsCall';
+import type { CallableToolDefinition } from './toolsCall';
 import type { ToolExecutionMeter } from './usageToolRecording';
 
 const noopLogToolCallingError = () => {};
@@ -82,7 +82,7 @@ export const callSoatTool = async (
     meter: ToolExecutionMeter;
     authHeader?: string;
     toolContext?: Record<string, string>;
-    signedOff?: SignedOffCall;
+    boundaryPolicy?: unknown;
   }
 ): Promise<unknown> => {
   const { authHeader } = args;
@@ -116,11 +116,11 @@ export const callSoatTool = async (
       `action "${action}" is not a known SOAT action.`
     );
   }
-  if (args.signedOff) {
+  if (args.boundaryPolicy) {
     const refusal = await soatActionBoundaryRefusal({
       def,
       rawArgs: mergedInput,
-      boundaryPolicy: args.signedOff.boundaryPolicy,
+      boundaryPolicy: args.boundaryPolicy,
       isSoatActionAllowedByBoundary,
     });
     if (refusal) return refusal;
@@ -303,7 +303,7 @@ export const dispatchDirectTool = async (args: {
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
-  signedOff?: SignedOffCall;
+  boundaryPolicy?: unknown;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(
@@ -321,7 +321,7 @@ export const dispatchDirectTool = async (args: {
       meter: args.meter,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
-      signedOff: args.signedOff,
+      boundaryPolicy: args.boundaryPolicy,
     });
   }
   throw new DomainError(

@@ -1011,6 +1011,7 @@ const resolvePipelineTool = (
     authHeader?: string;
     remainingDepth?: number;
     attribution: ToolCallAttribution;
+    boundaryPolicy?: unknown;
   }
 ): Tool => {
   const parameters =
@@ -1041,6 +1042,7 @@ const resolvePipelineTool = (
         authHeader: args.authHeader,
         remainingDepth: args.remainingDepth,
         attribution: args.attribution,
+        boundaryPolicy: args.boundaryPolicy,
       });
     },
   });
@@ -1112,6 +1114,7 @@ const resolveToolByType = async (
           authHeader: args.authHeader,
           remainingDepth: args.remainingDepth,
           attribution: args.attribution,
+          boundaryPolicy: args.boundaryPolicy,
         }),
       };
     case 'mcp':
