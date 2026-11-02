@@ -203,6 +203,17 @@ describe('GET /api/v1/tools/{tool_id}/actions', () => {
     expect(res.body.error.code).toBe('MCP_TOOL_ERROR');
   });
 
+  test('a listing that cannot be read is a 502 MCP_TOOL_ERROR naming why', async () => {
+    const tool = await mcpTool();
+    turn.target.reply(tool.path, { raw: 'not json' });
+
+    const res = await listActions(tool.id);
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe('MCP_TOOL_ERROR');
+    expect(res.body.error.message).toMatch(/JSON/);
+  });
+
   test('a tool that is not mcp is a 400', async () => {
     const tool = await turn.createTool();
 
