@@ -229,7 +229,6 @@ paths:
       operationId: ingestDocument
       x-iam-action: documents:IngestDocument
       parameters:
-        - $ref: '#/components/parameters/PathPrefixPin'
         - name: wait
           in: query
           required: false
@@ -1539,7 +1538,7 @@ components:
         Pins the call to documents filed under this directory, by the same
         path-boundary rule as the listing's `path_prefix`. A document outside it
         is `404`, as if it did not exist; a write that would file one outside
-        it (including a create or ingest whose default path falls outside) is
+        it (including a create whose default path falls outside) is
         `400 DOCUMENT_PATH_OUTSIDE_PREFIX`.
       schema:
         type: string

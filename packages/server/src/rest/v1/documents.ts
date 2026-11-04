@@ -432,7 +432,6 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkOverlap: body.chunk_overlap,
     wait,
     endUser: { sessionId: body.session_id, actorId: body.actor_id },
-    pathPin: readPathPin(ctx),
   });
 
   ctx.status = wait ? 201 : 202;

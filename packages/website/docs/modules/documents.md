@@ -158,16 +158,16 @@ Which field goes in `tags` and which in `metadata`: [IAM — Choosing a bag](iam
 
 ### Pinning a call to a directory
 
-`path_prefix` in the query string pins a write or by-id call to one directory, by the same path-boundary rule as [the listing filter](#listing-a-directory). It is accepted by [`POST /api/v1/documents`](/docs/api/documents/create-document), [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) and every `/documents/{document_id}` route, so one value confines everything a caller does with documents:
+`path_prefix` in the query string pins a write or by-id call to one directory, by the same path-boundary rule as [the listing filter](#listing-a-directory). It is accepted by [`POST /api/v1/documents`](/docs/api/documents/create-document) and every `/documents/{document_id}` route. [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) takes `path_prefix` in its body as the directory it files into, so one value confines everything a caller does with documents:
 
 | Case | Answer |
 | --- | --- |
 | A document outside the pin, by id (including a relation's target) | `404`, as if it did not exist |
-| A create, ingest or `PATCH` that would file the document outside it | `400 DOCUMENT_PATH_OUTSIDE_PREFIX` |
-| A create or ingest with no path, whose default lands at the root | `400 DOCUMENT_PATH_OUTSIDE_PREFIX` |
+| A create or `PATCH` that would file the document outside it | `400 DOCUMENT_PATH_OUTSIDE_PREFIX` |
+| A create with no path, whose default lands at the root | `400 DOCUMENT_PATH_OUTSIDE_PREFIX` |
 | No `path_prefix` | unpinned |
 
-A [builtin tool](./tools.md) presetting `path_prefix` confines an agent to that directory: the model cannot choose a path outside it, nor a wider prefix. On `ingest-document` the tool argument fills both the pin and the body's destination `path_prefix`.
+A [builtin tool](./tools.md) presetting `path_prefix` confines an agent to that directory: the model cannot choose a path outside it, nor a wider prefix, and `ingest-document` files into it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

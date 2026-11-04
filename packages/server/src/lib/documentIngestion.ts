@@ -17,7 +17,6 @@ import {
 } from './documentIngestionCore';
 import { countIndexedChunks } from './documentLoaders';
 import { mapDocument } from './documentMapper';
-import { assertPathInsidePin } from './documentPathPin';
 import { assertFilePathFree } from './filePathConflict';
 import { normalizePath } from './filePaths';
 import {
@@ -284,8 +283,6 @@ export const enqueueDocumentIngestion = async (args: {
   wait?: boolean;
   /** Who the ingest runs for, validated by the route (`assertCallerEndUser`). */
   endUser: GenerationEndUser;
-  /** The directory the caller's `path_prefix` confines it to. */
-  pathPin?: string;
 }) => {
   const runAsync = args.wait !== true;
 
@@ -317,7 +314,6 @@ export const enqueueDocumentIngestion = async (args: {
       ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
       : `/${filename}`
   );
-  assertPathInsidePin({ path: docPath, pin: args.pathPin });
 
   // Filed only once the source converts, which may be long after this answer:
   // a path taken now is refused now rather than as a failed document later.

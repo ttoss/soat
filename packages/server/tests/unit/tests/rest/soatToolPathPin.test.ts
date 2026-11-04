@@ -3,6 +3,7 @@ import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import { HttpToolError } from 'src/lib/httpToolError';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient } from '../../testClient';
 
 const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
 
@@ -17,13 +18,13 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
 
   const PIN = '/people/alice/';
 
-  const createDocumentTool = (): Tool => {
+  const pinnedTool = (action: string): Tool => {
     const tools = resolveSoatTools({
       meter: UNMETERED,
       typedTool: {
         name: 'notes',
         description: null,
-        actions: ['create-document'],
+        actions: [action],
         presetParameters: { path_prefix: PIN },
       },
       authHeader: `Bearer ${adminToken}`,
@@ -36,11 +37,14 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
       },
       logToolCallingError: () => {},
     });
-    return tools['notes_create-document'];
+    return tools[`notes_${action}`];
   };
 
-  const execute = async (input: Record<string, unknown>) => {
-    return (await createDocumentTool().execute?.(input, {
+  const execute = async (
+    input: Record<string, unknown>,
+    action = 'create-document'
+  ) => {
+    return (await pinnedTool(action).execute?.(input, {
       messages: [],
       toolCallId: 'call_1',
       context: undefined,
@@ -66,7 +70,11 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'pathpintool',
-      policyActions: ['documents:CreateDocument'],
+      policyActions: [
+        'documents:CreateDocument',
+        'documents:IngestDocument',
+        'files:UploadFile',
+      ],
     });
     adminToken = setup.adminToken;
     projectId = setup.projectId;
@@ -94,5 +102,22 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
         path_prefix: '/',
       })
     ).toBe('DOCUMENT_PATH_OUTSIDE_PREFIX');
+  });
+
+  test('ingest-document files inside the pin whatever prefix the model asks for', async () => {
+    const upload = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files/upload')
+      .attach('file', Buffer.from('ingested'), {
+        filename: 'ingested.txt',
+        contentType: 'text/plain',
+      })
+      .field('project_id', projectId);
+    expect(upload.status).toBe(201);
+
+    const result = await execute(
+      { file_id: upload.body.id, path_prefix: '/people/bob/', wait: true },
+      'ingest-document'
+    );
+    expect(result.path).toBe(`${PIN}ingested.txt`);
   });
 });

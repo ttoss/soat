@@ -291,11 +291,11 @@ describe('Documents pinned to a path_prefix', () => {
   });
 
   describe('POST /documents/ingest', () => {
-    const upload = async (): Promise<string> => {
+    const upload = async (filename: string): Promise<string> => {
       const res = await client()
         .post('/api/v1/files/upload')
         .attach('file', Buffer.from(`ingest ${unique()}`), {
-          filename: `${unique()}.txt`,
+          filename,
           contentType: 'text/plain',
         })
         .field('project_id', projectId);
@@ -303,28 +303,23 @@ describe('Documents pinned to a path_prefix', () => {
       return res.body.id as string;
     };
 
-    const ingestPinned = async (body: Record<string, unknown>) => {
+    const ingest = async (args: { filename: string; pathPrefix: string }) => {
       return client()
-        .post(pinned('/api/v1/documents/ingest?wait=true'))
-        .send({ project_id: projectId, file_id: await upload(), ...body });
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({
+          project_id: projectId,
+          file_id: await upload(args.filename),
+          path_prefix: args.pathPrefix,
+        });
     };
 
-    test('files inside the pin', async () => {
-      const res = await ingestPinned({ path_prefix: `${PIN}inbox/` });
+    test('files under the body path_prefix', async () => {
+      const res = await ingest({
+        filename: `${unique()}.txt`,
+        pathPrefix: PIN,
+      });
       expect(res.status).toBe(201);
       expect(res.body.path.startsWith(PIN)).toBe(true);
-    });
-
-    test('refuses a body path_prefix outside the pin', async () => {
-      const res = await ingestPinned({ path_prefix: '/people/bob/' });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('DOCUMENT_PATH_OUTSIDE_PREFIX');
-    });
-
-    test('refuses an ingest whose default path falls outside', async () => {
-      const res = await ingestPinned({});
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('DOCUMENT_PATH_OUTSIDE_PREFIX');
     });
   });
 
