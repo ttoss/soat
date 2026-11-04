@@ -18,7 +18,6 @@ import {
   fetchDocumentWithContext,
 } from './documentLoaders';
 import { mapDocument } from './documentMapper';
-import { assertPathInsidePin } from './documentPathPin';
 import { writeDocumentUpdate } from './documentUpdateWrite';
 import {
   buildDocumentConfigSnapshot,
@@ -215,8 +214,8 @@ export const createDocument = async (
     system?: DocumentFiling;
     /** Off stores the chunks without vectors. See `persistChunks`. */
     embed?: boolean;
-    /** The directory the caller's `path_prefix` confines it to. */
-    pathPin?: string;
+    /** Refuses a filing outside the caller's pins, before anything is written. */
+    assertFiling?: (values: { path: string | null }) => void;
   } & VersionedWrite
 ) => {
   log('createDocument: projectId=%d', args.projectId);
@@ -230,7 +229,7 @@ export const createDocument = async (
     filename: args.filename,
     publicId,
   });
-  assertPathInsidePin({ path: filing.normalizedPath, pin: args.pathPin });
+  args.assertFiling?.({ path: filing.normalizedPath });
 
   await assertCreatedDocumentMetadataValid({
     projectId: args.projectId,

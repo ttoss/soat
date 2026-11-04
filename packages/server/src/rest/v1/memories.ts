@@ -42,9 +42,9 @@ import {
   validateTagsBag,
 } from './memoriesRequestBody';
 import { sendNdjson } from './ndjsonResponse';
-import { readQueryPin } from './queryPin';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
+import { resourcePins } from './resourcePins';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
@@ -133,6 +133,12 @@ const resolveMemoryStoreForAction = async (
   return { memoryStore, memoryStoreRowId: memoryStoreRow!.id as number };
 };
 
+const memoryPins = resourcePins({ listOperation: 'listMemories' });
+
+const memoryNotFound = (): DomainError => {
+  return new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
+};
+
 /**
  * Resolves an entry by its (globally unique) id and verifies access via the
  * owning memory store's project. Every by-id route resolves through here, so
@@ -145,14 +151,11 @@ const resolveEntryForAction = async (
   entryId: string,
   action: string
 ): Promise<Awaited<ReturnType<typeof getMemory>> | null> => {
-  const entry = await getMemory({ id: entryId });
-  const storePin = readQueryPin(ctx, 'memory_store_id');
-  if (
-    !entry ||
-    (storePin !== undefined && entry.memory_store_id !== storePin)
-  ) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
-  }
+  const entry = memoryPins.assertItem({
+    ctx,
+    item: await getMemory({ id: entryId }),
+    notFound: memoryNotFound,
+  });
   const memoryStore = await getMemoryStore({ id: entry.memory_store_id! });
   if (!memoryStore) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');

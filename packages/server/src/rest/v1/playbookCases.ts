@@ -44,7 +44,7 @@ import {
   caseReadableBy,
   playbookAccess,
   playbookCaseAccess,
-  readActorPin,
+  playbookCasePins,
 } from './playbookAccess';
 
 const playbookCasesRouter = new Router<Context>();
@@ -98,7 +98,7 @@ playbookCasesRouter.get('/playbook-cases', async (ctx: Context) => {
   ctx.body = await listPlaybookCases({
     projectIds,
     playbookId: parseString(ctx.query.playbook_id),
-    actorId: readActorPin(ctx),
+    actorId: playbookCasePins.read(ctx, 'actor_id'),
     subject: parseString(ctx.query.subject),
     automationStatuses: parseEnumListQuery({
       ctx,

@@ -38,6 +38,9 @@ paths:
         - name: path_prefix
           in: query
           required: false
+          x-soat-pin:
+            field: path
+            match: path_prefix
           description: >-
             Only documents filed under this directory. The prefix is a path
             boundary, not a substring: `/reports` returns `/reports/q1.txt` and

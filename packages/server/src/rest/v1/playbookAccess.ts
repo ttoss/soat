@@ -2,11 +2,11 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import type { PlaybookAuthor } from 'src/lib/playbookAuthor';
-import { assertCaseActorPin, playbookCases } from 'src/lib/playbookCases';
+import { findCasePinnedFields, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
-import { readQueryPin } from './queryPin';
 import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
+import { resourcePins } from './resourcePins';
 
 /** Every `/playbooks/:playbook_id` route authorizes against the playbook's SRN. */
 export const playbookAccess = makeItemRouteAuthorizer({
@@ -25,21 +25,26 @@ const caseAuthorizer = makeItemRouteAuthorizer({
 
 type CaseAuthorize = typeof caseAuthorizer.authorizeRead;
 
-/** The `actor_id` a call is pinned to. */
-export const readActorPin = (ctx: Context): string | undefined => {
-  return readQueryPin(ctx, 'actor_id');
-};
+export const playbookCasePins = resourcePins({
+  listOperation: 'listPlaybookCases',
+});
 
 /**
- * The actor pin rides on authorization, so no case route can act without it:
+ * The case pins ride on authorization, so no case route can act without them:
  * a call naming `?actor_id` reaches that actor's cases only.
  */
-const pinnedToActor = (authorize: CaseAuthorize): CaseAuthorize => {
+const pinnedCase = (authorize: CaseAuthorize): CaseAuthorize => {
   return async (args) => {
     const access = await authorize(args);
-    const actorId = readActorPin(args.ctx);
-    if (actorId !== undefined) {
-      await assertCaseActorPin({ id: args.ctx.params.case_id, actorId });
+    if (playbookCasePins.isPinned(args.ctx)) {
+      const id = args.ctx.params.case_id;
+      playbookCasePins.assertItem({
+        ctx: args.ctx,
+        item: await findCasePinnedFields({ id }),
+        notFound: () => {
+          return playbookCases.notFound(id);
+        },
+      });
     }
     return access;
   };
@@ -47,11 +52,11 @@ const pinnedToActor = (authorize: CaseAuthorize): CaseAuthorize => {
 
 /**
  * Every `/playbook-cases/:case_id` route authorizes against the case's SRN and
- * honours the `actor_id` pin.
+ * honours its pins.
  */
 export const playbookCaseAccess = {
-  authorizeRead: pinnedToActor(caseAuthorizer.authorizeRead),
-  authorizeWrite: pinnedToActor(caseAuthorizer.authorizeWrite),
+  authorizeRead: pinnedCase(caseAuthorizer.authorizeRead),
+  authorizeWrite: pinnedCase(caseAuthorizer.authorizeWrite),
 };
 
 /**
