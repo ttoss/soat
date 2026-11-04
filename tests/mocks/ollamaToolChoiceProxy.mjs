@@ -133,13 +133,16 @@ const inferArgument = (args) => {
   });
 };
 
-/** Builds arguments for every required property of the forced tool. */
+/**
+ * Builds arguments for the required properties of the forced tool only: a
+ * placeholder in an optional one (`metadata`, `path_prefix`) fails the call.
+ */
 const buildToolArguments = (args) => {
   const { parameters, text } = args;
   const properties = parameters?.properties ?? {};
   const required = Array.isArray(parameters?.required)
     ? parameters.required
-    : Object.keys(properties);
+    : [];
 
   return Object.fromEntries(
     required

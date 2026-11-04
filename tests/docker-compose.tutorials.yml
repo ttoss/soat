@@ -65,9 +65,9 @@ services:
       # deliberately left off while an unhonored `tool_choice` merely went
       # unforced. `ai` 7.0.99 enforces it, so the same request now fails the
       # generation outright — the status quo that judgment preferred is gone.
-      # Six of them pin every parameter, so the model sees an empty schema and
-      # a synthesized call is exact; only poem-write's `content` is the model's,
-      # and no tutorial asserts the poem it writes.
+      # Their presets pin every required parameter and the shim fills only
+      # required ones, so a synthesized call carries no arguments; poem-write's
+      # `content` is optional and no tutorial asserts the poem it writes.
       TOOL_CHOICE_TOOLS: 'get_order_status,record_order,docs_update-document,read_local_file,call-stanza-1_create-agent-generation,call-stanza-2_create-agent-generation,call-stanza-3_create-agent-generation,call-stanza-4_create-agent-generation,read-final-poem_get-document,poem-read_get-document,poem-write_update-document'
       # Nothing bounds how many tokens qwen2.5:0.5b emits (agents have no max_tokens
       # field) and no tutorial asserts generated content, so uncapped output is what
