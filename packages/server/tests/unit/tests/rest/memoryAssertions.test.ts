@@ -43,45 +43,28 @@ describe('MemoryAssertions', () => {
   };
 
   describe('GET /api/v1/memories/:memory_id/assertions', () => {
-    test('orders writes landing in one millisecond as they resolved', async () => {
-      const memoryStoreId = await createMemoryStore('Same instant');
-      const contents = [
-        'Customer prefers email',
-        'The customer would rather be emailed',
-        'Email is how the customer likes to be reached',
-        'Reach the customer by email',
-        'The customer asked for email contact',
-      ];
-
-      // Only `Date` is faked, and never advanced: every write shares one
-      // timestamp while the database and the HTTP stack keep real timers.
-      jest.useFakeTimers({
-        now: Date.now(),
-        doNotFake: [
-          'hrtime',
-          'nextTick',
-          'performance',
-          'queueMicrotask',
-          'setImmediate',
-          'clearImmediate',
-          'setInterval',
-          'clearInterval',
-          'setTimeout',
-          'clearTimeout',
-        ],
+    test('lists a write after the one before it, whatever the clock reads', async () => {
+      const memoryStoreId = await createMemoryStore('Clock behind');
+      const first = await writeMemory({
+        memoryStoreId,
+        content: 'Customer prefers email',
       });
-      let firstId: string | undefined;
+
+      // A clock behind the previous write's stands for any tie or skew: two
+      // writes in one millisecond, or two processes whose clocks differ.
+      jest.useFakeTimers({ advanceTimers: true });
+      jest.setSystemTime(Date.now() - 60_000);
       try {
-        for (const content of contents) {
-          const written = await writeMemory({ memoryStoreId, content });
-          firstId ??= written.id;
-        }
+        await writeMemory({
+          memoryStoreId,
+          content: 'The customer would rather be emailed',
+        });
       } finally {
         jest.useRealTimers();
       }
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/memories/${firstId}/assertions`
+        `/api/v1/memories/${first.id}/assertions`
       );
 
       expect(response.status).toBe(200);
@@ -89,7 +72,10 @@ describe('MemoryAssertions', () => {
         response.body.data.map((assertion: { content: string }) => {
           return assertion.content;
         })
-      ).toEqual(contents);
+      ).toEqual([
+        'Customer prefers email',
+        'The customer would rather be emailed',
+      ]);
     });
 
     test('returns the writes that resolved into the memory', async () => {
