@@ -43,6 +43,55 @@ describe('MemoryAssertions', () => {
   };
 
   describe('GET /api/v1/memories/:memory_id/assertions', () => {
+    test('orders writes landing in one millisecond as they resolved', async () => {
+      const memoryStoreId = await createMemoryStore('Same instant');
+      const contents = [
+        'Customer prefers email',
+        'The customer would rather be emailed',
+        'Email is how the customer likes to be reached',
+        'Reach the customer by email',
+        'The customer asked for email contact',
+      ];
+
+      // Only `Date` is faked, and never advanced: every write shares one
+      // timestamp while the database and the HTTP stack keep real timers.
+      jest.useFakeTimers({
+        now: Date.now(),
+        doNotFake: [
+          'hrtime',
+          'nextTick',
+          'performance',
+          'queueMicrotask',
+          'setImmediate',
+          'clearImmediate',
+          'setInterval',
+          'clearInterval',
+          'setTimeout',
+          'clearTimeout',
+        ],
+      });
+      let firstId: string | undefined;
+      try {
+        for (const content of contents) {
+          const written = await writeMemory({ memoryStoreId, content });
+          firstId ??= written.id;
+        }
+      } finally {
+        jest.useRealTimers();
+      }
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/memories/${firstId}/assertions`
+      );
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.data.map((assertion: { content: string }) => {
+          return assertion.content;
+        })
+      ).toEqual(contents);
+    });
+
     test('returns the writes that resolved into the memory', async () => {
       const memoryStoreId = await createMemoryStore('History');
       const created = await writeMemory({
