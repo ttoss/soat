@@ -18,7 +18,7 @@ import {
 import { countIndexedChunks } from './documentLoaders';
 import { mapDocument } from './documentMapper';
 import { assertFilePathFree } from './filePathConflict';
-import { normalizePath } from './filePaths';
+import { normalizeCallerPath } from './filePaths';
 import {
   assertCallerEndUser,
   type GenerationEndUser,
@@ -309,7 +309,7 @@ export const enqueueDocumentIngestion = async (args: {
   await assertCorpusWriteQuotas({ projectId: args.projectId, addedBytes: 0 });
 
   const filename = file.filename ?? 'document';
-  const docPath = normalizePath(
+  const docPath = normalizeCallerPath(
     args.pathPrefix
       ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
       : `/${filename}`

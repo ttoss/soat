@@ -34,6 +34,21 @@ export const normalizePath = (p: string): string => {
 };
 
 /**
+ * {@link normalizePath} for a key a caller files something at: a `..` segment
+ * is refused rather than resolved, since a prefix-scoped IAM path glob judges
+ * the key the caller spelled. `.` still resolves; `a..b` is a plain name.
+ */
+export const normalizeCallerPath = (p: string): string => {
+  if (p.trim().split('/').includes('..')) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `'${p}': a '..' path segment is not allowed`
+    );
+  }
+  return normalizePath(p);
+};
+
+/**
  * The `LIKE` pattern that selects everything filed **under** a directory.
  *
  * The prefix is a path boundary, not a substring: `/reports` matches
@@ -85,9 +100,9 @@ export const buildPath = (args: {
   const prefix =
     args.prefix !== undefined && args.prefix.trim() !== '' ? args.prefix : '/';
   if (args.filename) {
-    return normalizePath(`${prefix}/${args.filename}`);
+    return normalizeCallerPath(`${prefix}/${args.filename}`);
   }
-  const normalized = normalizePath(prefix);
+  const normalized = normalizeCallerPath(prefix);
   return normalized === '/' ? null : normalized;
 };
 
