@@ -55,6 +55,14 @@ const WEATHER_TOOL = {
   },
 };
 
+const OPTIONAL_ONLY_PARAMETERS = {
+  type: 'object',
+  properties: {
+    metadata: { allOf: [{ type: 'object' }] },
+    path_prefix: { type: 'string' },
+  },
+};
+
 /** Requests the fake upstream received, in order. */
 const upstreamRequests = [];
 let upstream;
@@ -140,11 +148,10 @@ describe('ollamaToolChoiceProxy — synthesizing a forced call', () => {
     );
   });
 
-  // `preset_parameters` are stripped from the schema the model sees
-  // (`modelVisibleSchema`), so a fully-pinned builtin reaches the shim with no
-  // properties: the synthesized call must carry the empty arguments a real one
-  // would, not an inferred value.
-  test('synthesizes an empty-argument call for a tool with no properties', async () => {
+  // `preset_parameters` strip the pinned keys and `required` from the schema
+  // the model sees, but a builtin keeps its optional ones (`metadata`,
+  // `path_prefix`); a placeholder there fails the runtime call.
+  test('synthesizes an empty-argument call for a tool with nothing required', async () => {
     const name = 'call-stanza-1_create-agent-generation';
     const res = await chat({
       model: 'qwen2.5:0.5b',
@@ -152,7 +159,7 @@ describe('ollamaToolChoiceProxy — synthesizing a forced call', () => {
       tools: [
         {
           type: 'function',
-          function: { name, parameters: { type: 'object', properties: {} } },
+          function: { name, parameters: OPTIONAL_ONLY_PARAMETERS },
         },
       ],
       tool_choice: { type: 'function', function: { name } },
