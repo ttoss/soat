@@ -36,7 +36,7 @@ Files belong to a project and are persisted through the configured backend (loca
 | `created_at`   | string         | ISO 8601 creation timestamp                                                                                                                                              |
 | `updated_at`   | string         | ISO 8601 last-updated timestamp                                                                                                                                          |
 
-`path` is normalized at write time, unique per project, and the target of path-based SRNs. Change `prefix` to **move**, `filename` to **rename**; either rebuilds `path`. A collision returns `409 NAME_CONFLICT`.
+`path` is normalized at write time, unique per project, and the target of path-based SRNs. Change `prefix` to **move**, `filename` to **rename**; either rebuilds `path`. A collision returns `409 NAME_CONFLICT`. A `..` that climbs above `/` returns `400 VALIDATION_FAILED`.
 
 ## Key Concepts
 
