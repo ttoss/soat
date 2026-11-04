@@ -73,7 +73,7 @@ Chunks are not exposed directly; they are used for embedding-based search. `cont
 
 `path` defaults to `/<filename>`, or to `/<document_id>.txt` for a document created from inline content with neither a `path` nor a `filename` — a document with no path is reachable only by its id, since a prefix filter is a `LIKE` and never matches null. That document's `filename` is the same leaf, so the key and the download name agree. A create with `path` and no `filename` takes `filename` from the path's leaf: `/reports/q1.txt` gives `q1.txt`.
 
-Paths are absolute (start with `/`) and normalized (`.` and `..` resolved); `project_id + path` is unique. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts `path` to move a document, and `null` to clear it — a cleared document is reachable by id alone.
+Paths are absolute (start with `/`) and normalized (`.` resolved); a `..` segment in `path`, `filename` or an ingestion `path_prefix` returns `400 VALIDATION_FAILED`. `project_id + path` is unique. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts `path` to move a document, and `null` to clear it — a cleared document is reachable by id alone.
 
 A path another file in the project holds is `409 NAME_CONFLICT` on create, on ingest and on a move, the same answer the files API gives. A refused move changes nothing, content included.
 

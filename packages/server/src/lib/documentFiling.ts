@@ -1,7 +1,7 @@
 import {
   assertCallerPath,
   filenameFromPath,
-  normalizePath,
+  normalizeCallerPath,
   systemPath,
 } from './filePaths';
 
@@ -44,7 +44,7 @@ export const resolveDocumentFiling = (args: {
       filename: `${args.publicId}.txt`,
     };
   }
-  const normalizedPath = normalizePath(rawPath);
+  const normalizedPath = normalizeCallerPath(rawPath);
   return {
     normalizedPath,
     filename: args.filename ?? filenameFromPath(normalizedPath),

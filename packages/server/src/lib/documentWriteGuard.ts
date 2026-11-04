@@ -1,13 +1,13 @@
 import type { LoadedDoc } from './documentLoaders';
 import { documentVersionStore } from './documentVersionSnapshot';
 import { assertFilePathFree } from './filePathConflict';
-import { assertCallerPath, normalizePath } from './filePaths';
+import { assertCallerPath, normalizeCallerPath } from './filePaths';
 import { assertUpdatedDocumentMetadataValid } from './metadataSchemas';
 import { toResourceRef } from './resourceVersions';
 
 /** A stated `path`, normalized and refused when it names the reserved root. */
 export const normalizeStatedPath = (path: string | null): string | null => {
-  return assertCallerPath(path === null ? null : normalizePath(path));
+  return assertCallerPath(path === null ? null : normalizeCallerPath(path));
 };
 
 /**
