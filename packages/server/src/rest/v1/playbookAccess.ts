@@ -5,6 +5,7 @@ import type { PlaybookAuthor } from 'src/lib/playbookAuthor';
 import { assertCaseActorPin, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
+import { readQueryPin } from './queryPin';
 import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
 
 /** Every `/playbooks/:playbook_id` route authorizes against the playbook's SRN. */
@@ -24,17 +25,9 @@ const caseAuthorizer = makeItemRouteAuthorizer({
 
 type CaseAuthorize = typeof caseAuthorizer.authorizeRead;
 
-/**
- * The `actor_id` a call is pinned to. A repeated parameter is refused rather
- * than read as absent, which would drop the pin.
- */
+/** The `actor_id` a call is pinned to. */
 export const readActorPin = (ctx: Context): string | undefined => {
-  const value = ctx.query.actor_id;
-  if (value === undefined || typeof value === 'string') return value;
-  throw new DomainError(
-    'VALIDATION_FAILED',
-    'actor_id must be given at most once.'
-  );
+  return readQueryPin(ctx, 'actor_id');
 };
 
 /**

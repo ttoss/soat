@@ -4,6 +4,10 @@ import { DomainError } from 'src/errors';
 import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
 import { findDocumentProjectId } from 'src/lib/documentLoaders';
+import {
+  assertDocumentUnderPathPin,
+  assertPathInsidePin,
+} from 'src/lib/documentPathPin';
 import { relatedDocumentRowIds } from 'src/lib/documentRelations';
 import {
   createDocument,
@@ -42,6 +46,7 @@ import {
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 import { sendNdjson } from './ndjsonResponse';
+import { readPathPin } from './queryPin';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -98,6 +103,8 @@ export const checkDocumentPermission = async (
   } & ProjectOwned,
   action: string
 ): Promise<boolean> => {
+  // Every by-id route passes here, so none can act outside the pin.
+  assertDocumentUnderPathPin({ path: doc.path, pin: readPathPin(ctx) });
   const context = buildDocumentContext(doc);
   const resources = buildDocumentResources(doc, doc.project_id!);
   const allowed = await ctx.authUser!.isAllowed({
@@ -263,6 +270,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     createdBy: requestPrincipalFromCtx(ctx),
+    pathPin: readPathPin(ctx),
   });
   ctx.status = 201;
   ctx.body = doc;
@@ -307,6 +315,10 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     metadata?: unknown;
     tags?: unknown;
   };
+
+  if (body.path !== undefined) {
+    assertPathInsidePin({ path: body.path, pin: readPathPin(ctx) });
+  }
 
   if (body.content !== undefined) {
     const projectId = await findDocumentProjectId({
@@ -420,6 +432,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkOverlap: body.chunk_overlap,
     wait,
     endUser: { sessionId: body.session_id, actorId: body.actor_id },
+    pathPin: readPathPin(ctx),
   });
 
   ctx.status = wait ? 201 : 202;

@@ -127,6 +127,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The session is closed and accepts no further messages. Open a new one, or fork this one to keep its history.',
   MEMORY_ALREADY_INVALIDATED:
     'The fact is already out of every read. Read the memory by id to see whether a supersede replaced it, and retract the memory that replaced it if that is the one that no longer holds.',
+  DOCUMENT_PATH_OUTSIDE_PREFIX:
+    'Give a `path` under `meta.path_prefix`; a create or ingest without one lands at the project root, outside every narrower pin.',
   DOCUMENT_ALREADY_WITHDRAWN:
     'The document is already out of every default read. To bring it back, restore the version before the withdrawal.',
   TRIGGER_FIRING_ABANDONED:

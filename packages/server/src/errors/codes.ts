@@ -869,6 +869,11 @@ export const ERROR_CODES = {
     description:
       'The memory no longer holds — a retraction or a supersede already invalidated it — so there is nothing to retract. `meta.memory_id` names it; read it by id to see which.',
   },
+  DOCUMENT_PATH_OUTSIDE_PREFIX: {
+    httpStatus: 400,
+    description:
+      'The write would file the document outside the directory the call is pinned to with `path_prefix`. `meta.path` is where it would land and `meta.path_prefix` the pin.',
+  },
   DOCUMENT_ALREADY_WITHDRAWN: {
     httpStatus: 409,
     description:
