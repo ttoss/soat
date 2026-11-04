@@ -44,8 +44,14 @@ describe('a `..` segment in a file key', () => {
 
   const createFile = async (): Promise<string> => {
     const res = await client(userToken)
-      .post('/api/v1/files')
-      .send({ project_id: projectId, prefix: unique(), filename: 'held.txt' });
+      .post('/api/v1/files/upload/base64')
+      .send({
+        project_id: projectId,
+        prefix: unique(),
+        filename: 'held.txt',
+        content_type: 'text/plain',
+        content: Buffer.from('Held.').toString('base64'),
+      });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

@@ -226,12 +226,12 @@ describe('Documents pinned to a path_prefix', () => {
       expect(res.body.error.code).toBe('DOCUMENT_PATH_OUTSIDE_PREFIX');
     });
 
-    test('refuses a path that resolves outside through ..', async () => {
+    test('refuses a `..` segment before the pin is read', async () => {
       const res = await createPinned({
         path: `${PIN}../bob/${unique()}.txt`,
       });
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('DOCUMENT_PATH_OUTSIDE_PREFIX');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('refuses a create without a path, whose default falls outside', async () => {
