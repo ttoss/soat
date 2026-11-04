@@ -156,6 +156,54 @@ Key-value string pairs set at creation or ingestion, or via the tag sub-endpoint
 
 Which field goes in `tags` and which in `metadata`: [IAM — Choosing a bag](iam.md#choosing-a-bag).
 
+### Pinning a call to a directory
+
+`path_prefix` in the query string pins a write or by-id call to one directory, by the same path-boundary rule as [the listing filter](#listing-a-directory). It is accepted by [`POST /api/v1/documents`](/docs/api/documents/create-document) and every `/documents/{document_id}` route. [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) takes `path_prefix` in its body as the directory it files into, so one value confines everything a caller does with documents:
+
+| Case | Answer |
+| --- | --- |
+| A document outside the pin, by id (including a relation's target) | `404`, as if it did not exist |
+| A create or `PATCH` that would file the document outside it | `400 DOCUMENT_PATH_OUTSIDE_PREFIX` |
+| A create with no path, whose default lands at the root | `400 DOCUMENT_PATH_OUTSIDE_PREFIX` |
+| No `path_prefix` | unpinned |
+
+A [builtin tool](./tools.md) presetting `path_prefix` confines an agent to that directory: the model cannot choose a path outside it, nor a wider prefix, and `ingest-document` files into it.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-document --path-prefix /people/actor_V1StGXR8Z5jdHi6B/ \
+  --project-id proj_ABC --path /people/actor_V1StGXR8Z5jdHi6B/notes.txt --content "..."
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.documents.createDocument({
+  query: { path_prefix: '/people/actor_V1StGXR8Z5jdHi6B/' },
+  body: {
+    project_id: 'proj_ABC',
+    path: '/people/actor_V1StGXR8Z5jdHi6B/notes.txt',
+    content: '...',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/documents?path_prefix=/people/actor_V1StGXR8Z5jdHi6B/" \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_ABC","path":"/people/actor_V1StGXR8Z5jdHi6B/notes.txt","content":"..."}'
+```
+
+</TabItem>
+</Tabs>
+
 ### Polling Ingestion Status
 
 [`GET /documents/:id`](/docs/api/documents/get-document) returns the full chunk content, which can be megabytes. [`GET /api/v1/documents/:id/status`](/docs/api/documents/get-document-status) returns only the lifecycle fields:

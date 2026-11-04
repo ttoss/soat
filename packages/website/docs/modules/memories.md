@@ -272,6 +272,10 @@ A caller that states nothing still gets the version bump: two writers racing on 
 serialize, and the loser sees the conflict rather than silently overwriting the winner. A
 [retraction](#retraction) claims the same counter, so it is refused the same way.
 
+### Pinning a call to a store
+
+`memory_store_id` in the query string, the parameter that scopes [`GET /api/v1/memories`](/docs/api/memories/list-memories), also pins every `/memories/{memory_id}` route — get, [`PUT`](/docs/api/memories/update-memory), delete, retract, assertions and tags. A memory of another store is `404`, as if it did not exist. A [builtin tool](./tools.md) presetting `memory_store_id` therefore confines an agent to that store on every memory action.
+
 ### NDJSON export
 
 [`GET /api/v1/memory-stores/{memory_store_id}/export`](/docs/api/memory-stores/export-memories) streams one store's memories as newline-delimited JSON, oldest first, one memory object per line.

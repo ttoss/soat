@@ -110,6 +110,8 @@ paths:
       description: Creates a new text document and generates an embedding vector for semantic search. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
       x-iam-action: documents:CreateDocument
+      parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
       requestBody:
         required: true
         content:
@@ -404,6 +406,7 @@ paths:
       operationId: getDocument
       x-iam-action: documents:GetDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -450,6 +453,7 @@ paths:
       operationId: deleteDocument
       x-iam-action: documents:DeleteDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -492,6 +496,7 @@ paths:
       operationId: updateDocument
       x-iam-action: documents:UpdateDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -591,6 +596,7 @@ paths:
       operationId: listDocumentRelations
       x-iam-action: documents:GetDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -653,6 +659,7 @@ paths:
       operationId: createDocumentRelation
       x-iam-action: documents:UpdateDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -737,6 +744,7 @@ paths:
       operationId: deleteDocumentRelation
       x-iam-action: documents:UpdateDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -791,6 +799,7 @@ paths:
       operationId: getDocumentStatus
       x-iam-action: documents:GetDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -854,6 +863,7 @@ paths:
       operationId: withdrawDocument
       x-iam-action: documents:WithdrawDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -940,6 +950,7 @@ paths:
       operationId: listDocumentVersions
       x-iam-action: documents:ListDocumentVersions
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -997,6 +1008,7 @@ paths:
       operationId: getDocumentVersion
       x-iam-action: documents:GetDocumentVersion
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -1067,6 +1079,7 @@ paths:
       operationId: restoreDocumentVersion
       x-iam-action: documents:RestoreDocumentVersion
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -1158,6 +1171,7 @@ paths:
       operationId: reingestDocument
       x-iam-action: documents:IngestDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -1365,6 +1379,7 @@ paths:
       operationId: getDocumentTags
       x-iam-action: documents:GetDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -1411,6 +1426,7 @@ paths:
       operationId: replaceDocumentTags
       x-iam-action: documents:UpdateDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -1465,6 +1481,7 @@ paths:
       operationId: mergeDocumentTags
       x-iam-action: documents:UpdateDocument
       parameters:
+        - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
           in: path
           required: true
@@ -1512,6 +1529,20 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 components:
+  parameters:
+    PathPrefixPin:
+      name: path_prefix
+      in: query
+      required: false
+      description: >-
+        Pins the call to documents filed under this directory, by the same
+        path-boundary rule as the listing's `path_prefix`. A document outside it
+        is `404`, as if it did not exist; a write that would file one outside
+        it (including a create whose default path falls outside) is
+        `400 DOCUMENT_PATH_OUTSIDE_PREFIX`.
+      schema:
+        type: string
+        example: '/people/actor_V1StGXR8Z5jdHi6B/'
   securitySchemes:
     bearerAuth:
       type: http

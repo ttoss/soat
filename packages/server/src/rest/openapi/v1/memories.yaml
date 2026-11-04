@@ -264,6 +264,7 @@ paths:
         from: memory_id
       x-iam-action: memories:GetMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -316,6 +317,7 @@ paths:
         from: memory_id
       x-iam-action: memories:UpdateMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -407,6 +409,7 @@ paths:
         from: memory_id
       x-iam-action: memories:DeleteMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -471,6 +474,7 @@ paths:
         from: memory_id
       x-iam-action: memories:RetractMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -553,6 +557,7 @@ paths:
         from: memory_id
       x-iam-action: memories:ListMemoryAssertions
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -614,6 +619,7 @@ paths:
         from: memory_id
       x-iam-action: memories:GetMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -663,6 +669,7 @@ paths:
         from: memory_id
       x-iam-action: memories:UpdateMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -724,6 +731,7 @@ paths:
         from: memory_id
       x-iam-action: memories:UpdateMemory
       parameters:
+        - $ref: '#/components/parameters/MemoryStorePin'
         - name: memory_id
           in: path
           required: true
@@ -775,6 +783,17 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 components:
+  parameters:
+    MemoryStorePin:
+      name: memory_store_id
+      in: query
+      required: false
+      description: >-
+        Pins the call to memories of this store, the same parameter that scopes
+        the listing. A memory of another store is `404`, as if it did not exist.
+      schema:
+        type: string
+        example: mstore_V1StGXR8Z5jdHi6B
   securitySchemes:
     bearerAuth:
       type: http

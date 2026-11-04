@@ -14,6 +14,7 @@ import {
   documentsRouter as _router,
 } from './documents';
 import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import { readPathPin } from './queryPin';
 
 /**
  * A document's typed edges, as a sub-resource of the document that asserts
@@ -107,6 +108,7 @@ export const registerDocumentRelationRoutes = (args: {
         type: readRelationType(body.type),
         toDocumentId: readTargetDocumentId(body.to_document_id),
         projectIds: await documentScope(ctx),
+        pathPin: readPathPin(ctx),
       });
     }
   );

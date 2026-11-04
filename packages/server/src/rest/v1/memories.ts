@@ -42,6 +42,7 @@ import {
   validateTagsBag,
 } from './memoriesRequestBody';
 import { sendNdjson } from './ndjsonResponse';
+import { readQueryPin } from './queryPin';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -134,7 +135,9 @@ const resolveMemoryStoreForAction = async (
 
 /**
  * Resolves an entry by its (globally unique) id and verifies access via the
- * owning memory store's project. Returns the mapped entry, or null after setting the
+ * owning memory store's project. Every by-id route resolves through here, so
+ * a `memory_store_id` pin confines all of them: another store's memory is
+ * `404`. Returns the mapped entry, or null after setting the
  * appropriate error response.
  */
 const resolveEntryForAction = async (
@@ -143,7 +146,11 @@ const resolveEntryForAction = async (
   action: string
 ): Promise<Awaited<ReturnType<typeof getMemory>> | null> => {
   const entry = await getMemory({ id: entryId });
-  if (!entry) {
+  const storePin = readQueryPin(ctx, 'memory_store_id');
+  if (
+    !entry ||
+    (storePin !== undefined && entry.memory_store_id !== storePin)
+  ) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
   }
   const memoryStore = await getMemoryStore({ id: entry.memory_store_id! });
