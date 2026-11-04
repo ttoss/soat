@@ -290,19 +290,16 @@ export const getPlaybookCase = async (args: {
 };
 
 /**
- * Refuses a call pinned to an actor on a case that is not that actor's, as if
- * the case did not exist, so a pinned caller learns nothing of other actors'
- * cases.
+ * A case's pinned fields, as `rest/v1/resourcePins.ts` compares them to the
+ * call's pins; null when no such case.
  */
-export const assertCaseActorPin = async (args: {
+export const findCasePinnedFields = async (args: {
   id: string;
-  actorId: string;
-}): Promise<void> => {
-  log('assertCaseActorPin: id=%s actorId=%s', args.id, args.actorId);
+}): Promise<{ actor_id: string | null } | null> => {
+  log('findCasePinnedFields: id=%s', args.id);
   const row = await playbookCases.findByPublicId({ id: args.id });
-  if (row?.actor?.publicId !== args.actorId) {
-    throw playbookCases.notFound(args.id);
-  }
+  if (!row) return null;
+  return { actor_id: row.actor?.publicId ?? null };
 };
 
 export const deletePlaybookCase = async (args: {

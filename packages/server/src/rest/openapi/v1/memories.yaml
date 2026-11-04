@@ -31,6 +31,9 @@ paths:
         - name: memory_store_id
           in: query
           required: true
+          x-soat-pin:
+            field: memory_store_id
+            match: equals
           description: Memory store to list memories from (mstore_...)
           schema:
             type: string

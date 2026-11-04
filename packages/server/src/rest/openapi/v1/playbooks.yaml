@@ -620,6 +620,9 @@ paths:
         - name: actor_id
           in: query
           required: false
+          x-soat-pin:
+            field: actor_id
+            match: equals
           description: >-
             Only the cases that belong to this actor. Pin it in a tool's
             `preset_parameters` as `{{context:actor_id}}` so an agent lists

@@ -4,10 +4,6 @@ import { DomainError } from 'src/errors';
 import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
 import { findDocumentProjectId } from 'src/lib/documentLoaders';
-import {
-  assertDocumentUnderPathPin,
-  assertPathInsidePin,
-} from 'src/lib/documentPathPin';
 import { relatedDocumentRowIds } from 'src/lib/documentRelations';
 import {
   createDocument,
@@ -33,6 +29,7 @@ import {
   readTagQuery,
 } from 'src/lib/tags';
 
+import { assertDocumentFiling, assertDocumentReachable } from './documentPins';
 import { registerDocumentRelationRoutes } from './documentRelationRoutes';
 import { registerDocumentVersionRoutes } from './documentVersionRoutes';
 import type { AuthenticatedContext, ProjectOwned } from './helpers';
@@ -46,7 +43,6 @@ import {
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 import { sendNdjson } from './ndjsonResponse';
-import { readPathPin } from './queryPin';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -104,7 +100,7 @@ export const checkDocumentPermission = async (
   action: string
 ): Promise<boolean> => {
   // Every by-id route passes here, so none can act outside the pin.
-  assertDocumentUnderPathPin({ path: doc.path, pin: readPathPin(ctx) });
+  assertDocumentReachable(ctx)(doc);
   const context = buildDocumentContext(doc);
   const resources = buildDocumentResources(doc, doc.project_id!);
   const allowed = await ctx.authUser!.isAllowed({
@@ -270,7 +266,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     createdBy: requestPrincipalFromCtx(ctx),
-    pathPin: readPathPin(ctx),
+    assertFiling: assertDocumentFiling(ctx),
   });
   ctx.status = 201;
   ctx.body = doc;
@@ -316,9 +312,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     tags?: unknown;
   };
 
-  if (body.path !== undefined) {
-    assertPathInsidePin({ path: body.path, pin: readPathPin(ctx) });
-  }
+  assertDocumentFiling(ctx)(body);
 
   if (body.content !== undefined) {
     const projectId = await findDocumentProjectId({

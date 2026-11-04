@@ -7,7 +7,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { assertDocumentUnderPathPin } from './documentPathPin';
 import { paginatedList } from './pagination';
 
 const log = createDebug('soat:documents');
@@ -95,8 +94,8 @@ export const createDocumentRelation = async (args: {
   type: DocumentRelationType;
   toDocumentId: string;
   projectIds?: number[];
-  /** The directory the caller's `path_prefix` confines both ends to. */
-  pathPin?: string;
+  /** Refuses a target outside the caller's pins as if it did not exist. */
+  assertTarget?: (target: { path: string | null | undefined }) => void;
 }) => {
   log(
     'createDocumentRelation: from=%s type=%s to=%s',
@@ -120,7 +119,7 @@ export const createDocumentRelation = async (args: {
     publicId: args.toDocumentId,
     projectIds: args.projectIds,
   });
-  assertDocumentUnderPathPin({ path: to.file?.path, pin: args.pathPin });
+  args.assertTarget?.({ path: to.file?.path });
 
   // One project per edge. A relation is read back through project-scoped
   // surfaces — the listing filter, the export — so an edge leaving the project
