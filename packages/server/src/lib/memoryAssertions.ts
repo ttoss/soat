@@ -181,6 +181,23 @@ const resolveGenerationDbId = async (
 };
 
 /**
+ * Strictly after the memory's previous assertion. A memory's history is read
+ * in `createdAt` order, and two writes can share a millisecond or come from
+ * processes whose clocks disagree; either would show an effect before its cause.
+ */
+const nextAssertionTime = async (memoryId: number | null): Promise<Date> => {
+  const now = new Date();
+  if (memoryId === null) return now;
+  const previous = await db.MemoryAssertion.findOne({
+    where: { memoryId },
+    attributes: ['createdAt'],
+    order: [['createdAt', 'DESC']],
+  });
+  if (!previous || previous.createdAt < now) return now;
+  return new Date(previous.createdAt.getTime() + 1);
+};
+
+/**
  * Appends one assertion. Never throws into the write it records: an audit row
  * that cannot be written must not lose the fact the caller was storing.
  */
@@ -214,6 +231,7 @@ export const recordMemoryAssertion = async (args: {
     outcome: args.outcome,
     similarity: args.similarity,
     declared: args.declared ?? false,
+    createdAt: await nextAssertionTime(args.memoryId),
   });
 };
 
