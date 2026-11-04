@@ -43,6 +43,41 @@ describe('MemoryAssertions', () => {
   };
 
   describe('GET /api/v1/memories/:memory_id/assertions', () => {
+    test('lists a write after the one before it, whatever the clock reads', async () => {
+      const memoryStoreId = await createMemoryStore('Clock behind');
+      const first = await writeMemory({
+        memoryStoreId,
+        content: 'Customer prefers email',
+      });
+
+      // A clock behind the previous write's stands for any tie or skew: two
+      // writes in one millisecond, or two processes whose clocks differ.
+      jest.useFakeTimers({ advanceTimers: true });
+      jest.setSystemTime(Date.now() - 60_000);
+      try {
+        await writeMemory({
+          memoryStoreId,
+          content: 'The customer would rather be emailed',
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/memories/${first.id}/assertions`
+      );
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.data.map((assertion: { content: string }) => {
+          return assertion.content;
+        })
+      ).toEqual([
+        'Customer prefers email',
+        'The customer would rather be emailed',
+      ]);
+    });
+
     test('returns the writes that resolved into the memory', async () => {
       const memoryStoreId = await createMemoryStore('History');
       const created = await writeMemory({
