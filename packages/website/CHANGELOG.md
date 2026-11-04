@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.102.0](https://github.com/ttoss/soat/compare/v0.101.1...v0.102.0) (2026-11-04)
+
+### Bug Fixes
+
+* **files:** answer 400 for a file key that climbs above the root ([#1832](https://github.com/ttoss/soat/issues/1832)) ([e4eefef](https://github.com/ttoss/soat/commit/e4eefefdaa46828d6f3690c46819902df3b1659a))
+* **tutorials:** bound the multi-agent sonnet run under the client timeout ([#1837](https://github.com/ttoss/soat/issues/1837)) ([e18496b](https://github.com/ttoss/soat/commit/e18496ba3327878302f1b7beaeca4642b20d0ae7))
+
+### Features
+
+* **documents:** pin writes and by-id routes to a path_prefix, memories to a memory_store_id ([#1831](https://github.com/ttoss/soat/issues/1831)) ([4ba2cfc](https://github.com/ttoss/soat/commit/4ba2cfcfe29f48f506a9403935212252a2361e88))
+* **tools:** list an mcp tool's actions with their input schemas ([#1829](https://github.com/ttoss/soat/issues/1829)) ([d4cd29c](https://github.com/ttoss/soat/commit/d4cd29ce097cce22f9f9eeaeb534b7471c09aee9))
+
+### Reverts
+
+* release v0.102.0, unpublished after a red tutorials job ([#1838](https://github.com/ttoss/soat/issues/1838)) ([a25f962](https://github.com/ttoss/soat/commit/a25f96256ee2ea1b1524b7ab4c4d5d667d645068)), closes [#1837](https://github.com/ttoss/soat/issues/1837)
+
 ## [0.101.1](https://github.com/ttoss/soat/compare/v0.101.0...v0.101.1) (2026-11-01)
 
 ### Bug Fixes
