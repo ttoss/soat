@@ -18,7 +18,10 @@ export const normalizePath = (p: string): string => {
   for (const part of parts) {
     if (part === '..') {
       if (resolved.length === 0) {
-        throw new Error('Path traversal above root is not allowed');
+        throw new DomainError(
+          'VALIDATION_FAILED',
+          `'${p}': path traversal above root is not allowed`
+        );
       }
       resolved.pop();
     } else if (part !== '.') {
