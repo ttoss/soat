@@ -20,10 +20,10 @@ The toggle is always `wait`; never `async`, `sync`, `blocking`, `background`.
 1. `wait`, `default: false`, never `required: true`.
 2. Surface and status by what the endpoint does:
 
-   | Endpoint | `wait` in | Background | Blocking |
-   |---|---|---|---|
-   | acts on an existing resource | query string | `202` | `200` (`201` if it also creates) |
-   | creates a run | request body | `201`, `status: queued` | `201`, terminal status |
+   | Endpoint                     | `wait` in    | Background              | Blocking                         |
+   | ---------------------------- | ------------ | ----------------------- | -------------------------------- |
+   | acts on an existing resource | query string | `202`                   | `200` (`201` if it also creates) |
+   | creates a run                | request body | `201`, `status: queued` | `201`, terminal status           |
 
 3. The background response carries an id whose record already exists.
 4. Auth, validation, resolution, quota admission and the record write happen
@@ -33,11 +33,10 @@ The toggle is always `wait`; never `async`, `sync`, `blocking`, `background`.
 ## Fixed interactions
 
 - `stream: true` with `wait=false` → `400 VALIDATION_FAILED`.
-- A `soat` tool call always waits where the result is the point of the call
-  and the work is bounded (a generation, a decision): mark `wait`
-  `x-soat-tool-forced: true` (pinned server-side, hidden from the tool
-  schema), in the query string or the request body alike. A run that can
-  pause or run long keeps `wait` for the tool caller to choose.
+- Where the result is the point and the work is bounded (a generation, a
+  decision), mark `wait` `x-soat-tool-forced: true` (query or body): a `soat`
+  tool call always waits, pinned server-side and hidden from the tool schema.
+  A run that can pause or run long leaves `wait` to the tool caller.
 
 ## Enforcement and docs
 
@@ -48,5 +47,5 @@ calls nor named in `TOOL_CHOOSES_WAIT` with its reason) and
 `scripts/docs-lint.mjs` (retired `?async=` / `--async` in docs).
 
 `packages/website/docs/advanced/sync-and-async.md` is the canonical user page;
-update its tables with every `wait` change. Module pages describe their own
-handle and link there; they never restate the contract.
+update its tables with every `wait` change. Module pages describe their handle
+and link there, never restating the contract.

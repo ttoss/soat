@@ -8,8 +8,8 @@ paths:
 
 # Modules
 
-A module is a resource exposed through REST, MCP and the website. Change all
-of them together.
+A module is a resource exposed through REST, MCP and the website; change them
+together.
 
 ## Checklist
 
@@ -31,20 +31,20 @@ of them together.
 - [ ] A `tags` column follows `tags.md` (sub-resource, `?tags=`, validated
       writes, `soat:ResourceTag` context)
 
-MCP tools derive from the specs (`src/lib/soatTools.ts` → `src/mcp/server.ts`);
-there are no per-module MCP files.
+Never add per-module MCP files; tools derive from the specs
+(`src/lib/soatTools.ts` → `src/mcp/server.ts`).
 
 ## Formations sync
 
-A module with a `*FormationModule` in
-`packages/server/src/lib/formation-modules/` keeps its `*ResourceProperties`
-schema in `packages/server/src/rest/openapi/v1/formations.yaml` in sync with
-its REST spec. That schema is the sole allowlist: `formationSpecLoader.ts`
-derives allowed fields, required fields and types from it, and an unlisted
-field is `400 Unknown <resource> field`.
-
-Every module is `defineFormationModule({ … })`
-(`formation-modules/defineFormationModule.ts`), declaring only:
+- A module with a `*FormationModule` in
+  `packages/server/src/lib/formation-modules/` keeps its `*ResourceProperties`
+  schema in `packages/server/src/rest/openapi/v1/formations.yaml` in sync with
+  its REST spec.
+- That schema is the sole allowlist: `formationSpecLoader.ts` derives allowed
+  fields, required fields and types from it; an unlisted field is
+  `400 Unknown <resource> field`.
+- Every module is `defineFormationModule({ … })`
+  (`formation-modules/defineFormationModule.ts`), declaring only:
 
 | Key | Content |
 |---|---|
@@ -60,16 +60,15 @@ pass it → `read` returns it (if declared).
 
 ## Shared business rules
 
-Transport-independent rules (mutual exclusivity, invariants, preconditions)
-live once in `src/lib/<module>.ts` as an exported pure function used by both
-the route and the formation module.
-
-The field list is one of those rules, and the schema is where it lives: the
-route (`requestValidation.ts`) and the template
-(`pushUnknownFieldErrors`) refuse an undeclared key through one walk,
-`lib/openapiUnknownFields.ts`, at every depth the schema declares. So a
-nested object gets its fields declared in **both** the module's REST spec and
-its `*ResourceProperties` schema, or the two paths answer differently for the
-same field. An object that declares no `properties` is a free-form bag and is
-never read. `tests/unit/tests/lib/openapiClosedSchemas.test.ts` holds the
-declared lists closed.
+- Transport-independent rules (mutual exclusivity, invariants, preconditions)
+  live once in `src/lib/<module>.ts` as an exported pure function used by both
+  the route and the formation module.
+- The field list is such a rule and lives in the schema: the route
+  (`requestValidation.ts`) and the template (`pushUnknownFieldErrors`) refuse
+  an undeclared key through one walk, `lib/openapiUnknownFields.ts`, at every
+  depth the schema declares.
+- Declare a nested object's fields in **both** the REST spec and the
+  `*ResourceProperties` schema, or the two paths diverge.
+- An object with no `properties` is a free-form bag, never read.
+- `tests/unit/tests/lib/openapiClosedSchemas.test.ts` holds the declared lists
+  closed.

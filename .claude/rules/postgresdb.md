@@ -6,22 +6,21 @@ paths:
 # PostgresDB
 
 Docs: https://ttoss.dev/docs/modules/packages/postgresdb/. After a schema
-change, `pnpm test` in `packages/postgresdb` must pass, then
-`pnpm --filter @soat/postgresdb build` so dependents see the new types.
+change: `pnpm test` in `packages/postgresdb`, then
+`pnpm --filter @soat/postgresdb build` for dependents' types.
 
 ## Public ID
 
-Every model has `publicId` (`src/utils/publicId.ts`); it is the only id exposed
-externally. The UUID `id` is for joins only. New model: register a prefix in
-`PUBLIC_ID_PREFIXES` and generate it in `beforeValidate` via `generatePublicId`.
+- Expose only `publicId` (`src/utils/publicId.ts`); the UUID `id` is for joins.
+- New model: register a prefix in `PUBLIC_ID_PREFIXES`; generate it in
+  `beforeValidate` via `generatePublicId`.
 
 ## Migrations
 
 A change `sync` cannot make is a migration in `src/migrations/`, appended to
-`MIGRATIONS` in that folder's `index.ts`. See the README's _Migrations `sync`
-cannot perform_: they run **before** the sync here, every one declares
-`isApplied`, a step that must not half-land is a single `context.run`, and a
-name is permanent once merged.
+`MIGRATIONS` in its `index.ts` (README _Migrations `sync` cannot perform_):
+runs **before** sync, declares `isApplied`, a step that must not half-land is
+one `context.run`, the name is permanent once merged.
 
 ## Indexes
 
