@@ -5,8 +5,8 @@ paths:
 
 # Tutorials
 
-Every tutorial is validated end-to-end against a live dev server via the CLI
-(which exercises the SDK and REST beneath it) before publishing.
+Validate every tutorial end-to-end against a live dev server via the CLI
+(which exercises the SDK and REST) before publishing.
 
 ## Authoring
 
@@ -23,8 +23,8 @@ Every tutorial is validated end-to-end against a live dev server via the CLI
   Never append `/api/v1`; never `SOAT_URL`.
 - Numbered `## Step N`; sub-steps `### 3a` only for variants.
 - Prose between blocks follows `website.md` **Prose**: one or two sentences
-  saying what the step does and linking its doc; no commentary on the output
-  beyond the fields the next step reads.
+  saying what the step does, linking its doc; comment on output only for fields
+  the next step reads.
 - Every step links at least one doc (`/docs/modules/<module>`, a subsection
   anchor, or a third-party doc). Link a concept once, where it is introduced.
 - A step creating a local Ollama provider points to
@@ -32,12 +32,13 @@ Every tutorial is validated end-to-end against a live dev server via the CLI
 
 ## Read the spec first
 
-`packages/server/src/rest/openapi/v1/<resource>.yaml` decides field names
-(snake_case bodies), verbs, required fields. IAM action strings must match the
-handler's `action:` in `packages/server/src/rest/v1/<resource>.ts`. CLI flags
-are kebab-case of the spec names (`project_id` → `--project-id`); confirm in
-`packages/cli/src/generated/routes.ts`. SDK: `soat.<module>.<operation>({ path,
-body })`, snake_case throughout.
+- `packages/server/src/rest/openapi/v1/<resource>.yaml` decides field names
+  (snake_case bodies), verbs, required fields.
+- IAM action strings match the handler's `action:` in
+  `packages/server/src/rest/v1/<resource>.ts`.
+- CLI flags are kebab-case of spec names (`project_id` → `--project-id`);
+  confirm in `packages/cli/src/generated/routes.ts`.
+- SDK: `soat.<module>.<operation>({ path, body })`, snake_case throughout.
 
 ## Shell quoting (the runner replays CLI blocks)
 
@@ -51,11 +52,12 @@ strings are not handled.
 
 ## SRN format
 
-`soat:<projectId>:<resourceType>:<resourceId>` — exactly 4 colon-separated
-segments (`/^soat:[^:]+:[^:]+:[^:]+$/`), singular type (`document`, not
-`documents`), id or path (`/notes/public/*`), `*` wildcards. In CLI JSON:
-`"soat:'"$PROJECT_ID"':document:/notes/public/*"`. Always include `resource` in
-project-scoped examples; omitting it means `["*"]`.
+- `soat:<projectId>:<resourceType>:<resourceId>`: exactly 4 colon-separated
+  segments (`/^soat:[^:]+:[^:]+:[^:]+$/`), singular type (`document`, not
+  `documents`), id or path (`/notes/public/*`), `*` wildcards.
+- In CLI JSON: `"soat:'"$PROJECT_ID"':document:/notes/public/*"`.
+- Always include `resource` in project-scoped examples; omitting it means
+  `["*"]`.
 
 ## Validation
 
@@ -77,10 +79,10 @@ cd packages/website && pnpm run build      # no warnings or errors
 Local rendered docs: `packages/website/build/docs/` after the build; index in
 `packages/website/build/llms.txt` (drop the `https://soat.ttoss.dev/` prefix).
 
-A failing command reveals a spec, handler, SDK or CLI bug: fix the source
-(rebuild the CLI with `pnpm turbo run build --filter @soat/cli`), add a
-regression test (`tests/unit/tests/rest/permissionsFlow.test.ts` or the module
-file), then update the tutorial.
+On a failing command (a spec, handler, SDK or CLI bug): fix the source (rebuild
+the CLI with `pnpm turbo run build --filter @soat/cli`), add a regression test
+(`tests/unit/tests/rest/permissionsFlow.test.ts` or the module file), then
+update the tutorial.
 
 ## Common mistakes
 

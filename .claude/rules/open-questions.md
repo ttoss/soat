@@ -2,17 +2,16 @@
 
 An open choice (design, option A vs B, ambiguity) follows the workflow's
 [Decisions default](https://raw.githubusercontent.com/ttoss/ttoss/main/docs/website/docs/engineering/workflow/parameters.md#the-decisions-default):
-what it reserves to a person, its dominance and long-term tests, the trade
-format, the `Q`/`A` record in the PR description. A choice the task, a standing
-decision or a rule already makes is not open: implement it.
+what it reserves to a person, dominance and long-term tests, trade format, the
+`Q`/`A` record in the PR description. A choice the task, a standing decision or
+a rule already makes is not open: implement it.
 
 This project adds:
 
 - **Reserved to a person**, beyond the default: permissions and privacy.
   Product intent covers language, theme, scope, stack and business rules.
-- **Consolidation is decided.** Consolidating duplicated knowledge
-  (`duplicated-knowledge.md`) versus leaving it is not open: consolidate. Fewer
-  lines answering one question is the robustness this codebase optimises for.
+- **Consolidation is decided.** Consolidate duplicated knowledge
+  (`duplicated-knowledge.md`); leaving it is not an option.
 - **Dominance** is measured on these dimensions; "worsens nothing" names which
   were checked in the run.
 

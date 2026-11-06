@@ -43,31 +43,29 @@ holds the directories to these three.
 
 ## Test at the entry point
 
-The class is decided by the stimulus, not by where the outcome is read: a
-file whose tests are triggered by a tick (`wakeDueRuns`, a retention sweep,
-the storage snapshot) is `jobs/`, even when it reads the outcome back through
-`GET`, which it should whenever the API shows it. A tick run as one setup step
-inside a test triggered by a request (wake a run, then assert its `GET`) keeps
-that test in `rest/`.
+- The stimulus decides the class, not where the outcome is read: tests
+  triggered by a tick (`wakeDueRuns`, a retention sweep, the storage snapshot)
+  are `jobs/`. Read the outcome back through `GET` whenever the API shows it.
+- A tick run as a setup step inside a request-triggered test stays in `rest/`.
+- Default to REST, the MCP endpoint or the event flow. Write a `lib/` test only
+  when:
 
-Default to REST, the MCP endpoint or the event flow. Write a `lib/` test only
-when:
+  1. a pure algorithm with a large input space is expensive or low-resolution
+     through HTTP (`iam`, `policyCompiler`, `orchestrationValidation`,
+     `formationsHelpers`, `chunking`, `ingestionRuleMatching`), or
+  2. no entry point and no routine reaches the function.
 
-1. a pure algorithm with a large input space is expensive or low-resolution
-   through HTTP (`iam`, `policyCompiler`, `orchestrationValidation`,
-   `formationsHelpers`, `chunking`, `ingestionRuleMatching`), or
-2. no entry point and no routine reaches the function.
-
-Never duplicate `rest/` coverage in `lib/` or `jobs/`, and never test a
-defensive branch no entry point reaches: delete the branch.
+- Never duplicate `rest/` coverage in `lib/` or `jobs/`. Never test a defensive
+  branch no entry point reaches: delete the branch.
 
 ## Never mock what you own
 
-The DB and every `src/**` module run for real; `jest.mock`, `jest.doMock` and
-`jest.spyOn` on internal modules are all mocking. Set up state through the API
-in `beforeAll`. Mock only external I/O that cannot run in CI (LLM calls,
-embeddings, outbound HTTP, email), preferring a local fake server (see
-`memoryConsolidationCompletion.test.ts`).
+- Run the DB and every `src/**` module for real; `jest.mock`, `jest.doMock`
+  and `jest.spyOn` on internal modules all count as mocking.
+- Set up state through the API in `beforeAll`.
+- Mock only external I/O that cannot run in CI (LLM calls, embeddings, outbound
+  HTTP, email), preferring a local fake server
+  (`memoryConsolidationCompletion.test.ts`).
 
 Sanctioned exceptions, documented inline at the mock site:
 
@@ -77,13 +75,14 @@ Sanctioned exceptions, documented inline at the mock site:
 - `jest.spyOn(...).mockRejectedValueOnce(...)` solely to drive a `.catch()`
   resilience branch; the happy path still runs on the real DB.
 
-Prefer `jest.spyOn` over `jest.mock`: modules loaded by `app.ts` in
-`setupFilesAfterEnv` never see a `jest.mock` factory. `jest.doMock` +
-`jest.resetModules()` only for pure lib functions `app.ts` does not import.
-
-Local spies (created in `beforeEach`): `jest.restoreAllMocks()` in `afterEach`.
-Shared spies (exported from `setupTestsAfterEnv.ts`): `jest.clearAllMocks()`
-only — restoring disconnects the spy permanently and tests hang.
+- Prefer `jest.spyOn` over `jest.mock`: modules loaded by `app.ts` in
+  `setupFilesAfterEnv` never see a `jest.mock` factory.
+- `jest.doMock` + `jest.resetModules()` only for pure lib functions `app.ts`
+  does not import.
+- Local spies (created in `beforeEach`): `jest.restoreAllMocks()` in
+  `afterEach`.
+- Shared spies (exported from `setupTestsAfterEnv.ts`): `jest.clearAllMocks()`
+  only; restoring disconnects the spy permanently and tests hang.
 
 ## Helpers
 
@@ -117,9 +116,9 @@ const setup = await setupProjectWithUsers({
 ## Async pitfalls
 
 - Supertest requests are lazy; start the request before awaiting a signal.
-- Signal with Promises, not timer polling. Never `await setTimeout(n)` to let a
-  fire-and-forget path settle; resolve inside the dispatch boundary or poll a
-  bounded predicate on a side effect. Advance an injected clock for TTLs.
+- Signal with Promises, not timer polling. Never `await setTimeout(n)` for a
+  fire-and-forget path; resolve inside the dispatch boundary or poll a bounded
+  predicate on a side effect. Advance an injected clock for TTLs.
 - Never assert across a wall-clock bucket boundary: counted sequences
   use `calendar_month` (`COUNTED_WINDOW` in `rest/quotas.test.ts`); test
   truncation math against a frozen clock.
@@ -128,11 +127,11 @@ const setup = await setupProjectWithUsers({
 
 ## MCP tools
 
-All in `tests/unit/tests/rest/mcp.test.ts`, grouped by module with comment
-headers; use `mcpCall` and `parseResult`; same coverage as REST. Every new or
-changed tool gets a test.
+All in `tests/unit/tests/rest/mcp.test.ts`, grouped by module under comment
+headers; use `mcpCall` and `parseResult`; same coverage as REST. Test every new
+or changed tool.
 
 ## Smoke and tutorials tests
 
-`e2e-tests.md`, loaded with `tests/**`, `.github/workflows/**` and the
-tutorials; read it before adding a smoke step or a tutorial annotation.
+Read `e2e-tests.md` (loaded with `tests/**`, `.github/workflows/**` and the
+tutorials) before adding a smoke step or a tutorial annotation.

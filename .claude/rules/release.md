@@ -10,28 +10,26 @@ paths:
 ## Flow
 
 1. Open a release PR (`release/vX.Y.Z` → `main`) titled `chore(release): …`.
-   `pr.yml` skips the build/smoke/tutorials jobs on that title, so never put
-   unreviewed non-release code on such a PR. It still runs `Release
-   Lockfile`, a frozen install: `lerna version` rewrites the lockfile, and
-   `main.yml` refuses to tag on one a frozen install rejects.
+   `pr.yml` skips build/smoke/tutorials on that title: never put unreviewed
+   non-release code on it. It still runs `Release Lockfile` (frozen install);
+   `main.yml` refuses to tag on a lockfile a frozen install rejects.
 2. **Squash-merge.** Every `main.yml` job gates on
-   `startsWith(head_commit.message, 'chore(release):')`; a default merge commit
-   (`Merge pull request …`) silently skips the whole release. After merging,
-   confirm the `main.yml` run actually ran.
+   `startsWith(head_commit.message, 'chore(release):')`; a merge commit
+   (`Merge pull request …`) silently skips the release. Confirm the `main.yml`
+   run ran.
 3. `main.yml`: `release-test-gate` → build/smoke/tutorials → `push-release-tag`
    → `release` (npm publish via OIDC trusted publishing + website deploy) →
-   `publish-docker`. The gate skips the three test jobs when the release commit
-   is only version bumps and changelogs on top of a tree whose PR run passed
-   every job; anything else (a lockfile change, a `package.json` edit beyond
-   `version`, a last PR merged while behind `main`) runs them.
+   `publish-docker`. The gate skips the three test jobs only when the release
+   commit is version bumps and changelogs on a tree whose PR run passed every
+   job; anything else (lockfile change, `package.json` edit beyond `version`,
+   last PR merged while behind `main`) runs them.
 
 ### npm trusted publishing
 
 No `NPM_TOKEN`; `id-token: write` on the `release` job. Each package registers
-`ttoss` / `soat` / `main.yml` as its trusted publisher on npmjs.com, so renaming
-`main.yml` or adding a package needs the publisher updated there first. A
-missing publisher shows as `404` on the OIDC exchange
-(`ERR_PNPM_AUTH_TOKEN_EXCHANGE`) then `404` on the `PUT`.
+`ttoss` / `soat` / `main.yml` as trusted publisher on npmjs.com: update it there
+before renaming `main.yml` or adding a package. A missing publisher is `404` on
+the OIDC exchange (`ERR_PNPM_AUTH_TOKEN_EXCHANGE`), then `404` on the `PUT`.
 
 ## Cutting a release from a session
 
@@ -62,9 +60,8 @@ Always `--no-push`: branch protection blocks direct pushes to `main`.
 
 ### `--dry-run` still writes files
 
-It skips commit/tag/push only; `lerna.json`, every `package.json` and every
-`CHANGELOG.md` are bumped. A real run after an unreset dry run bumps twice and
-skips a version. After any dry run:
+It skips only commit/tag/push; `lerna.json`, every `package.json` and
+`CHANGELOG.md` are bumped, so a later real run bumps twice. After any dry run:
 
 ```bash
 git checkout -- . && git status --porcelain   # must print nothing
@@ -76,9 +73,9 @@ Before the real run, lerna's "current project version" must equal
 
 ## Breaking changes
 
-`--conventional-commits` bumps major on a `BREAKING CHANGE:` footer. The `feat!:`
-shorthand needs the `conventionalcommits` preset; lerna.json uses `angular`, so
-use the footer.
+`--conventional-commits` bumps major on a `BREAKING CHANGE:` footer. Use the
+footer, not `feat!:`: that needs the `conventionalcommits` preset and lerna.json
+uses `angular`.
 
 ## Flags
 

@@ -1,9 +1,9 @@
 # Flow
 
-The maintainers' work in this repo lives in the Flow project
-`proj_vx1h3xshaq`, with `naturali-ai/naturali.ai`, which holds the project's
-parameters (`.claude/flow.md`) and pins the `flow` skills (`skills-lock.json`):
-add that repo to read them. A maintainer's session follows
+Work in this repo lives in the Flow project `proj_vx1h3xshaq`, with
+`naturali-ai/naturali.ai`; add that repo to read the project's parameters
+(`.claude/flow.md`) and the pinned `flow` skills (`skills-lock.json`). A
+maintainer's session follows
 [Get Things Flowing](https://flow.ttoss.dev/docs/agents/protocol.md), the
 [delivery process](https://raw.githubusercontent.com/ttoss/ttoss/main/docs/website/docs/engineering/workflow/process.md)
 and those parameters, started by `/flow` or not:
@@ -18,7 +18,7 @@ and those parameters, started by `/flow` or not:
   `after_integration` (what integrating leaves), and its wait on the gates.
   After the verdict, the tick writes the task.
 - A soat task runs four stages: implementation, the soat release, naturali's
-  bump, then validation against the real naturali API. It closes only on that
-  validation, so its `after_integration` is `release`, never `close`, and its
-  merge puts it behind the bump (naturali's `.claude/flow-release.md`).
+  bump, validation against the real naturali API. It closes only on that
+  validation: `after_integration` is `release`, never `close`; its merge puts
+  it behind the bump (naturali's `.claude/flow-release.md`).
 - Friction with a skill, GTF or a Flow tool → `flow-friction`, then continue.

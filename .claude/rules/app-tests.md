@@ -7,20 +7,20 @@ paths:
 
 ## Mock the HTTP boundary, nothing else
 
-Never mock components, hooks, providers, `apiFetch` or `@soat/sdk`
-(no `vi.mock('@/...')`, no `vi.mock('@soat/sdk')`, no fake context providers).
-The only stub is MSW at the network. MSW runs with
-`onUnhandledRequest: 'error'`: every request needs a handler (a default in
-`handlers.ts` or a per-test `server.use`).
+- Never mock components, hooks, providers, `apiFetch` or `@soat/sdk` (no
+  `vi.mock('@/...')`, no `vi.mock('@soat/sdk')`, no fake context providers).
+- Stub only with MSW at the network. It runs with
+  `onUnhandledRequest: 'error'`: give every request a handler (a default in
+  `handlers.ts` or a per-test `server.use`).
 
 ## Stack and layout
 
 Vitest (`jsdom`, `globals: true`; `packages/app/vitest.config.ts`),
 @testing-library/react + user-event + jest-dom, `msw/node`.
 
-Tests live in `packages/app/tests/unit/` mirroring `src/` (`engine/`, `auth/`,
-`views/`, `api/`), named `<module>.test.ts` or `<component>.test.tsx`, never in
-`src/` (the package lints `src` only). Import app code via `@/`.
+Put tests in `packages/app/tests/unit/` mirroring `src/` (`engine/`, `auth/`,
+`views/`, `api/`), named `<module>.test.ts` or `<component>.test.tsx`; never in
+`src/` (lints `src` only). Import app code via `@/`.
 
 ```bash
 pnpm --filter @soat/app test

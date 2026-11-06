@@ -1,13 +1,10 @@
 # No Historical Narration
 
-SOAT is pre-v1. Docs, comments and messages describe **what SOAT is now** —
-never what it was, what changed, or when. A reader meeting SOAT today has no
-memory to correct, so a sentence about the old behaviour teaches them a thing
-that does not exist.
-
-Git history, commit messages and pull requests are the record of change. The
-working tree is not. Move the narrative there and keep the tree in the present
-tense.
+- Docs, comments and messages describe **what SOAT is now** — never what it
+  was, what changed, or when. SOAT is pre-v1; readers have no old behaviour to
+  unlearn.
+- History belongs in git, commit messages and pull requests; keep the working
+  tree in the present tense.
 
 ## Delete on sight
 
@@ -30,9 +27,8 @@ tense.
 
 ## A present-tense reason is not history
 
-The `why` a comment exists for is a constraint, an invariant or a consequence
-that **still holds**. Keep it, and state it directly instead of pointing at the
-ticket where it was found:
+- Keep a why that **still holds** (constraint, invariant, consequence); state
+  it directly, never as the ticket where it was found:
 
 ```ts
 // Raw SQL because the column is managed: Sequelize stamps the current time
@@ -40,19 +36,18 @@ ticket where it was found:
 // Raw SQL because #1102 broke the model path.              ← delete
 ```
 
-A conditional is present tense: "a pointer here *would* make the baseline move
-with the docs" states why the rule exists without narrating that it once did.
+- A conditional ("a pointer here _would_ make the baseline move") is present
+  tense.
 
 ## Where it applies
 
 | Surface | Rule |
 |---|---|
-| `packages/website/docs/**` | No history at all — this is what a new user reads |
+| `packages/website/docs/**` | No history at all |
 | `ERROR_CODES` descriptions, `ERROR_RESOLUTIONS` hints, OpenAPI descriptions | User-facing; no issue numbers |
 | `src/**` and `tests/**` comments and JSDoc | Present-tense reason only, no issue number |
-| `.claude/rules/**` | Same: state the rule, not the incident behind it |
+| `.claude/rules/**`, `CLAUDE.md` | A direct instruction only: no provenance, decision ids, task links, PR numbers, history, measurements or narrative. The Flow graph holds the record |
 | Commit messages, PR descriptions | History belongs here, and only here |
 
-Naming a sibling file, test or constant is not history — `pinned by
-`moduleCeiling.test.mjs`` points at something that exists now. Naming a ticket
-points at something that happened.
+Naming an existing file, test or constant (`pinned by
+`moduleCeiling.test.mjs``) is not history; naming a ticket is.

@@ -6,20 +6,20 @@ paths:
 
 # Tagged Resources
 
-A resource with a `tags` column gets four capabilities from one mechanism; a
-resource that hand-rolls any of them is a bug. Everything shared lives in
-`packages/server/src/lib/tags.ts` and `src/rest/v1/tagRoutes.ts`.
+A resource with a `tags` column gets four capabilities from one mechanism;
+never hand-roll any of them. Shared code: `packages/server/src/lib/tags.ts`,
+`src/rest/v1/tagRoutes.ts`.
 
 ## Checklist
 
 - [ ] Model: `@Column({ type: DataType.JSONB, allowNull: true }) declare tags:
-      Record<string, string> | null;`
+    Record<string, string> | null;`
 - [ ] IAM: `registerResourceFieldMap({ resourceType, publicIdColumn,
-      tagsColumn: { column: 'tags' } })` in the lib, and
+    tagsColumn: { column: 'tags' } })` in the lib, and
       `context: buildResourceTagContext({ resourceType, tags })` on every
       `isAllowed` call for the resource
 - [ ] Sub-resource: `registerTagRoutes({ router, path, resolve, readTags,
-      writeTags })` in the REST module; `resolve` loads the resource and throws
+    writeTags })` in the REST module; `resolve` loads the resource and throws
       `RESOURCE_NOT_FOUND` / `FORBIDDEN` for the given `access`
 - [ ] List filter: `const tags = readTagQuery(ctx.query.tags)` in the route,
       `applyTagFilter({ where, tags })` in the lib list function
@@ -40,18 +40,19 @@ resource that hand-rolls any of them is a bug. Everything shared lives in
 
 ## Choosing the bags
 
-A new resource gets `tags` when a policy must scope its rows
-(`soat:ResourceTag`) or callers match it by label (`?tags=`, knowledge
-search); `metadata` when callers attach a typed record; both when both. The
-field-level rule is `iam.md` §Choosing a bag. Every model declaring either
-column has a row in `iam.md` §Which resources carry which bag, naming exactly
-its bags (`tests/harness/annotationBags.test.mjs`).
+- `tags`: a policy scopes its rows (`soat:ResourceTag`) or callers match by
+  label (`?tags=`, knowledge search).
+- `metadata`: callers attach a typed record. Both when both.
+- Field-level rule: `iam.md` §Choosing a bag.
+- Every model declaring either column has a row in `iam.md` §Which resources
+  carry which bag naming exactly its bags
+  (`tests/harness/annotationBags.test.mjs`).
 
 ## Rules
 
-- The shape is declared once, in `openapi/v1/tags.yaml`. A site that needs its
-  own wording keeps it beside a single-member `allOf`, never as a sibling of
-  `$ref` — OpenAPI 3.0 ignores those:
+- Declare the shape once, in `openapi/v1/tags.yaml`. Own wording goes beside
+  a single-member `allOf`, never as a sibling of `$ref` (OpenAPI 3.0 ignores
+  it):
 
   ```yaml
   tags:
@@ -60,15 +61,16 @@ its bags (`tests/harness/annotationBags.test.mjs`).
       - $ref: './tags.yaml#/components/schemas/NullableTagBag'
   ```
 
-  The server, the SDK generator and the docs pages all resolve those refs.
-  `@ttoss/openapi-codegen` does not, so `packages/cli/scripts/localizeSpecs.ts`
-  inlines the shared components on the way into the CLI manifest; a new shared
-  component is picked up automatically as long as its file declares no paths.
+  `@ttoss/openapi-codegen` does not resolve those refs;
+  `packages/cli/scripts/localizeSpecs.ts` inlines shared components into the
+  CLI manifest, picking up a new one automatically if its file declares no
+  paths.
+
 - Tag bags are opaque values (`case-convention.md`): never read, rename or
   case-convert a key.
 - One matching rule: `?tags=`, knowledge search and `soat:ResourceTag/<key>`
-  all read the column by JSONB containment (`tagContainment`).
+  read the column by JSONB containment (`tagContainment`).
 - Never `ctx.request.body as Record<string, string>`: `String(["a","b"])` is
-  `"a,b"` and a policy condition would match a tag nobody wrote.
-- Authorization stays in the module. `registerTagRoutes` owns the contract
-  (body shape, response is the bag), not who may read or write.
+  `"a,b"`, matching a tag nobody wrote.
+- Authorization stays in the module; `registerTagRoutes` owns only the contract
+  (body shape, response is the bag).
