@@ -50,7 +50,7 @@ with the docs" states why the rule exists without narrating that it once did.
 | `packages/website/docs/**` | No history at all — this is what a new user reads |
 | `ERROR_CODES` descriptions, `ERROR_RESOLUTIONS` hints, OpenAPI descriptions | User-facing; no issue numbers |
 | `src/**` and `tests/**` comments and JSDoc | Present-tense reason only, no issue number |
-| `.claude/rules/**` | Same: state the rule, not the incident behind it |
+| `.claude/rules/**`, `CLAUDE.md` | A direct instruction only: no provenance, decision ids, task links, PR numbers, history, measurements or narrative. The Flow graph holds the record |
 | Commit messages, PR descriptions | History belongs here, and only here |
 
 Naming a sibling file, test or constant is not history — `pinned by
