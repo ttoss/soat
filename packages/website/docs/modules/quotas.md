@@ -90,7 +90,7 @@ Each metric is scoped by what measures it: the request middleware sees API key a
 
 ### Storage enforcement
 
-`storage_bytes` caps what a project **holds**: [files](./files.md), document chunks (text *and* vector), memories and the [evaluations](./evaluations.md) corpus, all [metered](./usage.md#storage-metering). No other metric bounds them.
+`storage_bytes` caps what a project **holds**: [files](./files.md), document chunks (text *and* vector), memories, [collection](./collections.md) items and the [evaluations](./evaluations.md) corpus, all [metered](./usage.md#storage-metering). No other metric bounds them.
 
 | | Flow metrics | `storage_bytes` |
 | --- | --- | --- |

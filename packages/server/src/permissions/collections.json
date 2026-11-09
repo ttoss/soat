@@ -1,0 +1,70 @@
+{
+  "module": "collections",
+  "operations": [
+    {
+      "operationId": "listCollections",
+      "action": "collections:ListCollections",
+      "description": "List the collections in a project"
+    },
+    {
+      "operationId": "createCollection",
+      "action": "collections:CreateCollection",
+      "description": "Create a collection"
+    },
+    {
+      "operationId": "getCollection",
+      "action": "collections:GetCollection",
+      "description": "Get a collection by ID"
+    },
+    {
+      "operationId": "updateCollection",
+      "action": "collections:UpdateCollection",
+      "description": "Update a collection"
+    },
+    {
+      "operationId": "deleteCollection",
+      "action": "collections:DeleteCollection",
+      "description": "Delete a collection and its items"
+    },
+    {
+      "operationId": "listCollectionItems",
+      "action": "collections:ListCollectionItems",
+      "description": "List and filter the items of a collection"
+    },
+    {
+      "operationId": "getCollectionItem",
+      "action": "collections:GetCollectionItem",
+      "description": "Get an item by key"
+    },
+    {
+      "operationId": "putCollectionItem",
+      "action": "collections:PutCollectionItem",
+      "description": "Create or replace an item"
+    },
+    {
+      "operationId": "updateCollectionItem",
+      "action": "collections:UpdateCollectionItem",
+      "description": "Merge into an item's data"
+    },
+    {
+      "operationId": "deleteCollectionItem",
+      "action": "collections:DeleteCollectionItem",
+      "description": "Delete an item"
+    },
+    {
+      "operationId": "getCollectionItemTags",
+      "action": "collections:GetCollectionItem",
+      "description": "Get an item's tags"
+    },
+    {
+      "operationId": "replaceCollectionItemTags",
+      "action": "collections:UpdateCollectionItem",
+      "description": "Replace an item's tags"
+    },
+    {
+      "operationId": "mergeCollectionItemTags",
+      "action": "collections:UpdateCollectionItem",
+      "description": "Merge tags into an item's tags"
+    }
+  ]
+}

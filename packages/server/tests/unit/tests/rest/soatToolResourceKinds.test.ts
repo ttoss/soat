@@ -53,6 +53,7 @@ const KINDS = [
   'agent',
   'audit',
   'chain',
+  'collection',
   'conversation',
   'dataset',
   'decider',
@@ -266,6 +267,16 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
         from: 'chain_id',
         realId: chain.publicId,
         absentId: 'chain_absent',
+      }),
+      own({
+        kind: 'collection',
+        action: 'get-collection',
+        from: 'collection_id',
+        realId: await create('/api/v1/collections', {
+          project_id: projectId,
+          name: 'kinds-collection',
+        }),
+        absentId: 'coll_absent',
       }),
       own({
         kind: 'conversation',

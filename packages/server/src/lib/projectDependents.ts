@@ -82,6 +82,9 @@ export const PROJECT_CASCADE_ORDER = [
   // Declarations govern writes, so nothing points at them.
   'MetadataSchema',
 
+  // CollectionItem cascades at the DB level.
+  'Collection',
+
   'Generation',
   'Trace',
 
@@ -147,6 +150,7 @@ export const PROJECT_COUNTED_MODELS = [
   'AiProvider',
   'ApprovalItem',
   'Chat',
+  'Collection',
   'Conversation',
   'Dataset',
   'Decider',

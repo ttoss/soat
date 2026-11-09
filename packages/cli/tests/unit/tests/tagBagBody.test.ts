@@ -37,7 +37,7 @@ describe('a tag bag body is sent whole by --tags', () => {
   };
 
   test('every replace and merge tag command carries its bag in --tags', () => {
-    expect(tagBagCommands).toHaveLength(14);
+    expect(tagBagCommands).toHaveLength(16);
     for (const command of tagBagCommands) {
       expect(command).toMatch(/^(replace|merge)-[a-z-]+-tags$/);
       const flag = routes[command as keyof typeof routes].flags.find((f) => {

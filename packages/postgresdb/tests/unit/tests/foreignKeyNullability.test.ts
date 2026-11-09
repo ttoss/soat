@@ -33,6 +33,8 @@ const NOT_NULL_FOREIGN_KEYS = [
   'api_keys.user_id',
   'approval_items.project_id',
   'chats.project_id',
+  'collection_items.collection_id',
+  'collections.project_id',
   'conversation_messages.conversation_id',
   'conversation_messages.document_id',
   'conversations.project_id',

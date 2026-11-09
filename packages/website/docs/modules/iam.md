@@ -377,6 +377,7 @@ The table assumes both bags. A resource that carries one takes every field there
 | Resource             | `tags` | `metadata` |
 | -------------------- | ------ | ---------- |
 | Actor                | ✓      |            |
+| Collection item      | ✓      |            |
 | Conversation         | ✓      |            |
 | Conversation message |        | ✓          |
 | Dataset item         |        | ✓          |

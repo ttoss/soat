@@ -139,6 +139,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:
     'Re-read the resource, re-apply the change on top of the version `meta.current_version` names, and retry with that version. A retry of the same body against the same stale version conflicts again.',
+  QUERY_TIMEOUT:
+    'Add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on, or lower `limit`. Retrying the same query times out again.',
   CONVERSATION_POSITION_CONFLICT:
     'Retry the write unchanged: nothing was stored, and the retry resolves its position again.',
   NAME_CONFLICT:

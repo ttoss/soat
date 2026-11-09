@@ -2107,6 +2107,24 @@ components:
           additionalProperties: true
           description: Optional JSON Schema describing a task's payload
 
+    CollectionResourceProperties:
+      description: >-
+        Creates a collection of keyed JSON items. Items are written through the
+        collections API, not declared in a template.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Unique within the project.
+        schema:
+          type: object
+          nullable: true
+          description: >-
+            A JSON Schema every item's `data` must satisfy, stored as written.
+
     MetadataSchemaResourceProperties:
       description: >-
         Declares what `metadata` must satisfy for one resource type under one
@@ -2331,7 +2349,7 @@ components:
           pattern: '^[a-z][a-z0-9_]*$'
           description: >
             Resource type. The built-in types are `ai_provider`, `tool`,
-            `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`,
+            `agent`, `actor`, `api_key`, `chat`, `collection`, `conversation`, `dataset`,
             `dataset_item`, `decider`, `document`, `file`, `guardrail`, `ingestion_rule`,
             `memory_store`, `memory`, `memory_rule`, `metadata_schema`,
             `model_route`, `eval`, `orchestration`, `playbook`,

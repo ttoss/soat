@@ -3,6 +3,7 @@ import { agentsFormationModule } from './formation-modules/agentsFormationModule
 import { aiProvidersFormationModule } from './formation-modules/aiProvidersFormationModule';
 import { apiKeysFormationModule } from './formation-modules/apiKeysFormationModule';
 import { chatsFormationModule } from './formation-modules/chatsFormationModule';
+import { collectionsFormationModule } from './formation-modules/collectionsFormationModule';
 import { conversationsFormationModule } from './formation-modules/conversationsFormationModule';
 import { datasetItemsFormationModule } from './formation-modules/datasetItemsFormationModule';
 import { datasetsFormationModule } from './formation-modules/datasetsFormationModule';
@@ -58,6 +59,7 @@ registerFormationModule({ module: memoryRulesFormationModule });
 registerFormationModule({ module: modelRoutesFormationModule });
 registerFormationModule({ module: webhooksFormationModule });
 registerFormationModule({ module: chatsFormationModule });
+registerFormationModule({ module: collectionsFormationModule });
 registerFormationModule({ module: conversationsFormationModule });
 registerFormationModule({ module: filesFormationModule });
 registerFormationModule({ module: guardrailsFormationModule });

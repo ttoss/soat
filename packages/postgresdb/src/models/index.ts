@@ -7,6 +7,8 @@ export { ApiKey } from './ApiKey';
 export { ApprovalItem } from './ApprovalItem';
 export { AuditEntry } from './AuditEntry';
 export { Chat } from './Chat';
+export { Collection } from './Collection';
+export { CollectionItem } from './CollectionItem';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
 export { Dataset } from './Dataset';

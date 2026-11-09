@@ -52,3 +52,14 @@ components:
       schema:
         type: string
       example: '{"quarter":"Q1","revision":{"gte":3}}'
+    DataQuery:
+      name: data
+      in: query
+      required: false
+      description: >-
+        A `StructuredFilter` over an item's `data`, as JSON, url-encoded.
+        Equality and `in` are answered by an index; a range is evaluated on the
+        rows the other conditions leave.
+      schema:
+        type: string
+      example: '{"status":"open","priority":{"gte":2}}'

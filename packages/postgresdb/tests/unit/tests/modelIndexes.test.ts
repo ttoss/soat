@@ -435,6 +435,7 @@ describe('containment-matched bags carry a GIN index', () => {
         .sort()
     ).toEqual([
       'actors.tags',
+      'collection_items.tags',
       'conversations.tags',
       'documents.tags',
       'files.tags',

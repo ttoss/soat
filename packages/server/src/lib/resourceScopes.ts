@@ -24,6 +24,7 @@
 import { actors } from './actors';
 import { agents } from './agentAccessor';
 import { auditEntries } from './auditLog';
+import { collections } from './collections';
 import { conversations } from './conversations';
 import { deciders } from './deciders';
 import { decisions } from './decisions';
@@ -119,6 +120,15 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
       return chains;
     },
     resourceType: 'chain',
+  },
+
+  // Item operations name the collection: an item has no public id, and its
+  // own SRN and tags are judged by the item routes.
+  collection: {
+    accessor: () => {
+      return collections;
+    },
+    resourceType: 'collection',
   },
 
   conversation: {
