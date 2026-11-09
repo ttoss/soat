@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.102.1](https://github.com/ttoss/soat/compare/v0.102.0...v0.102.1) (2026-11-09)
+
+### Bug Fixes
+
+* **files:** answer 400 for a `..` segment in a prefix or filename ([#1840](https://github.com/ttoss/soat/issues/1840)) ([4d5e646](https://github.com/ttoss/soat/commit/4d5e6462a1e44716563d80f7d1f646de6f7bd11b))
+
 # [0.102.0](https://github.com/ttoss/soat/compare/v0.101.1...v0.102.0) (2026-11-04)
 
 ### Bug Fixes
