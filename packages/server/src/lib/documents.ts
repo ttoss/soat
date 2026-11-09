@@ -35,8 +35,8 @@ import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { toResourceRef } from './resourceVersions';
 import {
   applyFilterWhere,
-  compileMetadataWhere,
-  type MetadataFilter,
+  compileStructuredWhere,
+  type StructuredFilter,
 } from './structuredFilter';
 import { liveDocumentWhere, nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter, mergeTags } from './tags';
@@ -120,8 +120,8 @@ export const listDocuments = async (args: {
   /** Only the documents these row ids name; an empty list narrows to nothing. */
   relatedRowIds?: number[];
   tags?: Record<string, string>;
-  /** Structured question about the bag; see {@link compileMetadataWhere}. */
-  metadata?: MetadataFilter;
+  /** Structured question about the bag; see {@link compileStructuredWhere}. */
+  metadata?: StructuredFilter;
   /** Withdrawn documents are left out unless the request asks for them. */
   includeWithdrawn?: boolean;
   limit?: number;
@@ -131,8 +131,9 @@ export const listDocuments = async (args: {
     return emptyPage(args);
   }
 
-  const metadataWhere = compileMetadataWhere({
+  const metadataWhere = compileStructuredWhere({
     filter: args.metadata,
+    attribute: 'metadata',
     column: DOCUMENT_METADATA_COLUMN,
   });
 

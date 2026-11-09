@@ -21,7 +21,7 @@ import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
 import { contentBytes } from 'src/lib/quotaStorage';
-import { readMetadataQuery } from 'src/lib/structuredFilter';
+import { readStructuredQuery } from 'src/lib/structuredFilter';
 import {
   assertNoSystemTagKeys,
   buildResourceTagContext,
@@ -127,7 +127,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   const pathPrefix = ctx.query.path_prefix as string | undefined;
   const relatedTo = ctx.query.related_to as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
-  const metadata = readMetadataQuery(ctx.query.metadata);
+  const metadata = readStructuredQuery({ name: 'metadata', query: ctx.query });
   const includeWithdrawn = ctx.query.include_withdrawn === 'true';
 
   const projectIds = await resolveReadProjectIds({

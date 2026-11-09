@@ -17,7 +17,7 @@ overrides:
       - "src/rest/openapi/v1/concurrency.yaml"
       - "src/rest/openapi/v1/errors.yaml"
       - "src/rest/openapi/v1/memory-assertions.yaml"
-      - "src/rest/openapi/v1/metadata-filters.yaml"
+      - "src/rest/openapi/v1/structured-filters.yaml"
       - "src/rest/openapi/v1/metadata.yaml"
       - "src/rest/openapi/v1/tags.yaml"
       - "src/rest/openapi/v1/usage-totals.yaml"

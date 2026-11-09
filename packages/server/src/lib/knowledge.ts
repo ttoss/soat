@@ -18,9 +18,9 @@ import type {
 import { fuseCandidates } from './knowledgeRanking';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import {
-  compileMetadataWhere,
-  hasMetadataFilter,
-  type MetadataFilter,
+  compileStructuredWhere,
+  hasStructuredFilter,
+  type StructuredFilter,
 } from './structuredFilter';
 import { hasTagFilter } from './tags';
 
@@ -101,7 +101,7 @@ type SearchKnowledgeArgs = {
    * filter: memories carry no such bag, so it names that store the way
    * `document_paths` does rather than narrowing both.
    */
-  metadata?: MetadataFilter;
+  metadata?: StructuredFilter;
   /**
    * Switches the document store off even when the request would otherwise
    * reach it. Default `true`.
@@ -157,7 +157,7 @@ const getSearchFlags = (
     args.includeDocuments !== false &&
     (everyStore ||
       namesAny(args.paths, args.documentIds) ||
-      hasMetadataFilter(args.metadata));
+      hasStructuredFilter(args.metadata));
   const hasMemoryStoreSearch =
     args.includeMemories !== false &&
     (everyStore || namesAny(args.memoryStoreIds));
@@ -250,8 +250,9 @@ export const searchKnowledge = async (
   // and let the halves disagree: one call failing would leave documents with a
   // `similarity_score` and memory stores without, which the contract reserves for a
   // search that answered from the lexical channel alone.
-  const metadataWhere = compileMetadataWhere({
+  const metadataWhere = compileStructuredWhere({
     filter: args.metadata,
+    attribute: 'metadata',
     column: DOCUMENT_METADATA_COLUMN,
   });
 

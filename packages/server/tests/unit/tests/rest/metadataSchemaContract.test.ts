@@ -24,7 +24,7 @@ const SHARED_SPEC = 'metadata.yaml';
 const NOT_MODULES = new Set([
   SHARED_SPEC,
   // The structured filter grammar — `{ gte: 3 }` is an operator, not a value.
-  'metadata-filters.yaml',
+  'structured-filters.yaml',
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -124,11 +124,11 @@ describe('the metadata bag is declared once', () => {
         path: [],
         file,
         visit: (finding, schema) => {
-          // The knowledge search filter points at `metadata-filters.yaml`
+          // The knowledge search filter points at `structured-filters.yaml`
           // instead: it reads a bag rather than declaring one.
           const shared =
             referencesShared(schema) ||
-            JSON.stringify(schema).includes('metadata-filters.yaml');
+            JSON.stringify(schema).includes('structured-filters.yaml');
           if (!shared) unreferenced.push(`${finding.file}: ${finding.where}`);
         },
       });

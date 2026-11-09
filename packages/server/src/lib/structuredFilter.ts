@@ -6,7 +6,7 @@ import { asJsonb, jsonbFn } from './jsonbQuery';
 import { isPlainObject } from './plainObject';
 
 /**
- * A structured question about a `metadata` bag.
+ * A structured question about a JSON field, such as a `metadata` bag.
  *
  * Equality and `in` are containment — the `@>` match `?tags=` already uses —
  * so they read a value exactly as it is stored, and a number never answers to
@@ -44,7 +44,7 @@ type FieldFilter =
   | { kind: 'in'; values: Scalar[] }
   | { kind: 'range'; bounds: { operator: RangeOperator; value: Orderable }[] };
 
-export type MetadataFilter = Record<string, FieldFilter>;
+export type StructuredFilter = Record<string, FieldFilter>;
 
 const refuse = (message: string, field?: string): never => {
   throw new DomainError(
@@ -67,7 +67,11 @@ const isRangeOperator = (key: string): key is RangeOperator => {
   return key in RANGE_OPERATORS;
 };
 
-const readIn = (args: { field: string; value: unknown }): FieldFilter => {
+const readIn = (args: {
+  name: string;
+  field: string;
+  value: unknown;
+}): FieldFilter => {
   const values = args.value;
   if (
     !Array.isArray(values) ||
@@ -75,7 +79,7 @@ const readIn = (args: { field: string; value: unknown }): FieldFilter => {
     !values.every(isScalar)
   ) {
     return refuse(
-      `metadata filter '${args.field}': in needs a non-empty list of values.`,
+      `${args.name} filter '${args.field}': in needs a non-empty list of values.`,
       args.field
     );
   }
@@ -83,6 +87,7 @@ const readIn = (args: { field: string; value: unknown }): FieldFilter => {
 };
 
 const readRange = (args: {
+  name: string;
   field: string;
   operators: Record<string, unknown>;
 }): FieldFilter => {
@@ -90,13 +95,13 @@ const readRange = (args: {
   for (const [key, operand] of Object.entries(args.operators)) {
     if (!isRangeOperator(key)) {
       return refuse(
-        `metadata filter '${args.field}': '${key}' is not an operator. Use one of: ${OPERATOR_NAMES.join(', ')}.`,
+        `${args.name} filter '${args.field}': '${key}' is not an operator. Use one of: ${OPERATOR_NAMES.join(', ')}.`,
         args.field
       );
     }
     if (typeof operand !== 'string' && typeof operand !== 'number') {
       return refuse(
-        `metadata filter '${args.field}': ${key} compares against a string or a number.`,
+        `${args.name} filter '${args.field}': ${key} compares against a string or a number.`,
         args.field
       );
     }
@@ -106,13 +111,14 @@ const readRange = (args: {
 };
 
 const readFieldFilter = (args: {
+  name: string;
   field: string;
   value: unknown;
 }): FieldFilter => {
   if (isScalar(args.value)) return { kind: 'eq', value: args.value };
   if (!isPlainObject(args.value)) {
     return refuse(
-      `metadata filter '${args.field}' must be a value or an operator object; a list of values is written { "in": [...] }.`,
+      `${args.name} filter '${args.field}' must be a value or an operator object; a list of values is written { "in": [...] }.`,
       args.field
     );
   }
@@ -120,36 +126,48 @@ const readFieldFilter = (args: {
   const keys = Object.keys(args.value);
   if (keys.length === 0) {
     return refuse(
-      `metadata filter '${args.field}' names no operator.`,
+      `${args.name} filter '${args.field}' names no operator.`,
       args.field
     );
   }
   if (keys.includes(IN_OPERATOR)) {
     if (keys.length > 1) {
       return refuse(
-        `metadata filter '${args.field}': in is a set of values, so it stands alone.`,
+        `${args.name} filter '${args.field}': in is a set of values, so it stands alone.`,
         args.field
       );
     }
-    return readIn({ field: args.field, value: args.value[IN_OPERATOR] });
+    return readIn({
+      name: args.name,
+      field: args.field,
+      value: args.value[IN_OPERATOR],
+    });
   }
-  return readRange({ field: args.field, operators: args.value });
+  return readRange({
+    name: args.name,
+    field: args.field,
+    operators: args.value,
+  });
 };
 
 /**
  * Reads the filter as a request body carries it: a JSON object, whose values
  * already say what type they are.
+ *
+ * @param name the request field carrying the filter, named in refusals.
  */
-export const readMetadataFilter = (
-  value: unknown
-): MetadataFilter | undefined => {
+export const readStructuredFilter = (args: {
+  name: string;
+  value: unknown;
+}): StructuredFilter | undefined => {
+  const { name, value } = args;
   if (value === undefined || value === null) return undefined;
   if (!isPlainObject(value)) {
-    return refuse('metadata must be an object of field filters.');
+    return refuse(`${name} must be an object of field filters.`);
   }
-  const filter: MetadataFilter = {};
+  const filter: StructuredFilter = {};
   for (const [field, raw] of Object.entries(value)) {
-    filter[field] = readFieldFilter({ field, value: raw });
+    filter[field] = readFieldFilter({ name, field, value: raw });
   }
   return filter;
 };
@@ -159,26 +177,29 @@ export const readMetadataFilter = (
  * `key:value` spelling like `?tags=` cannot say whether `3` is the number or
  * the string, and containment tells those apart.
  */
-export const readMetadataQuery = (
-  raw: string | string[] | undefined
-): MetadataFilter | undefined => {
+export const readStructuredQuery = (args: {
+  name: string;
+  query: Record<string, string | string[] | undefined>;
+}): StructuredFilter | undefined => {
+  const { name } = args;
+  const raw = args.query[name];
   if (raw === undefined) return undefined;
   if (typeof raw !== 'string') {
-    return refuse('metadata is one JSON object, not a repeated parameter.');
+    return refuse(`${name} is one JSON object, not a repeated parameter.`);
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return refuse('metadata must be a JSON object.');
+    return refuse(`${name} must be a JSON object.`);
   }
-  return readMetadataFilter(parsed);
+  return readStructuredFilter({ name, value: parsed });
 };
 
 /** Whether a filter narrows anything: an empty one matches every row. */
-export const hasMetadataFilter = (
-  filter: MetadataFilter | undefined
-): filter is MetadataFilter => {
+export const hasStructuredFilter = (
+  filter: StructuredFilter | undefined
+): filter is StructuredFilter => {
   return filter !== undefined && Object.keys(filter).length > 0;
 };
 
@@ -198,12 +219,6 @@ export const containment = (args: {
   bag: Record<string, Scalar>;
 }): Record<string, Record<symbol, Record<string, Scalar>>> => {
   return { [args.attribute]: { [Op.contains]: args.bag } };
-};
-
-const METADATA_ATTRIBUTE = 'metadata';
-
-const metadataContainment = (bag: Record<string, Scalar>) => {
-  return containment({ attribute: METADATA_ATTRIBUTE, bag });
 };
 
 const jsonTypeOf = (value: Orderable): 'string' | 'number' => {
@@ -268,15 +283,17 @@ export const applyFilterWhere = (args: {
  * The where-fragments a filter compiles to, to be ANDed into the query the
  * caller is already building.
  *
- * @param column the `metadata` column qualified by the alias its query roots
- *   the document at — a raw comparison names the column itself, where the
+ * @param attribute the JSON attribute filtered, as the model names it — the
  *   containment halves let Sequelize qualify it.
+ * @param column the same column qualified by the alias its query roots the row
+ *   at — a raw comparison names the column itself.
  */
-export const compileMetadataWhere = (args: {
-  filter: MetadataFilter | undefined;
+export const compileStructuredWhere = (args: {
+  filter: StructuredFilter | undefined;
+  attribute: string;
   column: string;
 }): unknown[] => {
-  if (!hasMetadataFilter(args.filter)) return [];
+  if (!hasStructuredFilter(args.filter)) return [];
 
   const equality: Record<string, Scalar> = {};
   const fragments: unknown[] = [];
@@ -289,7 +306,10 @@ export const compileMetadataWhere = (args: {
       case 'in':
         fragments.push({
           [Op.or]: filter.values.map((value) => {
-            return metadataContainment({ [field]: value });
+            return containment({
+              attribute: args.attribute,
+              bag: { [field]: value },
+            });
           }),
         });
         break;
@@ -302,7 +322,7 @@ export const compileMetadataWhere = (args: {
   }
 
   if (Object.keys(equality).length > 0) {
-    fragments.push(metadataContainment(equality));
+    fragments.push(containment({ attribute: args.attribute, bag: equality }));
   }
 
   return fragments;

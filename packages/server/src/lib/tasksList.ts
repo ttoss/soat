@@ -4,8 +4,8 @@ import { db } from 'src/db';
 import { paginatedList } from './pagination';
 import {
   applyFilterWhere,
-  compileMetadataWhere,
-  type MetadataFilter,
+  compileStructuredWhere,
+  type StructuredFilter,
 } from './structuredFilter';
 import { mapTask, taskIncludes } from './tasks';
 import {
@@ -30,8 +30,8 @@ export const listTasks = async (args: {
   // of those cards has an automation still dispatching.
   automationStatuses?: (TaskAutomationStatus | null)[];
   assignee?: string;
-  /** Structured question about the bag; see {@link compileMetadataWhere}. */
-  metadata?: MetadataFilter;
+  /** Structured question about the bag; see {@link compileStructuredWhere}. */
+  metadata?: StructuredFilter;
   limit?: number;
   cursor?: string;
 }) => {
@@ -54,8 +54,9 @@ export const listTasks = async (args: {
 
   applyFilterWhere({
     where,
-    fragments: compileMetadataWhere({
+    fragments: compileStructuredWhere({
       filter: args.metadata,
+      attribute: 'metadata',
       column: TASK_METADATA_COLUMN,
     }),
   });

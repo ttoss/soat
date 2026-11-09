@@ -156,7 +156,7 @@ paths:
                     passing it alone searches documents, as `document_paths`
                     does.
                   allOf:
-                    - $ref: './metadata-filters.yaml#/components/schemas/MetadataFilter'
+                    - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
       responses:
         '200':
           description: Search results
