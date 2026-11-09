@@ -72,7 +72,7 @@ paths:
             type: string
             example: doc_V1StGXR8Z5jdHi6B
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
-        - $ref: './metadata-filters.yaml#/components/parameters/MetadataQuery'
+        - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:

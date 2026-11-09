@@ -95,7 +95,7 @@ paths:
           required: false
           schema:
             type: string
-        - $ref: './metadata-filters.yaml#/components/parameters/MetadataQuery'
+        - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:

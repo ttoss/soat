@@ -5,7 +5,8 @@ import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
-const libDir = path.join(repoRoot, 'packages/server/src/lib');
+const srcDir = path.join(repoRoot, 'packages/server/src');
+const libDir = path.join(srcDir, 'lib');
 
 /**
  * Both annotation bags are asked the same question on a read — does this bag
@@ -64,5 +65,43 @@ describe('bag containment', () => {
       .sort();
 
     assert.deepEqual(spelling, []);
+  });
+
+  /**
+   * A range over a JSON field is only honest beside its `jsonb_typeof` guard,
+   * and `compileStructuredWhere` is the one place that pairs them.
+   */
+  test('one compiler writes every JSON-field range', () => {
+    const typed = fs
+      .readdirSync(srcDir, { recursive: true })
+      .filter((entry) => {
+        return (
+          typeof entry === 'string' &&
+          entry.endsWith('.ts') &&
+          path.basename(entry) !== 'structuredFilter.ts'
+        );
+      })
+      .filter((entry) => {
+        const source = code(path.join(srcDir, entry));
+        return /fn:\s*'typeof'/.test(source) || /jsonb_typeof/.test(source);
+      })
+      .sort();
+
+    assert.deepEqual(typed, []);
+  });
+
+  /**
+   * The grammar filters any JSON column, so each caller states which one; a
+   * column the compiler picked for itself would answer that once for all.
+   */
+  test('the compiler takes the JSON column from its caller', () => {
+    const source = code(path.join(libDir, 'structuredFilter.ts'));
+
+    assert.match(
+      source,
+      /export const compileStructuredWhere = \(args: \{[^}]*\battribute: string;/
+    );
+    assert.doesNotMatch(source, /attribute: '\w+'/);
+    assert.doesNotMatch(source, /_ATTRIBUTE = '/);
   });
 });

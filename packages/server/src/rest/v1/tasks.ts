@@ -4,7 +4,7 @@ import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
 import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
-import { readMetadataQuery } from 'src/lib/structuredFilter';
+import { readStructuredQuery } from 'src/lib/structuredFilter';
 import {
   createTask,
   deleteTask,
@@ -62,7 +62,7 @@ const principalFromCtx = (ctx: Context): TaskPrincipal => {
 tasksRouter.get('/tasks', async (ctx: Context) => {
   requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const metadata = readMetadataQuery(ctx.query.metadata);
+  const metadata = readStructuredQuery({ name: 'metadata', query: ctx.query });
   const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,

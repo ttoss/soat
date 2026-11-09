@@ -6,9 +6,9 @@ import type { KnowledgePolicyWhere } from 'src/lib/knowledge';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import {
-  hasMetadataFilter,
-  type MetadataFilter,
-  readMetadataFilter,
+  hasStructuredFilter,
+  readStructuredFilter,
+  type StructuredFilter,
 } from 'src/lib/structuredFilter';
 import { hasTagFilter, readTagBag } from 'src/lib/tags';
 
@@ -56,12 +56,12 @@ const toStringArray = (
 const hasSearchFilters = (
   body: KnowledgeSearchBody,
   tags: Record<string, string> | undefined,
-  metadata: MetadataFilter | undefined
+  metadata: StructuredFilter | undefined
 ): boolean => {
   const hasDocumentFilters =
     (body.document_paths !== undefined && body.document_paths.length > 0) ||
     (body.document_ids !== undefined && body.document_ids.length > 0) ||
-    hasMetadataFilter(metadata);
+    hasStructuredFilter(metadata);
   const hasMemoryStoreFilters =
     body.memory_store_ids !== undefined && body.memory_store_ids.length > 0;
   return (
@@ -130,7 +130,10 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
 
   const body = ctx.request.body as KnowledgeSearchBody;
   const tags = readTagBag(body.tags);
-  const metadata = readMetadataFilter(body.metadata);
+  const metadata = readStructuredFilter({
+    name: 'metadata',
+    value: body.metadata,
+  });
 
   if (!hasSearchFilters(body, tags, metadata)) {
     throw new DomainError(
