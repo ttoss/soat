@@ -287,6 +287,41 @@ describe('versioned write contract', () => {
         },
       ],
     },
+    // An item has no public id: its "id" here is the path below the
+    // collection, and it keeps no archived config.
+    'CollectionItem.ts': {
+      path: '/api/v1/collections',
+      archived: false,
+      create: async () => {
+        const collectionId = await createIn('/api/v1/collections', {
+          project_id: projectId,
+          name: unique('contract-collection'),
+        });
+        const res = await client()
+          .put(`/api/v1/collections/${collectionId}/items/k`)
+          .send({ data: { n: 1 } });
+        expect(res.status).toBe(201);
+        return `${collectionId}/items/k`;
+      },
+      writes: [
+        {
+          name: 'putCollectionItem',
+          send: (id, extra) => {
+            return client()
+              .put(`/api/v1/collections/${id}`)
+              .send({ data: { n: 2 }, ...extra });
+          },
+        },
+        {
+          name: 'patchCollectionItem',
+          send: (id, extra) => {
+            return client()
+              .patch(`/api/v1/collections/${id}`)
+              .send({ data: { m: 3 }, ...extra });
+          },
+        },
+      ],
+    },
     // A memory keeps no archived config, so only the counter is checked.
     'Memory.ts': {
       path: '/api/v1/memories',
@@ -334,6 +369,7 @@ describe('versioned write contract', () => {
         'playbooks:*',
         'documents:*',
         'memories:*',
+        'collections:*',
       ],
     });
     userToken = setup.userToken;
