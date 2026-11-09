@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.103.0](https://github.com/ttoss/soat/compare/v0.102.1...v0.103.0) (2026-11-09)
+
+### Features
+
+* **server:** collections module — keyed JSON items without embeddings ([#1844](https://github.com/ttoss/soat/issues/1844)) ([4e10186](https://github.com/ttoss/soat/commit/4e101863fe401732124487620304b017348b2d35))
+
 ## [0.102.1](https://github.com/ttoss/soat/compare/v0.102.0...v0.102.1) (2026-11-09)
 
 **Note:** Version bump only for package @soat/postgresdb
