@@ -17,8 +17,8 @@ and those parameters, started by `/flow` or not:
   the task carries the change as an `implements` reference,
   `after_integration` (what integrating leaves), and its wait on the gates.
   After the verdict, the tick writes the task.
-- A soat task runs four stages: implementation, the soat release, naturali's
-  bump, validation against the real naturali API. It closes only on that
-  validation: `after_integration` is `release`, never `close`; its merge puts
-  it behind the bump (naturali's `.claude/flow-release.md`).
+- A soat task closes on the validation its brief names from naturali's
+  `.claude/flow-validation.md`, usually `merged`. Every soat code change is
+  also validated on the real naturali API: at handoff the child writes an
+  API-validation task behind naturali's bump (`.claude/flow-release.md`).
 - Friction with a skill, GTF or a Flow tool → `flow-friction`, then continue.
