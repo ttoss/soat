@@ -8066,6 +8066,38 @@ $SOAT_CLI delete-eval --eval_id "$EVAL_ID"
 $SOAT_CLI delete-dataset --dataset_id "$DATASET_ID"
 echo "Evaluations: OK"
 
+echo "=== Collections ==="
+COLL_ID=$($SOAT_CLI create-collection --project_id "$PROJECT_PUBLIC_ID" --name smoke-tickets | jq -r '.id')
+$SOAT_CLI put-collection-item --collection_id "$COLL_ID" --key t-1 \
+  --data '{"status":"open","priority":1}' --tags '{"team":"a"}' > /dev/null
+$SOAT_CLI put-collection-item --collection_id "$COLL_ID" --key t-2 \
+  --data '{"status":"open","priority":3}' > /dev/null
+
+COLL_MERGED=$($SOAT_CLI update-collection-item --collection_id "$COLL_ID" --key t-1 \
+  --data '{"status":"closed"}' --expected_version 1)
+COLL_MERGED_VERSION=$(printf '%s\n' "$COLL_MERGED" | jq -r '.version')
+COLL_MERGED_PRIORITY=$(printf '%s\n' "$COLL_MERGED" | jq -r '.data.priority')
+if [ "$COLL_MERGED_VERSION" != "2" ] || [ "$COLL_MERGED_PRIORITY" != "1" ]; then
+  echo "ERROR: update-collection-item expected a merge at version 2, got version=$COLL_MERGED_VERSION priority=$COLL_MERGED_PRIORITY" >&2
+  exit 1
+fi
+
+if $SOAT_CLI update-collection-item --collection_id "$COLL_ID" --key t-1 \
+  --data '{"status":"open"}' --expected_version 1 > /dev/null 2>&1; then
+  echo "ERROR: a stale expected_version should be refused" >&2
+  exit 1
+fi
+
+COLL_FILTERED=$($SOAT_CLI list-collection-items --collection_id "$COLL_ID" \
+  --data '{"priority":{"gte":2}}' | jq -r '[.data[].key] | join(",")')
+if [ "$COLL_FILTERED" != "t-2" ]; then
+  echo "ERROR: list-collection-items range filter expected t-2, got '$COLL_FILTERED'" >&2
+  exit 1
+fi
+
+$SOAT_CLI delete-collection --collection_id "$COLL_ID" > /dev/null
+echo "Collections: put, merge under a precondition, filter: OK"
+
 echo "=== Deciders ==="
 
 echo "--- Creating a tool-less agent and a decider ---"

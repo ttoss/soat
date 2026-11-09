@@ -889,6 +889,11 @@ export const ERROR_CODES = {
     description:
       'The write named a version other than the one the resource currently holds, or a concurrent write took that version first. `meta.current_version` is the version in force, and `meta.expected_version` the one the request named. Nothing was written: re-read the resource, rebase the change on what it now holds, and retry against the version `meta.current_version` names.',
   },
+  QUERY_TIMEOUT: {
+    httpStatus: 422,
+    description:
+      'A collection item listing ran past its statement timeout (`COLLECTION_QUERY_TIMEOUT_MS`, five seconds by default) and was cancelled. Equality and `in` on `?data=` and `?tags=` are answered by an index; a range is evaluated row by row. `meta.timeout_ms` is the limit that applied.',
+  },
   CONVERSATION_POSITION_CONFLICT: {
     httpStatus: 409,
     description:
@@ -946,7 +951,7 @@ export const ERROR_CODES = {
   QUOTA_STORAGE_EXCEEDED: {
     httpStatus: 409,
     description:
-      "An enforced `storage_bytes` quota is exceeded: the project's stored footprint — files, document chunks (text and vector) and memories — is already over the byte limit, and the write would have added to it. No `Retry-After` is sent, and the refusal is a 409 rather than a 429, because a stock is not a rate: no window reset clears it and waiting changes nothing. The error meta carries `current_bytes` (the last daily snapshot plus the request's own delta) beside `limit`, so the caller knows how much to delete. Raised at the corpus write paths — file upload/create, document create, document ingest and re-ingest, memory create.",
+      "An enforced `storage_bytes` quota is exceeded: the project's stored footprint — files, document chunks (text and vector), memories and collection items — is already over the byte limit, and the write would have added to it. No `Retry-After` is sent, and the refusal is a 409 rather than a 429, because a stock is not a rate: no window reset clears it and waiting changes nothing. The error meta carries `current_bytes` (the last daily snapshot plus the request's own delta) beside `limit`, so the caller knows how much to delete. Raised at the corpus write paths — file upload/create, document create, document ingest and re-ingest, memory create, collection item put and update.",
   },
   QUOTA_CONFLICT: {
     httpStatus: 409,

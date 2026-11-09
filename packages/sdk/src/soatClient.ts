@@ -12,6 +12,7 @@ import {
   AuditLog as AuditLogSdk,
   Chains as ChainsSdk,
   Chats as ChatsSdk,
+  Collections as CollectionsSdk,
   Conversations as ConversationsSdk,
   Deciders as DecidersSdk,
   Documents as DocumentsSdk,
@@ -126,6 +127,7 @@ export class SoatClient {
   readonly auditLog: typeof AuditLogSdk;
   readonly chains: typeof ChainsSdk;
   readonly chats: typeof ChatsSdk;
+  readonly collections: typeof CollectionsSdk;
   readonly conversations: typeof ConversationsSdk;
   readonly deciders: typeof DecidersSdk;
   readonly documents: typeof DocumentsSdk;
@@ -182,6 +184,7 @@ export class SoatClient {
     this.auditLog = bindResource(AuditLogSdk, httpClient);
     this.chains = bindResource(ChainsSdk, httpClient);
     this.chats = bindResource(ChatsSdk, httpClient);
+    this.collections = bindResource(CollectionsSdk, httpClient);
     this.conversations = bindResource(ConversationsSdk, httpClient);
     this.deciders = bindResource(DecidersSdk, httpClient);
     this.documents = bindResource(DocumentsSdk, httpClient);

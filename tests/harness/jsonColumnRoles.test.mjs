@@ -37,6 +37,7 @@ const ROLES = {
     'ApprovalItem.taskPayload',
     'AuditEntry.detail',
     'AuditEntry.onBehalfOf',
+    'Collection.schema',
     'ConversationMessage.metadata',
     'ConversationMessage.responseMessages',
     'DatasetItem.input',
@@ -165,6 +166,8 @@ const ROLES = {
   ],
   query: [
     'Actor.tags',
+    'CollectionItem.data',
+    'CollectionItem.tags',
     'Conversation.tags',
     'Document.metadata',
     'Document.tags',

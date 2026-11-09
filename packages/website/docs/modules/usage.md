@@ -178,7 +178,7 @@ A turn of an agent another project [shares](./shares.md#using-a-shared-agent) wi
 
 A daily snapshot writes one `storage` event per project per UTC day with three components: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them), measured in one statement, and [`record_gb_day`](#records-of-work) (gigabytes of records of work done). No principal/agent/run attribution. Each is priced from the `soat`/`gb-day` SKU from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null. A project whose snapshot cannot be written is logged at error level; only a later sweep inside the same UTC day writes that day.
 
-`gb_day` sums seven terms:
+`gb_day` sums eight terms:
 
 | Term | Source |
 | --- | --- |
@@ -189,8 +189,9 @@ A daily snapshot writes one `storage` event per project per UTC day with three c
 | Memory entry embeddings | the stored width of each entry's vector |
 | Dataset item payloads | [dataset item](./evaluations.md) `input`, `expected_output`, `metadata` |
 | Eval result payloads | [eval result](./evaluations.md) `input`, `expected_output`, `scores`, `output` |
+| Collection items | [item](./collections.md) `data`, `key`, `tags` |
 
-`chunk_count` counts [document](./documents.md) chunks plus [memory entries](./memories.md), embedded or not (a row joins the vector index once its embedding is written). Dataset items and eval results carry no vector and are not counted.
+`chunk_count` counts [document](./documents.md) chunks plus [memory entries](./memories.md), embedded or not (a row joins the vector index once its embedding is written). Dataset items, eval results and collection items carry no vector and are not counted.
 
 - **The evaluations corpus grows with runs, not the dataset.** An eval result [freezes its own copy](./evaluations.md#frozen-inputs) of the item it scored: a 100-item dataset run ten times stores eleven copies of every payload. [Retention](./evaluations.md#retention-and-erasure) clears a result's `output` only.
 - **The snapshot bounds the corpus.** A `storage_bytes` [quota](./quotas.md#storage-enforcement) caps the footprint against the newest `storage` event plus the request's delta, refusing corpus writes with `409 QUOTA_STORAGE_EXCEEDED`; this keeps the check off the per-upload path at up to a day of staleness.

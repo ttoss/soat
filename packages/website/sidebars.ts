@@ -75,6 +75,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'modules/files',
             'modules/documents',
+            'modules/collections',
             'modules/embeddings',
             'modules/ingestion-rules',
             'modules/knowledge',

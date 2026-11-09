@@ -1,0 +1,702 @@
+openapi: 3.0.3
+info:
+  title: SOAT Collections API
+  version: 1.0.0
+  description: >-
+    Application data as collections of JSON items addressed by key, with no
+    embedding and no backing file. Items are filtered by their `data` and
+    `tags`, and written under optimistic concurrency.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Collections
+    description: Store and query keyed JSON items
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/collections:
+    get:
+      tags:
+        - Collections
+      summary: List collections
+      description: Returns the collections in scope, oldest first.
+      operationId: listCollections
+      x-iam-action: collections:ListCollections
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The collections in scope
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Collection'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    post:
+      tags:
+        - Collections
+      summary: Create a collection
+      description: >-
+        Creates a collection. `name` is unique per project; a second collection
+        of the same name is `409 NAME_CONFLICT`. A `schema` is compiled here,
+        so one JSON Schema cannot parse is refused rather than stored.
+      operationId: createCollection
+      x-iam-action: collections:CreateCollection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - name
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: >-
+                    Project the collection belongs to. Optional for a
+                    project-scoped API key, which supplies it.
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: Unique within the project.
+                  example: support-tickets
+                schema:
+                  $ref: '#/components/schemas/CollectionSchema'
+      responses:
+        '201':
+          description: Collection created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '409':
+          description: A collection of this name exists in the project (`NAME_CONFLICT`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/collections/{collection_id}:
+    get:
+      tags:
+        - Collections
+      summary: Get a collection
+      description: Returns one collection.
+      operationId: getCollection
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:GetCollection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: The collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    patch:
+      tags:
+        - Collections
+      summary: Update a collection
+      description: >-
+        Renames the collection or replaces its `schema`. A new schema governs
+        the next write of each item; items already stored are not re-judged.
+      operationId: updateCollection
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:UpdateCollection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  example: support-tickets
+                schema:
+                  $ref: '#/components/schemas/CollectionSchema'
+      responses:
+        '200':
+          description: Collection updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          description: A collection of this name exists in the project (`NAME_CONFLICT`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    delete:
+      tags:
+        - Collections
+      summary: Delete a collection
+      description: Deletes the collection and every item in it.
+      operationId: deleteCollection
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:DeleteCollection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/collections/{collection_id}/items:
+    get:
+      tags:
+        - Collections
+      summary: List items
+      description: >-
+        Returns the collection's items in key order, narrowed by `data` and
+        `tags`. The listing is bounded by `limit` (at most 100) and a statement
+        timeout; a query past it is `422 QUERY_TIMEOUT`.
+      operationId: listCollectionItems
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:ListCollectionItems
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: './structured-filters.yaml#/components/parameters/DataQuery'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The items that match
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CollectionItem'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '422':
+          description: The query ran past its statement timeout (`QUERY_TIMEOUT`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/collections/{collection_id}/items/{key}:
+    get:
+      tags:
+        - Collections
+      summary: Get an item
+      description: Returns the item at `key`.
+      operationId: getCollectionItem
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:GetCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+      responses:
+        '200':
+          description: The item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionItem'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    put:
+      tags:
+        - Collections
+      summary: Create or replace an item
+      description: >-
+        Writes `data` at `key`: `201` when the key was free, `200` when it
+        replaced an item. `tags` replace the bag when sent and leave it alone
+        when omitted. `data` is at most 64 KB as JSON and must satisfy the
+        collection's `schema`. A precondition (`If-Match` or
+        `expected_version`) names a version of an existing item, so it is
+        `404` for a free key.
+      operationId: putCollectionItem
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:PutCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/ItemData'
+                tags:
+                  description: Replaces the item's tags; `null` clears them.
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+                expected_version:
+                  description: Refuses the write unless the item is at this version.
+                  allOf:
+                    - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
+      responses:
+        '200':
+          description: Item replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionItem'
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionItem'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ItemWriteConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    patch:
+      tags:
+        - Collections
+      summary: Update an item
+      description: >-
+        Merges `data` into the item's as a JSON Merge Patch (RFC 7386): an
+        object merges key by key, `null` removes a key, any other value
+        replaces it. The merged `data` is judged as a put's is.
+      operationId: updateCollectionItem
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:UpdateCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                data:
+                  description: The merge patch applied to the item's `data`.
+                  allOf:
+                    - $ref: '#/components/schemas/ItemData'
+                tags:
+                  description: Replaces the item's tags; `null` clears them.
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+                expected_version:
+                  description: Refuses the write unless the item is at this version.
+                  allOf:
+                    - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionItem'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ItemWriteConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    delete:
+      tags:
+        - Collections
+      summary: Delete an item
+      description: Deletes the item at `key`.
+      operationId: deleteCollectionItem
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:DeleteCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/collections/{collection_id}/items/{key}/tags:
+    get:
+      tags:
+        - Collections
+      summary: Get item tags
+      description: Returns the item's tags.
+      operationId: getCollectionItemTags
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:GetCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+      responses:
+        '200':
+          description: Item tags
+          content:
+            application/json:
+              schema:
+                $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    put:
+      tags:
+        - Collections
+      summary: Replace item tags
+      description: Replaces every tag on the item. Bumps the item's `version`.
+      operationId: replaceCollectionItemTags
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:UpdateCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './tags.yaml#/components/schemas/TagBag'
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ItemWriteConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    patch:
+      tags:
+        - Collections
+      summary: Merge item tags
+      description: >-
+        Merges the given tags into the item's; a key not sent is kept. Bumps
+        the item's `version`.
+      operationId: mergeCollectionItemTags
+      x-soat-resource:
+        kind: collection
+        from: collection_id
+      x-iam-action: collections:UpdateCollectionItem
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/ItemKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './tags.yaml#/components/schemas/TagBag'
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ItemWriteConflict'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CollectionId:
+      name: collection_id
+      in: path
+      required: true
+      schema:
+        type: string
+        example: coll_V1StGXR8Z5jdHi6B
+    ItemKey:
+      name: key
+      in: path
+      required: true
+      description: >-
+        The item's key, unique in its collection: 1–256 letters, digits and
+        `. _ : @ -`, starting with a letter or digit.
+      schema:
+        type: string
+        example: ticket-1042
+  responses:
+    ItemWriteConflict:
+      description: >-
+        The item has moved past the version this write read
+        (`VERSION_CONFLICT`, with `meta.current_version`), or the write would
+        exceed the project's `storage_bytes` quota (`QUOTA_STORAGE_EXCEEDED`).
+        Nothing is written.
+      content:
+        application/json:
+          schema:
+            $ref: './errors.yaml#/components/schemas/ErrorResponse'
+  schemas:
+    CollectionSchema:
+      type: object
+      nullable: true
+      description: >-
+        A JSON Schema every item's `data` must satisfy, stored as written.
+        `null` removes it.
+      example:
+        type: object
+        required: [status]
+        properties:
+          status: { type: string }
+    ItemData:
+      type: object
+      description: >-
+        The item's JSON object, at most 64 KB serialized. Stored as `jsonb`,
+        so key order is not kept.
+      example:
+        status: open
+        priority: 2
+        actor_id: actor_V1StGXR8Z5jdHi6B
+    Collection:
+      type: object
+      properties:
+        id:
+          type: string
+          example: coll_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: support-tickets
+        schema:
+          $ref: '#/components/schemas/CollectionSchema'
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+    CollectionItem:
+      type: object
+      properties:
+        collection_id:
+          x-soat-ref: collections
+          type: string
+          example: coll_V1StGXR8Z5jdHi6B
+        key:
+          type: string
+          example: ticket-1042
+        data:
+          $ref: '#/components/schemas/ItemData'
+        tags:
+          $ref: './tags.yaml#/components/schemas/TagBag'
+        version:
+          type: integer
+          minimum: 1
+          description: Bumped by every write; what `If-Match` names.
+          example: 3
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'

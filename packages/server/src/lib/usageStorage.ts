@@ -52,6 +52,7 @@ type StoredFootprint = {
     memories: number;
     datasetItems: number;
     evalResults: number;
+    collectionItems: number;
     total: number;
   };
   counts: {
@@ -73,6 +74,7 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
     memory_rows: string | number;
     dataset_item_bytes: string | number;
     eval_result_bytes: string | number;
+    collection_item_bytes: string | number;
   }>;
   const files = Number(row.file_bytes);
   const chunkBytes = Number(row.chunk_bytes);
@@ -81,6 +83,7 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
   const memoryRows = Number(row.memory_rows);
   const datasetItemBytes = Number(row.dataset_item_bytes);
   const evalResultBytes = Number(row.eval_result_bytes);
+  const collectionItemBytes = Number(row.collection_item_bytes);
   return {
     bytes: {
       files,
@@ -88,8 +91,14 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
       memories: memoryBytes,
       datasetItems: datasetItemBytes,
       evalResults: evalResultBytes,
+      collectionItems: collectionItemBytes,
       total:
-        files + chunkBytes + memoryBytes + datasetItemBytes + evalResultBytes,
+        files +
+        chunkBytes +
+        memoryBytes +
+        datasetItemBytes +
+        evalResultBytes +
+        collectionItemBytes,
     },
     counts: {
       documentChunks: chunkRows,
@@ -138,7 +147,8 @@ const projectStoredFootprint = async (
             memory_content.memory_bytes,
             memories.memory_rows,
             dataset_items.dataset_item_bytes,
-            eval_results.eval_result_bytes
+            eval_results.eval_result_bytes,
+            collection_items.collection_item_bytes
        FROM (SELECT COALESCE(SUM(f."size"), 0) AS file_bytes
                FROM "files" f
               WHERE f."project_id" = :projectId) files
@@ -190,7 +200,16 @@ const projectStoredFootprint = async (
                FROM "eval_results" er
                JOIN "eval_runs" ers ON er."eval_run_id" = ers."id"
                JOIN "evals" e ON ers."eval_id" = e."id"
-              WHERE e."project_id" = :projectId) eval_results`,
+              WHERE e."project_id" = :projectId) eval_results
+       CROSS JOIN
+            (SELECT COALESCE(SUM(
+                      pg_column_size(ci."data")
+                      + OCTET_LENGTH(ci."key")
+                      + COALESCE(pg_column_size(ci."tags"), 0)
+                    ), 0) AS collection_item_bytes
+               FROM "collection_items" ci
+               JOIN "collections" c ON ci."collection_id" = c."id"
+              WHERE c."project_id" = :projectId) collection_items`,
     { replacements: { projectId } }
   );
   return readStoredFootprint(rows);
@@ -408,7 +427,7 @@ export const snapshotProjectStorage = async (args: {
     costUsd,
   });
   log(
-    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d rows=%d chunkRows=%d memoryRows=%d recordBytes=%d generations=%d traces=%d usageEvents=%d auditEntries=%d activityEntries=%d decisions=%d created=%s costUsd=%s',
+    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d collectionItems=%d rows=%d chunkRows=%d memoryRows=%d recordBytes=%d generations=%d traces=%d usageEvents=%d auditEntries=%d activityEntries=%d decisions=%d created=%s costUsd=%s',
     args.projectPublicId,
     footprint.bytes.total,
     footprint.bytes.files,
@@ -416,6 +435,7 @@ export const snapshotProjectStorage = async (args: {
     footprint.bytes.memories,
     footprint.bytes.datasetItems,
     footprint.bytes.evalResults,
+    footprint.bytes.collectionItems,
     footprint.counts.total,
     footprint.counts.documentChunks,
     footprint.counts.memories,

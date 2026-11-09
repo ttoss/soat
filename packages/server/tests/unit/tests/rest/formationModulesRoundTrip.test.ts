@@ -601,6 +601,19 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
+    name: 'collection',
+    type: 'collection',
+    route: 'collections',
+    build: () => {
+      return {
+        create: { name: 'formation-tickets', schema: { type: 'object' } },
+        expectRead: { name: 'formation-tickets', schema: { type: 'object' } },
+        update: { name: 'formation-tickets-renamed' },
+        expectAfterUpdate: { name: 'formation-tickets-renamed', schema: null },
+      };
+    },
+  },
+  {
     name: 'metadata_schema',
     type: 'metadata_schema',
     route: 'metadata-schemas',

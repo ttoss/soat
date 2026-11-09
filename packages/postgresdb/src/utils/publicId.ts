@@ -17,6 +17,7 @@ export const PUBLIC_ID_PREFIXES = {
   secret: 'sec_',
   aiProvider: 'aip_',
   chat: 'chat_',
+  collection: 'coll_',
   agent: 'agent_',
   agentVersion: 'agver_',
   user: 'user_',

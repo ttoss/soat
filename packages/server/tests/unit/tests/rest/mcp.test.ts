@@ -1583,6 +1583,66 @@ describe('MCP tools - happy path', () => {
     });
   });
 
+  // ── Collections ──────────────────────────────────────────────────────────
+
+  describe('Collection tools', () => {
+    test('an agent writes, filters and merges keyed items', async () => {
+      const collection = parseResult(
+        await mcpCall('create-collection', {
+          project_id: projectId,
+          name: 'mcp-tickets',
+        })
+      );
+      expect(collection.id).toMatch(/^coll_/);
+
+      const put = parseResult(
+        await mcpCall('put-collection-item', {
+          collection_id: collection.id,
+          key: 'ticket-1',
+          data: { status: 'open', priority: 2 },
+          tags: { actor_id: 'actor_a' },
+        })
+      );
+      expect(put).toMatchObject({ key: 'ticket-1', version: 1 });
+
+      const merged = parseResult(
+        await mcpCall('update-collection-item', {
+          collection_id: collection.id,
+          key: 'ticket-1',
+          data: { status: 'closed' },
+          expected_version: 1,
+        })
+      );
+      expect(merged.data).toEqual({ status: 'closed', priority: 2 });
+
+      const listed = parseResult(
+        await mcpCall('list-collection-items', {
+          collection_id: collection.id,
+          data: JSON.stringify({ status: 'closed' }),
+        })
+      );
+      expect(
+        (listed.data as { key: string }[]).map((item) => {
+          return item.key;
+        })
+      ).toEqual(['ticket-1']);
+
+      const fetched = parseResult(
+        await mcpCall('get-collection-item', {
+          collection_id: collection.id,
+          key: 'ticket-1',
+        })
+      );
+      expect(fetched.version).toBe(2);
+
+      const deleted = await mcpCall('delete-collection-item', {
+        collection_id: collection.id,
+        key: 'ticket-1',
+      });
+      expect(deleted.status).toBe(200);
+    });
+  });
+
   // ── Secrets ──────────────────────────────────────────────────────────────
 
   describe('Secrets tools', () => {
