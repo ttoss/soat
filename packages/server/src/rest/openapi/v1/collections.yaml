@@ -177,6 +177,7 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Unique within the project.
                   example: support-tickets
                 schema:
                   $ref: '#/components/schemas/CollectionSchema'
@@ -380,7 +381,15 @@ paths:
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/ItemWriteConflict'
+          description: >-
+            The item has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`), or the write
+            would exceed the project's `storage_bytes` quota
+            (`QUOTA_STORAGE_EXCEEDED`). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
@@ -440,7 +449,15 @@ paths:
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/ItemWriteConflict'
+          description: >-
+            The item has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`), or the write
+            would exceed the project's `storage_bytes` quota
+            (`QUOTA_STORAGE_EXCEEDED`). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
@@ -543,7 +560,15 @@ paths:
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/ItemWriteConflict'
+          description: >-
+            The item has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`), or the write
+            would exceed the project's `storage_bytes` quota
+            (`QUOTA_STORAGE_EXCEEDED`). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
@@ -587,7 +612,15 @@ paths:
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/ItemWriteConflict'
+          description: >-
+            The item has moved past the version this write read
+            (`VERSION_CONFLICT`, with `meta.current_version`), or the write
+            would exceed the project's `storage_bytes` quota
+            (`QUOTA_STORAGE_EXCEEDED`). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
@@ -605,6 +638,7 @@ components:
       name: collection_id
       in: path
       required: true
+      description: The collection's public ID (coll_ prefix).
       schema:
         type: string
         example: coll_V1StGXR8Z5jdHi6B
@@ -618,17 +652,6 @@ components:
       schema:
         type: string
         example: ticket-1042
-  responses:
-    ItemWriteConflict:
-      description: >-
-        The item has moved past the version this write read
-        (`VERSION_CONFLICT`, with `meta.current_version`), or the write would
-        exceed the project's `storage_bytes` quota (`QUOTA_STORAGE_EXCEEDED`).
-        Nothing is written.
-      content:
-        application/json:
-          schema:
-            $ref: './errors.yaml#/components/schemas/ErrorResponse'
   schemas:
     CollectionSchema:
       type: object

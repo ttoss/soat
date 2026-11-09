@@ -40,15 +40,12 @@ const queryTimeoutMs = (): number => {
 const QUERY_CANCELED = '57014';
 
 const isQueryCanceled = (error: unknown): boolean => {
-  if (typeof error !== 'object' || error === null || !('parent' in error)) {
-    return false;
-  }
-  const parent: unknown = error.parent;
   return (
-    typeof parent === 'object' &&
-    parent !== null &&
-    'code' in parent &&
-    parent.code === QUERY_CANCELED
+    error instanceof Error &&
+    'parent' in error &&
+    error.parent instanceof Error &&
+    'code' in error.parent &&
+    error.parent.code === QUERY_CANCELED
   );
 };
 
@@ -84,15 +81,6 @@ export const findCollectionItem = async (args: {
   const row = await findRow(args);
   if (!row) return null;
   return mapItem({ row, collectionPublicId: args.collection.publicId });
-};
-
-export const getCollectionItem = async (args: {
-  collection: CollectionRow;
-  key: string;
-}): Promise<MappedCollectionItem> => {
-  const item = await findCollectionItem(args);
-  if (!item) throw itemNotFound(args.key);
-  return item;
 };
 
 /**

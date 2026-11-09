@@ -143,6 +143,35 @@ describe('Collection item tags', () => {
     });
   });
 
+  test('a grant on the collection alone lists no items', async () => {
+    const reader = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'collitemcollonly', password: 'collitemcollonlypass' });
+    const policy = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['collections:ListCollectionItems'],
+              resource: [`srn:${projectId}:collection:${collectionId}`],
+            },
+          ],
+        },
+      });
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${reader.body.id}/policies`)
+      .send({ policy_ids: [policy.body.id] });
+    const token = await loginAs('collitemcollonly', 'collitemcollonlypass');
+
+    const response = await authenticatedTestClient(token).get(
+      `/api/v1/collections/${collectionId}/items`
+    );
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], next_cursor: null });
+  });
+
   describe('a principal scoped to one actor by tag', () => {
     const keys = (body: { data: { key: string }[] }) => {
       return body.data.map((item) => {

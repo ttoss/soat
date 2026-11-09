@@ -61,13 +61,7 @@ const readName = (value: unknown): string => {
  */
 const readSchema = (value: unknown): Record<string, unknown> | null => {
   if (value === null) return null;
-  if (!isPlainObject(value)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'schema must be a JSON Schema object, or null.'
-    );
-  }
-  if (!compileJsonSchema(value)) {
+  if (!isPlainObject(value) || !compileJsonSchema(value)) {
     throw new DomainError(
       'VALIDATION_FAILED',
       'schema is not a valid JSON Schema.'

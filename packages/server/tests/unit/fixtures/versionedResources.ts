@@ -15,6 +15,11 @@ export const VERSIONED_RESOURCES: Record<
   { module: string; update: string }[]
 > = {
   'Agent.ts': [{ module: 'agents.ts', update: 'updateAgent' }],
+  // Every item write claims it: a put over an existing key and a merge.
+  'CollectionItem.ts': [
+    { module: 'collections.ts', update: 'putCollectionItem' },
+    { module: 'collections.ts', update: 'patchCollectionItem' },
+  ],
   // Only a changed question set bumps it; a rename or a new agent does not.
   'Decider.ts': [{ module: 'deciders.ts', update: 'updateDecider' }],
   'Guardrail.ts': [{ module: 'guardrails.ts', update: 'updateGuardrail' }],
