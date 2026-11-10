@@ -90,8 +90,7 @@ principal would let a later re-mint act with the whole of the owning user's acce
 acts as its starter until a caller resumes it by
 [submitting tool outputs](#lifecycle): the resumed segment's tool calls run on that
 caller's credential, and `acted_as` names them while `started_by_principal_*` keeps the
-starter. A resumption through a [session](./sessions.md) carries no credential, so
-`acted_as` is `null` after it.
+starter, through a [session](./sessions.md) too.
 
 An [approved tool call](./approvals.md#continuation-identity) runs as the `acted_as` of
 the generation that proposed it.

@@ -34,6 +34,7 @@ describe('sessionDelayHelpers', () => {
           sessionId: 'sess_delay_unref',
           // Long enough that it never fires during the test.
           delayMs: 60_000,
+          authHeader: undefined,
           generateFn: () => {
             return Promise.resolve();
           },
