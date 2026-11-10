@@ -33,6 +33,7 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
   let stub: ChatCompletionsStub;
   let adminToken: string;
   let userToken: string;
+  let userId: string;
   let agentId: string;
   let listToolsName: string;
 
@@ -52,6 +53,7 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userId = setup.userId;
 
     const asAdmin = authenticatedTestClient(adminToken);
     const provider = await asAdmin.post('/api/v1/ai-providers').send({
@@ -154,5 +156,40 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
 
     expect(toolResult).not.toContain('credListTools');
     expect(toolResult).toContain("'list-tools' failed");
+  });
+
+  const getGeneration = async (generationId: string) => {
+    const res = await authenticatedTestClient(adminToken).get(
+      `/api/v1/generations/${generationId}`
+    );
+    expect(res.status).toBe(200);
+    return res.body;
+  };
+
+  test('a generation acts as the principal that started it', async () => {
+    const generationId = await pauseAsAdmin();
+
+    const generation = await getGeneration(generationId);
+
+    expect(generation.started_by_principal_type).toBe('user');
+    expect(generation.acted_as).toEqual({
+      principal_type: generation.started_by_principal_type,
+      principal_id: generation.started_by_principal_id,
+    });
+  });
+
+  test('a resumed generation acts as the submitter, still started by the starter', async () => {
+    const generationId = await pauseAsAdmin();
+    const startedBy = (await getGeneration(generationId))
+      .started_by_principal_id;
+
+    await submitAsUser(generationId);
+    const generation = await getGeneration(generationId);
+
+    expect(generation.started_by_principal_id).toBe(startedBy);
+    expect(generation.acted_as).toEqual({
+      principal_type: 'user',
+      principal_id: userId,
+    });
   });
 });

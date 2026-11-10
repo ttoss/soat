@@ -8,6 +8,7 @@ import {
   storeResumedConversationTurn,
 } from './conversationGeneration';
 import { mapGeneratedTurn } from './generatedTurn';
+import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import { emitGenerationStarted } from './sessionGenerationHelpers';
@@ -368,6 +369,8 @@ export const submitSessionToolOutputs = async (args: {
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
   // See `generateSessionResponse`.
   authHeader: string | undefined;
+  // Who the resumed segment's tool calls are recorded as acting as.
+  authUser: AuthUser | undefined;
 }) => {
   const { conversation } = await fetchSessionAndConversation({
     agentId: args.agentId,
@@ -385,6 +388,10 @@ export const submitSessionToolOutputs = async (args: {
     generationId: args.generationId,
     toolOutputs: args.toolOutputs,
     authHeader: args.authHeader,
+    actedAs: resolveStartingPrincipal({
+      authUser: args.authUser,
+      authHeader: args.authHeader,
+    }),
   });
 
   const turn = await storeResumedConversationTurn({

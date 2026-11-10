@@ -42,6 +42,8 @@ const builtinToolResult = (completions: RecordedRequest[]): string => {
 describe('Session self-call', () => {
   let stub: ChatCompletionsStub;
   let userToken: string;
+  let userId: string;
+  let adminToken: string;
   let projectId: string;
   let agentId: string;
   let builtinCall: { id: string; name: string; args: Record<string, unknown> };
@@ -58,6 +60,8 @@ describe('Session self-call', () => {
       createNoPermUser: false,
     });
     userToken = setup.userToken;
+    userId = setup.userId;
+    adminToken = setup.adminToken;
     projectId = setup.projectId;
     const asAdmin = authenticatedTestClient(setup.adminToken);
 
@@ -181,5 +185,12 @@ describe('Session self-call', () => {
 
     expect(res.status).toBe(200);
     expectAuthenticatedBuiltinCall();
+    const generation = await authenticatedTestClient(adminToken).get(
+      `/api/v1/generations/${paused.body.generation_id}`
+    );
+    expect(generation.body.acted_as).toEqual({
+      principal_type: 'user',
+      principal_id: userId,
+    });
   });
 });

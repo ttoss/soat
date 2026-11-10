@@ -563,6 +563,21 @@ components:
             Public id of that principal: the user (`user_…`), or for API key
             auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
+        acted_as:
+          type: object
+          nullable: true
+          description: >-
+            The principal the latest segment's tool calls ran as: the starter,
+            or the caller who resumed the generation by submitting its tool
+            outputs. A tool call an approval held runs, once approved, as this
+            principal. Null when the segment ran with no principal.
+          required: [principal_type, principal_id]
+          properties:
+            principal_type:
+              $ref: './principals.yaml#/components/schemas/PrincipalType'
+            principal_id:
+              type: string
+              example: user_V1StGXR8Z5jdHi6B
         status:
           type: string
           description: Lifecycle status of the generation

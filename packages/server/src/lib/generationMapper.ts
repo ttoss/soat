@@ -14,6 +14,7 @@ export type PersistedGeneration = {
   actor_id: string | null;
   started_by_principal_type: string | null;
   started_by_principal_id: string | null;
+  acted_as: { principal_type: string; principal_id: string } | null;
   status: string;
   started_at: Date;
   completed_at: Date | null;
@@ -65,6 +66,17 @@ const linkedPublicId = (
   return linked?.publicId ?? null;
 };
 
+const actedAs = (gen: {
+  actedAsPrincipalType: string | null;
+  actedAsPrincipalId: string | null;
+}): PersistedGeneration['acted_as'] => {
+  if (!gen.actedAsPrincipalType || !gen.actedAsPrincipalId) return null;
+  return {
+    principal_type: gen.actedAsPrincipalType,
+    principal_id: gen.actedAsPrincipalId,
+  };
+};
+
 export const mapGeneration = (
   gen: InstanceType<(typeof db)['Generation']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -100,6 +112,7 @@ export const mapGeneration = (
     actor_id: linkedPublicId(gen.startedByActor),
     started_by_principal_type: gen.startedByPrincipalType,
     started_by_principal_id: gen.startedByPrincipalId,
+    acted_as: actedAs(gen),
     status: gen.status,
     started_at: gen.startedAt,
     completed_at: gen.completedAt,

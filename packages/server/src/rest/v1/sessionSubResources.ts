@@ -169,6 +169,7 @@ sessionSubResourcesRouter.post(
         };
       }),
       authHeader: ctx.headers.authorization,
+      authUser: ctx.authUser,
     });
 
     ctx.body = result;

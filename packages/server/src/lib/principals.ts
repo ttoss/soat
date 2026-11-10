@@ -79,6 +79,19 @@ export const startedByPrincipalColumns = (
   };
 };
 
+/** The `actedAsPrincipal*` column pair, the same mapping as `startedBy`. */
+export const actedAsPrincipalColumns = (
+  principal: StartingPrincipal | null
+): {
+  actedAsPrincipalType: string | null;
+  actedAsPrincipalId: string | null;
+} => {
+  return {
+    actedAsPrincipalType: principal?.principalType ?? null,
+    actedAsPrincipalId: principal?.principalId ?? null,
+  };
+};
+
 /** The `createdByPrincipal*` column pair, the same mapping as `startedBy`. */
 export const createdByColumns = (
   principal: RequestPrincipal | null
