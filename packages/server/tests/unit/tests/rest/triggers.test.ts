@@ -2047,6 +2047,44 @@ describe('Triggers', () => {
       });
     });
 
+    test("a manual fire through an API key acts as the key's grant ∩ policy_ids", async () => {
+      const fireOnly = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['triggers:FireTrigger'] }],
+          },
+        });
+      const createKey = async (policyIds: string[]) => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/api-keys')
+          .send({
+            name: `fire-key-${policyIds[0]}`,
+            project_id: projectId,
+            policy_ids: policyIds,
+          });
+        expect(res.status).toBe(201);
+        return res.body as { id: string; key: string };
+      };
+      const narrowKey = await createKey([fireOnly.body.id]);
+      const fullKey = await createKey([triggerPolicyId]);
+
+      const refused = await authenticatedTestClient(narrowKey.key)
+        .post(`/api/v1/triggers/${orchTriggerId}/fire`)
+        .send({});
+      const fired = await authenticatedTestClient(fullKey.key)
+        .post(`/api/v1/triggers/${orchTriggerId}/fire`)
+        .send({});
+
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.code).toBe('FORBIDDEN');
+      expect(fired.status).toBe(200);
+      expect(fired.body.acted_as).toEqual({
+        principal_type: 'api_key',
+        principal_id: fullKey.id,
+      });
+    });
+
     test("a manual fire is refused when the trigger's policy_ids cannot start the target (403)", async () => {
       const narrow = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
