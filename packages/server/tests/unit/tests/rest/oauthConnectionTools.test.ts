@@ -254,6 +254,57 @@ describe('http tool auth oauth_connection', () => {
     expect(JSON.stringify(result)).toContain('needs an actor');
   });
 
+  test('builtin actions on a client and a connection are scoped by their SRNs', async () => {
+    const actorId = await createActor();
+    const connectionId = await connect(actorId);
+    const tool = await turn.createTool({
+      type: 'builtin',
+      execute: undefined,
+      parameters: undefined,
+      actions: ['get-oauth-client', 'get-oauth-connection'],
+    });
+    const scoped = await turn.createAgent({
+      tool_bindings: [{ tool_id: tool.id }],
+      policy_ids: [
+        await turn.createPolicy({
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'oauth-clients:GetOauthClient',
+                'oauth-connections:GetOauthConnection',
+              ],
+              resource: [
+                `srn:${turn.projectId}:oauth_client:${clientId}`,
+                `srn:${turn.projectId}:oauth_connection:${connectionId}`,
+              ],
+            },
+          ],
+        }),
+      ],
+    });
+
+    const { results } = await turn.generate({
+      agentId: scoped,
+      calls: [
+        {
+          name: `${tool.name}_get-oauth-client`,
+          args: { oauth_client_id: clientId },
+        },
+        {
+          name: `${tool.name}_get-oauth-connection`,
+          args: { oauth_connection_id: connectionId },
+        },
+      ],
+    });
+
+    expect(
+      results.map((result) => {
+        return result.id;
+      })
+    ).toEqual([clientId, connectionId]);
+  });
+
   test("the agent's policy_ids must allow UseOauthConnection", async () => {
     const actorId = await createActor();
     await connect(actorId);
