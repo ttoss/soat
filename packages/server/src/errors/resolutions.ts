@@ -63,6 +63,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
   POLICY_GRANT_NOT_HELD:
     'Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.',
+  POLICY_OUTSIDE_PROJECT:
+    "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
   POLICY_HAS_DEPENDENTS:
     'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) and the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), or delete them, then delete the policy.',
   SHARE_CAP_EXCEEDED:

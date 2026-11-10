@@ -49,6 +49,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced policy does not exist.',
   },
+  POLICY_OUTSIDE_PROJECT: {
+    httpStatus: 400,
+    description:
+      "A `policy_ids` entry names a policy of another project. A resource may carry only its own project's policies and global ones. `meta.policy_id` names it.",
+  },
   AI_PROVIDER_ERROR: {
     httpStatus: 502,
     description:

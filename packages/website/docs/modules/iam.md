@@ -87,7 +87,7 @@ Examples:
 
 ### Project Segment and Policy Scoping
 
-Policies are **global**, so the `<project_id>` segment is the primary project restriction:
+The `<project_id>` segment is the primary project restriction. A [project policy](./policies.md#project-and-global-policies) may name only its own project; a global policy may name any:
 
 - `resource: ["*"]` — all resources in **all projects**
 - `resource: ["srn:proj_ABC:*:*"]` — `proj_ABC` only

@@ -2,7 +2,10 @@ openapi: 3.0.3
 info:
   title: SOAT Policies API
   version: 1.0.0
-  description: API for managing global policies (admin-only)
+  description: >-
+    API for managing policies: global ones (unrestricted admin only) and
+    project policies, managed by whoever holds the `policies:*` actions in
+    their project.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -23,13 +26,22 @@ paths:
     get:
       tags:
         - Policies
-      summary: List all policies
+      summary: List policies
       description: >
-        Returns global policies. Requires admin role. Pass user_id to list only
-        the policies attached to that user.
+        Returns the policies of the project `project_id` names, or of the
+        project a project-scoped credential is bound to. Without either, the
+        unrestricted admin lists every policy, global and project ones. Pass
+        `user_id` (unrestricted admin only) to list only the policies attached
+        to that user.
       operationId: listPolicies
       x-iam-action: policies:ListPolicies
       parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: List only this project's policies (proj_...)
+          schema:
+            type: string
         - name: user_id
           in: query
           required: false
@@ -60,7 +72,9 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (non-admin user)
+          description: >-
+            Forbidden: the caller may not list policies in the project, or
+            lists global policies without being the unrestricted admin
           content:
             application/json:
               schema:
@@ -73,7 +87,12 @@ paths:
       tags:
         - Policies
       summary: Create a policy
-      description: Creates a new global policy. Requires admin role.
+      description: >-
+        Creates a project policy when `project_id` is given or the credential
+        is bound to a project: its `Allow` statements may name only that
+        project's resources (`srn:<project_id>:<type>:<id>`), else `400`.
+        Without a project, creates a global policy, which only the
+        unrestricted admin may.
       operationId: createPolicy
       x-iam-action: policies:CreatePolicy
       x-soat-agent-exclude: true
@@ -87,6 +106,13 @@ paths:
                 - document
               additionalProperties: false
               properties:
+                project_id:
+                  type: string
+                  description: >-
+                    The project the policy belongs to (proj_...). Defaults to
+                    a project-scoped credential's own project; omitted
+                    otherwise, the policy is global.
+                  example: proj_V1StGXR8Z5jdHi6B
                 name:
                   type: string
                   example: ReadOnlyAccess
@@ -103,7 +129,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/PolicyRecord'
         '400':
-          description: Bad request (invalid policy document)
+          description: >-
+            Bad request: an invalid policy document, or an `Allow` resource
+            outside the policy's project
           content:
             application/json:
               schema:
@@ -115,7 +143,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (non-admin user)
+          description: Forbidden (the caller may not act on this policy)
           content:
             application/json:
               schema:
@@ -131,7 +159,9 @@ paths:
       tags:
         - Policies
       summary: Get a policy
-      description: Returns details of a specific policy. Requires admin role.
+      description: >-
+        Returns a policy. A project policy needs `policies:GetPolicy` in its
+        project; a global one, the unrestricted admin.
       operationId: getPolicy
       x-iam-action: policies:GetPolicy
       parameters:
@@ -158,7 +188,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (non-admin user)
+          description: Forbidden (the caller may not act on this policy)
           content:
             application/json:
               schema:
@@ -177,7 +207,10 @@ paths:
       tags:
         - Policies
       summary: Update a policy
-      description: Updates an existing global policy. Requires admin role.
+      description: >-
+        Updates a policy. A project policy needs `policies:UpdatePolicy` in its
+        project and its `Allow` statements stay within that project; a global
+        one, the unrestricted admin. The project never changes.
       operationId: updatePolicy
       x-iam-action: policies:UpdatePolicy
       x-soat-agent-exclude: true
@@ -213,7 +246,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/PolicyRecord'
         '400':
-          description: Bad request (invalid policy document)
+          description: >-
+            Bad request: an invalid policy document, or an `Allow` resource
+            outside the policy's project
           content:
             application/json:
               schema:
@@ -225,7 +260,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (non-admin user)
+          description: Forbidden (the caller may not act on this policy)
           content:
             application/json:
               schema:
@@ -247,7 +282,8 @@ paths:
         - Policies
       summary: Delete a policy
       description: >-
-        Deletes a global policy. Requires admin role. Refused with `409
+        Deletes a policy. A project policy needs `policies:DeletePolicy` in its
+        project; a global one, the unrestricted admin. Refused with `409
         POLICY_HAS_DEPENDENTS` while a trigger, agent or webhook names it in
         its `policy_ids`.
       operationId: deletePolicy
@@ -273,7 +309,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden (non-admin user)
+          description: Forbidden (the caller may not act on this policy)
           content:
             application/json:
               schema:
@@ -354,6 +390,12 @@ components:
           type: string
           description: Public policy ID (pol_ prefix)
           example: pol_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          nullable: true
+          description: >-
+            The project the policy belongs to; `null` for a global policy.
+          example: proj_V1StGXR8Z5jdHi6B
         name:
           type: string
           nullable: true

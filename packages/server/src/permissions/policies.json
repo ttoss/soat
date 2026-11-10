@@ -4,27 +4,27 @@
     {
       "operationId": "listPolicies",
       "action": "policies:ListPolicies",
-      "description": "List all policies (admin only)"
+      "description": "List the policies of a project"
     },
     {
       "operationId": "createPolicy",
       "action": "policies:CreatePolicy",
-      "description": "Create a new policy (admin only)"
+      "description": "Create a policy in a project"
     },
     {
       "operationId": "getPolicy",
       "action": "policies:GetPolicy",
-      "description": "Get a policy by ID (admin only)"
+      "description": "Get a project policy by ID"
     },
     {
       "operationId": "updatePolicy",
       "action": "policies:UpdatePolicy",
-      "description": "Update a policy (admin only)"
+      "description": "Update a project policy"
     },
     {
       "operationId": "deletePolicy",
       "action": "policies:DeletePolicy",
-      "description": "Delete a policy (admin only)"
+      "description": "Delete a project policy"
     }
   ]
 }
