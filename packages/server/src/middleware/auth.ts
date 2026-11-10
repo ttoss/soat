@@ -12,6 +12,7 @@ import {
   createPolicySetsIsAllowed,
   resolvePolicySets,
 } from '../lib/permissions';
+import { narrowToOnBehalfOf } from './authOnBehalfOf';
 import type { IsAllowedFn } from './authProjectResolvers';
 import {
   createApiKeyResolveProjectIds,
@@ -448,6 +449,7 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
       headers: ctx.headers ?? {},
       apiKeyProjectPublicId: ctx.authUser.apiKeyProjectPublicId,
     });
+    ctx.authUser = narrowToOnBehalfOf({ authUser: ctx.authUser, db: ctx.db });
   }
 
   await next();
