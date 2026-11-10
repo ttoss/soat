@@ -5738,8 +5738,8 @@ if [ -z "$EVENT_TRIGGER_ID" ] || [ "$EVENT_TRIGGER_ID" = "null" ]; then
   printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
   exit 1
 fi
-if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.event_pattern == "smoke.tick"' >/dev/null 2>&1; then
-  echo "ERROR: event trigger did not persist its event_pattern" >&2
+if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.events == ["smoke.tick"]' >/dev/null 2>&1; then
+  echo "ERROR: event trigger did not persist its events" >&2
   printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
   exit 1
 fi

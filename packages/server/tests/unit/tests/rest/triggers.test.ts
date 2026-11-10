@@ -2206,6 +2206,12 @@ describe('Triggers', () => {
       );
       expect(listRes.status).toBe(200);
 
+      // A by-id refusal reads the token's policies for the project it names.
+      const getRes = await authenticatedTestClient(trgToken).get(
+        `/api/v1/triggers/${boundTrigger.body.id}`
+      );
+      expect(getRes.status).toBe(403);
+
       // policy_ids do not allow creating triggers → the creator's own
       // (broader) permissions do not reach the token.
       const createRes = await authenticatedTestClient(trgToken)
