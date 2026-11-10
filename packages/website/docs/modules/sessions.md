@@ -226,6 +226,8 @@ When `auto_generate` is `true`, `POST .../messages` saves the user message **and
 
 The explicit `POST .../generate` endpoint works regardless of this setting.
 
+Whichever request runs the turn — `.../messages` (auto-generated or debounced), `.../generate` or `.../tool-outputs` — its `builtin` calls run as that request's caller, held to the agent's [`boundary_policy`](./agents.md#soat-action-permissions).
+
 ### Message Delay (Debounce)
 
 When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LLM generation immediately. A timer starts and resets with each new message; the LLM is called once the delay elapses with no new messages. With `message_delay_seconds: 3`, three rapid messages ("What's the" / "weather in" / "Paris?") each reset the timer; after 3 seconds of silence the LLM is called once with all three in context.

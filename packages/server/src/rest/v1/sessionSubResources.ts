@@ -72,6 +72,7 @@ sessionSubResourcesRouter.post(
       documentId: body.document_id,
       toolContext: parseToolContextBody(body.tool_context),
       authUser: ctx.authUser,
+      authHeader: ctx.headers.authorization,
       idempotencyKey: idempotencyKeyOf(ctx),
     });
 
@@ -109,6 +110,7 @@ sessionSubResourcesRouter.post(
         sessionId: ctx.params.session_id,
         model: body.model,
         toolContext: parseToolContextBody(body.tool_context),
+        authHeader: ctx.headers.authorization,
       }).catch(() => {
         // Fire-and-forget: errors are emitted via event bus
       });
@@ -122,6 +124,7 @@ sessionSubResourcesRouter.post(
       sessionId: ctx.params.session_id,
       model: body.model,
       toolContext: parseToolContextBody(body.tool_context),
+      authHeader: ctx.headers.authorization,
     });
 
     ctx.body = result;
@@ -165,6 +168,7 @@ sessionSubResourcesRouter.post(
           output: toolOutput.output,
         };
       }),
+      authHeader: ctx.headers.authorization,
     });
 
     ctx.body = result;

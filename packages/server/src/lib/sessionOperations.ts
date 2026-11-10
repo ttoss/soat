@@ -124,10 +124,9 @@ export const generateSessionResponse = async (args: {
   sessionId: string;
   model?: string;
   toolContext?: Record<string, string>;
-  // Only request-less callers set it: an approved tool call's continuation
-  // re-mints one from the principal on the generation that proposed the call. A
-  // turn driven by a real request leaves it unset.
-  authHeader?: string;
+  // The credential the turn's `builtin` calls run as: the driving request's, or
+  // one a request-less continuation re-mints. Required so every caller states it.
+  authHeader: string | undefined;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -217,7 +216,7 @@ export const addSessionMessage = async (args: {
   idempotencyKey?: string;
   // Forwarded to the auto-generation this message may trigger; see
   // `generateSessionResponse`.
-  authHeader?: string;
+  authHeader: string | undefined;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -314,7 +313,7 @@ export const sendSessionMessage = async (args: {
   // See `generateSessionResponse`. Threaded through both the auto-generation
   // `addSessionMessage` may trigger and the explicit turn below, so the
   // credential reaches whichever of the two actually runs.
-  authHeader?: string;
+  authHeader: string | undefined;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -367,6 +366,8 @@ export const submitSessionToolOutputs = async (args: {
   sessionId: string;
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
+  // See `generateSessionResponse`.
+  authHeader: string | undefined;
 }) => {
   const { conversation } = await fetchSessionAndConversation({
     agentId: args.agentId,
@@ -383,6 +384,7 @@ export const submitSessionToolOutputs = async (args: {
     agentId: args.agentPublicId,
     generationId: args.generationId,
     toolOutputs: args.toolOutputs,
+    authHeader: args.authHeader,
   });
 
   const turn = await storeResumedConversationTurn({

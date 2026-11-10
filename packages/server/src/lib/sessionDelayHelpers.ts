@@ -5,7 +5,7 @@ type GenerateSessionResponseFn = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
-  authHeader?: string;
+  authHeader: string | undefined;
   initiatorGenerationId?: string | null;
 }) => Promise<unknown>;
 
@@ -28,7 +28,7 @@ export const scheduleDelayedGeneration = (args: {
   sessionId: string;
   delayMs: number;
   toolContext?: Record<string, string>;
-  authHeader?: string;
+  authHeader: string | undefined;
   generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
@@ -61,7 +61,7 @@ export const triggerOrScheduleGeneration = (args: {
   savedContent: string | null;
   savedDocumentId: string | undefined;
   toolContext?: Record<string, string>;
-  authHeader?: string;
+  authHeader: string | undefined;
   generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
