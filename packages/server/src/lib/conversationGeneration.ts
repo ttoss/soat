@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
@@ -102,6 +103,7 @@ const runAgentGeneration = async (args: {
   abortSignal?: AbortSignal;
   sessionId?: string;
   authHeader?: string;
+  authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
@@ -119,6 +121,7 @@ const runAgentGeneration = async (args: {
       snapshotPosition: args.snapshotPosition,
     },
     authHeader: args.authHeader,
+    authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
 
@@ -157,6 +160,7 @@ const runGenerationForAgent = async (args: {
   abortSignal?: AbortSignal;
   sessionId?: string;
   authHeader?: string;
+  authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
 }): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
@@ -169,6 +173,7 @@ const runGenerationForAgent = async (args: {
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
 };
@@ -424,10 +429,12 @@ export const generateConversationMessage = async (args: {
   // caller that knows the session behind the turn (the actor is derived from
   // it). Plain conversation generations leave it unset.
   sessionId?: string;
-  // The credential the turn's tools run with. Set only by request-less callers
-  // that re-minted one for durable work (an approved tool call's
-  // continuation); a request-driven turn leaves it unset.
+  // The credential the turn's `builtin` calls run as: the driving request's, or
+  // one a request-less continuation re-mints.
   authHeader?: string;
+  // The caller recorded as the generation's `acted_as`; required so every
+  // entry point states it (`undefined` when no request drove the turn).
+  authUser: AuthUser | undefined;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -460,6 +467,7 @@ export const generateConversationMessage = async (args: {
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
 

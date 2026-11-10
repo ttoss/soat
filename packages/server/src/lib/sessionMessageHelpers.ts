@@ -68,11 +68,12 @@ export const addResolvedSessionUserMessage = async (args: {
 
 type SessionRecord = InstanceType<(typeof db)['Session']> | null;
 
-type GenerateFn = (args: {
+export type GenerateSessionResponseFn = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
   authHeader: string | undefined;
+  authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
 }) => Promise<unknown>;
 
@@ -82,9 +83,10 @@ export const triggerOrReturnMessage = (args: {
   sessionId: string;
   toolContext?: Record<string, string>;
   authHeader: string | undefined;
+  authUser: AuthUser | undefined;
   savedContent: string | null;
   savedDocumentId: string | undefined;
-  generateFn: GenerateFn;
+  generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -96,6 +98,7 @@ export const triggerOrReturnMessage = (args: {
       sessionId: args.sessionId,
       toolContext: args.toolContext,
       authHeader: args.authHeader,
+      authUser: args.authUser,
       initiatorGenerationId: args.initiatorGenerationId,
     });
   }

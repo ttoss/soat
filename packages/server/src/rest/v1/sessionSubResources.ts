@@ -104,14 +104,17 @@ sessionSubResourcesRouter.post(
     // Background by default; ?wait=true blocks until the generation settles.
     const wait = ctx.query['wait'] === 'true';
 
+    const turn = {
+      agentId,
+      sessionId: ctx.params.session_id,
+      model: body.model,
+      toolContext: parseToolContextBody(body.tool_context),
+      authHeader: ctx.headers.authorization,
+      authUser: ctx.authUser,
+    };
+
     if (!wait) {
-      generateSessionResponse({
-        agentId,
-        sessionId: ctx.params.session_id,
-        model: body.model,
-        toolContext: parseToolContextBody(body.tool_context),
-        authHeader: ctx.headers.authorization,
-      }).catch(() => {
+      generateSessionResponse(turn).catch(() => {
         // Fire-and-forget: errors are emitted via event bus
       });
       ctx.status = 202;
@@ -119,13 +122,7 @@ sessionSubResourcesRouter.post(
       return;
     }
 
-    const result = await generateSessionResponse({
-      agentId,
-      sessionId: ctx.params.session_id,
-      model: body.model,
-      toolContext: parseToolContextBody(body.tool_context),
-      authHeader: ctx.headers.authorization,
-    });
+    const result = await generateSessionResponse(turn);
 
     ctx.body = result;
   }

@@ -276,6 +276,15 @@ conversationSubResourcesRouter.post(
       });
     }
 
+    const turn = {
+      conversationId: ctx.params.conversation_id,
+      agentId: body.agent_id,
+      model: body.model,
+      toolContext: parseToolContextBody(body.tool_context),
+      authHeader: ctx.headers.authorization,
+      authUser: ctx.authUser,
+    };
+
     // The agent is resolved first either way, so an unknown one is still a
     // synchronous 404 rather than a failure the caller can only discover by
     // polling.
@@ -285,12 +294,7 @@ conversationSubResourcesRouter.post(
         agentId: body.agent_id,
       });
 
-      generateConversationMessage({
-        conversationId: ctx.params.conversation_id,
-        agentId: body.agent_id,
-        model: body.model,
-        toolContext: parseToolContextBody(body.tool_context),
-      }).catch(() => {
+      generateConversationMessage(turn).catch(() => {
         // Fire-and-forget: the reply lands as a conversation message, and
         // failures surface on the generation record the caller polls.
       });
@@ -303,12 +307,7 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const result = await generateConversationMessage({
-      conversationId: ctx.params.conversation_id,
-      agentId: body.agent_id,
-      model: body.model,
-      toolContext: parseToolContextBody(body.tool_context),
-    });
+    const result = await generateConversationMessage(turn);
 
     ctx.status = 200;
     ctx.body = mapGeneratedTurn(result);

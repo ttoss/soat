@@ -210,6 +210,8 @@ Flow (with `?wait=true`):
 
 6. On `requires_action` (client tools), no message is persisted yet. Submit outputs via [`POST /agents/:id/generate/:generation_id/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs). When the turn completes, its reply is stored right after the last message the turn read and emits `conversation_messages.generated`, as in step 5; that route answers the generation, not the stored message.
 
+The turn's `builtin` calls run as the caller of `generate`, capped by the agent's [`policy_ids`](./agents.md#execution-identity), and the generation records that caller as its [`acted_as`](./generations.md#acting-principal).
+
 #### Concurrency
 
 Nothing serializes generate calls on one conversation. Each turn reads the history as it stands when it starts, so concurrent turns answer the same history, and stores its reply right after the last message it read, so a message added while it runs stays after the reply. Message writes to one conversation are serialized, so a reply and the messages added while it ran are all stored (see [Message ordering](#message-ordering)).

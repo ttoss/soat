@@ -1,13 +1,9 @@
+import type { AuthUser } from '../Context';
 import type { db } from '../db';
-import { triggerOrReturnMessage } from './sessionMessageHelpers';
-
-type GenerateSessionResponseFn = (args: {
-  agentId: number;
-  sessionId: string;
-  toolContext?: Record<string, string>;
-  authHeader: string | undefined;
-  initiatorGenerationId?: string | null;
-}) => Promise<unknown>;
+import {
+  type GenerateSessionResponseFn,
+  triggerOrReturnMessage,
+} from './sessionMessageHelpers';
 
 // One pending timer per session, keyed `${agentId}#${sessionId}`. Debounce:
 // each new message cancels the previous timer, so the LLM is called only after
@@ -29,6 +25,7 @@ export const scheduleDelayedGeneration = (args: {
   delayMs: number;
   toolContext?: Record<string, string>;
   authHeader: string | undefined;
+  authUser: AuthUser | undefined;
   generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
@@ -44,6 +41,7 @@ export const scheduleDelayedGeneration = (args: {
         sessionId: args.sessionId,
         toolContext: args.toolContext,
         authHeader: args.authHeader,
+        authUser: args.authUser,
         initiatorGenerationId: args.initiatorGenerationId,
       })
       .catch(() => {});
@@ -62,6 +60,7 @@ export const triggerOrScheduleGeneration = (args: {
   savedDocumentId: string | undefined;
   toolContext?: Record<string, string>;
   authHeader: string | undefined;
+  authUser: AuthUser | undefined;
   generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
@@ -79,6 +78,7 @@ export const triggerOrScheduleGeneration = (args: {
       delayMs,
       toolContext: args.toolContext,
       authHeader: args.authHeader,
+      authUser: args.authUser,
       generateFn: args.generateFn,
       initiatorGenerationId: args.initiatorGenerationId,
     });
@@ -95,6 +95,7 @@ export const triggerOrScheduleGeneration = (args: {
     sessionId: args.sessionId,
     toolContext: args.toolContext,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     savedContent: args.savedContent,
     savedDocumentId: args.savedDocumentId,
     generateFn: args.generateFn,

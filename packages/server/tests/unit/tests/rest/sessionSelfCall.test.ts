@@ -128,6 +128,16 @@ describe('Session self-call', () => {
     expect(result).toContain('session-self-call-tool');
   };
 
+  const expectActedAsCaller = async (generationId: string) => {
+    const generation = await authenticatedTestClient(adminToken).get(
+      `/api/v1/generations/${generationId}`
+    );
+    expect(generation.body.acted_as).toEqual({
+      principal_type: 'user',
+      principal_id: userId,
+    });
+  };
+
   beforeEach(() => {
     stub.completions.length = 0;
   });
@@ -145,6 +155,7 @@ describe('Session self-call', () => {
 
     expect(res.status).toBe(200);
     expectAuthenticatedBuiltinCall();
+    await expectActedAsCaller(res.body.generation_id);
   });
 
   test('POST /sessions/{id}/messages runs an auto-generated turn as the caller', async () => {
@@ -157,6 +168,7 @@ describe('Session self-call', () => {
 
     expect(res.status).toBe(201);
     expectAuthenticatedBuiltinCall();
+    await expectActedAsCaller(res.body.generation_id);
   });
 
   test('POST /sessions/{id}/tool-outputs resumes the turn as the caller', async () => {
@@ -185,12 +197,6 @@ describe('Session self-call', () => {
 
     expect(res.status).toBe(200);
     expectAuthenticatedBuiltinCall();
-    const generation = await authenticatedTestClient(adminToken).get(
-      `/api/v1/generations/${paused.body.generation_id}`
-    );
-    expect(generation.body.acted_as).toEqual({
-      principal_type: 'user',
-      principal_id: userId,
-    });
+    await expectActedAsCaller(paused.body.generation_id);
   });
 });
