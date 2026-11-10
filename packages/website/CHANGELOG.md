@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.105.0](https://github.com/ttoss/soat/compare/v0.104.0...v0.105.0) (2026-11-10)
+
+* feat(iam)!: on-behalf-of requests run as the key capped by the generation's identity (#1857) ([3ea4497](https://github.com/ttoss/soat/commit/3ea4497f5e631c29246c70e8c9ae2bd90b488da2)), closes [#1857](https://github.com/ttoss/soat/issues/1857)
+
+### Bug Fixes
+
+* **server:** session and conversation turns record the caller as acted_as ([#1858](https://github.com/ttoss/soat/issues/1858)) ([950bb82](https://github.com/ttoss/soat/commit/950bb82a7ceb502511d6b2ffb6ab585ea89c91ab))
+* **tutorials:** bound the formations tutorial runs under the client timeout ([#1859](https://github.com/ttoss/soat/issues/1859)) ([14caebf](https://github.com/ttoss/soat/commit/14caebf29dc45ed9616cfe1958a81df6599d13d3))
+
+### Features
+
+* **iam:** project-scoped policies with project_id ([#1860](https://github.com/ttoss/soat/issues/1860)) ([c020649](https://github.com/ttoss/soat/commit/c020649025e4a9707e6f5e5c99192b0af3bfc989))
+
+### BREAKING CHANGES
+
+* a callback that passed on the key's grant is now refused where the generation's identity denies.
+
 # [0.104.0](https://github.com/ttoss/soat/compare/v0.103.0...v0.104.0) (2026-11-10)
 
 * feat(webhooks)!: webhooks take policy_ids and share the event trigger filter (#1855) ([9b5014e](https://github.com/ttoss/soat/commit/9b5014ecc9ab0dbeec0ceace84261f146f454885)), closes [#1855](https://github.com/ttoss/soat/issues/1855)

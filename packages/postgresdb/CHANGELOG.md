@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.105.0](https://github.com/ttoss/soat/compare/v0.104.0...v0.105.0) (2026-11-10)
+
+### Features
+
+* **iam:** project-scoped policies with project_id ([#1860](https://github.com/ttoss/soat/issues/1860)) ([c020649](https://github.com/ttoss/soat/commit/c020649025e4a9707e6f5e5c99192b0af3bfc989))
+
 # [0.104.0](https://github.com/ttoss/soat/compare/v0.103.0...v0.104.0) (2026-11-10)
 
 * feat(webhooks)!: webhooks take policy_ids and share the event trigger filter (#1855) ([9b5014e](https://github.com/ttoss/soat/commit/9b5014ecc9ab0dbeec0ceace84261f146f454885)), closes [#1855](https://github.com/ttoss/soat/issues/1855)
