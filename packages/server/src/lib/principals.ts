@@ -8,6 +8,7 @@ export const PRINCIPAL_TYPES = [
   'agent',
   'automation',
   'approval',
+  'trigger',
   'system',
 ] as const;
 

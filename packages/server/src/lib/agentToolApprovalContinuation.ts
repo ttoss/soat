@@ -4,13 +4,13 @@ import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
-import { resolveAgentBoundary } from './agentPolicies';
 import {
   type ApprovalResumeHandler,
   type DecisionOutput,
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
+import { resolveAttachedPolicies } from './attachedPolicies';
 import { expireChainIfSettled } from './generationChains';
 import type { PolicyDocument } from './iam';
 import { buildRunAuthHeader } from './orchestrationRunToken';
@@ -91,7 +91,7 @@ const proposingAgentBoundary = async (args: {
       })
     : null;
   if (!agent) return DENY_ALL_BOUNDARY;
-  return resolveAgentBoundary({
+  return resolveAttachedPolicies({
     policyIds: agent.policyIds,
     actorId: await proposingActorId(args.item.generation_id),
   });

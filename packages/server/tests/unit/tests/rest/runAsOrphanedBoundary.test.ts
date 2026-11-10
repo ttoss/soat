@@ -82,7 +82,7 @@ describe('a run-as token whose boundary source is gone', () => {
         type: 'manual',
         target_type: 'orchestration',
         target_id: orchestrationRes.body.id,
-        policy_id: policyId,
+        policy_ids: [policyId],
       });
     expect(triggerRes.status).toBe(201);
 

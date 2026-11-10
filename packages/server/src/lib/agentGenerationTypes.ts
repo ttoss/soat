@@ -40,7 +40,7 @@ export type TypedAgent = {
   stopConditions: unknown;
   activeToolIds: unknown;
   stepRules: unknown;
-  /** Resolved per turn by `resolveAgentBoundary`, never read raw. */
+  /** Resolved per turn by `resolveAttachedPolicies`, never read raw. */
   policyIds: unknown;
   temperature: unknown;
   maxOutputTokens: unknown;

@@ -15,6 +15,7 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
   let userToken: string;
   let projectId: string;
   let agentId: string;
+  let userPolicyId: string;
   let triggerFormationId: string;
 
   const templateFor = (note: string) => {
@@ -27,6 +28,7 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
             type: 'manual',
             target_type: 'agent',
             target_id: agentId,
+            policy_ids: [userPolicyId],
             tool_context: { note },
           },
         },
@@ -51,6 +53,7 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
       createNoPermUser: false,
     });
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
 
     const aiProviderRes = await authenticatedTestClient(userToken)

@@ -2,7 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { findAgentsCarryingPolicy } from './agentPolicies';
+import { findPolicyCarriers } from './attachedPolicies';
 import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
 import { emptyPage, paginatedList } from './pagination';
@@ -137,27 +137,17 @@ export const deletePolicy = async (args: {
     );
   }
 
-  const [triggers, triggerCount, agents] = await Promise.all([
-    db.Trigger.findAll({
-      where: { policyId: policy.id },
-      attributes: ['publicId'],
-      limit: MAX_DEPENDENT_SAMPLE,
-    }),
-    db.Trigger.count({ where: { policyId: policy.id } }),
-    findAgentsCarryingPolicy({
-      policyPublicId: args.policyId,
-      limit: MAX_DEPENDENT_SAMPLE,
-    }),
-  ]);
-  if (triggerCount > 0 || agents.count > 0) {
+  const { agents, triggers } = await findPolicyCarriers({
+    policyPublicId: args.policyId,
+    limit: MAX_DEPENDENT_SAMPLE,
+  });
+  if (triggers.count > 0 || agents.count > 0) {
     throw new DomainError(
       'POLICY_HAS_DEPENDENTS',
-      `Policy '${args.policyId}' is attached to ${triggerCount} trigger(s) and ${agents.count} agent(s); it cannot be deleted.`,
+      `Policy '${args.policyId}' is attached to ${triggers.count} trigger(s) and ${agents.count} agent(s); it cannot be deleted.`,
       {
-        triggers: triggerCount,
-        sample: triggers.map((trigger) => {
-          return trigger.publicId;
-        }),
+        triggers: triggers.count,
+        sample: triggers.sample,
         agents: agents.count,
         agent_sample: agents.sample,
       }

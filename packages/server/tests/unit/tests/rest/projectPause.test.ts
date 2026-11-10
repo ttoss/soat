@@ -1,7 +1,10 @@
 import { db } from 'src/db';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createAllowAllPolicy,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Project pause', () => {
@@ -383,13 +386,16 @@ describe('Project pause', () => {
     });
 
     test('a manual trigger fire', async () => {
-      const trigger = await asAdmin().post('/api/v1/triggers').send({
-        project_id: projectId,
-        name: 'paused-manual',
-        type: 'manual',
-        target_type: 'agent',
-        target_id: agentId,
-      });
+      const trigger = await asAdmin()
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'paused-manual',
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+        });
       expect(trigger.status).toBe(201);
 
       const res = await asAdmin()

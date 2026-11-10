@@ -16,23 +16,28 @@ import {
   acceptStoredToolContextUpdate,
 } from './toolContextCarrier';
 import {
+  effectiveEventFilter,
+  type EventFilterArgs,
+  storedEventFilter,
+} from './triggerEventFilter';
+import {
   assertTriggerConfigValid,
   computeNextFireAt,
   type TriggerTargetType,
   type TriggerType,
 } from './triggerValidation';
 import {
-  assertTriggerPolicyHeld,
+  assertTriggerPoliciesHeld,
   assertTriggerUpdateAuthority,
 } from './triggerWriteAuthority';
 
+export { readTriggerEvents, validateEventPattern } from './triggerEventFilter';
 export type { TriggerTargetType, TriggerType } from './triggerValidation';
 export {
   mayStartTarget,
   TRIGGER_TARGET_TYPES,
   TRIGGER_TYPES,
   validateCronExpression,
-  validateEventPattern,
   validateTriggerShape,
 } from './triggerValidation';
 
@@ -46,7 +51,6 @@ const decryptTriggerSecret = (stored: string): string => {
 
 type TriggerInstance = InstanceType<(typeof db)['Trigger']> & {
   project?: InstanceType<(typeof db)['Project']>;
-  policy?: InstanceType<(typeof db)['Policy']> | null;
   createdBy?: InstanceType<(typeof db)['User']> | null;
 };
 
@@ -65,9 +69,11 @@ const mapTrigger = (
     action: instance.action,
     input: instance.input,
     cron: instance.cron,
-    event_pattern: instance.eventPattern,
+    events: instance.events,
+    event_resources: instance.eventResources,
+    event_data: instance.eventData,
     active: instance.active,
-    policy_id: instance.policy?.publicId ?? null,
+    policy_ids: instance.policyIds ?? [],
     next_fire_at: instance.nextFireAt,
     ...(args?.includeSecret
       ? { secret: decryptTriggerSecret(instance.secret as string) }
@@ -80,7 +86,6 @@ const mapTrigger = (
 const triggerIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
-    { model: db.Policy, as: 'policy' },
     { model: db.User, as: 'createdBy' },
   ];
 };
@@ -215,10 +220,10 @@ export const getTriggerSecret = async (args: { id: string }) => {
   return { secret: decryptTriggerSecret(trigger.secret as string) };
 };
 
-type CreateTriggerArgs = {
+type CreateTriggerArgs = EventFilterArgs & {
   projectId: number;
   createdByUserId?: number | null;
-  policyId?: number | null;
+  policyIds?: string[];
   name: string;
   description?: string | null;
   type: string;
@@ -228,10 +233,9 @@ type CreateTriggerArgs = {
   input?: Record<string, unknown> | null;
   toolContext?: Record<string, string> | null;
   cron?: string | null;
-  eventPattern?: string | null;
   active?: boolean;
   isAllowed: IsAllowedFn;
-  /** The writer's policy sets, which must hold every grant of `policyId`. */
+  /** The writer's policy sets, which must hold every grant of `policyIds`. */
   writerPolicies: GetWriterPolicies;
 };
 
@@ -271,7 +275,7 @@ const buildCreateAttributes = (args: CreateTriggerArgs) => {
   return {
     projectId: args.projectId,
     createdByUserId: args.createdByUserId ?? null,
-    policyId: args.policyId ?? null,
+    policyIds: args.policyIds ?? null,
     name: args.name,
     description: args.description ?? null,
     type: args.type,
@@ -281,7 +285,7 @@ const buildCreateAttributes = (args: CreateTriggerArgs) => {
     input: args.input ?? null,
     toolContext: args.toolContext ?? null,
     cron: args.cron ?? null,
-    eventPattern: args.eventPattern ?? null,
+    ...storedEventFilter(args),
     ...deriveCreateState({
       type: args.type,
       cron: args.cron,
@@ -306,7 +310,9 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     projectId: args.projectId,
     action: args.action,
     cron: args.cron,
-    eventPattern: args.eventPattern,
+    events: args.events,
+    eventResources: args.eventResources,
+    eventData: args.eventData,
   });
   // A firing resolves the stored bag's `{{secret:...}}` tokens, so the trigger
   // is the carrier that declares `resolved`.
@@ -317,7 +323,12 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     isAllowed: args.isAllowed,
   });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
-  await assertTriggerPolicyHeld(args);
+  await assertTriggerPoliciesHeld({
+    writerPolicies: args.writerPolicies,
+    projectId: args.projectId,
+    policyIds: args.policyIds ?? [],
+    current: null,
+  });
 
   const trigger = await db.Trigger.create(
     buildCreateAttributes({ ...args, toolContext })
@@ -329,9 +340,9 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
   });
 };
 
-type UpdateTriggerArgs = {
+type UpdateTriggerArgs = EventFilterArgs & {
   id: string;
-  policyId?: number | null;
+  policyIds?: string[];
   name?: string;
   description?: string | null;
   targetType?: string;
@@ -340,10 +351,9 @@ type UpdateTriggerArgs = {
   input?: Record<string, unknown> | null;
   toolContext?: Record<string, string> | null;
   cron?: string | null;
-  eventPattern?: string | null;
   active?: boolean;
   isAllowed: IsAllowedFn;
-  /** The writer's policy sets, which must hold every grant of `policyId`. */
+  /** The writer's policy sets, which must hold every grant of `policyIds`. */
   writerPolicies: GetWriterPolicies;
 };
 
@@ -359,13 +369,15 @@ type UpdateTriggerArgs = {
 const DIRECT_UPDATE_FIELDS = [
   ['name', 'name'],
   ['description', 'description'],
-  ['policyId', 'policyId'],
+  ['policyIds', 'policyIds'],
   ['targetType', 'targetType'],
   ['targetId', 'targetId'],
   ['action', 'action'],
   ['input', 'input'],
   ['toolContext', 'toolContext'],
-  ['eventPattern', 'eventPattern'],
+  ['events', 'events'],
+  ['eventResources', 'eventResources'],
+  ['eventData', 'eventData'],
   ['active', 'active'],
 ] as const satisfies readonly (readonly [
   keyof UpdateTriggerArgs,
@@ -408,10 +420,7 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     projectId: trigger.projectId as number,
     action: args.action !== undefined ? args.action : trigger.action,
     cron: args.cron !== undefined ? args.cron : trigger.cron,
-    eventPattern:
-      args.eventPattern !== undefined
-        ? args.eventPattern
-        : trigger.eventPattern,
+    ...effectiveEventFilter({ trigger, args }),
     validateTarget: targetChanged,
   });
 

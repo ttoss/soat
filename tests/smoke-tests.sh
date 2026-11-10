@@ -5375,10 +5375,15 @@ $SOAT_CLI call-tool --tool-id "$CALLED_TOOL_ID" --input '{}' >/dev/null
 expect_cli_error_status 429 call-tool --tool-id "$CALLED_TOOL_ID" --input '{}'
 SOAT_TOKEN="$TOKEN"
 
+# Every trigger acts under its policy_ids; the admin holds this one.
+TRIGGER_POLICY_ID=$($SOAT_CLI create-policy --name smoke-trigger-grant \
+  --document '{"statement":[{"effect":"Allow","action":["*"]}]}' | jq -r '.id')
+
 echo "--- A grantee revoke is held while its resources name the shared tool ---"
 REFERRING_TRIGGER_ID=$($SOAT_CLI create-trigger --project-id "$SHARE_GRANTEE_ID" \
   --name smoke-share-ref-trigger --type manual \
-  --target-type tool --target-id "$CALLED_TOOL_ID" | jq -r '.id')
+  --target-type tool --target-id "$CALLED_TOOL_ID" \
+  --policy-ids '["'"$TRIGGER_POLICY_ID"'"]' | jq -r '.id')
 if ! $SOAT_CLI list-share-references --share-id "$CALLED_SHARE_ID" \
   --project-id "$SHARE_GRANTEE_ID" \
   | jq -e --arg id "$REFERRING_TRIGGER_ID" '.data | any(.id == $id)' >/dev/null; then
@@ -5607,6 +5612,7 @@ TRIGGER_CREATE_RESP=$($SOAT_CLI create-trigger \
   --type manual \
   --target-type orchestration \
   --target-id "$TRIGGER_ORCH_ID" \
+  --policy-ids '["'"$TRIGGER_POLICY_ID"'"]' \
   --input '{"cycle":"daily"}' \
   --tool_context '{"advertiserId":"adv_smoke"}')
 TRIGGER_ID=$(printf '%s\n' "$TRIGGER_CREATE_RESP" | jq -r '.id')
@@ -5670,7 +5676,8 @@ WEBHOOK_TRIGGER_RESP=$($SOAT_CLI create-trigger \
   --name "smoke-webhook-trigger" \
   --type webhook \
   --target-type orchestration \
-  --target-id "$TRIGGER_ORCH_ID")
+  --target-id "$TRIGGER_ORCH_ID" \
+  --policy-ids '["'"$TRIGGER_POLICY_ID"'"]')
 WEBHOOK_TRIGGER_ID=$(printf '%s\n' "$WEBHOOK_TRIGGER_RESP" | jq -r '.id')
 WEBHOOK_TRIGGER_SECRET=$(printf '%s\n' "$WEBHOOK_TRIGGER_RESP" | jq -r '.secret')
 if [ -z "$WEBHOOK_TRIGGER_ID" ] || [ "$WEBHOOK_TRIGGER_ID" = "null" ]; then
@@ -5720,9 +5727,10 @@ EVENT_TRIGGER_RESP=$($SOAT_CLI create-trigger \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-event-trigger" \
   --type event \
-  --event-pattern "smoke.tick" \
+  --events '["smoke.tick"]' \
   --target-type orchestration \
   --target-id "$TRIGGER_ORCH_ID" \
+  --policy-ids '["'"$TRIGGER_POLICY_ID"'"]' \
   --input '{"cycle":"reactive"}')
 EVENT_TRIGGER_ID=$(printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -r '.id')
 if [ -z "$EVENT_TRIGGER_ID" ] || [ "$EVENT_TRIGGER_ID" = "null" ]; then
@@ -5730,8 +5738,8 @@ if [ -z "$EVENT_TRIGGER_ID" ] || [ "$EVENT_TRIGGER_ID" = "null" ]; then
   printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
   exit 1
 fi
-if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.event_pattern == "smoke.tick"' >/dev/null 2>&1; then
-  echo "ERROR: event trigger did not persist its event_pattern" >&2
+if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.events == ["smoke.tick"]' >/dev/null 2>&1; then
+  echo "ERROR: event trigger did not persist its events" >&2
   printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
   exit 1
 fi
@@ -6364,7 +6372,8 @@ DEL_TRIGGER_ID=$(printf '%s\n' "$($SOAT_CLI create-trigger \
   --name smoke-delete-trigger \
   --type webhook \
   --target-type agent \
-  --target-id "$DEL_AGENT_ID")" | jq -r '.id')
+  --target-id "$DEL_AGENT_ID" \
+  --policy-ids '["'"$TRIGGER_POLICY_ID"'"]')" | jq -r '.id')
 
 DEL_GUARDRAIL_ID=$(printf '%s\n' "$($SOAT_CLI create-guardrail \
   --project-id "$DEL_PROJECT_ID" \
@@ -7975,7 +7984,8 @@ EVAL_TRIGGER_RESP=$($SOAT_CLI create-trigger \
   --type schedule \
   --target-type eval \
   --target-id "$EVAL_ID" \
-  --cron "0 3 * * *")
+  --cron "0 3 * * *" \
+  --policy-ids '["'"$TRIGGER_POLICY_ID"'"]')
 EVAL_TRIGGER_ID=$(printf '%s\n' "$EVAL_TRIGGER_RESP" | jq -r '.id')
 if ! printf '%s\n' "$EVAL_TRIGGER_RESP" | jq -e \
   '.target_type == "eval" and .next_fire_at != null' >/dev/null 2>&1; then

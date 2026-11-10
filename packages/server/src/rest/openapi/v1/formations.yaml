@@ -1517,9 +1517,8 @@ components:
     TriggerResourceProperties:
       description: >-
         Binds a starter (manual, webhook, schedule, or event) to an executable
-        target (orchestration, agent, tool, or eval). Firings run under the
-        confined run-as identity of the caller who deployed the formation, so a
-        firing never exceeds what that caller could do directly.
+        target (orchestration, agent, tool, or eval). Firings act under its
+        `policy_ids`, which the deploying caller must hold.
       type: object
       additionalProperties: false
       required:
@@ -1527,6 +1526,7 @@ components:
         - type
         - target_type
         - target_id
+        - policy_ids
       properties:
         name:
           type: string
@@ -1582,23 +1582,44 @@ components:
           type: string
           nullable: true
           description: 5-field cron expression (UTC). Required when type is schedule
+        events:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Event type patterns (`*`, `prefix.*`, or an exact event name).
+            Required when type is event, rejected otherwise
         event_pattern:
           type: string
           nullable: true
+          description: One event type pattern, the same as `events` of one item
+        event_resources:
+          type: array
+          nullable: true
+          items:
+            type: string
           description: >-
-            Internal-event subscription pattern (`*`, `prefix.*`, or an exact
-            event name). Required when type is event, rejected otherwise
+            Event triggers only: SRN patterns the event's resource must match.
+            Omitted matches any resource in the project
+        event_data:
+          nullable: true
+          description: Event triggers only. A filter the event's `data` must match
+          allOf:
+            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
         active:
           type: boolean
           description: Whether the trigger fires (default true)
-        policy_id:
-          x-soat-ref: policies
-          type: string
-          nullable: true
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
           description: >-
-            Optional boundary policy that further confines the run-as identity.
-            The deploying caller must hold every grant it carries inside the
-            project, else the resource fails with `POLICY_GRANT_NOT_HELD`.
+            The policies every firing acts under. Use { "ref": "LogicalId" }
+            for a policy in the template. The deploying caller must hold every
+            grant they carry inside the project, else the resource fails with
+            `POLICY_GRANT_NOT_HELD`.
 
     ApiKeyResourceProperties:
       description: >-

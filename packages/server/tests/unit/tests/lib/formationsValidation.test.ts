@@ -1265,6 +1265,7 @@ describe('validateFormationTemplate', () => {
           MyTrigger: {
             type: 'trigger',
             properties: {
+              policy_ids: ['pol_placeholder00000'],
               name: 'hc',
               type: 'schedule',
               target_type: 'orchestration',
@@ -1327,6 +1328,7 @@ describe('validateFormationTemplate', () => {
           MyTrigger: {
             type: 'trigger',
             properties: {
+              policy_ids: ['pol_placeholder00000'],
               name: 't',
               type: 'manual',
               target_type: 'orchestration',

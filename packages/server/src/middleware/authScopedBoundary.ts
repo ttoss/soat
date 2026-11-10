@@ -1,6 +1,8 @@
 import type { Context } from '../Context';
-import type { PolicyDocument } from '../lib/iam';
+import { resolveAttachedPolicies } from '../lib/attachedPolicies';
+import type { PolicyDocument, PolicySets } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
+import { resolvePolicySets } from '../lib/permissions';
 
 /**
  * An orchestration run-as token's boundary: the policies of the API key that
@@ -29,9 +31,6 @@ const resolveRunTokenBoundaryDocs = async (args: {
 /**
  * Resolves the boundary PolicyDocuments for a project-scoped JWT credential:
  * - OAuth: the consented scope, rebuilt from the `scope` claim.
- * - Trigger run-as: the trigger's attached policy; with none, no boundary (the
- *   token inherits the creator's policies as a ceiling only). A trigger
- *   deleted since the token was minted allows nothing.
  * - Orchestration run-as: the starting API key's own policies, so a run can
  *   never reach further than the credential that started it; when a user
  *   started it, no boundary.
@@ -43,7 +42,6 @@ const resolveRunTokenBoundaryDocs = async (args: {
  */
 export const resolveScopedBoundaryDocs = async (args: {
   scopedProjectPublicId?: string;
-  triggerPublicId?: string;
   runApiKeyPublicId?: string;
   isRunToken?: boolean;
   scopeClaim?: string;
@@ -58,25 +56,59 @@ export const resolveScopedBoundaryDocs = async (args: {
     });
   }
 
-  if (args.triggerPublicId) {
-    const trigger = await args.db.Trigger.findOne({
-      where: { publicId: args.triggerPublicId },
-    });
-    if (!trigger) return [];
-    const triggerPolicyId = trigger.policyId as number | null;
-    if (!triggerPolicyId) return undefined;
-    const policies = await args.db.Policy.findAll({
-      where: { id: triggerPolicyId },
-    });
-    return policies.map((policy) => {
-      return policy.document as PolicyDocument;
-    });
-  }
-
   return [
     buildConsentPolicyFromScopeClaim({
       projectPublicId: args.scopedProjectPublicId,
       scopeClaim: args.scopeClaim,
     }),
   ];
+};
+
+/**
+ * The policy sets a trigger run-as token must each satisfy: the trigger's
+ * `policy_ids`, and, for a manual fire, the caller's own grant as its
+ * credential narrows it. A trigger deleted since the token was minted, or one
+ * with no policy, allows nothing.
+ */
+export const resolveTriggerPolicySets = async (args: {
+  triggerPublicId: string;
+  projectPublicId: string;
+  caller?: {
+    role: 'admin' | 'user';
+    userPolicyIds: number[];
+    apiKeyPublicId?: string;
+    oauthScope?: string;
+  };
+  db: Context['db'];
+}): Promise<PolicySets> => {
+  const trigger = await args.db.Trigger.findOne({
+    where: { publicId: args.triggerPublicId },
+  });
+  const grant = trigger
+    ? await resolveAttachedPolicies({
+        policyIds: trigger.policyIds,
+        actorId: null,
+      })
+    : null;
+  const triggerDocs = grant ? [grant] : [];
+  if (!args.caller) return [triggerDocs];
+  const callerSets = await resolvePolicySets({
+    userRole: args.caller.role,
+    userPolicyIds: args.caller.userPolicyIds,
+    apiKeyPolicyIds: [],
+    boundaryPolicyDocs:
+      args.caller.oauthScope !== undefined
+        ? [
+            buildConsentPolicyFromScopeClaim({
+              projectPublicId: args.projectPublicId,
+              scopeClaim: args.caller.oauthScope,
+            }),
+          ]
+        : await resolveRunTokenBoundaryDocs({
+            apiKeyPublicId: args.caller.apiKeyPublicId,
+            db: args.db,
+          }),
+    db: args.db,
+  });
+  return [...callerSets, triggerDocs];
 };

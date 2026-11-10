@@ -453,6 +453,7 @@ const CASES: RoundTripCase[] = [
         target_type: 'agent',
         target_id: fx.agentId,
         input: { foo: 'bar' },
+        policy_ids: [fx.policyA],
       };
       return {
         create: declared,
@@ -463,7 +464,7 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
-    name: 'schedule trigger with a policy boundary',
+    name: 'schedule trigger acting under its policies',
     type: 'trigger',
     route: 'triggers',
     build: (seed) => {
@@ -474,13 +475,36 @@ const CASES: RoundTripCase[] = [
           target_type: 'agent',
           target_id: fx.agentId,
           cron: '0 8 * * *',
-          policy_id: fx.policyA,
+          policy_ids: [fx.policyA, fx.policyB],
         },
         expectRead: {
           type: 'schedule',
           cron: '0 8 * * *',
-          policy_id: fx.policyA,
+          policy_ids: [fx.policyA, fx.policyB],
         },
+      };
+    },
+  },
+  {
+    name: 'event trigger with an event filter',
+    type: 'trigger',
+    route: 'triggers',
+    build: (seed) => {
+      const declared = {
+        name: `Event ${seed}`,
+        type: 'event',
+        target_type: 'agent',
+        target_id: fx.agentId,
+        policy_ids: [fx.policyA],
+        events: ['documents.ingested'],
+        event_resources: ['*'],
+        event_data: { status: 'ready' },
+      };
+      return {
+        create: declared,
+        expectRead: declared,
+        update: { ...declared, event_data: { status: { in: ['ready'] } } },
+        expectAfterUpdate: { event_data: { status: { in: ['ready'] } } },
       };
     },
   },

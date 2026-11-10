@@ -114,6 +114,52 @@ export const resolvePolicySets = async (args: {
 };
 
 /**
+ * Authorizer over policy sets that must each allow the request, confined to
+ * one project. `getSets` is read per check, so a revoked policy takes effect
+ * on the next one.
+ */
+export const createPolicySetsIsAllowed = (args: {
+  projectPublicId?: string;
+  getSets: () => Promise<PolicySets>;
+}) => {
+  return async (reqArgs: {
+    projectPublicId: string;
+    action: string;
+    resource?: string;
+    resources?: string[];
+    context?: Record<string, string>;
+  }): Promise<boolean> => {
+    if (
+      !hasProjectPublicId({
+        projectPublicId: reqArgs.projectPublicId,
+        action: reqArgs.action,
+      })
+    ) {
+      return false;
+    }
+
+    // Hard project scope: a scoped credential never reaches another project.
+    if (
+      args.projectPublicId &&
+      reqArgs.projectPublicId !== args.projectPublicId
+    ) {
+      return false;
+    }
+
+    const sets = await args.getSets();
+    return sets.every((policies) => {
+      return evalDocs({
+        policies,
+        action: reqArgs.action,
+        resource: reqArgs.resource,
+        resources: reqArgs.resources,
+        context: reqArgs.context,
+      });
+    });
+  };
+};
+
+/**
  * Authorizer for a "scoped credential" — an API key or an OAuth access token.
  *
  * Both are modelled the same way: the owning user's policies form the ceiling,
@@ -134,41 +180,12 @@ export const createApiKeyIsAllowed = (args: {
   boundaryPolicyDocs?: PolicyDocument[];
   db: DB;
 }) => {
-  return async (reqArgs: {
-    projectPublicId: string;
-    action: string;
-    resource?: string;
-    resources?: string[];
-    context?: Record<string, string>;
-  }): Promise<boolean> => {
-    if (
-      !hasProjectPublicId({
-        projectPublicId: reqArgs.projectPublicId,
-        action: reqArgs.action,
-      })
-    ) {
-      return false;
-    }
-
-    // Hard project scope: if the key is scoped to a project, reject cross-project access
-    if (
-      args.apiKeyProjectPublicId &&
-      reqArgs.projectPublicId !== args.apiKeyProjectPublicId
-    ) {
-      return false;
-    }
-
-    const sets = await resolvePolicySets(args);
-    return sets.every((policies) => {
-      return evalDocs({
-        policies,
-        action: reqArgs.action,
-        resource: reqArgs.resource,
-        resources: reqArgs.resources,
-        context: reqArgs.context,
-      });
-    });
-  };
+  return createPolicySetsIsAllowed({
+    projectPublicId: args.apiKeyProjectPublicId,
+    getSets: () => {
+      return resolvePolicySets(args);
+    },
+  });
 };
 
 export const createJwtIsAllowed = (args: {

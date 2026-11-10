@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { resolveTriggerPolicySets } from '../middleware/authScopedBoundary';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import {
@@ -10,12 +11,14 @@ import {
   runWithCausationChain,
 } from './eventCausation';
 import { buildEventEnvelope } from './eventEnvelope';
-import { evaluateEventPolicy, matchesEvent } from './eventMatching';
+import { EVENT_READ_ACTIONS } from './eventReadActions';
 import { fileException } from './exceptions';
+import { createPolicySetsIsAllowed } from './permissions';
 import { projectPausedError, readProjectPause } from './projectPause';
 import { evaluateRequestQuotas, quotaBreachError } from './quotaEnforcement';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { retryTransient } from './transientRetry';
+import { eventSrn, matchesTriggerEventFilter } from './triggerEventFilter';
 import { reserveEventFiring } from './triggerEventFirings';
 import { createFiringRecord, finalizeFiringFailed } from './triggerFirings';
 
@@ -241,7 +244,33 @@ const dispatchTrigger = async (args: {
 };
 
 /**
- * Finds the project's active event triggers whose pattern matches, and runs
+ * Whether the trigger's `policy_ids` may read the resource the event is
+ * about: a trigger never learns of a resource its identity cannot see.
+ */
+const mayReadEventResource = (args: {
+  trigger: TriggerRow;
+  event: SoatEvent;
+}): Promise<boolean> => {
+  const { trigger, event } = args;
+  const isAllowed = createPolicySetsIsAllowed({
+    projectPublicId: event.projectPublicId,
+    getSets: () => {
+      return resolveTriggerPolicySets({
+        triggerPublicId: trigger.publicId as string,
+        projectPublicId: event.projectPublicId,
+        db,
+      });
+    },
+  });
+  return isAllowed({
+    projectPublicId: event.projectPublicId,
+    action: EVENT_READ_ACTIONS[event.resourceType],
+    resource: eventSrn(event),
+  });
+};
+
+/**
+ * Finds the project's active event triggers whose filter matches, and runs
  * each. Failures are per-trigger: one trigger whose creator was deleted must not
  * stop the others bound to the same event.
  */
@@ -275,22 +304,16 @@ const handleEvent = async (event: SoatEvent): Promise<void> => {
   const chain = event.causationChain ?? currentCausationChain();
 
   for (const trigger of triggers) {
-    if (
-      !matchesEvent({
-        patterns: [trigger.eventPattern as string],
-        eventType: event.type,
-      })
-    ) {
-      continue;
-    }
-
-    if (trigger.policyId) {
-      const allowed = await evaluateEventPolicy({
-        policyId: trigger.policyId as number,
+    const matched =
+      matchesTriggerEventFilter({
+        filter: {
+          events: trigger.events,
+          eventResources: trigger.eventResources,
+          eventData: trigger.eventData,
+        },
         event,
-      });
-      if (!allowed) continue;
-    }
+      }) && (await mayReadEventResource({ trigger, event }));
+    if (!matched) continue;
 
     await dispatchTrigger({ trigger, event, chain }).catch((error: unknown) => {
       log(

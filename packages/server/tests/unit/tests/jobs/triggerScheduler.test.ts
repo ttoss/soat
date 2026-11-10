@@ -13,6 +13,7 @@ const flush = () => {
 let userToken: string;
 let projectPublicId: string;
 let orchestrationId: string;
+let userPolicyId: string;
 
 let triggerSeq = 0;
 
@@ -31,6 +32,7 @@ const createScheduleTrigger = async (args?: {
     .send({
       project_id: projectPublicId,
       name: `sched-${triggerSeq}`,
+      policy_ids: [userPolicyId],
       type: 'schedule',
       target_type: 'orchestration',
       target_id: orchestrationId,
@@ -66,6 +68,7 @@ beforeAll(async () => {
   });
   userToken = setup.userToken;
   projectPublicId = setup.projectId;
+  userPolicyId = setup.policyId;
 
   orchestrationId = (
     await authenticatedTestClient(userToken)

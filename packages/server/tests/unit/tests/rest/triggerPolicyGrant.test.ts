@@ -34,7 +34,7 @@ describe('Trigger policy grant check', () => {
         type: 'manual',
         target_type: 'orchestration',
         target_id: orchestrationId,
-        ...(args.policyId ? { policy_id: args.policyId } : {}),
+        policy_ids: [args.policyId ?? heldPolicyId],
       });
   };
 
@@ -53,7 +53,7 @@ describe('Trigger policy grant check', () => {
                 type: 'manual',
                 target_type: 'orchestration',
                 target_id: orchestrationId,
-                policy_id: args.policyId,
+                policy_ids: [args.policyId],
               },
             },
           },
@@ -109,7 +109,7 @@ describe('Trigger policy grant check', () => {
       });
 
       expect(res.status).toBe(201);
-      expect(res.body.policy_id).toBe(heldPolicyId);
+      expect(res.body.policy_ids).toEqual([heldPolicyId]);
     });
 
     test('refuses a policy granting what the writer lacks with 403', async () => {
@@ -148,7 +148,7 @@ describe('Trigger policy grant check', () => {
         type: 'manual',
         target_type: 'orchestration',
         target_id: orchestrationId,
-        policy_id: heldPolicyId,
+        policy_ids: [heldPolicyId],
       });
 
       expect(res.status).toBe(401);
@@ -166,16 +166,16 @@ describe('Trigger policy grant check', () => {
     test('attaches a policy the writer holds', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/triggers/${triggerId}`)
-        .send({ policy_id: heldPolicyId });
+        .send({ policy_ids: [heldPolicyId] });
 
       expect(res.status).toBe(200);
-      expect(res.body.policy_id).toBe(heldPolicyId);
+      expect(res.body.policy_ids).toEqual([heldPolicyId]);
     });
 
     test('refuses a policy granting what the writer lacks with 403', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/triggers/${triggerId}`)
-        .send({ policy_id: widerPolicyId });
+        .send({ policy_ids: [widerPolicyId] });
 
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('POLICY_GRANT_NOT_HELD');
@@ -183,7 +183,7 @@ describe('Trigger policy grant check', () => {
       const read = await authenticatedTestClient(userToken).get(
         `/api/v1/triggers/${triggerId}`
       );
-      expect(read.body.policy_id).not.toBe(widerPolicyId);
+      expect(read.body.policy_ids).not.toContain(widerPolicyId);
     });
   });
 
@@ -221,6 +221,50 @@ describe('Trigger policy grant check', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('active');
+    });
+
+    test('deploys a trigger naming a policy declared in the same template', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'trgrant-fref',
+          template: {
+            resources: {
+              Runner: {
+                type: 'policy',
+                properties: {
+                  document: {
+                    statement: [
+                      { effect: 'Allow', action: ['orchestrations:StartRun'] },
+                    ],
+                  },
+                },
+              },
+              Trigger: {
+                type: 'trigger',
+                properties: {
+                  name: 'trgrant-fref',
+                  type: 'manual',
+                  target_type: 'orchestration',
+                  target_id: orchestrationId,
+                  policy_ids: [{ ref: 'Runner' }],
+                },
+              },
+            },
+            outputs: {
+              trigger_id: { ref: 'Trigger' },
+              policy_id: { ref: 'Runner' },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      const trigger = await authenticatedTestClient(adminToken).get(
+        `/api/v1/triggers/${res.body.outputs.trigger_id}`
+      );
+      expect(trigger.body.policy_ids).toEqual([res.body.outputs.policy_id]);
     });
 
     test('fails a trigger with a policy granting what the deployer lacks', async () => {

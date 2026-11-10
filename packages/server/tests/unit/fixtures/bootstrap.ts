@@ -127,3 +127,19 @@ export const createScopedPrincipal = async (args: {
 
   return loginAs(args.username, password);
 };
+
+/**
+ * A policy allowing every action: the `policy_ids` of an admin-created trigger
+ * in a test that is not about what its firings may do.
+ */
+export const createAllowAllPolicy = async (args: {
+  adminToken: string;
+}): Promise<string> => {
+  const res = await authenticatedTestClient(args.adminToken)
+    .post('/api/v1/policies')
+    .send({ document: { statement: [{ effect: 'Allow', action: ['*'] }] } });
+  if (res.status !== 201) {
+    throw new Error(`createAllowAllPolicy: ${res.status}`);
+  }
+  return res.body.id as string;
+};

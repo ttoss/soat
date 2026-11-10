@@ -9,6 +9,7 @@ import { requestOnBehalfOf } from '../lib/onBehalfOf';
 import {
   createApiKeyIsAllowed,
   createJwtIsAllowed,
+  createPolicySetsIsAllowed,
   resolvePolicySets,
 } from '../lib/permissions';
 import type { IsAllowedFn } from './authProjectResolvers';
@@ -17,7 +18,10 @@ import {
   createJwtResolveProjectIds,
   createUnscopedApiKeyResolveProjectIds,
 } from './authProjectResolvers';
-import { resolveScopedBoundaryDocs } from './authScopedBoundary';
+import {
+  resolveScopedBoundaryDocs,
+  resolveTriggerPolicySets,
+} from './authScopedBoundary';
 
 const requireJwtSecret = () => {
   const secret = process.env.JWT_SECRET;
@@ -168,8 +172,10 @@ const buildScopedIdentityFields = (args: {
   isRunToken: boolean;
   runApiKeyPublicId?: string;
   runWorkPublicId?: string;
+  oauthScope?: string;
 }): {
   oauthProjectPublicId?: string;
+  oauthScope?: string;
   isTriggerToken?: boolean;
   isRunToken?: boolean;
   runWorkPublicId?: string;
@@ -179,6 +185,7 @@ const buildScopedIdentityFields = (args: {
     ...(args.scopedProjectPublicId
       ? { oauthProjectPublicId: args.scopedProjectPublicId }
       : {}),
+    ...(args.oauthScope !== undefined ? { oauthScope: args.oauthScope } : {}),
     ...(args.isTriggerToken ? { isTriggerToken: true } : {}),
     ...(args.isRunToken ? { isRunToken: true } : {}),
     ...(args.isRunToken && args.runWorkPublicId
@@ -221,6 +228,9 @@ type JwtClaims = {
   trg?: string;
   orn?: string;
   key?: string;
+  clr?: boolean;
+  ckey?: string;
+  cscope?: string;
 };
 
 /** Verifies a bearer JWT, or null when it is not a valid token of ours. */
@@ -233,6 +243,84 @@ const verifyJwtClaims = (token: string): JwtClaims | null => {
   } catch {
     return null;
   }
+};
+
+/**
+ * What a JWT may do. A project-scoped credential intersects the owning user's
+ * policies with a boundary through the same evaluator API keys use; a trigger
+ * token instead acts under the trigger's own policy sets.
+ */
+const resolveJwtAuthority = async (args: {
+  payload: JwtClaims;
+  role: 'admin' | 'user';
+  userPolicyIds: number[];
+  db: Context['db'];
+}): Promise<{
+  isAllowed: IsAllowedFn;
+  getPolicies: (projectPublicId: string) => Promise<PolicySets>;
+}> => {
+  const { payload, role, userPolicyIds, db } = args;
+  const scoped = payload.prj;
+  if (!scoped) {
+    return {
+      isAllowed: createJwtIsAllowed({ role, userPolicyIds, db }),
+      getPolicies: createJwtGetPolicies({ role, userPolicyIds, db }),
+    };
+  }
+  if (typeof payload.trg === 'string') {
+    const triggerPublicId = payload.trg;
+    const getSets = () => {
+      return resolveTriggerPolicySets({
+        triggerPublicId,
+        projectPublicId: scoped,
+        caller: payload.clr
+          ? {
+              role,
+              userPolicyIds,
+              apiKeyPublicId: payload.ckey,
+              oauthScope: payload.cscope,
+            }
+          : undefined,
+        db,
+      });
+    };
+    return {
+      isAllowed: createPolicySetsIsAllowed({
+        projectPublicId: scoped,
+        getSets,
+      }),
+      getPolicies: async (projectPublicId) => {
+        return projectPublicId === scoped ? getSets() : [];
+      },
+    };
+  }
+  const isRunToken = typeof payload.orn === 'string';
+  const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
+    scopedProjectPublicId: scoped,
+    isRunToken,
+    runApiKeyPublicId:
+      typeof payload.key === 'string' ? payload.key : undefined,
+    scopeClaim: payload.scope,
+    db,
+  });
+  return {
+    isAllowed: createApiKeyIsAllowed({
+      apiKeyProjectPublicId: scoped,
+      userRole: role,
+      userPolicyIds,
+      apiKeyPolicyIds: [],
+      boundaryPolicyDocs,
+      db,
+    }),
+    getPolicies: createApiKeyGetPolicies({
+      apiKeyProjectPublicId: scoped,
+      apiKeyPolicyIds: [],
+      boundaryPolicyDocs,
+      userPolicyIds,
+      role,
+      db,
+    }),
+  };
 };
 
 /**
@@ -264,27 +352,12 @@ export const resolveJwtAuthUser = async (args: {
   const runApiKeyPublicId =
     typeof payload.key === 'string' ? payload.key : undefined;
 
-  // All project-scoped credentials: they intersect the owning user's policies
-  // with a boundary through the same evaluator API keys use.
-  const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
-    scopedProjectPublicId,
-    triggerPublicId: isTriggerToken ? payload.trg : undefined,
-    isRunToken,
-    runApiKeyPublicId,
-    scopeClaim: payload.scope,
+  const { isAllowed, getPolicies } = await resolveJwtAuthority({
+    payload,
+    role,
+    userPolicyIds,
     db,
   });
-
-  const isAllowed: IsAllowedFn = scopedProjectPublicId
-    ? createApiKeyIsAllowed({
-        apiKeyProjectPublicId: scopedProjectPublicId,
-        userRole: role,
-        userPolicyIds,
-        apiKeyPolicyIds: [],
-        boundaryPolicyDocs,
-        db,
-      })
-    : jwtIsAllowed;
 
   return {
     id: userId,
@@ -297,6 +370,7 @@ export const resolveJwtAuthUser = async (args: {
       isRunToken,
       runApiKeyPublicId,
       runWorkPublicId: payload.orn,
+      oauthScope: isTriggerToken || isRunToken ? undefined : payload.scope,
     }),
     isAllowed,
     resolveProjectIds: scopedProjectPublicId
@@ -311,16 +385,7 @@ export const resolveJwtAuthUser = async (args: {
           jwtIsAllowed,
           db,
         }),
-    getPolicies: scopedProjectPublicId
-      ? createApiKeyGetPolicies({
-          apiKeyProjectPublicId: scopedProjectPublicId,
-          apiKeyPolicyIds: [],
-          boundaryPolicyDocs,
-          userPolicyIds,
-          role,
-          db,
-        })
-      : createJwtGetPolicies({ role, userPolicyIds, db }),
+    getPolicies,
   };
 };
 

@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
-import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
@@ -14,6 +13,7 @@ import {
   getTriggerSecret,
   listTriggers,
   mayStartTarget,
+  readTriggerEvents,
   rotateTriggerSecret,
   TRIGGER_TARGET_TYPES,
   TRIGGER_TYPES,
@@ -33,22 +33,6 @@ import {
 import { resourceRefusal } from './resourceAccess';
 
 const triggersRouter = new Router<Context>();
-
-const resolvePolicyId = async (
-  policyPublicId: string | undefined
-): Promise<number | null> => {
-  if (!policyPublicId) return null;
-  const policy = await db.Policy.findOne({
-    where: { publicId: policyPublicId },
-  });
-  if (!policy) {
-    throw new DomainError(
-      'POLICY_NOT_FOUND',
-      `Policy '${policyPublicId}' not found.`
-    );
-  }
-  return policy.id;
-};
 
 /** `type` and `target_type`, read once for the list and its count. */
 const readTriggerListFilters = (ctx: Context) => {
@@ -149,9 +133,12 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     input?: Record<string, unknown>;
     tool_context?: unknown;
     cron?: string;
+    events?: string[];
     event_pattern?: string;
+    event_resources?: string[];
+    event_data?: Record<string, unknown>;
     active?: boolean;
-    policy_id?: string;
+    policy_ids: string[];
   };
 
   const targetProjectId = await resolveWriteProjectId({
@@ -173,12 +160,10 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const policyId = await resolvePolicyId(body.policy_id);
-
   const trigger = await createTrigger({
     projectId: Number(targetProjectId),
     createdByUserId: ctx.authUser!.id,
-    policyId,
+    policyIds: body.policy_ids,
     name: body.name,
     description: body.description,
     type: body.type,
@@ -188,7 +173,12 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     input: body.input,
     toolContext: parseToolContextBody(body.tool_context),
     cron: body.cron,
-    eventPattern: body.event_pattern,
+    events: readTriggerEvents({
+      events: body.events,
+      eventPattern: body.event_pattern,
+    }),
+    eventResources: body.event_resources,
+    eventData: body.event_data,
     active: body.active,
     isAllowed: ctx.authUser!.isAllowed,
     writerPolicies: ctx.authUser!.getPolicies,
@@ -235,7 +225,7 @@ const assertMayShapeUpdatedFiring = async (args: {
     target_id?: string;
     action?: string | null;
     input?: Record<string, unknown> | null;
-    policy_id?: string | null;
+    policy_ids?: string[];
   };
   toolContext: Record<string, string> | null | undefined;
 }): Promise<void> => {
@@ -244,7 +234,7 @@ const assertMayShapeUpdatedFiring = async (args: {
     body.target_type !== undefined && body.target_type !== trigger.target_type;
   const repoints =
     body.target_id !== undefined && body.target_id !== trigger.target_id;
-  const reshapes = [body.action, body.input, toolContext, body.policy_id].some(
+  const reshapes = [body.action, body.input, toolContext, body.policy_ids].some(
     (field) => {
       return field !== undefined;
     }
@@ -275,9 +265,12 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     input?: Record<string, unknown> | null;
     tool_context?: unknown;
     cron?: string | null;
-    event_pattern?: string | null;
+    events?: string[];
+    event_pattern?: string;
+    event_resources?: string[] | null;
+    event_data?: Record<string, unknown> | null;
     active?: boolean;
-    policy_id?: string | null;
+    policy_ids?: string[];
   };
 
   const toolContext = parseNullableToolContextBody(body.tool_context);
@@ -289,11 +282,6 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     toolContext,
   });
 
-  const policyId =
-    body.policy_id === undefined
-      ? undefined
-      : await resolvePolicyId(body.policy_id ?? undefined);
-
   const updated = await updateTrigger({
     id: ctx.params.trigger_id,
     name: body.name,
@@ -304,9 +292,14 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     input: body.input,
     toolContext,
     cron: body.cron,
-    eventPattern: body.event_pattern,
+    events: readTriggerEvents({
+      events: body.events,
+      eventPattern: body.event_pattern,
+    }),
+    eventResources: body.event_resources,
+    eventData: body.event_data,
     active: body.active,
-    policyId: body.policy_id === null ? null : policyId,
+    policyIds: body.policy_ids,
     isAllowed: ctx.authUser!.isAllowed,
     writerPolicies: ctx.authUser!.getPolicies,
   });
@@ -365,6 +358,12 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     // reserved identity keys are stripped here, where the caller's bytes
     // arrive, rather than trusted.
     fireToolContext: sanitizeCallerToolContext(toolContext),
+    caller: {
+      publicId: ctx.authUser.publicId,
+      role: ctx.authUser.role,
+      apiKeyPublicId: ctx.authUser.apiKeyPublicId,
+      oauthScope: ctx.authUser.oauthScope,
+    },
   });
 
   ctx.status = 200;

@@ -11,9 +11,9 @@ import {
   type TypedAgent,
 } from './agentGenerationTypes';
 import { resolveAgentModel } from './agentModelResolution';
-import { resolveAgentBoundary } from './agentPolicies';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
+import { resolveAttachedPolicies } from './attachedPolicies';
 import {
   getGenerationPendingState,
   notAwaitingToolOutputs,
@@ -306,7 +306,7 @@ export const recoverPendingFromDb = async (args: {
     projectIds: args.projectIds,
     authHeader: args.authHeader,
     typedAgent,
-    boundaryPolicy: await resolveAgentBoundary({
+    boundaryPolicy: await resolveAttachedPolicies({
       policyIds: typedAgent.policyIds,
       actorId: pendingState.toolContext?.actor_id,
     }),

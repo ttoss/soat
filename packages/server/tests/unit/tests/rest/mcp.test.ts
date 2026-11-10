@@ -10,6 +10,7 @@ import * as pdfModule from 'src/lib/pdf';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { saveTrace } from 'src/lib/traces';
 
+import { createAllowAllPolicy } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -2192,6 +2193,7 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('create-trigger', {
         project_id: projectId,
         name: 'MCP Manual Trigger',
+        policy_ids: [await createAllowAllPolicy({ adminToken })],
         type: 'manual',
         target_type: 'orchestration',
         target_id: triggerOrchestrationId,
@@ -2237,6 +2239,7 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toMatch(/^trg_fire_/);
       expect(result.source).toBe('manual');
       expect(['completed', 'failed']).toContain(result.status);
+      expect(result.acted_as.principal_type).toBe('user');
     });
 
     test('list-trigger-firings returns results', async () => {
@@ -2280,6 +2283,7 @@ describe('MCP tools - happy path', () => {
         await mcpCall('create-trigger', {
           project_id: projectId,
           name: 'MCP Webhook Trigger',
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
           type: 'webhook',
           target_type: 'orchestration',
           target_id: triggerOrchestrationId,

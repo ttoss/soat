@@ -178,6 +178,7 @@ describe('a formation never echoes secret material', () => {
               EchoTrigger: {
                 type: 'trigger',
                 properties: {
+                  policy_ids: ['pol_placeholder00000'],
                   name: 'fse-trigger',
                   type: 'webhook',
                   target_type: 'tool',

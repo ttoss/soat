@@ -1,6 +1,7 @@
-import { lookupPolicyInternalIds } from '../formationLookups';
 import type { ValidationError } from '../formationsTypes';
 import {
+  toNullableArray,
+  toNullableObject,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -10,9 +11,9 @@ import {
   createTrigger,
   deleteTrigger,
   findTrigger,
+  readTriggerEvents,
   updateTrigger,
   validateCronExpression,
-  validateEventPattern,
   validateTriggerShape,
 } from '../triggers';
 import { defineFormationModule } from './defineFormationModule';
@@ -27,6 +28,14 @@ const toInputObject = (value: unknown): Record<string, unknown> | undefined => {
   return value != null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+};
+
+/** An `event_data` filter as the template wrote it; `null` clears it. */
+const toEventData = (
+  value: unknown
+): Record<string, unknown> | null | undefined => {
+  const object = toNullableObject(value);
+  return object == null ? object : toInputObject(object);
 };
 
 const toOptionalBoolean = (value: unknown): boolean | undefined => {
@@ -48,10 +57,27 @@ const shapeFieldValue = (value: unknown): string | null => {
   return toNullableString(value) ?? null;
 };
 
+/** A list field whose items may be expressions, with each one resolved later. */
+const shapeListValue = (value: unknown): unknown => {
+  if (isFormationExpression(value)) return ['*'];
+  if (!Array.isArray(value)) return value;
+  return value.map((item) => {
+    return isFormationExpression(item) ? '*' : item;
+  });
+};
+
+/** The template's `events`, `event_pattern` spelling included. */
+const templateEvents = (properties: Record<string, unknown>) => {
+  return readTriggerEvents({
+    events: toNullableArray<string>(properties.events),
+    eventPattern: toNullableString(properties.event_pattern),
+  });
+};
+
 /**
  * Reuses the transport-independent business rules from the lib so formation
  * templates enforce the same invariants as the REST API (cron iff schedule,
- * event_pattern iff event, action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
+ * events iff event, action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
  * type-dependent fields are present, well-typed, and schema-valid — so it is a
  * no-op when `errors` already has entries.
  */
@@ -74,18 +100,19 @@ const pushShapeRuleErrors = (args: {
       targetType: properties.target_type,
       action: shapeFieldValue(properties.action),
       cron: shapeFieldValue(properties.cron),
-      eventPattern: shapeFieldValue(properties.event_pattern),
+      events: shapeListValue(
+        properties.events ??
+          (properties.event_pattern == null
+            ? undefined
+            : [properties.event_pattern])
+      ),
+      eventResources: shapeListValue(properties.event_resources),
+      eventData: properties.event_data,
     });
     // Only a literal cron can be parsed here; an expression's real value is
     // validated at apply time once the parameter/ref is resolved.
     if (properties.type === 'schedule' && typeof properties.cron === 'string') {
       validateCronExpression(properties.cron);
-    }
-    if (
-      properties.type === 'event' &&
-      typeof properties.event_pattern === 'string'
-    ) {
-      validateEventPattern(properties.event_pattern);
     }
   } catch (error) {
     errors.push({
@@ -123,15 +150,10 @@ export const triggersFormationModule = defineFormationModule({
     // `createdByUserId` is the run-as identity a firing mints a token for, not
     // attribution: the deploying caller, so a firing can never exceed whoever
     // declared the trigger.
-    const policyPublicId = toOptionalString(properties.policy_id);
-    const policyId = policyPublicId
-      ? (await lookupPolicyInternalIds([policyPublicId]))[0]
-      : null;
-
     return createTrigger({
       projectId,
       createdByUserId: actor.userId,
-      policyId,
+      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,
       type: properties.type as string,
@@ -141,7 +163,10 @@ export const triggersFormationModule = defineFormationModule({
       input: toInputObject(properties.input),
       toolContext: toStoredToolContext(properties.tool_context),
       cron: toOptionalString(properties.cron) ?? undefined,
-      eventPattern: toOptionalString(properties.event_pattern) ?? undefined,
+      events: templateEvents(properties) ?? undefined,
+      eventResources:
+        toNullableArray<string>(properties.event_resources) ?? undefined,
+      eventData: toEventData(properties.event_data) ?? undefined,
       active: toOptionalBoolean(properties.active),
       isAllowed: actor.isAllowed,
       writerPolicies: actor.getPolicies,
@@ -149,14 +174,9 @@ export const triggersFormationModule = defineFormationModule({
   },
 
   update: async ({ properties, physicalResourceId, actor }) => {
-    const policyPublicId = toOptionalString(properties.policy_id);
-    const policyId = policyPublicId
-      ? (await lookupPolicyInternalIds([policyPublicId]))[0]
-      : undefined;
-
     await updateTrigger({
       id: physicalResourceId,
-      policyId,
+      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       targetType: toOptionalString(properties.target_type),
@@ -165,7 +185,9 @@ export const triggersFormationModule = defineFormationModule({
       input: toInputObject(properties.input),
       toolContext: toStoredToolContext(properties.tool_context),
       cron: toNullableString(properties.cron),
-      eventPattern: toNullableString(properties.event_pattern),
+      events: templateEvents(properties),
+      eventResources: toNullableArray<string>(properties.event_resources),
+      eventData: toEventData(properties.event_data),
       active: toOptionalBoolean(properties.active),
       isAllowed: actor.isAllowed,
       writerPolicies: actor.getPolicies,

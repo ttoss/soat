@@ -28,7 +28,7 @@ export type MappedAgent = {
   stop_conditions: object[] | null;
   active_tool_ids: string[] | null;
   step_rules: object[] | null;
-  /** Policies capping every generation; see `agentPolicies.ts`. */
+  /** Policies capping every generation; see `attachedPolicies.ts`. */
   policy_ids: string[] | null;
   temperature: number | null;
   max_output_tokens: number | null;

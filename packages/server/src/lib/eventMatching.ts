@@ -8,8 +8,8 @@ import type { SoatEvent } from './eventBus';
  * declare *which* events it wants: an exact name, a `prefix.*` namespace, or
  * `*` for everything.
  *
- * It lives here rather than in the webhook dispatcher because event triggers
- * subscribe with the same grammar. Two copies of a matcher is two places for a
+ * It lives here rather than in the webhook dispatcher because event triggers'
+ * `events` use the same grammar. Two copies of a matcher is two places for a
  * pattern to start meaning something slightly different.
  */
 export const matchesEvent = (args: {
@@ -33,8 +33,7 @@ export const matchesEvent = (args: {
  * when the policy no longer exists, so a deleted policy fails closed rather
  * than silently widening the subscription.
  *
- * Shared by webhook subscriptions and event triggers — both attach a
- * `policy_id` with exactly these semantics.
+ * A webhook subscription's `policy_id` has exactly these semantics.
  */
 export const evaluateEventPolicy = async (args: {
   policyId: number;

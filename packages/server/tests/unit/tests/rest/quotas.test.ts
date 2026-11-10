@@ -1440,13 +1440,16 @@ describe('Quotas', () => {
       const rawKey = keyRes.body.key as string;
 
       const createTrigger = (name: string) => {
-        return authenticatedTestClient(rawKey).post('/api/v1/triggers').send({
-          project_id: enfProjectId,
-          name,
-          type: 'manual',
-          target_type: 'tool',
-          target_id: toolRes.body.id,
-        });
+        return authenticatedTestClient(rawKey)
+          .post('/api/v1/triggers')
+          .send({
+            project_id: enfProjectId,
+            name,
+            type: 'manual',
+            target_type: 'tool',
+            target_id: toolRes.body.id,
+            policy_ids: [triggerPolicyRes.body.id],
+          });
       };
 
       for (let i = 0; i < 2; i += 1) {

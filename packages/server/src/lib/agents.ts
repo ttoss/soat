@@ -11,10 +11,6 @@ import {
   assertValidReasoning,
 } from './agentModelSettings';
 import {
-  type AgentPolicyUse,
-  assertAgentPoliciesAttachable,
-} from './agentPolicies';
-import {
   assertForcedToolChoiceCanStop,
   assertValidStopConditions,
 } from './agentStopConditions';
@@ -36,6 +32,10 @@ import {
   requireAiProviderDbId,
   resolveCreateModelBinding,
 } from './agentWriteValidation';
+import {
+  assertPoliciesAttachable,
+  type PolicyAttachUse,
+} from './attachedPolicies';
 import { emitResourceEvent } from './eventBus';
 import { resolveModelRouteDbId } from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
@@ -217,7 +217,7 @@ export const createAgent = async (
     onApprovalExpiry?: string | null;
     secretUse: BindingSecretUse;
     /** Whose grant `policyIds` is checked against. */
-    policyUse: AgentPolicyUse;
+    policyUse: PolicyAttachUse;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
@@ -241,7 +241,7 @@ export const createAgent = async (
     projectId: args.projectId,
   });
 
-  await assertAgentPoliciesAttachable({ ...args, current: null });
+  await assertPoliciesAttachable({ ...args, current: null });
 
   const toolBindings = await resolveBindingsForCreate(args);
 
@@ -371,7 +371,7 @@ export const updateAgent = async (
     id: string;
     secretUse: BindingSecretUse;
     /** Whose grant the policies `policyIds` adds are checked against. */
-    policyUse: AgentPolicyUse;
+    policyUse: PolicyAttachUse;
   } & AgentUpdateFields &
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
@@ -410,7 +410,7 @@ export const updateAgent = async (
     projectId: agent.projectId,
   });
 
-  await assertAgentPoliciesAttachable({
+  await assertPoliciesAttachable({
     policyIds: args.policyIds,
     current: agent.policyIds,
     projectId: agent.projectId,

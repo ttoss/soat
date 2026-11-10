@@ -153,6 +153,9 @@ const ROLES = {
     'Tool.presetParameters',
     'Trace.error',
     'Trace.stepSegments',
+    'Trigger.eventData',
+    'Trigger.eventResources',
+    'Trigger.events',
     'Trigger.input',
     'Trigger.toolContext',
     'TriggerFiring.causationChain',
@@ -180,6 +183,7 @@ const ROLES = {
     'MemoryStore.tags',
     'Session.tags',
     'Task.metadata',
+    'Trigger.policyIds',
     'UsageEvent.guardrailIds',
   ],
 };

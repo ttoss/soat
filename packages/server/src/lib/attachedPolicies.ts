@@ -10,14 +10,15 @@ import {
 } from './policyGrantCoverage';
 import { bindPolicyVariables } from './policyVariables';
 
-const log = createDebug('soat:agentPolicies');
+const log = createDebug('soat:attachedPolicies');
 
 /**
- * Whose grant a write attaching `policy_ids` is checked against. `archived`
- * replays a version: its policies were held when attached, and every edit to
- * one since was checked where a version names it.
+ * Whose grant a write attaching `policy_ids` to an agent or a trigger is
+ * checked against. `archived` replays an agent version: its policies were held
+ * when attached, and every edit to one since was checked where a version names
+ * it.
  */
-export type AgentPolicyUse = GetWriterPolicies | 'archived';
+export type PolicyAttachUse = GetWriterPolicies | 'archived';
 
 /** Refuses every action: what a policy that no longer resolves allows. */
 const DENY_ALL: PolicyDocument = {
@@ -32,14 +33,14 @@ const loadPolicies = async (publicIds: string[]) => {
  * Checks a write's `policy_ids`: every id names a policy, and the writer holds
  * every grant of the ones it adds to `current`.
  */
-export const assertAgentPoliciesAttachable = async (args: {
+export const assertPoliciesAttachable = async (args: {
   policyIds?: string[] | null;
   current: string[] | null;
   projectId: number;
-  policyUse: AgentPolicyUse;
+  policyUse: PolicyAttachUse;
 }): Promise<void> => {
   if (!args.policyIds || args.policyIds.length === 0) return;
-  log('assertAgentPoliciesAttachable: policyIds=%o', args.policyIds);
+  log('assertPoliciesAttachable: policyIds=%o', args.policyIds);
   const rows = await loadPolicies(args.policyIds);
   const missing = args.policyIds.find((id) => {
     return !rows.some((row) => {
@@ -63,11 +64,11 @@ export const assertAgentPoliciesAttachable = async (args: {
 };
 
 /**
- * The cap an agent's `policy_ids` put on one generation, with
- * `${soat:ActorId}` bound to the end user it runs for. `null` is no cap; a
- * policy that no longer resolves allows nothing.
+ * The grant `policy_ids` carry as one document, with `${soat:ActorId}` bound
+ * to the end user it acts for. `null` is no cap; a policy that no longer
+ * resolves allows nothing.
  */
-export const resolveAgentBoundary = async (args: {
+export const resolveAttachedPolicies = async (args: {
   policyIds: unknown;
   actorId: string | null | undefined;
 }): Promise<PolicyDocument | null> => {
@@ -79,7 +80,7 @@ export const resolveAgentBoundary = async (args: {
   });
   const rows = await loadPolicies(publicIds);
   if (rows.length !== new Set(args.policyIds).size) {
-    log('resolveAgentBoundary: unresolved in %o', args.policyIds);
+    log('resolveAttachedPolicies: unresolved in %o', args.policyIds);
     return DENY_ALL;
   }
   const merged: PolicyDocument = {
@@ -90,20 +91,37 @@ export const resolveAgentBoundary = async (args: {
   return bindPolicyVariables({ document: merged, actorId: args.actorId });
 };
 
-/** Live agents naming the policy, for the refusal to delete it. */
-export const findAgentsCarryingPolicy = async (args: {
-  policyPublicId: string;
-  limit: number;
-}): Promise<{ count: number; sample: string[] }> => {
-  const where = { policyIds: { [Op.contains]: [args.policyPublicId] } };
-  const [rows, count] = await Promise.all([
-    db.Agent.findAll({ where, attributes: ['publicId'], limit: args.limit }),
-    db.Agent.count({ where }),
-  ]);
+type Carriers = { count: number; sample: string[] };
+
+const carriersOf = async (args: {
+  rows: Promise<{ publicId: string }[]>;
+  count: Promise<number>;
+}): Promise<Carriers> => {
+  const [rows, count] = await Promise.all([args.rows, args.count]);
   return {
     count,
     sample: rows.map((row) => {
       return row.publicId;
     }),
   };
+};
+
+/** Live agents and triggers naming the policy, for the refusal to delete it. */
+export const findPolicyCarriers = async (args: {
+  policyPublicId: string;
+  limit: number;
+}): Promise<{ agents: Carriers; triggers: Carriers }> => {
+  const where = { policyIds: { [Op.contains]: [args.policyPublicId] } };
+  const query = { where, attributes: ['publicId'], limit: args.limit };
+  const [agents, triggers] = await Promise.all([
+    carriersOf({
+      rows: db.Agent.findAll(query),
+      count: db.Agent.count({ where }),
+    }),
+    carriersOf({
+      rows: db.Trigger.findAll(query),
+      count: db.Trigger.count({ where }),
+    }),
+  ]);
+  return { agents, triggers };
 };

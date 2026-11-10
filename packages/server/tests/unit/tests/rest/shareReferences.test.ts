@@ -1,3 +1,4 @@
+import { createAllowAllPolicy } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -141,6 +142,7 @@ describe('Share references', () => {
       edges: [],
     });
     const trigger = await createInGrantee('/api/v1/triggers', {
+      policy_ids: [await createAllowAllPolicy({ adminToken })],
       name: 'shared-ref-trigger',
       type: 'manual',
       target_type: 'tool',
@@ -322,6 +324,7 @@ describe('Share references', () => {
       const tool = await newTool('forcedRefTool');
       const shareId = await shareAccepted({ type: 'tool', id: tool });
       await createInGrantee('/api/v1/triggers', {
+        policy_ids: [await createAllowAllPolicy({ adminToken })],
         name: 'forced-ref-trigger',
         type: 'manual',
         target_type: 'tool',
@@ -351,6 +354,7 @@ describe('Share references', () => {
     const tool = await newTool('publisherRevokedTool');
     const shareId = await shareAccepted({ type: 'tool', id: tool });
     await createInGrantee('/api/v1/triggers', {
+      policy_ids: [await createAllowAllPolicy({ adminToken })],
       name: 'publisher-revoked-trigger',
       type: 'manual',
       target_type: 'tool',

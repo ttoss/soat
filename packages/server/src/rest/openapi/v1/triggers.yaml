@@ -257,10 +257,10 @@ paths:
         Updates an existing trigger's configuration. The type is immutable.
         Changing `target_type` or `target_id` re-checks the target-start action
         (`orchestrations:StartRun`, `agents:CreateAgentGeneration` or
-        `tools:CallTool`) against the resulting target, because a firing runs with
-        the trigger creator's authority rather than the updater's. A caller who
-        could not start the new target is answered `403` and the trigger keeps the
-        target it had.
+        `tools:CallTool`) against the resulting target, because a firing acts
+        under the trigger's `policy_ids` rather than the updater's grant. A
+        caller who could not start the new target is answered `403` and the
+        trigger keeps the target it had.
         A `{{secret:...}}` reference in a written `tool_context`, or in the stored
         one when the target changes, also needs `secrets:UseSecret` on that
         secret, else `403`.
@@ -363,8 +363,10 @@ paths:
     post:
       description: >-
         Fires a trigger synchronously and returns the terminal firing record.
-        The firing itself always settles here; an `eval` target's run is queued
-        rather than executed inline, so the record names a `queued` run to poll.
+        The firing acts as the caller ∩ the trigger's `policy_ids`, which must
+        allow starting the target, else `403`. The firing itself always settles
+        here; an `eval` target's run is queued rather than executed inline, so
+        the record names a `queued` run to poll.
       tags:
         - Triggers
       summary: Fire a trigger
@@ -414,7 +416,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: Trigger inactive or creator unavailable
+          description: Trigger inactive
           content:
             application/json:
               schema:
@@ -675,19 +677,38 @@ components:
           type: string
           nullable: true
           description: 5-field cron expression (UTC). Present only for schedule triggers
-        event_pattern:
-          type: string
+        events:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Event triggers only: the event type patterns that fire it — `*`,
+            `prefix.*`, or an exact name, custom names included.
+        event_resources:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Event triggers only: SRN patterns, with IAM wildcards, the event's
+            resource must match. Null matches any resource in the project.
+        event_data:
           nullable: true
           description: >-
-            Internal-event subscription pattern. Present only for event
-            triggers: `*`, `prefix.*`, or an exact event name
+            Event triggers only: a filter the event's `data` must match.
+          allOf:
+            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
         active:
           type: boolean
-        policy_id:
-          x-soat-ref: policies
-          type: string
-          nullable: true
-          description: Optional boundary policy that further restricts firings
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies a firing acts under: alone when nobody called the
+            trigger, intersected with the caller's grant for a manual fire.
         next_fire_at:
           type: string
           format: date-time
@@ -716,6 +737,7 @@ components:
         - type
         - target_type
         - target_id
+        - policy_ids
       additionalProperties: false
       properties:
         project_id:
@@ -772,21 +794,49 @@ components:
         cron:
           type: string
           description: 5-field cron expression (UTC). Required when type is schedule
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: >-
+            Required when type is event, rejected otherwise. The event type
+            patterns that fire the trigger: `*` matches every event, `prefix.*`
+            a namespace, or give an exact name such as `documents.ingested`
+            or a custom name an orchestration emits.
         event_pattern:
           type: string
           description: >-
-            Internal-event subscription pattern. Required when type is event,
-            rejected otherwise. `*` matches every event, `prefix.*` a namespace,
-            or give an exact event name such as `documents.ingested`
+            One event type pattern, the same as `events: [event_pattern]`.
+            Send `events` or this, not both.
+        event_resources:
+          type: array
+          items:
+            type: string
+          description: >-
+            Event triggers only. SRN patterns, with IAM wildcards
+            (`srn:<project>:<type>:<id>` or `*`); the trigger fires only for
+            an event whose resource matches one. Omitted matches any resource
+            in the project.
+        event_data:
+          description: >-
+            Event triggers only. A filter the event's `data` must match: a
+            top-level field to a value, or to `in`, `gt`, `gte`, `lt`, `lte`.
+            An absent field never matches.
+          allOf:
+            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
         active:
           type: boolean
           default: true
-        policy_id:
-          x-soat-ref: policies
-          type: string
+        policy_ids:
+          type: array
+          minItems: 1
+          items:
+            x-soat-ref: policies
+            type: string
           description: >-
-            Boundary policy for firings. The caller must hold every grant it
-            carries inside the trigger's project, else `403
+            The policies every firing acts under. The caller must hold every
+            grant they carry inside the trigger's project, else `403
             POLICY_GRANT_NOT_HELD`.
 
     UpdateTriggerRequest:
@@ -824,19 +874,39 @@ components:
         cron:
           type: string
           nullable: true
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: Replaces the event type patterns; event triggers only.
         event_pattern:
           type: string
+          description: >-
+            The same as `events: [event_pattern]`.
+        event_resources:
+          type: array
           nullable: true
+          items:
+            type: string
+          description: Replaces the resource patterns; `null` matches any resource.
+        event_data:
+          nullable: true
+          description: Replaces the data filter; `null` clears it.
+          allOf:
+            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
         active:
           type: boolean
-        policy_id:
-          x-soat-ref: policies
-          type: string
+        policy_ids:
+          type: array
+          minItems: 1
+          items:
+            x-soat-ref: policies
+            type: string
           description: >-
-            Boundary policy for firings. The caller must hold every grant it
-            carries inside the trigger's project, else `403
+            Replaces the policies every firing acts under. The caller must
+            hold every grant of each one added, else `403
             POLICY_GRANT_NOT_HELD`.
-          nullable: true
 
     FireTriggerRequest:
       type: object
@@ -927,6 +997,21 @@ components:
             interrupted before it recorded a result and the firing was
             redelivered — not that the target refused it, which is recorded
             terminally in `error` and never retried.
+        acted_as:
+          type: object
+          nullable: true
+          description: >-
+            The principal the firing acted as: the trigger itself
+            (`trigger`, under its `policy_ids`), or the caller of a manual
+            fire (under the caller's grant ∩ `policy_ids`). Null for a firing
+            refused before it was dispatched.
+          required: [principal_type, principal_id]
+          properties:
+            principal_type:
+              $ref: './principals.yaml#/components/schemas/PrincipalType'
+            principal_id:
+              type: string
+              example: trg_V1StGXR8Z5jdHi6B
         started_at:
           type: string
           format: date-time

@@ -22,6 +22,7 @@ components:
         - agent
         - automation
         - approval
+        - trigger
         - system
       description: >-
         What kind of principal acted. `user` and `api_key` are authenticated
@@ -29,7 +30,8 @@ components:
         (`key_…`), so a record names which key acted rather than its owner.
         `agent` is an agent writing under its own identity (`agent_…`).
         `automation` is the task engine acting on a dispatch outcome and
-        `approval` an approval resolution; neither carries an id. `system` is
+        `approval` an approval resolution; neither carries an id. `trigger` is
+        a trigger firing under its own `policy_ids` (`trg_…`). `system` is
         the platform itself, with an id naming the mechanism
         (`retention_sweep`, `zero_retention`).
       example: user

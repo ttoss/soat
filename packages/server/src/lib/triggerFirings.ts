@@ -24,6 +24,13 @@ export const mapTriggerFiring = (instance: TriggerFiringInstance) => {
     error: instance.error,
     idempotency_key: instance.idempotencyKey,
     attempts: instance.attempts,
+    acted_as:
+      instance.actedAsPrincipalType && instance.actedAsPrincipalId
+        ? {
+            principal_type: instance.actedAsPrincipalType,
+            principal_id: instance.actedAsPrincipalId,
+          }
+        : null,
     started_at: instance.startedAt,
     completed_at: instance.completedAt,
     created_at: instance.createdAt,

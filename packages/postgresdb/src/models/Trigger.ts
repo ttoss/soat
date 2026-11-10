@@ -8,7 +8,6 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { Policy } from './Policy';
 import { Project } from './Project';
 import { User } from './User';
 
@@ -50,7 +49,7 @@ export class Trigger extends Model {
   )
   declare project: Project;
 
-  // The trigger creator. Firings execute as this identity; a deleted creator
+  // The trigger creator, the user a firing's token names. A deleted creator
   // keeps the trigger but makes firings fail closed.
   @ForeignKey(() => {
     return User;
@@ -66,19 +65,9 @@ export class Trigger extends Model {
   )
   declare createdBy: User | null;
 
-  @ForeignKey(() => {
-    return Policy;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare policyId: number | null;
-
-  @BelongsTo(
-    () => {
-      return Policy;
-    },
-    { onDelete: 'RESTRICT' }
-  )
-  declare policy: Policy | null;
+  // Public ids of the policies a firing acts under; queried by policy.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare policyIds: string[] | null;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare name: string;
@@ -123,10 +112,17 @@ export class Trigger extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare cron: string | null;
 
-  // Bus subscription pattern ('*', 'prefix.*', or an exact event name); present
-  // only for event triggers.
-  @Column({ type: DataType.STRING, allowNull: true })
-  declare eventPattern: string | null;
+  // Event triggers only: type patterns ('*', 'prefix.*', or an exact name).
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare events: string[] | null;
+
+  // Event triggers only: SRN patterns; null matches any resource.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare eventResources: string[] | null;
+
+  // Event triggers only: a structured filter over the event's `data`.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare eventData: Record<string, unknown> | null;
 
   @Column({
     type: DataType.BOOLEAN,
