@@ -20,6 +20,7 @@ import type { StreamedGenerationPart } from 'src/lib/agentStreamGeneration';
 import { storeResumedConversationTurn } from 'src/lib/conversationGeneration';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
+import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 
 import { authorizeAgentWrite } from './agentAccess';
 import { parseToolContextBody } from './helpers';
@@ -314,6 +315,7 @@ agentGenerationRouter.post(
         };
       }),
       authHeader: (ctx.headers.authorization as string) ?? undefined,
+      actedAs: resolveStartingPrincipal({ authUser: ctx.authUser }),
     });
     await storeResumedConversationTurn({
       result,

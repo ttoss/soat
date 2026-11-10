@@ -20,6 +20,7 @@ import {
   collectSystemInstructions,
   withoutSystemMessages,
 } from './modelMessages';
+import type { StartingPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 
 /**
@@ -89,6 +90,8 @@ export const submitToolOutputs = async (args: {
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
   authHeader?: string;
+  // Who `authHeader` names; the resumed segment's tool calls run as them.
+  actedAs: StartingPrincipal | null;
 }): Promise<GenerationResult> => {
   let pending = pendingGenerations.get(args.generationId);
 
@@ -126,7 +129,12 @@ export const submitToolOutputs = async (args: {
   await assertProjectAcceptsWork({ projectId: pending.projectId });
 
   pendingGenerations.delete(args.generationId);
-  if (!(await claimPausedGeneration({ publicId: args.generationId }))) {
+  if (
+    !(await claimPausedGeneration({
+      publicId: args.generationId,
+      actedAs: args.actedAs,
+    }))
+  ) {
     throw notAwaitingToolOutputs(args.generationId);
   }
 
