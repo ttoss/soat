@@ -645,6 +645,48 @@ describe('compilePolicy', () => {
   });
 });
 
+describe('compilePolicy unbound variable', () => {
+  const statement = (effect: 'Allow' | 'Deny') => {
+    return {
+      effect,
+      action: ['test:Do'],
+      resource: ['*'],
+      condition: {
+        StringNotEquals: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+      },
+    };
+  };
+
+  test('an Allow naming one grants nothing', () => {
+    const result = compilePolicy({
+      policies: [[{ statement: [statement('Allow')] }]],
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(false);
+  });
+
+  test('a Deny naming one does not narrow', () => {
+    const result = compilePolicy({
+      policies: [
+        [
+          {
+            statement: [
+              { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+              statement('Deny'),
+            ],
+          },
+        ],
+      ],
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result).toEqual({ hasAccess: true, where: {} });
+  });
+});
+
 describe('compilePolicy project segment', () => {
   const compile = (statement: PolicyDocument['statement']) => {
     return compilePolicy({

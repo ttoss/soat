@@ -150,7 +150,7 @@ export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
 // ── IAM Boundary Check ────────────────────────────────────────────────────
 
 /**
- * Evaluates an agent's `boundary_policy` for one SOAT action.
+ * Evaluates an agent's `policy_ids` for one SOAT action.
  *
  * `resource` is the SRN the call acts on and `context` the condition inputs for
  * it (`buildResourceTagContext`), so a boundary can scope a grant to a single

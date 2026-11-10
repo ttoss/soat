@@ -1,5 +1,5 @@
 ---
-description: "Cap what an agent can do with a boundary policy, so a sub-agent holding a caller's full token still cannot exceed its own ceiling."
+description: "Cap what an agent can do with its policy_ids, so a sub-agent holding a caller's full token still cannot exceed its own ceiling."
 keywords:
   - agent boundary policy
   - agent permissions
@@ -12,13 +12,13 @@ sidebar_position: 15
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Bound an Agent with a Boundary Policy
+# Bound an Agent with Its Policies
 
 SOAT forwards the caller's credential into every `builtin` action an agent performs, so a chain is capped by the caller's token. That cap is not least privilege: a read-only summarizer running under a caller who may write documents executes at the caller's ceiling.
 
-`boundary_policy` is a policy document stored on the agent that limits which `builtin` actions that agent may perform, whoever calls it. Effective permission = caller policy ∩ agent boundary, as with [API keys](/docs/modules/api-keys#permission-inheritance).
+An agent's `policy_ids` name stored policies that limit which `builtin` actions that agent may perform, whoever calls it. Every generation runs as the caller ∩ those policies, as with [API keys](/docs/modules/api-keys#permission-inheritance).
 
-You give alice broad document permissions, bind an agent to a document-writing tool, watch the agent's write be refused by a read-only boundary, then perform the same write directly as alice.
+You give alice broad document permissions, bind an agent to a document-writing tool, watch the agent's write be refused by a read-only policy, then perform the same write directly as alice.
 
 ## Prerequisites
 
@@ -230,6 +230,7 @@ POLICY_ID=$(soat create-policy \
           "documents:*",
           "agents:CreateAgentGeneration",
           "agents:GetAgent",
+          "agents:UpdateAgent",
           "traces:GetTrace",
           "traces:ListTraces"
         ],
@@ -265,6 +266,7 @@ const { data: policy } = await adminSoat.policies.createPolicy({
             'documents:*',
             'agents:CreateAgentGeneration',
             'agents:GetAgent',
+            'agents:UpdateAgent',
             'traces:GetTrace',
             'traces:ListTraces',
           ],
@@ -312,6 +314,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
             \"documents:*\",
             \"agents:CreateAgentGeneration\",
             \"agents:GetAgent\",
+            \"agents:UpdateAgent\",
             \"traces:GetTrace\",
             \"traces:ListTraces\"
           ],
@@ -391,24 +394,19 @@ echo "Write tool: $WRITE_TOOL_ID"
 
 ---
 
-## Step 6 — Create the agent with a read-only boundary
+## Step 6 — Create the agent with a read-only policy
 
-- `boundary_policy` allows `documents:GetDocument` only. Boundaries are deny-by-default, so the bound `update-document` tool is refused.
+- The agent's policy allows `documents:GetDocument` only. Policies are deny-by-default, so the bound `update-document` tool is refused.
+- Attaching it needs a caller who holds every grant it carries; admin does.
 - `step_rules` forces the tool call on step 1 so the refusal does not depend on `qwen2.5:0.5b` volunteering it. See [Step Rules](/docs/modules/agents#step-rules).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-AGENT_ID=$(soat create-agent \
-  --project-id "$PROJECT_ID" \
-  --ai-provider-id "$PROVIDER_ID" \
-  --name "Bounded Summarizer" \
-  --instructions "You summarize notes. Use your tools when asked." \
-  --tool-bindings "[{\"tool_id\":\"$WRITE_TOOL_ID\"}]" \
-  --max-steps 2 \
-  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"docs_update-document"}}]' \
-  --boundary-policy '{
+READ_POLICY_ID=$(soat create-policy \
+  --name "summarizer-read-only" \
+  --document '{
     "statement": [
       {
         "effect": "Allow",
@@ -417,6 +415,16 @@ AGENT_ID=$(soat create-agent \
       }
     ]
   }' | jq -r '.id')
+
+AGENT_ID=$(soat create-agent \
+  --project-id "$PROJECT_ID" \
+  --ai-provider-id "$PROVIDER_ID" \
+  --name "Bounded Summarizer" \
+  --instructions "You summarize notes. Use your tools when asked." \
+  --tool-bindings "[{\"tool_id\":\"$WRITE_TOOL_ID\"}]" \
+  --max-steps 2 \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"docs_update-document"}}]' \
+  --policy-ids '["'"$READ_POLICY_ID"'"]' | jq -r '.id')
 echo "Agent: $AGENT_ID"
 ```
 
@@ -424,6 +432,21 @@ echo "Agent: $AGENT_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: readPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'summarizer-read-only',
+    document: {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['documents:GetDocument'],
+          resource: ['*'],
+        },
+      ],
+    },
+  },
+});
+
 const { data: agent } = await adminSoat.agents.createAgent({
   body: {
     project_id: projectId,
@@ -438,15 +461,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
         tool_choice: { type: 'tool', tool_name: 'docs_update-document' },
       },
     ],
-    boundary_policy: {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['documents:GetDocument'],
-          resource: ['*'],
-        },
-      ],
-    },
+    policy_ids: [readPolicy!.id],
   },
 });
 const agentId = agent!.id;
@@ -456,6 +471,18 @@ const agentId = agent!.id;
 <TabItem value="curl" label="curl">
 
 ```bash
+READ_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "summarizer-read-only",
+    "document": {
+      "statement": [
+        {"effect": "Allow", "action": ["documents:GetDocument"], "resource": ["*"]}
+      ]
+    }
+  }' | jq -r '.id')
+
 AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
@@ -467,11 +494,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
     \"tool_bindings\": [{\"tool_id\": \"$WRITE_TOOL_ID\"}],
     \"max_steps\": 2,
     \"step_rules\": [{\"step\": 1, \"tool_choice\": {\"type\": \"tool\", \"tool_name\": \"docs_update-document\"}}],
-    \"boundary_policy\": {
-      \"statement\": [
-        {\"effect\": \"Allow\", \"action\": [\"documents:GetDocument\"], \"resource\": [\"*\"]}
-      ]
-    }
+    \"policy_ids\": [\"$READ_POLICY_ID\"]
   }" | jq -r '.id')
 echo "Agent: $AGENT_ID"
 ```
@@ -479,15 +502,15 @@ echo "Agent: $AGENT_ID"
 </TabItem>
 </Tabs>
 
-:::tip Write boundaries as allow-lists
-An allow-list stays correct as the agent gains tools: a newly bound `builtin` action is refused until the boundary is widened. A deny-list permits every action nobody thought to deny.
+:::tip Write agent policies as allow-lists
+An allow-list stays correct as the agent gains tools: a newly bound `builtin` action is refused until the policy is widened. A deny-list permits every action nobody thought to deny.
 :::
 
 ---
 
 ## Step 7 — Run the agent as alice, and watch the write fail
 
-The boundary is evaluated before dispatch: the tool returns an error result and the [generation](/docs/modules/agents#soat-action-permissions) still completes.
+The agent's policies are evaluated before dispatch: the tool returns an error result and the [generation](/docs/modules/agents#execution-identity) still completes.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -498,7 +521,7 @@ soat --profile alice create-agent-generation --wait true \
   --messages '[{"role":"user","content":"Replace the note content with: OVERWRITTEN BY THE AGENT."}]' \
   | jq '.status'
 
-# The boundary refused the write — content is untouched.
+# The agent's policy refused the write — content is untouched.
 soat --profile alice get-document --document-id "$DOC_ID" | jq -r '.content'
 
 # Verify it: this exits non-zero if the agent managed to change anything.
@@ -530,7 +553,7 @@ const { data: after } = await aliceSoat.documents.getDocument({
 });
 
 console.log('Content after the agent ran:', after!.content);
-// → "ORIGINAL CONTENT" — the boundary refused the write
+// → "ORIGINAL CONTENT" — the agent's policy refused the write
 ```
 
 </TabItem>
@@ -604,48 +627,46 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/documents/$DOC_ID" \
 </TabItem>
 </Tabs>
 
-The forwarded credential caps the chain from above; the boundary caps each agent from below. A prompt injection inherits the agent's ceiling, not alice's.
+The forwarded credential caps the chain from above; `policy_ids` cap each agent from below. A prompt injection inherits the agent's ceiling, not alice's.
 
 ---
 
-## Step 9 — A mistyped action is rejected at write time
+## Step 9 — Attaching a policy needs its grants
 
-Action strings are validated on agent create and update, so a mis-named action is rejected instead of silently matching nothing.
+An agent can do no more than whoever attached its policies. Alice may update the agent but does not hold `agents:DeleteAgent`, so she cannot hand it a policy granting that: `403 POLICY_GRANT_NOT_HELD`, with `meta.ungranted` naming the grant.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+WIDE_POLICY_ID=$(soat create-policy \
+  --name "summarizer-wide" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:DeleteAgent"]}]}' \
+  | jq -r '.id')
+
 # → expect-fail
-soat create-agent \
-  --project-id "$PROJECT_ID" \
-  --ai-provider-id "$PROVIDER_ID" \
-  --name "Typo Agent" \
-  --boundary-policy '{"statement":[{"effect":"Allow","action":["documents:GetDocumnet"],"resource":["*"]}]}'
+soat --profile alice update-agent \
+  --agent-id "$AGENT_ID" \
+  --policy-ids '["'"$WIDE_POLICY_ID"'"]'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// Rejected with 400 VALIDATION_FAILED:
-//   statement[0].action: "documents:GetDocumnet" is not a known action
-//   — see the Permissions Reference (/docs/permissions)
-await adminSoat.agents.createAgent({
+const { data: widePolicy } = await adminSoat.policies.createPolicy({
   body: {
-    project_id: projectId,
-    ai_provider_id: providerId,
-    name: 'Typo Agent',
-    boundary_policy: {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['documents:GetDocumnet'],
-          resource: ['*'],
-        },
-      ],
+    name: 'summarizer-wide',
+    document: {
+      statement: [{ effect: 'Allow', action: ['agents:DeleteAgent'] }],
     },
   },
+});
+
+// Rejected with 403 POLICY_GRANT_NOT_HELD
+await aliceSoat.agents.updateAgent({
+  path: { agent_id: agentId },
+  body: { policy_ids: [widePolicy!.id] },
 });
 ```
 
@@ -653,39 +674,40 @@ await adminSoat.agents.createAgent({
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+WIDE_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{
-    \"project_id\": \"$PROJECT_ID\",
-    \"ai_provider_id\": \"$PROVIDER_ID\",
-    \"name\": \"Typo Agent\",
-    \"boundary_policy\": {\"statement\":[{\"effect\":\"Allow\",\"action\":[\"documents:GetDocumnet\"],\"resource\":[\"*\"]}]}
-  }" | jq '.'
+  -d '{"name":"summarizer-wide","document":{"statement":[{"effect":"Allow","action":["agents:DeleteAgent"]}]}}' \
+  | jq -r '.id')
+
+curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"policy_ids\": [\"$WIDE_POLICY_ID\"]}" | jq '.error.code'
 ```
 
 </TabItem>
 </Tabs>
 
-Action names: [Permissions Reference](/docs/permissions).
+A mis-named action is rejected when the policy is written, so a typo'd `Deny` cannot silently match nothing. Action names: [Permissions Reference](/docs/permissions).
 
 ---
 
-## What the boundary does and does not cover
+## What the agent's policies do and do not cover
 
-|                                  | Governed by `boundary_policy`                                            |
-| -------------------------------- | ------------------------------------------------------------------------ |
-| `builtin` tools (platform actions)  | **Yes** — every action is checked before dispatch                        |
-| The built-in `write_memory` tool | **Yes** — fails closed when the boundary denies the memory write actions |
-| `http`, `mcp`, `client` tools    | **No** — these execute outside the platform                              |
+|                                    | Governed by `policy_ids`                                               |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| `builtin` tools (platform actions) | **Yes** — every action is checked before dispatch                      |
+| The built-in `write_memory` tool   | **Yes** — fails closed when the policies deny the memory write actions |
+| `http`, `mcp`, `client` tools      | **No** — these execute outside the platform                            |
 
-For tool types the boundary cannot reach, use [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) or [Approvals](/docs/tutorials/approval-gate).
+For tool types the agent's policies cannot reach, use [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) or [Approvals](/docs/tutorials/approval-gate).
 
-A boundary applies per hop: a sub-agent called through `create-agent-generation` resolves its tools under its own boundary; the orchestrator's permissions do not widen it.
+The cap applies per hop: a sub-agent called through `create-agent-generation` resolves its tools under its own `policy_ids`; the orchestrator's permissions do not widen it.
 
 ## Next Steps
 
-- [Agents — SOAT Action Permissions](/docs/modules/agents#soat-action-permissions) — `boundary_policy` reference
+- [Agents — Execution Identity](/docs/modules/agents#execution-identity) — `policy_ids` reference, including `${soat:ActorId}` per end user
 - [Permissions in Practice](/docs/tutorials/permissions)
-- [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — a boundary per sub-agent
+- [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — a policy per sub-agent
 - [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails)

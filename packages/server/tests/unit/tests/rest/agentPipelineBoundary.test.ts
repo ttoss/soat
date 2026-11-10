@@ -4,7 +4,7 @@ import {
 } from '../../fixtures/agentToolTurn';
 
 // A pipeline bound to an agent runs its builtin steps as that agent's calls,
-// so the agent's `boundary_policy` holds for every step, however nested.
+// so the agent's `policy_ids` hold for every step, however nested.
 
 const DENY_GET_FILE = {
   statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
@@ -16,7 +16,7 @@ const ALLOW_GET_FILE = {
 
 const REFUSAL = { error: 'Forbidden: boundary policy denies files:GetFile' };
 
-describe("an agent's boundary_policy bounds the builtin steps of its pipeline tools", () => {
+describe("an agent's policy_ids bound the builtin steps of its pipeline tools", () => {
   let turn: AgentToolTurn;
 
   beforeAll(async () => {
@@ -51,7 +51,9 @@ describe("an agent's boundary_policy bounds the builtin steps of its pipeline to
   }) => {
     const agentId = await turn.createAgent({
       tool_bindings: [{ tool_id: args.tool.id }],
-      ...(args.boundaryPolicy ? { boundary_policy: args.boundaryPolicy } : {}),
+      ...(args.boundaryPolicy
+        ? { policy_ids: [await turn.createPolicy(args.boundaryPolicy)] }
+        : {}),
     });
     const { results } = await turn.generate({
       agentId,

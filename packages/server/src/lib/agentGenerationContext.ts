@@ -13,6 +13,7 @@ import {
   readKnowledgeConfig,
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
+import { resolveAgentBoundary } from './agentPolicies';
 import {
   resolveServedAgentVersion,
   withOutputSchema,
@@ -247,6 +248,11 @@ export const buildGenerationContext = async (
     outputSchema: args.outputSchemaOverride,
   });
 
+  const boundaryPolicy = await resolveAgentBoundary({
+    policyIds: typedAgent.policyIds,
+    actorId: toolContext?.actor_id,
+  });
+
   const resolvedMessages = await resolveGenerationInputMessages({
     projectIds: args.projectIds,
     messages: args.messages,
@@ -254,7 +260,7 @@ export const buildGenerationContext = async (
     authUser: args.authUser,
     allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
       .toolIds,
-    agentBoundaryPolicy: typedAgent.boundaryPolicy,
+    agentBoundaryPolicy: boundaryPolicy,
     toolContext, // identity-pinned, not the raw caller bag
   });
   const { model } = await resolveGenerationModel({
@@ -278,6 +284,7 @@ export const buildGenerationContext = async (
     generationId,
     projectIds: args.projectIds,
     typedAgent,
+    boundaryPolicy,
     authHeader: args.authHeader,
     toolContext,
     traceId: args.traceId,

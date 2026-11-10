@@ -77,8 +77,8 @@ srn:<project_id>:<resource_type>:<resource_id>
 
 Examples:
 
-| SRN                              | Description                |
-| -------------------------------- | -------------------------- |
+| SRN                             | Description                |
+| ------------------------------- | -------------------------- |
 | `srn:proj_ABC:document:doc_XYZ` | A specific document        |
 | `srn:proj_ABC:document:*`       | All documents in a project |
 | `srn:proj_ABC:file:*`           | All files in a project     |
@@ -145,13 +145,13 @@ Actions follow `module:Operation`. Full list: [Permissions Reference](../permiss
 
 Every action maps to one operation reachable through every client surface, e.g. `actors:CreateActor`:
 
-| Surface           | Convention                    | Example                     |
-| ----------------- | ----------------------------- | --------------------------- |
-| **Permission**    | `module:OperationName`        | `actors:CreateActor`        |
-| **REST endpoint** | `METHOD /api/v1/...`          | [`POST /api/v1/actors`](/docs/api/actors/create-actor)       |
-| **MCP tool**      | kebab-case operation name     | `create-actor`              |
-| **CLI command**   | `soat <kebab-case>`           | `soat create-actor`         |
-| **SDK method**    | `soat.<module>.<camelCase>()` | `soat.actors.createActor()` |
+| Surface           | Convention                    | Example                                                |
+| ----------------- | ----------------------------- | ------------------------------------------------------ |
+| **Permission**    | `module:OperationName`        | `actors:CreateActor`                                   |
+| **REST endpoint** | `METHOD /api/v1/...`          | [`POST /api/v1/actors`](/docs/api/actors/create-actor) |
+| **MCP tool**      | kebab-case operation name     | `create-actor`                                         |
+| **CLI command**   | `soat <kebab-case>`           | `soat create-actor`                                    |
+| **SDK method**    | `soat.<module>.<camelCase>()` | `soat.actors.createActor()`                            |
 
 A caller may invoke an operation iff the resolved policy grants the action, on any surface.
 
@@ -202,19 +202,29 @@ The check exists because an unknown key is never present in the evaluation conte
 
 Operators and keys match **by exact string**; no case conversion applies to a `condition` block or to `tags` (see [Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
+### Policy Variables
+
+A condition value may name `${soat:ActorId}`, replaced at evaluation time:
+
+| Variable          | Bound to                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| `${soat:ActorId}` | The [actor](./actors.md) a generation runs for, in its [agent's `policy_ids`](./agents.md#execution-identity) |
+
+Anywhere else, or in a generation with no actor, the variable is **unbound**, and a condition naming an unbound variable matches nothing under every operator, `StringNotEquals` included. Any other `${...}` is rejected with `400 VALIDATION_FAILED` when the policy is written.
+
 ## Authorization Model
 
 Authorization is **policy-only**: every decision is evaluated against the requested action and target SRN.
 
 ### Policy Resolution by Caller Type
 
-| Caller type                   | Policies used                                                               |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| **Admin (JWT)**               | Bypassed — admins have unrestricted access to all resources                 |
-| **Regular user (JWT)**        | All policies attached to the user (via `User.policyIds`)                    |
-| **API key (no policies)**     | Inherits the owning user's policies, hard-locked to the key's project        |
-| **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
-| **OAuth token**               | Intersection of user policies and the consented scope, hard-locked to the token's project |
+| Caller type                 | Policies used                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| **Admin (JWT)**             | Bypassed — admins have unrestricted access to all resources                               |
+| **Regular user (JWT)**      | All policies attached to the user (via `User.policyIds`)                                  |
+| **API key (no policies)**   | Inherits the owning user's policies, hard-locked to the key's project                     |
+| **API key (with policies)** | Intersection of user policies and key policies — both must allow the action               |
+| **OAuth token**             | Intersection of user policies and the consented scope, hard-locked to the token's project |
 
 Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope, never the scope binding, and passes the instance-wide admin gates (users, policies, project creation, the price book) only through a credential with no project and no policies, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 
@@ -227,8 +237,8 @@ A key with policies, or an OAuth token with a consented scope, **never exceeds i
 | Scenario                                                            | Result  | Reason                                   |
 | ------------------------------------------------------------------- | ------- | ---------------------------------------- |
 | Admin accessing any resource                                        | Allowed | Admins bypass policy evaluation          |
-| User with `resource: ["srn:proj_A:*:*"]` accessing proj_A          | Allowed | Policy covers the SRN                    |
-| User with `resource: ["srn:proj_A:*:*"]` accessing proj_B          | Denied  | Policy does not cover proj_B SRN         |
+| User with `resource: ["srn:proj_A:*:*"]` accessing proj_A           | Allowed | Policy covers the SRN                    |
+| User with `resource: ["srn:proj_A:*:*"]` accessing proj_B           | Denied  | Policy does not cover proj_B SRN         |
 | API key scoped to proj_A, accessing proj_B                          | Denied  | Key is hard-locked to proj_A             |
 | API key with key policy allowed, but user policy denied             | Denied  | Intersection semantics — both must allow |
 | API key without policies, accessing resource allowed by user policy | Allowed | Key inherits user permissions            |
@@ -237,15 +247,15 @@ A key with policies, or an OAuth token with a consented scope, **never exceeds i
 
 A denial's status code depends on what the route does, not on which policy failed:
 
-| Route shape                                                             | Denied response                                                                      |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                 | `200` with an empty list — the caller may read zero projects, so nothing matches      |
-| **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                        | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
+| Route shape                                                                                               | Denied response                                                                        |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                  | `200` with an empty list — the caller may read zero projects, so nothing matches       |
+| **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                           | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
 | **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
-| **Write / act on one, in a project none of the caller's policies name** | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either      |
-| **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                             | `403 FORBIDDEN`                                                                        |
-| Scoped credential naming another project (`project_id`)                | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
-| Scoped credential addressing, by id, a resource in another project     | `404` — the module's not-found, as for an id that names nothing                      |
+| **Write / act on one, in a project none of the caller's policies name**                                   | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either       |
+| **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                              | `403 FORBIDDEN`                                                                        |
+| Scoped credential naming another project (`project_id`)                                                   | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                      |
+| Scoped credential addressing, by id, a resource in another project                                        | `404` — the module's not-found, as for an id that names nothing                        |
 
 A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
@@ -289,13 +299,13 @@ A statement matches a request when **all** of the following are true:
 
 Tags are key-value pairs on resources, enabling ABAC via conditions. One mechanism serves every resource that carries `tags` ([which ones](#which-resources-carry-which-bag)), so a tag is written, filtered and matched the same way everywhere:
 
-| Surface | Rule |
-|---|---|
-| Write (`tags` on create/update, `PUT`/`PATCH …/tags`) | A flat object of string values; anything else (an array, a nested object, a number) is `400 VALIDATION_FAILED`, never coerced |
-| Bounds | At most 50 keys, 128-character keys and 256-character values. A write past a bound is `400 VALIDATION_FAILED` with `meta.limit`, and so is a `PATCH` whose merge would grow the stored bag past the key count. `system.*` keys are the platform's and do not count |
-| List filter (`?tags=key:value`, repeatable) | JSONB containment: every pair present with exactly that value; split on the first colon; a pair without a colon is `400` |
-| Knowledge search (`tags` in the body) | Same containment rule across documents and memory entries |
-| Policy condition (`soat:ResourceTag/<key>`) | Same pairs, read from the same column |
+| Surface                                               | Rule                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Write (`tags` on create/update, `PUT`/`PATCH …/tags`) | A flat object of string values; anything else (an array, a nested object, a number) is `400 VALIDATION_FAILED`, never coerced                                                                                                                                      |
+| Bounds                                                | At most 50 keys, 128-character keys and 256-character values. A write past a bound is `400 VALIDATION_FAILED` with `meta.limit`, and so is a `PATCH` whose merge would grow the stored bag past the key count. `system.*` keys are the platform's and do not count |
+| List filter (`?tags=key:value`, repeatable)           | JSONB containment: every pair present with exactly that value; split on the first colon; a pair without a colon is `400`                                                                                                                                           |
+| Knowledge search (`tags` in the body)                 | Same containment rule across documents and memory entries                                                                                                                                                                                                          |
+| Policy condition (`soat:ResourceTag/<key>`)           | Same pairs, read from the same column                                                                                                                                                                                                                              |
 
 Every resource that carries `tags` honors `soat:ResourceTag/<key>` in a policy condition.
 
@@ -305,10 +315,10 @@ A memory is the one resource governed by two tag bags — its own, and its memor
 
 A condition applies differently to one resource than to a listing:
 
-| Route shape | How the condition applies |
-|---|---|
-| One resource ([`GET /sessions/{id}`](/docs/api/sessions/get-session), the tag sub-endpoints) | The resource is loaded before the policy is evaluated, so its tags are the context: an `Allow` or a `Deny` condition decides the request |
-| A listing ([`GET /sessions?project_id=`](/docs/api/sessions/list-sessions)) | The caller is authorized for the resource type with no tag context, then the conditions compile into the query, where a `Deny` condition removes rows. Without `?project_id=` the policy of every project in scope compiles, and a row must pass each |
+| Route shape                                                                                  | How the condition applies                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One resource ([`GET /sessions/{id}`](/docs/api/sessions/get-session), the tag sub-endpoints) | The resource is loaded before the policy is evaluated, so its tags are the context: an `Allow` or a `Deny` condition decides the request                                                                                                              |
+| A listing ([`GET /sessions?project_id=`](/docs/api/sessions/list-sessions))                  | The caller is authorized for the resource type with no tag context, then the conditions compile into the query, where a `Deny` condition removes rows. Without `?project_id=` the policy of every project in scope compiles, and a row must pass each |
 
 ```json
 {
@@ -345,13 +355,13 @@ A tag key is an opaque label, **never case-converted**: stored, returned, and ma
 
 A resource carries two annotation bags, and only one of them is an authorization input.
 
-|                       | `tags`                                                                                     | `metadata`                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Shape                 | A flat object of string values, bounded (50 keys, 128-character keys, 256-character values)   | Any JSON object, nested, with the types it was written with; bounded by the project's storage quota, not by a count |
-| Governed by           | One mechanism for the write, `?tags=`, knowledge search and `soat:ResourceTag/<key>`         | A [metadata schema](metadata-schemas.md) per resource type and selector, which governs the write only              |
-| Read by the platform  | Yes: the IAM context of every access check, containment filters, `system.*` provenance       | Never: not in an IAM context, not in a policy condition, not in a prompt                                           |
-| Filtered by           | `?tags=key:value`, by containment                                                            | The [structured filter grammar](documents.md#metadata-filters) — equality, `in`, ordering — through the same containment |
-| Reserved keys         | `system.*`, refused on a caller write                                                        | None, and that is the point: nothing in the bag reaches platform state                                             |
+|                      | `tags`                                                                                      | `metadata`                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Shape                | A flat object of string values, bounded (50 keys, 128-character keys, 256-character values) | Any JSON object, nested, with the types it was written with; bounded by the project's storage quota, not by a count      |
+| Governed by          | One mechanism for the write, `?tags=`, knowledge search and `soat:ResourceTag/<key>`        | A [metadata schema](metadata-schemas.md) per resource type and selector, which governs the write only                    |
+| Read by the platform | Yes: the IAM context of every access check, containment filters, `system.*` provenance      | Never: not in an IAM context, not in a policy condition, not in a prompt                                                 |
+| Filtered by          | `?tags=key:value`, by containment                                                           | The [structured filter grammar](documents.md#metadata-filters) — equality, `in`, ordering — through the same containment |
+| Reserved keys        | `system.*`, refused on a caller write                                                       | None, and that is the point: nothing in the bag reaches platform state                                                   |
 
 A label is a string, and a record's fields have types. A report's `revision` is an integer, its `published_at` a date, its `reviewers` a list; stored as strings, `3`, `03` and `3.0` are three values to containment and every consumer parses by convention. So `tags` carry the labels the platform matches on, and `metadata` carries the record, typed at rest.
 
@@ -363,12 +373,12 @@ Which bag a rule may read follows from who writes it. Any caller who may write a
 
 ### Choosing a bag
 
-| A field that… | Goes in |
-| --- | --- |
-| a policy scopes rows by, through `soat:ResourceTag/<key>` | `tags` |
-| identifies the row, matched by `?tags=` or knowledge search | `tags` |
+| A field that…                                                  | Goes in    |
+| -------------------------------------------------------------- | ---------- |
+| a policy scopes rows by, through `soat:ResourceTag/<key>`      | `tags`     |
+| identifies the row, matched by `?tags=` or knowledge search    | `tags`     |
 | holds a typed value: a number, a date, a list, a nested object | `metadata` |
-| is ordered or compared (`gt`, `lte`, `in`) | `metadata` |
+| is ordered or compared (`gt`, `lte`, `in`)                     | `metadata` |
 
 The table assumes both bags. A resource that carries one takes every field there: a task's identifier lives in its `metadata` and is found with [`?metadata=`](/docs/api/tasks/list-tasks), and no policy can condition on it.
 

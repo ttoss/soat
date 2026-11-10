@@ -518,6 +518,8 @@ describe('Policies', () => {
       expect(refused.body.error.meta).toEqual({
         triggers: 1,
         sample: [triggerRes.body.id],
+        agents: 0,
+        agent_sample: [],
       });
 
       const detached = await client

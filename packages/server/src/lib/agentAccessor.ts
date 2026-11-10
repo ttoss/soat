@@ -28,7 +28,8 @@ export type MappedAgent = {
   stop_conditions: object[] | null;
   active_tool_ids: string[] | null;
   step_rules: object[] | null;
-  boundary_policy: object | null;
+  /** Policies capping every generation; see `agentPolicies.ts`. */
+  policy_ids: string[] | null;
   temperature: number | null;
   max_output_tokens: number | null;
   /** `{ effort }` — see `agentModelSettings.ts`. Null is the model's default. */

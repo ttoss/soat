@@ -10,7 +10,7 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * An approved `builtin` action runs outside the generation that proposed it,
- * so the proposing agent's `boundary_policy` is checked again where it runs.
+ * so the proposing agent's `policy_ids` is checked again where it runs.
  * The continuation's opening message carries the action's result, which is
  * how these tests read what ran.
  */
@@ -62,6 +62,14 @@ describe("an approved builtin action is held to the agent's boundary", () => {
     throw new Error(`no continuation for ${approvalId}`);
   };
 
+  const createPolicy = async (document: object): Promise<string> => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({ document });
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  };
+
   const createAgent = async (args: {
     aiProviderId: string;
     name: string;
@@ -74,7 +82,7 @@ describe("an approved builtin action is held to the agent's boundary", () => {
         ai_provider_id: args.aiProviderId,
         name: args.name,
         ...(args.boundaryPolicy
-          ? { boundary_policy: args.boundaryPolicy }
+          ? { policy_ids: [await createPolicy(args.boundaryPolicy)] }
           : {}),
       });
     expect(res.status).toBe(201);

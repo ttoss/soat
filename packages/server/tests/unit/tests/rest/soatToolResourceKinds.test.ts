@@ -10,7 +10,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
  * Every resource kind a builtin action can name, resolved to the SRN an
- * agent's `boundary_policy` is checked against — through a real turn.
+ * agent's `policy_ids` are checked against — through a real turn.
  *
  * One builtin tool carries one `get-*` action per kind. The model (a local
  * chat-completions stub) calls each action twice in a single step: once with
@@ -485,21 +485,25 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       name: 'kinds-caller-agent',
       max_steps: 2,
       tool_bindings: [{ tool_id: builtinToolId }],
-      boundary_policy: {
-        statement: [
-          {
-            effect: 'Allow',
-            action: ['*'],
-            resource: [
-              ...new Set(
-                kinds.map((entry) => {
-                  return entry.srn;
-                })
-              ),
+      policy_ids: [
+        await create('/api/v1/policies', {
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['*'],
+                resource: [
+                  ...new Set(
+                    kinds.map((entry) => {
+                      return entry.srn;
+                    })
+                  ),
+                ],
+              },
             ],
           },
-        ],
-      },
+        }),
+      ],
     });
 
     plannedCalls = kinds.flatMap((entry) => {

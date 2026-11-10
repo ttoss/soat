@@ -148,9 +148,14 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     modules: ['agentStepRules.ts'],
     enforces: 'Rewrites per-step request settings through `prepareStep`.',
   },
-  boundaryPolicy: {
-    modules: ['agentToolResolver.ts'],
-    enforces: 'Decides which cross-project resources the agent may reach.',
+  policyIds: {
+    modules: [
+      'agentGenerationContext.ts',
+      'agentGenerationRecovery.ts',
+      'agentToolApprovalContinuation.ts',
+    ],
+    enforces:
+      'Resolved into the cap every builtin action of the turn, its resumption and an approved call is evaluated under.',
   },
   temperature: {
     modules: ['agentModelSettings.ts'],

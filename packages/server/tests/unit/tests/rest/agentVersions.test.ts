@@ -128,7 +128,6 @@ describe('Agent versions', () => {
         [
           'active_tool_ids',
           'ai_provider_id',
-          'boundary_policy',
           'guardrail_ids',
           'instructions',
           'knowledge_config',
@@ -143,6 +142,7 @@ describe('Agent versions', () => {
           // agent behaved, so a restore has to bring it back.
           'on_approval_expiry',
           'output_schema',
+          'policy_ids',
           // Configuration: whether a turn marked a cache breakpoint changes
           // what the provider was billed for, so a restore has to bring it back.
           'prompt_caching',

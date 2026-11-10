@@ -5,7 +5,7 @@
  * with `srn:<project>:<type>:*` is something a statement naming one resource
  * can never match, so a policy scoped to one tool or one eval would reach
  * *nothing* while an action-only one reached every sibling in the project.
- * Naming the resource is also what lets an agent `boundary_policy` be scoped to
+ * Naming the resource is also what lets an agent `policy_ids` be scoped to
  * one of them, since a boundary may only promise the granularity the caller
  * path enforces.
  *

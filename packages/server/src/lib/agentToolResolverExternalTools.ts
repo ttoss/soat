@@ -131,7 +131,7 @@ type IsSoatActionAllowedByBoundary = (args: {
 }) => boolean;
 
 /**
- * The refusal an agent's `boundary_policy` gives one builtin call, or `null`
+ * The refusal an agent's `policy_ids` gives one builtin call, or `null`
  * when it admits it. Every path that runs a builtin action for an agent asks
  * here, with the arguments the call will carry.
  */

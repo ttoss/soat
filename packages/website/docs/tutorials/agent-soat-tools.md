@@ -845,5 +845,5 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tools/$LIST_TOOL_ID/call" \
 
 - Add more actions (e.g. `search-knowledge`) to the tools.
 - [Step rules](/docs/modules/agents#step-rules) — force a specific tool call first.
-- [Boundary policies](/docs/modules/agents#soat-action-permissions) — cap actions per agent, independent of the caller.
+- [Agent policies](/docs/modules/agents#execution-identity) — cap actions per agent, independent of the caller.
 - [Agents reference](/docs/modules/agents#examples) — all soat actions and options.

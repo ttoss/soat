@@ -94,7 +94,7 @@ const toSoatTool = (tool: OpenApiToolDefinition): ToolDefinition => {
     query: tool.query,
     body: tool.body,
     // Resolved from the same operationId→action catalog the route handlers
-    // enforce, so `boundary_policy` is evaluated against a name a policy
+    // enforce, so `policy_ids` is evaluated against a name a policy
     // author may write; `x-iam-action` is pinned equal to that catalog.
     iamAction:
       typeof iamAction === 'string'

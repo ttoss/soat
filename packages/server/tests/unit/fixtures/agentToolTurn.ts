@@ -60,6 +60,13 @@ const resourceBuilders = (project: TurnProject) => {
     return res.body.id;
   };
 
+  /** A stored policy, for an agent's `policy_ids`. */
+  const createPolicy = async (document: object): Promise<string> => {
+    const res = await api().post('/api/v1/policies').send({ document });
+    expect(res.status).toBe(201);
+    return res.body.id;
+  };
+
   /** An `http` tool posting to its own path on the target. */
   const createTool = async (
     body: Record<string, unknown> = {}
@@ -114,7 +121,7 @@ const resourceBuilders = (project: TurnProject) => {
     return { ...tool, agentId, guardrailIds };
   };
 
-  return { createGuardrail, createTool, createAgent, gatedTool };
+  return { createGuardrail, createPolicy, createTool, createAgent, gatedTool };
 };
 
 type Turn = {

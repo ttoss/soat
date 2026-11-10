@@ -6,7 +6,7 @@ import { listResourceKinds } from 'src/lib/resourceScopes';
 import { soatTools } from 'src/lib/soatTools';
 
 /**
- * `x-soat-resource` is what lets an agent's `boundary_policy` be evaluated
+ * `x-soat-resource` is what lets an agent's `policy_ids` be evaluated
  * against the resource a builtin call names rather than against `*`.
  * An operation that grows a path parameter and no annotation is not an
  * oversight anyone would notice at runtime — the check simply keeps answering

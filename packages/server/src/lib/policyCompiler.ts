@@ -3,6 +3,7 @@ import { Op, Sequelize } from '@ttoss/postgresdb';
 import type { PolicyDocument, PolicySets } from './iam';
 import { matchesPattern } from './iam';
 import { jsonbFn } from './jsonbQuery';
+import { hasUnboundPolicyVariable } from './policyVariables';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -353,6 +354,25 @@ const buildStatementFragments = (args: {
 };
 
 /**
+ * The statement names the action and binds every variable; one with an unbound
+ * variable matches nothing, as `evaluateCondition` answers.
+ */
+const statementCanMatch = (args: {
+  statement: PolicyDocument['statement'][0];
+  action: string;
+}): boolean => {
+  const actionMatch = args.statement.action.some((a) => {
+    return matchesPattern({ pattern: a, value: args.action });
+  });
+  return (
+    actionMatch &&
+    !Object.values(args.statement.condition ?? {}).some((block) => {
+      return Object.values(block ?? {}).some(hasUnboundPolicyVariable);
+    })
+  );
+};
+
+/**
  * Process a single statement and update allow/deny fragments.
  */
 const processStatement = (args: {
@@ -364,10 +384,7 @@ const processStatement = (args: {
   denyFragments: Array<Record<string, unknown>>;
   context: { hasAnyAllow: boolean; unconditionalAllow: boolean };
 }): boolean => {
-  const actionMatch = args.statement.action.some((a) => {
-    return matchesPattern({ pattern: a, value: args.action });
-  });
-  if (!actionMatch) return false;
+  if (!statementCanMatch(args)) return false;
 
   const {
     frags: resourceFrags,

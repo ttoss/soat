@@ -7,6 +7,7 @@ import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledge';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
+import type { GetWriterPolicies } from 'src/lib/policyGrantCoverage';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { redactAgentToolSecrets } from 'src/lib/toolSecretRedaction';
 import { setAuditResourceHint } from 'src/middleware/audit';
@@ -46,7 +47,7 @@ type CreateAgentBody = {
   stop_conditions?: unknown;
   active_tool_ids?: unknown;
   step_rules?: unknown;
-  boundary_policy?: unknown;
+  policy_ids?: unknown;
   temperature?: unknown;
   max_output_tokens?: unknown;
   reasoning?: unknown;
@@ -90,7 +91,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     stopConditions: parseOptional<object[] | null>(body.stop_conditions),
     activeToolIds: parseOptional<string[] | null>(body.active_tool_ids),
     stepRules: parseOptional<object[] | null>(body.step_rules),
-    boundaryPolicy: parseOptional<object | null>(body.boundary_policy),
+    policyIds: parseOptional<string[] | null>(body.policy_ids),
     temperature: parseOptional<number | null>(body.temperature),
     // Forwarded unvalidated: the lib owns both shapes, so a bad value is a 400.
     maxOutputTokens: parseOptional<number | null>(body.max_output_tokens),
@@ -163,12 +164,14 @@ const buildCreateAgentArgs = (args: {
   body: CreateAgentBody;
   createdBy: RequestPrincipal | null;
   secretUse: IsAllowedFn;
+  policyUse: GetWriterPolicies;
 }): Parameters<typeof createAgent>[0] => {
   const { projectId, body, createdBy } = args;
   return {
     projectId,
     createdBy,
     secretUse: args.secretUse,
+    policyUse: args.policyUse,
     versionLabel: parseNullableString(body.version_label),
     ...parseModelBinding(body),
     name: typeof body.name === 'string' ? body.name : undefined,
@@ -186,7 +189,7 @@ const buildCreateAgentArgs = (args: {
       ? body.active_tool_ids
       : undefined,
     stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
-    boundaryPolicy: body.boundary_policy as object | undefined,
+    policyIds: parseOptional<string[] | null>(body.policy_ids),
     temperature: parseNumber(body.temperature),
     maxOutputTokens: parseOptional<number>(body.max_output_tokens),
     reasoning: parseOptional<object>(body.reasoning),
@@ -236,6 +239,7 @@ const runAgentUpdate = async (args: {
     // Attributes the archived version to whoever made the change.
     createdBy: requestPrincipalFromCtx(ctx),
     secretUse: ctx.authUser.isAllowed,
+    policyUse: ctx.authUser.getPolicies,
   });
 };
 
@@ -261,6 +265,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
       body: reqBody,
       createdBy: requestPrincipalFromCtx(ctx),
       secretUse: ctx.authUser.isAllowed,
+      policyUse: ctx.authUser.getPolicies,
     })
   );
 

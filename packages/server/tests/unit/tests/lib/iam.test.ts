@@ -11,6 +11,7 @@ import {
   validatePolicyActions,
   validatePolicyDocument,
 } from 'src/lib/iam';
+import { bindPolicyVariables } from 'src/lib/policyVariables';
 
 describe('IAM', () => {
   describe('validatePolicyDocument', () => {
@@ -323,6 +324,65 @@ describe('IAM', () => {
     });
   });
 
+  describe('policy variables', () => {
+    const ownedBy = (value: string): PolicyDocument => {
+      return {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['memories:GetMemoryStore'],
+            condition: { StringEquals: { 'soat:ResourceTag/owner': value } },
+          },
+        ],
+      };
+    };
+
+    test('a condition value may name ${soat:ActorId}', () => {
+      expect(validatePolicyDocument(ownedBy('${soat:ActorId}')).valid).toBe(
+        true
+      );
+    });
+
+    test('a condition value naming an unknown variable is invalid', () => {
+      const result = validatePolicyDocument(ownedBy('${soat:UserId}'));
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('${soat:UserId}');
+    });
+
+    test('binding the actor makes the condition compare its id', () => {
+      const bound = bindPolicyVariables({
+        document: ownedBy('team-${soat:ActorId}'),
+        actorId: 'act_1',
+      });
+
+      expect(bound.statement[0].condition).toEqual({
+        StringEquals: { 'soat:ResourceTag/owner': 'team-act_1' },
+      });
+      expect(
+        evaluatePolicies({
+          policies: [bound],
+          action: 'memories:GetMemoryStore',
+          context: { 'soat:ResourceTag/owner': 'team-act_1' },
+        })
+      ).toBe(true);
+    });
+
+    test('with no actor the variable stays unbound and grants nothing', () => {
+      const bound = bindPolicyVariables({
+        document: ownedBy('${soat:ActorId}'),
+        actorId: null,
+      });
+
+      expect(
+        evaluatePolicies({
+          policies: [bound],
+          action: 'memories:GetMemoryStore',
+          context: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+        })
+      ).toBe(false);
+    });
+  });
+
   describe('validatePolicyActions', () => {
     test('non-object document is treated as valid (no actions to check)', () => {
       expect(validatePolicyActions(null).valid).toBe(true);
@@ -512,6 +572,24 @@ describe('IAM', () => {
           context: {},
         })
       ).toBe(true);
+    });
+
+    test('a variable left unbound matches under no operator', () => {
+      const context = { 'soat:ResourceTag/owner': '${soat:ActorId}' };
+      for (const operator of [
+        'StringEquals',
+        'StringNotEquals',
+        'StringLike',
+      ] as const) {
+        expect(
+          evaluateCondition({
+            condition: {
+              [operator]: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+            },
+            context,
+          })
+        ).toBe(false);
+      }
     });
 
     test('an unrecognized operator is treated as a pass', () => {

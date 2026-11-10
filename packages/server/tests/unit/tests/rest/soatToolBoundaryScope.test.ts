@@ -11,7 +11,7 @@ const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
 
 /**
  * A builtin action carries the caller's bearer, so the route checks the
- * caller's policy against the target's SRN. The agent's `boundary_policy` is
+ * caller's policy against the target's SRN. The agent's `policy_ids` are
  * the second half of that intersection, and it is evaluated here — before the
  * request — against the same SRN and tags, so an operator can confine an agent
  * to named resources whoever invoked it.

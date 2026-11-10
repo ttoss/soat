@@ -60,7 +60,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   POLICY_GRANT_NOT_HELD:
     'Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.',
   POLICY_HAS_DEPENDENTS:
-    'Detach the policy from the triggers `meta.sample` lists with `PATCH /api/v1/triggers/{trigger_id}` and `policy_id: null`, or delete them, then delete the policy.',
+    'Detach the policy from the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}` with `policy_id: null`) and the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}` without it in `policy_ids`), or delete them, then delete the policy.',
   SHARE_CAP_EXCEEDED:
     "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",
   SHARE_IN_USE:

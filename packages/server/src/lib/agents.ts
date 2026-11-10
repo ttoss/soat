@@ -11,6 +11,10 @@ import {
   assertValidReasoning,
 } from './agentModelSettings';
 import {
+  type AgentPolicyUse,
+  assertAgentPoliciesAttachable,
+} from './agentPolicies';
+import {
   assertForcedToolChoiceCanStop,
   assertValidStopConditions,
 } from './agentStopConditions';
@@ -28,7 +32,6 @@ import {
 } from './agentVersionSnapshot';
 import {
   assertAgentReferencesExist,
-  assertBoundaryPolicyActionsKnown,
   assertModelBinding,
   requireAiProviderDbId,
   resolveCreateModelBinding,
@@ -68,7 +71,7 @@ export const mapAgent = (agent: AgentRow): MappedAgent => {
     stop_conditions: agent.stopConditions,
     active_tool_ids: agent.activeToolIds,
     step_rules: agent.stepRules,
-    boundary_policy: agent.boundaryPolicy,
+    policy_ids: agent.policyIds,
     temperature: agent.temperature,
     max_output_tokens: agent.maxOutputTokens,
     reasoning: agent.reasoning,
@@ -103,7 +106,7 @@ type AgentUpdateFields = {
   stopConditions?: object[] | null;
   activeToolIds?: string[] | null;
   stepRules?: object[] | null;
-  boundaryPolicy?: object | null;
+  policyIds?: string[] | null;
   temperature?: number | null;
   maxOutputTokens?: number | null;
   reasoning?: object | null;
@@ -141,7 +144,7 @@ export const AGENT_SCALAR_FIELDS = [
   'stopConditions',
   'activeToolIds',
   'stepRules',
-  'boundaryPolicy',
+  'policyIds',
   'temperature',
   'maxOutputTokens',
   'reasoning',
@@ -177,7 +180,7 @@ const AGENT_CREATE_DEFAULTS = {
   stopConditions: null,
   activeToolIds: null,
   stepRules: null,
-  boundaryPolicy: null,
+  policyIds: null,
   temperature: null,
   maxOutputTokens: null,
   reasoning: null,
@@ -200,7 +203,7 @@ export const createAgent = async (
     stopConditions?: object[];
     activeToolIds?: string[];
     stepRules?: object[];
-    boundaryPolicy?: object;
+    policyIds?: string[] | null;
     temperature?: number;
     maxOutputTokens?: number;
     reasoning?: object;
@@ -213,10 +216,11 @@ export const createAgent = async (
     traceContentMode?: string | null;
     onApprovalExpiry?: string | null;
     secretUse: BindingSecretUse;
+    /** Whose grant `policyIds` is checked against. */
+    policyUse: AgentPolicyUse;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
-  assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
   assertValidStopConditions(args.stopConditions);
   assertValidPromptCaching(args.promptCaching);
@@ -236,6 +240,8 @@ export const createAgent = async (
     traceContentMode: args.traceContentMode,
     projectId: args.projectId,
   });
+
+  await assertAgentPoliciesAttachable({ ...args, current: null });
 
   const toolBindings = await resolveBindingsForCreate(args);
 
@@ -364,11 +370,12 @@ export const updateAgent = async (
     projectIds?: number[];
     id: string;
     secretUse: BindingSecretUse;
+    /** Whose grant the policies `policyIds` adds are checked against. */
+    policyUse: AgentPolicyUse;
   } & AgentUpdateFields &
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
-  assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
   assertValidStopConditions(args.stopConditions);
   assertValidPromptCaching(args.promptCaching);
@@ -401,6 +408,13 @@ export const updateAgent = async (
     stepRules: args.stepRules,
     traceContentMode: args.traceContentMode,
     projectId: agent.projectId,
+  });
+
+  await assertAgentPoliciesAttachable({
+    policyIds: args.policyIds,
+    current: agent.policyIds,
+    projectId: agent.projectId,
+    policyUse: args.policyUse,
   });
 
   const bindingsUpdate = await resolveBindingsForUpdate({

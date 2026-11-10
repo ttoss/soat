@@ -3,7 +3,6 @@ import { toStoredKnowledgeConfig } from '../agentKnowledge';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import type { ValidationError } from '../formationsTypes';
-import { validatePolicyActions } from '../iam';
 import { validateModelRouteExclusivity } from '../modelRoutes';
 import {
   toNullableArray,
@@ -111,7 +110,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     ),
     guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
     stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
-    boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
+    policyIds: toOptional(toNullableArray<string>(properties.policy_ids)),
     temperature: toOptional(toNullableNumber(properties.temperature)),
     maxOutputTokens: toOptional(toNullableNumber(properties.max_output_tokens)),
     reasoning: toOptional(toNullableObject(properties.reasoning)),
@@ -142,16 +141,6 @@ export const agentsFormationModule = defineFormationModule({
   },
 
   extraChecks: ({ properties, basePath, errors }) => {
-    // A mis-named `Deny` would silently no-op and fail the boundary open, so
-    // the action names are checked here; the evaluator handles structure at
-    // generation time.
-    const boundaryPolicy = properties.boundary_policy;
-    if (boundaryPolicy != null && isObjectRecord(boundaryPolicy)) {
-      for (const message of validatePolicyActions(boundaryPolicy).errors) {
-        errors.push({ path: `${basePath}.boundary_policy`, message });
-      }
-    }
-
     pushToolBindingErrors({ properties, basePath, errors });
     pushModelBindingErrors({ properties, basePath, errors });
   },
@@ -161,6 +150,7 @@ export const agentsFormationModule = defineFormationModule({
       projectId,
       createdBy: actor.author,
       secretUse: actor.isAllowed,
+      policyUse: actor.getPolicies,
       ...mapAgentProperties(properties),
     });
   },
@@ -170,6 +160,7 @@ export const agentsFormationModule = defineFormationModule({
       id: physicalResourceId,
       createdBy: actor.author,
       secretUse: actor.isAllowed,
+      policyUse: actor.getPolicies,
       // REST PATCH semantics: an explicit `null` clears the binding, an
       // undeclared field leaves it alone.
       aiProviderId: toNullableString(properties.ai_provider_id),
@@ -185,7 +176,7 @@ export const agentsFormationModule = defineFormationModule({
       onApprovalExpiry: toNullableString(properties.on_approval_expiry),
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),
       stepRules: toNullableArray<object>(properties.step_rules),
-      boundaryPolicy: toNullableObject(properties.boundary_policy),
+      policyIds: toNullableArray<string>(properties.policy_ids),
       temperature: toNullableNumber(properties.temperature),
       maxOutputTokens: toNullableNumber(properties.max_output_tokens),
       reasoning: toNullableObject(properties.reasoning),
@@ -234,7 +225,7 @@ export const agentsFormationModule = defineFormationModule({
       on_approval_expiry: agent.on_approval_expiry,
       guardrail_ids: agent.guardrail_ids,
       step_rules: agent.step_rules,
-      boundary_policy: agent.boundary_policy,
+      policy_ids: agent.policy_ids,
       temperature: agent.temperature,
       max_output_tokens: agent.max_output_tokens,
       reasoning: agent.reasoning,
