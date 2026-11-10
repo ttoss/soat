@@ -21,6 +21,7 @@ import {
   deciderVersionStore,
 } from './deciderVersionSnapshot';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 import type { VersionedWrite } from './writePrecondition';
@@ -211,7 +212,7 @@ export const listDeciders = async (args: {
 }): Promise<Page<MappedDecider>> => {
   log('listDeciders: projectIds=%o', args.projectIds);
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

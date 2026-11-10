@@ -22,6 +22,7 @@ import {
   orchestrationVersionStore,
 } from './orchestrationVersionSnapshot';
 import { emptyPage, type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { toResourceRef } from './resourceVersions';
 import { getOrchestrationRunUsageRollups } from './usageReceipt';
 import type { UsageTotals } from './usageTotals';
@@ -407,7 +408,7 @@ export const listOrchestrations = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: { projectId: args.projectIds },
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'DESC']],
     query: ({ where, limit, order }) => {
       return db.Orchestration.findAll({

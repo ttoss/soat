@@ -5,6 +5,8 @@ import { hasPolicyConstraints } from 'src/lib/policyWhere';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { applyTagFilter, mergeTags } from 'src/lib/tags';
 
+import { projectScopeWhere } from './projectScope';
+
 registerResourceFieldMap({
   resourceType: 'memory_store',
   publicIdColumn: { column: 'publicId' },
@@ -77,7 +79,7 @@ export const listMemoryStores = async (args: {
   }
 
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   applyTagFilter({ where, tags: args.tags });
   if (hasPolicyConstraints(args.policyWhere)) {
     Object.assign(where, args.policyWhere);

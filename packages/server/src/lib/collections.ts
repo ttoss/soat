@@ -6,6 +6,7 @@ import { compileJsonSchema } from './jsonSchemaValidator';
 import { paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import { registerResourceFieldMap } from './policyCompiler';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -114,7 +115,7 @@ export const listCollections = async (args: {
   cursor?: string;
 }) => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

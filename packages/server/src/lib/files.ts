@@ -25,6 +25,7 @@ import {
   registerResourceFieldMap,
 } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
+import { projectScopeWhere } from './projectScope';
 import { assertStorageQuota } from './quotaStorage';
 import { emitLoadedRecordEvent } from './recordEvents';
 import { nonSystemPathWhere } from './systemPathScope';
@@ -100,9 +101,7 @@ export const listFiles = async (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
 
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   applyTagFilter({ where, tags: args.tags });
 
   if (args.pathPrefix !== undefined) {

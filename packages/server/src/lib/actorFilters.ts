@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { projectScopeWhere } from './projectScope';
 
 const log = createDebug('soat:actors');
 
@@ -11,9 +12,7 @@ export const buildActorListWhere = (args: {
   name?: string;
 }): Record<string, unknown> => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.externalId !== undefined) {
     where.externalId = args.externalId;
   }

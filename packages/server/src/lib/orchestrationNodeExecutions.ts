@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 
 const log = createDebug('soat:orchestrations');
 
@@ -68,7 +69,7 @@ export const listOrchestrationRunNodeExecutions = async (args: {
             required: true,
             where: {
               publicId: args.runId,
-              projectId: args.projectIds,
+              ...projectScopeWhere({ projectIds: args.projectIds }),
             },
           },
         ],

@@ -7,6 +7,7 @@ import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
 import type { PrincipalType } from './principals';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import type { SoatEventTypeFor, SoatResourceType } from './soatEvents';
 import {
@@ -154,7 +155,7 @@ const collectTraceSubtree = async (args: {
   const where: Record<string, any> = {
     [Op.or]: [{ id: rootDbId }, { rootTraceId: rootDbId }],
   };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   const candidates = await db.Trace.findAll({ where });
 

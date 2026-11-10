@@ -27,6 +27,7 @@ import {
   parsePlaybookDefinition,
   throwPlaybookDefinitionProblems,
 } from './playbookWire';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 import type { StoredError } from './storedError';
@@ -213,7 +214,7 @@ export const listPlaybooks = async (args: {
 }): Promise<Page<MappedPlaybook>> => {
   log('listPlaybooks: projectIds=%o', args.projectIds);
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

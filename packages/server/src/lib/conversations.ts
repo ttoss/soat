@@ -14,6 +14,7 @@ import {
   registerResourceFieldMap,
 } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { applyTagFilter, mergeTags } from './tags';
 
@@ -75,9 +76,7 @@ export const listConversations = async (args: {
 
   const where: Record<string, unknown> = {};
 
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   applyTagFilter({ where, tags: args.tags });
 
   if (args.actorId !== undefined) {

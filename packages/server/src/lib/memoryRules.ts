@@ -8,6 +8,7 @@ import {
   validateMemoryRule,
 } from './memoryRuleValidation';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { serverSideToolProblem } from './toolsCallDispatch';
 
@@ -55,7 +56,7 @@ const memoryRuleIncludes = (projectIds?: number[]) => {
       model: db.MemoryStore,
       as: 'memoryStore',
       required: true,
-      ...(projectIds === undefined ? {} : { where: { projectId: projectIds } }),
+      where: projectScopeWhere({ projectIds }),
       include: [{ model: db.Project, as: 'project' }],
     },
     { model: db.Agent, as: 'agent' },

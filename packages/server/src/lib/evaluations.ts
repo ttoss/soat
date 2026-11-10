@@ -22,6 +22,7 @@ import {
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import { rethrowAsConflict } from './uniqueViolation';
@@ -202,7 +203,7 @@ export const listEvals = async (args: {
   log('listEvals: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,
