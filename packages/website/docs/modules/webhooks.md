@@ -11,7 +11,7 @@ HTTP callbacks that deliver signed event notifications when project resources ch
 
 ## Overview
 
-A webhook is project-scoped: a URL plus a list of event patterns. Matching events are dispatched automatically, retried up to three times, recorded as a row before the first HTTP attempt (see [Delivery durability](#delivery-durability)), and signed with HMAC-SHA256.
+A webhook is project-scoped: a URL, an [event filter](#event-filter) and the [policies](#policy-ids-and-the-read-guard) whose read grant decides what it may receive. Matching events are dispatched automatically, retried up to three times, recorded as a row before the first HTTP attempt (see [Delivery durability](#delivery-durability)), and signed with HMAC-SHA256.
 
 Webhooks are **outbound**. For the **inbound** direction (an external system activating an orchestration, agent, or tool) see [Triggers](./triggers.md), whose `webhook` starter verifies an incoming HMAC signature the same way.
 
@@ -29,19 +29,21 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 
 ### Webhook
 
-| Field         | Type           | Description                                          |
-| ------------- | -------------- | ---------------------------------------------------- |
-| `id`          | string         | Public identifier                                    |
-| `project_id`  | string         | ID of the owning project                             |
-| `policy_id`   | string \| null | Optional [policy](./policies.md) that gates delivery |
-| `name`        | string         | Human-readable name                                  |
-| `description` | string \| null | Optional description                                 |
-| `url`         | string         | HTTPS endpoint that receives deliveries              |
-| `events`      | string[]       | List of event patterns to subscribe to               |
-| `active`      | boolean        | Whether the webhook is enabled                       |
-| `secret`      | string         | Returned only on create and secret rotation          |
-| `created_at`  | string         | ISO 8601 creation timestamp                          |
-| `updated_at`  | string         | ISO 8601 last-updated timestamp                      |
+| Field             | Type             | Description                                                                                       |
+| ----------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| `id`              | string           | Public identifier                                                                                 |
+| `project_id`      | string           | ID of the owning project                                                                          |
+| `policy_ids`      | string[]         | Required, at least one: the [policies](./policies.md) whose read grant decides what it receives |
+| `name`            | string           | Human-readable name                                                                               |
+| `description`     | string \| null   | Optional description                                                                              |
+| `url`             | string           | HTTPS endpoint that receives deliveries                                                           |
+| `events`          | string[]         | Event type patterns it receives                                                                   |
+| `event_resources` | string[] \| null | SRN patterns the event's resource must match; null matches any resource in the project           |
+| `event_data`      | object \| null   | A [structured filter](./documents.md#metadata-filters) the event's `data` must match              |
+| `active`          | boolean          | Whether the webhook is enabled                                                                    |
+| `secret`          | string           | Returned only on create and secret rotation                                                       |
+| `created_at`      | string           | ISO 8601 creation timestamp                                                                       |
+| `updated_at`      | string           | ISO 8601 last-updated timestamp                                                                   |
 
 ### Webhook Delivery
 
@@ -62,7 +64,24 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 
 ## Key Concepts
 
-### Event Patterns
+### Event Filter
+
+A webhook receives an event when its type matches any `events` item, **and** its resource matches any `event_resources` item (IAM wildcard rules, `srn:<project>:<type>:<id>`; absent = any resource in the project), **and** its `data` matches `event_data`, **and** its [`policy_ids`](#policy-ids-and-the-read-guard) may read the resource. It is the same filter an [`event` trigger](./triggers.md#event-triggers) uses, field for field:
+
+```json
+{
+  "name": "large-ready-files",
+  "url": "https://example.com/hook",
+  "events": ["files.*"],
+  "event_resources": ["srn:proj_ABC:file:*"],
+  "event_data": { "size": { "gte": 1000 } },
+  "policy_ids": ["pol_ABC"]
+}
+```
+
+`event_data` is the [structured filter](./documents.md#metadata-filters) grammar: a top-level field to a value, or to `in`, `gt`, `gte`, `lt`, `lte`, ANDed across fields; an absent field never matches. On update, `null` clears `event_resources` or `event_data`. An invalid SRN pattern or filter is `400 VALIDATION_FAILED`.
+
+#### Event Patterns
 
 An event is named `<resource type, plural>.<verb>` (`files.created`, `generations.completed`), so `<plural>.*` matches exactly one resource type's events. Patterns are dot-separated:
 
@@ -72,7 +91,7 @@ An event is named `<resource type, plural>.<verb>` (`files.created`, `generation
 | `files.*`       | Any event starting with `files.`  |
 | `*`             | Every event in the project        |
 
-Every event is listed in the [Webhook Events Reference](../webhook-events.md), generated from the event registry; a name not there never matches. Example: [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription).
+Every event is listed in the [Webhook Events Reference](../webhook-events.md), generated from the event registry. A pattern whose first segment is a platform namespace must resolve to a registered event (`files.creatd` is `400 INVALID_EVENT_PATTERN`); a name outside every platform namespace (`orders.shipped`) is accepted, since an orchestration [`emit_event` node](./orchestrations.md#emitting-events) emits names SOAT does not own. Example: [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription).
 
 ### Delivery
 
@@ -197,23 +216,36 @@ const isValid = (secret, body, header) => {
 
 Each attempt is signed when sent, so a retry carries a fresh timestamp.
 
-### Policy Gating
+### Policy IDs and the Read Guard
 
-Attach a [policy](./policies.md) (a global resource) to filter deliveries without changing subscriptions: the event is delivered only if the policy evaluates to _allow_ for the event context.
+A delivery happens when nobody is present, so a webhook carries its own identity: `policy_ids`, at least one [policy](./policies.md). An event is delivered only when those policies allow reading its resource (the resource's `Get` action, such as `files:GetFile`, on the event's SRN; a custom `emit_event` event is about its run, `orchestrations:GetRun`), so a webhook never learns of a resource its identity cannot see. The guard is evaluated per event, so editing or detaching a policy takes effect on the next one.
+
+- Attaching a policy needs a caller who holds every grant in it inside the webhook's project, else `403 POLICY_GRANT_NOT_HELD`; on update only the policies added are checked. Editing an attached policy is checked the same way in every project a webhook carries it.
+- A policy a webhook names cannot be deleted (`409 POLICY_HAS_DEPENDENTS`, `meta.webhook_sample`).
+- Missing or empty `policy_ids` is `400 VALIDATION_FAILED`; a policy id that does not exist is `400 POLICY_NOT_FOUND`.
 
 ### Formation Support
 
-A [Formation](./formations.md) can create webhooks; capture the secret as an output with `ref_attr`:
+A [Formation](./formations.md) can create webhooks, with the same fields; the deploying caller must hold the grants of `policy_ids` (`{ "ref": "LogicalId" }` names a policy in the template). Capture the secret as an output with `ref_attr`:
 
 ```json
 {
   "resources": {
+    "HookReader": {
+      "type": "policy",
+      "properties": {
+        "document": {
+          "statement": [{ "effect": "Allow", "action": ["files:GetFile"] }]
+        }
+      }
+    },
     "MyWebhook": {
       "type": "webhook",
       "properties": {
         "name": "my-hook",
         "url": "https://example.com/hook",
-        "events": ["*"]
+        "events": ["*"],
+        "policy_ids": [{ "ref": "HookReader" }]
       }
     }
   },
@@ -236,7 +268,8 @@ soat create-webhook \
   --project-id proj_ABC \
   --name "My Webhook" \
   --url https://example.com/hook \
-  --events "sessions.*"
+  --events "sessions.*" \
+  --policy-ids '["pol_ABC"]'
 ```
 
 </TabItem>
@@ -255,6 +288,7 @@ const { data, error } = await soat.webhooks.createWebhook({
     name: 'My Webhook',
     url: 'https://example.com/hook',
     events: ['sessions.*'],
+    policy_ids: ['pol_ABC'],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -272,7 +306,8 @@ curl -X POST https://api.example.com/api/v1/webhooks \
     "project_id": "proj_ABC",
     "name": "My Webhook",
     "url": "https://example.com/hook",
-    "events": ["sessions.*"]
+    "events": ["sessions.*"],
+    "policy_ids": ["pol_ABC"]
   }'
 ```
 

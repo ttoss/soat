@@ -34,6 +34,8 @@ describe('Webhook delivery', () => {
   let adminToken: string;
   let userToken: string;
   let projectId: string;
+  /** The user's own policy, which reads files: what a webhook may receive. */
+  let userPolicyId: string;
   let fetchMock: jest.SpyInstance;
   let seq = 0;
 
@@ -45,6 +47,7 @@ describe('Webhook delivery', () => {
     url: string;
     events: string[];
     policyId?: string;
+    filter?: Record<string, unknown>;
   }): Promise<{ id: string; secret: string }> => {
     seq += 1;
     const res = await asUser()
@@ -54,7 +57,8 @@ describe('Webhook delivery', () => {
         name: `delivery-hook-${seq}`,
         url: args.url,
         events: args.events,
-        ...(args.policyId ? { policy_id: args.policyId } : {}),
+        policy_ids: [args.policyId ?? userPolicyId],
+        ...args.filter,
       });
     expect(res.status).toBe(201);
     return { id: res.body.id, secret: res.body.secret };
@@ -135,6 +139,7 @@ describe('Webhook delivery', () => {
       prefix: 'whdelivery',
       policyActions: [
         'files:CreateFile',
+        'files:GetFile',
         'webhooks:CreateWebhook',
         'webhooks:ListWebhookDeliveries',
         'webhooks:GetWebhookDelivery',
@@ -145,6 +150,7 @@ describe('Webhook delivery', () => {
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
+    userPolicyId = setup.policyId;
   });
 
   beforeEach(() => {
@@ -281,52 +287,76 @@ describe('Webhook delivery', () => {
       ).toBeUndefined();
     });
 
-    test('an attached policy decides whether the event is delivered', async () => {
-      const createPolicy = async (effect: string): Promise<string> => {
-        const res = await authenticatedTestClient(adminToken)
-          .post('/api/v1/policies')
-          .send({
-            document: {
-              statement: [{ effect, action: ['*'], resource: ['*'] }],
-            },
-          });
-        expect(res.status).toBe(201);
-        return res.body.id;
-      };
-      const denied = await createWebhook({
-        url: 'https://example.com/delivery-policy-deny',
+    test('a webhook whose policy_ids cannot read the resource receives nothing', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['webhooks:GetWebhookDelivery'] },
+            ],
+          },
+        });
+      expect(res.status).toBe(201);
+      const blind = await createWebhook({
+        url: 'https://example.com/delivery-blind',
         events: ['files.created'],
-        policyId: await createPolicy('Deny'),
+        policyId: res.body.id,
       });
-      const allowed = await createWebhook({
-        url: 'https://example.com/delivery-policy-allow',
+      const witness = await createWebhook({
+        url: 'https://example.com/delivery-witness',
         events: ['files.created'],
-        policyId: await createPolicy('Allow'),
       });
 
-      const first = await createFile();
-      const second = await createFile();
-      const settled = (d: Delivery) => {
-        return d.status === 'completed';
-      };
+      const fileId = await createFile();
       await waitForDelivery({
-        webhookId: allowed.id,
-        fileId: first,
-        done: settled,
+        webhookId: witness.id,
+        fileId,
+        done: (d) => {
+          return d.status === 'completed';
+        },
       });
-      // The second file's delivery lands after the first event's whole pass,
-      // so the denied webhook has had its evaluation for both by now.
+
+      // Matching runs in one pass before any row is written.
+      expect(
+        await deliveryFor({ webhookId: blind.id, fileId })
+      ).toBeUndefined();
+    });
+
+    test('event_resources and event_data narrow which events are delivered', async () => {
+      const otherResource = await createWebhook({
+        url: 'https://example.com/delivery-other-resource',
+        events: ['files.created'],
+        filter: { event_resources: [`srn:${projectId}:document:*`] },
+      });
+      const otherData = await createWebhook({
+        url: 'https://example.com/delivery-other-data',
+        events: ['files.created'],
+        filter: { event_data: { filename: 'never.txt' } },
+      });
+      const matching = await createWebhook({
+        url: 'https://example.com/delivery-matching-filter',
+        events: ['files.created'],
+        filter: {
+          event_resources: [`srn:${projectId}:file:*`],
+          event_data: { filename: { gte: 'delivery-' } },
+        },
+      });
+
+      const fileId = await createFile();
       await waitForDelivery({
-        webhookId: allowed.id,
-        fileId: second,
-        done: settled,
+        webhookId: matching.id,
+        fileId,
+        done: (d) => {
+          return d.status === 'completed';
+        },
       });
 
       expect(
-        await deliveryFor({ webhookId: denied.id, fileId: first })
+        await deliveryFor({ webhookId: otherResource.id, fileId })
       ).toBeUndefined();
       expect(
-        await deliveryFor({ webhookId: denied.id, fileId: second })
+        await deliveryFor({ webhookId: otherData.id, fileId })
       ).toBeUndefined();
     });
   });

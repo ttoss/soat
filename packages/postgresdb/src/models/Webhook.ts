@@ -8,7 +8,6 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { Policy } from './Policy';
 import { Project } from './Project';
 
 @Table({
@@ -49,19 +48,10 @@ export class Webhook extends Model {
   )
   declare project: Project;
 
-  @ForeignKey(() => {
-    return Policy;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare policyId: number | null;
-
-  @BelongsTo(
-    () => {
-      return Policy;
-    },
-    { onDelete: 'SET NULL' }
-  )
-  declare policy: Policy | null;
+  // Public ids of the policies whose read grant decides what it receives;
+  // queried by policy.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare policyIds: string[] | null;
 
   @Column({
     type: DataType.STRING,
@@ -92,6 +82,14 @@ export class Webhook extends Model {
     allowNull: false,
   })
   declare events: string[];
+
+  // SRN patterns the event's resource must match; null matches any.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare eventResources: string[] | null;
+
+  // A structured filter over the event's `data`.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare eventData: Record<string, unknown> | null;
 
   @Column({
     type: DataType.BOOLEAN,

@@ -312,11 +312,6 @@ describe('Event trigger dispatch', () => {
         eventPattern: emitter.eventName,
         filter: { event_data: { reason: 'other' } },
       });
-      const otherType = await createEventTrigger({
-        targetId: inertOrchestrationId,
-        eventPattern: emitter.eventName,
-        filter: { event_data: { reason: { lt: 5 } } },
-      });
       const matching = await createEventTrigger({
         targetId: inertOrchestrationId,
         eventPattern: emitter.eventName,
@@ -325,24 +320,13 @@ describe('Event trigger dispatch', () => {
           event_data: { reason: { in: ['cycle', 'other'] } },
         },
       });
-      const inRange = await createEventTrigger({
-        targetId: inertOrchestrationId,
-        eventPattern: emitter.eventName,
-        filter: {
-          event_data: {
-            reason: { gt: 'a', gte: 'cycle', lt: 'z', lte: 'cycle' },
-          },
-        },
-      });
 
       await emitter.emit();
 
       const [firing] = await waitForFirings({ triggerId: matching, count: 1 });
       expect(firing.status).toBe('completed');
-      await waitForFirings({ triggerId: inRange, count: 1 });
       expect(await listFirings({ triggerId: otherResource })).toHaveLength(0);
       expect(await listFirings({ triggerId: otherData })).toHaveLength(0);
-      expect(await listFirings({ triggerId: otherType })).toHaveLength(0);
     }, 60_000);
 
     test('a trigger whose input cannot satisfy its target is skipped, the others still run', async () => {

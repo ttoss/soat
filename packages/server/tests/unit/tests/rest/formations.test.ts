@@ -8,6 +8,8 @@ describe('Formations', () => {
   let adminToken: string;
   let userToken: string;
   let userId: string;
+  /** The user's own policy: the grant a webhook it deploys may carry. */
+  let userPolicyId: string;
   let projectId: string;
   let noPermToken: string;
   let formationId: string;
@@ -141,6 +143,7 @@ describe('Formations', () => {
     await authenticatedTestClient(adminToken)
       .put(`/api/v1/users/${userId}/policies`)
       .send({ policy_ids: [policyRes.body.id] });
+    userPolicyId = policyRes.body.id;
 
     const noPermRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/users')
@@ -1591,40 +1594,43 @@ resources:
   describe('Formation with optional resource properties', () => {
     let optionalPropsFormationId: string;
 
-    const templateWithOptionalProps = {
-      resources: {
-        MemoryStoreWithDescription: {
-          type: 'memory_store',
-          properties: {
-            name: 'MemoryStore With Metadata',
-            description: 'This is a memoryStore with description',
-            tags: { priority: 'important', scope: 'core' },
+    const templateWithOptionalProps = () => {
+      return {
+        resources: {
+          MemoryStoreWithDescription: {
+            type: 'memory_store',
+            properties: {
+              name: 'MemoryStore With Metadata',
+              description: 'This is a memoryStore with description',
+              tags: { priority: 'important', scope: 'core' },
+            },
           },
-        },
-        ToolWithOptions: {
-          type: 'tool',
-          properties: {
-            name: 'Tool With Full Options',
-            description: 'Tool with description and parameters',
-            execute: { url: 'https://example.com/search' },
-            parameters: {
-              type: 'object',
-              properties: {
-                query: { type: 'string', description: 'Search query' },
+          ToolWithOptions: {
+            type: 'tool',
+            properties: {
+              name: 'Tool With Full Options',
+              description: 'Tool with description and parameters',
+              execute: { url: 'https://example.com/search' },
+              parameters: {
+                type: 'object',
+                properties: {
+                  query: { type: 'string', description: 'Search query' },
+                },
               },
             },
           },
-        },
-        WebhookWithEvents: {
-          type: 'webhook',
-          properties: {
-            name: 'Webhook With Events',
-            url: 'https://example.com/webhook',
-            events: ['memoryStore.created', 'memoryStore.updated'],
-            description: 'Webhook with description and events',
+          WebhookWithEvents: {
+            type: 'webhook',
+            properties: {
+              name: 'Webhook With Events',
+              url: 'https://example.com/webhook',
+              events: ['memoryStore.created', 'memoryStore.updated'],
+              description: 'Webhook with description and events',
+              policy_ids: [userPolicyId],
+            },
           },
         },
-      },
+      };
     };
 
     // Asserts the documented execute keys are what an apply actually carries
@@ -1896,7 +1902,7 @@ resources:
         .send({
           project_id: projectId,
           name: `optional-props-${Date.now()}`,
-          template: templateWithOptionalProps,
+          template: templateWithOptionalProps(),
         });
 
       expect(res.status).toBe(201);
@@ -1931,9 +1937,10 @@ resources:
               tags: { state: 'updated', change: 'modified' },
             },
           },
-          ToolWithOptions: templateWithOptionalProps.resources.ToolWithOptions,
+          ToolWithOptions:
+            templateWithOptionalProps().resources.ToolWithOptions,
           WebhookWithEvents:
-            templateWithOptionalProps.resources.WebhookWithEvents,
+            templateWithOptionalProps().resources.WebhookWithEvents,
         },
       };
 

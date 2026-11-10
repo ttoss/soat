@@ -520,6 +520,8 @@ describe('Policies', () => {
         sample: [triggerRes.body.id],
         agents: 0,
         agent_sample: [],
+        webhooks: 0,
+        webhook_sample: [],
       });
 
       const other = await client.post('/api/v1/policies').send(sendDoc());

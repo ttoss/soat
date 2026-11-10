@@ -1,7 +1,7 @@
 import type { ValidationError } from '../formationsTypes';
 import {
   toNullableArray,
-  toNullableObject,
+  toNullableRecord,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -28,14 +28,6 @@ const toInputObject = (value: unknown): Record<string, unknown> | undefined => {
   return value != null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-};
-
-/** An `event_data` filter as the template wrote it; `null` clears it. */
-const toEventData = (
-  value: unknown
-): Record<string, unknown> | null | undefined => {
-  const object = toNullableObject(value);
-  return object == null ? object : toInputObject(object);
 };
 
 const toOptionalBoolean = (value: unknown): boolean | undefined => {
@@ -166,7 +158,7 @@ export const triggersFormationModule = defineFormationModule({
       events: templateEvents(properties) ?? undefined,
       eventResources:
         toNullableArray<string>(properties.event_resources) ?? undefined,
-      eventData: toEventData(properties.event_data) ?? undefined,
+      eventData: toNullableRecord(properties.event_data) ?? undefined,
       active: toOptionalBoolean(properties.active),
       isAllowed: actor.isAllowed,
       writerPolicies: actor.getPolicies,
@@ -187,7 +179,7 @@ export const triggersFormationModule = defineFormationModule({
       cron: toNullableString(properties.cron),
       events: templateEvents(properties),
       eventResources: toNullableArray<string>(properties.event_resources),
-      eventData: toEventData(properties.event_data),
+      eventData: toNullableRecord(properties.event_data),
       active: toOptionalBoolean(properties.active),
       isAllowed: actor.isAllowed,
       writerPolicies: actor.getPolicies,

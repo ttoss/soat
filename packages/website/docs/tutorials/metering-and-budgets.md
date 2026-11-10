@@ -406,11 +406,15 @@ soat create-usage-threshold \
   --metric cost_usd \
   --window calendar_month \
   --threshold 50
+HOOK_POLICY_ID=$(soat create-policy \
+  --name "budget-alerts-reader" \
+  --document '{"statement":[{"effect":"Allow","action":["usage:ListThresholds"]}]}' | jq -r '.id')
 soat create-webhook \
   --project-id "$PROJECT_ID" \
   --name "budget-alerts" \
   --url "https://example.com/usage-alerts" \
-  --events '["usage_thresholds.crossed"]'
+  --events '["usage_thresholds.crossed"]' \
+  --policy-ids '["'"$HOOK_POLICY_ID"'"]'
 soat list-usage-thresholds --project-id "$PROJECT_ID"
 ```
 
@@ -424,12 +428,19 @@ await adminSoat.usage.createUsageThreshold({
 await adminSoat.usage.createUsageThreshold({
   body: { project_id: PROJECT_ID, metric: 'cost_usd', window: 'calendar_month', threshold: 50 },
 });
+const { data: hookPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'budget-alerts-reader',
+    document: { statement: [{ effect: 'Allow', action: ['usage:ListThresholds'] }] },
+  },
+});
 await adminSoat.webhooks.createWebhook({
   body: {
     project_id: PROJECT_ID,
     name: 'budget-alerts',
     url: 'https://example.com/usage-alerts',
     events: ['usage_thresholds.crossed'],
+    policy_ids: [hookPolicy.id],
   },
 });
 const { data: thresholds } = await adminSoat.usage.listUsageThresholds({
@@ -448,9 +459,12 @@ curl -s -X POST "$SOAT_URL/api/v1/usage/thresholds" \
 curl -s -X POST "$SOAT_URL/api/v1/usage/thresholds" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"metric\":\"cost_usd\",\"window\":\"calendar_month\",\"threshold\":50}"
+HOOK_POLICY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"budget-alerts-reader","document":{"statement":[{"effect":"Allow","action":["usage:ListThresholds"]}]}}' | jq -r '.id')
 curl -s -X POST "$SOAT_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"budget-alerts\",\"url\":\"https://example.com/usage-alerts\",\"events\":[\"usage_thresholds.crossed\"]}"
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"budget-alerts\",\"url\":\"https://example.com/usage-alerts\",\"events\":[\"usage_thresholds.crossed\"],\"policy_ids\":[\"$HOOK_POLICY_ID\"]}"
 curl -s "$SOAT_URL/api/v1/usage/thresholds?project_id=$PROJECT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```

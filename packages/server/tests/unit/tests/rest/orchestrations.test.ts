@@ -8,7 +8,10 @@ import { eventBus } from 'src/lib/eventBus';
 import { reapOrphanedRuns, wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import * as toolsModule from 'src/lib/tools';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createAllowAllPolicy,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
 import { readRequestBody } from '../../fixtures/requestBody';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -3772,6 +3775,7 @@ describe('Orchestrations', () => {
             name: 'emit-event-hook',
             url: hookUrl,
             events: ['guardrail.exception'],
+            policy_ids: [await createAllowAllPolicy({ adminToken })],
           });
         expect(hookRes.status).toBe(201);
 

@@ -141,14 +141,15 @@ The export is not an MCP or `builtin` tool action (unbounded stream); tools use 
 
 ### `audit_entries.created` webhook
 
-Every persisted **project-scoped** entry emits an `audit_entries.created` [webhook](./webhooks.md) event with the full entry as `data`, in the read API's snake_case shape. Subscribe with `audit_entries.*` or the exact name:
+Every persisted **project-scoped** entry emits an `audit_entries.created` [webhook](./webhooks.md) event with the full entry as `data`, in the read API's snake_case shape. Subscribe with `audit_entries.*` or the exact name, under `policy_ids` that allow `audit:GetAuditEntry`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-webhook --project-id proj_ABC \
-  --url https://siem.example.com/soat --events "audit_entries.created"
+soat create-webhook --project-id proj_ABC --name siem \
+  --url https://siem.example.com/soat --events '["audit_entries.created"]' \
+  --policy-ids '["pol_ABC"]'
 ```
 
 </TabItem>
@@ -158,8 +159,10 @@ soat create-webhook --project-id proj_ABC \
 const { data, error } = await soat.webhooks.createWebhook({
   body: {
     project_id: 'proj_ABC',
+    name: 'siem',
     url: 'https://siem.example.com/soat',
     events: ['audit_entries.created'],
+    policy_ids: ['pol_ABC'],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -174,8 +177,10 @@ curl -X POST https://api.example.com/api/v1/webhooks \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "proj_ABC",
+    "name": "siem",
     "url": "https://siem.example.com/soat",
-    "events": ["audit_entries.created"]
+    "events": ["audit_entries.created"],
+    "policy_ids": ["pol_ABC"]
   }'
 ```
 

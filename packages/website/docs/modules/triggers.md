@@ -246,7 +246,9 @@ value, or to `in`, `gt`, `gte`, `lt`, `lte`, ANDed across fields; an absent
 field never matches. A different combination per type (X only from A, Y only
 from B) is two triggers.
 
-**Pattern grammar** for `events` (same as webhook subscriptions):
+The filter and the read guard below are the ones a [webhook](./webhooks.md#event-filter) applies, field for field.
+
+**Pattern grammar** for `events`:
 
 | Pattern              | Matches                                              |
 | -------------------- | ---------------------------------------------------- |

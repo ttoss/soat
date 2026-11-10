@@ -9,6 +9,7 @@ import {
   type PolicySets,
   type Statement,
 } from './iam';
+import { DIRECT_POLICY_CARRIERS } from './policyCarriers';
 
 const log = createDebug('soat:policyGrantCoverage');
 
@@ -286,10 +287,23 @@ export const assertWriterHoldsPolicies = async (args: {
   });
 };
 
+const directCarrierProjects = (): string => {
+  return Object.values(DIRECT_POLICY_CARRIERS)
+    .map((model) => {
+      return `
+     UNION
+     SELECT p.public_id
+       FROM ${model().tableName} c
+       JOIN projects p ON p.id = c.project_id
+      WHERE c.policy_ids @> :ids::jsonb`;
+    })
+    .join('');
+};
+
 /**
- * The projects of every trigger naming the policy, and of every agent whose
- * live config or any archived version names it: a version is served again by
- * a release or a restore.
+ * The projects of every direct carrier naming the policy, and of every agent
+ * whose live config or any archived version names it: a version is served
+ * again by a release or a restore.
  */
 const projectsOfCarriers = async (
   policyPublicId: string
@@ -303,11 +317,7 @@ const projectsOfCarriers = async (
               SELECT 1 FROM agent_versions v
                WHERE v.agent_id = a.id
                  AND (v.config::jsonb -> 'policy_ids') @> :ids::jsonb)
-     UNION
-     SELECT p.public_id
-       FROM triggers t
-       JOIN projects p ON p.id = t.project_id
-      WHERE t.policy_ids @> :ids::jsonb`,
+${directCarrierProjects()}`,
     { replacements: { ids: JSON.stringify([policyPublicId]) } }
   );
   return (rows as { public_id: string }[]).map((row) => {

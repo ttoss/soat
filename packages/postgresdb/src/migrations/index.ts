@@ -53,6 +53,7 @@ import { payloadsKeepKeyOrder } from './2026-11-01-payloadsKeepKeyOrder';
 import { agentPolicyIds } from './2026-11-10-agentPolicyIds';
 import { generationActedAs } from './2026-11-10-generationActedAs';
 import { triggerPolicyIds } from './2026-11-10-triggerPolicyIds';
+import { webhookPolicyIds } from './2026-11-10-webhookPolicyIds';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -127,4 +128,5 @@ export const MIGRATIONS: Migration[] = [
   generationActedAs,
   agentPolicyIds,
   triggerPolicyIds,
+  webhookPolicyIds,
 ];

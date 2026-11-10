@@ -589,16 +589,20 @@ Expected output (the promoted version records which run cleared it):
 
 ## Step 8 — Keep feeding the gate after you stop watching
 
-A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on a cadence. Declare it in the same template and subscribe a [webhook](/docs/modules/webhooks) to the verdict. Creating an eval-target trigger requires `evaluations:RunEval` on top of `triggers:CreateTrigger`, and the trigger acts under its own [`policy_ids`](/docs/modules/triggers#execution-identity): a policy declared beside it that allows `evaluations:RunEval`.
+A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on a cadence. Declare it in the same template and subscribe a [webhook](/docs/modules/webhooks) to the verdict, under a policy that may read eval runs (`evaluations:GetEval`). Creating an eval-target trigger requires `evaluations:RunEval` on top of `triggers:CreateTrigger`, and the trigger acts under its own [`policy_ids`](/docs/modules/triggers#execution-identity): a policy declared beside it that allows `evaluations:RunEval`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+HOOK_POLICY_ID=$(soat create-policy \
+  --name "eval-verdicts-reader" \
+  --document '{"statement":[{"effect":"Allow","action":["evaluations:GetEval"]}]}' | jq -r '.id')
 WEBHOOK_ID=$(soat create-webhook --project-id "$PROJECT_ID" \
   --name "eval-verdicts" \
   --url "http://127.0.0.1:9/eval-verdicts" \
-  --events '["eval_runs.completed","eval_runs.failed"]' | jq -r '.id')
+  --events '["eval_runs.completed","eval_runs.failed"]' \
+  --policy-ids '["'"$HOOK_POLICY_ID"'"]' | jq -r '.id')
 
 NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq \
   '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
@@ -613,12 +617,19 @@ echo "TRIGGER_ID: $TRIGGER_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: hookPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'eval-verdicts-reader',
+    document: { statement: [{ effect: 'Allow', action: ['evaluations:GetEval'] }] },
+  },
+});
 const { data: webhook } = await adminSoat.webhooks.createWebhook({
   body: {
     project_id: project.id,
     name: 'eval-verdicts',
     url: 'https://example.com/eval-verdicts',
     events: ['eval_runs.completed', 'eval_runs.failed'],
+    policy_ids: [hookPolicy.id],
   },
 });
 
@@ -656,9 +667,12 @@ const TRIGGER_ID = withNightly.outputs?.trigger_id as string;
 <TabItem value="curl" label="curl">
 
 ```bash
+HOOK_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"eval-verdicts-reader","document":{"statement":[{"effect":"Allow","action":["evaluations:GetEval"]}]}}' | jq -r '.id')
 WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"eval-verdicts\",\"url\":\"https://example.com/eval-verdicts\",\"events\":[\"eval_runs.completed\",\"eval_runs.failed\"]}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"eval-verdicts\",\"url\":\"https://example.com/eval-verdicts\",\"events\":[\"eval_runs.completed\",\"eval_runs.failed\"],\"policy_ids\":[\"$HOOK_POLICY_ID\"]}" | jq -r '.id')
 
 NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq -c \
   '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')

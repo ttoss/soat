@@ -1,14 +1,16 @@
 import { defineMigration, type MigrationContext } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import {
+  convertEventResources,
+  hasDeny,
+  insertManualReview,
+  jsonLiteral,
+  literal,
+  type PolicyRow,
+  statementsOf,
+} from './eventFilterPolicyConversion';
 
-type Statement = {
-  effect?: string;
-  action?: string[];
-  resource?: string[];
-  condition?: unknown;
-};
-type PolicyRow = { id: number; public_id: string; document: string };
 type TriggerRow = {
   id: number;
   public_id: string;
@@ -27,18 +29,6 @@ export type TriggerConversion = {
   events: string[] | null;
   eventResources: string[] | null;
   review: string[];
-};
-
-const statementsOf = (policy: PolicyRow | undefined): Statement[] => {
-  if (!policy) return [];
-  const document = JSON.parse(policy.document) as { statement?: Statement[] };
-  return document.statement ?? [];
-};
-
-const hasDeny = (statements: Statement[]): boolean => {
-  return statements.some((statement) => {
-    return statement.effect === 'Deny';
-  });
 };
 
 /**
@@ -73,27 +63,6 @@ const convertGrant = (args: {
   return userPolicyIds.includes(boundary.id) && !userDenies
     ? [boundary.public_id]
     : null;
-};
-
-/** An action pattern that could match a dotted event type, other than `*`. */
-const isEventGlob = (action: string): boolean => {
-  return action !== '*' && !action.includes(':');
-};
-
-/**
- * The resources an event-filter policy let through, or `null` when its
- * statements say more than a resource list can (a `Deny`, a condition, an
- * action narrowing event types).
- */
-const convertEventResources = (statements: Statement[]): string[] | null => {
-  const resources: string[] = [];
-  for (const statement of statements) {
-    if (statement.effect !== 'Allow' || statement.condition) return null;
-    const actions = statement.action ?? [];
-    if (actions.some(isEventGlob)) return null;
-    if (actions.includes('*')) resources.push(...(statement.resource ?? ['*']));
-  }
-  return [...new Set(resources)];
 };
 
 /**
@@ -134,14 +103,6 @@ export const convertTrigger = (args: {
   };
 };
 
-const literal = (value: string): string => {
-  return `'${value.replaceAll("'", "''")}'`;
-};
-
-const jsonLiteral = (value: unknown): string => {
-  return value === null ? 'NULL' : literal(JSON.stringify(value));
-};
-
 const ALLOW_ALL = { statement: [{ effect: 'Allow', action: ['*'] }] };
 
 const insertPolicy = (args: { publicId: string; name: string }): string => {
@@ -155,9 +116,12 @@ const insertReview = (args: {
 }): string => {
   const { trigger } = args;
   const title = `Trigger '${trigger.name}' matches and allows nothing until reviewed: ${args.review.join('; ')}`;
-  const detail = { trigger_id: trigger.public_id, reasons: args.review };
-  return `INSERT INTO exception_items (public_id, project_id, status, severity, kind, title, detail, dedup_key, occurrence_count, last_seen_at, created_at, updated_at)
-    VALUES (${literal(generatePublicId(PUBLIC_ID_PREFIXES.exception))}, ${trigger.project_id}, 'open', 'warning', 'manual', ${literal(title)}, ${jsonLiteral(detail)}, ${literal(`trigger_policy_review:${trigger.public_id}`)}, 1, now(), now(), now());`;
+  return insertManualReview({
+    projectId: trigger.project_id,
+    title,
+    detail: { trigger_id: trigger.public_id, reasons: args.review },
+    dedupKey: `trigger_policy_review:${trigger.public_id}`,
+  });
 };
 
 const statementsFor = (args: {

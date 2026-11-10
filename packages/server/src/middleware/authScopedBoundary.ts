@@ -1,5 +1,5 @@
 import type { Context } from '../Context';
-import { resolveAttachedPolicies } from '../lib/attachedPolicies';
+import { resolveAttachedPolicySet } from '../lib/attachedPolicies';
 import type { PolicyDocument, PolicySets } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import { resolvePolicySets } from '../lib/permissions';
@@ -84,13 +84,9 @@ export const resolveTriggerPolicySets = async (args: {
   const trigger = await args.db.Trigger.findOne({
     where: { publicId: args.triggerPublicId },
   });
-  const grant = trigger
-    ? await resolveAttachedPolicies({
-        policyIds: trigger.policyIds,
-        actorId: null,
-      })
-    : null;
-  const triggerDocs = grant ? [grant] : [];
+  const triggerDocs = await resolveAttachedPolicySet({
+    policyIds: trigger?.policyIds ?? null,
+  });
   if (!args.caller) return [triggerDocs];
   const callerSets = await resolvePolicySets({
     userRole: args.caller.role,

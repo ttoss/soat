@@ -5480,12 +5480,16 @@ echo "OAuth client and connection flow passed."
 echo ""
 echo "=== Webhooks ==="
 
-# Create webhook
+# Create webhook: it receives only what its policy_ids may read.
 echo "--- Creating webhook ---"
+WEBHOOK_POLICY_ID=$($SOAT_CLI create-policy --name "smoke-webhook-reader" \
+  --document '{"statement":[{"effect":"Allow","action":["*"]}]}' | jq -r '.id')
 WEBHOOK_CREATE_RESP=$($SOAT_CLI create-webhook --project-id "$PROJECT_PUBLIC_ID" \
   --name "Smoke Webhook" \
   --url "https://example.com/smoke-hook" \
-  --events '["file.*"]')
+  --events '["file.*"]' \
+  --event-resources '["srn:'"$PROJECT_PUBLIC_ID"':file:*"]' \
+  --policy-ids '["'"$WEBHOOK_POLICY_ID"'"]')
 WEBHOOK_ID=$(printf '%s\n' "$WEBHOOK_CREATE_RESP" | jq -r '.id')
 if [ -z "$WEBHOOK_ID" ] || [ "$WEBHOOK_ID" = "null" ]; then
   echo "ERROR: Failed to create webhook" >&2
@@ -5537,7 +5541,8 @@ echo "--- Redelivering a webhook delivery ---"
 REDELIVER_HOOK_RESP=$($SOAT_CLI create-webhook --project-id "$PROJECT_PUBLIC_ID" \
   --name "Smoke Redeliver Webhook" \
   --url "https://example.com/smoke-redeliver" \
-  --events '["*"]')
+  --events '["*"]' \
+  --policy-ids '["'"$WEBHOOK_POLICY_ID"'"]')
 REDELIVER_HOOK_ID=$(printf '%s\n' "$REDELIVER_HOOK_RESP" | jq -r '.id')
 if [ -z "$REDELIVER_HOOK_ID" ] || [ "$REDELIVER_HOOK_ID" = "null" ]; then
   echo "ERROR: Failed to create redeliver webhook" >&2

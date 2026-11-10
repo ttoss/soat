@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
+import { DIRECT_POLICY_CARRIERS } from './policyCarriers';
 import {
   assertWriterHoldsPolicies,
   type GetWriterPolicies,
@@ -64,6 +65,30 @@ export const assertPoliciesAttachable = async (args: {
 };
 
 /**
+ * Checks a write to a carrier whose `policy_ids` are required: a sent list
+ * names at least one policy, else `refusal` says what the grant is for.
+ */
+export const assertRequiredPoliciesAttachable = async (args: {
+  policyIds?: string[];
+  current: string[] | null;
+  projectId: number;
+  policyUse: PolicyAttachUse;
+  refusal: string;
+}): Promise<void> => {
+  if (args.policyIds === undefined) return;
+  if (
+    !Array.isArray(args.policyIds) ||
+    args.policyIds.length === 0 ||
+    !args.policyIds.every((id) => {
+      return typeof id === 'string';
+    })
+  ) {
+    throw new DomainError('VALIDATION_FAILED', args.refusal);
+  }
+  await assertPoliciesAttachable(args);
+};
+
+/**
  * The grant `policy_ids` carry as one document, with `${soat:ActorId}` bound
  * to the end user it acts for. `null` is no cap; a policy that no longer
  * resolves allows nothing.
@@ -91,6 +116,20 @@ export const resolveAttachedPolicies = async (args: {
   return bindPolicyVariables({ document: merged, actorId: args.actorId });
 };
 
+/**
+ * The policy set `policyIds` act under when nobody called: the grant alone. An
+ * empty list is a set with no document, which allows nothing.
+ */
+export const resolveAttachedPolicySet = async (args: {
+  policyIds: unknown;
+}): Promise<PolicyDocument[]> => {
+  const grant = await resolveAttachedPolicies({
+    policyIds: args.policyIds,
+    actorId: null,
+  });
+  return grant ? [grant] : [];
+};
+
 type Carriers = { count: number; sample: string[] };
 
 const carriersOf = async (args: {
@@ -106,22 +145,26 @@ const carriersOf = async (args: {
   };
 };
 
-/** Live agents and triggers naming the policy, for the refusal to delete it. */
+/** Live carriers naming the policy, for the refusal to delete it. */
 export const findPolicyCarriers = async (args: {
   policyPublicId: string;
   limit: number;
-}): Promise<{ agents: Carriers; triggers: Carriers }> => {
+}): Promise<{ agents: Carriers; triggers: Carriers; webhooks: Carriers }> => {
   const where = { policyIds: { [Op.contains]: [args.policyPublicId] } };
   const query = { where, attributes: ['publicId'], limit: args.limit };
-  const [agents, triggers] = await Promise.all([
+  const [agents, triggers, webhooks] = await Promise.all([
     carriersOf({
       rows: db.Agent.findAll(query),
       count: db.Agent.count({ where }),
     }),
     carriersOf({
-      rows: db.Trigger.findAll(query),
-      count: db.Trigger.count({ where }),
+      rows: DIRECT_POLICY_CARRIERS.triggers().findAll(query),
+      count: DIRECT_POLICY_CARRIERS.triggers().count({ where }),
+    }),
+    carriersOf({
+      rows: DIRECT_POLICY_CARRIERS.webhooks().findAll(query),
+      count: DIRECT_POLICY_CARRIERS.webhooks().count({ where }),
     }),
   ]);
-  return { agents, triggers };
+  return { agents, triggers, webhooks };
 };

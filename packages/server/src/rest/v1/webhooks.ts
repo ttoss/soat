@@ -24,22 +24,6 @@ import {
 } from './helpers';
 import { resourceRefusal } from './resourceAccess';
 
-const resolvePolicyId = async (
-  policyPublicId: string | undefined
-): Promise<number | null> => {
-  if (!policyPublicId) return null;
-  const policy = await db.Policy.findOne({
-    where: { publicId: policyPublicId },
-  });
-  if (!policy) {
-    throw new DomainError(
-      'POLICY_NOT_FOUND',
-      `Policy '${policyPublicId}' not found.`
-    );
-  }
-  return policy.id;
-};
-
 const webhooksRouter = new Router<Context>();
 
 webhooksRouter.get('/webhooks', async (ctx: Context) => {
@@ -68,7 +52,9 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     description?: string;
     url?: string;
     events?: string[];
-    policy_id?: string;
+    event_resources?: string[];
+    event_data?: Record<string, unknown>;
+    policy_ids?: string[];
   };
 
   const targetProjectId = await resolveWriteProjectId({
@@ -77,22 +63,20 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     action: 'webhooks:CreateWebhook',
     resourceType: 'webhook',
   });
-  if (!body.name || !body.url || !body.events || body.events.length === 0) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'name, url, and events are required'
-    );
+  if (!body.name || !body.url) {
+    throw new DomainError('VALIDATION_FAILED', 'name and url are required');
   }
-
-  const policyId = await resolvePolicyId(body.policy_id);
 
   const webhook = await createWebhook({
     projectId: Number(targetProjectId),
-    policyId,
+    policyIds: body.policy_ids,
     name: body.name,
     description: body.description,
     url: body.url,
     events: body.events,
+    eventResources: body.event_resources,
+    eventData: body.event_data,
+    writerPolicies: ctx.authUser.getPolicies,
   });
 
   ctx.status = 201;
@@ -157,14 +141,11 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     description?: string;
     url?: string;
     events?: string[];
+    event_resources?: string[] | null;
+    event_data?: Record<string, unknown> | null;
     active?: boolean;
-    policy_id?: string | null;
+    policy_ids?: string[];
   };
-
-  let policyInternalId: number | null | undefined;
-  if (body.policy_id !== undefined) {
-    policyInternalId = await resolvePolicyId(body.policy_id ?? undefined);
-  }
 
   const updated = await updateWebhook({
     id: ctx.params.webhook_id,
@@ -172,8 +153,11 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     description: body.description,
     url: body.url,
     events: body.events,
+    eventResources: body.event_resources,
+    eventData: body.event_data,
     active: body.active,
-    policyId: policyInternalId,
+    policyIds: body.policy_ids,
+    writerPolicies: ctx.authUser.getPolicies,
   });
 
   ctx.body = updated;

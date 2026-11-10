@@ -1,6 +1,9 @@
 import { db } from 'src/db';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createAllowAllPolicy,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -263,6 +266,7 @@ describe('a literal credential in a tool definition', () => {
           name: 'itse-hook',
           url: HOOK_URL,
           events: ['agents.*'],
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
         });
       expect(hook.status).toBe(201);
       webhookId = hook.body.id;

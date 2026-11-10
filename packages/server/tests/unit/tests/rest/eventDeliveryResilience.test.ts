@@ -94,6 +94,7 @@ describe('Event delivery resilience', () => {
       prefix: 'evtresilience',
       policyActions: [
         'files:CreateFile',
+        'files:GetFile',
         'webhooks:CreateWebhook',
         'webhooks:ListWebhookDeliveries',
         'tools:CreateTool',
@@ -117,6 +118,7 @@ describe('Event delivery resilience', () => {
         name: 'resilience-hook',
         url: 'https://example.com/resilience',
         events: ['files.created'],
+        policy_ids: [setup.policyId],
       });
     expect(hook.status).toBe(201);
     webhookId = hook.body.id;

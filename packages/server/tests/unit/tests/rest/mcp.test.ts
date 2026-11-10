@@ -2084,6 +2084,7 @@ describe('MCP tools - happy path', () => {
         name: 'MCP Webhook',
         url: 'https://example.com/mcp-hook',
         events: ['file.*'],
+        policy_ids: [await createAllowAllPolicy({ adminToken })],
       });
       createWebhookResult = parseResult(res);
       webhookId = createWebhookResult.id;

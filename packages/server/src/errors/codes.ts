@@ -242,7 +242,7 @@ export const ERROR_CODES = {
   POLICY_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The policy is the `policy_id` of one or more triggers or in the `policy_ids` of one or more agents, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.agents` and `meta.agent_sample` do the same for agents.',
+      'The policy is in the `policy_ids` of one or more triggers, agents or webhooks, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.agents` and `meta.agent_sample` do the same for agents, `meta.webhooks` and `meta.webhook_sample` for webhooks.',
   },
   PROJECT_PAUSED: {
     httpStatus: 409,

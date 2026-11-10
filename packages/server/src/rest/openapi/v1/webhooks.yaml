@@ -509,10 +509,12 @@ components:
         project_id:
           x-soat-ref: projects
           type: string
-        policy_id:
-          x-soat-ref: policies
-          type: string
-          nullable: true
+        policy_ids:
+          description: >-
+            The policies whose read grant decides which events the webhook
+            receives.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         name:
           type: string
         description:
@@ -521,9 +523,19 @@ components:
         url:
           type: string
         events:
-          type: array
-          items:
-            type: string
+          description: The event type patterns the webhook receives.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
+        event_resources:
+          nullable: true
+          description: The resource patterns; null matches any resource.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
+        event_data:
+          nullable: true
+          description: The filter over the event's `data`; null matches any.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         active:
           type: boolean
         created_at:
@@ -547,6 +559,7 @@ components:
         - name
         - url
         - events
+        - policy_ids
       additionalProperties: false
       properties:
         project_id:
@@ -560,12 +573,23 @@ components:
         url:
           type: string
         events:
-          type: array
-          items:
-            type: string
-        policy_id:
-          x-soat-ref: policies
-          type: string
+          description: The event type patterns the webhook receives.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
+        event_resources:
+          description: Resource patterns an event must match; omitted matches any.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
+        event_data:
+          description: A filter the event's `data` must match.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
+        policy_ids:
+          description: >-
+            The policies whose read grant decides which events the webhook
+            receives.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
 
     UpdateWebhookRequest:
       type: object
@@ -578,15 +602,27 @@ components:
         url:
           type: string
         events:
-          type: array
-          items:
-            type: string
+          description: Replaces the event type patterns.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
+        event_resources:
+          nullable: true
+          description: Replaces the resource patterns; `null` matches any resource.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
+        event_data:
+          nullable: true
+          description: Replaces the data filter; `null` clears it.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         active:
           type: boolean
-        policy_id:
-          x-soat-ref: policies
-          type: string
-          nullable: true
+        policy_ids:
+          description: >-
+            Replaces the policies whose read grant decides which events the
+            webhook receives.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
 
     WebhookSecretResponse:
       type: object
