@@ -28,6 +28,7 @@ import {
   planResultToWire,
 } from './formationsTypes';
 import type { ResourceIncludes } from './modelIncludes';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:formations');
@@ -246,7 +247,7 @@ export const createFormation = async (args: {
 };
 
 export const listFormations = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   limit?: number;
   cursor?: string;
 }): Promise<Page<MappedFormation>> => {
@@ -256,7 +257,10 @@ export const listFormations = async (args: {
     filters: {
       projectIds: args.projectIds,
     },
-    where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
+    where: {
+      ...projectScopeWhere({ projectIds: args.projectIds }),
+      status: { [Op.ne]: 'deleted' },
+    },
     order: [['createdAt', 'ASC']],
     query: ({ where: pageWhere, limit, order }) => {
       return db.Formation.findAll({

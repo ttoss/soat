@@ -165,7 +165,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
   });
 
   ctx.body = await listApprovals({
-    projectIds: projectIds ?? [],
+    projectIds,
     statuses: parseApprovalStatuses(ctx),
     origin: ctx.query.origin as string | undefined,
     expiresFrom: parseDateQuery({ ctx, name: 'expires_from' }),
@@ -193,7 +193,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
     minCountRaw != null ? Number.parseInt(minCountRaw, 10) : undefined;
 
   ctx.body = await listApprovalRecurrences({
-    projectIds: projectIds ?? [],
+    projectIds,
     statuses: parseApprovalStatuses(ctx),
     minCount: Number.isFinite(minCount) ? minCount : undefined,
     ...parsePagination(ctx),

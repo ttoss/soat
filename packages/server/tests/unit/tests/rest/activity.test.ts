@@ -5,6 +5,7 @@ import { droppedEventCount } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
 import { fireDueTriggers } from 'src/lib/triggerScheduler';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -399,6 +400,19 @@ describe('Activity', () => {
       } finally {
         spy.mockRestore();
       }
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'Admin listed',
+      });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/activity',
+        projectId,
+      });
     });
   });
 

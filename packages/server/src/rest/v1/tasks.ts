@@ -82,7 +82,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
       : (value as TaskAutomationStatus);
   });
   ctx.body = await listTasks({
-    projectIds: projectIds ?? [],
+    projectIds,
     workflowId: ctx.query.workflow_id as string | undefined,
     state: ctx.query.state as string | undefined,
     statuses: parseEnumListQuery({

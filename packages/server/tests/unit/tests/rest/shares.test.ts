@@ -1,3 +1,4 @@
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -503,6 +504,15 @@ describe('Shares', () => {
         .query({ project_id: publisherId });
 
       expect(res.status).toBe(403);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await createToolShare('admin-listed-tool');
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/shares',
+        projectId: publisherId,
+      });
     });
   });
 

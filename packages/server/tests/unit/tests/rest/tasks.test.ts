@@ -15,6 +15,7 @@ import {
   sweepStalledTasks,
 } from 'src/lib/tasksScheduler';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -785,6 +786,15 @@ describe('Tasks', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await createTask();
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/tasks',
+        projectId,
+      });
     });
   });
 

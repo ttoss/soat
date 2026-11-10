@@ -9,6 +9,7 @@ import {
   type SoatResourceType,
 } from 'src/lib/soatEvents';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -232,6 +233,19 @@ describe('Exceptions', () => {
       const res = await listExceptions('&limit=not-a-number');
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await fileException({
+        projectId: projectInternalId,
+        kind: 'manual',
+        title: 'Admin listed',
+      });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/exceptions',
+        projectId,
+      });
     });
   });
 

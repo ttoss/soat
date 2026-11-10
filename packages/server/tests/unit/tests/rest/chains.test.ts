@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -170,18 +171,6 @@ describe('Chains', () => {
       expect(ids).not.toContain(otherProjectChainId);
     });
 
-    test('an unscoped list is a page, not every project', async () => {
-      // Same contract as `list-exceptions`: without `project_id` an
-      // unrestricted caller resolves to no project filter, which this route
-      // reads as an empty scope rather than as "all projects". Chains are
-      // project-owned, so a cross-project firehose is the wrong default.
-      const res =
-        await authenticatedTestClient(adminToken).get('/api/v1/chains');
-
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({ data: [], next_cursor: null });
-    });
-
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.get('/api/v1/chains');
       expect(res.status).toBe(401);
@@ -192,6 +181,14 @@ describe('Chains', () => {
         `/api/v1/chains?project_id=${projectId}`
       );
       expect(res.status).toBe(403);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/chains',
+        projectId,
+      });
     });
   });
 

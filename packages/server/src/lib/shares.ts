@@ -11,6 +11,7 @@ import { DomainError } from '../errors';
 import { buildSrn } from './iam';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor, type ResourceScope } from './resourceAccessor';
 import { findShareableType, type ShareProjection } from './shareableTypes';
 import { parseShareCap } from './shareCapShape';
@@ -312,12 +313,14 @@ export const getShare = async (args: {
 };
 
 export const listPublishedShares = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   resource?: string;
   limit?: number;
   cursor?: string;
 }) => {
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   // The scope already confines the project, so the SRN's type and id are all
   // the filter reads; a malformed one matches nothing.
   if (args.resource) {

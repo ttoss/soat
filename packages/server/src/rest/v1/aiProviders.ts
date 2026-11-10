@@ -61,7 +61,7 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   });
 
   const page = await listAiProviders({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
   ctx.body = { ...page, data: page.data.map(redactAiProviderSecrets) };

@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import * as chatsLib from 'src/lib/chats';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -248,12 +249,15 @@ describe('Chats', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
-    test('admin without project scoping gets an empty list', async () => {
-      const response =
-        await authenticatedTestClient(adminToken).get('/api/v1/chats');
-
-      expect(response.status).toBe(200);
-      expect(response.body.data).toEqual([]);
+    test('an admin without project_id lists every project', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/chats',
+        projectId,
+      });
     });
   });
 

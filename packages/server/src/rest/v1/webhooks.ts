@@ -55,7 +55,7 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
   });
 
   ctx.body = await listWebhooks({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
 });

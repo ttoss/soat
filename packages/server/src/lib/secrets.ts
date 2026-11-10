@@ -6,6 +6,7 @@ import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 
 const log = createDebug('soat:secrets');
 
@@ -116,7 +117,7 @@ const mapSecret = (instance: SecretRow) => {
 };
 
 export const listSecrets = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   limit?: number;
   cursor?: string;
 }) => {
@@ -124,7 +125,7 @@ export const listSecrets = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: { projectId: args.projectIds },
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'ASC']],
     query: ({ where, limit, order }) => {
       return db.Secret.findAll({

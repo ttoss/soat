@@ -24,7 +24,7 @@ const log = createDebug('soat:activity');
 export const streamActivityNdjson = (
   filters: ActivityFilters
 ): AsyncGenerator<string> => {
-  log('streamActivityNdjson: projects=%d', filters.projectIds.length);
+  log('streamActivityNdjson: projectIds=%o', filters.projectIds);
 
   const where = buildActivityWhere(filters);
 

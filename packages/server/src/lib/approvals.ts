@@ -12,6 +12,7 @@ import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import { emptyPage, type Page, pageOf, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import type { RequestPrincipal } from './principals';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
 import { timeRangeWhere } from './timeRange';
@@ -392,7 +393,7 @@ export const emitApproval = async (
 };
 
 export const listApprovals = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   statuses?: readonly ApprovalStatus[];
   origin?: string;
   expiresFrom?: Date;
@@ -402,7 +403,9 @@ export const listApprovals = async (args: {
 }): Promise<Page<MappedApproval>> => {
   assertValidApprovalFilters(args);
 
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   if (args.statuses?.length) where.status = args.statuses;
   if (args.origin) where.origin = args.origin;
   const expiresAt = timeRangeWhere({
@@ -509,7 +512,7 @@ const mapRecurrenceGroup = (args: {
  * prompt to encode a guardrail `deny` that stops the recurrence upstream.
  */
 export const listApprovalRecurrences = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   statuses?: readonly ApprovalStatus[];
   minCount?: number;
   limit?: number;
@@ -522,13 +525,13 @@ export const listApprovalRecurrences = async (args: {
   const minCount = normalizeMinCount(args.minCount);
 
   log(
-    'listApprovalRecurrences: projects=%d statuses=%o minCount=%d',
-    args.projectIds.length,
+    'listApprovalRecurrences: projectIds=%o statuses=%o minCount=%d',
+    args.projectIds,
     statuses,
     minCount
   );
 
-  if (args.projectIds.length === 0) {
+  if (args.projectIds?.length === 0) {
     return emptyPage(args);
   }
 
@@ -537,7 +540,7 @@ export const listApprovalRecurrences = async (args: {
   // this is a governance-review surface, not a hot path.
   const items = await db.ApprovalItem.findAll({
     where: {
-      projectId: args.projectIds,
+      ...projectScopeWhere({ projectIds: args.projectIds }),
       status: statuses,
       dedupKey: { [Op.ne]: null },
     },

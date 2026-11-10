@@ -10,6 +10,7 @@ import type { IsAllowedFn } from 'src/middleware/authProjectResolvers';
 import { assertLinkedSecretUsable } from './agentModel';
 import { assertAiProviderConfig } from './aiProviderConfigValidation';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { assertSecretUseAllowed } from './secretUse';
 
 const getAiProviderIncludes = () => {
@@ -48,7 +49,7 @@ const mapAiProvider = (instance: AiProviderRow) => {
 };
 
 export const listAiProviders = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   limit?: number;
   cursor?: string;
 }) => {
@@ -56,7 +57,7 @@ export const listAiProviders = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: { projectId: args.projectIds },
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'ASC']],
     query: ({ where, limit, order }) => {
       return db.AiProvider.findAll({

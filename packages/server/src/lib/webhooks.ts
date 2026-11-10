@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 
 import { paginatedList } from './pagination';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import {
   decryptStoredSecret,
@@ -57,7 +58,7 @@ const webhooks = makeResourceAccessor<WebhookRow>({
 });
 
 export const listWebhooks = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   limit?: number;
   cursor?: string;
 }) => {
@@ -65,7 +66,7 @@ export const listWebhooks = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: { projectId: args.projectIds },
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'ASC']],
     query: ({ where, limit, order }) => {
       return db.Webhook.findAll({

@@ -255,7 +255,7 @@ formationsRouter.get('/formations', async (ctx: Context) => {
   });
 
   ctx.body = await listFormations({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
 });

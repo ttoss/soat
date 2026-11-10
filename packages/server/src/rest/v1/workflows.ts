@@ -46,7 +46,7 @@ workflowsRouter.get('/workflows', async (ctx: Context) => {
     resourceType: 'workflow',
   });
   ctx.body = await listWorkflows({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
 });

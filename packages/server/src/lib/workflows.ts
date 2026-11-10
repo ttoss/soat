@@ -5,6 +5,7 @@ import { toResourceRef } from 'src/lib/resourceVersions';
 import type { VersionedWrite } from 'src/lib/writePrecondition';
 
 import { DomainError } from '../errors';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   assertDispatchTargetsValid,
   assertWorkflowValid,
@@ -83,7 +84,7 @@ const findWorkflowInstance = async (args: { id: string }) => {
 };
 
 export const listWorkflows = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   limit?: number;
   cursor?: string;
 }) => {
@@ -94,7 +95,7 @@ export const listWorkflows = async (args: {
     filters: {
       projectIds: args.projectIds,
     },
-    where: { projectId: args.projectIds },
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'DESC']],
     query: ({ where: pageWhere, limit, order }) => {
       return db.Workflow.findAll({

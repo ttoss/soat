@@ -49,7 +49,7 @@ activityRouter.get('/activity', async (ctx: Context) => {
   });
 
   ctx.body = await listActivity({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...readActivityFilters(ctx),
     ...parsePagination(ctx),
   });
@@ -76,7 +76,7 @@ activityRouter.get('/activity/export', async (ctx: Context) => {
     ctx,
     filename: `activity-${projectPublicId}.ndjson`,
     lines: streamActivityNdjson({
-      projectIds: projectIds ?? [],
+      projectIds,
       ...readActivityFilters(ctx),
     }),
   });

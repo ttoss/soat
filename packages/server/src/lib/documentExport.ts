@@ -4,6 +4,7 @@ import { db } from '../db';
 import { mapDocument } from './documentMapper';
 import { buildDocumentQueryOptions } from './documents';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
+import type { ProjectScope } from './projectScope';
 
 const log = createDebug('soat:documents');
 
@@ -17,14 +18,14 @@ const log = createDebug('soat:documents');
  * be a second answer to who may see a document.
  */
 export const streamDocumentsNdjson = (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
   pathPrefix?: string;
 }): AsyncGenerator<string> => {
   log(
-    'streamDocumentsNdjson: projects=%d pathPrefix=%s',
-    args.projectIds.length,
+    'streamDocumentsNdjson: projectIds=%o pathPrefix=%s',
+    args.projectIds,
     args.pathPrefix ?? '(none)'
   );
 
