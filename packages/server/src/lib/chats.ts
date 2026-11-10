@@ -22,6 +22,7 @@ import {
 } from './modelRoutes';
 import { type Page, paginatedList } from './pagination';
 import { assertProjectAcceptsWork } from './projectPause';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 import { makeResourceAccessor } from './resourceAccessor';
 import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
@@ -160,7 +161,7 @@ export const getChat = async (args: { id: string }): Promise<MappedChat> => {
 };
 
 export const listChats = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   limit?: number;
   cursor?: string;
 }): Promise<Page<MappedChat>> => {
@@ -168,7 +169,7 @@ export const listChats = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: { projectId: args.projectIds },
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'DESC']],
     query: ({ where, limit, order }) => {
       return db.Chat.findAll({

@@ -1,3 +1,4 @@
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -346,6 +347,15 @@ describe('Workflows', () => {
         `/api/v1/workflows?project_id=${projectId}`
       );
       expect(res.status).toBe(401);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await createWorkflow(userToken);
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/workflows',
+        projectId,
+      });
     });
   });
 

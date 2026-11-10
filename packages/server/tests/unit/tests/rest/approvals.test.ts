@@ -7,6 +7,7 @@ import {
 } from 'src/lib/approvals';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -288,6 +289,15 @@ describe('Approvals', () => {
         `/api/v1/approvals?project_id=${projectId}`
       );
       expect(res.status).toBe(403);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await seedApproval();
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/approvals',
+        projectId,
+      });
     });
   });
 
@@ -959,6 +969,22 @@ describe('Approvals', () => {
         `/api/v1/approvals/recurrences?project_id=${projectId}`
       );
       expect(res.status).toBe(403);
+    });
+
+    test('an admin without project_id groups every project', async () => {
+      const dedupKey = 'recurrences:admin-unscoped';
+      await seedRejectedChain(dedupKey, ['no', 'still no']);
+
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/approvals/recurrences'
+      );
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((g: { dedup_key: string }) => {
+          return g.dedup_key;
+        })
+      ).toContain(dedupKey);
     });
   });
 

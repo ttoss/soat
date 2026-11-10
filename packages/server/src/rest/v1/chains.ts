@@ -44,7 +44,7 @@ chainsRouter.get('/chains', async (ctx: Context) => {
   });
 
   ctx.body = await listChains({
-    projectIds: projectIds ?? [],
+    projectIds,
     statuses: parseEnumListQuery({
       ctx,
       name: 'status',

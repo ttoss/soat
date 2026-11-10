@@ -23,6 +23,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { type Page, paginatedList } from './pagination';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:generation');
@@ -76,13 +77,15 @@ export const mapChain = (instance: ChainInstance) => {
 export type MappedChain = ReturnType<typeof mapChain>;
 
 export const listChains = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   statuses?: readonly ChainStatus[];
   agentId?: string;
   limit?: number;
   cursor?: string;
 }): Promise<Page<MappedChain>> => {
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   if (args.statuses?.length) where.status = args.statuses;
   // A plain public-id string, not an FK: an unknown value matches no row, which
   // is the same answer as an agent with no chains.

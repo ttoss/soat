@@ -74,7 +74,7 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
     resourceType: 'trigger',
   });
   ctx.body = await listTriggers({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...readTriggerListFilters(ctx),
     ...parsePagination(ctx),
   });
@@ -90,7 +90,7 @@ triggersRouter.get('/triggers/count', async (ctx: Context) => {
     resourceType: 'trigger',
   });
   ctx.body = await countTriggers({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...readTriggerListFilters(ctx),
   });
 });

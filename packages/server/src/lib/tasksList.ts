@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { paginatedList } from './pagination';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   applyFilterWhere,
   compileStructuredWhere,
@@ -22,7 +23,7 @@ const log = createDebug('soat:tasks');
 const TASK_METADATA_COLUMN = '"Task"."metadata"';
 
 export const listTasks = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   workflowId?: string;
   state?: string;
   statuses?: readonly ('open' | 'closed')[];
@@ -43,7 +44,9 @@ export const listTasks = async (args: {
     args.statuses,
     args.metadata
   );
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   if (args.state) where.state = args.state;
   if (args.statuses?.length) where.status = args.statuses;
   if (args.assignee) where.assignee = args.assignee;

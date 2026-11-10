@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { saveTrace } from 'src/lib/traces';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Formations', () => {
@@ -1054,12 +1055,19 @@ resources:
       expect(res.status).toBe(403);
     });
 
-    test('admin without project scoping gets an empty list', async () => {
-      const res =
-        await authenticatedTestClient(adminToken).get('/api/v1/formations');
-
-      expect(res.status).toBe(200);
-      expect(res.body.data).toEqual([]);
+    test('an admin without project_id lists every project', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `admin-listed-${Date.now()}`,
+          template: simpleTemplate,
+        });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/formations',
+        projectId,
+      });
     });
   });
 

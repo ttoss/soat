@@ -49,7 +49,7 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
   });
 
   ctx.body = await listSecrets({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
 });

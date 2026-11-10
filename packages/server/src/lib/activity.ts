@@ -7,6 +7,7 @@ import { onEvent, recordDroppedEvent } from './eventBus';
 import { EXCEPTION_EVENT_TYPES } from './exceptions';
 import { type Page, type PageRequest, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { isSoatEventType, type SoatEventType } from './soatEvents';
 import { retryTransient } from './transientRetry';
@@ -160,7 +161,7 @@ export const emitActivityEntry = async (
  */
 /** What narrows a feed read: the scope, and the filters a caller may add. */
 export type ActivityFilters = {
-  projectIds: number[];
+  projectIds: ProjectScope;
   kind?: ActivityKind;
   severity?: ActivitySeverity;
   agentId?: string;
@@ -175,7 +176,9 @@ export type ActivityFilters = {
 export const buildActivityWhere = (
   filters: ActivityFilters
 ): Record<string, unknown> => {
-  const where: Record<string, unknown> = { projectId: filters.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: filters.projectIds,
+  });
   if (filters.kind) where.kind = filters.kind;
   if (filters.severity) where.severity = filters.severity;
   if (filters.agentId) where.agentId = filters.agentId;

@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -145,12 +146,20 @@ describe('Webhooks', () => {
       expect(response.status).toBe(401);
     });
 
-    test('admin without project scoping gets an empty list', async () => {
-      const response =
-        await authenticatedTestClient(adminToken).get('/api/v1/webhooks');
-
-      expect(response.status).toBe(200);
-      expect(response.body.data).toEqual([]);
+    test('an admin without project_id lists every project', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'Admin Listed',
+          url: 'https://example.com/admin-listed',
+          events: ['*'],
+        });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/webhooks',
+        projectId,
+      });
     });
   });
 

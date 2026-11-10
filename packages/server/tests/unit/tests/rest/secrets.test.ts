@@ -1,3 +1,4 @@
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -52,6 +53,17 @@ describe('Secrets', () => {
         .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: 'admin-listed', value: 'v' });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/secrets',
+        projectId,
+      });
     });
   });
 

@@ -49,7 +49,7 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
   });
 
   ctx.body = await listExceptions({
-    projectIds: projectIds ?? [],
+    projectIds,
     statuses: parseEnumListQuery({
       ctx,
       name: 'status',

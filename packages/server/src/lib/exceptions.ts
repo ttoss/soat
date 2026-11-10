@@ -6,6 +6,7 @@ import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { type Page, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import type { RequestPrincipal } from './principals';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { makeResourceAccessor } from './resourceAccessor';
 import type { SoatEventTypeFor } from './soatEvents';
@@ -288,14 +289,16 @@ export const fileException = async (
 };
 
 export const listExceptions = async (args: {
-  projectIds: number[];
+  projectIds: ProjectScope;
   statuses?: readonly ExceptionStatus[];
   severity?: ExceptionSeverity;
   kind?: ExceptionKind;
   limit?: number;
   cursor?: string;
 }): Promise<Page<MappedException>> => {
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   if (args.statuses?.length) where.status = args.statuses;
   if (args.severity) where.severity = args.severity;
   if (args.kind) where.kind = args.kind;

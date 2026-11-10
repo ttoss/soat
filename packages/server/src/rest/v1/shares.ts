@@ -124,7 +124,7 @@ sharesRouter.get('/shares', async (ctx: Context) => {
     resourceType: 'share',
   });
   ctx.body = await listPublishedShares({
-    projectIds: projectIds ?? [],
+    projectIds,
     resource: ctx.query.resource as string | undefined,
     ...pagination,
   });

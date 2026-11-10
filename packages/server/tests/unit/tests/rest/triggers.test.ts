@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { db } from 'src/db';
 import { signTriggerToken } from 'src/lib/triggerToken';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -611,11 +612,19 @@ describe('Triggers', () => {
   });
 
   describe('GET /api/v1/triggers', () => {
-    test('admin without project scoping gets an empty list', async () => {
-      const res =
-        await authenticatedTestClient(adminToken).get('/api/v1/triggers');
-      expect(res.status).toBe(200);
-      expect(res.body.data).toEqual([]);
+    test('an admin without project_id lists every project', async () => {
+      await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
+        project_id: projectId,
+        name: 'admin-listed',
+        type: 'manual',
+        target_type: 'orchestration',
+        target_id: orchestrationId,
+      });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/triggers',
+        projectId,
+      });
     });
 
     test('lists triggers in the project', async () => {
@@ -720,12 +729,16 @@ describe('Triggers', () => {
       );
     });
 
-    test('admin without project scoping counts nothing', async () => {
+    test('an admin without project_id counts every project', async () => {
       const res = await authenticatedTestClient(adminToken).get(
         '/api/v1/triggers/count'
       );
+      const scoped = await authenticatedTestClient(adminToken).get(
+        `/api/v1/triggers/count?project_id=${projectId}`
+      );
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ count: 0 });
+      expect(scoped.body.count).toBeGreaterThan(0);
+      expect(res.body.count).toBeGreaterThanOrEqual(scoped.body.count);
     });
 
     test('unauthenticated request returns 401', async () => {

@@ -203,7 +203,7 @@ documentsRouter.get('/documents/export', async (ctx: Context) => {
     lines: streamDocumentsNdjson({
       // A policy that grants nothing exports nothing, rather than refusing:
       // the scope a caller has is the scope the file describes.
-      projectIds: hasAccess ? (projectIds ?? []) : [],
+      projectIds: hasAccess ? projectIds : [],
       policyWhere,
       pathPrefix: ctx.query.path_prefix as string | undefined,
     }),

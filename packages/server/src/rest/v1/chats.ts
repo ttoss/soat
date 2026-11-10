@@ -141,7 +141,7 @@ chatsRouter.get('/chats', async (ctx: Context) => {
   });
 
   ctx.body = await listChats({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
 });

@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { load } from 'js-yaml';
 
+import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -154,6 +155,23 @@ describe('AI Providers', () => {
         .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Admin Listed',
+          provider: 'bedrock',
+          default_model: 'model-x',
+          secret_id: bedrockSecretId,
+        });
+      await expectAdminListSpansProjects({
+        adminToken,
+        path: '/api/v1/ai-providers',
+        projectId,
+      });
     });
   });
 

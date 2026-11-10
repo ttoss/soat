@@ -6,6 +6,7 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { GetWriterPolicies } from './policyGrantCoverage';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   decryptStoredSecret,
   encryptValue,
@@ -116,7 +117,7 @@ const findTriggerOrThrow = async (args: { id: string }) => {
 // ── CRUD ───────────────────────────────────────────────────────────────────
 
 type TriggerListFilters = {
-  projectIds: number[];
+  projectIds: ProjectScope;
   type?: TriggerType;
   targetType?: TriggerTargetType;
 };
@@ -124,7 +125,9 @@ type TriggerListFilters = {
 const buildTriggerListWhere = (
   args: TriggerListFilters
 ): Record<string, unknown> => {
-  const where: Record<string, unknown> = { projectId: args.projectIds };
+  const where: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   if (args.type) where.type = args.type;
   if (args.targetType) where.targetType = args.targetType;
   return where;
