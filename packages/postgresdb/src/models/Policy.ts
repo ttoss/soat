@@ -1,6 +1,14 @@
-import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  Table,
+} from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Project } from './Project';
 
 @Table({
   tableName: 'policies',
@@ -10,6 +18,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
       unique: true,
       fields: ['public_id'],
     },
+    { name: 'policies_project_id_idx', fields: ['project_id'] },
   ],
   hooks: {
     beforeValidate: (instance: Policy) => {
@@ -25,6 +34,22 @@ export class Policy extends Model {
     allowNull: false,
   })
   declare publicId: string;
+
+  // `null` is a global policy; set, the project whose resources alone its
+  // document may grant on.
+  @ForeignKey(() => {
+    return Project;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare projectId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Project;
+    },
+    { onDelete: 'CASCADE' }
+  )
+  declare project: Project | null;
 
   @Column({
     type: DataType.STRING,

@@ -124,6 +124,9 @@ export const PROJECT_CASCADE_ORDER = [
   // explicitly here for consistency with the rest of the graph.
   'Webhook',
   'ApiKey',
+  // Cascades from Project like the two above; agents, triggers, webhooks and
+  // keys name policies by id in an array, not by foreign key.
+  'Policy',
 
   // UsageComponent cascades from UsageEvent at the DB level; force=true is the
   // deliberate opt-in to erase billing history.

@@ -51,6 +51,16 @@ export const assertPoliciesAttachable = async (args: {
   if (missing) {
     throw new DomainError('POLICY_NOT_FOUND', `Policy '${missing}' not found.`);
   }
+  const foreign = rows.find((row) => {
+    return row.projectId !== null && row.projectId !== args.projectId;
+  });
+  if (foreign) {
+    throw new DomainError(
+      'POLICY_OUTSIDE_PROJECT',
+      `Policy '${foreign.publicId}' belongs to another project; name a policy of this project or a global one.`,
+      { policy_id: foreign.publicId }
+    );
+  }
   if (args.policyUse === 'archived') return;
   const added = rows.filter((row) => {
     return !(args.current ?? []).includes(row.publicId);
