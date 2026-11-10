@@ -1,0 +1,362 @@
+openapi: 3.0.3
+info:
+  title: SOAT OAuth Clients API
+  version: 1.0.0
+  description: >-
+    A project's own OAuth 2.0 apps at third-party providers. Actors connect
+    through one with OAuth connections, and an `http` tool with
+    `auth.type: oauth_connection` calls the provider as the actor.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Oauth Clients
+    description: Manage OAuth clients (your apps at third-party providers)
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/oauth-clients:
+    get:
+      tags:
+        - Oauth Clients
+      summary: List OAuth clients
+      description: Returns the OAuth clients of a project.
+      operationId: listOauthClients
+      x-iam-action: oauth-clients:ListOauthClients
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OAuth clients
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OauthClient'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    post:
+      tags:
+        - Oauth Clients
+      summary: Create an OAuth client
+      description: >-
+        Registers your app at a provider. `client_secret` is a
+        `{{secret:sec_...}}` reference, and the caller needs
+        `secrets:UseSecret` on it.
+      operationId: createOauthClient
+      x-iam-action: oauth-clients:CreateOauthClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, authorize_url, token_url, client_id, scopes]
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID (required if not using project key auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: A label for the client, such as the provider's name.
+                  example: x
+                authorize_url:
+                  $ref: '#/components/schemas/AuthorizeUrl'
+                token_url:
+                  $ref: '#/components/schemas/TokenUrl'
+                revocation_url:
+                  $ref: '#/components/schemas/RevocationUrl'
+                client_id:
+                  $ref: '#/components/schemas/ClientId'
+                client_secret:
+                  $ref: '#/components/schemas/ClientSecret'
+                scopes:
+                  $ref: '#/components/schemas/Scopes'
+                pkce:
+                  $ref: '#/components/schemas/Pkce'
+                token_endpoint_auth_method:
+                  $ref: '#/components/schemas/TokenEndpointAuthMethod'
+                redirect_uri:
+                  $ref: '#/components/schemas/RedirectUri'
+                authorize_params:
+                  $ref: '#/components/schemas/AuthorizeParams'
+      responses:
+        '201':
+          description: The OAuth client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthClient'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/oauth-clients/{oauth_client_id}:
+    parameters:
+      - name: oauth_client_id
+        in: path
+        required: true
+        description: OAuth client ID
+        schema:
+          type: string
+          example: oauc_V1StGXR8Z5jdHi6B
+    get:
+      tags:
+        - Oauth Clients
+      summary: Get an OAuth client
+      description: Returns the client; `client_secret` is its secret reference.
+      operationId: getOauthClient
+      x-soat-resource:
+        kind: oauth_client
+        from: oauth_client_id
+      x-iam-action: oauth-clients:GetOauthClient
+      responses:
+        '200':
+          description: The OAuth client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthClient'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    patch:
+      tags:
+        - Oauth Clients
+      summary: Update an OAuth client
+      description: Changes only the fields sent; `null` clears a nullable one.
+      operationId: updateOauthClient
+      x-soat-resource:
+        kind: oauth_client
+        from: oauth_client_id
+      x-iam-action: oauth-clients:UpdateOauthClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  description: A label for the client, such as the provider's name.
+                authorize_url:
+                  $ref: '#/components/schemas/AuthorizeUrl'
+                token_url:
+                  $ref: '#/components/schemas/TokenUrl'
+                revocation_url:
+                  $ref: '#/components/schemas/RevocationUrl'
+                client_id:
+                  $ref: '#/components/schemas/ClientId'
+                client_secret:
+                  $ref: '#/components/schemas/ClientSecret'
+                scopes:
+                  $ref: '#/components/schemas/Scopes'
+                pkce:
+                  $ref: '#/components/schemas/Pkce'
+                token_endpoint_auth_method:
+                  $ref: '#/components/schemas/TokenEndpointAuthMethod'
+                redirect_uri:
+                  $ref: '#/components/schemas/RedirectUri'
+                authorize_params:
+                  $ref: '#/components/schemas/AuthorizeParams'
+      responses:
+        '200':
+          description: The updated OAuth client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthClient'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    delete:
+      tags:
+        - Oauth Clients
+      summary: Delete an OAuth client
+      description: Deletes the client and every connection made through it.
+      operationId: deleteOauthClient
+      x-soat-resource:
+        kind: oauth_client
+        from: oauth_client_id
+      x-iam-action: oauth-clients:DeleteOauthClient
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    AuthorizeUrl:
+      type: string
+      description: >-
+        The provider's authorization endpoint. Query parameters it already
+        carries are kept.
+      example: https://x.com/i/oauth2/authorize
+    TokenUrl:
+      type: string
+      description: The provider's token endpoint.
+      example: https://api.x.com/2/oauth2/token
+    RevocationUrl:
+      type: string
+      nullable: true
+      description: >-
+        The provider's RFC 7009 revocation endpoint, called when a connection
+        is deleted. `null` skips revocation.
+      example: https://api.x.com/2/oauth2/revoke
+    ClientId:
+      type: string
+      description: Your app's client ID at the provider.
+      example: Tm9ZWdEX2hQ
+    ClientSecret:
+      type: string
+      nullable: true
+      description: >-
+        A `{{secret:sec_...}}` reference to your app's client secret, never
+        the value. `null` for a public client, which relies on PKCE.
+      example: '{{secret:sec_V1StGXR8Z5jdHi6B}}'
+    Scopes:
+      type: array
+      items:
+        type: string
+      description: The scopes requested at authorization.
+      example: [tweet.read, users.read, offline.access]
+    Pkce:
+      type: boolean
+      default: true
+      description: Whether the authorization uses PKCE (`S256`).
+    TokenEndpointAuthMethod:
+      type: string
+      enum: [client_secret_basic, client_secret_post]
+      default: client_secret_basic
+      description: How the client authenticates at the token endpoint.
+    RedirectUri:
+      type: string
+      nullable: true
+      description: >-
+        The callback the provider redirects to, as registered with the
+        provider. `null` is this server's own
+        `{SOAT_BASE_URL}/api/v1/oauth-connections/callback`; a front end that
+        receives the redirect itself forwards `code` and `state` there.
+      example: https://app.example.com/oauth/callback
+    AuthorizeParams:
+      type: object
+      nullable: true
+      additionalProperties:
+        type: string
+      description: >-
+        Extra query parameters for the authorize URL, such as Google's
+        `access_type: offline` and `prompt: consent` for a refresh token.
+      example:
+        prompt: consent
+    OauthClient:
+      type: object
+      properties:
+        id:
+          type: string
+          example: oauc_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: x
+        authorize_url:
+          $ref: '#/components/schemas/AuthorizeUrl'
+        token_url:
+          $ref: '#/components/schemas/TokenUrl'
+        revocation_url:
+          $ref: '#/components/schemas/RevocationUrl'
+        client_id:
+          $ref: '#/components/schemas/ClientId'
+        client_secret:
+          $ref: '#/components/schemas/ClientSecret'
+        scopes:
+          $ref: '#/components/schemas/Scopes'
+        pkce:
+          $ref: '#/components/schemas/Pkce'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/TokenEndpointAuthMethod'
+        redirect_uri:
+          $ref: '#/components/schemas/RedirectUri'
+        authorize_params:
+          $ref: '#/components/schemas/AuthorizeParams'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

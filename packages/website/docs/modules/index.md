@@ -40,6 +40,8 @@ The generation engine and its building blocks.
 - [AI Providers](./ai-providers.md) — LLM provider connections and models
 - [Agents](./agents.md) — configurable agents with tools and multi-step reasoning
 - [Tools](./tools.md) — HTTP, MCP, client-side, and SOAT-platform tools
+- [OAuth Clients](./oauth-clients.md) — your own OAuth apps at third-party providers
+- [OAuth Connections](./oauth-connections.md) — per-actor grants that http tools call providers with
 - [Sessions](./sessions.md) — the 1↔1 user/agent interface
 - [Conversations](./conversations.md) — the multi-party message engine
 - [Chats](./chats.md) — raw LLM completions without an agent

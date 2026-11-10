@@ -45,6 +45,7 @@ import { admitEachSharedCall } from './shareCaps';
 import {
   applyHttpToolAuth,
   type HttpToolAuthConfig,
+  type HttpToolAuthIdentity,
   mergeAuthHeaders,
   parseHttpToolAuthConfig,
 } from './toolAuth';
@@ -373,6 +374,8 @@ const resolveAuthSecrets = async (args: {
     return resolveSecretRefsInString({ value, projectId });
   };
 
+  if (auth.type === 'oauth_connection') return auth;
+
   if (auth.type === 'aws_sigv4') {
     return {
       type: 'aws_sigv4',
@@ -538,12 +541,13 @@ const buildHttpRequestInit = (args: {
  * byte-for-byte unchanged.
  */
 const withHttpToolAuth = async (args: {
-  auth?: HttpToolAuthConfig;
+  resolved: { auth?: HttpToolAuthConfig; fetchUrl: string };
   method: string;
-  url: string;
   init: RequestInit;
+  identity: HttpToolAuthIdentity;
 }): Promise<RequestInit> => {
-  if (!args.auth) return args.init;
+  const { auth, fetchUrl: url } = args.resolved;
+  if (!auth) return args.init;
 
   const headers = (args.init.headers ?? {}) as Record<string, string>;
   const body = args.init.body;
@@ -551,11 +555,12 @@ const withHttpToolAuth = async (args: {
   // Only a string body is hashable at signing time, which is why
   // `validateExecuteAuth` rejects aws_sigv4 + multipart at every write path.
   const authHeaders = await applyHttpToolAuth({
-    auth: args.auth,
+    auth,
     method: args.method,
-    url: args.url,
+    url,
     headers,
     body: typeof body === 'string' ? body : undefined,
+    identity: args.identity,
   });
 
   return {
@@ -626,6 +631,24 @@ type HttpToolExecuteArgs = {
   // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
   // execute headers and context headers.
   extraHeaders?: Record<string, string>;
+  // Who the call runs for: gates and selects an `oauth_connection` credential.
+  authHeader?: string;
+  boundaryPolicy?: unknown;
+};
+
+const authIdentity = (args: {
+  call: Pick<
+    HttpToolExecuteArgs,
+    'projectId' | 'authHeader' | 'boundaryPolicy'
+  >;
+  toolContext?: Record<string, string>;
+}): HttpToolAuthIdentity => {
+  return {
+    projectId: args.call.projectId,
+    actorId: args.toolContext?.actor_id,
+    authHeader: args.call.authHeader,
+    boundaryPolicy: args.call.boundaryPolicy,
+  };
 };
 
 const sendHttpToolRequest = async (
@@ -688,10 +711,10 @@ const sendHttpToolRequest = async (
     const response = await fetchWithEgressGuard(
       resolved.fetchUrl,
       await withHttpToolAuth({
-        auth: resolved.auth,
+        resolved,
         method,
-        url: resolved.fetchUrl,
         init,
+        identity: authIdentity({ call: args, toolContext }),
       }),
       {
         onRequest: () => {
@@ -754,7 +777,8 @@ const modelVisibleSchema = (
 const resolveHttpTool = (
   typedTool: TypedHttpTool,
   meter: ToolExecutionMeter,
-  toolContext?: Record<string, string>
+  toolContext?: Record<string, string>,
+  identity?: { authHeader?: string; boundaryPolicy?: unknown }
 ): Tool => {
   const parameters =
     typeof typedTool.parameters === 'string'
@@ -782,6 +806,8 @@ const resolveHttpTool = (
             contextKeys: typedTool.contextKeys,
             presetParameters: typedTool.presetParameters,
             parameterSchema: parameters,
+            authHeader: identity?.authHeader,
+            boundaryPolicy: identity?.boundaryPolicy,
           },
           toolContext
         )
@@ -1101,7 +1127,10 @@ const resolveToolByType = async (
   switch (toolType) {
     case 'http':
       return {
-        [typedTool.name]: resolveHttpTool(typedTool, meter, args.toolContext),
+        [typedTool.name]: resolveHttpTool(typedTool, meter, args.toolContext, {
+          authHeader: args.authHeader,
+          boundaryPolicy: args.boundaryPolicy,
+        }),
       };
     case 'client':
       return {

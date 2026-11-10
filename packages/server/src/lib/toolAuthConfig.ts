@@ -26,10 +26,20 @@ export type GcpServiceAccountAuthConfig = {
   scopes: string[];
 };
 
-export type HttpToolAuthConfig =
-  AwsSigV4AuthConfig | GcpServiceAccountAuthConfig;
+/** The bearer of the connection the turn's actor holds through the client. */
+export type OauthConnectionAuthConfig = {
+  type: 'oauth_connection';
+  oauthClientId: string;
+};
 
-const AUTH_TYPES = ['aws_sigv4', 'gcp_service_account'] as const;
+export type HttpToolAuthConfig =
+  AwsSigV4AuthConfig | GcpServiceAccountAuthConfig | OauthConnectionAuthConfig;
+
+const AUTH_TYPES = [
+  'aws_sigv4',
+  'gcp_service_account',
+  'oauth_connection',
+] as const;
 
 export const asString = (value: unknown): string | undefined => {
   return typeof value === 'string' && value ? value : undefined;
@@ -96,6 +106,10 @@ export const parseHttpToolAuthConfig = (
 
   if (type === 'aws_sigv4') return parseAwsSigV4Config(value);
   if (type === 'gcp_service_account') return parseGcpConfig(value);
+  if (type === 'oauth_connection') {
+    const oauthClientId = asString(value.oauth_client_id);
+    return oauthClientId ? { type, oauthClientId } : undefined;
+  }
 
   return undefined;
 };
@@ -176,6 +190,14 @@ export const validateHttpToolAuth = (args: {
 
   if (type === 'aws_sigv4') {
     validateAwsSigV4Auth({ auth: args.auth, bodyMode: args.bodyMode });
+    return;
+  }
+
+  if (type === 'oauth_connection') {
+    requireField({
+      value: args.auth.oauth_client_id,
+      field: 'oauth_client_id',
+    });
     return;
   }
 

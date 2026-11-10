@@ -39,9 +39,14 @@ export const callHttpTool = (
   tool: CallableToolDefinition,
   mergedInput: Record<string, unknown>,
   meter: ToolExecutionMeter,
-  idempotencyKey?: string,
-  toolContext?: Record<string, string>
+  call: {
+    idempotencyKey?: string;
+    toolContext?: Record<string, string>;
+    authHeader?: string;
+    boundaryPolicy?: unknown;
+  } = {}
 ): Promise<unknown> => {
+  const { idempotencyKey, toolContext } = call;
   const executeConfig = parseHttpExecuteConfig(
     (tool.execute as
       | { url: string; method?: string; headers?: Record<string, string> }
@@ -65,6 +70,8 @@ export const callHttpTool = (
       extraHeaders: idempotencyKey
         ? { 'Idempotency-Key': idempotencyKey }
         : undefined,
+      authHeader: call.authHeader,
+      boundaryPolicy: call.boundaryPolicy,
     },
     toolContext
     // Presets were already merged into `mergedInput` by `callResolvedTool`, so
@@ -333,13 +340,12 @@ export const dispatchDirectTool = async (args: {
   boundaryPolicy?: unknown;
 }): Promise<unknown> => {
   if (args.type === 'http') {
-    return callHttpTool(
-      args.tool,
-      args.mergedInput,
-      args.meter,
-      args.idempotencyKey,
-      args.toolContext
-    );
+    return callHttpTool(args.tool, args.mergedInput, args.meter, {
+      idempotencyKey: args.idempotencyKey,
+      toolContext: args.toolContext,
+      authHeader: args.authHeader,
+      boundaryPolicy: args.boundaryPolicy,
+    });
   }
   if (args.type === 'builtin') {
     return callSoatTool(args.tool, {

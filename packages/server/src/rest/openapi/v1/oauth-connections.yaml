@@ -1,0 +1,339 @@
+openapi: 3.0.3
+info:
+  title: SOAT OAuth Connections API
+  version: 1.0.0
+  description: >-
+    One actor's grant at a provider through an OAuth client. The server runs
+    the authorization code flow (PKCE, single-use `state`), keeps the tokens
+    encrypted and refreshes them; no route returns a token.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Oauth Connections
+    description: Connect actors to third-party providers
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/oauth-connections:
+    get:
+      tags:
+        - Oauth Connections
+      summary: List OAuth connections
+      description: Returns a project's OAuth connections, without tokens.
+      operationId: listOauthConnections
+      x-iam-action: oauth-connections:ListOauthConnections
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: actor_id
+          in: query
+          description: Only this actor's connections
+          schema:
+            type: string
+            example: actor_V1StGXR8Z5jdHi6B
+        - name: oauth_client_id
+          in: query
+          description: Only connections through this OAuth client
+          schema:
+            type: string
+            example: oauc_V1StGXR8Z5jdHi6B
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OAuth connections
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OauthConnection'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    post:
+      tags:
+        - Oauth Connections
+      summary: Start an OAuth connection
+      description: >-
+        Starts the authorization of an actor through an OAuth client and
+        returns the `authorize_url` to send the person to; it is single-use
+        and expires after 10 minutes. Starting again for the same actor and
+        client restarts the same connection (`200`), and a connected one keeps
+        its tokens until the new authorization completes. Hand the
+        `authorize_url` only to the person the actor is: whoever consents
+        connects their account to that actor.
+      operationId: createOauthConnection
+      x-iam-action: oauth-connections:CreateOauthConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [oauth_client_id, actor_id]
+              properties:
+                oauth_client_id:
+                  x-soat-ref: oauth-clients
+                  type: string
+                  description: The OAuth client to connect through.
+                  example: oauc_V1StGXR8Z5jdHi6B
+                actor_id:
+                  x-soat-ref: actors
+                  type: string
+                  description: The actor the grant is for.
+                  example: actor_V1StGXR8Z5jdHi6B
+                return_url:
+                  type: string
+                  description: >-
+                    Where the callback redirects the person's browser when it
+                    completes, with `oauth_connection_id` and `status`
+                    (`connected` or `failed`) added to its query.
+                  example: https://app.example.com/settings/connections
+      responses:
+        '200':
+          description: The existing connection, restarted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartedOauthConnection'
+        '201':
+          description: The new pending connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartedOauthConnection'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/oauth-connections/callback:
+    get:
+      tags:
+        - Oauth Connections
+      summary: Complete an OAuth connection
+      description: >-
+        The provider's redirect target. Not IAM-gated: the single-use `state`
+        is the credential. Exchanges `code` for tokens and connects the
+        connection; redirects to its `return_url` when one was given, else
+        answers the connection. A front end that receives the provider's
+        redirect itself forwards `code` and `state` here.
+      operationId: completeOauthConnection
+      security: []
+      x-soat-agent-exclude: true
+      parameters:
+        - name: state
+          in: query
+          description: The `state` of the authorize URL
+          schema:
+            type: string
+        - name: code
+          in: query
+          description: The authorization code
+          schema:
+            type: string
+        - name: error
+          in: query
+          description: The provider's refusal, such as `access_denied`
+          schema:
+            type: string
+        - name: error_description
+          in: query
+          description: The provider's refusal, in words
+          schema:
+            type: string
+        - name: error_uri
+          in: query
+          description: Sent by some providers with a refusal; ignored
+          schema:
+            type: string
+        - name: scope
+          in: query
+          description: Sent by some providers; ignored
+          schema:
+            type: string
+        - name: iss
+          in: query
+          description: Sent by some providers (RFC 9207); ignored
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The connected connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthConnection'
+        '302':
+          description: Redirect to the connection's `return_url`
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/oauth-connections/{oauth_connection_id}:
+    parameters:
+      - name: oauth_connection_id
+        in: path
+        required: true
+        description: OAuth connection ID
+        schema:
+          type: string
+          example: ocon_V1StGXR8Z5jdHi6B
+    get:
+      tags:
+        - Oauth Connections
+      summary: Get an OAuth connection
+      description: Returns the connection's status, without tokens.
+      operationId: getOauthConnection
+      x-soat-resource:
+        kind: oauth_connection
+        from: oauth_connection_id
+      x-iam-action: oauth-connections:GetOauthConnection
+      responses:
+        '200':
+          description: The OAuth connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthConnection'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    delete:
+      tags:
+        - Oauth Connections
+      summary: Delete an OAuth connection
+      description: >-
+        Revokes the grant at the provider's `revocation_url`, when the client
+        has one, and deletes the connection. A failed revocation does not stop
+        the deletion.
+      operationId: deleteOauthConnection
+      x-soat-resource:
+        kind: oauth_connection
+        from: oauth_connection_id
+      x-iam-action: oauth-connections:DeleteOauthConnection
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    OauthConnection:
+      type: object
+      properties:
+        id:
+          type: string
+          example: ocon_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        oauth_client_id:
+          x-soat-ref: oauth-clients
+          type: string
+          example: oauc_V1StGXR8Z5jdHi6B
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          example: actor_V1StGXR8Z5jdHi6B
+        status:
+          type: string
+          enum: [pending, connected, disconnected]
+          description: >-
+            `pending` until the first authorization completes; `connected`
+            while tool calls can use it; `disconnected` after a refused
+            authorization or refresh, until the actor connects again.
+        scopes:
+          type: array
+          items:
+            type: string
+          description: The scopes the provider granted.
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the current access token expires; it is refreshed before use.
+        connected_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          nullable: true
+          description: Why the last authorization or refresh failed.
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StartedOauthConnection:
+      allOf:
+        - $ref: '#/components/schemas/OauthConnection'
+        - type: object
+          properties:
+            authorize_url:
+              type: string
+              description: Where to send the person to consent.
+              example: https://x.com/i/oauth2/authorize?response_type=code&client_id=Tm9ZWdEX2hQ&state=...
+            authorize_url_expires_at:
+              type: string
+              format: date-time

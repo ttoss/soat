@@ -11,6 +11,20 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced actor does not exist.',
   },
+  OAUTH_CLIENT_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced OAuth client does not exist.',
+  },
+  OAUTH_CALLBACK_FAILED: {
+    httpStatus: 400,
+    description:
+      'An OAuth connection callback could not connect: the `state` is unknown, already used or expired, the provider refused the authorization, or its token endpoint refused the code.',
+  },
+  OAUTH_CONNECTION_REFRESH_FAILED: {
+    httpStatus: 502,
+    description:
+      "The provider refused to refresh an OAuth connection's access token; the connection is `disconnected` until the actor connects again.",
+  },
   SESSION_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced session does not exist.',
@@ -599,7 +613,7 @@ export const ERROR_CODES = {
   TOOL_AUTH_FAILED: {
     httpStatus: 502,
     description:
-      "An http-type tool's `execute.auth` credentials could not be turned into a request credential — malformed service account JSON, an unusable private key, or a token endpoint that rejected the assertion. The error `meta` carries the token endpoint's status and body when it responded. Distinct from `TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call.",
+      "An http-type tool's `execute.auth` credentials could not be turned into a request credential — malformed service account JSON, an unusable private key, a token endpoint that rejected the assertion, or an `oauth_connection` with no actor or no connected connection (`meta.reason` `oauth_connection_required`: the actor must reconnect). The error `meta` carries the token endpoint's status and body when it responded. Distinct from `TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call.",
   },
   EXPRESSION_FAILED: {
     httpStatus: 422,

@@ -39,6 +39,10 @@ const PERMISSIONLESS_OPERATIONS = new Map([
     'complete-ingestion-callback',
     'internal ingestion callback, not user-facing',
   ],
+  [
+    'complete-oauth-connection',
+    'the single-use authorization state is the credential, not a policy',
+  ],
 ]);
 
 describe('soat tool IAM action contract (real OpenAPI specs)', () => {
