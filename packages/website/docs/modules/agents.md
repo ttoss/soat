@@ -93,22 +93,23 @@ The `active_release` object on an agent, not a standalone resource: set with `se
 
 One agent execution; its steps are on its [trace](./traces.md).
 
-| Field                       | Type        | Description                                                                                                        |
-| --------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
-| `id`                        | string      | Public identifier (`gen_` prefix)                                                                                  |
-| `project_id`                | string      | Project the generation belongs to                                                                                  |
-| `agent_id`                  | string      | Agent that was executed                                                                                            |
-| `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                                                                    |
-| `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations)                       |
-| `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status)                                              |
-| `started_at`                | string      | ISO 8601 timestamp when execution began                                                                            |
-| `completed_at`              | string/null | ISO 8601 timestamp when execution finished                                                                         |
-| `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                                                                           |
-| `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)                                                         |
-| `started_by_principal_type` | string/null | Type of the principal that triggered the generation                                                                |
-| `started_by_principal_id`   | string/null | Public id of that principal                                                                                        |
-| `idempotency_key`           | string/null | Key the generation was started under — see [Running a generation at most once](#running-a-generation-at-most-once) |
-| `created_at`                | string      | ISO 8601 creation timestamp                                                                                        |
+| Field                       | Type        | Description                                                                                                                           |
+| --------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | string      | Public identifier (`gen_` prefix)                                                                                                     |
+| `project_id`                | string      | Project the generation belongs to                                                                                                     |
+| `agent_id`                  | string      | Agent that was executed                                                                                                               |
+| `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                                                                                       |
+| `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations)                                          |
+| `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status)                                                                 |
+| `started_at`                | string      | ISO 8601 timestamp when execution began                                                                                               |
+| `completed_at`              | string/null | ISO 8601 timestamp when execution finished                                                                                            |
+| `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                                                                                              |
+| `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)                                                                            |
+| `started_by_principal_type` | string/null | Type of the principal that triggered the generation                                                                                   |
+| `started_by_principal_id`   | string/null | Public id of that principal                                                                                                           |
+| `acted_as`                  | object/null | `{ principal_type, principal_id }` the latest segment's tool calls ran as — see [Acting principal](./generations.md#acting-principal) |
+| `idempotency_key`           | string/null | Key the generation was started under — see [Running a generation at most once](#running-a-generation-at-most-once)                    |
+| `created_at`                | string      | ISO 8601 creation timestamp                                                                                                           |
 
 #### Generation Status
 

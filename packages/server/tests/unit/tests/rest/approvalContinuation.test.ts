@@ -432,6 +432,28 @@ describe('Tool-call approval continuation', () => {
       expect(continuation.started_by_principal_id).toBe(userId);
     });
 
+    test('the continuation runs as the principal the proposing segment acted as', async () => {
+      const me =
+        await authenticatedTestClient(adminToken).get('/api/v1/users/me');
+      expect(me.status).toBe(200);
+      const root = await rootGeneration(agentId);
+      // The segment that proposed the call was resumed by another submitter.
+      await db.Generation.update(
+        { actedAsPrincipalType: 'user', actedAsPrincipalId: me.body.id },
+        { where: { publicId: root } }
+      );
+      const item = await seed({
+        toolId: refundToolId,
+        amount: 35,
+        generationId: root,
+      });
+
+      expect((await approve(item.id)).status).toBe(200);
+
+      const continuation = await firstContinuationOf(root);
+      expect(continuation.started_by_principal_id).toBe(me.body.id);
+    });
+
     test('edited arguments are what runs, and the continuation names them', async () => {
       const root = await rootGeneration(agentId);
       const item = await seed({

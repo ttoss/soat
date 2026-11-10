@@ -1,5 +1,5 @@
 ---
-description: "Human-decision approval queue with frozen evidence and server-enforced expiry in SOAT."
+description: 'Human-decision approval queue with frozen evidence and server-enforced expiry in SOAT.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -38,33 +38,33 @@ create endpoint. Producers:
 
 ## Data Model
 
-| Field                | Type            | Description                                                        |
-| -------------------- | --------------- | ------------------------------------------------------------------ |
-| `id`                 | string          | Public identifier (`apr_…`)                                        |
-| `project_id`         | string          | ID of the owning project                                           |
-| `origin`             | string          | `node` \| `tool_call` \| `task_transition` — producer origin (analytics/filtering only) |
-| `status`             | string          | `pending` \| `approved` \| `rejected` \| `expired`                 |
-| `proposed_action`    | object \| null  | Frozen `{ tool_id, action?, arguments }` the decision governs; `null` for `task_transition` items. `action` is present for `tool_call`-origin items (always, even for single-action tools) and omitted for `node`-origin items, whose downstream execution is wired by a separate `tool` node in the graph |
-| `reasoning`          | string \| null  | The proposing agent's rationale                                    |
-| `evidence`           | object \| null  | Structured supporting data                                         |
-| `predicted_impact`   | string \| null  | Expected execution effect                                          |
-| `expires_at`         | string          | Server-enforced hard gate; the item can never execute after this   |
-| `dedup_key`          | string \| null  | Set on tool-call items to suppress duplicate proposals             |
-| `orchestration_run_id`             | string \| null  | Originating orchestration run (node producer)                      |
-| `node_id`            | string \| null  | Originating node id within the run's graph                         |
-| `generation_id`      | string \| null  | Originating generation (tool-call producer)                        |
-| `session_id`         | string \| null  | Session the originating generation ran in (tool-call producer)     |
-| `agent_id`           | string \| null  | Proposing agent                                                    |
-| `task_id`            | string \| null  | Gated task (`task_transition` producer)                            |
-| `task_transition`    | string \| null  | Transition fired on approval (`task_transition` producer)          |
-| `policy_version`     | string \| null  | Guardrail policy version that routed here                          |
-| `previous_item_id`   | string \| null  | Prior item's ID when this proposal was re-filed after an earlier matching item (same `dedup_key`) was rejected |
-| `resolved_by_principal_type` | string \| null | Who resolved the item: `user` or `api_key`; `null` while pending and on expiry |
-| `resolved_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key resolved it |
-| `resolution_reason`  | string \| null  | Required on rejection                                              |
-| `edited_arguments`   | object \| null  | Set on edit-then-approve; the original stays in `proposed_action`  |
-| `created_at`         | string          | ISO 8601 creation timestamp                                        |
-| `updated_at`         | string          | ISO 8601 last-updated timestamp                                    |
+| Field                        | Type           | Description                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                         | string         | Public identifier (`apr_…`)                                                                                                                                                                                                                                                                                |
+| `project_id`                 | string         | ID of the owning project                                                                                                                                                                                                                                                                                   |
+| `origin`                     | string         | `node` \| `tool_call` \| `task_transition` — producer origin (analytics/filtering only)                                                                                                                                                                                                                    |
+| `status`                     | string         | `pending` \| `approved` \| `rejected` \| `expired`                                                                                                                                                                                                                                                         |
+| `proposed_action`            | object \| null | Frozen `{ tool_id, action?, arguments }` the decision governs; `null` for `task_transition` items. `action` is present for `tool_call`-origin items (always, even for single-action tools) and omitted for `node`-origin items, whose downstream execution is wired by a separate `tool` node in the graph |
+| `reasoning`                  | string \| null | The proposing agent's rationale                                                                                                                                                                                                                                                                            |
+| `evidence`                   | object \| null | Structured supporting data                                                                                                                                                                                                                                                                                 |
+| `predicted_impact`           | string \| null | Expected execution effect                                                                                                                                                                                                                                                                                  |
+| `expires_at`                 | string         | Server-enforced hard gate; the item can never execute after this                                                                                                                                                                                                                                           |
+| `dedup_key`                  | string \| null | Set on tool-call items to suppress duplicate proposals                                                                                                                                                                                                                                                     |
+| `orchestration_run_id`       | string \| null | Originating orchestration run (node producer)                                                                                                                                                                                                                                                              |
+| `node_id`                    | string \| null | Originating node id within the run's graph                                                                                                                                                                                                                                                                 |
+| `generation_id`              | string \| null | Originating generation (tool-call producer)                                                                                                                                                                                                                                                                |
+| `session_id`                 | string \| null | Session the originating generation ran in (tool-call producer)                                                                                                                                                                                                                                             |
+| `agent_id`                   | string \| null | Proposing agent                                                                                                                                                                                                                                                                                            |
+| `task_id`                    | string \| null | Gated task (`task_transition` producer)                                                                                                                                                                                                                                                                    |
+| `task_transition`            | string \| null | Transition fired on approval (`task_transition` producer)                                                                                                                                                                                                                                                  |
+| `policy_version`             | string \| null | Guardrail policy version that routed here                                                                                                                                                                                                                                                                  |
+| `previous_item_id`           | string \| null | Prior item's ID when this proposal was re-filed after an earlier matching item (same `dedup_key`) was rejected                                                                                                                                                                                             |
+| `resolved_by_principal_type` | string \| null | Who resolved the item: `user` or `api_key`; `null` while pending and on expiry                                                                                                                                                                                                                             |
+| `resolved_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key resolved it                                                                                                                                                                                                                                 |
+| `resolution_reason`          | string \| null | Required on rejection                                                                                                                                                                                                                                                                                      |
+| `edited_arguments`           | object \| null | Set on edit-then-approve; the original stays in `proposed_action`                                                                                                                                                                                                                                          |
+| `created_at`                 | string         | ISO 8601 creation timestamp                                                                                                                                                                                                                                                                                |
+| `updated_at`                 | string         | ISO 8601 last-updated timestamp                                                                                                                                                                                                                                                                            |
 
 ## Key Concepts
 
@@ -107,18 +107,17 @@ the approver sees.
 
 ### Continuation identity
 
-A continuation runs **as the principal that started the chain**, never as the
-approver. The platform reads the principal persisted on the proposing
-generation
-([`started_by_principal_type` / `started_by_principal_id`](./generations.md#starting-principal))
-and re-mints a short-lived run-as token; the continuation's
+A continuation runs **as the principal the proposing generation acted as**,
+never as the approver. The platform reads
+[`acted_as`](./generations.md#acting-principal) off the proposing generation —
+its starter, or the caller who resumed it with tool outputs — and re-mints a short-lived run-as token; the continuation's
 [`builtin` tools](./tools.md#builtin) and the approved action execute with it.
 The token asserts identity only; authorization is evaluated per request, so a
 chain started by a scoped API key never exceeds that key's policies, and
 revoking the key stops the chain mid-flight.
 
-The continuation records the same principal on its own generation, so later
-approvals in the chain re-mint from there. A chain with no recorded principal
+The continuation records that principal as its own starter and `acted_as`, so
+later approvals in the chain re-mint from there. A chain with no recorded principal
 (started by a trigger or an OAuth token) gets no credential; its self-calls
 stay unauthenticated.
 
@@ -236,9 +235,9 @@ of its items; there is no per-item assignment.
 executes under the **proposing** generation's principal. An edit additionally
 requires what making the call would require:
 
-| Proposal | Also required to edit |
-| --- | --- |
-| any tool | `tools:CallTool` on that tool |
+| Proposal         | Also required to edit                                         |
+| ---------------- | ------------------------------------------------------------- |
+| any tool         | `tools:CallTool` on that tool                                 |
 | a `builtin` tool | the proposed action's own IAM action, anywhere in the project |
 
 A builtin action is dispatched in-process against the proposer's credential, so nothing else checks the approver. An edit failing either check answers `403 FORBIDDEN`; approving as proposed is unaffected.
@@ -261,7 +260,10 @@ soat list-approvals --project-id proj_ABC --status pending
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.approvals.listApprovals({
   query: { project_id: 'proj_ABC', status: ['pending'] },

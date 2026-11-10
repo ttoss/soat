@@ -1,5 +1,5 @@
 ---
-description: "Generation records track individual LLM runs started by agents, including lifecycle status and failure details."
+description: 'Generation records track individual LLM runs started by agents, including lifecycle status and failure details.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -25,41 +25,42 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 
 ## Data Model
 
-| Field                       | Type           | Description                                                                                          |
-| --------------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
-| `id`                        | string         | Public identifier for the generation                                                                 |
-| `project_id`                | string         | Project the generation belongs to                                                                    |
-| `agent_id`                  | string         | Agent that ran the generation                                                                        |
-| `trace_id`                  | string         | Trace this generation belongs to                                                                     |
-| `initiator_generation_id`   | string \| null | Generation that started this one (see [Initiated generations](#initiated-generations)); `null` for top-level generations |
-| `chain_id`                  | string \| null | [Continuation chain](./chains.md) this generation belongs to — set on every member including the root; `null` when it is not part of one |
-| `session_id`                | string \| null | [Session](./sessions.md) this generation was dispatched through; `null` when it was started outside one |
-| `actor_id`                  | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none |
-| `started_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
-| `started_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` |
-| `status`                    | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                         |
-| `started_at`                | string         | When the generation started                                                                          |
-| `completed_at`              | string \| null | When the generation reached a terminal state                                                         |
-| `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
-| `stop_reason`               | string \| null | Why the generation stopped — see [Stop Reason](./agents.md#stop-reason)                              |
-| `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
-| `metadata`                  | object | Caller-owned annotations (see [Metadata](#metadata) and [Tags and metadata](iam.md#tags-and-metadata))                    |
-| `action_id`                 | string \| null | Logical action label supplied on the generate request                                                |
-| `trigger_id`                | string \| null | Trigger that initiated the generation                                                                |
-| `orchestration_run_id`      | string \| null | Orchestration run that dispatched the generation                                                     |
-| `node_id`                   | string \| null | Node within that run                                                                                 |
-| `node_attempt`              | number \| null | The node's 1-based retry attempt, so a retried node's generations are told apart (see [Finding an orchestration run's generations](#finding-an-orchestration-runs-generations)) |
-| `agent_version`             | number \| null | Agent config version that served the generation                                                      |
-| `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation, `decider` when a [decider](./deciders.md) question did; `null` for ordinary traffic |
-| `idempotency_key`           | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once)) |
-| `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
-| `retrieval`                 | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served)) |
-| `extraction`                | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))  |
-| `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |
-| `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system` |
-| `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth                               |
-| `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
-| `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
+| Field                                | Type           | Description                                                                                                                                                                     |
+| ------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                 | string         | Public identifier for the generation                                                                                                                                            |
+| `project_id`                         | string         | Project the generation belongs to                                                                                                                                               |
+| `agent_id`                           | string         | Agent that ran the generation                                                                                                                                                   |
+| `trace_id`                           | string         | Trace this generation belongs to                                                                                                                                                |
+| `initiator_generation_id`            | string \| null | Generation that started this one (see [Initiated generations](#initiated-generations)); `null` for top-level generations                                                        |
+| `chain_id`                           | string \| null | [Continuation chain](./chains.md) this generation belongs to — set on every member including the root; `null` when it is not part of one                                        |
+| `session_id`                         | string \| null | [Session](./sessions.md) this generation was dispatched through; `null` when it was started outside one                                                                         |
+| `actor_id`                           | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none                                                              |
+| `started_by_principal_type`          | string \| null | [Principal](./audit-log.md#principals) that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal))                                        |
+| `started_by_principal_id`            | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…`                                                                                          |
+| `acted_as`                           | object \| null | `{ principal_type, principal_id }` the latest segment's tool calls ran as (see [Acting principal](#acting-principal)); `null` when it ran with none                             |
+| `status`                             | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                                                                                                        |
+| `started_at`                         | string         | When the generation started                                                                                                                                                     |
+| `completed_at`                       | string \| null | When the generation reached a terminal state                                                                                                                                    |
+| `last_activity_at`                   | string \| null | Last activity timestamp                                                                                                                                                         |
+| `stop_reason`                        | string \| null | Why the generation stopped — see [Stop Reason](./agents.md#stop-reason)                                                                                                         |
+| `error`                              | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording))                                                                          |
+| `metadata`                           | object         | Caller-owned annotations (see [Metadata](#metadata) and [Tags and metadata](iam.md#tags-and-metadata))                                                                          |
+| `action_id`                          | string \| null | Logical action label supplied on the generate request                                                                                                                           |
+| `trigger_id`                         | string \| null | Trigger that initiated the generation                                                                                                                                           |
+| `orchestration_run_id`               | string \| null | Orchestration run that dispatched the generation                                                                                                                                |
+| `node_id`                            | string \| null | Node within that run                                                                                                                                                            |
+| `node_attempt`                       | number \| null | The node's 1-based retry attempt, so a retried node's generations are told apart (see [Finding an orchestration run's generations](#finding-an-orchestration-runs-generations)) |
+| `agent_version`                      | number \| null | Agent config version that served the generation                                                                                                                                 |
+| `source`                             | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation, `decider` when a [decider](./deciders.md) question did; `null` for ordinary traffic                       |
+| `idempotency_key`                    | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once))                        |
+| `routing`                            | object \| null | What the [model route](./model-routes.md) did for this generation                                                                                                               |
+| `retrieval`                          | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served))                       |
+| `extraction`                         | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))                                |
+| `content_redacted_at`                | string \| null | When the generation's content was purged; `null` while content is intact                                                                                                        |
+| `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system`                                                                                  |
+| `content_redacted_by_principal_id`   | string \| null | Public ID of that principal — the key's own id for API-key auth                                                                                                                 |
+| `created_at`                         | string         | ISO 8601 creation timestamp                                                                                                                                                     |
+| `updated_at`                         | string         | ISO 8601 last-update timestamp                                                                                                                                                  |
 
 ## Key Concepts
 
@@ -82,6 +83,18 @@ Both fields are `null` when the chain has no re-mintable principal: a generation
 by a [trigger](./triggers.md) or an [OAuth](./oauth.md) token. Each carries its authority
 in the token (the trigger's attached policy, the consented scope), so recording a
 principal would let a later re-mint act with the whole of the owning user's access.
+
+### Acting principal
+
+`acted_as` records whose credential the generation's tool calls ran as. A generation
+acts as its starter until a caller resumes it by
+[submitting tool outputs](#lifecycle): the resumed segment's tool calls run on that
+caller's credential, and `acted_as` names them while `started_by_principal_*` keeps the
+starter. A resumption through a [session](./sessions.md) carries no credential, so
+`acted_as` is `null` after it.
+
+An [approved tool call](./approvals.md#continuation-identity) runs as the `acted_as` of
+the generation that proposed it.
 
 ### Lifecycle
 
@@ -135,7 +148,14 @@ Internal recovery state (used to resume a `requires_action` generation after a s
 Every [memory rule](./memories.md#memory-rules) bound to `generations.completed` that fired for this turn records what it wrote, keyed by the rule's id:
 
 ```json
-{ "mrule_V1StGXR8Z5jdHi6B": { "candidates": 3, "created": 2, "superseded": 1, "skipped": 0 } }
+{
+  "mrule_V1StGXR8Z5jdHi6B": {
+    "candidates": 3,
+    "created": 2,
+    "superseded": 1,
+    "skipped": 0
+  }
+}
 ```
 
 A store can have several rules, so one flat pair of counts could not say which produced them. Absent when no rule fired. Rules bound to `conversation_messages.generated` are visible only in [`GET /api/v1/generations/{generation_id}/memory-assertions`](/docs/api/generations/list-generation-memory-assertions), which lists the rows behind every count either way.
@@ -232,11 +252,11 @@ The stored steps are **projected**, never forwarded; their on-disk shape belongs
 Two states return `200` with a skeleton rather than an error, so a caller never has to
 distinguish "no content" from "no such generation":
 
-| State | `status` | `input` / `output` | `steps` | `content_redacted_at` |
-|---|---|---|---|---|
-| Still running | `running` | `null` | `[]` | `null` |
-| Never stored (zero-retention) | terminal | `null` | `[]` | set, principal `zero_retention` |
-| Erased by a purge or sweep | terminal | `null` | `[]` | set, purging principal |
+| State                         | `status`  | `input` / `output` | `steps` | `content_redacted_at`           |
+| ----------------------------- | --------- | ------------------ | ------- | ------------------------------- |
+| Still running                 | `running` | `null`             | `[]`    | `null`                          |
+| Never stored (zero-retention) | terminal  | `null`             | `[]`    | set, principal `zero_retention` |
+| Erased by a purge or sweep    | terminal  | `null`             | `[]`    | set, purging principal          |
 
 `step_count` survives all three, being a counter rather than content. It counts **this
 turn's** steps: when a `trace_id` groups several generations, the trace's own `step_count`
@@ -255,11 +275,11 @@ Two different figures, deliberately kept apart.
 
 `tool_surface` is what SOAT **sent**: how many tool definitions the turn carried and how large they were.
 
-| Field | Meaning |
-|---|---|
-| `tools` | Tools resolved for the turn, before any per-step narrowing by [`step_rules`](./agents.md#step-rules) |
-| `bytes` | Serialized length of the definitions — name, description, input schema — in canonical JSON, not the provider's wire format, so two agents are comparable |
-| `estimated_tokens` | `bytes` over a measured bytes-per-token ratio |
+| Field              | Meaning                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools`            | Tools resolved for the turn, before any per-step narrowing by [`step_rules`](./agents.md#step-rules)                                                     |
+| `bytes`            | Serialized length of the definitions — name, description, input schema — in canonical JSON, not the provider's wire format, so two agents are comparable |
+| `estimated_tokens` | `bytes` over a measured bytes-per-token ratio                                                                                                            |
 
 It answers the one question the meter cannot. A provider reports totals, and the tool block is a constant inside them — byte-identical on every step of a turn — so it cannot be recovered by differencing steps either. An agent bound to a large MCP catalogue can spend most of its prompt describing tools it never calls, and without this nothing says so.
 
@@ -440,7 +460,10 @@ soat list-generations --trace-id trace_abc123 --status failed
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.generations.listGenerations({
   query: { trace_id: 'trace_abc123', status: ['failed'] },

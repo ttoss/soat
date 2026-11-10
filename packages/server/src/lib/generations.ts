@@ -30,6 +30,7 @@ import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
 import {
+  actedAsPrincipalColumns,
   startedByPrincipalColumns,
   type StartingPrincipal,
 } from './principals';
@@ -123,6 +124,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         ...conversation,
         chainId,
         ...startedByPrincipalColumns(args.startedBy ?? null),
+        // The first segment's tool calls run on the starting credential.
+        ...actedAsPrincipalColumns(args.startedBy ?? null),
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
         status: 'running',

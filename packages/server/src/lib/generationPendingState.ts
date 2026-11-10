@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { actedAsPrincipalColumns, type StartingPrincipal } from './principals';
 
 /**
  * Reads the internal recovery state of a generation paused on a client tool.
@@ -26,13 +27,18 @@ export const getGenerationPendingState = async (args: {
 /**
  * Takes a paused generation off `requires_action`, atomically. True for exactly
  * one caller per pause, so two submissions of the same outputs cannot both
- * resume the turn.
+ * resume the turn. The resumed segment's tool calls run as `actedAs`.
  */
 export const claimPausedGeneration = async (args: {
   publicId: string;
+  actedAs: StartingPrincipal | null;
 }): Promise<boolean> => {
   const [claimed] = await db.Generation.update(
-    { status: 'running', lastActivityAt: new Date() },
+    {
+      status: 'running',
+      lastActivityAt: new Date(),
+      ...actedAsPrincipalColumns(args.actedAs),
+    },
     { where: { publicId: args.publicId, status: 'requires_action' } }
   );
   return claimed > 0;
