@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import * as attachedPolicies from 'src/lib/attachedPolicies';
 import { droppedEventCount, type EventDropStage } from 'src/lib/eventBus';
 import { sweepDueWebhookDeliveries } from 'src/lib/webhookDispatcher';
 
@@ -242,6 +243,45 @@ describe('Event delivery resilience', () => {
       down.mockRestore();
 
       expect(droppedEventCount({ stage: 'webhook_lookup' })).toBeGreaterThan(
+        before
+      );
+      expect(await deliveriesFor(fileId)).toHaveLength(0);
+    });
+  });
+
+  describe("POST /api/v1/files → the subscriber's policy read", () => {
+    test('a transient failure does not lose the delivery', async () => {
+      const before = droppedEventCount({ stage: 'policy_lookup' });
+      const blip = jest
+        .spyOn(attachedPolicies, 'resolveAttachedPolicySet')
+        .mockRejectedValueOnce(new Error('connection terminated'));
+
+      const fileId = await createFile();
+      await until(() => {
+        return blip.mock.calls.length > 0;
+      });
+      await settledDelivery(fileId);
+
+      expect(await deliveriesFor(fileId)).toHaveLength(1);
+      expect(droppedEventCount({ stage: 'policy_lookup' })).toBe(before);
+    });
+
+    test('a failure outliving the retries is counted and printed, never delivered', async () => {
+      const before = droppedEventCount({ stage: 'policy_lookup' });
+      const down = jest
+        .spyOn(attachedPolicies, 'resolveAttachedPolicySet')
+        .mockRejectedValue(new Error('database is down'));
+
+      const fileId = await createFile();
+      await until(() => {
+        return printedDrop({
+          stage: 'policy_lookup',
+          text: `files.created (${fileId})`,
+        });
+      });
+      down.mockRestore();
+
+      expect(droppedEventCount({ stage: 'policy_lookup' })).toBeGreaterThan(
         before
       );
       expect(await deliveriesFor(fileId)).toHaveLength(0);
