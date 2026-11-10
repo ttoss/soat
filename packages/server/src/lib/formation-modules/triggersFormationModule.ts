@@ -144,6 +144,7 @@ export const triggersFormationModule = defineFormationModule({
       eventPattern: toOptionalString(properties.event_pattern) ?? undefined,
       active: toOptionalBoolean(properties.active),
       isAllowed: actor.isAllowed,
+      writerPolicies: actor.getPolicies,
     });
   },
 
@@ -167,6 +168,7 @@ export const triggersFormationModule = defineFormationModule({
       eventPattern: toNullableString(properties.event_pattern),
       active: toOptionalBoolean(properties.active),
       isAllowed: actor.isAllowed,
+      writerPolicies: actor.getPolicies,
     });
   },
 

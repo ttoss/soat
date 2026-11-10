@@ -191,6 +191,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     eventPattern: body.event_pattern,
     active: body.active,
     isAllowed: ctx.authUser!.isAllowed,
+    writerPolicies: ctx.authUser!.getPolicies,
   });
 
   ctx.status = 201;
@@ -307,6 +308,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     active: body.active,
     policyId: body.policy_id === null ? null : policyId,
     isAllowed: ctx.authUser!.isAllowed,
+    writerPolicies: ctx.authUser!.getPolicies,
   });
 
   ctx.body = updated;

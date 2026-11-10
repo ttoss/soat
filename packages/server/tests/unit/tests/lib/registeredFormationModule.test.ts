@@ -44,6 +44,9 @@ beforeAll(async () => {
     isAllowed: async () => {
       return true;
     },
+    getPolicies: async () => {
+      return [];
+    },
     keyPolicyBoundary: undefined,
     scopedToken: false,
     recordRefusal: () => {},

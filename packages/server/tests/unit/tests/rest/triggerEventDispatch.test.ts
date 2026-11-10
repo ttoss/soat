@@ -67,9 +67,10 @@ describe('Event trigger dispatch', () => {
     targetId: string;
     eventPattern: string;
     policyId?: string;
+    token?: string;
   }): Promise<string> => {
     seq += 1;
-    const res = await asUser()
+    const res = await authenticatedTestClient(args.token ?? userToken)
       .post('/api/v1/triggers')
       .send({
         project_id: projectId,
@@ -278,10 +279,13 @@ describe('Event trigger dispatch', () => {
         eventPattern: emitter.eventName,
         policyId: await createPolicy('Deny'),
       });
+      // A custom event type is matched only by `*`, a grant only an admin
+      // holds and so only an admin attaches.
       const allowed = await createEventTrigger({
         targetId: inertOrchestrationId,
         eventPattern: emitter.eventName,
         policyId: await createPolicy('Allow'),
+        token: adminToken,
       });
 
       await emitter.emit();

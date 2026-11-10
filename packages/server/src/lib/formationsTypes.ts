@@ -1,5 +1,6 @@
 import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import type { PolicySets } from './iam';
 import type { RequestPrincipal, StartingPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
@@ -107,6 +108,8 @@ export type FormationActor = {
   author: RequestPrincipal;
   principal: StartingPrincipal | null;
   isAllowed: IsAllowedFn;
+  /** The deploying credential's policy sets in a project. */
+  getPolicies: (projectPublicId: string) => Promise<PolicySets>;
   /**
    * The deploying key's `policy_ids` (`undefined` when it carries none), so an
    * `api_key` resource cannot be minted wider than the credential deploying it.
