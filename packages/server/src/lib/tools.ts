@@ -382,7 +382,7 @@ export const callTool = async (args: {
   attribution: ToolCallAttribution;
   /** See {@link SignedOffCall}. */
   signedOff?: SignedOffCall;
-  /** The calling agent's `boundary_policy`, held over every `builtin` action. */
+  /** The calling agent's `policy_ids`, held over every `builtin` action. */
   boundaryPolicy?: unknown;
 }): Promise<unknown> => {
   const referenced = await toolReferences.find({

@@ -1120,10 +1120,15 @@ components:
             numbered from the first step of the **turn**, and that numbering
             spans a `requires_action` pause — a rule fires once per turn, not
             once per resumption.
-        boundary_policy:
-          type: object
+        policy_ids:
+          x-soat-ref: policies
+          type: array
           nullable: true
-          description: Allowed/denied SOAT actions
+          items:
+            type: string
+          description: >-
+            Policies capping every generation: it runs as the caller's
+            permissions intersected with these. Null is no cap.
         temperature:
           type: number
           nullable: true
@@ -1349,7 +1354,7 @@ components:
             The agent's configuration as it stood at this version: every mutable
             field of the `Agent` schema (`instructions`, `model`,
             `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`,
-            `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`,
+            `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`,
             `knowledge_config`, `output_schema`, `max_context_messages`,
             `max_output_tokens`, `reasoning`,
             `single_session_per_actor`, `on_approval_expiry`,
@@ -1594,8 +1599,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgentStepRule'
-        boundary_policy:
-          $ref: '#/components/schemas/AgentBoundaryPolicy'
+        policy_ids:
+          x-soat-ref: policies
+          type: array
+          items:
+            type: string
+          description: >-
+            Policies capping every generation: it runs as the caller's
+            permissions intersected with these. The caller must hold every
+            grant they carry inside the agent's project, else `403
+            POLICY_GRANT_NOT_HELD`. See
+            [Execution Identity](/docs/modules/agents#execution-identity).
         temperature:
           description: >-
             Sampling temperature passed to the model. Omitted, the provider's
@@ -1860,8 +1874,17 @@ components:
           nullable: true
           items:
             $ref: '#/components/schemas/AgentStepRule'
-        boundary_policy:
-          $ref: '#/components/schemas/AgentBoundaryPolicy'
+        policy_ids:
+          x-soat-ref: policies
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Replaces the policies capping every generation; `null` removes the
+            cap. The caller must hold every grant of each policy it adds inside
+            the agent's project, else `403 POLICY_GRANT_NOT_HELD`. See
+            [Execution Identity](/docs/modules/agents#execution-identity).
         temperature:
           description: >-
             Sampling temperature passed to the model; `null` restores the
@@ -2447,56 +2470,3 @@ components:
           items:
             type: string
           description: Tool IDs active on this step.
-    AgentBoundaryPolicy:
-      type: object
-      nullable: true
-      additionalProperties: false
-      required:
-        - statement
-      description: >-
-        Restricts which SOAT actions the agent may invoke. Evaluated as the
-        intersection with the caller's own policy, so it can only narrow.
-      properties:
-        statement:
-          type: array
-          items:
-            $ref: '#/components/schemas/AgentBoundaryPolicyStatement'
-          description: IAM policy statements, in the policy document grammar.
-    AgentBoundaryPolicyStatement:
-      type: object
-      additionalProperties: false
-      required:
-        - effect
-        - action
-      properties:
-        effect:
-          type: string
-          enum:
-            - Allow
-            - Deny
-          example: Allow
-        action:
-          type: array
-          items:
-            type: string
-          example:
-            - memories:*
-            - agents:DeleteAgent
-        resource:
-          type: array
-          nullable: true
-          items:
-            type: string
-          description: Resource SRN patterns. Omit to match every resource.
-          example:
-            - srn:proj_abc:memories:*
-        condition:
-          type: object
-          nullable: true
-          additionalProperties: true
-          description: >-
-            Condition block, in the same grammar a policy document uses: keys
-            are condition operators mapping to context-key/value maps.
-          example:
-            StringEquals:
-              soat:ResourceTag/env: prod

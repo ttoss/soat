@@ -410,12 +410,14 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
 
     // Evaluated against the action's IAM permission, not the tool's action
     // name, which no `module:Operation` pattern can match.
-    test("the agent's boundary_policy denies an action it does not allow", async () => {
+    test("the agent's policy_ids denies an action it does not allow", async () => {
       const tool = await builtinTool({ actions: ['list-files'] });
       const agentId = await bindAgent([tool.id], {
-        boundary_policy: {
-          statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
-        },
+        policy_ids: [
+          await turn.createPolicy({
+            statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
+          }),
+        ],
       });
 
       const { results } = await turn.generate({
@@ -428,14 +430,16 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
       ]);
     });
 
-    test("the agent's boundary_policy lets an allowed action run", async () => {
+    test("the agent's policy_ids lets an allowed action run", async () => {
       const tool = await builtinTool({ actions: ['list-files'] });
       const agentId = await bindAgent([tool.id], {
-        boundary_policy: {
-          statement: [
-            { effect: 'Allow', action: ['files:GetFile'], resource: ['*'] },
-          ],
-        },
+        policy_ids: [
+          await turn.createPolicy({
+            statement: [
+              { effect: 'Allow', action: ['files:GetFile'], resource: ['*'] },
+            ],
+          }),
+        ],
       });
 
       const { results } = await turn.generate({

@@ -197,7 +197,7 @@ type CallResolvedToolArgs = {
   attribution: ToolCallAttribution;
   signedOff?: SignedOffCall;
   /**
-   * The `boundary_policy` of the agent whose call this is. Every `builtin`
+   * The `policy_ids` of the agent whose call this is. Every `builtin`
    * action the call reaches is held to it, a pipeline's steps included.
    */
   boundaryPolicy?: unknown;

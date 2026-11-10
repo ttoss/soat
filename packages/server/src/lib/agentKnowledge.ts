@@ -6,7 +6,7 @@ import type { TypedAgent } from './agentGenerationTypes';
 import type { BindingTools } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import type { EmbeddingBilling } from './embedding';
-import { buildSrn } from './iam';
+import { buildSrn, type PolicyDocument } from './iam';
 import { searchKnowledge } from './knowledge';
 import {
   type KnowledgeRetrieval,
@@ -352,7 +352,7 @@ export const buildKnowledgeMessages = async (args: {
 /**
  * The `write_memory` tool resolves a fact against the store — it may create a
  * new memory, supersede an existing one, or skip a duplicate. It is a
- * SOAT-native action, so the agent's `boundary_policy` must gate it the same
+ * SOAT-native action, so the agent's `policy_ids` must gate it the same
  * way `buildSoatActionTool` gates REST-backed native tools. Because a
  * supersede retires an existing memory, the boundary must allow **both**
  * memory-write actions; a deny on either (including a wildcard
@@ -477,6 +477,7 @@ export const buildKnowledgeBindings = (args: {
   generationId: string;
   projectIds?: number[];
   typedAgent: TypedAgent;
+  boundaryPolicy: PolicyDocument | null;
 }): BindingTools[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
   if (!knowledgeConfig?.writeMemoryStoreId) return [];
@@ -489,7 +490,7 @@ export const buildKnowledgeBindings = (args: {
           agentId: args.agentId,
           generationId: args.generationId,
           projectIds: args.projectIds,
-          boundaryPolicy: args.typedAgent.boundaryPolicy,
+          boundaryPolicy: args.boundaryPolicy,
         }),
       },
     },

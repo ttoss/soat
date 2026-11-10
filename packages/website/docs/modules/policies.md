@@ -1,5 +1,5 @@
 ---
-description: "Global, reusable IAM policy documents attached to users and API keys, defining fine-grained rules evaluated at request time."
+description: 'Global, reusable IAM policy documents attached to users and API keys, defining fine-grained rules evaluated at request time.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -11,7 +11,7 @@ Global, reusable IAM policy documents attached to users and API keys; managed by
 
 ## Overview
 
-A Policy is a named [policy document](./iam.md#policy-documents) stored globally, attached to **users** and **API keys**. Filter the listing by user to see a user's policies. Ids are prefixed `pol_`. A policy a trigger names as its `policy_id` cannot be deleted (`409 POLICY_HAS_DEPENDENTS`); detach it from the trigger first. Editing a policy a trigger carries needs an editor who holds its new grants in that trigger's project (`403 POLICY_GRANT_NOT_HELD`, see [Run-as Identity](./triggers.md#run-as-identity)).
+A Policy is a named [policy document](./iam.md#policy-documents) stored globally, attached to **users** and **API keys**. Filter the listing by user to see a user's policies. Ids are prefixed `pol_`. A policy a trigger names as its `policy_id`, or an agent in its [`policy_ids`](./agents.md#execution-identity), cannot be deleted (`409 POLICY_HAS_DEPENDENTS`); detach it first. Editing a policy a trigger or an agent carries needs an editor who holds its new grants in that resource's project (`403 POLICY_GRANT_NOT_HELD`, see [Run-as Identity](./triggers.md#run-as-identity)). A condition value may name [`${soat:ActorId}`](./iam.md#policy-variables).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

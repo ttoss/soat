@@ -816,41 +816,16 @@ components:
                 items:
                   type: string
                 description: Tool IDs active on this step
-        boundary_policy:
-          type: object
+        policy_ids:
+          x-soat-ref: policies
+          type: array
           nullable: true
-          description: Restricts which SOAT actions the agent may invoke. Evaluated as the intersection with the caller's own policy.
-          additionalProperties: false
-          properties:
-            statement:
-              type: array
-              description: List of IAM policy statements
-              items:
-                type: object
-                additionalProperties: false
-                properties:
-                  effect:
-                    type: string
-                    description: 'Effect — `Allow` or `Deny`'
-                  action:
-                    type: array
-                    items:
-                      type: string
-                    description: IAM action strings, e.g. `memories:*` or `agents:DeleteAgent`
-                  resource:
-                    type: array
-                    nullable: true
-                    items:
-                      type: string
-                    description: Resource SRN patterns (optional; omit to match all resources)
-                  condition:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                    description: >-
-                      Condition block, in the same grammar a policy document
-                      uses: keys are condition operators mapping to
-                      context-key/value maps.
+          items:
+            type: string
+          description: >-
+            Policies capping every generation. The deployer must hold every
+            grant they carry inside the agent's project, else `403
+            POLICY_GRANT_NOT_HELD`.
         temperature:
           type: number
           nullable: true

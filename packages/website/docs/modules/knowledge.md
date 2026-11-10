@@ -256,7 +256,7 @@ Retrieved knowledge is partly **user-derived** (a memory a [memory rule](./memor
 - **Never injected with the `system` role.** [Agent knowledge injection](./agents.md#knowledge-config) delivers results as a `user` message inside a fenced `<knowledge>` block with a preamble framing it as reference material; the agent's `instructions` remain the only system input. Otherwise a phrase a user said once could become a persistent system-level instruction.
 - **Extraction runs tool-less**: a plain completion with no tools and no injection, so quoted text cannot trigger a side effect while becoming memories.
 
-This does not make retrieved content safe to act on: a tool call made after reading it is still authorized only by the agent's [boundary policy](./agents.md) and [guardrails](./guardrails.md). Scope the boundary policy assuming anything in reachable memory stores and documents may influence the agent.
+This does not make retrieved content safe to act on: a tool call made after reading it is still authorized only by the agent's [`policy_ids`](./agents.md#execution-identity) and [guardrails](./guardrails.md). Scope those policies assuming anything in reachable memory stores and documents may influence the agent.
 
 ### Project Scoping
 

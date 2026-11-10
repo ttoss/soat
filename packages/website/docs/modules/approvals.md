@@ -135,7 +135,7 @@ a `{{context:<key>}}` token the proposal could not resolve fails the action
 with `MISSING_TOOL_CONTEXT_KEY`.
 
 An approved `builtin` action is held to the proposing agent's
-[`boundary_policy`](./agents.md#soat-action-permissions) as it stands at
+[`policy_ids`](./agents.md#execution-identity) as they stand at
 decision time, against the same resource SRN and tags as the agent's own calls.
 A denied action does not run; its result is
 `{"error": "Forbidden: boundary policy denies <action>"}`. An agent that no

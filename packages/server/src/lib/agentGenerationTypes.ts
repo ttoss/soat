@@ -40,7 +40,8 @@ export type TypedAgent = {
   stopConditions: unknown;
   activeToolIds: unknown;
   stepRules: unknown;
-  boundaryPolicy: unknown;
+  /** Resolved per turn by `resolveAgentBoundary`, never read raw. */
+  policyIds: unknown;
   temperature: unknown;
   maxOutputTokens: unknown;
   reasoning: unknown;
@@ -152,7 +153,7 @@ export const fromAgentConfig = (pending: PendingGeneration): TypedAgent => {
     stopConditions: pending.agentConfig.stopConditions,
     activeToolIds: pending.agentConfig.activeToolIds,
     stepRules: pending.agentConfig.stepRules,
-    boundaryPolicy: null,
+    policyIds: null,
     temperature: pending.agentConfig.temperature,
     maxOutputTokens: pending.agentConfig.maxOutputTokens ?? null,
     reasoning: pending.agentConfig.reasoning ?? null,

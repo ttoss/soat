@@ -63,7 +63,15 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       tool_bindings: args.toolIds.map((toolId) => {
         return { tool_id: toolId };
       }),
-      ...(args.boundaryPolicy ? { boundary_policy: args.boundaryPolicy } : {}),
+      ...(args.boundaryPolicy
+        ? {
+            policy_ids: [
+              await create('/api/v1/policies', {
+                document: args.boundaryPolicy,
+              }),
+            ],
+          }
+        : {}),
     });
   };
 

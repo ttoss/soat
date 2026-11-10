@@ -104,8 +104,9 @@ export class Agent extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare stepRules: object[] | null;
 
-  @Column({ type: DataType.JSON, allowNull: true })
-  declare boundaryPolicy: object | null;
+  // Public ids of the policies capping every generation; queried by policy.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare policyIds: string[] | null;
 
   @Column({ type: DataType.FLOAT, allowNull: true })
   declare temperature: number | null;

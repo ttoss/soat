@@ -301,18 +301,6 @@ describe('POST /api/v1/formations/validate — module rules', () => {
       message: /inline `tool` bindings are not supported/i,
     },
     {
-      name: 'an agent boundary_policy names real actions',
-      template: () => {
-        return one('agent', {
-          ai_provider_id: aiProviderId,
-          boundary_policy: {
-            statement: [{ effect: 'Deny', action: ['bogus:NotARealAction'] }],
-          },
-        });
-      },
-      message: /"bogus:NotARealAction" is not a known action/,
-    },
-    {
       name: 'an agent binds a provider or a route, not both',
       template: () => {
         return one('agent', {

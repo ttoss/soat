@@ -52,7 +52,7 @@ An **agent** is a named, reusable assistant in a project: an AI provider referen
 - **`client`** — pause for client-side execution and resume with the result
 - **`builtin`** — call SOAT platform actions, including invoking other agents
 
-Tools are shared across agents. The reasoning loop is controlled by `tool_choice`, `step_rules`, `active_tool_ids`, `boundary_policy`, and `max_steps`. Generations are **asynchronous by default**: start one, poll for status, or receive a webhook on completion.
+Tools are shared across agents. The reasoning loop is controlled by `tool_choice`, `step_rules`, `active_tool_ids`, `policy_ids`, and `max_steps`. Generations are **asynchronous by default**: start one, poll for status, or receive a webhook on completion.
 
 ## Agent Formations
 

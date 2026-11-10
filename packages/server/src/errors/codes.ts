@@ -228,7 +228,7 @@ export const ERROR_CODES = {
   POLICY_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The policy is the `policy_id` boundary of one or more triggers and cannot be deleted. `meta.triggers` counts them and `meta.sample` lists up to five trigger IDs.',
+      'The policy is the `policy_id` of one or more triggers or in the `policy_ids` of one or more agents, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.agents` and `meta.agent_sample` do the same for agents.',
   },
   PROJECT_PAUSED: {
     httpStatus: 409,
@@ -271,7 +271,7 @@ export const ERROR_CODES = {
   POLICY_GRANT_NOT_HELD: {
     httpStatus: 403,
     description:
-      "The request attaches a policy to a trigger, or edits a policy a trigger carries, and the policy grants a permission the caller does not hold in that trigger's project. A resource acting under a policy may do no more than whoever attached it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
+      "The request attaches a policy to a trigger or an agent, or edits a policy one carries, and the policy grants a permission the caller does not hold in that resource's project. A resource acting under a policy may do no more than whoever attached it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
   },
   API_KEY_SCOPED_TOKEN: {
     httpStatus: 403,

@@ -256,8 +256,8 @@ const assertCovered = async (args: {
 };
 
 /**
- * Attaching policies to a resource that acts under them (a trigger) needs a
- * writer who holds every grant they carry inside that resource's project.
+ * Attaching policies to a resource that acts under them (a trigger, an agent)
+ * needs a writer who holds every grant they carry inside its project.
  */
 export const assertWriterHoldsPolicies = async (args: {
   getPolicies: GetWriterPolicies;
@@ -287,6 +287,29 @@ export const assertWriterHoldsPolicies = async (args: {
 };
 
 /**
+ * The projects of every agent whose live config or any archived version
+ * names the policy: a version is served again by a release or a restore.
+ */
+const projectsOfAgentsCarrying = async (
+  policyPublicId: string
+): Promise<string[]> => {
+  const [rows] = await db.sequelize.query(
+    `SELECT DISTINCT p.public_id
+       FROM agents a
+       JOIN projects p ON p.id = a.project_id
+      WHERE a.policy_ids @> :ids::jsonb
+         OR EXISTS (
+              SELECT 1 FROM agent_versions v
+               WHERE v.agent_id = a.id
+                 AND (v.config::jsonb -> 'policy_ids') @> :ids::jsonb)`,
+    { replacements: { ids: JSON.stringify([policyPublicId]) } }
+  );
+  return (rows as { public_id: string }[]).map((row) => {
+    return row.public_id;
+  });
+};
+
+/**
  * Editing a policy already attached to a resource that acts under it is
  * attaching the new document again, in every project it is attached in.
  */
@@ -300,16 +323,20 @@ export const assertWriterHoldsAttachedEdit = async (args: {
     where: { publicId: args.policyPublicId },
   });
   if (!policy) return;
-  const triggers = await db.Trigger.findAll({
-    where: { policyId: policy.id },
-    attributes: ['projectId'],
-    include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
-  });
-  const projectPublicIds = new Set(
-    triggers.map((trigger) => {
+  const [triggers, agentProjects] = await Promise.all([
+    db.Trigger.findAll({
+      where: { policyId: policy.id },
+      attributes: ['projectId'],
+      include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
+    }),
+    projectsOfAgentsCarrying(args.policyPublicId),
+  ]);
+  const projectPublicIds = new Set([
+    ...triggers.map((trigger) => {
       return trigger.project?.publicId as string;
-    })
-  );
+    }),
+    ...agentProjects,
+  ]);
   for (const projectPublicId of projectPublicIds) {
     await assertCovered({
       getPolicies: args.getPolicies,

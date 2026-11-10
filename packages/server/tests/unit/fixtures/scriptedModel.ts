@@ -77,7 +77,11 @@ const completion = (body: ChatRequest) => {
   const lastUser = messages.reduce((found, message, index) => {
     return message.role === 'user' ? index : found;
   }, -1);
-  const script = parseJson(messages[lastUser]?.content) as {
+  // An actor's session message reaches the model behind a `[name]: ` label.
+  const content = messages[lastUser]?.content;
+  const script = parseJson(
+    typeof content === 'string' ? content.replace(/^\[[^\]]*\]: /, '') : content
+  ) as {
     calls?: ScriptedCall[];
   };
   const results = messages.slice(lastUser + 1).filter((message) => {

@@ -11,6 +11,7 @@ import {
   type TypedAgent,
 } from './agentGenerationTypes';
 import { resolveAgentModel } from './agentModelResolution';
+import { resolveAgentBoundary } from './agentPolicies';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
 import {
@@ -18,6 +19,7 @@ import {
   notAwaitingToolOutputs,
 } from './generationPendingState';
 import { generations, updateGenerationRecord } from './generations';
+import type { PolicyDocument } from './iam';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
 
@@ -209,6 +211,7 @@ const buildPendingFromState = async (args: {
   projectIds?: number[];
   authHeader?: string;
   typedAgent: TypedAgent;
+  boundaryPolicy: PolicyDocument | null;
   traceId: string;
   pendingState: PendingStateDb;
 }): Promise<PendingGeneration | undefined> => {
@@ -223,6 +226,7 @@ const buildPendingFromState = async (args: {
     generationId: args.generationId,
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
+    boundaryPolicy: args.boundaryPolicy,
     authHeader: args.authHeader,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
@@ -302,6 +306,10 @@ export const recoverPendingFromDb = async (args: {
     projectIds: args.projectIds,
     authHeader: args.authHeader,
     typedAgent,
+    boundaryPolicy: await resolveAgentBoundary({
+      policyIds: typedAgent.policyIds,
+      actorId: pendingState.toolContext?.actor_id,
+    }),
     traceId: gen.trace.publicId,
     pendingState,
   });

@@ -1,4 +1,8 @@
 import { listAllActions, listModuleNames } from './permissionCatalog';
+import {
+  hasUnboundPolicyVariable,
+  unknownPolicyVariables,
+} from './policyVariables';
 
 export type Effect = 'Allow' | 'Deny';
 
@@ -141,6 +145,13 @@ const validateConditionBlock = (args: {
         `${args.prefix}.condition.${args.op}: key "${key}" is not a condition key — must be ${[
           ...CONDITION_KEYS,
         ].join(', ')} or ${RESOURCE_TAG_CONDITION_PREFIX}<tag>`
+      );
+    }
+    const value = args.block[key];
+    if (typeof value !== 'string') continue;
+    for (const variable of unknownPolicyVariables(value)) {
+      args.errors.push(
+        `${args.prefix}.condition.${args.op}: "${variable}" is not a policy variable — must be \${soat:ActorId}`
       );
     }
   }
@@ -340,6 +351,9 @@ export const evaluateCondition = (args: {
     if (!block) continue;
 
     for (const [key, expected] of Object.entries(block)) {
+      // A variable nothing bound has no value to compare, so the condition
+      // fails under every operator, `StringNotEquals` included.
+      if (hasUnboundPolicyVariable(expected)) return false;
       const actual = context[key];
       if (!evaluateConditionForKey(op, actual, expected)) {
         return false;

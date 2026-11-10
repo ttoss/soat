@@ -4,6 +4,7 @@ import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
+import { resolveAgentBoundary } from './agentPolicies';
 import {
   type ApprovalResumeHandler,
   type DecisionOutput,
@@ -11,6 +12,7 @@ import {
   registerApprovalResumeHandler,
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
+import type { PolicyDocument } from './iam';
 import { buildRunAuthHeader } from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
@@ -54,18 +56,33 @@ const resolveContinuationAuthHeader = async (args: {
 };
 
 /** Refuses every action: what an agent that no longer resolves is bounded by. */
-const DENY_ALL_BOUNDARY = {
+const DENY_ALL_BOUNDARY: PolicyDocument = {
   statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
 };
 
+/** The end user the proposing generation ran for, bound into its policies. */
+const proposingActorId = async (
+  generationId: string | null | undefined
+): Promise<string | null> => {
+  if (!generationId) return null;
+  const proposing = await db.Generation.findOne({
+    where: { publicId: generationId },
+    attributes: ['startedByActorId'],
+    include: [
+      { model: db.Actor, as: 'startedByActor', attributes: ['publicId'] },
+    ],
+  });
+  return proposing?.startedByActor?.publicId ?? null;
+};
+
 /**
- * The proposing agent's `boundary_policy` as it stands now, the same config
- * the agent's own calls are held to.
+ * The proposing agent's `policy_ids` as they stand now, the same cap the
+ * agent's own calls are held to.
  */
 const proposingAgentBoundary = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-}): Promise<unknown> => {
+}): Promise<PolicyDocument | null> => {
   const agent = args.item.agent_id
     ? await agentReferences.find({
         id: args.item.agent_id,
@@ -73,7 +90,11 @@ const proposingAgentBoundary = async (args: {
         reach: 'project',
       })
     : null;
-  return agent ? agent.boundaryPolicy : DENY_ALL_BOUNDARY;
+  if (!agent) return DENY_ALL_BOUNDARY;
+  return resolveAgentBoundary({
+    policyIds: agent.policyIds,
+    actorId: await proposingActorId(args.item.generation_id),
+  });
 };
 
 /**

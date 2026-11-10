@@ -68,20 +68,12 @@ describe('definition key order', () => {
           project_id: projectId,
           ai_provider_id: aiProviderId,
           name: 'Key Order Agent',
-          boundary_policy: {
-            statement: [
-              {
-                resource: ['*'],
-                effect: 'Allow',
-                action: ['memories:ListMemories'],
-              },
-            ],
-          },
+          step_rules: [{ tool_choice: 'none', step: 1 }],
         };
       },
-      change: { method: 'put', body: { boundary_policy: null } },
+      change: { method: 'put', body: { step_rules: null } },
       read: (body) => {
-        return body.boundary_policy;
+        return body.step_rules;
       },
     },
     guardrails: {

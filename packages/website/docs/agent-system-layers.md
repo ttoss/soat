@@ -55,7 +55,7 @@ Ingestion path: [Files](/docs/modules/files) → [Documents](/docs/modules/docum
 Three independent scopes:
 
 - **[IAM](/docs/modules/iam) and [Policies](/docs/modules/policies)** — the caller's `resource:Action` permissions, enforced identically across REST, MCP, CLI, and SDK.
-- **`boundary_policy` on the agent** — a ceiling on which `builtin` actions the agent may perform; combined with the caller's permissions, an agent can never exceed them.
+- **`policy_ids` on the agent** — a ceiling on which `builtin` actions the agent may perform; a generation runs as the caller ∩ these, so an agent can never exceed either.
 - **[Secrets](/docs/modules/secrets)** — encrypted provider credentials referenced by [AI Providers](/docs/modules/ai-providers); no key travels in a request body or instructions.
 
 ### Making the harness reproducible
@@ -180,7 +180,7 @@ Promote by itself. The platform owns the *queue*, the *recurrence signal*, and t
 The pieces for a self-modifying loop exist: a [`builtin` tool](/docs/modules/tools#builtin) can expose `update-agent`, `update-guardrail`, `set-agent-release`, `start-eval-run`, `promote-agent-release`, so an agent with those actions and a permitting credential can propose changes to its own definitions, with [eval-gated promotion](/docs/modules/agents#eval-gated-promotion) as the deterministic brake. Two boundaries mark where platform enforcement ends:
 
 - **The promotion gate verifies evidence; it does not produce it.** `promote` fails closed (`409 PROMOTION_GATE_UNMET`) until a passing run pinned to the canary exists; running the eval is an explicit call outside the gate, only as trustworthy as its scorers and dataset.
-- **`boundary_policy` ceilings only `builtin` actions.** An agent reaching the platform through an `http` or `mcp` tool is outside that boundary; only a [guardrail](/docs/modules/guardrails) at tool, agent, or project scope reaches those calls.
+- **`policy_ids` ceiling only `builtin` actions.** An agent reaching the platform through an `http` or `mcp` tool is outside that boundary; only a [guardrail](/docs/modules/guardrails) at tool, agent, or project scope reaches those calls.
 
 Deciding what the system should optimize is not a layer SOAT automates.
 
@@ -221,7 +221,7 @@ Attribute a failure to a layer before changing anything, in this order: harness 
 | -------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | The agent **cannot operate** — wrong tool, stale answers, forgets the user | Harness        | [Tools](/docs/modules/tools) and `active_tool_ids`; `knowledge_config` and [Knowledge](/docs/modules/knowledge); [Sessions](/docs/modules/sessions) and [Memories](/docs/modules/memories) |
 | It **almost works but is unreliable** — right sometimes, unverifiable, or runs away | Loop           | `output_schema`, `max_steps`, [Guardrails](/docs/modules/guardrails), [Quotas](/docs/modules/quotas) — read the [Trace](/docs/modules/traces) first |
-| It **did something it should not have been able to do**  | Harness        | [Policies](/docs/modules/policies), the agent's `boundary_policy`, [Audit Log](/docs/modules/audit-log)                  |
+| It **did something it should not have been able to do**  | Harness        | [Policies](/docs/modules/policies), the agent's `policy_ids`, [Audit Log](/docs/modules/audit-log)                  |
 | **Each step is fine but the process is unmanageable** — no gate, no resume, no record of the path | Graph          | [Orchestrations](/docs/modules/orchestrations) or [Workflows](/docs/modules/workflows)                                     |
 | **It was fine last month** — a change made it worse, nobody can say which one, and the same correction keeps being applied by hand | Ratchet        | [Agent versions](/docs/modules/agents#versioning-and-staged-rollout) and the `agent_version` on the generation; [Evaluations](/docs/modules/evaluations); the [approvals recurrence view](/docs/modules/approvals#recurrence-view) |
 

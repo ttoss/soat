@@ -74,7 +74,15 @@ describe('Agent knowledge', () => {
       ...(args.knowledgeConfig === undefined
         ? {}
         : { knowledge_config: args.knowledgeConfig }),
-      ...(args.boundaryPolicy ? { boundary_policy: args.boundaryPolicy } : {}),
+      ...(args.boundaryPolicy
+        ? {
+            policy_ids: [
+              await create('/api/v1/policies', {
+                document: args.boundaryPolicy,
+              }),
+            ],
+          }
+        : {}),
       ...(args.toolBindings ? { tool_bindings: args.toolBindings } : {}),
     });
   };

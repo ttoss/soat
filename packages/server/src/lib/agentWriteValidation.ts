@@ -11,7 +11,6 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { collectStepRuleActiveToolIds } from './agentStepRules';
 import { assertGuardrailsExist } from './guardrails';
-import { validatePolicyActions } from './iam';
 import {
   assertModelBindingResolvable,
   resolveModelRouteDbId,
@@ -46,32 +45,6 @@ const assertTraceContentModeAllowed = async (args: {
   });
 
   if (message) throw new DomainError('VALIDATION_FAILED', message);
-};
-
-/**
- * Rejects a `boundary_policy` whose action strings do not name real,
- * enforceable permissions.
- *
- * The rule lives in `validatePolicyActions` (`iam.ts`) and is shared with the
- * formation module (`.claude/rules/modules.md` — Shared Business Rules), so
- * neither path can store a typo'd boundary unchecked. A boundary is where that
- * would fail open: a mis-named `Deny` matches nothing, leaving the agent
- * permitted.
- *
- * Structural validation stays with the boundary evaluator at generation time.
- */
-export const assertBoundaryPolicyActionsKnown = (
-  boundaryPolicy: unknown
-): void => {
-  if (boundaryPolicy === null || boundaryPolicy === undefined) return;
-  if (typeof boundaryPolicy !== 'object' || Array.isArray(boundaryPolicy)) {
-    return;
-  }
-
-  const { valid, errors } = validatePolicyActions(boundaryPolicy);
-  if (!valid) {
-    throw new DomainError('VALIDATION_FAILED', errors.join('; '));
-  }
 };
 
 export const assertAgentReferencesExist = async (args: {

@@ -226,7 +226,7 @@ When `auto_generate` is `true`, `POST .../messages` saves the user message **and
 
 The explicit `POST .../generate` endpoint works regardless of this setting.
 
-Whichever request runs the turn — `.../messages` (auto-generated or debounced), `.../generate` or `.../tool-outputs` — its `builtin` calls run as that request's caller, held to the agent's [`boundary_policy`](./agents.md#soat-action-permissions).
+Whichever request runs the turn — `.../messages` (auto-generated or debounced), `.../generate` or `.../tool-outputs` — its `builtin` calls run as that request's caller, capped by the agent's [`policy_ids`](./agents.md#execution-identity).
 
 ### Message Delay (Debounce)
 

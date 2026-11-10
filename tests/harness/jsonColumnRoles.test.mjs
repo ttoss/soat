@@ -19,7 +19,6 @@ const ROLES = {
     'ActivityEntry.detail',
     'Agent.activeRelease',
     'Agent.activeToolIds',
-    'Agent.boundaryPolicy',
     'Agent.guardrailIds',
     'Agent.knowledgeConfig',
     'Agent.outputSchema',
@@ -166,6 +165,7 @@ const ROLES = {
   ],
   query: [
     'Actor.tags',
+    'Agent.policyIds',
     'CollectionItem.data',
     'CollectionItem.tags',
     'Conversation.tags',

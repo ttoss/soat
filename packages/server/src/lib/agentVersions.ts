@@ -137,7 +137,7 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     stopConditions: configArray<object>(config.stop_conditions),
     activeToolIds: configArray<string>(config.active_tool_ids),
     stepRules: configArray<object>(config.step_rules),
-    boundaryPolicy: configObject(config.boundary_policy),
+    policyIds: configArray<string>(config.policy_ids),
     temperature: configNumber(config.temperature),
     maxOutputTokens: configNumber(config.max_output_tokens),
     reasoning: configObject(config.reasoning),
@@ -170,6 +170,7 @@ const agentVersionArchive = makeVersionArchive({
       versionLabel: args.label,
       createdBy: args.createdBy,
       secretUse: 'archived',
+      policyUse: 'archived',
     });
   },
 });

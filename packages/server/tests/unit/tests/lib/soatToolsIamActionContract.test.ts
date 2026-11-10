@@ -5,7 +5,7 @@ import { soatTools } from 'src/lib/soatTools';
  * Every `soat` tool action must resolve to an IAM action a policy author is
  * allowed to write.
  *
- * `boundary_policy` is evaluated at runtime against `def.iamAction ?? def.name`
+ * an agent's `policy_ids` are evaluated at runtime against `def.iamAction ?? def.name`
  * (`buildSoatActionTool` in `agentToolResolverExternalTools`), while
  * `validatePolicyActions` rejects any action that is not a real
  * `module:Operation` from the permission catalog. When those two disagree the

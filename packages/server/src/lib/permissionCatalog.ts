@@ -142,7 +142,7 @@ let operationActions: Map<string, string> | null = null;
  * The IAM action an operation is enforced with, keyed by its OpenAPI
  * `operationId` — the same mapping the route handlers pass to `isAllowed`.
  *
- * This is what lets the `soat` tool surface evaluate `boundary_policy` against
+ * This is what lets the `soat` tool surface evaluate `policy_ids` against
  * the action an author can actually write (`documents:UpdateDocument`) rather
  * than the tool's own kebab-case name (`update-document`), which
  * `validatePolicyActions` rejects, so a `Deny` boundary would match nothing.

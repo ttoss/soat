@@ -1,6 +1,6 @@
 /**
  * The resource half of a builtin tool's boundary check: what SRN and condition
- * inputs `boundary_policy` is evaluated against for one call.
+ * inputs `policy_ids` is evaluated against for one call.
  *
  * Kept out of `agentToolResolverExternalTools.ts` because it is the only part
  * of that path that reads the database, and because it is the part a reviewer

@@ -5,7 +5,7 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * Agents authorize per agent, not per project: a policy naming one agent's SRN
  * reaches that agent and refuses its siblings, on every route that acts on one.
  *
- * This is what lets an agent `boundary_policy` be scoped to an agent too — the
+ * This is what lets an agent's `policy_ids` be scoped to an agent too — the
  * boundary and the caller policy have to answer the same question about the
  * same call, so the route's own check is the granularity the boundary may
  * promise.

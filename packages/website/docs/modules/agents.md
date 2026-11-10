@@ -28,37 +28,37 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 
 ### Agent
 
-| Field                      | Type           | Description                                                                                                                                                                    |
-| -------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`                       | string         | Unique identifier (`agent_` prefix)                                                                                                                                            |
-| `project_id`               | string         | Project the agent belongs to                                                                                                                                                   |
-| `ai_provider_id`           | string         | AI provider used for the model. `null` when the agent routes through `model_route_id`                                                                                          |
-| `model_route_id`           | string         | [Model route](./model-routes.md) resolving the model with ordered failover. `null` when a provider is pinned. Mutually exclusive with `ai_provider_id` and `model`             |
-| `name`                     | string         | Display name                                                                                                                                                                   |
-| `instructions`             | string         | System instructions guiding agent behavior                                                                                                                                     |
-| `model`                    | string         | Model identifier (falls back to AI provider default)                                                                                                                           |
-| `tool_bindings`            | array          | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                                                                |
-| `max_steps`                | number         | Maximum reasoning steps before stopping (default: `20`)                                                                                                                        |
-| `tool_choice`              | string/object  | How the model selects tools — see [Tool Choice](#tool-choice)                                                                                                                  |
-| `stop_conditions`          | array          | Turn- and chain-scoped stop conditions — see [Stop Conditions](#stop-conditions)                                                                                               |
-| `active_tool_ids`          | array          | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                                                                            |
-| `guardrail_ids`            | array          | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment)                                  |
-| `step_rules`               | array          | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                                                                     |
-| `boundary_policy`          | object         | Boundary policy that limits which `builtin` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions)                                            |
-| `temperature`              | number         | Sampling temperature                                                                                                                                                           |
-| `max_output_tokens`        | integer/null   | Most tokens the model may generate per step; `null` (default) leaves the model's own limit — see [Output and Reasoning Limits](#output-and-reasoning-limits)                   |
-| `reasoning`                | object/null    | `{ "effort": "none" \| "low" \| "medium" \| "high" }`; `null` (default) leaves the model's own behavior — see [Output and Reasoning Limits](#output-and-reasoning-limits)      |
-| `knowledge_config`         | object         | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                                                                        |
-| `output_schema`            | object         | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)                                                         |
-| `prompt_caching`           | object/null    | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)                                                     |
-| `max_context_messages`     | number         | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)                                                   |
-| `single_session_per_actor` | boolean        | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)                                                       |
-| `trace_content_mode`       | string \| null | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written             |
-| `on_approval_expiry`       | string \| null | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
-| `version`                  | number         | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                                                                  |
-| `active_release`           | object/null    | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                                                              |
-| `created_at`               | string         | ISO 8601 creation timestamp                                                                                                                                                    |
-| `updated_at`               | string         | ISO 8601 last-updated timestamp                                                                                                                                                |
+| Field                      | Type             | Description                                                                                                                                                                    |
+| -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                       | string           | Unique identifier (`agent_` prefix)                                                                                                                                            |
+| `project_id`               | string           | Project the agent belongs to                                                                                                                                                   |
+| `ai_provider_id`           | string           | AI provider used for the model. `null` when the agent routes through `model_route_id`                                                                                          |
+| `model_route_id`           | string           | [Model route](./model-routes.md) resolving the model with ordered failover. `null` when a provider is pinned. Mutually exclusive with `ai_provider_id` and `model`             |
+| `name`                     | string           | Display name                                                                                                                                                                   |
+| `instructions`             | string           | System instructions guiding agent behavior                                                                                                                                     |
+| `model`                    | string           | Model identifier (falls back to AI provider default)                                                                                                                           |
+| `tool_bindings`            | array            | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                                                                |
+| `max_steps`                | number           | Maximum reasoning steps before stopping (default: `20`)                                                                                                                        |
+| `tool_choice`              | string/object    | How the model selects tools — see [Tool Choice](#tool-choice)                                                                                                                  |
+| `stop_conditions`          | array            | Turn- and chain-scoped stop conditions — see [Stop Conditions](#stop-conditions)                                                                                               |
+| `active_tool_ids`          | array            | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                                                                            |
+| `guardrail_ids`            | array            | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment)                                  |
+| `step_rules`               | array            | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                                                                     |
+| `policy_ids`               | string[] \| null | Policies capping every generation: it runs as the caller ∩ these — see [Execution Identity](#execution-identity)                                                               |
+| `temperature`              | number           | Sampling temperature                                                                                                                                                           |
+| `max_output_tokens`        | integer/null     | Most tokens the model may generate per step; `null` (default) leaves the model's own limit — see [Output and Reasoning Limits](#output-and-reasoning-limits)                   |
+| `reasoning`                | object/null      | `{ "effort": "none" \| "low" \| "medium" \| "high" }`; `null` (default) leaves the model's own behavior — see [Output and Reasoning Limits](#output-and-reasoning-limits)      |
+| `knowledge_config`         | object           | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                                                                        |
+| `output_schema`            | object           | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)                                                         |
+| `prompt_caching`           | object/null      | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)                                                     |
+| `max_context_messages`     | number           | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)                                                   |
+| `single_session_per_actor` | boolean          | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)                                                       |
+| `trace_content_mode`       | string \| null   | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written             |
+| `on_approval_expiry`       | string \| null   | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
+| `version`                  | number           | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                                                                  |
+| `active_release`           | object/null      | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                                                              |
+| `created_at`               | string           | ISO 8601 creation timestamp                                                                                                                                                    |
+| `updated_at`               | string           | ISO 8601 last-updated timestamp                                                                                                                                                |
 
 `version_label` (create/update body only) tags the version the write creates — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
 
@@ -249,7 +249,7 @@ Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choic
 | `tool_choice`     | string/object | no       | Override tool choice for this step  |
 | `active_tool_ids` | array         | no       | Override active tools for this step |
 
-A rule takes these three fields and nothing else. The same holds for every nested object on an agent — a `stop_conditions` entry, a `boundary_policy` statement, `knowledge_config`, `prompt_caching`: a key the field list does not name is `400 VALIDATION_FAILED`, reported by its path (`step_rules.0.active_tools`).
+A rule takes these three fields and nothing else. The same holds for every nested object on an agent — a `stop_conditions` entry, a `step_rules` entry, `knowledge_config`, `prompt_caching`: a key the field list does not name is `400 VALIDATION_FAILED`, reported by its path (`step_rules.0.active_tools`).
 
 Example — force `search` on step 1, then `analyze` on step 2:
 
@@ -626,53 +626,51 @@ Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a rea
 
 Listing agents stays project-scoped: [`GET /api/v1/agents`](/docs/api/agents/list-agents) asks whether the caller may list agents in a project at all, so a policy that names individual agents grants no listing.
 
-### SOAT Action Permissions
+### Execution Identity
 
-A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply. An [approved](./approvals.md#continuation-identity) `builtin` action is held to the boundary too, and so is every `builtin` step of a [pipeline tool](./tools.md#pipeline) the agent calls, nested pipelines included.
+A generation runs as its **caller** (the user, API key or run credential that started it) capped by the agent's **`policy_ids`**: a `builtin` action must be allowed by both, as for [API keys](./api-keys.md#permission-inheritance). With no `policy_ids` only the caller's permissions apply. The cap holds for every `builtin` call of the turn, its resumption after `submit-tool-outputs`, an [approved](./approvals.md#continuation-identity) action and every `builtin` step of a [pipeline tool](./tools.md#pipeline), nested pipelines included. Statements across the attached policies combine as one document: any `Deny` wins.
 
-A `boundary_policy` that is not a valid policy document allows nothing — it fails closed, so a malformed boundary denies every action rather than widening one. Its `condition` keys are held to the same rule as a stored policy's ([IAM — Condition Keys](./iam.md#condition-keys)): a key the platform does not supply invalidates the document.
+`policy_ids` name stored [policies](./policies.md). Attaching one needs a caller who holds every grant it carries inside the agent's project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); the same check runs on create, update and a [formation](./formations.md) apply, for each policy the write adds. Editing a policy an agent carries, live or in any [version](#agent-version), is attaching it again, and deleting one is `409 POLICY_HAS_DEPENDENTS`. An unknown id is `400 POLICY_NOT_FOUND`; a policy that no longer resolves at generation time allows nothing.
 
-The boundary also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): denying `memories:CreateMemory` / `memories:UpdateMemory` (or `Deny action:["*"]`) blocks it fail-closed.
-
-That tool writes in-process, so its boundary check is resource-scoped like the REST path's: both actions are evaluated against the target store's SRN (`srn:<project_id>:memory_store:<memory_store_id>`) and its tags as [condition](./iam.md#condition-keys) inputs. A boundary can therefore confine an agent to one store, whatever `write_memory_store_id` later says:
+**Per end user.** `${soat:ActorId}` in a condition value is the [actor](./actors.md) the generation runs for (a [session](./sessions.md)'s actor). One policy then confines every end user to their own resources:
 
 ```json
 {
-  "boundary_policy": {
-    "statement": [
-      {
-        "effect": "Allow",
-        "action": ["memories:CreateMemory", "memories:UpdateMemory"],
-        "resource": [
-          "srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"
-        ]
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["memories:*"],
+      "condition": {
+        "StringEquals": { "soat:ResourceTag/owner": "${soat:ActorId}" }
       }
-    ]
-  }
+    }
+  ]
 }
 ```
 
-### Resource-scoped boundaries
+A generation with no actor leaves the variable unbound, and a condition naming an unbound variable matches nothing ([IAM — Policy Variables](./iam.md#policy-variables)).
 
-A `builtin` action that names a resource is evaluated against that resource's SRN and tags, the same pair its route checks the caller's policy against. So a boundary can confine an agent to named resources whatever the caller may reach:
+The cap also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): it needs `memories:CreateMemory` **and** `memories:UpdateMemory`, evaluated against the target store's SRN (`srn:<project_id>:memory_store:<memory_store_id>`) and its tags as [condition](./iam.md#condition-keys) inputs, so a policy can confine an agent to one store whatever `write_memory_store_id` later says.
+
+### Resource-scoped policies
+
+A `builtin` action that names a resource is evaluated against that resource's SRN and tags, the same pair its route checks the caller's policy against. So an agent's policy can confine it to named resources whatever the caller may reach:
 
 ```json
 {
-  "boundary_policy": {
-    "statement": [
-      {
-        "effect": "Allow",
-        "action": ["memories:*"],
-        "resource": [
-          "srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"
-        ]
-      }
-    ]
-  }
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["memories:*"],
+      "resource": [
+        "srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"
+      ]
+    }
+  ]
 }
 ```
 
-The SRN is the one the route enforces, which is not always the id in the argument: a memory and a [memory rule](./memories.md#memory-rules) both authorize through their **memory store**, so a boundary naming the store covers every operation on the memories and rules inside it.
+The SRN is the one the route enforces, which is not always the id in the argument: a memory and a [memory rule](./memories.md#memory-rules) both authorize through their **memory store**, so a policy naming the store covers every operation on the memories and rules inside it.
 
 | Resource named by the action                                                                                | Scoped today                                  |
 | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
@@ -688,25 +686,23 @@ The SRN is the one the route enforces, which is not always the id in the argumen
 Two cases stay `*`, and both refuse rather than admit when a statement names a resource:
 
 - **An action that names no resource** — a listing, a create, anything project-scoped. `*` is the whole truth about it; scope those with the caller's policy.
-- **A module not yet scoped** (documents, files, tasks, triggers, webhooks, workflows and the rest). Their routes are still resource-checked for the caller; only the agent boundary is action-level there.
+- **A module not yet scoped** (documents, files, tasks, triggers, webhooks, workflows and the rest). Their routes are still resource-checked for the caller; only the agent's policies are action-level there.
 
-An id that resolves to nothing is treated the same way: no SRN, so a scoped boundary denies the call before it is made.
+An id that resolves to nothing is treated the same way: no SRN, so a scoped policy denies the call before it is made.
 
-Action strings are validated on write (`validate-formation`, `create-policy`, agent create/update); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.
+Action strings are validated when the policy is written (`create-policy`, `update-policy`, `validate-formation`); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.
 
-Example — read and search documents only, whatever the caller may do:
+Example — a policy that lets the agent read and search documents only, whatever the caller may do:
 
 ```json
 {
-  "boundary_policy": {
-    "statement": [
-      {
-        "effect": "Allow",
-        "action": ["documents:GetDocument", "knowledge:SearchKnowledge"],
-        "resource": ["*"]
-      }
-    ]
-  }
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["documents:GetDocument", "knowledge:SearchKnowledge"],
+      "resource": ["*"]
+    }
+  ]
 }
 ```
 
@@ -802,7 +798,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
+`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is not snapshotted: a version records the `knowledge_config`, not the documents or memories it resolves at generation time.
 

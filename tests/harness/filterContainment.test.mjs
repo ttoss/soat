@@ -41,9 +41,11 @@ describe('bag containment', () => {
    * no spelling for.
    *
    * `guardrailRuntimeMetrics.ts` asks array membership, not bag equality: a
-   * usage event's `guardrail_ids` is a list of ids, with no pairs to match.
+   * usage event's `guardrail_ids` is a list of ids, with no pairs to match;
+   * `agentPolicies.ts` the same of an agent's `policy_ids`.
    */
   const SPELLS_CONTAINMENT = [
+    'agentPolicies.ts',
     'structuredFilter.ts',
     'policyCompiler.ts',
     'guardrailRuntimeMetrics.ts',
