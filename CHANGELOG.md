@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.104.0](https://github.com/ttoss/soat/compare/v0.103.0...v0.104.0) (2026-11-10)
+
+* feat(webhooks)!: webhooks take policy_ids and share the event trigger filter (#1855) ([9b5014e](https://github.com/ttoss/soat/commit/9b5014ecc9ab0dbeec0ceace84261f146f454885)), closes [#1855](https://github.com/ttoss/soat/issues/1855)
+* feat(triggers)!: triggers act under their own policy_ids; event filter by events, event_resources and event_data (#1852) ([aedc756](https://github.com/ttoss/soat/commit/aedc756c731f6b322f9be3980197bb5a08acec02)), closes [#1852](https://github.com/ttoss/soat/issues/1852)
+
+### Bug Fixes
+
+* **server:** an admin list without project_id spans every project ([#1853](https://github.com/ttoss/soat/issues/1853)) ([102bb5f](https://github.com/ttoss/soat/commit/102bb5fce5f4aa455d4b74cdf775de7acebafcc9))
+* **server:** run session turns' builtin calls as the request's caller ([#1849](https://github.com/ttoss/soat/issues/1849)) ([d476949](https://github.com/ttoss/soat/commit/d476949cc93e02d731285b717f7894ad1bd97fa5))
+
+### Features
+
+* **generations:** record acted_as, the principal a segment's tool calls ran as ([#1850](https://github.com/ttoss/soat/issues/1850)) ([81c2104](https://github.com/ttoss/soat/commit/81c2104f11a35799a4bdabde00e8a98bc4c15c08))
+* **oauth-connections:** per-actor OAuth connections and http tool auth oauth_connection ([#1851](https://github.com/ttoss/soat/issues/1851)) ([122be98](https://github.com/ttoss/soat/commit/122be98205372c99193454c79b51e6ce0a7666fc))
+* **server:** grant check when attaching or editing a trigger's policy ([#1847](https://github.com/ttoss/soat/issues/1847)) ([c9c16d4](https://github.com/ttoss/soat/commit/c9c16d4bc62922ed231e00a531fa145f8cd28a4d))
+
+### BREAKING CHANGES
+
+* triggers take policy_ids (required) in place of policy_id,
+  and read back events in place of event_pattern.
+* webhooks take policy_ids (required) in place of
+  policy_id, and every existing webhook receives nothing until a caller
+  attaches policy_ids.
+
 # [0.103.0](https://github.com/ttoss/soat/compare/v0.102.1...v0.103.0) (2026-11-09)
 
 ### Features
