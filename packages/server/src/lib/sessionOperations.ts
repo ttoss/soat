@@ -128,6 +128,9 @@ export const generateSessionResponse = async (args: {
   // The credential the turn's `builtin` calls run as: the driving request's, or
   // one a request-less continuation re-mints. Required so every caller states it.
   authHeader: string | undefined;
+  // The caller recorded as the turn's `acted_as`; `undefined` when no request
+  // drove it, and the principal is read off a re-minted `authHeader`.
+  authUser: AuthUser | undefined;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -192,6 +195,7 @@ export const generateSessionResponse = async (args: {
       // would let a caller bill another actor.
       sessionId: session.publicId,
       authHeader: args.authHeader,
+      authUser: args.authUser,
       initiatorGenerationId: args.initiatorGenerationId,
       maxContextMessages: session.maxContextMessages,
     });
@@ -207,26 +211,11 @@ export const generateSessionResponse = async (args: {
   return buildGenerationResult(result);
 };
 
-export const addSessionMessage = async (args: {
+const findSessionAcceptingMessages = async (args: {
   agentId: number;
   sessionId: string;
-  message?: string;
-  documentId?: string;
-  toolContext?: Record<string, string>;
-  authUser?: AuthUser;
-  idempotencyKey?: string;
-  // Forwarded to the auto-generation this message may trigger; see
-  // `generateSessionResponse`.
-  authHeader: string | undefined;
-  // The generation this turn continues, when a resumption drove it (an
-  // approval's continuation). Declares the chain so it is bounded and linked;
-  // a person's own message leaves it unset.
-  initiatorGenerationId?: string | null;
 }) => {
-  const session = await findSessionRecord({
-    agentId: args.agentId,
-    sessionId: args.sessionId,
-  });
+  const session = await findSessionRecord(args);
 
   if (!session) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
@@ -245,6 +234,30 @@ export const addSessionMessage = async (args: {
       'The session has expired due to inactivity. Open a new session to continue.'
     );
   }
+
+  return session;
+};
+
+export const addSessionMessage = async (args: {
+  agentId: number;
+  sessionId: string;
+  message?: string;
+  documentId?: string;
+  toolContext?: Record<string, string>;
+  authUser: AuthUser | undefined;
+  idempotencyKey?: string;
+  // Forwarded to the auto-generation this message may trigger; see
+  // `generateSessionResponse`.
+  authHeader: string | undefined;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
+}) => {
+  const session = await findSessionAcceptingMessages({
+    agentId: args.agentId,
+    sessionId: args.sessionId,
+  });
 
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
@@ -299,6 +312,7 @@ export const addSessionMessage = async (args: {
     savedDocumentId,
     toolContext: args.toolContext,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     generateFn: generateSessionResponse,
     initiatorGenerationId: args.initiatorGenerationId,
   });
@@ -310,7 +324,7 @@ export const sendSessionMessage = async (args: {
   message: string;
   model?: string;
   toolContext?: Record<string, string>;
-  authUser?: AuthUser;
+  authUser: AuthUser | undefined;
   // See `generateSessionResponse`. Threaded through both the auto-generation
   // `addSessionMessage` may trigger and the explicit turn below, so the
   // credential reaches whichever of the two actually runs.
@@ -336,6 +350,7 @@ export const sendSessionMessage = async (args: {
     model: args.model,
     toolContext: args.toolContext,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
 };

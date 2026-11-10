@@ -277,6 +277,9 @@ const fireContinuation = async (args: {
       sessionId: item.session_id,
       message,
       authHeader: args.authHeader,
+      // No request drives a continuation: the principal is read off the
+      // re-minted `authHeader`.
+      authUser: undefined,
       toolContext: args.toolContext,
       initiatorGenerationId: item.generation_id,
     });
