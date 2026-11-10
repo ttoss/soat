@@ -50,8 +50,8 @@ import { memoryContentNormalizedHash } from './2026-10-23-memoryContentNormalize
 import { definitionsKeepKeyOrder } from './2026-11-01-definitionsKeepKeyOrder';
 import { modelFacingSchemasJson } from './2026-11-01-modelFacingSchemasJson';
 import { payloadsKeepKeyOrder } from './2026-11-01-payloadsKeepKeyOrder';
-import { generationActedAs } from './2026-11-10-generationActedAs';
 import { agentPolicyIds } from './2026-11-10-agentPolicyIds';
+import { generationActedAs } from './2026-11-10-generationActedAs';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
