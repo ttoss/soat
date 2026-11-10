@@ -2,7 +2,10 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { memoryStoresFormationModule } from 'src/lib/formation-modules/memoryStoresFormationModule';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createAllowAllPolicy,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 // What a deploy does to built-in resources across a formation's life: the
@@ -15,6 +18,8 @@ let projectId: string;
 let aiProviderId: string;
 let secretId: string;
 let agentId: string;
+/** The grant every webhook this file deploys carries. */
+let hookPolicyId: string;
 let formationCounter = 0;
 
 const client = () => {
@@ -65,6 +70,7 @@ beforeAll(async () => {
   });
   adminToken = setup.adminToken;
   projectId = setup.projectId;
+  hookPolicyId = await createAllowAllPolicy({ adminToken });
 
   const secretRes = await client()
     .post('/api/v1/secrets')
@@ -186,6 +192,7 @@ describe('PUT /api/v1/formations/:formation_id — a changed declaration updates
         name: 'fmlife-hook',
         url: 'https://example.com/webhook',
         events: ['memory_store.created'],
+        policy_ids: [hookPolicyId],
       })
     );
 
@@ -195,6 +202,7 @@ describe('PUT /api/v1/formations/:formation_id — a changed declaration updates
         description: 'Updated description',
         url: 'https://example.com/hook',
         events: ['memory_store.updated'],
+        policy_ids: [hookPolicyId],
       }),
     });
 
@@ -353,6 +361,7 @@ describe('PUT /api/v1/formations/:formation_id — outputs of a stored template'
             name: 'fmlife-out-hook',
             url: 'https://example.com/out',
             events: ['*'],
+            policy_ids: [hookPolicyId],
           },
         },
       },

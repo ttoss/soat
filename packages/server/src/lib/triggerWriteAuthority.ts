@@ -1,8 +1,7 @@
 import type { db } from 'src/db';
 
-import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import { assertPoliciesAttachable } from './attachedPolicies';
+import { assertRequiredPoliciesAttachable } from './attachedPolicies';
 import type { GetWriterPolicies } from './policyGrantCoverage';
 import { assertSecretUseAllowed, secretRefIds } from './secretUse';
 
@@ -16,24 +15,13 @@ export const assertTriggerPoliciesHeld = async (args: {
   policyIds?: string[];
   current: string[] | null;
 }): Promise<void> => {
-  if (args.policyIds === undefined) return;
-  if (
-    !Array.isArray(args.policyIds) ||
-    args.policyIds.length === 0 ||
-    !args.policyIds.every((id) => {
-      return typeof id === 'string';
-    })
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'policy_ids must name at least one policy: the grant every firing acts under.'
-    );
-  }
-  await assertPoliciesAttachable({
+  await assertRequiredPoliciesAttachable({
     policyIds: args.policyIds,
     current: args.current,
     projectId: args.projectId,
     policyUse: args.writerPolicies,
+    refusal:
+      'policy_ids must name at least one policy: the grant every firing acts under.',
   });
 };
 

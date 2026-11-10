@@ -508,17 +508,21 @@ sleep 2
 
 ## Step 9 - Create a session webhook subscription
 
-Subscribe to session generation events. Event types, retries and HMAC signing: [Webhooks](/docs/modules/webhooks#examples).
+Subscribe to session generation events. A webhook receives only events about resources its `policy_ids` may read ([Webhooks — Policy IDs](/docs/modules/webhooks#policy-ids-and-the-read-guard)); event types, retries and HMAC signing: [Webhooks](/docs/modules/webhooks#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+HOOK_POLICY_ID=$(soat create-policy \
+  --name "session-events-reader" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:GetSession","generations:GetGeneration"]}]}' | jq -r '.id')
 WEBHOOK_ID=$(soat create-webhook \
   --project-id "$PROJECT_ID" \
   --name "session-events" \
   --url "$WEBHOOK_BASE_URL/webhook" \
-  --events '["sessions.generation_started","generations.*"]' | jq -r '.id')
+  --events '["sessions.generation_started","generations.*"]' \
+  --policy-ids '["'"$HOOK_POLICY_ID"'"]' | jq -r '.id')
 echo "WEBHOOK_ID: $WEBHOOK_ID"
 ```
 
@@ -529,6 +533,12 @@ echo "WEBHOOK_ID: $WEBHOOK_ID"
 const WEBHOOK_BASE_URL =
   process.env.SOAT_WEBHOOK_BASE_URL ?? 'http://localhost:8787';
 
+const { data: hookPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'session-events-reader',
+    document: { statement: [{ effect: 'Allow', action: ['agents:GetSession', 'generations:GetGeneration'] }] },
+  },
+});
 const { data: webhook, error: webhookErr } =
   await adminSoat.webhooks.createWebhook({
     body: {
@@ -536,6 +546,7 @@ const { data: webhook, error: webhookErr } =
       name: 'session-events',
       url: `${WEBHOOK_BASE_URL}/webhook`,
       events: ['sessions.generation_started', 'generations.*'],
+      policy_ids: [hookPolicy.id],
     },
   });
 
@@ -548,10 +559,13 @@ const WEBHOOK_ID = webhook.id; // whk_...
 <TabItem value="curl" label="curl">
 
 ```bash
+HOOK_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"session-events-reader","document":{"statement":[{"effect":"Allow","action":["agents:GetSession","generations:GetGeneration"]}]}}' | jq -r '.id')
 WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"session-events\",\"url\":\"$WEBHOOK_BASE_URL/webhook\",\"events\":[\"sessions.generation_started\",\"generations.*\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"session-events\",\"url\":\"$WEBHOOK_BASE_URL/webhook\",\"events\":[\"sessions.generation_started\",\"generations.*\"],\"policy_ids\":[\"$HOOK_POLICY_ID\"]}" \
   | jq -r '.id')
 echo "WEBHOOK_ID: $WEBHOOK_ID"
 ```

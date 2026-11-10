@@ -137,19 +137,21 @@ export const deletePolicy = async (args: {
     );
   }
 
-  const { agents, triggers } = await findPolicyCarriers({
+  const { agents, triggers, webhooks } = await findPolicyCarriers({
     policyPublicId: args.policyId,
     limit: MAX_DEPENDENT_SAMPLE,
   });
-  if (triggers.count > 0 || agents.count > 0) {
+  if (triggers.count > 0 || agents.count > 0 || webhooks.count > 0) {
     throw new DomainError(
       'POLICY_HAS_DEPENDENTS',
-      `Policy '${args.policyId}' is attached to ${triggers.count} trigger(s) and ${agents.count} agent(s); it cannot be deleted.`,
+      `Policy '${args.policyId}' is attached to ${triggers.count} trigger(s), ${agents.count} agent(s) and ${webhooks.count} webhook(s); it cannot be deleted.`,
       {
         triggers: triggers.count,
         sample: triggers.sample,
         agents: agents.count,
         agent_sample: agents.sample,
+        webhooks: webhooks.count,
+        webhook_sample: webhooks.sample,
       }
     );
   }

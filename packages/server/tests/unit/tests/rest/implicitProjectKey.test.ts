@@ -18,6 +18,7 @@ describe('Implicit projectId via project-scoped API key', () => {
   let projectAId: string;
   let projectBId: string;
   let scopedKey: string;
+  let scopedPolicyId: string;
 
   beforeAll(async () => {
     await testClient
@@ -76,6 +77,7 @@ describe('Implicit projectId via project-scoped API key', () => {
     expect(keyRes.status).toBe(201);
     expect(keyRes.body.key).toMatch(/^sk_/);
     scopedKey = keyRes.body.key;
+    scopedPolicyId = policyRes.body.id;
   });
 
   describe('POST /api/v1/files', () => {
@@ -232,6 +234,7 @@ describe('Implicit projectId via project-scoped API key', () => {
           name: 'Implicit hook',
           url: 'https://example.com/hook',
           events: ['generation.completed'],
+          policy_ids: [scopedPolicyId],
         });
 
       expect(res.status).toBe(201);
@@ -246,6 +249,7 @@ describe('Implicit projectId via project-scoped API key', () => {
           name: 'Mismatch hook',
           url: 'https://example.com/hook',
           events: ['generation.completed'],
+          policy_ids: [scopedPolicyId],
         });
 
       expect(res.status).toBe(403);

@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: SOAT Event Subscriptions
+  version: 1.0.0
+  description: >-
+    Shared components for a resource that subscribes to platform events — an
+    event trigger, a webhook: which events it receives and the policies it
+    acts under. This file declares no paths, so each field means the same on
+    every subscriber.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    EventTypePatterns:
+      type: array
+      minItems: 1
+      items:
+        type: string
+      description: >-
+        Event type patterns: `*` matches every event, `prefix.*` a namespace,
+        or an exact name such as `documents.ingested` or a custom name an
+        orchestration emits. A pattern in a platform namespace must match a
+        registered event, else `400 INVALID_EVENT_PATTERN`.
+      example: ['documents.*']
+    EventResourcePatterns:
+      type: array
+      items:
+        type: string
+      description: >-
+        SRN patterns with IAM wildcards (`srn:<project>:<type>:<id>` or `*`);
+        an event is received only when its resource matches one. Null or
+        omitted matches any resource in the project.
+      example: ['srn:prj_V1StGXR8Z5jdHi6B:document:*']
+    EventDataFilter:
+      description: >-
+        A filter the event's `data` must match: a top-level field to a value,
+        or to `in`, `gt`, `gte`, `lt`, `lte`. An absent field never matches.
+      allOf:
+        - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+    AttachedPolicyIds:
+      type: array
+      minItems: 1
+      items:
+        x-soat-ref: policies
+        type: string
+      description: >-
+        The policies the resource acts under; an event subscriber receives an
+        event only when they allow reading its resource. The caller must hold
+        every grant of each one it attaches inside the project, else `403
+        POLICY_GRANT_NOT_HELD`.
+      example: ['pol_V1StGXR8Z5jdHi6B']

@@ -127,6 +127,7 @@ describe('a formation never echoes secret material', () => {
           properties: {
             name: 'fse-hook',
             url: 'https://example.com/fse',
+            policy_ids: ['pol_V1StGXR8Z5jdHi6B'],
             events: ['*'],
           },
         },

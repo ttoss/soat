@@ -90,6 +90,7 @@ describe('Server-minted secrets', () => {
           name: 'entropy-webhook',
           url: 'https://example.com/hook',
           events: ['file.created'],
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
         });
 
       expect(res.status).toBe(201);

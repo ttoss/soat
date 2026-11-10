@@ -1497,6 +1497,7 @@ components:
         - name
         - url
         - events
+        - policy_ids
       properties:
         name:
           type: string
@@ -1512,7 +1513,31 @@ components:
           type: array
           items:
             type: string
-          description: Event types to subscribe to (e.g. `documents.ingested`)
+          description: >-
+            Event type patterns (`*`, `prefix.*`, or an exact event name)
+        event_resources:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            SRN patterns the event's resource must match. Omitted matches any
+            resource in the project
+        event_data:
+          nullable: true
+          description: A filter the event's `data` must match
+          allOf:
+            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies whose read grant decides which events the webhook
+            receives. Use { "ref": "LogicalId" } for a policy in the template.
+            The deploying caller must hold every grant they carry inside the
+            project, else the resource fails with `POLICY_GRANT_NOT_HELD`.
 
     TriggerResourceProperties:
       description: >-

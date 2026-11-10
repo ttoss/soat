@@ -1,6 +1,15 @@
+import createDebug from 'debug';
 import { db } from 'src/db';
 
+import { DomainError } from '../errors';
+import { assertRequiredPoliciesAttachable } from './attachedPolicies';
+import {
+  type EventFilterArgs,
+  storedEventFilter,
+  validateEventFilter,
+} from './eventMatching';
 import { paginatedList } from './pagination';
+import type { GetWriterPolicies } from './policyGrantCoverage';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import {
@@ -10,6 +19,8 @@ import {
 } from './secrets';
 import { assertTenantHttpUrl } from './tenantUrl';
 
+const log = createDebug('soat:webhooks');
+
 const generateSecret = generateSecretValue;
 
 export const decryptWebhookSecret = (stored: string): string => {
@@ -18,7 +29,6 @@ export const decryptWebhookSecret = (stored: string): string => {
 
 type WebhookRow = InstanceType<(typeof db)['Webhook']> & {
   project?: InstanceType<(typeof db)['Project']>;
-  policy?: InstanceType<(typeof db)['Policy']> | null;
 };
 
 const mapWebhook = (
@@ -28,11 +38,13 @@ const mapWebhook = (
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId,
-    policy_id: instance.policy?.publicId ?? null,
+    policy_ids: instance.policyIds ?? [],
     name: instance.name,
     description: instance.description,
     url: instance.url,
     events: instance.events,
+    event_resources: instance.eventResources,
+    event_data: instance.eventData,
     active: instance.active,
     ...(args?.includeSecret
       ? { secret: decryptWebhookSecret(instance.secret) }
@@ -43,10 +55,7 @@ const mapWebhook = (
 };
 
 const webhookIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.Policy, as: 'policy' },
-  ];
+  return [{ model: db.Project, as: 'project' }];
 };
 
 const webhooks = makeResourceAccessor<WebhookRow>({
@@ -96,56 +105,96 @@ export const findWebhookSecret = async (args: { id: string }) => {
   return { secret: decryptWebhookSecret(webhook.secret as string) };
 };
 
-export const createWebhook = async (args: {
-  projectId: number;
-  policyId?: number | null;
-  name: string;
-  description?: string;
-  url: string;
-  events: string[];
-}) => {
+const POLICY_IDS_REFUSAL =
+  'policy_ids must name at least one policy: the grant that decides which events the webhook may read.';
+
+export const createWebhook = async (
+  args: EventFilterArgs & {
+    projectId: number;
+    policyIds?: string[];
+    name: string;
+    description?: string;
+    url: string;
+    writerPolicies: GetWriterPolicies;
+  }
+) => {
+  log('createWebhook: projectId=%d name=%s', args.projectId, args.name);
   assertTenantHttpUrl({ url: args.url, field: 'url' });
+  if (!args.events || args.events.length === 0) {
+    throw new DomainError('VALIDATION_FAILED', 'events is required.');
+  }
+  validateEventFilter(args);
+  await assertRequiredPoliciesAttachable({
+    policyIds: args.policyIds ?? [],
+    current: null,
+    projectId: args.projectId,
+    policyUse: args.writerPolicies,
+    refusal: POLICY_IDS_REFUSAL,
+  });
 
   const secret = generateSecret();
 
   const webhook = await db.Webhook.create({
     projectId: args.projectId,
-    policyId: args.policyId ?? null,
+    policyIds: args.policyIds,
     name: args.name,
     description: args.description ?? null,
     url: args.url,
     secret: encryptValue(secret),
-    events: args.events,
+    ...storedEventFilter(args),
     active: true,
   });
 
   return mapWebhook(await webhooks.reload(webhook), { includeSecret: true });
 };
 
-export const updateWebhook = async (args: {
-  id: string;
-  name?: string;
-  description?: string;
-  url?: string;
-  events?: string[];
-  active?: boolean;
-  policyId?: number | null;
-}) => {
+const UPDATE_FIELDS = [
+  'name',
+  'description',
+  'events',
+  'eventResources',
+  'eventData',
+  'active',
+  'policyIds',
+] as const;
+
+export const updateWebhook = async (
+  args: EventFilterArgs & {
+    id: string;
+    name?: string;
+    description?: string;
+    url?: string;
+    active?: boolean;
+    policyIds?: string[];
+    writerPolicies: GetWriterPolicies;
+  }
+) => {
+  log('updateWebhook: id=%s', args.id);
   const webhook = await db.Webhook.findOne({
     where: { publicId: args.id },
   });
   if (!webhook) return null;
 
+  if (args.events === null) {
+    throw new DomainError('VALIDATION_FAILED', 'events cannot be cleared.');
+  }
+  validateEventFilter(args);
+  await assertRequiredPoliciesAttachable({
+    policyIds: args.policyIds,
+    current: webhook.policyIds,
+    projectId: webhook.projectId,
+    policyUse: args.writerPolicies,
+    refusal: POLICY_IDS_REFUSAL,
+  });
+
   const updates: Record<string, unknown> = {};
-  if (args.name !== undefined) updates.name = args.name;
-  if (args.description !== undefined) updates.description = args.description;
+  for (const field of UPDATE_FIELDS) {
+    if (args[field] !== undefined) updates[field] = args[field];
+  }
   if (args.url !== undefined) {
     assertTenantHttpUrl({ url: args.url, field: 'url' });
     updates.url = args.url;
   }
-  if (args.events !== undefined) updates.events = args.events;
-  if (args.active !== undefined) updates.active = args.active;
-  if (args.policyId !== undefined) updates.policyId = args.policyId;
 
   await webhook.update(updates);
 

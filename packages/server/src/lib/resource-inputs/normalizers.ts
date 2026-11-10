@@ -46,6 +46,18 @@ export const toNullableObject = (value: unknown): object | null | undefined => {
     : undefined;
 };
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+/** A JSON object as the template wrote it; `null` clears it. */
+export const toNullableRecord = (
+  value: unknown
+): Record<string, unknown> | null | undefined => {
+  if (value === null) return null;
+  return isPlainRecord(value) ? value : undefined;
+};
+
 export const toNullableStringOrObject = (
   value: unknown
 ): string | object | null | undefined => {

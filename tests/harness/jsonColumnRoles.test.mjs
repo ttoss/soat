@@ -162,6 +162,8 @@ const ROLES = {
     'TriggerFiring.error',
     'TriggerFiring.input',
     'TriggerFiring.result',
+    'Webhook.eventData',
+    'Webhook.eventResources',
     'WebhookDelivery.payload',
     'Workflow.payloadSchema',
     'Workflow.states',
@@ -185,6 +187,7 @@ const ROLES = {
     'Task.metadata',
     'Trigger.policyIds',
     'UsageEvent.guardrailIds',
+    'Webhook.policyIds',
   ],
 };
 

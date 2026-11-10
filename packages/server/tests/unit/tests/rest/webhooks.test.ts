@@ -11,6 +11,8 @@ describe('Webhooks', () => {
   let adminToken: string;
   let userToken: string;
   let projectId: string;
+  /** The user's own policy: the grant a webhook it creates may carry. */
+  let userPolicyId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -33,6 +35,7 @@ describe('Webhooks', () => {
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
+    userPolicyId = setup.policyId;
   });
 
   describe('POST /api/v1/webhooks', () => {
@@ -41,6 +44,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Test Webhook',
           url: 'https://example.com/hook',
           events: ['file.created', 'file.*'],
@@ -65,6 +69,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Bad URL Webhook',
           url,
           events: ['files.created'],
@@ -97,6 +102,7 @@ describe('Webhooks', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post('/api/v1/webhooks').send({
         project_id: projectId,
+        policy_ids: [userPolicyId],
         name: 'Test',
         url: 'https://example.com/hook',
         events: ['*'],
@@ -118,6 +124,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Test',
           url: 'https://example.com/hook',
           events: ['*'],
@@ -151,6 +158,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Admin Listed',
           url: 'https://example.com/admin-listed',
           events: ['*'],
@@ -171,6 +179,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Get Test',
           url: 'https://example.com/get',
           events: ['*'],
@@ -212,6 +221,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Secret Test',
           url: 'https://example.com/secret',
           events: ['*'],
@@ -321,6 +331,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Update Test',
           url: 'https://example.com/update',
           events: ['*'],
@@ -360,6 +371,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Rotate Test',
           url: 'https://example.com/rotate',
           events: ['*'],
@@ -399,6 +411,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Deliveries Test',
           url: 'https://example.com/deliveries',
           events: ['*'],
@@ -493,6 +506,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Get Delivery Test',
           url: 'https://example.com/get-delivery',
           events: ['*'],
@@ -543,6 +557,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: args.name,
           url: args.url,
           events: ['files.created'],
@@ -617,6 +632,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Delete Test',
           url: 'https://example.com/delete',
           events: ['*'],
@@ -644,6 +660,181 @@ describe('Webhooks', () => {
     });
   });
 
+  describe('policy_ids and the event filter', () => {
+    const create = (body: Record<string, unknown>) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'Filtered',
+          url: 'https://example.com/filtered',
+          events: ['files.*'],
+          policy_ids: [userPolicyId],
+          ...body,
+        });
+    };
+
+    test('create stores and returns policy_ids, event_resources and event_data', async () => {
+      const response = await create({
+        event_resources: [`srn:${projectId}:file:*`],
+        event_data: { filename: { in: ['a.txt', 'b.txt'] } },
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.policy_ids).toEqual([userPolicyId]);
+      expect(response.body.event_resources).toEqual([
+        `srn:${projectId}:file:*`,
+      ]);
+      expect(response.body.event_data).toEqual({
+        filename: { in: ['a.txt', 'b.txt'] },
+      });
+      expect(response.body).not.toHaveProperty('policy_id');
+    });
+
+    test('create without event_resources or event_data reads them back null', async () => {
+      const response = await create({});
+
+      expect(response.status).toBe(201);
+      expect(response.body.event_resources).toBeNull();
+      expect(response.body.event_data).toBeNull();
+    });
+
+    test.each([
+      ['missing', { policy_ids: undefined }],
+      ['empty', { policy_ids: [] }],
+    ])('create with policy_ids %s returns 400', async (_label, body) => {
+      const response = await create(body);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('create with the retired policy_id returns 400', async () => {
+      const response = await create({ policy_id: userPolicyId });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('create attaching a policy the caller does not hold returns 403', async () => {
+      const wider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: { statement: [{ effect: 'Allow', action: ['*'] }] },
+        });
+      expect(wider.status).toBe(201);
+
+      const response = await create({ policy_ids: [wider.body.id] });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('POLICY_GRANT_NOT_HELD');
+    });
+
+    test('create with a misspelt platform event returns 400', async () => {
+      const response = await create({ events: ['files.creatd'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_EVENT_PATTERN');
+    });
+
+    test.each([
+      ['event_resources', { event_resources: ['file:*'] }],
+      ['event_data', { event_data: { size: { gt: true } } }],
+    ])('create with an invalid %s returns 400', async (_label, body) => {
+      const response = await create(body);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('update replaces the filter, and null clears event_resources and event_data', async () => {
+      const created = await create({
+        event_resources: [`srn:${projectId}:file:*`],
+        event_data: { filename: 'a.txt' },
+      });
+      expect(created.status).toBe(201);
+
+      const narrowed = await authenticatedTestClient(userToken)
+        .put(`/api/v1/webhooks/${created.body.id}`)
+        .send({ events: ['files.created'], event_data: { filename: 'b.txt' } });
+      expect(narrowed.status).toBe(200);
+      expect(narrowed.body.events).toEqual(['files.created']);
+      expect(narrowed.body.event_data).toEqual({ filename: 'b.txt' });
+      expect(narrowed.body.event_resources).toEqual([
+        `srn:${projectId}:file:*`,
+      ]);
+
+      const cleared = await authenticatedTestClient(userToken)
+        .put(`/api/v1/webhooks/${created.body.id}`)
+        .send({ event_resources: null, event_data: null });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.event_resources).toBeNull();
+      expect(cleared.body.event_data).toBeNull();
+    });
+
+    test('update with an invalid filter or empty policy_ids returns 400', async () => {
+      const created = await create({});
+      expect(created.status).toBe(201);
+
+      for (const body of [
+        { events: ['documents.ingsted'] },
+        { event_resources: ['*:*'] },
+        { policy_ids: [] },
+      ]) {
+        const response = await authenticatedTestClient(userToken)
+          .put(`/api/v1/webhooks/${created.body.id}`)
+          .send(body);
+        expect(response.status).toBe(400);
+      }
+    });
+
+    test('update attaching a policy the caller does not hold returns 403', async () => {
+      const created = await create({});
+      const wider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: { statement: [{ effect: 'Allow', action: ['*'] }] },
+        });
+
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/webhooks/${created.body.id}`)
+        .send({ policy_ids: [userPolicyId, wider.body.id] });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('POLICY_GRANT_NOT_HELD');
+    });
+
+    test('a policy a webhook names cannot be deleted', async () => {
+      const policy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'Carrier',
+          url: 'https://example.com/carrier',
+          events: ['files.*'],
+          policy_ids: [policy.body.id],
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/policies/${policy.body.id}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('POLICY_HAS_DEPENDENTS');
+      expect(response.body.error.meta).toMatchObject({
+        webhooks: 1,
+        webhook_sample: [created.body.id],
+      });
+    });
+  });
+
   describe('authorization and validation branches', () => {
     let noPermToken: string;
     let targetWebhookId: string;
@@ -659,6 +850,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Branch Target',
           url: 'https://example.com/branch',
           events: ['*'],
@@ -671,6 +863,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'No events',
           url: 'https://example.com/hook',
           events: [],
@@ -679,15 +872,15 @@ describe('Webhooks', () => {
       expect(response.status).toBe(400);
     });
 
-    test('POST /webhooks with an invalid policy_id returns 400', async () => {
+    test('POST /webhooks naming a policy that does not exist returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: ['pol_nonexistent'],
           name: 'Bad policy',
           url: 'https://example.com/hook',
           events: ['*'],
-          policy_id: 'pol_nonexistent',
         });
 
       expect(response.status).toBe(400);
@@ -726,10 +919,10 @@ describe('Webhooks', () => {
       expect(response.status).toBe(404);
     });
 
-    test('PUT /webhooks/:id with an invalid policy_id returns 400', async () => {
+    test('PUT /webhooks/:id naming a policy that does not exist returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/webhooks/${targetWebhookId}`)
-        .send({ policy_id: 'pol_nonexistent' });
+        .send({ policy_ids: ['pol_nonexistent'] });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('POLICY_NOT_FOUND');
@@ -859,6 +1052,7 @@ describe('Webhooks', () => {
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
+          policy_ids: [userPolicyId],
           name: 'Scoped Hook',
           url: 'https://example.com/scoped',
           events: ['*'],

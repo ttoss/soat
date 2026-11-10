@@ -5,6 +5,7 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import { type EventFilterArgs, storedEventFilter } from './eventMatching';
 import type { GetWriterPolicies } from './policyGrantCoverage';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
@@ -16,11 +17,7 @@ import {
   acceptStoredToolContext,
   acceptStoredToolContextUpdate,
 } from './toolContextCarrier';
-import {
-  effectiveEventFilter,
-  type EventFilterArgs,
-  storedEventFilter,
-} from './triggerEventFilter';
+import { effectiveEventFilter } from './triggerEventFilter';
 import {
   assertTriggerConfigValid,
   computeNextFireAt,
@@ -32,7 +29,7 @@ import {
   assertTriggerUpdateAuthority,
 } from './triggerWriteAuthority';
 
-export { readTriggerEvents, validateEventPattern } from './triggerEventFilter';
+export { readTriggerEvents } from './triggerEventFilter';
 export type { TriggerTargetType, TriggerType } from './triggerValidation';
 export {
   mayStartTarget,

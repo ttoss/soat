@@ -678,37 +678,32 @@ components:
           nullable: true
           description: 5-field cron expression (UTC). Present only for schedule triggers
         events:
-          type: array
           nullable: true
-          items:
-            type: string
           description: >-
-            Event triggers only: the event type patterns that fire it — `*`,
-            `prefix.*`, or an exact name, custom names included.
+            Event triggers only: the event type patterns that fire it.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
         event_resources:
-          type: array
           nullable: true
-          items:
-            type: string
           description: >-
-            Event triggers only: SRN patterns, with IAM wildcards, the event's
-            resource must match. Null matches any resource in the project.
+            Event triggers only: resource patterns the event must match. Null
+            matches any resource in the project.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
         event_data:
           nullable: true
           description: >-
             Event triggers only: a filter the event's `data` must match.
           allOf:
-            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         active:
           type: boolean
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies a firing acts under: alone when nobody called the
             trigger, intersected with the caller's grant for a manual fire.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         next_fire_at:
           type: string
           format: date-time
@@ -795,49 +790,36 @@ components:
           type: string
           description: 5-field cron expression (UTC). Required when type is schedule
         events:
-          type: array
-          minItems: 1
-          items:
-            type: string
           description: >-
             Required when type is event, rejected otherwise. The event type
-            patterns that fire the trigger: `*` matches every event, `prefix.*`
-            a namespace, or give an exact name such as `documents.ingested`
-            or a custom name an orchestration emits.
+            patterns that fire the trigger.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
         event_pattern:
           type: string
           description: >-
             One event type pattern, the same as `events: [event_pattern]`.
             Send `events` or this, not both.
         event_resources:
-          type: array
-          items:
-            type: string
           description: >-
-            Event triggers only. SRN patterns, with IAM wildcards
-            (`srn:<project>:<type>:<id>` or `*`); the trigger fires only for
-            an event whose resource matches one. Omitted matches any resource
-            in the project.
-        event_data:
-          description: >-
-            Event triggers only. A filter the event's `data` must match: a
-            top-level field to a value, or to `in`, `gt`, `gte`, `lt`, `lte`.
-            An absent field never matches.
+            Event triggers only. Resource patterns the event must match;
+            omitted matches any resource in the project.
           allOf:
-            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
+        event_data:
+          description: Event triggers only. A filter the event's `data` must match.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         active:
           type: boolean
           default: true
         policy_ids:
-          type: array
-          minItems: 1
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every firing acts under. The caller must hold every
             grant they carry inside the trigger's project, else `403
             POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
 
     UpdateTriggerRequest:
       type: object
@@ -875,38 +857,32 @@ components:
           type: string
           nullable: true
         events:
-          type: array
-          minItems: 1
-          items:
-            type: string
           description: Replaces the event type patterns; event triggers only.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
         event_pattern:
           type: string
           description: >-
             The same as `events: [event_pattern]`.
         event_resources:
-          type: array
           nullable: true
-          items:
-            type: string
           description: Replaces the resource patterns; `null` matches any resource.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
         event_data:
           nullable: true
           description: Replaces the data filter; `null` clears it.
           allOf:
-            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         active:
           type: boolean
         policy_ids:
-          type: array
-          minItems: 1
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             Replaces the policies every firing acts under. The caller must
             hold every grant of each one added, else `403
             POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
 
     FireTriggerRequest:
       type: object

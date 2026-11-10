@@ -7,7 +7,7 @@ import { readCappedBody } from './cappedBody';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { buildEventEnvelope, envelopeEventId } from './eventEnvelope';
-import { evaluateEventPolicy, matchesEvent } from './eventMatching';
+import { subscriberReceivesEvent } from './eventMatching';
 import { soatHeader } from './headerPrefix';
 import { signatureHeader, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
@@ -375,22 +375,16 @@ const handleEvent = async (event: SoatEvent) => {
   }
 
   for (const webhook of webhooks) {
-    if (
-      !matchesEvent({
-        patterns: webhook.events as string[],
-        eventType: event.type,
-      })
-    ) {
-      continue;
-    }
-
-    if (webhook.policyId) {
-      const allowed = await evaluateEventPolicy({
-        policyId: webhook.policyId,
-        event,
-      });
-      if (!allowed) continue;
-    }
+    const matched = await subscriberReceivesEvent({
+      filter: {
+        events: webhook.events,
+        eventResources: webhook.eventResources,
+        eventData: webhook.eventData,
+      },
+      policyIds: webhook.policyIds,
+      event,
+    });
+    if (!matched) continue;
 
     // Separated deliberately: a failed *attempt* is on the row and retried by
     // the sweep, while a failed *row write* leaves the sweep nothing to find.
