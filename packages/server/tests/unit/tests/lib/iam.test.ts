@@ -367,6 +367,23 @@ describe('IAM', () => {
       ).toBe(true);
     });
 
+    test('binding keeps a statement with no condition as it is', () => {
+      const unconditioned = {
+        effect: 'Allow' as const,
+        action: ['memories:ListMemoryStores'],
+      };
+      const document: PolicyDocument = {
+        statement: [unconditioned, ...ownedBy('${soat:ActorId}').statement],
+      };
+
+      const bound = bindPolicyVariables({ document, actorId: 'act_1' });
+
+      expect(bound.statement[0]).toBe(unconditioned);
+      expect(bound.statement[1].condition).toEqual({
+        StringEquals: { 'soat:ResourceTag/owner': 'act_1' },
+      });
+    });
+
     test('with no actor the variable stays unbound and grants nothing', () => {
       const bound = bindPolicyVariables({
         document: ownedBy('${soat:ActorId}'),
