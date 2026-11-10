@@ -784,6 +784,10 @@ components:
         policy_id:
           x-soat-ref: policies
           type: string
+          description: >-
+            Boundary policy for firings. The caller must hold every grant it
+            carries inside the trigger's project, else `403
+            POLICY_GRANT_NOT_HELD`.
 
     UpdateTriggerRequest:
       type: object
@@ -828,6 +832,10 @@ components:
         policy_id:
           x-soat-ref: policies
           type: string
+          description: >-
+            Boundary policy for firings. The caller must hold every grant it
+            carries inside the trigger's project, else `403
+            POLICY_GRANT_NOT_HELD`.
           nullable: true
 
     FireTriggerRequest:

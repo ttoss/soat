@@ -5,12 +5,12 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import type { GetWriterPolicies } from './policyGrantCoverage';
 import {
   decryptStoredSecret,
   encryptValue,
   generateSecretValue,
 } from './secrets';
-import { assertSecretUseAllowed, secretRefIds } from './secretUse';
 import {
   acceptStoredToolContext,
   acceptStoredToolContextUpdate,
@@ -21,6 +21,10 @@ import {
   type TriggerTargetType,
   type TriggerType,
 } from './triggerValidation';
+import {
+  assertTriggerPolicyHeld,
+  assertTriggerUpdateAuthority,
+} from './triggerWriteAuthority';
 
 export type { TriggerTargetType, TriggerType } from './triggerValidation';
 export {
@@ -227,6 +231,8 @@ type CreateTriggerArgs = {
   eventPattern?: string | null;
   active?: boolean;
   isAllowed: IsAllowedFn;
+  /** The writer's policy sets, which must hold every grant of `policyId`. */
+  writerPolicies: GetWriterPolicies;
 };
 
 /**
@@ -311,6 +317,7 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     isAllowed: args.isAllowed,
   });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
+  await assertTriggerPolicyHeld(args);
 
   const trigger = await db.Trigger.create(
     buildCreateAttributes({ ...args, toolContext })
@@ -336,6 +343,8 @@ type UpdateTriggerArgs = {
   eventPattern?: string | null;
   active?: boolean;
   isAllowed: IsAllowedFn;
+  /** The writer's policy sets, which must hold every grant of `policyId`. */
+  writerPolicies: GetWriterPolicies;
 };
 
 /**
@@ -382,21 +391,6 @@ const applyUpdateFields = (
   }
 };
 
-/** Retargeting sends the stored bag's secrets to the new target. */
-const assertRetargetSecretUse = async (params: {
-  trigger: InstanceType<(typeof db)['Trigger']>;
-  args: UpdateTriggerArgs;
-  targetChanged: boolean;
-}): Promise<void> => {
-  // A new bag in the same write is checked by its own ingress.
-  if (!params.targetChanged || params.args.toolContext !== undefined) return;
-  await assertSecretUseAllowed({
-    secretIds: secretRefIds(params.trigger.toolContext),
-    projectId: params.trigger.projectId as number,
-    isAllowed: params.args.isAllowed,
-  });
-};
-
 export const updateTrigger = async (args: UpdateTriggerArgs) => {
   log('updateTrigger: id=%s', args.id);
 
@@ -427,7 +421,7 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     secretRefs: 'resolved',
     isAllowed: args.isAllowed,
   });
-  await assertRetargetSecretUse({ trigger, args, targetChanged });
+  await assertTriggerUpdateAuthority({ trigger, args, targetChanged });
 
   if (args.name !== undefined && args.name !== trigger.name) {
     await assertNameAvailable({

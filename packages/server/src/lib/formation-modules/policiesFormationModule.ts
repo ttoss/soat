@@ -53,12 +53,13 @@ export const policiesFormationModule = defineFormationModule({
     return result;
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     const result = await updatePolicy({
       policyId: physicalResourceId,
       name: toOptionalString(properties.name) ?? undefined,
       description: toOptionalString(properties.description) ?? undefined,
       document: properties.document as PolicyDocument,
+      writerPolicies: actor.getPolicies,
     });
 
     if ('invalid' in result) {

@@ -68,6 +68,7 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
     name,
     description,
     document: document as PolicyDocument,
+    writerPolicies: ctx.authUser!.getPolicies,
   });
 
   if ('invalid' in result) {

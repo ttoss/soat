@@ -1614,7 +1614,9 @@ components:
           type: string
           nullable: true
           description: >-
-            Optional boundary policy that further confines the run-as identity
+            Optional boundary policy that further confines the run-as identity.
+            The deploying caller must hold every grant it carries inside the
+            project, else the resource fails with `POLICY_GRANT_NOT_HELD`.
 
     ApiKeyResourceProperties:
       description: >-

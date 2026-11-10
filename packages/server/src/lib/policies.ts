@@ -5,6 +5,10 @@ import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
 import { emptyPage, paginatedList } from './pagination';
+import {
+  assertWriterHoldsAttachedEdit,
+  type GetWriterPolicies,
+} from './policyGrantCoverage';
 
 const MAX_DEPENDENT_SAMPLE = 5;
 
@@ -85,6 +89,8 @@ export const updatePolicy = async (args: {
   name?: string;
   description?: string;
   document: PolicyDocument;
+  /** The writer's policy sets, which must hold the edit where it is attached. */
+  writerPolicies: GetWriterPolicies;
 }): Promise<
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
@@ -92,6 +98,11 @@ export const updatePolicy = async (args: {
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
   }
+  await assertWriterHoldsAttachedEdit({
+    getPolicies: args.writerPolicies,
+    policyPublicId: args.policyId,
+    document: args.document,
+  });
 
   const policy = await db.Policy.findOne({
     where: { publicId: args.policyId },

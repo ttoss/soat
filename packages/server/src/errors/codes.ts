@@ -268,6 +268,11 @@ export const ERROR_CODES = {
     description:
       'The credential is an API key narrowed by `policy_ids`, and the request would write an API key outside that boundary: no `policy_ids`, an empty list, or a policy the credential does not carry. A narrowed key may only mint or update keys whose `policy_ids` are a non-empty subset of its own. The error meta reports `boundary_policy_ids` and `requested_policy_ids`.',
   },
+  POLICY_GRANT_NOT_HELD: {
+    httpStatus: 403,
+    description:
+      "The request attaches a policy to a trigger, or edits a policy a trigger carries, and the policy grants a permission the caller does not hold in that trigger's project. A resource acting under a policy may do no more than whoever attached it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
+  },
   API_KEY_SCOPED_TOKEN: {
     httpStatus: 403,
     description:
