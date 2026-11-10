@@ -1193,3 +1193,63 @@ describe('2026-09-24-api-key-sha256', () => {
     expect(result.applied).toEqual([]);
   });
 });
+
+describe('2026-11-10-generation-acted-as', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await client.query(`
+      CREATE TABLE generations (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        started_by_principal_type varchar(255),
+        started_by_principal_id varchar(255)
+      );
+
+      INSERT INTO generations (public_id, started_by_principal_type, started_by_principal_id)
+        VALUES ('gen_user', 'user', 'user_abc'), ('gen_none', NULL, NULL);
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-11-10-generation-acted-as'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('a recorded generation acted as the principal that started it', async () => {
+    const rows = await selectRows<{
+      public_id: string;
+      acted_as_principal_type: string | null;
+      acted_as_principal_id: string | null;
+    }>({
+      client,
+      sql: `SELECT public_id, acted_as_principal_type, acted_as_principal_id FROM generations ORDER BY public_id`,
+    });
+
+    expect(rows).toEqual([
+      {
+        public_id: 'gen_none',
+        acted_as_principal_type: null,
+        acted_as_principal_id: null,
+      },
+      {
+        public_id: 'gen_user',
+        acted_as_principal_type: 'user',
+        acted_as_principal_id: 'user_abc',
+      },
+    ]);
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-11-10-generation-acted-as'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});

@@ -383,6 +383,8 @@ export const submitSessionToolOutputs = async (args: {
     agentId: args.agentPublicId,
     generationId: args.generationId,
     toolOutputs: args.toolOutputs,
+    // No credential reaches the session path, so its tool calls run as nobody.
+    actedAs: null,
   });
 
   const turn = await storeResumedConversationTurn({

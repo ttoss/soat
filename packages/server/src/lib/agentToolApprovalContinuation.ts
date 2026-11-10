@@ -24,8 +24,9 @@ const errorMessage = (error: unknown): string => {
 };
 
 /**
- * Re-mints the continuation's credential from the principal persisted on the
- * generation that proposed the approved call.
+ * Re-mints the continuation's credential from the principal the generation that
+ * proposed the approved call acted as: its submitter when a `tool-outputs`
+ * resumption proposed it.
  *
  * The approval can sit pending for days, so identity comes from the row, not
  * the resolving request: the approver decided *whether* the action happens, not
@@ -40,13 +41,13 @@ const resolveContinuationAuthHeader = async (args: {
 
   const proposing = await db.Generation.findOne({
     where: { publicId: args.item.generation_id },
-    attributes: ['startedByPrincipalType', 'startedByPrincipalId'],
+    attributes: ['actedAsPrincipalType', 'actedAsPrincipalId'],
   });
   if (!proposing) return undefined;
 
   return buildRunAuthHeader({
-    principalKind: proposing.startedByPrincipalType,
-    principalId: proposing.startedByPrincipalId,
+    principalKind: proposing.actedAsPrincipalType,
+    principalId: proposing.actedAsPrincipalId,
     projectId: args.projectInternalId,
     workPublicId: args.item.id,
   });

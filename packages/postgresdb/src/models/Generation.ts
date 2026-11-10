@@ -227,6 +227,14 @@ export class Generation extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare startedByPrincipalId: string | null;
 
+  // The principal the latest segment's tool calls ran as: the starter, until a
+  // `tool-outputs` submitter resumes the turn under their own credential.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare actedAsPrincipalType: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare actedAsPrincipalId: string | null;
+
   @Column({
     type: DataType.STRING(32),
     allowNull: false,
