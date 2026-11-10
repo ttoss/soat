@@ -30,6 +30,8 @@ import {
   MemoryStores as MemoryStoresSdk,
   MetadataSchemas as MetadataSchemasSdk,
   ModelRoutes as ModelRoutesSdk,
+  OauthClients as OauthClientsSdk,
+  OauthConnections as OauthConnectionsSdk,
   Orchestrations as OrchestrationsSdk,
   Playbooks as PlaybooksSdk,
   Policies as PoliciesSdk,
@@ -145,6 +147,8 @@ export class SoatClient {
   readonly memoryStores: typeof MemoryStoresSdk;
   readonly metadataSchemas: typeof MetadataSchemasSdk;
   readonly modelRoutes: typeof ModelRoutesSdk;
+  readonly oauthClients: typeof OauthClientsSdk;
+  readonly oauthConnections: typeof OauthConnectionsSdk;
   readonly orchestrations: typeof OrchestrationsSdk;
   readonly playbooks: typeof PlaybooksSdk;
   readonly policies: typeof PoliciesSdk;
@@ -202,6 +206,8 @@ export class SoatClient {
     this.memoryStores = bindResource(MemoryStoresSdk, httpClient);
     this.metadataSchemas = bindResource(MetadataSchemasSdk, httpClient);
     this.modelRoutes = bindResource(ModelRoutesSdk, httpClient);
+    this.oauthClients = bindResource(OauthClientsSdk, httpClient);
+    this.oauthConnections = bindResource(OauthConnectionsSdk, httpClient);
     this.orchestrations = bindResource(OrchestrationsSdk, httpClient);
     this.playbooks = bindResource(PlaybooksSdk, httpClient);
     this.policies = bindResource(PoliciesSdk, httpClient);

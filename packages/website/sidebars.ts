@@ -91,6 +91,8 @@ const sidebars: SidebarsConfig = {
             'modules/model-routes',
             'modules/agents',
             'modules/tools',
+            'modules/oauth-clients',
+            'modules/oauth-connections',
             'modules/sessions',
             'modules/conversations',
             'modules/chats',

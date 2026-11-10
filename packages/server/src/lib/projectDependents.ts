@@ -90,6 +90,9 @@ export const PROJECT_CASCADE_ORDER = [
 
   'Conversation',
   'Session',
+  // Must precede Actor and OauthProviderClient, which its FKs point at.
+  'OauthConnection',
+  'OauthProviderClient',
   'Actor',
   'Chat',
 

@@ -762,6 +762,13 @@ components:
             string) and `scopes` (a non-empty array). Tokens are cached per
             service account and scope set until shortly before they expire.
 
+            - `oauth_connection` — sends the access token of the OAuth connection
+            the turn's actor holds through `oauth_client_id`, refreshing it when it
+            expires. The call is refused unless both the caller and the agent's
+            `policy_ids` allow `oauth-connections:UseOauthConnection` on the
+            connection; with no actor, or no connected connection, it fails with
+            `TOOL_AUTH_FAILED` naming how to reconnect.
+
 
             Credential fields accept `{{secret:...}}` references and should use
             them — a tool is readable by anyone who can `GET /tools`, and the
@@ -1222,6 +1229,13 @@ components:
         string) and `scopes` (a non-empty array). Tokens are cached per
         service account and scope set until shortly before they expire.
 
+        - `oauth_connection` — sends the access token of the OAuth connection
+        the turn's actor holds through `oauth_client_id`, refreshing it when it
+        expires. The call is refused unless both the caller and the agent's
+        `policy_ids` allow `oauth-connections:UseOauthConnection` on the
+        connection; with no actor, or no connected connection, it fails with
+        `TOOL_AUTH_FAILED` naming how to reconnect.
+
 
         Credential fields accept `{{secret:...}}` references and should use
         them — a tool is readable by anyone who can `GET /tools`, and the
@@ -1299,9 +1313,10 @@ components:
         Computed request credential, for a target whose `Authorization`
         value cannot be expressed as a static header. `aws_sigv4` requires
         `region`, `service`, `access_key_id` and `secret_access_key`;
-        `gcp_service_account` requires `credentials` and `scopes`. Every
-        credential field takes a `{{secret:...}}` reference; a literal is
-        refused with `400 LITERAL_CREDENTIAL`.
+        `gcp_service_account` requires `credentials` and `scopes`;
+        `oauth_connection` requires `oauth_client_id`. Every credential field
+        takes a `{{secret:...}}` reference; a literal is refused with
+        `400 LITERAL_CREDENTIAL`.
       required:
         - type
       properties:
@@ -1310,6 +1325,7 @@ components:
           enum:
             - aws_sigv4
             - gcp_service_account
+            - oauth_connection
           description: Which credential is computed.
         region:
           type: string
@@ -1347,6 +1363,14 @@ components:
           items:
             type: string
           description: '`gcp_service_account`: the OAuth scopes to mint the token for.'
+        oauth_client_id:
+          x-soat-ref: oauth-clients
+          type: string
+          nullable: true
+          description: >-
+            `oauth_connection`: the OAuth client whose connection the turn's
+            actor holds.
+          example: oauc_V1StGXR8Z5jdHi6B
     ToolMcpConfig:
       type: object
       nullable: true

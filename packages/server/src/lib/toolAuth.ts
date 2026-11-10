@@ -1,5 +1,6 @@
+import { resolveOauthConnectionAccessToken } from './oauthConnectionTokens';
 import { signAwsSigV4 } from './toolAuthAwsSigV4';
-import type { HttpToolAuthConfig } from './toolAuthConfig';
+import { type HttpToolAuthConfig, toolAuthFailed } from './toolAuthConfig';
 import { getGcpAccessToken } from './toolAuthGcp';
 
 export { signAwsSigV4 } from './toolAuthAwsSigV4';
@@ -7,10 +8,19 @@ export {
   type AwsSigV4AuthConfig,
   type GcpServiceAccountAuthConfig,
   type HttpToolAuthConfig,
+  type OauthConnectionAuthConfig,
   parseHttpToolAuthConfig,
   validateExecuteAuth,
   validateHttpToolAuth,
 } from './toolAuthConfig';
+
+/** Who a call runs for: what an `oauth_connection` credential is chosen and gated by. */
+export type HttpToolAuthIdentity = {
+  projectId: number;
+  actorId?: string;
+  authHeader?: string;
+  boundaryPolicy?: unknown;
+};
 
 /**
  * Computes the credential headers for one request. Returns only the headers to
@@ -23,9 +33,25 @@ export const applyHttpToolAuth = async (args: {
   url: string;
   headers?: Record<string, string>;
   body?: string;
+  identity?: HttpToolAuthIdentity;
   now?: Date;
 }): Promise<Record<string, string>> => {
   const now = args.now ?? new Date();
+
+  if (args.auth.type === 'oauth_connection') {
+    if (!args.identity) {
+      throw toolAuthFailed({
+        message:
+          'execute.auth oauth_connection needs the identity of the call.',
+      });
+    }
+    const accessToken = await resolveOauthConnectionAccessToken({
+      ...args.identity,
+      oauthClientId: args.auth.oauthClientId,
+      now,
+    });
+    return { Authorization: `Bearer ${accessToken}` };
+  }
 
   if (args.auth.type === 'aws_sigv4') {
     return signAwsSigV4({

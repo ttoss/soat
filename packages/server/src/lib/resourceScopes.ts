@@ -39,6 +39,8 @@ import { getMemoryRule } from './memoryRules';
 import { memoryStores } from './memoryStores';
 import { metadataSchemas } from './metadataSchemas';
 import { modelRoutes } from './modelRoutes';
+import { oauthClients } from './oauthClients';
+import { oauthConnections } from './oauthConnections';
 import {
   findRunOrchestrationId,
   orchestrations,
@@ -92,6 +94,20 @@ const sessionAccessor: ScopeAccessor = {
 };
 
 const RESOURCE_KINDS: Record<string, ResourceKind> = {
+  oauth_client: {
+    accessor: () => {
+      return oauthClients;
+    },
+    resourceType: 'oauth_client',
+  },
+
+  oauth_connection: {
+    accessor: () => {
+      return oauthConnections;
+    },
+    resourceType: 'oauth_connection',
+  },
+
   actor: {
     accessor: () => {
       return actors;

@@ -32,6 +32,10 @@ const PERMISSIONLESS_OPERATIONS = new Map([
   ['registerOauthClient', 'OAuth dynamic client registration'],
   ['authorizeOauthClient', 'OAuth authorization endpoint'],
   ['createOauthToken', 'OAuth token endpoint'],
+  [
+    'completeOauthConnection',
+    'the single-use authorization state is the credential',
+  ],
 ]);
 
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'head'];

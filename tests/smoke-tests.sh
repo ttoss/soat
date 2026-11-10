@@ -5422,6 +5422,54 @@ fi
 $SOAT_CLI delete-share --share-id "$SHARE_ID" >/dev/null
 echo "Shares: OK"
 
+# ── OAuth clients and connections ─────────────────────────────────────────
+
+echo ""
+echo "=== OAuth Connections ==="
+
+OAUTH_SECRET_ID=$($SOAT_CLI create-secret --project-id "$PROJECT_PUBLIC_ID" \
+  --name "Smoke OAuth client secret" --value "smoke-client-secret" | jq -r '.id')
+OAUTH_ACTOR_ID=$($SOAT_CLI create-actor --project-id "$PROJECT_PUBLIC_ID" \
+  --name "Smoke OAuth actor" | jq -r '.id')
+
+echo "--- Creating OAuth client ---"
+OAUTH_CLIENT_RESP=$($SOAT_CLI create-oauth-client --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-provider" \
+  --authorize-url "https://example.com/oauth/authorize" \
+  --token-url "https://example.com/oauth/token" \
+  --client-id "smoke-client" \
+  --client-secret "{{secret:$OAUTH_SECRET_ID}}" \
+  --scopes '["read"]')
+OAUTH_CLIENT_ID=$(printf '%s\n' "$OAUTH_CLIENT_RESP" | jq -r '.id')
+if [ -z "$OAUTH_CLIENT_ID" ] || [ "$OAUTH_CLIENT_ID" = "null" ]; then
+  echo "ERROR: Failed to create OAuth client" >&2
+  echo "$OAUTH_CLIENT_RESP" >&2
+  exit 1
+fi
+
+echo "--- Starting OAuth connection ---"
+OAUTH_CONN_RESP=$($SOAT_CLI create-oauth-connection \
+  --oauth-client-id "$OAUTH_CLIENT_ID" --actor-id "$OAUTH_ACTOR_ID")
+OAUTH_CONN_ID=$(printf '%s\n' "$OAUTH_CONN_RESP" | jq -r '.id')
+if ! printf '%s\n' "$OAUTH_CONN_RESP" | jq -e '.status == "pending" and (.authorize_url | test("code_challenge_method=S256")) and (.authorize_url | test("oauth-connections%2Fcallback"))' >/dev/null 2>&1; then
+  echo "ERROR: OAuth connection did not start pending with a PKCE authorize_url" >&2
+  echo "$OAUTH_CONN_RESP" >&2
+  exit 1
+fi
+
+echo "--- Listing the actor's OAuth connections ---"
+OAUTH_LIST_RESP=$($SOAT_CLI list-oauth-connections --project-id "$PROJECT_PUBLIC_ID" \
+  --actor-id "$OAUTH_ACTOR_ID")
+if ! printf '%s\n' "$OAUTH_LIST_RESP" | jq -e --arg id "$OAUTH_CONN_ID" '[.data[].id] == [$id]' >/dev/null 2>&1; then
+  echo "ERROR: LIST oauth-connections did not return the connection" >&2
+  echo "$OAUTH_LIST_RESP" >&2
+  exit 1
+fi
+
+$SOAT_CLI delete-oauth-connection --oauth-connection-id "$OAUTH_CONN_ID" >/dev/null
+$SOAT_CLI delete-oauth-client --oauth-client-id "$OAUTH_CLIENT_ID" >/dev/null
+echo "OAuth client and connection flow passed."
+
 # ── Webhooks ──────────────────────────────────────────────────────────────
 
 echo ""
