@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.104.0](https://github.com/ttoss/soat/compare/v0.103.0...v0.104.0) (2026-11-10)
+
+### Features
+
+* **oauth-connections:** per-actor OAuth connections and http tool auth oauth_connection ([#1851](https://github.com/ttoss/soat/issues/1851)) ([122be98](https://github.com/ttoss/soat/commit/122be98205372c99193454c79b51e6ce0a7666fc))
+
 # [0.103.0](https://github.com/ttoss/soat/compare/v0.102.1...v0.103.0) (2026-11-09)
 
 ### Features
