@@ -77,8 +77,13 @@ const createApiKeyGetPolicies = (args: {
   };
 };
 
-const resolveProjectKey = async (ctx: Context, rawKey: string) => {
-  const verified = await verifyApiKey({ rawKey });
+/** The caller a raw `sk_` key resolves to, or undefined when it is not live. */
+const resolveApiKeyAuthUser = async (args: {
+  db: Context['db'];
+  rawKey: string;
+}): Promise<Context['authUser']> => {
+  const { db } = args;
+  const verified = await verifyApiKey({ rawKey: args.rawKey });
   if (!verified) return;
   const { apiKey: row, user: keyUser } = verified;
   const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
@@ -91,7 +96,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   let apiKeyProjectId: number | undefined;
   let apiKeyProjectPublicId: string | undefined;
   if (rawProjectId != null) {
-    const proj = await ctx.db.Project.findOne({
+    const proj = await db.Project.findOne({
       where: { id: rawProjectId },
     });
     if (proj) {
@@ -105,10 +110,10 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
     userRole: role,
     userPolicyIds,
     apiKeyPolicyIds,
-    db: ctx.db,
+    db,
   });
 
-  ctx.authUser = {
+  return {
     id: keyUser.id as number,
     publicId: keyUser.publicId as string,
     username: keyUser.username as string,
@@ -124,20 +129,20 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
       ? createApiKeyResolveProjectIds({
           apiKeyProjectPublicId,
           apiKeyIsAllowed,
-          db: ctx.db,
+          db,
         })
       : createUnscopedApiKeyResolveProjectIds({
           userRole: role,
           hasKeyBoundary: apiKeyPolicyIds.length > 0,
           apiKeyIsAllowed,
-          db: ctx.db,
+          db,
         }),
     getPolicies: createApiKeyGetPolicies({
       apiKeyProjectPublicId,
       apiKeyPolicyIds,
       userPolicyIds,
       role,
-      db: ctx.db,
+      db,
     }),
   };
 };
@@ -317,6 +322,26 @@ export const resolveJwtAuthUser = async (args: {
         })
       : createJwtGetPolicies({ role, userPolicyIds, db }),
   };
+};
+
+/**
+ * The caller an `Authorization: Bearer` value resolves to, outside a request:
+ * how a tool call evaluates the principal it runs for.
+ */
+export const resolveBearerAuthUser = async (args: {
+  db: Context['db'];
+  authHeader: string | undefined;
+}): Promise<Context['authUser']> => {
+  if (!args.authHeader?.startsWith('Bearer ')) return;
+  const token = args.authHeader.slice(7);
+  return token.startsWith(API_KEY_RAW_PREFIX)
+    ? resolveApiKeyAuthUser({ db: args.db, rawKey: token })
+    : resolveJwtAuthUser({ db: args.db, token });
+};
+
+const resolveProjectKey = async (ctx: Context, rawKey: string) => {
+  const authUser = await resolveApiKeyAuthUser({ db: ctx.db, rawKey });
+  if (authUser) ctx.authUser = authUser;
 };
 
 const resolveJwt = async (ctx: Context, token: string) => {

@@ -40,6 +40,8 @@ describe('mcp transport chokepoint', () => {
       // AI SDK provider requests, not tool calls.
       'egressFetch.ts',
       'mcpTransport.ts',
+      // The OAuth token and revocation requests behind `oauth_connection`.
+      'oauthTokenEndpoint.ts',
       // The GCP token exchange behind an `http` tool's auth.
       'toolAuthGcp.ts',
       'webhookDispatcher.ts',

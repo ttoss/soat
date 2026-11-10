@@ -1079,13 +1079,14 @@ components:
               description: >-
                 Computed request credential. `type` is `aws_sigv4` (with
                 `region`, `service`, `access_key_id`, `secret_access_key` and
-                optional `session_token`) or `gcp_service_account` (with
-                `credentials` and `scopes`). Credential fields accept
+                optional `session_token`), `gcp_service_account` (with
+                `credentials` and `scopes`) or `oauth_connection` (with
+                `oauth_client_id`). Credential fields accept
                 `{{secret:...}}` references.
               properties:
                 type:
                   type: string
-                  description: '`aws_sigv4` or `gcp_service_account`'
+                  description: '`aws_sigv4`, `gcp_service_account` or `oauth_connection`'
                 region:
                   type: string
                   nullable: true
@@ -1118,6 +1119,12 @@ components:
                   items:
                     type: string
                   description: '`gcp_service_account`: the scopes to mint for'
+                oauth_client_id:
+                  type: string
+                  nullable: true
+                  description: >-
+                    `oauth_connection`: the OAuth client whose connection the
+                    turn's actor holds
         mcp:
           type: object
           nullable: true

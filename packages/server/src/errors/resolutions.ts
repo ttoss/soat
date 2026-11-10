@@ -27,6 +27,10 @@ export const errorCodesDocsUrl = (): string => {
  * to act on. Codes not listed here fall back to `STATUS_RESOLUTIONS`.
  */
 export const ERROR_RESOLUTIONS: Record<string, string> = {
+  OAUTH_CALLBACK_FAILED:
+    'Start the connection again with POST /api/v1/oauth-connections and send the person to the new authorize_url; each state is single-use and expires in 10 minutes.',
+  OAUTH_CONNECTION_REFRESH_FAILED:
+    'Have the actor reconnect: POST /api/v1/oauth-connections for the same oauth_client_id and actor_id.',
   LITERAL_CREDENTIAL:
     'Create the value with `POST /secrets` and write `{{secret:<secret_id>}}` where the literal was (for example `Authorization: Bearer {{secret:sec_...}}`); `meta.paths` names every field to change.',
   UNAUTHORIZED:

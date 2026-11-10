@@ -89,6 +89,8 @@ const DOMAIN_LIFECYCLES: Record<string, string> = {
   'tasks.yaml#GET /api/v1/tasks.status':
     'a task is a work item moving through its workflow states',
   'formations.yaml#Formation.status': 'the deployed state of a stack',
+  'oauth-connections.yaml#OauthConnection.status':
+    'whether an actor holds a usable grant at a provider',
   'formations.yaml#FormationResource.status':
     'what the last deploy left a resource as',
 };

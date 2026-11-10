@@ -1,0 +1,30 @@
+{
+  "module": "oauth-clients",
+  "operations": [
+    {
+      "operationId": "listOauthClients",
+      "action": "oauth-clients:ListOauthClients",
+      "description": "List OAuth clients in a project"
+    },
+    {
+      "operationId": "createOauthClient",
+      "action": "oauth-clients:CreateOauthClient",
+      "description": "Create an OAuth client"
+    },
+    {
+      "operationId": "getOauthClient",
+      "action": "oauth-clients:GetOauthClient",
+      "description": "Get an OAuth client"
+    },
+    {
+      "operationId": "updateOauthClient",
+      "action": "oauth-clients:UpdateOauthClient",
+      "description": "Update an OAuth client"
+    },
+    {
+      "operationId": "deleteOauthClient",
+      "action": "oauth-clients:DeleteOauthClient",
+      "description": "Delete an OAuth client and its connections"
+    }
+  ]
+}

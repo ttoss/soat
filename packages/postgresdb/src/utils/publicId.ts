@@ -15,6 +15,8 @@ export const PUBLIC_ID_PREFIXES = {
   actor: 'actor_',
   conversation: 'conv_',
   secret: 'sec_',
+  oauthClient: 'oauc_',
+  oauthConnection: 'ocon_',
   aiProvider: 'aip_',
   chat: 'chat_',
   collection: 'coll_',

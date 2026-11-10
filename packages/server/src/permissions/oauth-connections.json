@@ -1,0 +1,30 @@
+{
+  "module": "oauth-connections",
+  "operations": [
+    {
+      "operationId": "listOauthConnections",
+      "action": "oauth-connections:ListOauthConnections",
+      "description": "List OAuth connections in a project"
+    },
+    {
+      "operationId": "createOauthConnection",
+      "action": "oauth-connections:CreateOauthConnection",
+      "description": "Start or restart an actor's OAuth connection"
+    },
+    {
+      "operationId": "getOauthConnection",
+      "action": "oauth-connections:GetOauthConnection",
+      "description": "Get an OAuth connection (tokens are never returned)"
+    },
+    {
+      "operationId": "deleteOauthConnection",
+      "action": "oauth-connections:DeleteOauthConnection",
+      "description": "Revoke and delete an OAuth connection"
+    },
+    {
+      "operationId": "useOauthConnection",
+      "action": "oauth-connections:UseOauthConnection",
+      "description": "Call a provider with an actor's connection through an http tool"
+    }
+  ]
+}
