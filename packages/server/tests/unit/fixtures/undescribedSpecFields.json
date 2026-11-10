@@ -142,7 +142,6 @@
   "triggers.yaml UpdateTriggerRequest.active",
   "triggers.yaml UpdateTriggerRequest.cron",
   "triggers.yaml UpdateTriggerRequest.description",
-  "triggers.yaml UpdateTriggerRequest.event_pattern",
   "triggers.yaml UpdateTriggerRequest.input",
   "triggers.yaml UpdateTriggerRequest.name",
   "triggers.yaml UpdateTriggerRequest.target_id",

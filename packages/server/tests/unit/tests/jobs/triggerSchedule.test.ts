@@ -16,6 +16,7 @@ const HOUR_MS = 60 * 60 * 1000;
 describe('Schedule trigger tick', () => {
   let userToken: string;
   let projectId: string;
+  let userPolicyId: string;
   let orchestrationId: string;
   let seq = 0;
 
@@ -30,6 +31,7 @@ describe('Schedule trigger tick', () => {
       .send({
         project_id: projectId,
         name: `sched-${seq}`,
+        policy_ids: [userPolicyId],
         type: 'schedule',
         target_type: 'orchestration',
         target_id: orchestrationId,
@@ -85,6 +87,7 @@ describe('Schedule trigger tick', () => {
     });
     userToken = setup.userToken;
     projectId = setup.projectId;
+    userPolicyId = setup.policyId;
 
     const orchestration = await asUser()
       .post('/api/v1/orchestrations')

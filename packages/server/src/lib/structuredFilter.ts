@@ -327,3 +327,56 @@ export const compileStructuredWhere = (args: {
 
   return fragments;
 };
+
+const boundHolds = (args: {
+  operator: RangeOperator;
+  actual: Orderable;
+  value: Orderable;
+}): boolean => {
+  const { operator, actual, value } = args;
+  if (operator === 'gt') return actual > value;
+  if (operator === 'gte') return actual >= value;
+  if (operator === 'lt') return actual < value;
+  return actual <= value;
+};
+
+const isOrderable = (value: unknown): value is Orderable => {
+  return typeof value === 'string' || typeof value === 'number';
+};
+
+const fieldMatches = (args: { filter: FieldFilter; actual: unknown }) => {
+  const { filter, actual } = args;
+  if (filter.kind === 'eq') return actual === filter.value;
+  if (filter.kind === 'in') {
+    return filter.values.some((value) => {
+      return value === actual;
+    });
+  }
+  return filter.bounds.every((bound) => {
+    return (
+      isOrderable(actual) &&
+      typeof actual === jsonTypeOf(bound.value) &&
+      boundHolds({ operator: bound.operator, actual, value: bound.value })
+    );
+  });
+};
+
+/**
+ * The filter asked of one in-memory object, with the meaning the compiled
+ * query gives it: equality and `in` compare a top-level value exactly, and an
+ * ordering holds only on a value of its operand's type. An absent field never
+ * matches.
+ */
+export const matchesStructuredFilter = (args: {
+  filter: StructuredFilter | undefined;
+  data: unknown;
+}): boolean => {
+  if (!hasStructuredFilter(args.filter)) return true;
+  const data = isPlainObject(args.data) ? args.data : {};
+  return Object.entries(args.filter).every(([field, filter]) => {
+    return (
+      Object.hasOwn(data, field) &&
+      fieldMatches({ filter, actual: data[field] })
+    );
+  });
+};

@@ -52,6 +52,7 @@ import { modelFacingSchemasJson } from './2026-11-01-modelFacingSchemasJson';
 import { payloadsKeepKeyOrder } from './2026-11-01-payloadsKeepKeyOrder';
 import { agentPolicyIds } from './2026-11-10-agentPolicyIds';
 import { generationActedAs } from './2026-11-10-generationActedAs';
+import { triggerPolicyIds } from './2026-11-10-triggerPolicyIds';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -125,4 +126,5 @@ export const MIGRATIONS: Migration[] = [
   payloadsKeepKeyOrder,
   generationActedAs,
   agentPolicyIds,
+  triggerPolicyIds,
 ];

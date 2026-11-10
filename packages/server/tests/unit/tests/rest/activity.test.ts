@@ -14,6 +14,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Activity', () => {
   let adminToken: string;
+  let userPolicyId: string;
   let userToken: string;
   let noPermToken: string;
   let projectId: string;
@@ -55,6 +56,7 @@ describe('Activity', () => {
       createOtherProject: true,
     });
     adminToken = setup.adminToken;
+    userPolicyId = setup.policyId;
     userToken = setup.userToken;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
@@ -495,6 +497,7 @@ describe('Activity', () => {
         .send({
           project_id: projectId,
           name: `activity-trg-${Date.now()}`,
+          policy_ids: [userPolicyId],
           type: 'schedule',
           target_type: 'orchestration',
           target_id: orchRes.body.id,

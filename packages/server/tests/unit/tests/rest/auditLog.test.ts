@@ -23,6 +23,7 @@ let adminToken: string;
 let userToken: string;
 let noPermToken: string;
 let projectId: string;
+let userPolicyId: string;
 
 beforeAll(async () => {
   const setup = await setupProjectWithUsers({
@@ -46,6 +47,7 @@ beforeAll(async () => {
     createNoPermUser: true,
   });
   adminToken = setup.adminToken;
+  userPolicyId = setup.policyId;
   userToken = setup.userToken;
   noPermToken = setup.noPermToken!;
   projectId = setup.projectId;
@@ -170,6 +172,7 @@ describe('Audit Log — write hook', () => {
       .send({
         project_id: projectId,
         name: 'audit-trigger',
+        policy_ids: [userPolicyId],
         type: 'manual',
         target_type: 'tool',
         target_id: toolId,

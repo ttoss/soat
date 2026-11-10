@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import { JWT_SECRET } from 'src/middleware/auth';
 
+import { createAllowAllPolicy } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Projects', () => {
@@ -1149,6 +1150,7 @@ describe('Projects', () => {
         .send({
           project_id: project,
           name: 'late-module-trigger',
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
           type: 'webhook',
           target_type: 'agent',
           target_id: agentRes.body.id,

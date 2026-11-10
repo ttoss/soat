@@ -777,20 +777,27 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
 ## Step 7 — Put the close on a schedule
 
 Create a `manual` [trigger](/docs/modules/triggers#examples) to fire the pass on
-demand and a `schedule` trigger for 02:00 UTC on the first of each month. Firing
-returns a terminal firing record whose `result.result_id` is the orchestration
-run it started.
+demand and a `schedule` trigger for 02:00 UTC on the first of each month. Both
+act under a policy confined to this project, their
+[`policy_ids`](/docs/modules/triggers#execution-identity). Firing returns a
+terminal firing record whose `result.result_id` is the orchestration run it
+started.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+CLOSE_POLICY_ID=$(soat create-policy \
+  --name "month-end-close" \
+  --document '{"statement":[{"effect":"Allow","action":["*"],"resource":["srn:'"$PROJECT_ID"':*:*"]}]}' | jq -r '.id')
+
 MANUAL_TRIGGER_ID=$(soat create-trigger \
   --project-id "$PROJECT_ID" \
   --name "run-close-now" \
   --type manual \
   --target-type orchestration \
   --target-id "$CLOSE_ORCH_ID" \
+  --policy-ids '["'"$CLOSE_POLICY_ID"'"]' \
   --input '{
     "ledger": { "cash": 128450.25, "ar": 64200.00, "ap": 31775.50 },
     "statements": { "bank": 128450.25, "ar_subledger": 64200.00, "ap_subledger": 31775.50 },
@@ -808,6 +815,7 @@ MONTHLY_TRIGGER_ID=$(soat create-trigger \
   --target-type orchestration \
   --target-id "$CLOSE_ORCH_ID" \
   --cron "0 2 1 * *" \
+  --policy-ids '["'"$CLOSE_POLICY_ID"'"]' \
   --input '{
     "ledger": { "cash": 128450.25, "ar": 64200.00, "ap": 31775.50 },
     "statements": { "bank": 128450.25, "ar_subledger": 64200.00, "ap_subledger": 31775.50 },
@@ -835,6 +843,17 @@ const staticInput = {
   tolerance: 1,
 };
 
+const { data: closePolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'month-end-close',
+    document: {
+      statement: [
+        { effect: 'Allow', action: ['*'], resource: [`srn:${PROJECT_ID}:*:*`] },
+      ],
+    },
+  },
+});
+
 const { data: manualTrigger } = await adminSoat.triggers.createTrigger({
   body: {
     project_id: PROJECT_ID,
@@ -842,6 +861,7 @@ const { data: manualTrigger } = await adminSoat.triggers.createTrigger({
     type: 'manual',
     target_type: 'orchestration',
     target_id: CLOSE_ORCH_ID,
+    policy_ids: [closePolicy.id],
     input: staticInput,
   },
 });
@@ -860,6 +880,7 @@ const { data: monthlyTrigger } = await adminSoat.triggers.createTrigger({
     target_type: 'orchestration',
     target_id: CLOSE_ORCH_ID,
     cron: '0 2 1 * *',
+    policy_ids: [closePolicy.id],
     input: staticInput,
   },
 });
@@ -870,10 +891,15 @@ console.log(monthlyTrigger.next_fire_at);
 <TabItem value="curl" label="curl">
 
 ```bash
+CLOSE_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"month-end-close","document":{"statement":[{"effect":"Allow","action":["*"],"resource":["srn:'"$PROJECT_ID"':*:*"]}]}}' | jq -r '.id')
+
 MANUAL_TRIGGER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"run-close-now","type":"manual","target_type":"orchestration","target_id":"'"$CLOSE_ORCH_ID"'","input":{"ledger":{"cash":128450.25,"ar":64200.00,"ap":31775.50},"statements":{"bank":128450.25,"ar_subledger":64200.00,"ap_subledger":31775.50},"tolerance":1}}' \
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"run-close-now","type":"manual","target_type":"orchestration","target_id":"'"$CLOSE_ORCH_ID"'","policy_ids":["'"$CLOSE_POLICY_ID"'"],"input":{"ledger":{"cash":128450.25,"ar":64200.00,"ap":31775.50},"statements":{"bank":128450.25,"ar_subledger":64200.00,"ap_subledger":31775.50},"tolerance":1}}' \
   | jq -r '.id')
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers/$MANUAL_TRIGGER_ID/fire" \
@@ -884,7 +910,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers/$MANUAL_TRIGGER_ID/fire" \
 MONTHLY_TRIGGER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"month-end-close","type":"schedule","target_type":"orchestration","target_id":"'"$CLOSE_ORCH_ID"'","cron":"0 2 1 * *","input":{"ledger":{"cash":128450.25,"ar":64200.00,"ap":31775.50},"statements":{"bank":128450.25,"ar_subledger":64200.00,"ap_subledger":31775.50},"tolerance":1}}' \
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"month-end-close","type":"schedule","target_type":"orchestration","target_id":"'"$CLOSE_ORCH_ID"'","cron":"0 2 1 * *","policy_ids":["'"$CLOSE_POLICY_ID"'"],"input":{"ledger":{"cash":128450.25,"ar":64200.00,"ap":31775.50},"statements":{"bank":128450.25,"ar_subledger":64200.00,"ap_subledger":31775.50},"tolerance":1}}' \
   | jq -r '.id')
 
 curl -s "$SOAT_BASE_URL/api/v1/triggers/$MONTHLY_TRIGGER_ID" \

@@ -287,10 +287,11 @@ export const assertWriterHoldsPolicies = async (args: {
 };
 
 /**
- * The projects of every agent whose live config or any archived version
- * names the policy: a version is served again by a release or a restore.
+ * The projects of every trigger naming the policy, and of every agent whose
+ * live config or any archived version names it: a version is served again by
+ * a release or a restore.
  */
-const projectsOfAgentsCarrying = async (
+const projectsOfCarriers = async (
   policyPublicId: string
 ): Promise<string[]> => {
   const [rows] = await db.sequelize.query(
@@ -301,7 +302,12 @@ const projectsOfAgentsCarrying = async (
          OR EXISTS (
               SELECT 1 FROM agent_versions v
                WHERE v.agent_id = a.id
-                 AND (v.config::jsonb -> 'policy_ids') @> :ids::jsonb)`,
+                 AND (v.config::jsonb -> 'policy_ids') @> :ids::jsonb)
+     UNION
+     SELECT p.public_id
+       FROM triggers t
+       JOIN projects p ON p.id = t.project_id
+      WHERE t.policy_ids @> :ids::jsonb`,
     { replacements: { ids: JSON.stringify([policyPublicId]) } }
   );
   return (rows as { public_id: string }[]).map((row) => {
@@ -319,24 +325,7 @@ export const assertWriterHoldsAttachedEdit = async (args: {
   document: PolicyDocument;
 }): Promise<void> => {
   log('assertWriterHoldsAttachedEdit: policy=%s', args.policyPublicId);
-  const policy = await db.Policy.findOne({
-    where: { publicId: args.policyPublicId },
-  });
-  if (!policy) return;
-  const [triggers, agentProjects] = await Promise.all([
-    db.Trigger.findAll({
-      where: { policyId: policy.id },
-      attributes: ['projectId'],
-      include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
-    }),
-    projectsOfAgentsCarrying(args.policyPublicId),
-  ]);
-  const projectPublicIds = new Set([
-    ...triggers.map((trigger) => {
-      return trigger.project?.publicId as string;
-    }),
-    ...agentProjects,
-  ]);
+  const projectPublicIds = await projectsOfCarriers(args.policyPublicId);
   for (const projectPublicId of projectPublicIds) {
     await assertCovered({
       getPolicies: args.getPolicies,

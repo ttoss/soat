@@ -134,6 +134,14 @@ export class TriggerFiring extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare leaseExpiresAt: Date | null;
 
+  // The principal the firing acted as: the trigger itself, or the caller of a
+  // manual fire.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare actedAsPrincipalType: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare actedAsPrincipalId: string | null;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare startedAt: Date | null;
 

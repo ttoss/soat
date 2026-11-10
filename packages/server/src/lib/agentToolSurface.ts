@@ -39,7 +39,7 @@ export const resolveAgentToolSurface = async (args: {
   projectIds?: number[];
   typedAgent: TypedAgent;
   /**
-   * The agent's `policy_ids` resolved for this turn (`resolveAgentBoundary`);
+   * The agent's `policy_ids` resolved for this turn (`resolveAttachedPolicies`);
    * `null` is no cap. Required, so no path offers tools uncapped by omission.
    */
   boundaryPolicy: PolicyDocument | null;

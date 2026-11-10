@@ -13,7 +13,6 @@ import {
   readKnowledgeConfig,
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
-import { resolveAgentBoundary } from './agentPolicies';
 import {
   resolveServedAgentVersion,
   withOutputSchema,
@@ -22,6 +21,7 @@ import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
+import { resolveAttachedPolicies } from './attachedPolicies';
 import { resolveServerToolContextIdentity } from './generationAttribution';
 import {
   type GenerationInputMessage,
@@ -248,7 +248,7 @@ export const buildGenerationContext = async (
     outputSchema: args.outputSchemaOverride,
   });
 
-  const boundaryPolicy = await resolveAgentBoundary({
+  const boundaryPolicy = await resolveAttachedPolicies({
     policyIds: typedAgent.policyIds,
     actorId: toolContext?.actor_id,
   });

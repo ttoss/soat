@@ -60,6 +60,8 @@ export type AuthUser = {
   isControlPlaneKey?: boolean;
   /** Public string id of the project an OAuth token is scoped to. */
   oauthProjectPublicId?: string;
+  /** An OAuth token's consented scope claim, which narrows what it may do. */
+  oauthScope?: string;
   /**
    * True when the caller authenticated with a trigger run-as token (`trg`
    * claim). Used by the fire endpoint to reject trigger→trigger recursion.

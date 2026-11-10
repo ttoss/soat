@@ -7,7 +7,10 @@ import { flushProjectResumes } from 'src/lib/projectPauseActions';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import { fireDueTriggers } from 'src/lib/triggerScheduler';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createAllowAllPolicy,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -413,6 +416,7 @@ describe('Project pause — work in motion', () => {
         .send({
           project_id: projectId,
           name: `trg-${Math.random()}`,
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
           target_type: 'agent',
           target_id: agentId,
           ...body,

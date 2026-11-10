@@ -2,6 +2,7 @@ import type { IncomingHttpHeaders, Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { createAllowAllPolicy } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -286,6 +287,7 @@ describe('Shared tools', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
           project_id: granteeId,
           name: 'shared-tool-trigger',
           type: 'manual',

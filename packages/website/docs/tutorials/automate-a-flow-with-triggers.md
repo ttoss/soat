@@ -16,8 +16,8 @@ import TabItem from '@theme/TabItem';
 
 A [Trigger](/docs/modules/triggers) binds a starter (`manual`, `webhook`, `schedule`)
 to a target (orchestration, agent, tool). Each firing is an auditable
-[firing record](/docs/modules/triggers#data-model) run under an identity derived from
-the trigger's creator. You bind one orchestration to all three starters.
+[firing record](/docs/modules/triggers#data-model) run under the trigger's own
+`policy_ids`. You bind one orchestration to all three starters.
 
 ## Prerequisites
 
@@ -199,18 +199,25 @@ echo "Orchestration: $ORCH_ID"
 
 `input` is the [Trigger](/docs/modules/triggers)'s static input, shallow-merged under
 each firing's runtime input. Creating a trigger requires the target-start permission
-(`orchestrations:StartRun`) — [Triggers — Run-as Identity](/docs/modules/triggers#run-as-identity).
+(`orchestrations:StartRun`), and every firing acts under the trigger's `policy_ids`
+— [Triggers — Execution Identity](/docs/modules/triggers#execution-identity). The
+policy below lets a firing start the orchestration and nothing else.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+POLICY_ID=$(soat create-policy \
+  --name "run-daily-cycle" \
+  --document '{"statement":[{"effect":"Allow","action":["orchestrations:StartRun"]}]}' | jq -r '.id')
+
 TRIGGER_ID=$(soat create-trigger \
   --project-id "$PROJECT_ID" \
   --name "run-daily-cycle" \
   --type manual \
   --target-type orchestration \
   --target-id "$ORCH_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --input '{"cycle":"daily"}' | jq -r '.id')
 echo "Trigger: $TRIGGER_ID"
 ```
@@ -219,6 +226,16 @@ echo "Trigger: $TRIGGER_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: policy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'run-daily-cycle',
+    document: {
+      statement: [{ effect: 'Allow', action: ['orchestrations:StartRun'] }],
+    },
+  },
+});
+const policyId = policy.id;
+
 const { data: trigger } = await adminSoat.triggers.createTrigger({
   body: {
     project_id: projectId,
@@ -226,6 +243,7 @@ const { data: trigger } = await adminSoat.triggers.createTrigger({
     type: 'manual',
     target_type: 'orchestration',
     target_id: orchestrationId,
+    policy_ids: [policyId],
     input: { cycle: 'daily' },
   },
 });
@@ -236,10 +254,15 @@ const triggerId = trigger.id;
 <TabItem value="curl" label="curl">
 
 ```bash
+POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"run-daily-cycle","document":{"statement":[{"effect":"Allow","action":["orchestrations:StartRun"]}]}}' | jq -r '.id')
+
 TRIGGER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"run-daily-cycle","type":"manual","target_type":"orchestration","target_id":"'"$ORCH_ID"'","input":{"cycle":"daily"}}' | jq -r '.id')
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"run-daily-cycle","type":"manual","target_type":"orchestration","target_id":"'"$ORCH_ID"'","policy_ids":["'"$POLICY_ID"'"],"input":{"cycle":"daily"}}' | jq -r '.id')
 
 echo "Trigger: $TRIGGER_ID"
 ```
@@ -327,6 +350,7 @@ SCHEDULE_ID=$(soat create-trigger \
   --target-type orchestration \
   --target-id "$ORCH_ID" \
   --cron "0 8 * * *" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --input '{"cycle":"scheduled"}' | jq -r '.id')
 
 # next_fire_at is server-computed in UTC.
@@ -345,6 +369,7 @@ const { data: schedule } = await adminSoat.triggers.createTrigger({
     target_type: 'orchestration',
     target_id: orchestrationId,
     cron: '0 8 * * *',
+    policy_ids: [policyId],
     input: { cycle: 'scheduled' },
   },
 });
@@ -358,7 +383,7 @@ console.log(schedule.next_fire_at); // server-computed UTC timestamp
 curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"daily-cycle-8am","type":"schedule","target_type":"orchestration","target_id":"'"$ORCH_ID"'","cron":"0 8 * * *","input":{"cycle":"scheduled"}}'
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"daily-cycle-8am","type":"schedule","target_type":"orchestration","target_id":"'"$ORCH_ID"'","cron":"0 8 * * *","policy_ids":["'"$POLICY_ID"'"],"input":{"cycle":"scheduled"}}'
 ```
 
 </TabItem>
@@ -384,7 +409,8 @@ WEBHOOK_TRIGGER_ID=$(soat create-trigger \
   --name "cycle-on-webhook" \
   --type webhook \
   --target-type orchestration \
-  --target-id "$ORCH_ID" | jq -r '.id')
+  --target-id "$ORCH_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' | jq -r '.id')
 
 # Retrieve the current signing secret (webhook triggers only).
 soat get-trigger-secret --trigger-id "$WEBHOOK_TRIGGER_ID"
@@ -404,6 +430,7 @@ const { data: webhookTrigger } = await adminSoat.triggers.createTrigger({
     type: 'webhook',
     target_type: 'orchestration',
     target_id: orchestrationId,
+    policy_ids: [policyId],
   },
 });
 
@@ -423,7 +450,7 @@ const { data: rotated } = await adminSoat.triggers.rotateTriggerSecret({
 WEBHOOK_TRIGGER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"cycle-on-webhook","type":"webhook","target_type":"orchestration","target_id":"'"$ORCH_ID"'"}' | jq -r '.id')
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"cycle-on-webhook","type":"webhook","target_type":"orchestration","target_id":"'"$ORCH_ID"'","policy_ids":["'"$POLICY_ID"'"]}' | jq -r '.id')
 
 SECRET=$(curl -s "$SOAT_BASE_URL/api/v1/triggers/$WEBHOOK_TRIGGER_ID/secret" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.secret')

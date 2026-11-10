@@ -22,12 +22,15 @@ type Firing = {
   error: Record<string, unknown> | null;
   idempotency_key: string | null;
   attempts: number;
+  acted_as: { principal_type: string; principal_id: string } | null;
 };
 
 describe('Event trigger dispatch', () => {
   let adminToken: string;
   let userToken: string;
   let projectId: string;
+  /** The user's own policy, which reads and starts orchestration runs. */
+  let userPolicyId: string;
   /** Emits nothing, so firing it cannot extend a causal chain. */
   let inertOrchestrationId: string;
   let seq = 0;
@@ -67,6 +70,7 @@ describe('Event trigger dispatch', () => {
     targetId: string;
     eventPattern: string;
     policyId?: string;
+    filter?: Record<string, unknown>;
     token?: string;
   }): Promise<string> => {
     seq += 1;
@@ -76,10 +80,11 @@ describe('Event trigger dispatch', () => {
         project_id: projectId,
         name: `evt-${seq}`,
         type: 'event',
-        event_pattern: args.eventPattern,
+        events: [args.eventPattern],
         target_type: 'orchestration',
         target_id: args.targetId,
-        ...(args.policyId ? { policy_id: args.policyId } : {}),
+        policy_ids: [args.policyId ?? userPolicyId],
+        ...args.filter,
       });
     expect(res.status).toBe(201);
     return res.body.id;
@@ -185,6 +190,7 @@ describe('Event trigger dispatch', () => {
         'triggers:ListTriggerFirings',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
+        'orchestrations:GetRun',
         'exceptions:ListExceptions',
       ],
       createNoPermUser: false,
@@ -192,6 +198,7 @@ describe('Event trigger dispatch', () => {
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
+    userPolicyId = setup.policyId;
 
     inertOrchestrationId = await createOrchestration({ name: 'Inert' });
   }, 120_000);
@@ -231,6 +238,10 @@ describe('Event trigger dispatch', () => {
         target_type: 'orchestration',
         status: 'completed',
       });
+      expect(firing.acted_as).toEqual({
+        principal_type: 'trigger',
+        principal_id: triggerId,
+      });
     }, 60_000);
 
     test('a pattern that does not match, or an inactive trigger, does not fire', async () => {
@@ -261,38 +272,77 @@ describe('Event trigger dispatch', () => {
       expect(await listFirings({ triggerId: inactive })).toHaveLength(0);
     }, 60_000);
 
-    test('an attached policy that denies the event blocks the firing', async () => {
-      const createPolicy = async (effect: string): Promise<string> => {
-        const res = await authenticatedTestClient(adminToken)
-          .post('/api/v1/policies')
-          .send({
-            document: {
-              statement: [{ effect, action: ['*'], resource: ['*'] }],
-            },
-          });
-        expect(res.status).toBe(201);
-        return res.body.id;
-      };
+    test('a trigger whose policy_ids cannot read the event resource does not fire', async () => {
+      const startOnly = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['orchestrations:StartRun'] },
+            ],
+          },
+        });
+      expect(startOnly.status).toBe(201);
       const emitter = await createEmitter();
-      const blocked = await createEventTrigger({
+      const blind = await createEventTrigger({
         targetId: inertOrchestrationId,
         eventPattern: emitter.eventName,
-        policyId: await createPolicy('Deny'),
+        policyId: startOnly.body.id,
       });
-      // A custom event type is matched only by `*`, a grant only an admin
-      // holds and so only an admin attaches.
-      const allowed = await createEventTrigger({
+      const witness = await createEventTrigger({
         targetId: inertOrchestrationId,
         eventPattern: emitter.eventName,
-        policyId: await createPolicy('Allow'),
-        token: adminToken,
       });
 
       await emitter.emit();
 
-      const [firing] = await waitForFirings({ triggerId: allowed, count: 1 });
+      await waitForFirings({ triggerId: witness, count: 1 });
+      expect(await listFirings({ triggerId: blind })).toHaveLength(0);
+    }, 60_000);
+
+    test('event_resources and event_data narrow which events fire it', async () => {
+      const emitter = await createEmitter();
+      const otherResource = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: { event_resources: [`srn:${projectId}:document:*`] },
+      });
+      const otherData = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: { event_data: { reason: 'other' } },
+      });
+      const otherType = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: { event_data: { reason: { lt: 5 } } },
+      });
+      const matching = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: {
+          event_resources: [`srn:${projectId}:orchestration_run:*`],
+          event_data: { reason: { in: ['cycle', 'other'] } },
+        },
+      });
+      const inRange = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: {
+          event_data: {
+            reason: { gt: 'a', gte: 'cycle', lt: 'z', lte: 'cycle' },
+          },
+        },
+      });
+
+      await emitter.emit();
+
+      const [firing] = await waitForFirings({ triggerId: matching, count: 1 });
       expect(firing.status).toBe('completed');
-      expect(await listFirings({ triggerId: blocked })).toHaveLength(0);
+      await waitForFirings({ triggerId: inRange, count: 1 });
+      expect(await listFirings({ triggerId: otherResource })).toHaveLength(0);
+      expect(await listFirings({ triggerId: otherData })).toHaveLength(0);
+      expect(await listFirings({ triggerId: otherType })).toHaveLength(0);
     }, 60_000);
 
     test('a trigger whose input cannot satisfy its target is skipped, the others still run', async () => {
@@ -452,13 +502,19 @@ describe('Event trigger dispatch', () => {
         project: quotaProjectId,
         token: adminToken,
       });
+      const allowAll = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: { statement: [{ effect: 'Allow', action: ['*'] }] },
+        });
       const trigger = await authenticatedTestClient(adminToken)
         .post('/api/v1/triggers')
         .send({
           project_id: quotaProjectId,
           name: 'quota-evt',
           type: 'event',
-          event_pattern: EVENT_NAME,
+          events: [EVENT_NAME],
+          policy_ids: [allowAll.body.id],
           target_type: 'orchestration',
           target_id: inert,
         });

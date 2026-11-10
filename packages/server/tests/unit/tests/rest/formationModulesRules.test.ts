@@ -11,6 +11,7 @@ let adminToken: string;
 let projectId: string;
 let aiProviderId: string;
 let agentId: string;
+let triggerPolicyId: string;
 let converterToolId: string;
 let datasetId: string;
 let counter = 0;
@@ -93,6 +94,7 @@ beforeAll(async () => {
     createNoPermUser: false,
   });
   adminToken = setup.adminToken;
+  triggerPolicyId = setup.policyId;
   projectId = setup.projectId;
 
   const providerRes = await client().post('/api/v1/ai-providers').send({
@@ -245,6 +247,7 @@ describe('POST /api/v1/formations/validate — module rules', () => {
       name: 'cron belongs to a schedule trigger only',
       template: () => {
         return one('trigger', {
+          policy_ids: [triggerPolicyId],
           name: 'Bad',
           type: 'manual',
           target_type: 'agent',
@@ -258,6 +261,7 @@ describe('POST /api/v1/formations/validate — module rules', () => {
       name: 'a schedule trigger cron parses',
       template: () => {
         return one('trigger', {
+          policy_ids: [triggerPolicyId],
           name: 'Bad',
           type: 'schedule',
           target_type: 'agent',
@@ -271,6 +275,7 @@ describe('POST /api/v1/formations/validate — module rules', () => {
       name: 'an action belongs to a tool target only',
       template: () => {
         return one('trigger', {
+          policy_ids: [triggerPolicyId],
           name: 'Bad',
           type: 'manual',
           target_type: 'agent',
@@ -639,6 +644,7 @@ describe('POST /api/v1/formations/plan — a resource removed out of band reads 
       route: 'triggers',
       template: () => {
         return one('trigger', {
+          policy_ids: [triggerPolicyId],
           name: `Gone ${seed()}`,
           type: 'manual',
           target_type: 'agent',
@@ -801,6 +807,7 @@ describe('PUT /api/v1/formations/:formation_id — write-only and side-effecting
           type: 'manual',
           target_type: 'agent',
           target_id: agentId,
+          policy_ids: [triggerPolicyId],
           ...(toolContext === undefined ? {} : { tool_context: toolContext }),
         };
       },

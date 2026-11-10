@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createAllowAllPolicy,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -101,6 +104,7 @@ describe('Server-minted secrets', () => {
         .send({
           project_id: projectId,
           name: 'entropy-trigger',
+          policy_ids: [await createAllowAllPolicy({ adminToken })],
           type: 'webhook',
           target_type: 'agent',
           target_id: agentId,

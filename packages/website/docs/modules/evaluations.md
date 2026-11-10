@@ -647,7 +647,9 @@ its origin in `trigger_id` and keeps it if the trigger is later deleted.
 The trigger's `input` may carry `agent_version` and `baseline_run_id`, validated at fire
 time: a stale version fails the **firing** (reason on the firing record) instead of
 creating a run. Creating an eval-target trigger requires `evaluations:RunEval` on top of
-`triggers:CreateTrigger`. A trigger carries no [`tool_context`](#run-tool-context); an
+`triggers:CreateTrigger`, and the trigger's [`policy_ids`](./triggers.md#execution-identity)
+(`$POLICY_ID` below) must allow `evaluations:RunEval`, the grant every firing acts under.
+A trigger carries no [`tool_context`](#run-tool-context); an
 eval whose agent needs one has to be started through the API.
 
 <Tabs groupId="client">
@@ -660,7 +662,8 @@ soat create-trigger \
   --type schedule \
   --target-type eval \
   --target-id "$EVAL_ID" \
-  --cron "0 3 * * *"
+  --cron "0 3 * * *" \
+  --policy-ids '["'"$POLICY_ID"'"]'
 ```
 
 </TabItem>
@@ -675,6 +678,7 @@ const { data, error } = await soat.triggers.createTrigger({
     target_type: 'eval',
     target_id: evalId,
     cron: '0 3 * * *',
+    policy_ids: [policyId],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -693,7 +697,8 @@ curl -X POST https://api.example.com/api/v1/triggers \
     "type": "schedule",
     "target_type": "eval",
     "target_id": "'"$EVAL_ID"'",
-    "cron": "0 3 * * *"
+    "cron": "0 3 * * *",
+    "policy_ids": ["'"$POLICY_ID"'"]
   }'
 ```
 

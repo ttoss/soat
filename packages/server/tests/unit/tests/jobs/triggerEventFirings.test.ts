@@ -39,6 +39,7 @@ describe('Durable event firings', () => {
   let projectId: string;
   let projectDbId: number;
   let inertOrchestrationId: string;
+  let userPolicyId: string;
   let seq = 0;
 
   const asUser = () => {
@@ -53,7 +54,8 @@ describe('Durable event firings', () => {
         project_id: projectId,
         name: `durable-${seq}`,
         type: 'event',
-        event_pattern: EVENT_NAME,
+        events: [EVENT_NAME],
+        policy_ids: [userPolicyId],
         target_type: 'orchestration',
         target_id: inertOrchestrationId,
       });
@@ -117,6 +119,7 @@ describe('Durable event firings', () => {
       policyActions: [
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
+        'orchestrations:GetRun',
         'triggers:CreateTrigger',
         'triggers:ListTriggerFirings',
         'triggers:GetTriggerFiring',
@@ -125,6 +128,7 @@ describe('Durable event firings', () => {
     });
     userToken = setup.userToken;
     projectId = setup.projectId;
+    userPolicyId = setup.policyId;
     projectDbId = (await db.Project.findOne({
       where: { publicId: projectId },
     }))!.id as number;

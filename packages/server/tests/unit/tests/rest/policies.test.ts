@@ -508,7 +508,7 @@ describe('Policies', () => {
         type: 'manual',
         target_type: 'orchestration',
         target_id: orchestrationRes.body.id,
-        policy_id: policyId,
+        policy_ids: [policyId],
       });
       expect(triggerRes.status).toBe(201);
 
@@ -522,9 +522,10 @@ describe('Policies', () => {
         agent_sample: [],
       });
 
+      const other = await client.post('/api/v1/policies').send(sendDoc());
       const detached = await client
         .patch(`/api/v1/triggers/${triggerRes.body.id}`)
-        .send({ policy_id: null });
+        .send({ policy_ids: [other.body.id] });
       expect(detached.status).toBe(200);
 
       const deleted = await client.delete(`/api/v1/policies/${policyId}`);

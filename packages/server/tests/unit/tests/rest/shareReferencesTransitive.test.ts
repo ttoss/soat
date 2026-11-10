@@ -1,3 +1,4 @@
+import { createAllowAllPolicy } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -131,6 +132,7 @@ describe('Share references through local resources', () => {
       edges: [],
     });
     const trigger = await createIn(granteeId, '/api/v1/triggers', {
+      policy_ids: [await createAllowAllPolicy({ adminToken })],
       name: 'fires-the-orchestration',
       type: 'manual',
       target_type: 'orchestration',

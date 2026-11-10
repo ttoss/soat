@@ -24,6 +24,7 @@ describe('Triggers', () => {
   let mcpToolId: string;
   let clientToolId: string;
   let evalId: string;
+  let triggerPolicyId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -61,6 +62,7 @@ describe('Triggers', () => {
     userToken = setup.userToken;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
+    triggerPolicyId = setup.policyId;
     otherProjectId = setup.otherProjectId as string;
 
     // A user that can create triggers but cannot start any target — used to
@@ -176,6 +178,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'manual-orch',
           type: 'manual',
@@ -200,6 +203,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'webhook-agent',
           type: 'webhook',
@@ -217,6 +221,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'schedule-tool',
           type: 'schedule',
@@ -235,6 +240,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'schedule-nocron',
           type: 'schedule',
@@ -250,6 +256,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'manual-with-cron',
           type: 'manual',
@@ -266,6 +273,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'schedule-badcron',
           type: 'schedule',
@@ -278,10 +286,11 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('INVALID_CRON_EXPRESSION');
     });
 
-    test('creates an event trigger with an event_pattern', async () => {
+    test('creates an event trigger from event_pattern, read back as events', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-ingested',
           type: 'event',
@@ -292,7 +301,10 @@ describe('Triggers', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.type).toBe('event');
-      expect(res.body.event_pattern).toBe('documents.ingested');
+      expect(res.body.events).toEqual(['documents.ingested']);
+      expect(res.body.event_pattern).toBeUndefined();
+      expect(res.body.event_resources).toBeNull();
+      expect(res.body.event_data).toBeNull();
       expect(res.body.cron).toBeNull();
       // Only webhook triggers carry a signing secret; an event trigger's
       // authenticity comes from the bus, not an HMAC.
@@ -303,28 +315,30 @@ describe('Triggers', () => {
       const prefix = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-documents-any',
           type: 'event',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          event_pattern: 'documents.*',
+          events: ['documents.*'],
         });
       expect(prefix.status).toBe(201);
-      expect(prefix.body.event_pattern).toBe('documents.*');
+      expect(prefix.body.events).toEqual(['documents.*']);
 
       const all = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-any',
           type: 'event',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          event_pattern: '*',
+          events: ['*'],
         });
       expect(all.status).toBe(201);
-      expect(all.body.event_pattern).toBe('*');
+      expect(all.body.events).toEqual(['*']);
     });
 
     test('accepts an author-authored name outside every platform namespace', async () => {
@@ -333,28 +347,30 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-custom',
           type: 'event',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          event_pattern: 'orders.shipped',
+          events: ['orders.shipped'],
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.event_pattern).toBe('orders.shipped');
+      expect(res.body.events).toEqual(['orders.shipped']);
     });
 
     test('rejects a typo inside a platform namespace (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-typo',
           type: 'event',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          event_pattern: 'documents.ingsted',
+          events: ['documents.ingsted'],
         });
 
       expect(res.status).toBe(400);
@@ -365,22 +381,24 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-malformed',
           type: 'event',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          event_pattern: 'documents.*.created',
+          events: ['documents.*.created'],
         });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_EVENT_PATTERN');
     });
 
-    test('rejects an event trigger without an event_pattern (400)', async () => {
+    test('rejects an event trigger without events (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'event-nopattern',
           type: 'event',
@@ -392,26 +410,133 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('TRIGGER_ACTION_NOT_ALLOWED');
     });
 
-    test('rejects event_pattern on a non-event trigger (400)', async () => {
+    test('rejects events on a non-event trigger (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'manual-with-pattern',
           type: 'manual',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          event_pattern: 'documents.ingested',
+          events: ['documents.ingested'],
         });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('TRIGGER_ACTION_NOT_ALLOWED');
     });
 
+    describe('event filter', () => {
+      const createEventTrigger = (args: {
+        name: string;
+        fields: Record<string, unknown>;
+      }) => {
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: args.name,
+            type: 'event',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+            ...args.fields,
+          });
+      };
+
+      test('stores events, event_resources and event_data', async () => {
+        const res = await createEventTrigger({
+          name: 'event-filtered',
+          fields: {
+            events: ['documents.ingested', 'collections.*'],
+            event_resources: [`srn:${projectId}:document:*`],
+            event_data: { status: 'ready', size: { gte: 1000 } },
+          },
+        });
+
+        expect(res.status).toBe(201);
+        expect(res.body.events).toEqual([
+          'documents.ingested',
+          'collections.*',
+        ]);
+        expect(res.body.event_resources).toEqual([
+          `srn:${projectId}:document:*`,
+        ]);
+        expect(res.body.event_data).toEqual({
+          status: 'ready',
+          size: { gte: 1000 },
+        });
+      });
+
+      test('refuses events and event_pattern together (400)', async () => {
+        const res = await createEventTrigger({
+          name: 'event-both',
+          fields: { events: ['*'], event_pattern: '*' },
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('refuses an event_resources item that is not an SRN pattern (400)', async () => {
+        const res = await createEventTrigger({
+          name: 'event-bad-resource',
+          fields: { events: ['*'], event_resources: ['documents'] },
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('refuses an event_data operator outside the filter grammar (400)', async () => {
+        const res = await createEventTrigger({
+          name: 'event-bad-data',
+          fields: { events: ['*'], event_data: { size: { near: 3 } } },
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('refuses event_resources on a non-event trigger (400)', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'manual-with-resources',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+            event_resources: ['*'],
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('TRIGGER_ACTION_NOT_ALLOWED');
+      });
+
+      test('an update replaces event_resources and null clears event_data', async () => {
+        const created = await createEventTrigger({
+          name: 'event-update',
+          fields: { events: ['*'], event_data: { status: 'ready' } },
+        });
+        const res = await authenticatedTestClient(userToken)
+          .patch(`/api/v1/triggers/${created.body.id}`)
+          .send({ event_resources: ['*'], event_data: null });
+
+        expect(res.status).toBe(200);
+        expect(res.body.event_resources).toEqual(['*']);
+        expect(res.body.event_data).toBeNull();
+        expect(res.body.events).toEqual(['*']);
+      });
+    });
+
     test('rejects action on a non-tool target (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'orch-with-action',
           type: 'manual',
@@ -428,6 +553,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'mcp-noaction',
           type: 'manual',
@@ -443,6 +569,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'mcp-withaction',
           type: 'manual',
@@ -469,6 +596,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'builtin-noaction',
           type: 'manual',
@@ -484,6 +612,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'client-tool-trigger',
           type: 'manual',
@@ -500,6 +629,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'missing-target',
           type: 'manual',
@@ -512,16 +642,20 @@ describe('Triggers', () => {
     });
 
     test('rejects a duplicate name in the same project (409)', async () => {
-      await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-        project_id: projectId,
-        name: 'dup-name',
-        type: 'manual',
-        target_type: 'orchestration',
-        target_id: orchestrationId,
-      });
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          policy_ids: [triggerPolicyId],
+          project_id: projectId,
+          name: 'dup-name',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'dup-name',
           type: 'manual',
@@ -533,47 +667,71 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('NAME_CONFLICT');
     });
 
-    test('creates a trigger with an attached boundary policy', async () => {
-      const policy = await authenticatedTestClient(adminToken)
-        .post('/api/v1/policies')
-        .send({
-          name: 'trigger-boundary',
-          document: {
-            statement: [{ effect: 'Allow', action: ['triggers:ListTriggers'] }],
-          },
-        });
-
+    test('creates a trigger acting under its policy_ids', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'with-policy',
           type: 'manual',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          policy_id: policy.body.id,
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.policy_id).toBe(policy.body.id);
+      expect(res.body.policy_ids).toEqual([triggerPolicyId]);
+      expect(res.body.policy_id).toBeUndefined();
     });
 
-    test('rejects a non-existent policy_id (400)', async () => {
+    test('rejects a trigger without policy_ids (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          project_id: projectId,
+          name: 'without-policy',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects empty policy_ids (400)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          policy_ids: [],
+          project_id: projectId,
+          name: 'empty-policy',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a non-existent policy in policy_ids (400)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          policy_ids: ['pol_doesnotexist'],
           project_id: projectId,
           name: 'bad-policy',
           type: 'manual',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          policy_id: 'pol_doesnotexist',
         });
       expect(res.status).toBe(400);
     });
 
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.post('/api/v1/triggers').send({
+        policy_ids: [triggerPolicyId],
         project_id: projectId,
         name: 'noauth',
         type: 'manual',
@@ -587,6 +745,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(noPermToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'noperm',
           type: 'manual',
@@ -600,6 +759,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(limitedToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'escalation',
           type: 'manual',
@@ -759,13 +919,16 @@ describe('Triggers', () => {
 
     beforeAll(async () => {
       triggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'get-one',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'get-one',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+          })
       ).body.id;
     });
 
@@ -804,14 +967,17 @@ describe('Triggers', () => {
 
     beforeAll(async () => {
       triggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'patch-one',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-          active: true,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'patch-one',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+            active: true,
+          })
       ).body.id;
     });
 
@@ -824,7 +990,7 @@ describe('Triggers', () => {
       expect(res.body.active).toBe(false);
     });
 
-    test('attaches a policy_id', async () => {
+    test('replaces policy_ids', async () => {
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -837,17 +1003,17 @@ describe('Triggers', () => {
 
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/triggers/${triggerId}`)
-        .send({ policy_id: policyRes.body.id });
+        .send({ policy_ids: [policyRes.body.id] });
       expect(res.status).toBe(200);
-      expect(res.body.policy_id).toBe(policyRes.body.id);
+      expect(res.body.policy_ids).toEqual([policyRes.body.id]);
     });
 
-    test('clears a policy_id with null', async () => {
+    test('refuses emptying policy_ids (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/triggers/${triggerId}`)
-        .send({ policy_id: null });
-      expect(res.status).toBe(200);
-      expect(res.body.policy_id).toBeNull();
+        .send({ policy_ids: [] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('changing target_type re-validates the target and re-checks permission', async () => {
@@ -863,6 +1029,7 @@ describe('Triggers', () => {
       const orchTrigger = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'patch-no-escalation',
           type: 'manual',
@@ -899,14 +1066,17 @@ describe('Triggers', () => {
 
     test('updating a schedule trigger with an invalid cron returns 400', async () => {
       const scheduleId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'patch-schedule',
-          type: 'schedule',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-          cron: '0 8 * * *',
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'patch-schedule',
+            type: 'schedule',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+            cron: '0 8 * * *',
+          })
       ).body.id;
 
       const invalid = await authenticatedTestClient(userToken)
@@ -928,6 +1098,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'schedule-inactive-toggle',
           type: 'schedule',
@@ -992,13 +1163,16 @@ describe('Triggers', () => {
 
     beforeAll(async () => {
       triggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'delete-one',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'delete-one',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+          })
       ).body.id;
     });
 
@@ -1043,6 +1217,7 @@ describe('Triggers', () => {
       const wh = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'secret-webhook',
           type: 'webhook',
@@ -1053,13 +1228,16 @@ describe('Triggers', () => {
       initialSecret = wh.body.secret;
 
       manualTriggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'secret-manual',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'secret-manual',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+          })
       ).body.id;
     });
 
@@ -1183,6 +1361,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-create-${Date.now()}`,
           type: 'manual',
@@ -1205,6 +1384,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-badkey-${Date.now()}`,
           type: 'manual',
@@ -1221,6 +1401,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-badsecret-${Date.now()}`,
           type: 'manual',
@@ -1241,6 +1422,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-secret-name-${Date.now()}`,
           type: 'manual',
@@ -1266,6 +1448,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-secret-existing-name-${Date.now()}`,
           type: 'manual',
@@ -1282,6 +1465,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-secret-name-update-${Date.now()}`,
           type: 'manual',
@@ -1309,6 +1493,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-fire-${Date.now()}`,
           type: 'manual',
@@ -1354,6 +1539,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-secret-${Date.now()}`,
           type: 'manual',
@@ -1399,6 +1585,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-run-secret-${Date.now()}`,
           type: 'manual',
@@ -1437,6 +1624,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-fired-secret-${Date.now()}`,
           type: 'manual',
@@ -1471,6 +1659,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-reserved-${Date.now()}`,
           type: 'manual',
@@ -1509,6 +1698,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: `ctx-override-${Date.now()}`,
           type: 'manual',
@@ -1549,6 +1739,7 @@ describe('Triggers', () => {
               CtxTrigger: {
                 type: 'trigger',
                 properties: {
+                  policy_ids: [triggerPolicyId],
                   name: `ctx-tpl-${Date.now()}`,
                   type: 'manual',
                   target_type: 'agent',
@@ -1584,6 +1775,7 @@ describe('Triggers', () => {
               CtxBadTrigger: {
                 type: 'trigger',
                 properties: {
+                  policy_ids: [triggerPolicyId],
                   name: `ctx-tpl-bad-${Date.now()}`,
                   type: 'manual',
                   target_type: 'agent',
@@ -1611,6 +1803,7 @@ describe('Triggers', () => {
               CtxNameTrigger: {
                 type: 'trigger',
                 properties: {
+                  policy_ids: [triggerPolicyId],
                   name: `ctx-tpl-secret-name-${Date.now()}`,
                   type: 'manual',
                   target_type: 'agent',
@@ -1647,6 +1840,7 @@ describe('Triggers', () => {
               CtxSubTrigger: {
                 type: 'trigger',
                 properties: {
+                  policy_ids: [triggerPolicyId],
                   name: `ctx-tpl-secret-sub-${Date.now()}`,
                   type: 'manual',
                   target_type: 'agent',
@@ -1684,6 +1878,7 @@ describe('Triggers', () => {
         await authenticatedTestClient(userToken)
           .post('/api/v1/triggers')
           .send({
+            policy_ids: [triggerPolicyId],
             project_id: projectId,
             name: 'fire-orch',
             type: 'manual',
@@ -1694,24 +1889,30 @@ describe('Triggers', () => {
       ).body.id;
 
       agentTriggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'fire-agent',
-          type: 'manual',
-          target_type: 'agent',
-          target_id: agentId,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'fire-agent',
+            type: 'manual',
+            target_type: 'agent',
+            target_id: agentId,
+          })
       ).body.id;
 
       inactiveTriggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'fire-inactive',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-          active: false,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'fire-inactive',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+            active: false,
+          })
       ).body.id;
     });
 
@@ -1740,6 +1941,7 @@ describe('Triggers', () => {
         await authenticatedTestClient(userToken)
           .post('/api/v1/triggers')
           .send({
+            policy_ids: [triggerPolicyId],
             project_id: projectId,
             name: 'fire-tool',
             type: 'manual',
@@ -1833,6 +2035,45 @@ describe('Triggers', () => {
       );
     });
 
+    test('a manual fire records its caller as acted_as', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${orchTriggerId}/fire`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.acted_as).toEqual({
+        principal_type: 'user',
+        principal_id: expect.stringMatching(/^user_/),
+      });
+    });
+
+    test("a manual fire is refused when the trigger's policy_ids cannot start the target (403)", async () => {
+      const narrow = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['triggers:GetTrigger'] }],
+          },
+        });
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/triggers')
+        .send({
+          policy_ids: [narrow.body.id],
+          project_id: projectId,
+          name: 'fire-narrow-policy',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({});
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
     test('empty agent input returns 400 TRIGGER_INPUT_INVALID', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/triggers/${agentTriggerId}/fire`)
@@ -1887,7 +2128,7 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('TRIGGER_RECURSION_FORBIDDEN');
     });
 
-    test('a trigger run-as token is scoped by the attached boundary policy', async () => {
+    test('a trigger run-as token nobody called acts under policy_ids alone', async () => {
       // Boundary policy that allows only listing triggers.
       const policy = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
@@ -1900,12 +2141,12 @@ describe('Triggers', () => {
       const boundTrigger = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [policy.body.id],
           project_id: projectId,
           name: 'runas-bound',
           type: 'manual',
           target_type: 'orchestration',
           target_id: orchestrationId,
-          policy_id: policy.body.id,
         });
 
       const users = (
@@ -1921,17 +2162,18 @@ describe('Triggers', () => {
         triggerId: boundTrigger.body.id,
       });
 
-      // The boundary allows ListTriggers → the run-as token can list.
+      // policy_ids allow ListTriggers → the run-as token can list.
       const listRes = await authenticatedTestClient(trgToken).get(
         `/api/v1/triggers?project_id=${projectId}`
       );
       expect(listRes.status).toBe(200);
 
-      // The boundary does NOT allow creating triggers → confined below the
-      // creator's own (broader) permissions.
+      // policy_ids do not allow creating triggers → the creator's own
+      // (broader) permissions do not reach the token.
       const createRes = await authenticatedTestClient(trgToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'runas-should-fail',
           type: 'manual',
@@ -1941,7 +2183,7 @@ describe('Triggers', () => {
       expect(createRes.status).toBe(403);
     });
 
-    test('fails closed when the creator has been deleted (409)', async () => {
+    test('a manual fire acts as its caller, whoever created the trigger', async () => {
       // A throwaway user creates a trigger, then is deleted.
       await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
@@ -1978,6 +2220,7 @@ describe('Triggers', () => {
       const ephemeralTrigger = await authenticatedTestClient(ephemeralToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [ephemeralPolicy.body.id],
           project_id: projectId,
           name: 'fire-ephemeral',
           type: 'manual',
@@ -1991,12 +2234,12 @@ describe('Triggers', () => {
       );
       expect(deleteRes.status).toBe(204);
 
-      // admin (bypasses permission checks) fires the now-orphaned trigger
       const res = await authenticatedTestClient(adminToken)
         .post(`/api/v1/triggers/${ephemeralTrigger.body.id}/fire`)
         .send({});
-      expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe('TRIGGER_CREATOR_UNAVAILABLE');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      expect(res.body.acted_as.principal_type).toBe('user');
     });
   });
 
@@ -2025,13 +2268,16 @@ describe('Triggers', () => {
           },
         });
       schemaTriggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'fire-schema',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orch.body.id,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'fire-schema',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orch.body.id,
+          })
       ).body.id;
     });
 
@@ -2066,13 +2312,16 @@ describe('Triggers', () => {
 
     beforeAll(async () => {
       firedTriggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'firings-query',
-          type: 'manual',
-          target_type: 'orchestration',
-          target_id: orchestrationId,
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'firings-query',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: orchestrationId,
+          })
       ).body.id;
       firingId = (
         await authenticatedTestClient(userToken)
@@ -2210,6 +2459,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'inbound-hook',
           type: 'webhook',
@@ -2486,6 +2736,7 @@ describe('Triggers', () => {
       const manual = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'inbound-manual',
           type: 'manual',
@@ -2505,6 +2756,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'inbound-inactive',
           type: 'webhook',
@@ -2555,6 +2807,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: otherProjectId,
           name: 'cross-project',
           type: 'manual',
@@ -2580,14 +2833,17 @@ describe('Triggers', () => {
       process.env.EVAL_WORKER_DISABLED = 'true';
 
       evalTriggerId = (
-        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
-          project_id: projectId,
-          name: 'nightly-eval',
-          type: 'schedule',
-          target_type: 'eval',
-          target_id: evalId,
-          cron: '0 3 * * *',
-        })
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/triggers')
+          .send({
+            policy_ids: [triggerPolicyId],
+            project_id: projectId,
+            name: 'nightly-eval',
+            type: 'schedule',
+            target_type: 'eval',
+            target_id: evalId,
+            cron: '0 3 * * *',
+          })
       ).body.id;
     });
 
@@ -2617,6 +2873,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'unknown-eval-trigger',
           type: 'manual',
@@ -2632,6 +2889,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'eval-with-action',
           type: 'manual',
@@ -2648,6 +2906,7 @@ describe('Triggers', () => {
       const res = await authenticatedTestClient(limitedToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'escalating-eval-trigger',
           type: 'manual',
@@ -2770,6 +3029,7 @@ describe('Triggers', () => {
         await authenticatedTestClient(adminToken)
           .post('/api/v1/triggers')
           .send({
+            policy_ids: [triggerPolicyId],
             project_id: projectId,
             name: 'repoint-subject',
             type: 'manual',
@@ -2853,6 +3113,7 @@ describe('Triggers', () => {
         await authenticatedTestClient(adminToken)
           .post('/api/v1/triggers')
           .send({
+            policy_ids: [triggerPolicyId],
             project_id: projectId,
             name: 'shape-subject',
             type: 'manual',
@@ -2881,13 +3142,13 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
-    test('fires the stored firing for a caller who cannot start the target', async () => {
+    test('refuses a fire from a caller who cannot start the target: it acts as caller ∩ policy_ids', async () => {
       const res = await authenticatedTestClient(shaperToken)
         .post(`/api/v1/triggers/${triggerId}/fire`)
         .send({});
 
-      expect(res.status).toBe(200);
-      expect(res.body.input).toEqual({ seed: 1 });
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
     test('refuses an input update from a caller who cannot start the target', async () => {
@@ -2907,10 +3168,10 @@ describe('Triggers', () => {
       expect(res.status).toBe(403);
     });
 
-    test('refuses a policy_id update from a caller who cannot start the target', async () => {
+    test('refuses a policy_ids update from a caller who cannot start the target', async () => {
       const res = await authenticatedTestClient(shaperToken)
         .patch(`/api/v1/triggers/${triggerId}`)
-        .send({ policy_id: null });
+        .send({ policy_ids: [triggerPolicyId] });
 
       expect(res.status).toBe(403);
     });
@@ -2955,6 +3216,7 @@ describe('Triggers', () => {
       const created = await authenticatedTestClient(adminToken)
         .post('/api/v1/triggers')
         .send({
+          policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'scoped-trigger',
           type: 'manual',

@@ -16,6 +16,7 @@ describe('Secret use by secret-carrying writes', () => {
   let otherSecretId: string;
   let aiProviderId: string;
   let toolId: string;
+  let callToolPolicyId: string;
 
   const ACTIONS = [
     'agents:CreateAgent',
@@ -72,6 +73,7 @@ describe('Secret use by secret-carrying writes', () => {
       target_type: 'tool',
       target_id: toolId,
       tool_context: { token: `{{secret:${args.secret}}}` },
+      policy_ids: [callToolPolicyId],
     };
   };
 
@@ -139,6 +141,16 @@ describe('Secret use by secret-carrying writes', () => {
           name: 'suc-target',
           type: 'http',
           execute: { url: 'https://example.com/hook', method: 'POST' },
+        })
+    ).body.id;
+
+    callToolPolicyId = (
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['tools:CallTool'] }],
+          },
         })
     ).body.id;
 

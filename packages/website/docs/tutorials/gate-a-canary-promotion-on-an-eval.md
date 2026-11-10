@@ -589,7 +589,7 @@ Expected output (the promoted version records which run cleared it):
 
 ## Step 8 — Keep feeding the gate after you stop watching
 
-A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on a cadence. Declare it in the same template and subscribe a [webhook](/docs/modules/webhooks) to the verdict. Creating an eval-target trigger requires `evaluations:RunEval` on top of `triggers:CreateTrigger`.
+A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on a cadence. Declare it in the same template and subscribe a [webhook](/docs/modules/webhooks) to the verdict. Creating an eval-target trigger requires `evaluations:RunEval` on top of `triggers:CreateTrigger`, and the trigger acts under its own [`policy_ids`](/docs/modules/triggers#execution-identity): a policy declared beside it that allows `evaluations:RunEval`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -601,7 +601,7 @@ WEBHOOK_ID=$(soat create-webhook --project-id "$PROJECT_ID" \
   --events '["eval_runs.completed","eval_runs.failed"]' | jq -r '.id')
 
 NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq \
-  '.resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *"}} | .outputs.trigger_id = {"ref":"nightly"}')
+  '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
 
 TRIGGER_ID=$(soat update-formation --formation-id "$FORMATION_ID" \
   --template "$NIGHTLY_TEMPLATE" | jq -r '.outputs.trigger_id')
@@ -623,6 +623,15 @@ const { data: webhook } = await adminSoat.webhooks.createWebhook({
 });
 
 const nightlyTemplate = structuredClone(candidateTemplate);
+nightlyTemplate.resources.nightlyRunner = {
+  type: 'policy',
+  properties: {
+    name: 'nightly-release-notes-gate',
+    document: {
+      statement: [{ effect: 'Allow', action: ['evaluations:RunEval'] }],
+    },
+  },
+};
 nightlyTemplate.resources.nightly = {
   type: 'trigger',
   properties: {
@@ -631,6 +640,7 @@ nightlyTemplate.resources.nightly = {
     target_type: 'eval',
     target_id: { ref: 'gate' },
     cron: '0 3 * * *',
+    policy_ids: [{ ref: 'nightlyRunner' }],
   },
 };
 nightlyTemplate.outputs.trigger_id = { ref: 'nightly' };
@@ -651,7 +661,7 @@ WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"eval-verdicts\",\"url\":\"https://example.com/eval-verdicts\",\"events\":[\"eval_runs.completed\",\"eval_runs.failed\"]}" | jq -r '.id')
 
 NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq -c \
-  '.resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *"}} | .outputs.trigger_id = {"ref":"nightly"}')
+  '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
 
 TRIGGER_ID=$(curl -s -X PUT "$SOAT_BASE_URL/api/v1/formations/$FORMATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
