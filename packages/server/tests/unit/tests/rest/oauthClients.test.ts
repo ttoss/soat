@@ -142,6 +142,19 @@ describe('OAuth clients', () => {
       ).toContain(id);
     });
 
+    test('an admin without project_id lists every project', async () => {
+      const id = await createClient({ name: 'admin-listed' });
+      const res = await authenticatedTestClient(adminToken)
+        .get('/api/v1/oauth-clients')
+        .query({ limit: 100 });
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((row: { id: string }) => {
+          return row.id;
+        })
+      ).toContain(id);
+    });
+
     test('unauthenticated is 401', async () => {
       const res = await testClient.get('/api/v1/oauth-clients');
       expect(res.status).toBe(401);

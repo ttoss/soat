@@ -41,7 +41,7 @@ oauthConnectionsRouter.get('/oauth-connections', async (ctx: Context) => {
     resourceType: 'oauth_connection',
   });
   ctx.body = await listOauthConnections({
-    projectIds: projectIds ?? [],
+    projectIds,
     actorId: queryString(ctx.query.actor_id),
     oauthClientId: queryString(ctx.query.oauth_client_id),
     ...parsePagination(ctx),

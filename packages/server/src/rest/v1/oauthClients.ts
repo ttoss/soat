@@ -67,7 +67,7 @@ oauthClientsRouter.get('/oauth-clients', async (ctx: Context) => {
     resourceType: 'oauth_client',
   });
   ctx.body = await listOauthClients({
-    projectIds: projectIds ?? [],
+    projectIds,
     ...parsePagination(ctx),
   });
 });

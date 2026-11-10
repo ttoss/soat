@@ -15,6 +15,9 @@ type ProviderState = {
   expiresIn: number | undefined;
   refreshDelayMs: number;
   failRefresh: boolean;
+  refreshStatus: number;
+  formEncoded: boolean;
+  oversized: boolean;
 };
 
 const readForm = async (req: http.IncomingMessage) => {
@@ -42,6 +45,28 @@ const issue = (state: ProviderState) => {
   };
 };
 
+/** Issues tokens the way the state asks: JSON, form-encoded or oversized. */
+const sendTokens = (state: ProviderState, res: http.ServerResponse) => {
+  const tokens = issue(state);
+  if (state.oversized) {
+    res.setHeader('Content-Type', 'application/json');
+    res.end('x'.repeat(9 * 1024 * 1024));
+    return;
+  }
+  if (!state.formEncoded) {
+    send(res, 200, tokens);
+    return;
+  }
+  res.setHeader('Content-Type', 'application/x-www-form-urlencoded');
+  res.end(
+    new URLSearchParams(
+      Object.entries(tokens).map(([key, value]) => {
+        return [key, String(value)];
+      })
+    ).toString()
+  );
+};
+
 const handleToken = async (args: {
   state: ProviderState;
   req: http.IncomingMessage;
@@ -54,7 +79,7 @@ const handleToken = async (args: {
     params,
   });
   if (params.grant_type === 'authorization_code') {
-    if (params.code === 'good-code') send(res, 200, issue(state));
+    if (params.code === 'good-code') sendTokens(state, res);
     else send(res, 400, { error: 'invalid_grant' });
     return;
   }
@@ -63,6 +88,10 @@ const handleToken = async (args: {
       setTimeout(resolve, state.refreshDelayMs);
     });
   }
+  if (state.refreshStatus >= 500) {
+    send(res, state.refreshStatus, { error: 'temporarily_unavailable' });
+    return;
+  }
   if (
     state.failRefresh ||
     !state.liveRefreshTokens.delete(params.refresh_token)
@@ -70,7 +99,7 @@ const handleToken = async (args: {
     send(res, 400, { error: 'invalid_grant' });
     return;
   }
-  send(res, 200, issue(state));
+  sendTokens(state, res);
 };
 
 /**
@@ -87,6 +116,9 @@ export const startFakeOauthProvider = async () => {
     expiresIn: 7200,
     refreshDelayMs: 0,
     failRefresh: false,
+    refreshStatus: 200,
+    formEncoded: false,
+    oversized: false,
   };
 
   const server = http.createServer(async (req, res) => {

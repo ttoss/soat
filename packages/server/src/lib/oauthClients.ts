@@ -139,8 +139,9 @@ export const mapOauthClient = (row: OauthClientRow) => {
   };
 };
 
+/** `projectIds` undefined is no project filter (an admin's unscoped read). */
 export const listOauthClients = async (args: {
-  projectIds: number[];
+  projectIds?: number[];
   limit?: number;
   cursor?: string;
 }) => {
@@ -148,7 +149,7 @@ export const listOauthClients = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: { projectId: args.projectIds },
+    where: args.projectIds ? { projectId: args.projectIds } : {},
     order: [['createdAt', 'ASC']],
     query: ({ where, limit, order }) => {
       return db.OauthProviderClient.findAll({

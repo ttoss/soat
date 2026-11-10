@@ -242,18 +242,19 @@ export const startOauthConnection = async (args: {
 const resolveFilterId = async (args: {
   find: (where: Record<string, unknown>) => Promise<{ id?: unknown } | null>;
   publicId?: string;
-  projectIds: number[];
+  projectIds?: number[];
 }): Promise<number | null | undefined> => {
   if (!args.publicId) return undefined;
   const row = await args.find({
     publicId: args.publicId,
-    projectId: args.projectIds,
+    ...(args.projectIds ? { projectId: args.projectIds } : {}),
   });
   return row ? Number(row.id) : null;
 };
 
+/** `projectIds` undefined is no project filter (an admin's unscoped read). */
 export const listOauthConnections = async (args: {
-  projectIds: number[];
+  projectIds?: number[];
   actorId?: string;
   oauthClientId?: string;
   limit?: number;
@@ -273,7 +274,9 @@ export const listOauthConnections = async (args: {
     publicId: args.oauthClientId,
     projectIds: args.projectIds,
   });
-  const nothing = actorId === null || oauthClientId === null;
+  // A filter id that names nothing here matches no row.
+  const projectIds =
+    actorId === null || oauthClientId === null ? [] : args.projectIds;
   return paginatedList({
     limit: args.limit,
     cursor: args.cursor,
@@ -283,7 +286,7 @@ export const listOauthConnections = async (args: {
       oauthClientId: args.oauthClientId,
     },
     where: {
-      projectId: nothing ? [] : args.projectIds,
+      ...(projectIds ? { projectId: projectIds } : {}),
       ...(actorId ? { actorId } : {}),
       ...(oauthClientId ? { oauthClientId } : {}),
     },

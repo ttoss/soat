@@ -86,7 +86,7 @@ const describeFailure = (body: Record<string, unknown>, status: number) => {
 };
 
 const messageOf = (error: unknown): string => {
-  return error instanceof Error ? error.message : String(error);
+  return String(error);
 };
 
 /** A token endpoint answers JSON, or form-encoded from older providers. */
@@ -167,6 +167,6 @@ export const revokeToken = async (args: {
     });
     log('revokeToken: status=%d', response.status);
   } catch (error) {
-    log('revokeToken: failed %s', error instanceof Error ? error.message : '');
+    log('revokeToken: failed %s', messageOf(error));
   }
 };

@@ -17,6 +17,7 @@ describe('OAuth connections', () => {
   let projectId: string;
   let otherProjectId: string;
   let clientId: string;
+  let secretRef: string;
   let actorSeq = 0;
 
   const api = () => {
@@ -79,6 +80,7 @@ describe('OAuth connections', () => {
     const secret = await api()
       .post('/api/v1/secrets')
       .send({ project_id: projectId, name: 'client-secret', value: 'shh' });
+    secretRef = `{{secret:${secret.body.id}}}`;
     const client = await api()
       .post('/api/v1/oauth-clients')
       .send({
@@ -99,6 +101,158 @@ describe('OAuth connections', () => {
 
   afterAll(async () => {
     await provider.close();
+  });
+
+  beforeEach(() => {
+    provider.state.formEncoded = false;
+    provider.state.oversized = false;
+    provider.state.expiresIn = 7200;
+  });
+
+  /** A client against the fake provider, with `overrides` on its fields. */
+  const createClient = async (overrides: Record<string, unknown>) => {
+    const res = await api()
+      .post('/api/v1/oauth-clients')
+      .send({
+        project_id: projectId,
+        name: 'variant',
+        authorize_url: `${provider.url}/authorize`,
+        token_url: `${provider.url}/token`,
+        revocation_url: `${provider.url}/revoke`,
+        client_id: 'variant-client',
+        client_secret: secretRef,
+        scopes: ['tweet.read'],
+        redirect_uri: 'https://app.example.com/oauth/callback',
+        ...overrides,
+      });
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  };
+
+  const connectThrough = async (oauthClientId: string) => {
+    const actorId = await createActor();
+    const started = await api()
+      .post('/api/v1/oauth-connections')
+      .send({ oauth_client_id: oauthClientId, actor_id: actorId });
+    expect(started.status).toBe(201);
+    return callback({
+      code: 'good-code',
+      state: stateOf(started.body.authorize_url),
+    });
+  };
+
+  describe('token endpoint variants', () => {
+    test('client_secret_post sends the credentials in the form and reads a form-encoded answer', async () => {
+      const id = await createClient({
+        token_endpoint_auth_method: 'client_secret_post',
+      });
+      provider.state.formEncoded = true;
+
+      const res = await connectThrough(id);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('connected');
+      const exchange = provider.state.tokenRequests.at(-1);
+      expect(exchange?.authorization).toBeUndefined();
+      expect(exchange?.params).toMatchObject({
+        client_id: 'variant-client',
+        client_secret: 'shh',
+      });
+    });
+
+    test('a public client sends only its client_id and a non-expiring token has no expires_at', async () => {
+      const id = await createClient({ client_secret: null });
+      provider.state.expiresIn = undefined;
+
+      const res = await connectThrough(id);
+
+      expect(res.status).toBe(200);
+      expect(res.body.expires_at).toBeNull();
+      const exchange = provider.state.tokenRequests.at(-1);
+      expect(exchange?.authorization).toBeUndefined();
+      expect(exchange?.params.client_id).toBe('variant-client');
+      expect(exchange?.params.client_secret).toBeUndefined();
+    });
+
+    test('a client without revocation_url deletes without revoking', async () => {
+      const id = await createClient({ revocation_url: null });
+      const connected = await connectThrough(id);
+      const revocations = provider.state.revokeRequests.length;
+
+      const res = await api().delete(
+        `/api/v1/oauth-connections/${connected.body.id}`
+      );
+
+      expect(res.status).toBe(204);
+      expect(provider.state.revokeRequests.length).toBe(revocations);
+    });
+
+    test('an unreachable token endpoint is 400', async () => {
+      const id = await createClient({
+        token_url: 'http://127.0.0.1:1/token',
+      });
+
+      const res = await connectThrough(id);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('OAUTH_CALLBACK_FAILED');
+    });
+
+    test('an oversized token answer is 400', async () => {
+      const id = await createClient({});
+      provider.state.oversized = true;
+
+      const res = await connectThrough(id);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('OAUTH_CALLBACK_FAILED');
+    });
+
+    test('an unreachable revocation endpoint does not stop the delete', async () => {
+      const id = await createClient({
+        revocation_url: 'http://127.0.0.1:1/revoke',
+      });
+      const connected = await connectThrough(id);
+
+      const res = await api().delete(
+        `/api/v1/oauth-connections/${connected.body.id}`
+      );
+
+      expect(res.status).toBe(204);
+    });
+  });
+
+  describe('default redirect_uri', () => {
+    afterEach(() => {
+      delete process.env.SOAT_BASE_URL;
+    });
+
+    test("is this server's callback under SOAT_BASE_URL", async () => {
+      process.env.SOAT_BASE_URL = 'https://soat.example.com/';
+      const id = await createClient({ redirect_uri: null });
+      const actorId = await createActor();
+
+      const res = await api()
+        .post('/api/v1/oauth-connections')
+        .send({ oauth_client_id: id, actor_id: actorId });
+
+      expect(res.status).toBe(201);
+      expect(
+        new URL(res.body.authorize_url).searchParams.get('redirect_uri')
+      ).toBe('https://soat.example.com/api/v1/oauth-connections/callback');
+    });
+
+    test('without SOAT_BASE_URL starting is 400', async () => {
+      const id = await createClient({ redirect_uri: null });
+      const actorId = await createActor();
+
+      const res = await api()
+        .post('/api/v1/oauth-connections')
+        .send({ oauth_client_id: id, actor_id: actorId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   describe('POST /api/v1/oauth-connections', () => {
@@ -305,6 +459,20 @@ describe('OAuth connections', () => {
         })
       ).toEqual([id]);
       expect(JSON.stringify(res.body)).not.toMatch(/access-|refresh-/);
+    });
+
+    test('an admin without project_id lists every project', async () => {
+      const actorId = await createActor();
+      const { id } = await connect(actorId);
+      const res = await authenticatedTestClient(adminToken)
+        .get('/api/v1/oauth-connections')
+        .query({ actor_id: actorId });
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((row: { id: string }) => {
+          return row.id;
+        })
+      ).toEqual([id]);
     });
 
     test('filters by oauth_client_id', async () => {

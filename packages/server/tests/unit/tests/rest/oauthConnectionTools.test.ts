@@ -136,6 +136,7 @@ describe('http tool auth oauth_connection', () => {
     provider.state.expiresIn = 7200;
     provider.state.refreshDelayMs = 0;
     provider.state.failRefresh = false;
+    provider.state.refreshStatus = 200;
   });
 
   test('an unknown oauth_client_id is refused at write time', async () => {
@@ -222,6 +223,21 @@ describe('http tool auth oauth_connection', () => {
       .get(`/api/v1/oauth-connections/${connectionId}`);
     expect(read.body.status).toBe('disconnected');
     expect(read.body.error.code).toBe('OAUTH_CONNECTION_REFRESH_FAILED');
+  });
+
+  test('a provider that cannot refresh fails the call and keeps the connection', async () => {
+    provider.state.expiresIn = 0;
+    const actorId = await createActor();
+    const connectionId = await connect(actorId);
+    provider.state.refreshStatus = 503;
+
+    const [result] = await callTool({ actorId });
+
+    expect(JSON.stringify(result)).toContain('temporarily_unavailable');
+    const read = await turn
+      .api()
+      .get(`/api/v1/oauth-connections/${connectionId}`);
+    expect(read.body.status).toBe('connected');
   });
 
   test('an actor with no connection gets a reconnect error', async () => {
