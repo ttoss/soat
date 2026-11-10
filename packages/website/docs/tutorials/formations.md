@@ -191,6 +191,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -205,6 +206,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -219,6 +221,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -233,6 +236,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -318,7 +322,7 @@ cat > formation.json << 'EOF'
           { "step": 4, "tool_choice": { "type": "tool", "tool_name": "call-stanza-4_create-agent-generation" } },
           { "step": 5, "tool_choice": { "type": "tool", "tool_name": "read-final-poem_get-document" } }
         ],
-        "max_steps": 8
+        "max_steps": 6
       }
     }
   },
@@ -393,6 +397,9 @@ const template = {
             },
           },
         ],
+        stop_conditions: [
+          { type: 'has_tool_call', tool_name: 'poem-write_update-document' },
+        ],
         max_steps: 5,
       },
     },
@@ -416,6 +423,9 @@ const template = {
               tool_name: 'poem-write_update-document',
             },
           },
+        ],
+        stop_conditions: [
+          { type: 'has_tool_call', tool_name: 'poem-write_update-document' },
         ],
         max_steps: 5,
       },
@@ -441,6 +451,9 @@ const template = {
             },
           },
         ],
+        stop_conditions: [
+          { type: 'has_tool_call', tool_name: 'poem-write_update-document' },
+        ],
         max_steps: 5,
       },
     },
@@ -464,6 +477,9 @@ const template = {
               tool_name: 'poem-write_update-document',
             },
           },
+        ],
+        stop_conditions: [
+          { type: 'has_tool_call', tool_name: 'poem-write_update-document' },
         ],
         max_steps: 5,
       },
@@ -605,7 +621,7 @@ const template = {
             },
           },
         ],
-        max_steps: 8,
+        max_steps: 6,
       },
     },
   },
@@ -669,6 +685,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -683,6 +700,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -697,6 +715,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -711,6 +730,7 @@ cat > formation.json << 'EOF'
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
         ],
+        "stop_conditions": [{ "type": "has_tool_call", "tool_name": "poem-write_update-document" }],
         "max_steps": 5
       }
     },
@@ -796,7 +816,7 @@ cat > formation.json << 'EOF'
           { "step": 4, "tool_choice": { "type": "tool", "tool_name": "call-stanza-4_create-agent-generation" } },
           { "step": 5, "tool_choice": { "type": "tool", "tool_name": "read-final-poem_get-document" } }
         ],
-        "max_steps": 8
+        "max_steps": 6
       }
     }
   },
