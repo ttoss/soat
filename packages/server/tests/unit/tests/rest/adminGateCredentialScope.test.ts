@@ -50,9 +50,9 @@ describe('Admin gate and credential scope', () => {
         },
       },
       {
-        name: 'GET /policies',
+        name: 'GET /policies/{global policy}',
         send: () => {
-          return client.get('/api/v1/policies');
+          return client.get(`/api/v1/policies/${readPolicyId}`);
         },
       },
       {
