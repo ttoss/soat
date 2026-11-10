@@ -14,6 +14,7 @@ import {
   resolveOauthClient,
 } from './oauthClients';
 import { revokeToken, type TokenSet } from './oauthTokenEndpoint';
+import { projectScopeWhere } from './projectScope';
 import { decryptValue, encryptValue } from './secrets';
 
 const log = createDebug('soat:oauth-connections');
@@ -247,7 +248,7 @@ const resolveFilterId = async (args: {
   if (!args.publicId) return undefined;
   const row = await args.find({
     publicId: args.publicId,
-    ...(args.projectIds ? { projectId: args.projectIds } : {}),
+    ...projectScopeWhere({ projectIds: args.projectIds }),
   });
   return row ? Number(row.id) : null;
 };
@@ -286,7 +287,7 @@ export const listOauthConnections = async (args: {
       oauthClientId: args.oauthClientId,
     },
     where: {
-      ...(projectIds ? { projectId: projectIds } : {}),
+      ...projectScopeWhere({ projectIds }),
       ...(actorId ? { actorId } : {}),
       ...(oauthClientId ? { oauthClientId } : {}),
     },

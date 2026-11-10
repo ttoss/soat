@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError, type ErrorCode } from '../errors';
 import type { Transaction } from './dbTransaction';
 import type { ResourceIncludes } from './modelIncludes';
+import { projectScopeWhere } from './projectScope';
 import { isStringRecord } from './tags';
 
 /**
@@ -44,7 +45,7 @@ export const scopedWhere = (args: {
   where?: Record<string, unknown>;
 }): Record<string, unknown> => {
   const where: Record<string, unknown> = { publicId: args.id, ...args.where };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   return where;
 };
 

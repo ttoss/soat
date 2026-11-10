@@ -4,6 +4,7 @@ import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
+import { projectScopeWhere } from './projectScope';
 import { sessionIncludes, sessions } from './sessionAccessor';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { emitSessionEvent, readSessionRecord } from './sessionEvents';
@@ -203,9 +204,7 @@ export const listSessions = async (args: {
 
   const where: Record<string, unknown> = {};
 
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   applyTagFilter({ where, tags: args.tags });
 
   if (args.policyWhere) {

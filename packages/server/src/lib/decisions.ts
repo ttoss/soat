@@ -17,6 +17,7 @@ import {
 } from './decisionBackends';
 import { emitResourceEvent } from './eventBus';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:decisions');
@@ -331,7 +332,7 @@ export const listDecisions = async (args: {
 }): Promise<Page<MappedDecision>> => {
   log('listDecisions: projectIds=%o', args.projectIds);
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.deciderId !== undefined) where.deciderId = args.deciderId;
   if (args.statuses?.length) where.status = args.statuses;
 

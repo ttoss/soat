@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { validateQuotaImmutableFields } from './quotaImmutability';
 import { resolveOnUnpriced, validateOnUnpriced } from './quotaPricingPosture';
 import {
@@ -326,9 +327,7 @@ export const listQuotas = async (args: {
   log('listQuotas: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

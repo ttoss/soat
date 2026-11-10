@@ -7,6 +7,7 @@ import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import { paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import { registerResourceFieldMap } from './policyCompiler';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import type { StoredError } from './storedError';
 import { isUniqueViolation } from './uniqueViolation';
@@ -227,7 +228,7 @@ export const listMetadataSchemas = async (args: {
   cursor?: string;
 }) => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.resourceType) where.resourceType = args.resourceType;
 
   return paginatedList({

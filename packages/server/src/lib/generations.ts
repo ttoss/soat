@@ -34,6 +34,7 @@ import {
   startedByPrincipalColumns,
   type StartingPrincipal,
 } from './principals';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import { rollUpUsageTotals } from './usageAggregate';
@@ -403,10 +404,8 @@ export const listGenerations = async (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
 
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return emptyPage(args);
-    where.projectId = args.projectIds;
-  }
+  if (args.projectIds?.length === 0) return emptyPage(args);
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   const resolved = await applyGenerationScopeFilters(where, {
     agentId: args.agentId,

@@ -23,6 +23,7 @@ import { type PlaybookNodeRun, playbookNodeRuns } from './playbookNodeRuns';
 import { playbooks } from './playbooks';
 import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
 import { parsePlaybookDefinition } from './playbookWire';
+import { projectScopeWhere } from './projectScope';
 
 export {
   appendEntries,
@@ -222,7 +223,7 @@ export const listPlaybookCases = async (args: {
   const where: Record<string | symbol, unknown> = automationWhere(
     args.automationStatuses
   );
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.playbookId !== undefined) {
     const playbook = await playbooks.findByPublicId({
       projectIds: args.projectIds,
@@ -235,7 +236,7 @@ export const listPlaybookCases = async (args: {
     const actor = await db.Actor.findOne({
       where: {
         publicId: args.actorId,
-        ...(args.projectIds !== undefined && { projectId: args.projectIds }),
+        ...projectScopeWhere({ projectIds: args.projectIds }),
       },
     });
     // An unknown or unreachable actor filters to nothing, never to all.

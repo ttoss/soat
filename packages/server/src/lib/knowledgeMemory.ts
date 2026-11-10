@@ -14,6 +14,7 @@ import type {
 } from './knowledgeRanking';
 import { validMemoryWhere } from './memoryValidity';
 import { hasPolicyConstraints } from './policyWhere';
+import { projectScopeWhere } from './projectScope';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter, tagContainment } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
@@ -54,10 +55,10 @@ const resolveMemoryStoreIdsByTags = async (args: {
   tags: Record<string, string>;
   projectIds?: number[];
 }): Promise<string[]> => {
-  const where: Record<string, unknown> = { ...tagContainment(args.tags) };
-  if (args.projectIds && args.projectIds.length > 0) {
-    where.projectId = args.projectIds;
-  }
+  const where: Record<string, unknown> = {
+    ...tagContainment(args.tags),
+    ...projectScopeWhere({ projectIds: args.projectIds }),
+  };
   const memoryStores = await db.MemoryStore.findAll({
     where,
     attributes: ['publicId'],
@@ -77,10 +78,10 @@ const resolveMemoryStoreInternalIds = async (args: {
   projectIds?: number[];
 }): Promise<number[]> => {
   if (args.publicIds.length === 0) return [];
-  const where: Record<string, unknown> = { publicId: args.publicIds };
-  if (args.projectIds && args.projectIds.length > 0) {
-    where.projectId = args.projectIds;
-  }
+  const where: Record<string, unknown> = {
+    publicId: args.publicIds,
+    ...projectScopeWhere({ projectIds: args.projectIds }),
+  };
   const memoryStores = await db.MemoryStore.findAll({
     where,
     attributes: ['id'],
@@ -421,10 +422,9 @@ const buildSearchWheres = (args: {
     ],
   };
 
-  const memoryStoreWhere: Record<string, unknown> = {};
-  if (args.projectIds && args.projectIds.length > 0) {
-    memoryStoreWhere.projectId = args.projectIds;
-  }
+  const memoryStoreWhere: Record<string, unknown> = projectScopeWhere({
+    projectIds: args.projectIds,
+  });
   if (hasPolicyConstraints(args.policyWhere?.memoryStore)) {
     Object.assign(memoryStoreWhere, args.policyWhere.memoryStore);
   }

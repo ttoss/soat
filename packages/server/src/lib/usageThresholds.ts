@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:usage:thresholds');
@@ -98,10 +99,8 @@ export const listThresholds = async (args: {
   cursor?: string;
 }): Promise<Page<PersistedUsageThreshold>> => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return emptyPage(args);
-    where.projectId = args.projectIds;
-  }
+  if (args.projectIds?.length === 0) return emptyPage(args);
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   if (args.projectId !== undefined) {
     const project = await db.Project.findOne({

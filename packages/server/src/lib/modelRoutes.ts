@@ -17,6 +17,7 @@ import {
   validateModelRouteTargets,
 } from './modelRouteValidation';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:model-routes');
@@ -229,7 +230,7 @@ export const listModelRoutes = async (args: {
   cursor?: string;
 }): Promise<Page<MappedModelRoute>> => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

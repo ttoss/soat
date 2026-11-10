@@ -9,6 +9,7 @@ import {
 import { resolveConverterTool } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -237,9 +238,7 @@ export const listIngestionRules = async (args: {
   log('listIngestionRules: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

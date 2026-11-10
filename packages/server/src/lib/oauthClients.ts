@@ -6,6 +6,7 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { isPlainObject } from './plainObject';
+import { projectScopeWhere } from './projectScope';
 import { resolveSecretRefsInString, SECRET_ID_PATTERN } from './secrets';
 import { assertSecretUseAllowed } from './secretUse';
 
@@ -149,7 +150,7 @@ export const listOauthClients = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where: args.projectIds ? { projectId: args.projectIds } : {},
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'ASC']],
     query: ({ where, limit, order }) => {
       return db.OauthProviderClient.findAll({

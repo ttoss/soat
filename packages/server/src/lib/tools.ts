@@ -12,6 +12,7 @@ import {
   validatePipelineConfig,
 } from './pipelineTools';
 import { assertProjectAcceptsWork } from './projectPause';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { type ReferenceReach, toolReferences } from './resourceReferences';
 import { assertSecretRefsExist } from './secrets';
@@ -232,9 +233,7 @@ export const listTools = async (args: {
   cursor?: string;
 }): Promise<Page<MappedTool>> => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

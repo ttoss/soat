@@ -32,6 +32,7 @@ import { assertCreatedDocumentMetadataValid } from './metadataSchemas';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
+import { projectScopeWhere } from './projectScope';
 import { toResourceRef } from './resourceVersions';
 import {
   applyFilterWhere,
@@ -97,7 +98,7 @@ export const buildDocumentQueryOptions = (args: {
   applyFilterWhere({ where: topLevelWhere, fragments: args.metadataWhere });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const file: Record<string, any> = {};
-  if (args.projectIds !== undefined) file.projectId = args.projectIds;
+  Object.assign(file, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.pathPrefix !== undefined) {
     file.path = { [Op.like]: pathPrefixPattern(args.pathPrefix) };
   } else if (!hasSystemTagFilter(args.tags)) {

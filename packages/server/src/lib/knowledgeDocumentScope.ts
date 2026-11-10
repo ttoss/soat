@@ -1,6 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { projectScopeWhere } from './projectScope';
 import { nonSystemPathWhere } from './systemPathScope';
 
 /**
@@ -34,7 +35,7 @@ export const buildFileInclude = (args: {
 }): KnowledgeFileInclude => {
   const conditions: unknown[] = [];
   if (args.projectIds !== undefined) {
-    conditions.push({ projectId: args.projectIds });
+    conditions.push(projectScopeWhere({ projectIds: args.projectIds }));
   }
   const namesPaths = Boolean(args.paths && args.paths.length > 0);
   if (!namesPaths && !args.namesDocuments && !args.namesSystemTags) {

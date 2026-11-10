@@ -12,6 +12,7 @@ import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
 import type { OnBehalfOf } from './onBehalfOf';
 import { type Page, type PageBounds, paginatedList } from './pagination';
 import type { PrincipalType } from './principals';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { timeRangeWhere } from './timeRange';
 
@@ -318,7 +319,7 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
 
-  if (args.projectIds) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.action) where.action = args.action;
   if (args.principalId) where.principalId = args.principalId;
   if (args.resourcePublicId) where.resourcePublicId = args.resourcePublicId;

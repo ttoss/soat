@@ -22,6 +22,7 @@ import {
 import { getGenerationTurn } from './generationTurn';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { assertStorageQuota, contentBytes, jsonBytes } from './quotaStorage';
 import { makeResourceAccessor } from './resourceAccessor';
 import { rethrowAsConflict } from './uniqueViolation';
@@ -120,7 +121,7 @@ export const listDatasets = async (args: {
   log('listDatasets: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

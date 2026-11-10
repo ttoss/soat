@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { orchestrationRuns } from './orchestrationAccessor';
 import { sumComponentCostUsd } from './priceCompute';
+import { projectScopeWhere } from './projectScope';
 import type { UsageTotals } from './usageTotals';
 
 const assocPublicId = (
@@ -193,7 +194,7 @@ export const getReceipt = async (args: {
   const genWhere: { publicId: string; projectId?: number[] } = {
     publicId: args.generationId,
   };
-  if (args.projectIds !== undefined) genWhere.projectId = args.projectIds;
+  Object.assign(genWhere, projectScopeWhere({ projectIds: args.projectIds }));
 
   const generation = await db.Generation.findOne({ where: genWhere });
   if (!generation) return null;

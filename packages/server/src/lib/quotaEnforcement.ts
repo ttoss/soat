@@ -8,6 +8,7 @@ import {
   type UnpricedRow,
 } from './costEnforceability';
 import { resolveGenerationEndUser } from './generationAttribution';
+import { projectScopeWhere } from './projectScope';
 import { quotaBreachError, type WindowedQuotaBreach } from './quotaBreach';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
@@ -493,8 +494,11 @@ export const evaluateGenerationQuotas = async (args: {
   // A turn run in a named project is capped by that project's quotas, whoever
   // owns the agent; the context builder settles whether it may run there.
   const agentWhere: Record<string, unknown> = { publicId: args.agentId };
-  if (args.runProjectId === undefined && args.projectIds !== undefined) {
-    agentWhere.projectId = args.projectIds;
+  if (args.runProjectId === undefined) {
+    Object.assign(
+      agentWhere,
+      projectScopeWhere({ projectIds: args.projectIds })
+    );
   }
   const agent = await db.Agent.findOne({
     where: agentWhere,

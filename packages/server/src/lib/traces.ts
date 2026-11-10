@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emptyPage, type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
 // The write path lives in its own module; re-exported here so `saveTrace` and
@@ -83,10 +84,8 @@ export const listTraces = async (args: {
   cursor?: string;
 }): Promise<Page<Trace>> => {
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return emptyPage(args);
-    where.projectId = args.projectIds;
-  }
+  if (args.projectIds?.length === 0) return emptyPage(args);
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
   if (args.parentTraceId !== undefined) {
     // A parent naming nothing in scope empties the page rather than dropping
     // the filter, so a mistyped id never reads back as every trace.
@@ -185,9 +184,7 @@ export const getTraceTree = async (args: {
   const treeWhere: Record<string, any> = {
     [Op.or]: [{ id: rootTraceDbId }, { rootTraceId: rootTraceDbId }],
   };
-  if (args.projectIds !== undefined) {
-    treeWhere.projectId = args.projectIds;
-  }
+  Object.assign(treeWhere, projectScopeWhere({ projectIds: args.projectIds }));
 
   const allRows = await db.Trace.findAll({
     where: treeWhere,

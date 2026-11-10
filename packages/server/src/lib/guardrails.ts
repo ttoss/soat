@@ -10,6 +10,7 @@ import {
   guardrailVersionStore,
 } from './guardrailVersionSnapshot';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toolReferences } from './resourceReferences';
 import { toResourceRef } from './resourceVersions';
@@ -274,9 +275,7 @@ export const listGuardrails = async (args: {
   log('listGuardrails: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   return paginatedList({
     limit: args.limit,

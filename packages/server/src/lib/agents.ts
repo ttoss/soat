@@ -40,6 +40,7 @@ import { emitResourceEvent } from './eventBus';
 import { resolveModelRouteDbId } from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
 import { type Page, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import { assertValidPromptCaching } from './promptCaching';
 import { parseActiveRelease } from './releaseAssignment';
 import { toResourceRef } from './resourceVersions';
@@ -289,10 +290,7 @@ export const listAgents = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: { projectIds: args.projectIds },
-    where:
-      args.projectIds !== undefined
-        ? { projectId: args.projectIds }
-        : undefined,
+    where: projectScopeWhere({ projectIds: args.projectIds }),
     order: [['createdAt', 'DESC']],
     query: ({ where, limit, order }) => {
       return db.Agent.findAll({

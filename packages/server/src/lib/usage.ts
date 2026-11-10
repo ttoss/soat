@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { emptyPage, paginatedList } from './pagination';
+import { projectScopeWhere } from './projectScope';
 import type { RecordedIdKey } from './usageNarrowings';
 import {
   RECORDED_ID_COLUMNS,
@@ -210,10 +211,8 @@ export const listUsageEvents = async (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
 
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return emptyPage(args);
-    where.projectId = args.projectIds;
-  }
+  if (args.projectIds?.length === 0) return emptyPage(args);
+  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
 
   for (const key of VALUE_NARROWING_KEYS) {
     const value = args[key];
