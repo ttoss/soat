@@ -1,6 +1,6 @@
 import { DomainError } from '../errors';
 import { resolveAttachedPolicySet } from './attachedPolicies';
-import type { SoatEvent } from './eventBus';
+import { recordDroppedEvent, type SoatEvent } from './eventBus';
 import { EVENT_READ_ACTIONS } from './eventReadActions';
 import { matchesPattern } from './iam';
 import { createPolicySetsIsAllowed } from './permissions';
@@ -9,6 +9,7 @@ import {
   matchesStructuredFilter,
   readStructuredFilter,
 } from './structuredFilter';
+import { retryTransient } from './transientRetry';
 
 /**
  * The event filter every bus subscriber that declares *which* events it wants
@@ -227,14 +228,37 @@ export const mayReadEventResource = (args: {
   });
 };
 
-/** The filter, then the read guard against the subscriber's `policyIds`. */
+/**
+ * The filter, then the read guard against the subscriber's `policyIds`.
+ *
+ * Never rejects: it runs after the emitting write committed, so a policy read
+ * that outlives its retries is a counted drop and the subscriber is not told.
+ */
 export const subscriberReceivesEvent = async (args: {
   filter: EventFilter;
   policyIds: readonly string[] | null;
   event: SoatEvent;
 }): Promise<boolean> => {
-  return (
-    matchesEventFilter({ filter: args.filter, event: args.event }) &&
-    mayReadEventResource({ policyIds: args.policyIds, event: args.event })
-  );
+  if (!matchesEventFilter({ filter: args.filter, event: args.event })) {
+    return false;
+  }
+  try {
+    return await retryTransient({
+      label: 'subscriberReceivesEvent.policyLookup',
+      operation: () => {
+        return mayReadEventResource({
+          policyIds: args.policyIds,
+          event: args.event,
+        });
+      },
+    });
+  } catch (error) {
+    recordDroppedEvent({
+      stage: 'policy_lookup',
+      type: args.event.type,
+      resourceId: args.event.resourceId,
+      error,
+    });
+    return false;
+  }
 };

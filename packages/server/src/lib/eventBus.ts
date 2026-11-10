@@ -39,6 +39,7 @@ export type EventDropStage =
   | 'delivery_write'
   | 'activity_write'
   | 'trigger_lookup'
+  | 'policy_lookup'
   | 'exception_file'
   | 'memory_rule_dispatch'
   | 'playbook_execution_settle'
