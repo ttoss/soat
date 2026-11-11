@@ -31,7 +31,7 @@ const reconnect = (args: {
   connectionId?: string;
 }) => {
   return toolAuthFailed({
-    message: `${args.message} The actor must reconnect: start a new connection with POST /api/v1/oauth-connections.`,
+    message: `${args.message} The actor must reconnect: start a new OAuth connection for this client and actor.`,
     meta: {
       reason: 'oauth_connection_required',
       oauth_client_id: args.clientId,
