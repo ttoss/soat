@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
+import { SIGNATURE_TOLERANCE_SECONDS } from 'src/lib/hmacSignature';
 import { signTriggerToken } from 'src/lib/triggerToken';
 
 import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
@@ -2546,6 +2547,9 @@ describe('Triggers', () => {
       expect(firing.input).toEqual({ event: 'push', ref: 'main' });
     });
 
+    // Clears the window even when the request lands seconds after signing.
+    const OUTSIDE_WINDOW_MARGIN_SECONDS = 60;
+
     const signTimestamped = (args: {
       secret: string;
       body: string;
@@ -2586,7 +2590,9 @@ describe('Triggers', () => {
             signTimestamped({
               secret: hookSecret,
               body,
-              timestamp: Math.floor(Date.now() / 1000) - 301,
+              timestamp:
+                Math.floor(Date.now() / 1000) -
+                (SIGNATURE_TOLERANCE_SECONDS + OUTSIDE_WINDOW_MARGIN_SECONDS),
             })
           )
           .send(body);
@@ -2604,7 +2610,9 @@ describe('Triggers', () => {
             signTimestamped({
               secret: hookSecret,
               body,
-              timestamp: Math.floor(Date.now() / 1000) + 301,
+              timestamp:
+                Math.floor(Date.now() / 1000) +
+                (SIGNATURE_TOLERANCE_SECONDS + OUTSIDE_WINDOW_MARGIN_SECONDS),
             })
           )
           .send(body);
