@@ -160,6 +160,24 @@ A caller may invoke an operation iff the resolved policy grants the action, on a
 - `*` — matches all actions across all modules
 - `module:*` — matches all actions in a specific module (e.g., `documents:*`)
 
+### Deployment-registered Actions
+
+A deployment fronting SOAT with routes of its own registers their actions and resource types in the file `IAM_REGISTRATIONS_CONFIG` names (see [Configuration](#configuration)). Policies may then name them like built-in ones (`channels:GetChannel`, `channels:*`, `srn:<project_id>:channel:<id>`), and the deployment asks the engine before serving its own route with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission):
+
+```json
+{
+  "action": "channels:GetChannel",
+  "resource": "srn:proj_V1StGXR8Z5jdHi6B:channel:ch_1",
+  "context": { "tags": { "team": "red" } }
+}
+```
+
+- The answer is `200 { "allowed": true | false }`, never `403`: the caller's own policies (owner, key or OAuth boundary, project scope), evaluated as for a built-in route.
+- `action` must be a registered `module:Operation`; a built-in action or a wildcard is `400 VALIDATION_FAILED`.
+- The SRN's type must be one the action's module registered; `<id>` may be `*` for a create or a list. The project and resource are not looked up.
+- `context.tags` feeds `iam:ResourceTag/<key>` conditions, and `iam:ResourceType` is the SRN's type.
+- A check is not an action, so it writes no [audit log](./audit-log.md) entry.
+
 ## Conditions
 
 Conditions add attribute-based constraints: an operator mapped to key-value pairs that must all hold.
@@ -489,3 +507,29 @@ Allow only actors tagged `"internal"`:
 ## Users
 
 For user identity management, roles, authentication, and bootstrap, see the [Users module](./users.md).
+
+## Configuration
+
+| Environment Variable       | Required | Description                                                                                                               |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions). Unset (the default) registers none. |
+
+```json
+{
+  "modules": [
+    {
+      "module": "channels",
+      "resource_types": ["channel"],
+      "actions": [
+        {
+          "action": "channels:CreateChannel",
+          "description": "Create a channel"
+        },
+        { "action": "channels:GetChannel", "description": "Get a channel" }
+      ]
+    }
+  ]
+}
+```
+
+Read once at boot; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module.

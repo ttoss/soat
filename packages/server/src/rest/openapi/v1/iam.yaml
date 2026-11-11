@@ -1,0 +1,109 @@
+openapi: 3.0.3
+info:
+  title: SOAT IAM API
+  version: 1.0.0
+  description: >-
+    Ask the policy engine whether the calling credential may perform an
+    action a deployment registered.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: IAM
+    description: Evaluate the calling credential's policies
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/iam/check:
+    post:
+      tags:
+        - IAM
+      summary: Check a permission of the calling credential
+      description: >-
+        Evaluates the calling credential's own policies (its owner's and, for
+        an API key or OAuth token, its boundary and project scope) for an
+        action the deployment registered (`IAM_REGISTRATIONS_CONFIG`) on an
+        SRN, with the engine the runtime's own routes use. A denial is `200`
+        with `allowed: false`, never `403`. Only policies are evaluated: the
+        answer says nothing about whether the resource exists.
+      operationId: checkIamPermission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IamCheckRequest'
+      responses:
+        '200':
+          description: The policy decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IamCheckResult'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    IamCheckRequest:
+      type: object
+      required:
+        - action
+        - resource
+      additionalProperties: false
+      properties:
+        action:
+          type: string
+          description: >-
+            A `module:Operation` action the deployment registered; a
+            built-in action or a wildcard is `400`.
+          example: channels:GetChannel
+        resource:
+          type: string
+          description: >-
+            `srn:<project_id>:<resource_type>:<id>`, where the type is one the
+            action's module registered and `<id>` may be `*` for an action on
+            no single resource (a create or a list).
+          example: srn:proj_V1StGXR8Z5jdHi6B:channel:ch_1
+        context:
+          type: object
+          description: What the conditions of a policy statement read.
+          additionalProperties: false
+          properties:
+            tags:
+              description: >-
+                The resource's tags, read by `iam:ResourceTag/<key>`
+                conditions.
+              allOf:
+                - $ref: './tags.yaml#/components/schemas/TagBag'
+    IamCheckResult:
+      type: object
+      required:
+        - allowed
+      properties:
+        allowed:
+          type: boolean
+          description: Whether the caller's policies allow the action.

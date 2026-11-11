@@ -31,6 +31,7 @@ const PERMISSIONLESS_OPERATIONS = new Map([
   ['login-user', 'unauthenticated — exchanges credentials for a token'],
   ['bootstrap-user', 'unauthenticated — creates the first admin'],
   ['get-current-user', 'self-scoped — reads the caller behind the token'],
+  ['check-iam-permission', "self-scoped — evaluates the caller's own policies"],
   [
     'upload-file-with-token',
     'the upload token is the credential, not a policy',

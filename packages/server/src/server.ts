@@ -16,6 +16,7 @@ import {
 } from './lib/embeddingPrice';
 import { startEvalWorker } from './lib/evaluationWorker';
 import { initFormationResourceTypes } from './lib/formationsRegistry';
+import { initIamRegistrations } from './lib/iamRegistrations';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
@@ -42,6 +43,7 @@ const startServer = async () => {
   // problem is fatal — see `formationResourceTypeConfig.ts` for why.
   try {
     initFormationResourceTypes();
+    initIamRegistrations();
     // Same reason and the same place: a rate that cannot be parsed must not
     // reach the meter, where it would be swallowed and every embedding frozen
     // at an unintended cost.
