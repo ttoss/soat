@@ -119,6 +119,20 @@ To gate several tools differently, create a guardrail per tool and [attach](#att
 | `context.*` | The **effective guardrail context** — application-owned, see below                                             |
 | `runtime.*`    | Platform-computed values (fixed catalog below); reserved — never writable by the caller or the context tool     |
 
+Inside an iterator (`some`, `all`, `none`, `map`, `filter`, `reduce`), a `var` in the body reads the current element (`current` and `accumulator` in `reduce`), as JSON Logic defines it; `../../` climbs one iterator level back to the namespaces. This refuses any call whose messages carry object content:
+
+```json
+{
+  "class": {
+    "if": [
+      { "some": [{ "var": "args.messages" }, { "!!": { "var": "content.type" } }] },
+      "D",
+      "A"
+    ]
+  }
+}
+```
+
 The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. A guardrail may also name a `context_tool_id`, an ordinary [tool](./tools.md) in its own project (`400 TOOL_NOT_FOUND` otherwise) that runs server-side: a `client` tool, or a `builtin` or `mcp` tool whose `preset_parameters` name no `action`, is `400 VALIDATION_FAILED` the platform calls immediately before classifying each gated call, so long-parked runs read fresh context. `context_mode` combines the two: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning; `replace` substitutes it entirely.
 
 The context tool is called on every gated call, uncached, with the proposed call as its input, nested under one key:
@@ -192,7 +206,7 @@ Two windows at once, and a failure circuit breaker, in one guard:
 }
 ```
 
-**Fail-closed at both ends.** At write time, a `var` outside the three namespaces, or a `runtime.*` key outside the catalog, is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider fails closed: in `class` the result is `default_class`; in `guard` it counts as a failed guard and tripwire semantics apply.
+**Fail-closed at both ends.** At write time, a `var` outside the three namespaces (other than an iterator's own element), or a `runtime.*` key outside the catalog, is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider fails closed: in `class` the result is `default_class`; in `guard` it counts as a failed guard and tripwire semantics apply.
 
 **Variable casing.** `guardrail_context` (and a dry-run's `args`) keys pass through verbatim, with no snake↔camel conversion; snake_case is recommended (it matches the `runtime.*` catalog): `{ "var": "context.max_daily_budget" }` reads a supplied `max_daily_budget`.
 
@@ -366,7 +380,7 @@ Every evaluation writes a `guardrail_evaluation` activity entry and stamps the g
 - `scope` records where this guardrail was attached: `project` \| `agent` \| `tool`. One record per applying guardrail; the enacted `decision` is the strictest across them.
 - `context_source` records where the effective context came from: `caller` \| `tool` \| `merged` \| `none`.
 - `guard_result` is the guard expression's boolean outcome; `null` when the document has no guard or the call did not classify as `B`.
-- `context_snapshot` is a flat map of only the vars the evaluation referenced, keyed by fully-qualified path and frozen at evaluation-time value; unreferenced (possibly sensitive) context is never recorded.
+- `context_snapshot` is a flat map of only the vars the evaluation referenced, keyed by fully-qualified path and frozen at evaluation-time value (an iterator's element vars are covered by the iterated array's own entry); unreferenced (possibly sensitive) context is never recorded.
 
 Evaluations that changed the call's outcome (`route_to_approval`, `blocked`, `tripwire`; not `execute`) are also mirrored into the [audit log](./audit-log.md#system-originated-entries) as a platform-originated entry (`action: guardrails:Evaluate`, `detail.kind: guardrail_evaluation`); a `route_to_approval` entry also carries the filed `approval_id`.
 

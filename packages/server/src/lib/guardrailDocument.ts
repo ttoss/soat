@@ -1,6 +1,7 @@
 import { DomainError } from '../errors';
 import { RUNTIME_CONTEXT_CATALOG } from './guardrailRuntimeCatalog';
 import { isLogic } from './jsonLogicMapping';
+import { rootVarPaths } from './jsonLogicVars';
 import { isPlainObject } from './plainObject';
 
 /**
@@ -42,48 +43,9 @@ export const isActionClass = (value: unknown): value is ActionClass => {
   );
 };
 
-// The path a JSON Logic `var` argument selects: a bare string, or the first
-// element of a `[path, default]` array. A non-string argument selects nothing
-// resolvable and so needs no write-time rule (it fails closed at runtime).
-const varArgPath = (arg: unknown): string | undefined => {
-  if (typeof arg === 'string') return arg;
-  if (Array.isArray(arg) && typeof arg[0] === 'string') return arg[0];
-  return undefined;
-};
-
 /**
- * Collects every JSON Logic `var` path referenced anywhere in an expression, at
- * any nesting depth (inside operator arrays, inside a `var` default value).
- */
-const collectVarPaths = (node: unknown, out: string[]): void => {
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      collectVarPaths(item, out);
-    }
-    return;
-  }
-  if (!isPlainObject(node)) {
-    return;
-  }
-  const keys = Object.keys(node);
-  if (keys.length === 1 && keys[0] === 'var') {
-    const path = varArgPath(node.var);
-    if (path !== undefined) {
-      out.push(path);
-    }
-    // Recurse into the argument so a var default that itself contains vars
-    // (`{ var: [path, { var: '...' }] }`) is captured too.
-    collectVarPaths(node.var, out);
-    return;
-  }
-  for (const value of Object.values(node)) {
-    collectVarPaths(value, out);
-  }
-};
-
-/**
- * Every JSON Logic `var` path referenced by a document's `class` and `guard`
- * expressions, de-duplicated and in first-seen order. This is the exact set the
+ * Every root-data JSON Logic `var` path referenced by a document's `class` and
+ * `guard` expressions, de-duplicated and in first-seen order. This is the exact set the
  * evaluation audit record snapshots (guardrails.md — Evaluation Audit Record):
  * only the vars an expression actually read, keyed by fully-qualified path. A
  * literal `class` (no expression) contributes nothing.
@@ -93,10 +55,10 @@ export const collectDocumentVarPaths = (
 ): string[] => {
   const paths: string[] = [];
   if (isPlainObject(document.class)) {
-    collectVarPaths(document.class, paths);
+    paths.push(...rootVarPaths(document.class));
   }
   if (isPlainObject(document.guard)) {
-    collectVarPaths(document.guard, paths);
+    paths.push(...rootVarPaths(document.guard));
   }
   return [...new Set(paths)];
 };
@@ -108,9 +70,7 @@ const isAllowedVarPath = (path: string): boolean => {
 };
 
 const assertVarNamespaces = (expression: unknown, field: string): void => {
-  const paths: string[] = [];
-  collectVarPaths(expression, paths);
-  for (const path of paths) {
+  for (const path of rootVarPaths(expression)) {
     if (isAllowedVarPath(path)) continue;
     const detail = path.startsWith('runtime.')
       ? `'${path}' is not in the runtime.* catalog`

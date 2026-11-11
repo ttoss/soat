@@ -72,6 +72,136 @@ describe('validateGuardrailDocument', () => {
     });
   });
 
+  describe('iterator scopes', () => {
+    test.each(['some', 'all', 'every', 'none', 'map', 'filter'])(
+      'accepts an element var inside %s',
+      (operator) => {
+        expect(() => {
+          return validateGuardrailDocument({
+            class: {
+              if: [
+                {
+                  [operator]: [
+                    { var: 'args.messages' },
+                    { '!!': { var: 'content.type' } },
+                  ],
+                },
+                'D',
+                'A',
+              ],
+            },
+          });
+        }).not.toThrow();
+      }
+    );
+
+    test('accepts the reduce scope vars current and accumulator', () => {
+      expect(() => {
+        return validateGuardrailDocument({
+          class: 'B',
+          guard: {
+            '<': [
+              {
+                reduce: [
+                  { var: 'args.items' },
+                  { '+': [{ var: 'current.qty' }, { var: 'accumulator' }] },
+                  0,
+                ],
+              },
+              10,
+            ],
+          },
+        });
+      }).not.toThrow();
+    });
+
+    test('accepts the element itself and its index', () => {
+      expect(() => {
+        return validateGuardrailDocument({
+          class: 'B',
+          guard: {
+            all: [
+              { var: 'args.items' },
+              { and: [{ var: '' }, { '<': [{ var: '../index' }, 5] }] },
+            ],
+          },
+        });
+      }).not.toThrow();
+    });
+
+    test('accepts a root var reached from inside an iterator through ../..', () => {
+      expect(() => {
+        return validateGuardrailDocument({
+          class: 'B',
+          guard: {
+            some: [
+              { var: 'args.items' },
+              {
+                some: [
+                  { var: 'tags' },
+                  { '==': [{ var: '' }, { var: '../../../../context.tag' }] },
+                ],
+              },
+            ],
+          },
+        });
+      }).not.toThrow();
+    });
+
+    test('checks the namespace of a root var reached through ../..', () => {
+      expectValidationError(
+        {
+          class: 'B',
+          guard: {
+            some: [
+              { var: 'args.items' },
+              { '==': [{ var: 'id' }, { var: '../../secret.id' }] },
+            ],
+          },
+        },
+        /'secret\.id' is outside the args\.\* \/ context\.\* \/ runtime\.\* namespaces/
+      );
+    });
+
+    test('checks the runtime catalog for a root var reached through ../..', () => {
+      expectValidationError(
+        {
+          class: 'B',
+          guard: {
+            all: [
+              { var: 'args.items' },
+              { '<': [{ var: '../../runtime.nope' }, 1] },
+            ],
+          },
+        },
+        /'runtime\.nope' is not in the runtime\.\* catalog/
+      );
+    });
+
+    test('checks the namespace of the iterated array', () => {
+      expectValidationError(
+        { class: 'B', guard: { some: [{ var: 'items' }, true] } },
+        /'items' is outside/
+      );
+    });
+
+    test('checks the namespace of the reduce initial value', () => {
+      expectValidationError(
+        {
+          class: 'B',
+          guard: {
+            reduce: [
+              { var: 'args.items' },
+              { var: 'current' },
+              { var: 'start' },
+            ],
+          },
+        },
+        /'start' is outside/
+      );
+    });
+  });
+
   describe('structural rejections', () => {
     test('rejects a non-object document', () => {
       expectValidationError('C', /must be a JSON object/);

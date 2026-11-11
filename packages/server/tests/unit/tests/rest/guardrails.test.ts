@@ -611,6 +611,42 @@ describe('Guardrails', () => {
       );
     });
 
+    test('an iterator reads each element and snapshots only root vars', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: 'Object Content Guardrail',
+          document: {
+            class: {
+              if: [
+                {
+                  some: [
+                    { var: 'args.messages' },
+                    { '!!': { var: 'content.type' } },
+                  ],
+                },
+                'D',
+                'A',
+              ],
+            },
+          },
+        });
+      expect(res.status).toBe(201);
+
+      const messages = [{ content: 'hi' }, { content: { type: 'image' } }];
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${res.body.id}/evaluate`)
+        .send({ args: { messages } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.class).toBe('D');
+      expect(response.body.decision).toBe('blocked');
+      expect(response.body.context_snapshot).toEqual({
+        'args.messages': messages,
+      });
+    });
+
     test('files no approval item and writes no audit row', async () => {
       const before = await authenticatedTestClient(userToken).get(
         '/api/v1/approvals?status=pending'

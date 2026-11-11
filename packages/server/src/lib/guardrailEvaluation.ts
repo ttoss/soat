@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { ActionClass, GuardrailDocument } from './guardrailDocument';
 import { DEFAULT_ACTION_CLASS, isActionClass } from './guardrailDocument';
 import { evaluateLogic } from './jsonLogicMapping';
+import { operandRootVarPath, walkLogicOperators } from './jsonLogicVars';
 import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:guardrails');
@@ -98,15 +99,6 @@ const getByPath = (root: unknown, path: string): unknown => {
   return node;
 };
 
-// The path a JSON Logic `var` argument selects: a bare string, or the first
-// element of a `[path, default]` array — mirrors guardrailDocument.ts's
-// internal helper of the same name.
-const varArgPath = (arg: unknown): string | undefined => {
-  if (typeof arg === 'string') return arg;
-  if (Array.isArray(arg) && typeof arg[0] === 'string') return arg[0];
-  return undefined;
-};
-
 const isFailClosedNamespacePath = (path: string): boolean => {
   return (
     path === 'runtime' ||
@@ -129,16 +121,14 @@ const UNSAFE_COMPARISON_OPS: ReadonlySet<string> = new Set([
 
 // `args.*` is deliberately excluded: its `null`-coercion is a documented caveat
 // callers guard against explicitly, not a fail-closed invariant to enforce here.
-const isUnresolvedFailClosedVarNode = (
-  node: unknown,
-  logicContext: Record<string, unknown>
-): boolean => {
-  if (!isPlainObject(node)) return false;
-  const keys = Object.keys(node);
-  if (keys.length !== 1 || keys[0] !== 'var') return false;
-  const path = varArgPath(node.var);
+const isUnresolvedFailClosedVar = (args: {
+  operand: unknown;
+  depth: number;
+  logicContext: Record<string, unknown>;
+}): boolean => {
+  const path = operandRootVarPath({ operand: args.operand, depth: args.depth });
   if (path === undefined || !isFailClosedNamespacePath(path)) return false;
-  const value = getByPath(logicContext, path);
+  const value = getByPath(args.logicContext, path);
   return value === null || value === undefined;
 };
 
@@ -152,33 +142,22 @@ const isUnresolvedFailClosedVarNode = (
  * a normal, safe use of `null`'s own equality — is left alone.
  */
 const hasUnsafeComparisonWithUnresolvedVar = (
-  node: unknown,
+  expression: unknown,
   logicContext: Record<string, unknown>
 ): boolean => {
-  if (Array.isArray(node)) {
-    return node.some((item) => {
-      return hasUnsafeComparisonWithUnresolvedVar(item, logicContext);
-    });
-  }
-  if (!isPlainObject(node)) return false;
-
-  const keys = Object.keys(node);
-  if (keys.length === 1 && UNSAFE_COMPARISON_OPS.has(keys[0])) {
-    const operands = Array.isArray(node[keys[0]])
-      ? (node[keys[0]] as unknown[])
-      : [node[keys[0]]];
-    if (
-      operands.some((operand) => {
-        return isUnresolvedFailClosedVarNode(operand, logicContext);
-      })
-    ) {
-      return true;
-    }
-  }
-
-  return Object.values(node).some((value) => {
-    return hasUnsafeComparisonWithUnresolvedVar(value, logicContext);
+  let unsafe = false;
+  walkLogicOperators({
+    node: expression,
+    depth: 0,
+    visit: ({ operator, argument, depth }) => {
+      if (unsafe || !UNSAFE_COMPARISON_OPS.has(operator)) return;
+      const operands = Array.isArray(argument) ? argument : [argument];
+      unsafe = operands.some((operand) => {
+        return isUnresolvedFailClosedVar({ operand, depth, logicContext });
+      });
+    },
   });
+  return unsafe;
 };
 
 /**
