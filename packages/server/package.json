@@ -55,7 +55,7 @@
     "@ttoss/http-server": "^0.11.1",
     "@ttoss/http-server-auth": "^0.8.1",
     "@ttoss/http-server-mcp": "^0.34.2",
-    "@ttoss/http-server-mcp-openapi": "^0.8.2",
+    "@ttoss/http-server-mcp-openapi": "^0.12.5",
     "@ttoss/postgresdb": "^0.14.1",
     "ai": "^7.0.127",
     "ajv": "^8.20.0",
