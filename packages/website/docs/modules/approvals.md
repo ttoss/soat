@@ -138,7 +138,7 @@ An approved `builtin` action is held to the proposing agent's
 [`policy_ids`](./agents.md#execution-identity) as they stand at
 decision time, against the same resource SRN and tags as the agent's own calls.
 A denied action does not run; its result is
-`{"error": "Forbidden: boundary policy denies <action>"}`. An agent that no
+`{"error": "Forbidden: the agent's policies deny <action>"}`. An agent that no
 longer exists bounds nothing in, so its approved `builtin` actions are refused.
 
 ### Duplicate proposals (dedup)

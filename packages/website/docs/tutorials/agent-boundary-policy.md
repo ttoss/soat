@@ -576,7 +576,7 @@ echo "Content after the agent ran: $CONTENT"
 The tool result the model received:
 
 ```json
-{ "error": "Forbidden: boundary policy denies update-document" }
+{ "error": "Forbidden: the agent's policies deny documents:UpdateDocument" }
 ```
 
 ---

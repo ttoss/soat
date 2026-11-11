@@ -8,6 +8,7 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import { agentPolicyDenial } from './agentPolicyDenial';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import {
   type LogToolCallingError,
@@ -155,9 +156,7 @@ export const soatActionBoundaryRefusal = async (args: {
     iamAction,
     ...(scope ?? {}),
   });
-  return allowed
-    ? null
-    : { error: `Forbidden: boundary policy denies ${iamAction}` };
+  return allowed ? null : { error: agentPolicyDenial({ action: iamAction }) };
 };
 
 /**

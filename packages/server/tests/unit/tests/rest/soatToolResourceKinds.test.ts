@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
 import { createGenerationRecord } from 'src/lib/generations';
 import { saveTrace } from 'src/lib/traces';
 
@@ -45,7 +46,7 @@ const stubPromise = startChatCompletionStub({
   },
 });
 
-const BOUNDARY_DENIAL = /^Forbidden: boundary policy denies /;
+const BOUNDARY_DENIAL = new RegExp(`^${agentPolicyDenial({ action: '' })}`);
 
 /** Every kind `resourceScopes.ts` resolves, in the order `kinds` lists them. */
 const KINDS = [

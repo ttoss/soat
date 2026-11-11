@@ -1,6 +1,8 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
+
 import {
   type ChatRequest,
   startChatCompletionStub,
@@ -681,7 +683,7 @@ describe('Agent knowledge', () => {
         });
 
         expect(JSON.parse(result)).toEqual({
-          error: 'Forbidden: boundary policy denies memories:CreateMemory',
+          error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
         });
         expect(
           (await memoriesIn(storeId)).map((memory) => {
@@ -708,7 +710,7 @@ describe('Agent knowledge', () => {
         const { result } = await remember({ agentId, content: 'A fact.' });
 
         expect(JSON.parse(result)).toEqual({
-          error: 'Forbidden: boundary policy denies memories:UpdateMemory',
+          error: agentPolicyDenial({ action: 'memories:UpdateMemory' }),
         });
       });
 
@@ -730,7 +732,7 @@ describe('Agent knowledge', () => {
         });
 
         expect(JSON.parse(result)).toEqual({
-          error: 'Forbidden: boundary policy denies memories:CreateMemory',
+          error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
         });
       });
 
@@ -784,8 +786,7 @@ describe('Agent knowledge', () => {
           outcome === 'created'
             ? expect.objectContaining({ action: 'created' })
             : {
-                error:
-                  'Forbidden: boundary policy denies memories:CreateMemory',
+                error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
               }
         );
       });

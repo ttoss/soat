@@ -3,6 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
+import { agentPolicyDenial } from './agentPolicyDenial';
 import type { BindingTools } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import type { EmbeddingBilling } from './embedding';
@@ -436,8 +437,8 @@ export const buildWriteMemoryTool = (args: {
         }),
       });
       if (deniedAction) {
-        log('write_memory: boundary policy denies %s', deniedAction);
-        return { error: `Forbidden: boundary policy denies ${deniedAction}` };
+        log('write_memory: denied %s', deniedAction);
+        return { error: agentPolicyDenial({ action: deniedAction }) };
       }
       const result = await writeMemory({
         memoryStoreId: memoryStore.id,
