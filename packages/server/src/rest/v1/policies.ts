@@ -57,7 +57,10 @@ const authorizePolicy = async (args: {
     return;
   }
   const found = await findPolicyScope({ policyId });
-  if (found?.scope == null) {
+  if (found === null) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
+  }
+  if (found.scope === null) {
     requireAdmin(ctx, args.action);
     return;
   }
