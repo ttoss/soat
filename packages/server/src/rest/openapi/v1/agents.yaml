@@ -1578,7 +1578,8 @@ components:
         active_tool_ids:
           description: >-
             Persisted tools from `tool_bindings` the model sees on every step.
-            Omitted or `[]` leaves every bound tool active. See
+            Omitted or `[]` leaves every bound tool active. An id not among
+            the agent's `tool_bindings` is rejected with 400. See
             [Active Tools](/docs/modules/agents#active-tools).
           x-soat-ref: tools
           type: array
@@ -1851,7 +1852,8 @@ components:
         active_tool_ids:
           description: >-
             Persisted tools from `tool_bindings` the model sees on every step.
-            `null` or `[]` leaves every bound tool active. See
+            `null` or `[]` leaves every bound tool active. An id not among
+            the agent's `tool_bindings` is rejected with 400. See
             [Active Tools](/docs/modules/agents#active-tools).
           x-soat-ref: tools
           type: array
@@ -2469,4 +2471,6 @@ components:
           nullable: true
           items:
             type: string
-          description: Tool IDs active on this step.
+          description: >-
+            Tool IDs active on this step, each among the agent's
+            `tool_bindings`.

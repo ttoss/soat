@@ -236,6 +236,7 @@ export const createAgent = async (
 
   await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
+    toolBindings: args.toolBindings,
     activeToolIds: args.activeToolIds,
     stepRules: args.stepRules,
     traceContentMode: args.traceContentMode,
@@ -399,14 +400,7 @@ export const updateAgent = async (
 
   const beforeConfig = buildAgentConfigSnapshot(mapAgent(agent));
 
-  // No-ops for an undefined list (attachments/restriction left untouched).
-  await assertAgentReferencesExist({
-    guardrailIds: args.guardrailIds,
-    activeToolIds: args.activeToolIds,
-    stepRules: args.stepRules,
-    traceContentMode: args.traceContentMode,
-    projectId: agent.projectId,
-  });
+  await assertAgentReferencesExist({ ...args, current: agent });
 
   await assertPoliciesAttachable({
     ...args,

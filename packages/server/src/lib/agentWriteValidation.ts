@@ -10,12 +10,18 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { collectStepRuleActiveToolIds } from './agentStepRules';
+import {
+  type AgentToolBinding,
+  readAgentToolBindings,
+  splitToolBindings,
+} from './agentToolBindings';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertModelBindingResolvable,
   resolveModelRouteDbId,
   validateModelRouteExclusivity,
 } from './modelRoutes';
+import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { validateAgentTraceContentMode } from './traceContentPolicy';
 
@@ -47,17 +53,103 @@ const assertTraceContentModeAllowed = async (args: {
   if (message) throw new DomainError('VALIDATION_FAILED', message);
 };
 
-export const assertAgentReferencesExist = async (args: {
-  guardrailIds: string[] | null | undefined;
-  activeToolIds: string[] | null | undefined;
-  stepRules?: unknown;
-  traceContentMode?: string | null;
+/** The stored agent an update merges onto: a field the body omits keeps it. */
+type StoredAgentToolConfig = {
   projectId: number;
-}): Promise<void> => {
-  await assertGuardrailsExist({
-    guardrailIds: args.guardrailIds,
-    projectId: args.projectId,
-  });
+  toolBindings?: unknown;
+  activeToolIds?: unknown;
+  stepRules?: unknown;
+};
+
+type ActiveToolsWrite = {
+  current: StoredAgentToolConfig | undefined;
+  toolBindings?: AgentToolBinding[] | null;
+  activeToolIds?: unknown;
+  stepRules?: unknown;
+};
+
+/** The write merged onto the stored agent, or `null` for an update sending none of the three. */
+const mergeActiveToolsWrite = (args: ActiveToolsWrite) => {
+  const { current } = args;
+  if (!current) {
+    return { ...args, toolBindings: args.toolBindings ?? null };
+  }
+  if (
+    args.toolBindings === undefined &&
+    args.activeToolIds === undefined &&
+    args.stepRules === undefined
+  ) {
+    return null;
+  }
+  return {
+    toolBindings:
+      args.toolBindings === undefined
+        ? readAgentToolBindings(current)
+        : args.toolBindings,
+    activeToolIds:
+      args.activeToolIds === undefined
+        ? current.activeToolIds
+        : args.activeToolIds,
+    stepRules:
+      args.stepRules === undefined ? current.stepRules : args.stepRules,
+  };
+};
+
+const isBindingList = (value: unknown): value is AgentToolBinding[] | null => {
+  return value === null || (Array.isArray(value) && value.every(isPlainObject));
+};
+
+/**
+ * Generation narrows the bound tool ids to the active ones, so an active id
+ * that is not bound would leave the agent with fewer tools than it declares,
+ * or none. An update is checked as merged, so removing a binding that is still
+ * active is refused.
+ */
+const assertActiveToolsBound = (args: ActiveToolsWrite): void => {
+  const merged = mergeActiveToolsWrite(args);
+  // A malformed `tool_bindings` is refused by its own validation, with its own message.
+  if (!merged || !isBindingList(merged.toolBindings)) return;
+
+  const bound = new Set(splitToolBindings(merged.toolBindings).toolIds);
+  const fields: Array<[string, string[]]> = [
+    [
+      'active_tool_ids',
+      Array.isArray(merged.activeToolIds)
+        ? merged.activeToolIds.filter((id): id is string => {
+            return typeof id === 'string';
+          })
+        : [],
+    ],
+    [
+      'step_rules[].active_tool_ids',
+      collectStepRuleActiveToolIds(merged.stepRules),
+    ],
+  ];
+  for (const [field, ids] of fields) {
+    const unbound = ids.find((id) => {
+      return !bound.has(id);
+    });
+    if (unbound !== undefined) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `${field} entry '${unbound}' is not among the agent's tool_bindings.`
+      );
+    }
+  }
+};
+
+export const assertAgentReferencesExist = async (
+  args: {
+    guardrailIds?: string[] | null;
+    toolBindings?: AgentToolBinding[] | null;
+    activeToolIds?: string[] | null;
+    stepRules?: unknown;
+    traceContentMode?: string | null;
+  } & ({ projectId: number } | { current: StoredAgentToolConfig })
+): Promise<void> => {
+  const current = 'current' in args ? args.current : undefined;
+  const projectId = 'current' in args ? args.current.projectId : args.projectId;
+  await assertGuardrailsExist({ guardrailIds: args.guardrailIds, projectId });
   // A typo surfaces as a `400` on write instead of silently narrowing the
   // agent's tool surface at generation time.
   await toolReferences.requireMany({
@@ -65,12 +157,13 @@ export const assertAgentReferencesExist = async (args: {
       ...(args.activeToolIds ?? []),
       ...collectStepRuleActiveToolIds(args.stepRules),
     ],
-    projectId: args.projectId,
+    projectId,
     reach: 'shares',
   });
+  assertActiveToolsBound({ ...args, current });
   await assertTraceContentModeAllowed({
     traceContentMode: args.traceContentMode,
-    projectId: args.projectId,
+    projectId,
   });
 };
 
