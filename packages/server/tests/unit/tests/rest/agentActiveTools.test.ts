@@ -168,14 +168,114 @@ describe('Agent active tools', () => {
         'beta_tool',
       ]);
     });
+  });
 
-    test('an active tool that is not bound is not offered', async () => {
+  describe('active tools must be bound', () => {
+    const postAgent = (body: Record<string, unknown>) => {
+      return authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'active-tools-agent',
+          ...body,
+        });
+    };
+
+    const patchAgent = (agentId: string, body: Record<string, unknown>) => {
+      return authenticatedTestClient(adminToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send(body);
+    };
+
+    const expectUnbound = (
+      res: {
+        status: number;
+        body: { error: { code: string; message: string } };
+      },
+      toolId: string
+    ) => {
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain(toolId);
+    };
+
+    test('refuses an active tool on an agent with no tool_bindings', async () => {
+      const res = await postAgent({ active_tool_ids: [alphaToolId] });
+
+      expectUnbound(res, alphaToolId);
+    });
+
+    test('refuses an active tool the agent does not bind', async () => {
       const unboundToolId = await createTool('unbound_tool');
-      const agentId = await createAgent({
+      const res = await postAgent({
+        tool_bindings: [{ tool_id: alphaToolId }],
         active_tool_ids: [unboundToolId, alphaToolId],
       });
 
-      expect(await toolsOfferedBy(agentId)).toEqual(['alpha_tool']);
+      expectUnbound(res, unboundToolId);
+    });
+
+    test("refuses a step rule's active tool the agent does not bind", async () => {
+      const res = await postAgent({
+        tool_bindings: [{ tool_id: alphaToolId }],
+        step_rules: [{ step: 1, active_tool_ids: [betaToolId] }],
+      });
+
+      expectUnbound(res, betaToolId);
+    });
+
+    test('accepts active tools and step rules naming bound tools', async () => {
+      const res = await postAgent({
+        tool_bindings: [{ tool_id: alphaToolId }, { tool_id: betaToolId }],
+        active_tool_ids: [alphaToolId],
+        step_rules: [{ step: 1, active_tool_ids: [betaToolId] }],
+      });
+
+      expect(res.status).toBe(201);
+    });
+
+    test('refuses an update naming an active tool the agent does not bind', async () => {
+      const created = await postAgent({
+        tool_bindings: [{ tool_id: alphaToolId }],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await patchAgent(created.body.id as string, {
+        active_tool_ids: [betaToolId],
+      });
+
+      expectUnbound(res, betaToolId);
+    });
+
+    test('refuses an update removing a binding that is still active', async () => {
+      const created = await postAgent({
+        tool_bindings: [{ tool_id: alphaToolId }, { tool_id: betaToolId }],
+        step_rules: [{ step: 1, active_tool_ids: [betaToolId] }],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await patchAgent(created.body.id as string, {
+        tool_bindings: [{ tool_id: alphaToolId }],
+      });
+
+      expectUnbound(res, betaToolId);
+    });
+
+    test('accepts an update removing a binding together with its active id', async () => {
+      const created = await postAgent({
+        tool_bindings: [{ tool_id: alphaToolId }, { tool_id: betaToolId }],
+        active_tool_ids: [betaToolId],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await patchAgent(created.body.id as string, {
+        tool_bindings: [{ tool_id: alphaToolId }],
+        active_tool_ids: [alphaToolId],
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.active_tool_ids).toEqual([alphaToolId]);
     });
   });
 });
