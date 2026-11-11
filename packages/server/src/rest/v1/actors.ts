@@ -13,7 +13,7 @@ import {
   validateActorExclusivity,
 } from 'src/lib/actors';
 import { emptyPage } from 'src/lib/pagination';
-import { readTagQuery } from 'src/lib/tags';
+import { assertNoSystemTagKeys, readTagBag, readTagQuery } from 'src/lib/tags';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
@@ -190,6 +190,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     instructions?: string | null;
     agent_id?: string | null;
     chat_id?: string | null;
+    tags?: unknown;
   };
 
   const updated = await updateActor({
@@ -199,6 +200,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     instructions: body.instructions,
     agentId: body.agent_id,
     chatId: body.chat_id,
+    tags: assertNoSystemTagKeys(readTagBag(body.tags)),
   });
 
   ctx.body = updated;

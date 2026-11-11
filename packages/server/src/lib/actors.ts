@@ -140,6 +140,7 @@ const buildActorUpdates = (args: {
   name?: string;
   externalId?: string;
   instructions?: string | null;
+  tags?: Record<string, string>;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) {
@@ -150,6 +151,9 @@ const buildActorUpdates = (args: {
   }
   if (args.instructions !== undefined) {
     updates.instructions = args.instructions;
+  }
+  if (args.tags !== undefined) {
+    updates.tags = args.tags;
   }
   return updates;
 };
@@ -312,6 +316,7 @@ export const updateActor = async (args: {
   instructions?: string | null;
   agentId?: string | null;
   chatId?: string | null;
+  tags?: Record<string, string>;
 }) => {
   log('updateActor %o', args);
 
@@ -321,6 +326,7 @@ export const updateActor = async (args: {
     name: args.name,
     externalId: args.externalId,
     instructions: args.instructions,
+    tags: args.tags,
   });
 
   const resolved = await resolveActorLinkedIds({
