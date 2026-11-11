@@ -182,6 +182,71 @@ describe('guardrailEvaluation', () => {
       expect(result.guardResult).toBe(true);
     });
 
+    test('an iterator element var resolves against the element', () => {
+      const guardrail = attach({
+        class: {
+          if: [
+            {
+              some: [
+                { var: 'args.messages' },
+                { '!!': { var: 'content.type' } },
+              ],
+            },
+            'D',
+            'A',
+          ],
+        },
+      });
+      const refused = evaluateGuardrail({
+        guardrail,
+        context: {
+          args: { messages: [{ content: 'hi' }, { content: { type: 'img' } }] },
+        },
+      });
+      const allowed = evaluateGuardrail({
+        guardrail,
+        context: { args: { messages: [{ content: 'hi' }] } },
+      });
+      expect(refused.decision).toBe('blocked');
+      expect(allowed.decision).toBe('execute');
+    });
+
+    test('an unresolvable runtime.* var reached through ../.. fails closed', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: {
+            all: [
+              { var: 'args.items' },
+              {
+                '<': [{ var: '../../runtime.projects.tool_calls.24h' }, 100],
+              },
+            ],
+          },
+        }),
+        context: { args: { items: [1] }, runtime: {} },
+      });
+      expect(result.decision).toBe('tripwire');
+      expect(result.guardResult).toBe(false);
+    });
+
+    test('an element field named context is not a root context.* var', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: {
+            all: [
+              { var: 'args.items' },
+              { '<': [{ var: 'context.size' }, 100] },
+            ],
+          },
+        }),
+        context: { args: { items: [{ context: { size: 5 } }] } },
+      });
+      expect(result.decision).toBe('execute');
+      expect(result.guardResult).toBe(true);
+    });
+
     // The evaluator matches `var` paths against the caller's context verbatim —
     // the casing is preserved end-to-end (caseTransform leaves guardrail_context
     // as a pass-through bag), so a snake_case document reads a snake_case key.
