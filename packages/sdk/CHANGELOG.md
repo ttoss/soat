@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.106.0](https://github.com/ttoss/soat/compare/v0.105.0...v0.106.0) (2026-11-11)
+
+### Features
+
+* **iam:** add POST /api/v1/iam/check and deployment-registered iam actions ([#1863](https://github.com/ttoss/soat/issues/1863)) ([8c00cea](https://github.com/ttoss/soat/commit/8c00cea4f389c36671a779ac2652b9610262e5c4))
+
 # [0.105.0](https://github.com/ttoss/soat/compare/v0.104.0...v0.105.0) (2026-11-10)
 
 **Note:** Version bump only for package @soat/sdk
