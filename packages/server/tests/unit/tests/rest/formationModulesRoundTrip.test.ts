@@ -118,7 +118,13 @@ const CASES: RoundTripCase[] = [
     route: 'policies',
     build: (seed) => {
       const document = {
-        statement: [{ effect: 'Allow', action: ['tools:ListTools'] }],
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['tools:ListTools'],
+            resource: [`srn:${fx.projectId}:*:*`],
+          },
+        ],
       };
       return {
         create: { name: `Pol ${seed}`, description: 'a policy', document },

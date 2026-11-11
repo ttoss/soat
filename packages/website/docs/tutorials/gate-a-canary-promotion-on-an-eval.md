@@ -604,8 +604,8 @@ WEBHOOK_ID=$(soat create-webhook --project-id "$PROJECT_ID" \
   --events '["eval_runs.completed","eval_runs.failed"]' \
   --policy-ids '["'"$HOOK_POLICY_ID"'"]' | jq -r '.id')
 
-NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq \
-  '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
+NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq --arg p "$PROJECT_ID" \
+  '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"],"resource":["srn:\($p):*:*"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
 
 TRIGGER_ID=$(soat update-formation --formation-id "$FORMATION_ID" \
   --template "$NIGHTLY_TEMPLATE" | jq -r '.outputs.trigger_id')
@@ -639,7 +639,13 @@ nightlyTemplate.resources.nightlyRunner = {
   properties: {
     name: 'nightly-release-notes-gate',
     document: {
-      statement: [{ effect: 'Allow', action: ['evaluations:RunEval'] }],
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['evaluations:RunEval'],
+          resource: [`srn:${project.id}:*:*`],
+        },
+      ],
     },
   },
 };
@@ -674,8 +680,8 @@ WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"eval-verdicts\",\"url\":\"https://example.com/eval-verdicts\",\"events\":[\"eval_runs.completed\",\"eval_runs.failed\"],\"policy_ids\":[\"$HOOK_POLICY_ID\"]}" | jq -r '.id')
 
-NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq -c \
-  '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
+NIGHTLY_TEMPLATE=$(printf '%s' "$CANDIDATE_TEMPLATE" | jq -c --arg p "$PROJECT_ID" \
+  '.resources.nightlyRunner = {"type":"policy","properties":{"name":"nightly-release-notes-gate","document":{"statement":[{"effect":"Allow","action":["evaluations:RunEval"],"resource":["srn:\($p):*:*"]}]}}} | .resources.nightly = {"type":"trigger","properties":{"name":"nightly-release-notes-gate","type":"schedule","target_type":"eval","target_id":{"ref":"gate"},"cron":"0 3 * * *","policy_ids":[{"ref":"nightlyRunner"}]}} | .outputs.trigger_id = {"ref":"nightly"}')
 
 TRIGGER_ID=$(curl -s -X PUT "$SOAT_BASE_URL/api/v1/formations/$FORMATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \

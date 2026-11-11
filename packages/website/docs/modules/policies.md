@@ -63,6 +63,7 @@ Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Ex
 | Carried in `policy_ids` by | agents, triggers and webhooks of the same project                  | agents, triggers and webhooks of any project |
 
 - `POST` with `project_id`, or with a project-scoped API key (its project is the default), creates a project policy; without either, a global one. The project never changes; deleting the project deletes its policies.
+- A `policy` resource in a [formation](./formations.md) is a project policy of the formation's project.
 - An `Allow` with no `resource`, `*`, `srn:*:…`, a project glob, or another project's SRN is refused (`400 VALIDATION_FAILED`, `meta.details`). A `Deny` may name anything.
 - Listing returns only the projects' policies the caller may list; the unrestricted admin also sees global ones.
 - A project policy read outside the caller's reach is `404`; a global policy is `403` to anyone but the unrestricted admin.

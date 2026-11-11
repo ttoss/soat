@@ -235,7 +235,13 @@ A [Formation](./formations.md) can create webhooks, with the same fields; the de
       "type": "policy",
       "properties": {
         "document": {
-          "statement": [{ "effect": "Allow", "action": ["files:GetFile"] }]
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["files:GetFile"],
+              "resource": ["srn:proj_V1StGXR8Z5jdHi6B:*:*"]
+            }
+          ]
         }
       }
     },

@@ -51,19 +51,37 @@ const CASES: RoundTripCase[] = [
     route: 'policies',
     build: () => {
       const document = {
-        statement: [{ effect: 'Allow', action: ['agents:GetAgent'] }],
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['agents:GetAgent'],
+            resource: [`srn:${fx.projectId}:*:*`],
+          },
+        ],
       };
       return {
         create: { document },
         expectRead: { document },
         update: {
           document: {
-            statement: [{ effect: 'Allow', action: ['tools:ListTools'] }],
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['tools:ListTools'],
+                resource: [`srn:${fx.projectId}:*:*`],
+              },
+            ],
           },
         },
         expectAfterUpdate: {
           document: {
-            statement: [{ effect: 'Allow', action: ['tools:ListTools'] }],
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['tools:ListTools'],
+                resource: [`srn:${fx.projectId}:*:*`],
+              },
+            ],
           },
         },
       };

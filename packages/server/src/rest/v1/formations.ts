@@ -23,7 +23,6 @@ import { readNullableMetadataBag } from 'src/lib/metadataBag';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
-  isUnrestrictedAdmin,
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
@@ -44,26 +43,21 @@ export const formationsRouter = new Router<Context>();
  * request, and every decision is recorded here — a Deny that silently failed to
  * apply left no audit entry distinguishing it from a Deny that was honoured,
  * which is what made the gap invisible.
- *
- * `adminOnly` short-circuits the IAM probe rather than being ANDed with it: it
- * asks the same question `requireAdmin` does for the global resource it creates.
  */
 const formationAuthorizer = (args: {
   ctx: Context & { authUser: AuthUser };
   projectPublicId: string;
 }): FormationAuthorizer => {
   return async (request) => {
-    const allowed = request.adminOnly
-      ? isUnrestrictedAdmin(args.ctx.authUser)
-      : await args.ctx.authUser.isAllowed({
-          projectPublicId: args.projectPublicId,
-          action: request.action,
-          resource: buildSrn({
-            projectPublicId: args.projectPublicId,
-            resourceType: request.srnResourceType,
-            resourceId: request.resourceId,
-          }),
-        });
+    const allowed = await args.ctx.authUser.isAllowed({
+      projectPublicId: args.projectPublicId,
+      action: request.action,
+      resource: buildSrn({
+        projectPublicId: args.projectPublicId,
+        resourceType: request.srnResourceType,
+        resourceId: request.resourceId,
+      }),
+    });
 
     recordAuthorizationDecision(args.ctx, { action: request.action, allowed });
 
