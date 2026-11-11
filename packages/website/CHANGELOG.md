@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.106.0](https://github.com/ttoss/soat/compare/v0.105.0...v0.106.0) (2026-11-11)
+
+* feat(iam)!: policy condition keys use the iam: namespace (#1862) ([1e42582](https://github.com/ttoss/soat/commit/1e425825fcbbe3f38af72b3ec2393fc504f5658b)), closes [#1862](https://github.com/ttoss/soat/issues/1862)
+
+### Bug Fixes
+
+* **iam:** check edits to policies api keys and users carry ([#1866](https://github.com/ttoss/soat/issues/1866)) ([beeb42c](https://github.com/ttoss/soat/commit/beeb42c25acda6e5597551d7005d77cab7cd3e28))
+
+### Features
+
+* **iam:** add POST /api/v1/iam/check and deployment-registered iam actions ([#1863](https://github.com/ttoss/soat/issues/1863)) ([8c00cea](https://github.com/ttoss/soat/commit/8c00cea4f389c36671a779ac2652b9610262e5c4))
+* **tools:** call a tool for an actor with actor_id ([#1864](https://github.com/ttoss/soat/issues/1864)) ([df2e97a](https://github.com/ttoss/soat/commit/df2e97a10417c0df83d8f4f31afd65ceffa74731))
+
+### BREAKING CHANGES
+
+* policy condition keys and variables are `iam:ResourceType`, `iam:ResourceTag/<tag>` and `${iam:ActorId}`; a migration rewrites stored policy documents and formation templates.
+
 # [0.105.0](https://github.com/ttoss/soat/compare/v0.104.0...v0.105.0) (2026-11-10)
 
 * feat(iam)!: on-behalf-of requests run as the key capped by the generation's identity (#1857) ([3ea4497](https://github.com/ttoss/soat/commit/3ea4497f5e631c29246c70e8c9ae2bd90b488da2)), closes [#1857](https://github.com/ttoss/soat/issues/1857)
