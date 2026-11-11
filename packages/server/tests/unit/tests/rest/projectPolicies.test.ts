@@ -342,6 +342,22 @@ describe('Project policies', () => {
       }
     );
 
+    test.each(['get', 'put', 'delete'] as const)(
+      'an unknown policy id is 404 to a project key (%s)',
+      async (method) => {
+        const req = authenticatedTestClient(projectKey)[method](
+          '/api/v1/policies/pol_doesnotexist0000'
+        );
+        const res =
+          method === 'put'
+            ? await req.send({ document: allowIn({ project: projectId }) })
+            : await req;
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      }
+    );
+
     test('an update granting outside the policy project is 400', async () => {
       const created = await createProjectPolicy({
         token: projectAdminToken,
