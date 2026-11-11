@@ -1,4 +1,5 @@
 import type { Tool } from 'ai';
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
 import { isSoatActionAllowedByBoundary } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 
@@ -107,7 +108,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
     const result = await callWith({ tool, memoryStoreId: otherStoreId });
 
     expect(result).toEqual({
-      error: 'Forbidden: boundary policy denies memories:GetMemoryStore',
+      error: agentPolicyDenial({ action: 'memories:GetMemoryStore' }),
     });
   });
 
@@ -134,7 +135,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       memoryStoreId: otherStoreId,
     });
     expect(untagged).toEqual({
-      error: 'Forbidden: boundary policy denies memories:GetMemoryStore',
+      error: agentPolicyDenial({ action: 'memories:GetMemoryStore' }),
     });
   });
 

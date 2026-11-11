@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveBearerAuthUser } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
+import { agentPolicyDenial } from './agentPolicyDenial';
 import {
   buildSrn,
   evaluatePolicies,
@@ -51,12 +52,10 @@ const assertUseAllowed = async (args: {
   authHeader?: string;
   boundaryPolicy?: unknown;
 }) => {
-  const deny = (by: string) => {
-    return new DomainError(
-      'FORBIDDEN',
-      `Forbidden: ${by} denies ${USE_OAUTH_CONNECTION_ACTION}`,
-      { action: USE_OAUTH_CONNECTION_ACTION }
-    );
+  const deny = (message: string) => {
+    return new DomainError('FORBIDDEN', message, {
+      action: USE_OAUTH_CONNECTION_ACTION,
+    });
   };
   if (args.boundaryPolicy) {
     const valid = validatePolicyDocument(args.boundaryPolicy).valid;
@@ -68,7 +67,7 @@ const assertUseAllowed = async (args: {
         resource: args.resource,
       })
     ) {
-      throw deny('boundary policy');
+      throw deny(agentPolicyDenial({ action: USE_OAUTH_CONNECTION_ACTION }));
     }
   }
   const caller = await resolveBearerAuthUser({
@@ -80,7 +79,11 @@ const assertUseAllowed = async (args: {
     action: USE_OAUTH_CONNECTION_ACTION,
     resource: args.resource,
   });
-  if (!allowed) throw deny("the caller's policy");
+  if (!allowed) {
+    throw deny(
+      `Forbidden: the caller's policy denies ${USE_OAUTH_CONNECTION_ACTION}`
+    );
+  }
 };
 
 const isFresh = (row: OauthConnectionRow, now: Date): boolean => {

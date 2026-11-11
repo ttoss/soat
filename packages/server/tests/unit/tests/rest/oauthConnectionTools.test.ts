@@ -1,3 +1,5 @@
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
+
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -323,7 +325,7 @@ describe('http tool auth oauth_connection', () => {
     const [result] = await callTool({ actorId, agent: bounded });
 
     expect(JSON.stringify(result)).toContain(
-      'oauth-connections:UseOauthConnection'
+      agentPolicyDenial({ action: 'oauth-connections:UseOauthConnection' })
     );
     expect(provider.state.apiAuthorizations.length).toBe(before);
   });

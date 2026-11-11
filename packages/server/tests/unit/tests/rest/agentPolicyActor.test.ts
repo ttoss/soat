@@ -1,3 +1,5 @@
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
+
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -106,7 +108,7 @@ describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
 
   test("another actor's store is refused", async () => {
     expect(await writeAsActor(otherStoreAgentId)).toEqual({
-      error: 'Forbidden: boundary policy denies memories:CreateMemory',
+      error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
     });
   });
 
@@ -117,7 +119,7 @@ describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
     });
 
     expect(results).toEqual([
-      { error: 'Forbidden: boundary policy denies memories:CreateMemory' },
+      { error: agentPolicyDenial({ action: 'memories:CreateMemory' }) },
     ]);
   });
 });

@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
 import { emitApproval } from 'src/lib/approvals';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -225,7 +226,7 @@ describe("an approved builtin action is held to the agent's boundary", () => {
     const message = await approveGetMemoryStore(boundedAgentId);
 
     expect(message).toContain(
-      'Result: {"error":"Forbidden: boundary policy denies memories:GetMemoryStore"}'
+      `Result: ${JSON.stringify({ error: agentPolicyDenial({ action: 'memories:GetMemoryStore' }) })}`
     );
     expect(message).not.toContain(`"id":"${memoryStoreId}"`);
   });

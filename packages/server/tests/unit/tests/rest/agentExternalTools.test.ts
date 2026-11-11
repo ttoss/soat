@@ -1,3 +1,5 @@
+import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
+
 import {
   type AgentToolTurn,
   pollUntil,
@@ -426,7 +428,7 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
       });
 
       expect(results).toEqual([
-        { error: 'Forbidden: boundary policy denies files:GetFile' },
+        { error: agentPolicyDenial({ action: 'files:GetFile' }) },
       ]);
     });
 
