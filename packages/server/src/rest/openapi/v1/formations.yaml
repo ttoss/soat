@@ -1820,9 +1820,9 @@ components:
 
     OauthClientResourceProperties:
       description: >-
-        Registers an OAuth 2.0 client (your app at a provider) within the
-        formation's project. A `tool`'s `execute.auth.oauth_client_id` names
-        it with `{ "ref": "<LogicalId>" }`.
+        Registers an OAuth 2.0 client (your app at a provider) in the
+        formation's project. A `tool` names it by `ref` in
+        `execute.auth.oauth_client_id`.
       type: object
       additionalProperties: false
       required:
@@ -2301,14 +2301,7 @@ components:
             quotas REST contract.
         meter_type:
           type: string
-          enum:
-            [
-              llm_tokens,
-              compute_execution,
-              api_request,
-              storage,
-              tool_execution,
-            ]
+          enum: [llm_tokens, compute_execution, api_request, storage, tool_execution]
           description: >-
             Only for metric cost_usd. The meter this cap answers for; omit it
             and the cap sums every priced meter. See the quotas REST contract.
