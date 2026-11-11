@@ -457,11 +457,12 @@ describe('Traces REST API', () => {
       expect(res.body.data).toHaveLength(0);
     });
 
-    test('user without permission cannot list generations', async () => {
+    test('a caller who can read no project gets an empty page, not a 403', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/generations?trace_id=${traceId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ data: [], next_cursor: null });
     });
   });
 
