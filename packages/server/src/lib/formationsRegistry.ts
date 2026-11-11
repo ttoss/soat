@@ -18,6 +18,7 @@ import { memoryRulesFormationModule } from './formation-modules/memoryRulesForma
 import { memoryStoresFormationModule } from './formation-modules/memoryStoresFormationModule';
 import { metadataSchemasFormationModule } from './formation-modules/metadataSchemasFormationModule';
 import { modelRoutesFormationModule } from './formation-modules/modelRoutesFormationModule';
+import { oauthClientsFormationModule } from './formation-modules/oauthClientsFormationModule';
 import { orchestrationsFormationModule } from './formation-modules/orchestrationsFormationModule';
 import { playbooksFormationModule } from './formation-modules/playbooksFormationModule';
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
@@ -69,6 +70,7 @@ registerFormationModule({ module: projectPricesFormationModule });
 registerFormationModule({ module: metadataSchemasFormationModule });
 registerFormationModule({ module: quotasFormationModule });
 registerFormationModule({ module: secretsFormationModule });
+registerFormationModule({ module: oauthClientsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });
 registerFormationModule({ module: orchestrationsFormationModule });
 registerFormationModule({ module: triggersFormationModule });
