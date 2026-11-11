@@ -35,7 +35,7 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `name`                  | `string`                                                         | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`builtin`)                                                                                                                                                                                                     |
 | `type`                  | `"http"` \| `"client"` \| `"mcp"` \| `"builtin"` \| `"pipeline"` | Tool type — determines execution behaviour                                                                                                                                                                                                                                                 |
 | `description`           | `string \| null`                                                 | Human-readable description sent to the model for tool selection                                                                                                                                                                                                                            |
-| `parameters`            | `object \| null`                                                 | JSON Schema describing the tool's input. `null`: the model sees `{ "type": "object", "properties": {} }`.                                                                                                                                                                                  |
+| `parameters`            | `object \| null`                                                 | JSON Schema describing the tool's input; on `http` and `pipeline` tools, every call must satisfy it ([Input Validation](#input-validation)). `null`: the model sees `{ "type": "object", "properties": {} }`.                                                                                                                                                                                  |
 | `execute`               | `object \| null`                                                 | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `response_mode`, `auth`). Required for `http` type, with `url`.                                                                                                                                                            |
 | `execute.url`           | `string`                                                         | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.                                                                                                                                                    |
 | `execute.method`        | `string`                                                         | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.                                                                                                                                                                                   |
@@ -393,6 +393,36 @@ Each step's output is captured under `steps.<id>`; a step may reference only ear
 For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), which share the JSON Logic mapping model.
 
 **Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool) and `validate-formation` check the structure: every step needs a `tool_id` or an inline `tool` with a `name`, and a `tool_id` names a tool in the pipeline's own project (`400 PIPELINE_INVALID_STEP` otherwise), which is also where it resolves at call time, whoever calls the pipeline; a `{ "ref": … }` `tool_id` is accepted in a formation template only (direct `POST`/`PATCH` need a literal string). `validate-formation` also warns (not errors) on a `parameters` property no step `input` or `output` reads via `{ "var": "input.<name>" }`.
+
+### Input Validation
+
+On an `http` or `pipeline` tool, `parameters` is the input contract: each call's input, `preset_parameters` merged in, must satisfy it, or the call is `400 VALIDATION_FAILED` naming the violated field, before any guardrail or dispatch. A model's call from an agent loop gets the same refusal as its tool result. A schema that does not compile is not checked. `mcp` actions declare their schemas on their server; `client` tools run on the caller's side.
+
+A `pipeline` narrows the input of a tool it wraps: its `parameters` are what callers see and send, and a step's `input` maps them onto the wrapped tool's. A caller of this pipeline can send only a string, delivered as a user message:
+
+```json
+{
+  "name": "ask-coach",
+  "type": "pipeline",
+  "parameters": {
+    "type": "object",
+    "properties": { "message": { "type": "string" } },
+    "required": ["message"]
+  },
+  "pipeline": {
+    "steps": [
+      {
+        "id": "ask",
+        "tool_id": "tool_abc123",
+        "action": "create-agent-generation",
+        "input": {
+          "messages": [{ "role": "user", "content": { "var": "input.message" } }]
+        }
+      }
+    ]
+  }
+}
+```
 
 ### Output Mapping
 

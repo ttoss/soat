@@ -10,6 +10,7 @@ import {
   type ToolCallGuardrailMode,
 } from './toolCallGuardrail';
 import { pinCallingProject } from './toolContext';
+import { assertToolInputValid } from './toolInputValidation';
 import {
   mergePresetParameters,
   presetsDeclaredBy,
@@ -321,6 +322,11 @@ const runResolvedTool = async (
     call: args,
     type,
     meter,
+  });
+
+  assertToolInputValid({
+    tool: args.tool,
+    input: mergePresetParameters({ presetParameters, input: args.input ?? {} }),
   });
 
   // Before any dispatch and before the pipeline runner, so a gated pipeline is
