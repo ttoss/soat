@@ -1,6 +1,9 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { ServerToolContextIdentity } from './toolContext';
+import {
+  pinServerIdentityToolContext,
+  type ServerToolContextIdentity,
+} from './toolContext';
 
 export type EndUserAttribution = {
   actorId: number | null;
@@ -144,6 +147,41 @@ export const resolveServerToolContextIdentity = async (
     actorId: actor?.publicId,
     actorExternalId: actor?.externalId ?? undefined,
   };
+};
+
+/**
+ * The bag a direct call with no session forwards when its caller names an
+ * actor: the actor must exist in the calling project, and its identity is
+ * stamped as a session's would be, so the identity keys stay server-derived.
+ */
+export const pinCallerActorToolContext = async (args: {
+  toolContext?: Record<string, string>;
+  actorId: unknown;
+  projectId: number;
+}): Promise<Record<string, string> | undefined> => {
+  if (args.actorId === undefined) return args.toolContext;
+  if (typeof args.actorId !== 'string') {
+    throw new DomainError('VALIDATION_FAILED', 'actor_id must be a string.', {
+      field: 'actor_id',
+    });
+  }
+  const { actor } = await resolveGenerationEndUser({
+    actorId: args.actorId,
+    projectId: args.projectId,
+  });
+  if (!actor) {
+    throw new DomainError(
+      'ACTOR_NOT_FOUND',
+      `Actor '${args.actorId}' not found.`
+    );
+  }
+  return pinServerIdentityToolContext({
+    toolContext: args.toolContext,
+    identity: {
+      actorId: actor.publicId,
+      actorExternalId: actor.externalId ?? undefined,
+    },
+  });
 };
 
 export type GenerationAttribution = {

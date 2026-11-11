@@ -157,7 +157,7 @@ curl -X POST "$SOAT_URL/api/v1/tools/tool_01/call" \
 
 The bag behaves as elsewhere: it resolves `{{context:...}}` in `execute.headers`, `mcp.headers` and `preset_parameters`, it is forwarded as `X-Soat-Context-*` headers, and the tool's [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool) narrows it.
 
-There is no session here, so the [auto-populated keys](#auto-populated-keys-sessions) are dropped from this bag rather than forwarded, in any casing; a tool endpoint can still read `X-Soat-Context-session_id` as a value SOAT derived.
+There is no session here, so the [auto-populated keys](#auto-populated-keys-sessions) are dropped from this bag rather than forwarded, in any casing; a tool endpoint can still read `X-Soat-Context-session_id` as a value SOAT derived. The body's `actor_id` runs the call for an actor of the calling project: SOAT stamps `actor_id` and `actor_external_id` from that actor, as a session would, and an unknown actor is `400 ACTOR_NOT_FOUND`.
 
 ## Key → header name
 
