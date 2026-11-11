@@ -245,7 +245,10 @@ describe('http tool auth oauth_connection', () => {
 
     const [result] = await callTool({ actorId });
 
-    expect(JSON.stringify(result)).toContain('POST /api/v1/oauth-connections');
+    const text = JSON.stringify(result);
+    expect(text).toContain('must reconnect');
+    // The message is relayed by fronting APIs that serve other paths.
+    expect(text).not.toContain('/api/v1');
   });
 
   test('a turn with no actor is refused', async () => {
