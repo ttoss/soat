@@ -30,15 +30,15 @@ const reconnect = (args: {
   actorId: string;
   connectionId?: string;
 }) => {
-  return toolAuthFailed({
-    message: `${args.message} The actor must reconnect: start a new OAuth connection for this client and actor.`,
-    meta: {
-      reason: 'oauth_connection_required',
+  return new DomainError(
+    'OAUTH_CONNECTION_REQUIRED',
+    `${args.message} The actor must reconnect: start a new OAuth connection for this client and actor.`,
+    {
       oauth_client_id: args.clientId,
       actor_id: args.actorId,
       ...(args.connectionId ? { oauth_connection_id: args.connectionId } : {}),
-    },
-  });
+    }
+  );
 };
 
 /**

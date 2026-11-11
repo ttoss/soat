@@ -29,6 +29,8 @@ export const errorCodesDocsUrl = (): string => {
 export const ERROR_RESOLUTIONS: Record<string, string> = {
   OAUTH_CALLBACK_FAILED:
     'Start the connection again with POST /api/v1/oauth-connections and send the person to the new authorize_url; each state is single-use and expires in 10 minutes.',
+  OAUTH_CONNECTION_REQUIRED:
+    'Have the actor reconnect: start an OAuth connection for the `meta` oauth_client_id and actor_id and send the person to its authorize_url.',
   OAUTH_CONNECTION_REFRESH_FAILED:
     'Have the actor reconnect: POST /api/v1/oauth-connections for the same oauth_client_id and actor_id.',
   LITERAL_CREDENTIAL:

@@ -29,7 +29,7 @@ describe('POST /api/v1/tools/:tool_id/call with actor_id', () => {
     return res.body.id;
   };
 
-  const connect = async (actorId: string): Promise<void> => {
+  const connect = async (actorId: string): Promise<string> => {
     const started = await turn
       .api()
       .post('/api/v1/oauth-connections')
@@ -42,6 +42,7 @@ describe('POST /api/v1/tools/:tool_id/call with actor_id', () => {
       .get('/api/v1/oauth-connections/callback')
       .query({ code: 'good-code', state });
     expect(done.status).toBe(200);
+    return started.body.id;
   };
 
   beforeAll(async () => {
@@ -84,6 +85,12 @@ describe('POST /api/v1/tools/:tool_id/call with actor_id', () => {
     await turn.close();
   });
 
+  beforeEach(() => {
+    provider.state.expiresIn = 7200;
+    provider.state.failRefresh = false;
+    provider.state.refreshStatus = 200;
+  });
+
   test("an oauth_connection tool sends the named actor's access token", async () => {
     const actorId = await createActor();
     await connect(actorId);
@@ -96,6 +103,58 @@ describe('POST /api/v1/tools/:tool_id/call with actor_id', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ authorization: `Bearer access-${issued}` });
+  });
+
+  test('an actor with no connection is refused with 409 OAUTH_CONNECTION_REQUIRED', async () => {
+    const actorId = await createActor();
+
+    const res = await turn
+      .api()
+      .post(`/api/v1/tools/${oauthToolId}/call`)
+      .send({ actor_id: actorId });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('OAUTH_CONNECTION_REQUIRED');
+    expect(res.body.error.meta).toEqual({
+      oauth_client_id: clientId,
+      actor_id: actorId,
+    });
+  });
+
+  test('a refused refresh is refused with 409 OAUTH_CONNECTION_REQUIRED', async () => {
+    provider.state.expiresIn = 0;
+    const actorId = await createActor();
+    const connectionId = await connect(actorId);
+    provider.state.failRefresh = true;
+
+    const res = await turn
+      .api()
+      .post(`/api/v1/tools/${oauthToolId}/call`)
+      .send({ actor_id: actorId });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('OAUTH_CONNECTION_REQUIRED');
+    expect(res.body.error.meta).toEqual({
+      oauth_client_id: clientId,
+      actor_id: actorId,
+      oauth_connection_id: connectionId,
+    });
+  });
+
+  test('a provider that cannot refresh is 502 TOOL_AUTH_FAILED', async () => {
+    provider.state.expiresIn = 0;
+    const actorId = await createActor();
+    await connect(actorId);
+    provider.state.refreshStatus = 503;
+
+    const res = await turn
+      .api()
+      .post(`/api/v1/tools/${oauthToolId}/call`)
+      .send({ actor_id: actorId });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe('TOOL_AUTH_FAILED');
+    expect(res.body.error.meta.reason).toBe('provider_unavailable');
   });
 
   test('stamps the actor identity over a forged tool_context', async () => {

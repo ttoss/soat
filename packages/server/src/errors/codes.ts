@@ -20,6 +20,11 @@ export const ERROR_CODES = {
     description:
       'An OAuth connection callback could not connect: the `state` is unknown, already used or expired, the provider refused the authorization, or its token endpoint refused the code.',
   },
+  OAUTH_CONNECTION_REQUIRED: {
+    httpStatus: 409,
+    description:
+      'An http-type tool with `execute.auth` `oauth_connection` ran for an actor holding no `connected` connection through its `oauth_client_id`: none was made, it was disconnected, or the provider refused its refresh. The error `meta` carries `oauth_client_id`, `actor_id` and, when one exists, `oauth_connection_id`. Distinct from `TOOL_AUTH_FAILED`, a credential the provider could not issue.',
+  },
   OAUTH_CONNECTION_REFRESH_FAILED: {
     httpStatus: 502,
     description:
@@ -618,7 +623,7 @@ export const ERROR_CODES = {
   TOOL_AUTH_FAILED: {
     httpStatus: 502,
     description:
-      "An http-type tool's `execute.auth` credentials could not be turned into a request credential — malformed service account JSON, an unusable private key, a token endpoint that rejected the assertion, or an `oauth_connection` with no actor or no connected connection (`meta.reason` `oauth_connection_required`: the actor must reconnect). The error `meta` carries the token endpoint's status and body when it responded. Distinct from `TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call.",
+      "An http-type tool's `execute.auth` credentials could not be turned into a request credential — malformed service account JSON, an unusable private key, a token endpoint that rejected the assertion or was unavailable, or an `oauth_connection` tool run with no actor. An actor with no connected connection is `OAUTH_CONNECTION_REQUIRED`. The error `meta` carries the token endpoint's status and body when it responded. Distinct from `TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call.",
   },
   EXPRESSION_FAILED: {
     httpStatus: 422,
