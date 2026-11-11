@@ -35,9 +35,9 @@ import {
   parseDateQuery,
   parsePagination,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { requireMemoryStore } from './memoryStoreAccess';
 import { compileReadPolicy } from './readPolicy';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -125,14 +125,14 @@ const readEnum = <T extends string>(args: {
 memoryStoresRouter.get('/memory-stores', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'memories:ListMemoryStores',
     resourceType: 'memory_store',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

@@ -28,6 +28,7 @@ import {
   requireAuth,
   requireProjectAccess,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import { sessionSubResourcesRouter } from './sessionSubResources';
@@ -161,18 +162,18 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
 sessionsRouter.get('/sessions', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const {
-    project_id: projectPublicId,
-    agent_id: agentId,
-    actor_id: actorId,
-  } = ctx.query as Record<string, string | undefined>;
+  const { agent_id: agentId, actor_id: actorId } = ctx.query as Record<
+    string,
+    string | undefined
+  >;
   const tags = readTagQuery(ctx.query.tags);
 
-  const projectIds = await requireProjectAccess({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'agents:ListSessions',
     resourceType: 'session',
+    projectSelector: 'optional',
+    emptyScope: 'forbidden',
   });
 
   // A list authorizes before it has rows, so the policy is compiled into the

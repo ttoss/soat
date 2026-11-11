@@ -398,7 +398,7 @@ export const createOrchestration = async (
 };
 
 export const listOrchestrations = async (args: {
-  projectIds: number[];
+  projectIds?: number[];
   limit?: number;
   cursor?: string;
 }): Promise<Page<MappedOrchestration>> => {

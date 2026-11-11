@@ -11,12 +11,8 @@ import {
 } from 'src/lib/modelRoutes';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const modelRoutesRouter = new Router<Context>();
@@ -69,11 +65,12 @@ modelRoutesRouter.post('/model-routes', async (ctx: Context) => {
 modelRoutesRouter.get('/model-routes', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'model-routes:ListModelRoutes',
     resourceType: 'model_route',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listModelRoutes({ projectIds, ...parsePagination(ctx) });

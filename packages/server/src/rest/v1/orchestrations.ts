@@ -32,10 +32,10 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
-  resolveReadProjectIds,
   writePreconditionOf,
 } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
+import { resolveListScope } from './listScope';
 import {
   authorizeOrchestrationRead,
   authorizeOrchestrationWrite,
@@ -158,18 +158,13 @@ orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
 orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'orchestrations:ListOrchestrations',
     resourceType: 'orchestration',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
-
-  if (!projectIds || projectIds.length === 0) {
-    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
-  }
 
   ctx.body = await listOrchestrations({ projectIds, ...parsePagination(ctx) });
 });
@@ -313,11 +308,12 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs/get'
  */
 orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query['project_id'] as string | undefined,
     action: 'orchestrations:ListRuns',
     resourceType: 'orchestration',
+    projectSelector: 'optional',
+    emptyScope: 'forbidden',
   });
 
   const orchestrationId = ctx.query['orchestration_id'] as string | undefined;

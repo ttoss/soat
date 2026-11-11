@@ -27,9 +27,9 @@ import {
   parsePagination,
   parseToolContextBody,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 
 const triggersRouter = new Router<Context>();
@@ -49,13 +49,12 @@ const readTriggerListFilters = (ctx: Context) => {
 triggersRouter.get('/triggers', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'triggers:ListTriggers',
     resourceType: 'trigger',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listTriggers({
     projectIds,
@@ -67,11 +66,12 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
 triggersRouter.get('/triggers/count', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'triggers:ListTriggers',
     resourceType: 'trigger',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await countTriggers({
     projectIds,

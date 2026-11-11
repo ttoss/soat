@@ -35,9 +35,9 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   parseToolContextBody,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
 
 const evaluationsRouter = new Router<Context>();
@@ -106,11 +106,12 @@ evaluationsRouter.post('/datasets', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets/get'
  */
 evaluationsRouter.get('/datasets', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'evaluations:ListDatasets',
     resourceType: 'dataset',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listDatasets({ projectIds, ...parsePagination(ctx) });
@@ -371,11 +372,12 @@ evaluationsRouter.post('/evals', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals/get'
  */
 evaluationsRouter.get('/evals', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'evaluations:ListEvals',
     resourceType: 'eval',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listEvals({ projectIds, ...parsePagination(ctx) });

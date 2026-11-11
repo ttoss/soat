@@ -7,12 +7,8 @@ import {
   listChains,
 } from 'src/lib/generationChains';
 
-import {
-  parseEnumListQuery,
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-} from './helpers';
+import { parseEnumListQuery, parsePagination, requireAuth } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const chainsRouter = new Router<Context>();
@@ -36,11 +32,12 @@ const chainAccess = makeItemRouteAuthorizer({
 chainsRouter.get('/chains', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'chains:ListChains',
     resourceType: 'chain',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listChains({

@@ -38,8 +38,8 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import {
   caseReadableBy,
   playbookAccess,
@@ -88,11 +88,12 @@ playbookCasesRouter.post(
  */
 playbookCasesRouter.get('/playbook-cases', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'playbooks:ListPlaybookCases',
     resourceType: 'playbook_case',
-    projectPublicId: parseString(ctx.query.project_id),
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listPlaybookCases({

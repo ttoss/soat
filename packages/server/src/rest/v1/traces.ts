@@ -8,8 +8,8 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
   requireFound,
-  resolveReadProjectIds,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 export const tracesRouter = new Router<Context>();
@@ -28,13 +28,12 @@ const traceAccess = makeItemRouteAuthorizer({
 tracesRouter.get('/traces', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'traces:ListTraces',
     resourceType: 'trace',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listTraces({

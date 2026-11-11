@@ -15,12 +15,8 @@ import { readTagQuery } from 'src/lib/tags';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 
@@ -29,16 +25,16 @@ const conversationsRouter = new Router<Context>();
 conversationsRouter.get('/conversations', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const actorId = ctx.query.actor_id as string | undefined;
   const tags = readTagQuery(ctx.query.tags);
   const { limit, cursor } = parsePagination(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'conversations:ListConversations',
     resourceType: 'conversation',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

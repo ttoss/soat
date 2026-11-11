@@ -16,12 +16,8 @@ import {
   updateWebhook,
 } from 'src/lib/webhooks';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 
 const webhooksRouter = new Router<Context>();
@@ -29,13 +25,12 @@ const webhooksRouter = new Router<Context>();
 webhooksRouter.get('/webhooks', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'webhooks:ListWebhooks',
     resourceType: 'webhook',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listWebhooks({

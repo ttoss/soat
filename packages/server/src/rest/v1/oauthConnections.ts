@@ -10,12 +10,8 @@ import {
   startOauthConnection,
 } from 'src/lib/oauthConnections';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const oauthConnectionsRouter = new Router<Context>();
@@ -33,12 +29,12 @@ const queryString = (value: unknown): string | undefined => {
 
 oauthConnectionsRouter.get('/oauth-connections', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectPublicId = queryString(ctx.query.project_id);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'oauth-connections:ListOauthConnections',
     resourceType: 'oauth_connection',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listOauthConnections({
     projectIds,

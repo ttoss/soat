@@ -17,10 +17,10 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 import { workflowMigrationsRouter } from './workflowMigrations';
 import { workflowVersionsRouter } from './workflowVersions';
@@ -38,12 +38,12 @@ const parseVersionLabel = (raw: unknown): string | undefined => {
  */
 workflowsRouter.get('/workflows', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectPublicId = ctx.query.project_id as string | undefined;
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'workflows:ListWorkflows',
     resourceType: 'workflow',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listWorkflows({
     projectIds,

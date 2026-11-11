@@ -23,9 +23,9 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
-  resolveReadProjectIds,
   writePreconditionOf,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 import { coerceToJsonObject } from './tools';
 
@@ -146,13 +146,12 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
 guardrailsRouter.get('/guardrails', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'guardrails:ListGuardrails',
     resourceType: 'guardrail',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listGuardrails({ projectIds, ...parsePagination(ctx) });

@@ -243,6 +243,24 @@ describe('Guardrails', () => {
       expect(response.status).toBe(401);
     });
 
+    test('admin without project scoping and no project_id lists every project', async () => {
+      const response =
+        await authenticatedTestClient(adminToken).get('/api/v1/guardrails');
+      expect(response.status).toBe(200);
+      expect(
+        response.body.data.some((item: { id: string }) => {
+          return item.id === guardrailId;
+        })
+      ).toBe(true);
+    });
+
+    test('user permitted in no project and no project_id lists nothing', async () => {
+      const response =
+        await authenticatedTestClient(noPermToken).get('/api/v1/guardrails');
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+    });
+
     test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/guardrails')

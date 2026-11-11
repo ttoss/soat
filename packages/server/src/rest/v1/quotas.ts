@@ -11,12 +11,8 @@ import {
 } from 'src/lib/quotas';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const quotasRouter = new Router<Context>();
@@ -83,13 +79,12 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
 quotasRouter.get('/quotas', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'quotas:ListQuotas',
     resourceType: 'quota',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listQuotas({ projectIds, ...parsePagination(ctx) });

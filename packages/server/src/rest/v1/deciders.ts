@@ -31,10 +31,10 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const decidersRouter = new Router<Context>();
@@ -109,11 +109,12 @@ decidersRouter.post('/deciders', async (ctx: Context) => {
  */
 decidersRouter.get('/deciders', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'deciders:ListDeciders',
     resourceType: 'decider',
-    projectPublicId: parseString(ctx.query.project_id),
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listDeciders({ projectIds, ...parsePagination(ctx) });
@@ -317,11 +318,12 @@ decidersRouter.post('/decisions', async (ctx: Context) => {
  */
 decidersRouter.get('/decisions', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'deciders:ListDecisions',
     resourceType: 'decision',
-    projectPublicId: parseString(ctx.query.project_id),
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listDecisions({

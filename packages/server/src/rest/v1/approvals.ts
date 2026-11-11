@@ -23,8 +23,8 @@ import {
   parseToolContextBody,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 
 const approvalsRouter = new Router<Context>();
@@ -155,13 +155,12 @@ const parseApprovalStatuses = (ctx: Context) => {
 approvalsRouter.get('/approvals', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'approvals:ListApprovals',
     resourceType: 'approval',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listApprovals({
@@ -179,13 +178,12 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
 approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'approvals:ListApprovalRecurrences',
     resourceType: 'approval',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const minCountRaw = ctx.query.min_count as string | undefined;

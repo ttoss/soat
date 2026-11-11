@@ -15,12 +15,8 @@ import {
 import { emptyPage } from 'src/lib/pagination';
 import { readTagQuery } from 'src/lib/tags';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
@@ -55,7 +51,6 @@ type CreateActorBody = {
 actorsRouter.get('/actors', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const externalId = ctx.query.external_id as string | undefined;
   const name = ctx.query.name as string | undefined;
   const agentId = ctx.query.agent_id as string | undefined;
@@ -64,11 +59,12 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const tags = readTagQuery(ctx.query.tags);
   const { limit, cursor } = parsePagination(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'actors:ListActors',
     resourceType: 'actor',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

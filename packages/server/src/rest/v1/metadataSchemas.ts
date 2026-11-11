@@ -16,9 +16,9 @@ import {
   parsePagination,
   requireAuth,
   requireProjectAccess,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const metadataSchemasRouter = new Router<Context>();
@@ -45,11 +45,12 @@ type WriteBody = {
 metadataSchemasRouter.get('/metadata-schemas', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'metadata-schemas:ListMetadataSchemas',
     resourceType: 'metadata_schema',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listMetadataSchemas({
