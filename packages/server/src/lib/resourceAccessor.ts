@@ -53,7 +53,7 @@ export const scopedWhere = (args: {
  * Everything an authorization preamble needs about a resource *before* it
  * decides: which project it belongs to — in both spellings, the numeric id the
  * lib layer filters on and the public id an SRN names — and the tags a
- * `soat:ResourceTag/<key>` condition reads.
+ * `iam:ResourceTag/<key>` condition reads.
  *
  * The tags travel with the scope rather than alongside it so an SRN and the
  * condition context can never come from two different rows, which is the one

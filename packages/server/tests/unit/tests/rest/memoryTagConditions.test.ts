@@ -2,7 +2,7 @@ import { isolateMemory } from '../../fixtures/memoryWrites';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * Memory stores and memories evaluate `soat:ResourceTag/<key>` conditions the
+ * Memory stores and memories evaluate `iam:ResourceTag/<key>` conditions the
  * way every other tagged resource does. Two tag bags meet on the entry routes:
  * the entry's own, and its memory store's — an entry is never more visible than the
  * memory store holding it, so a condition that hides a memory store hides its entries too.
@@ -103,7 +103,7 @@ describe('Tag conditions on memoryStores and memories', () => {
               ],
               resource: [`srn:${projectId}:*:*`],
               condition: {
-                StringNotEquals: { 'soat:ResourceTag/team': 'finance' },
+                StringNotEquals: { 'iam:ResourceTag/team': 'finance' },
               },
             },
           ],

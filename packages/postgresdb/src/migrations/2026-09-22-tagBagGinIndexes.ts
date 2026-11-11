@@ -5,7 +5,7 @@ import { defineMigration } from '@ttoss/postgresdb';
  * a scan.
  *
  * Containment is the only way a tag bag is read — the `?tags=` list filter,
- * knowledge search and a `soat:ResourceTag/<key>` policy condition all match
+ * knowledge search and a `iam:ResourceTag/<key>` policy condition all match
  * it with `@>` — and without an index each of those reads every row the rest
  * of the query leaves in scope. The cost then grows with the project rather
  * than with the answer, and it grows quietly: a filter that is fast and a

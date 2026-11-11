@@ -11,7 +11,7 @@ const libDir = path.join(srcDir, 'lib');
 /**
  * A resource carries two bags with two jobs. `tags` are labels the platform
  * reads: they become the IAM evaluation context on every `isAllowed` call, and
- * a policy condition matches them through `soat:ResourceTag/<key>`. `metadata`
+ * a policy condition matches them through `iam:ResourceTag/<key>`. `metadata`
  * is typed JSON the platform stores, validates against a declared schema and
  * filters structurally, and never reads for itself.
  *

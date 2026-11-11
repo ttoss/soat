@@ -124,7 +124,7 @@ describe('Lists without project_id apply the row-level policy filter', () => {
               action: LIST_ACTIONS,
               resource: ['*'],
               condition: {
-                StringEquals: { 'soat:ResourceTag/team': 'finance' },
+                StringEquals: { 'iam:ResourceTag/team': 'finance' },
               },
             },
           ],

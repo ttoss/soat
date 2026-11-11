@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { RESOURCE_TYPE_KEY, resourceTagKey } from './iamConditionKeys';
 import { isStringRecord, readStringBag } from './stringBag';
 import { applyFilterWhere, containment } from './structuredFilter';
 
@@ -15,7 +16,7 @@ const TAGS_ATTRIBUTE = 'tags';
  *
  * A `system.*` pair says which conversation, actor, agent and role a row came
  * from. It is what a knowledge search filters an actor's turns by and what an
- * IAM `soat:ResourceTag/system.actor` condition fences them with, so a caller
+ * IAM `iam:ResourceTag/system.actor` condition fences them with, so a caller
  * who could write one could make their own rows answer to another actor's
  * filter. Callers therefore read these keys and never write them.
  *
@@ -32,7 +33,7 @@ export const isSystemTagKey = (key: string): boolean => {
  * What a tag bag may hold.
  *
  * Every pair reaches the IAM evaluation context of every `isAllowed` call on
- * the resource, and every `soat:ResourceTag/<key>` condition compiled into a
+ * the resource, and every `iam:ResourceTag/<key>` condition compiled into a
  * listing, so the bag is a cost on the request path rather than a column that
  * merely grows. Bounding it where it is written is what keeps that cost
  * knowable; bounding it on a read would be too late for the write that already
@@ -150,8 +151,8 @@ export const parseTagPairs = (
 };
 
 /**
- * IAM evaluation context for a tagged resource: `soat:ResourceType` plus one
- * `soat:ResourceTag/<key>` entry per tag, keys and values verbatim. Every
+ * IAM evaluation context for a tagged resource: `iam:ResourceType` plus one
+ * `iam:ResourceTag/<key>` entry per tag, keys and values verbatim. Every
  * `isAllowed` call on a tagged resource passes this, so a policy condition
  * reads exactly the pairs `?tags=` and knowledge search filter on.
  */
@@ -160,10 +161,10 @@ export const buildResourceTagContext = (args: {
   tags: Record<string, string> | null | undefined;
 }): Record<string, string> => {
   const context: Record<string, string> = {
-    'soat:ResourceType': args.resourceType,
+    [RESOURCE_TYPE_KEY]: args.resourceType,
   };
   for (const [key, value] of Object.entries(args.tags ?? {})) {
-    context[`soat:ResourceTag/${key}`] = value;
+    context[resourceTagKey(key)] = value;
   }
   return context;
 };
@@ -211,7 +212,7 @@ export const readTagQuery = (
  * exactly that value.
  *
  * The one matching rule shared by `?tags=`, knowledge search and the
- * `soat:ResourceTag/<key>` fragments `policyCompiler` emits, and the same
+ * `iam:ResourceTag/<key>` fragments `policyCompiler` emits, and the same
  * containment a `metadata` equality compiles to — `?tags=key:value` is the
  * query-string spelling of that equality on the other bag, so both go through
  * `containment` rather than each spelling `@>` for itself.

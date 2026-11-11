@@ -134,7 +134,7 @@ describe('POST /api/v1/iam/check', () => {
       {
         effect: 'Allow',
         action: ['channels:GetChannel'],
-        condition: { StringEquals: { 'soat:ResourceTag/team': 'red' } },
+        condition: { StringEquals: { 'iam:ResourceTag/team': 'red' } },
       },
     ]);
     const key = await mintKey({ policyIds: [policyId] });

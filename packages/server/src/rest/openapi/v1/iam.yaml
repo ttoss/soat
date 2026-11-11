@@ -95,7 +95,7 @@ components:
           properties:
             tags:
               description: >-
-                The resource's tags, read by `soat:ResourceTag/<key>`
+                The resource's tags, read by `iam:ResourceTag/<key>`
                 conditions.
               allOf:
                 - $ref: './tags.yaml#/components/schemas/TagBag'

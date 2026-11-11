@@ -40,7 +40,7 @@ never hand-roll any of them. Shared code: `packages/server/src/lib/tags.ts`,
 
 ## Choosing the bags
 
-- `tags`: a policy scopes its rows (`soat:ResourceTag`) or callers match by
+- `tags`: a policy scopes its rows (`iam:ResourceTag`) or callers match by
   label (`?tags=`, knowledge search).
 - `metadata`: callers attach a typed record. Both when both.
 - Field-level rule: `iam.md` §Choosing a bag.
@@ -68,7 +68,7 @@ never hand-roll any of them. Shared code: `packages/server/src/lib/tags.ts`,
 
 - Tag bags are opaque values (`case-convention.md`): never read, rename or
   case-convert a key.
-- One matching rule: `?tags=`, knowledge search and `soat:ResourceTag/<key>`
+- One matching rule: `?tags=`, knowledge search and `iam:ResourceTag/<key>`
   read the column by JSONB containment (`tagContainment`).
 - Never `ctx.request.body as Record<string, string>`: `String(["a","b"])` is
   `"a,b"`, matching a tag nobody wrote.

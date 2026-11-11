@@ -254,7 +254,7 @@ export const authorizeResource = async (args: {
       resourceId: args.resourceId,
     }),
     // The tags come off the same row the SRN names — `scope`, not a second
-    // lookup — so a `soat:ResourceTag/<key>` condition can never be evaluated
+    // lookup — so a `iam:ResourceTag/<key>` condition can never be evaluated
     // against one resource while the SRN names another.
     context: buildResourceTagContext({
       resourceType: args.resourceType,

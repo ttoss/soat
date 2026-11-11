@@ -42,7 +42,7 @@ Files belong to a project and are persisted through the configured backend (loca
 
 ### Tags
 
-Key-value string pairs managed via the tag sub-endpoints and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/files`](/docs/api/files/list-files) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
+Key-value string pairs managed via the tag sub-endpoints and matched by `iam:ResourceTag/<key>`. [`GET /api/v1/files`](/docs/api/files/list-files) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
 
 ### Metadata
 

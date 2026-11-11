@@ -4,8 +4,11 @@ import * as path from 'node:path';
 
 import {
   IAM_REGISTRATIONS_CONFIG_ENV,
+  initIamRegistrations,
+  isRegisteredIamModule,
   loadIamRegistrationConfig,
   parseIamRegistrationConfig,
+  unregisterIamModules,
 } from 'src/lib/iamRegistrations';
 
 // Parsed once at boot, where every rejection is a hard failure: a `lib/` test
@@ -129,5 +132,23 @@ describe('loadIamRegistrationConfig', () => {
         env: { [IAM_REGISTRATIONS_CONFIG_ENV]: file },
       });
     }).toThrow('Could not load IAM registrations config');
+  });
+});
+
+describe('initIamRegistrations', () => {
+  afterEach(() => {
+    delete process.env[IAM_REGISTRATIONS_CONFIG_ENV];
+    unregisterIamModules({ modules: ['channels'] });
+  });
+
+  test('registers the modules the configured file declares', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iam-reg-'));
+    const file = path.join(dir, 'iam.json');
+    fs.writeFileSync(file, JSON.stringify({ modules: [CHANNELS] }));
+    process.env[IAM_REGISTRATIONS_CONFIG_ENV] = file;
+
+    initIamRegistrations();
+
+    expect(isRegisteredIamModule('channels')).toBe(true);
   });
 });

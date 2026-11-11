@@ -15,7 +15,7 @@ export type LoadedMemoryStore = NonNullable<
  * with the store's own tags as the condition context.
  *
  * Shared so a route cannot authorize a store without supplying that context — a
- * missing context makes every `soat:ResourceTag/<key>` condition evaluate
+ * missing context makes every `iam:ResourceTag/<key>` condition evaluate
  * against nothing, which silently drops a `Deny`. It lives in its own module
  * because a memory **rule** is authorized here too: a rule is the store's
  * ingestion policy, so its SRN is the store's.

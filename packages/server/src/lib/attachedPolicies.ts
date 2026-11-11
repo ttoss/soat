@@ -99,7 +99,7 @@ export const assertRequiredPoliciesAttachable = async (args: {
 };
 
 /**
- * The grant `policy_ids` carry as one document, with `${soat:ActorId}` bound
+ * The grant `policy_ids` carry as one document, with `${iam:ActorId}` bound
  * to the end user it acts for. `null` is no cap; a policy that no longer
  * resolves allows nothing.
  */

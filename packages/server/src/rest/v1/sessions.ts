@@ -40,7 +40,7 @@ export const sessionsRouter = new Router<Context>();
  * against the session's own SRN, carrying its tags as evaluation context.
  *
  * The session is loaded *before* the policy is evaluated, which is what makes
- * `soat:ResourceTag/<key>` work: a conditioned statement can only match once
+ * `iam:ResourceTag/<key>` work: a conditioned statement can only match once
  * the tags it names are known. A project-level probe for
  * `srn:<project>:session:*` carries no context, so no conditioned statement
  * would match and the resource segment of a policy would never be compared at
@@ -176,7 +176,7 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
   });
 
   // A list authorizes before it has rows, so the policy is compiled into the
-  // query instead: `soat:ResourceTag` conditions become JSONB predicates on the
+  // query instead: `iam:ResourceTag` conditions become JSONB predicates on the
   // same column `?tags=` reads.
   const compiled = await compileReadPolicy({
     ctx,
