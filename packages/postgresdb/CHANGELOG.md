@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.106.1](https://github.com/ttoss/soat/compare/v0.106.0...v0.106.1) (2026-11-11)
+
+**Note:** Version bump only for package @soat/postgresdb
+
 # [0.106.0](https://github.com/ttoss/soat/compare/v0.105.0...v0.106.0) (2026-11-11)
 
 * feat(iam)!: policy condition keys use the iam: namespace (#1862) ([1e42582](https://github.com/ttoss/soat/commit/1e425825fcbbe3f38af72b3ec2393fc504f5658b)), closes [#1862](https://github.com/ttoss/soat/issues/1862)

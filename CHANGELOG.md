@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.106.1](https://github.com/ttoss/soat/compare/v0.106.0...v0.106.1) (2026-11-11)
+
+### Bug Fixes
+
+* **formations:** a policy resource is a project policy of the formation's project ([#1871](https://github.com/ttoss/soat/issues/1871)) ([3fcc66d](https://github.com/ttoss/soat/commit/3fcc66d0d46e83b882b2da37a3623fab5b8d2871))
+* **server:** apply tags on patch /actors/{actor_id} ([#1870](https://github.com/ttoss/soat/issues/1870)) ([086eb79](https://github.com/ttoss/soat/commit/086eb7947416edb9934197584100921fd6b54f91))
+* **server:** keep the oauth reconnect message free of a route path ([#1872](https://github.com/ttoss/soat/issues/1872)) ([1969839](https://github.com/ttoss/soat/commit/1969839c13f5ca1482d2ccfe2617de901a591fbd))
+
 # [0.106.0](https://github.com/ttoss/soat/compare/v0.105.0...v0.106.0) (2026-11-11)
 
 * feat(iam)!: policy condition keys use the iam: namespace (#1862) ([1e42582](https://github.com/ttoss/soat/commit/1e425825fcbbe3f38af72b3ec2393fc504f5658b)), closes [#1862](https://github.com/ttoss/soat/issues/1862)
