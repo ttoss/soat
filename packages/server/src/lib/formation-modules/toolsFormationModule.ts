@@ -1,5 +1,5 @@
 import { DomainError } from '../../errors';
-import { isRef } from '../formationsHelpers';
+import { isParam, isRef, isRefAttr, isSub } from '../formationsHelpers';
 import type { ValidationError } from '../formationsTypes';
 import { validateHttpExecute } from '../httpToolResponse';
 import {
@@ -59,13 +59,21 @@ const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
 };
 
 /**
- * A `url` written as an intrinsic (`param`, `sub`, `ref`) is a string only
- * after deploy, where the create path checks it again; here it counts as
- * present.
+ * A value written as an intrinsic (`param`, `sub`, `ref`, `ref_attr`) is a
+ * string only after deploy, where the create path checks it again; here it
+ * counts as present.
  */
-const withDeployTimeUrl = (execute: unknown): unknown => {
-  if (!isObjectRecord(execute) || !isObjectRecord(execute.url)) return execute;
-  return { ...execute, url: 'resolved-at-deploy' };
+const withDeployTimeValues = (value: unknown): unknown => {
+  if (isRef(value) || isParam(value) || isSub(value) || isRefAttr(value)) {
+    return 'resolved-at-deploy';
+  }
+  if (Array.isArray(value)) return value.map(withDeployTimeValues);
+  if (!isObjectRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      return [key, withDeployTimeValues(entry)];
+    })
+  );
 };
 
 /**
@@ -82,7 +90,7 @@ const pushExecuteErrors = (args: {
   try {
     validateHttpExecute({
       type,
-      execute: withDeployTimeUrl(execute),
+      execute: withDeployTimeValues(execute),
     });
   } catch (error) {
     args.errors.push({
