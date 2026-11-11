@@ -1,3 +1,7 @@
+import {
+  findIamActionRegistration,
+  isRegisteredIamModule,
+} from './iamRegistrations';
 import { listAllActions, listModuleNames } from './permissionCatalog';
 import {
   hasUnboundPolicyVariable,
@@ -231,7 +235,8 @@ export const validatePolicyDocument = (
 /**
  * True when `action` names a real, enforceable permission: the `*` super
  * wildcard, a `module:*` wildcard for a module that exists, or an exact
- * `module:Operation` present in the permission catalog (`src/permissions/*`).
+ * `module:Operation` present in the permission catalog (`src/permissions/*`)
+ * or registered by the deployment (`iamRegistrations.ts`).
  *
  * Degrades safely: if the catalog could not be loaded (empty — e.g. a bundle
  * where the permission files are not shipped), every action is treated as known
@@ -243,8 +248,14 @@ const isKnownAction = (action: string): boolean => {
   const knownActions = listAllActions();
   if (knownActions.size === 0) return true;
   const wildcard = /^([a-zA-Z0-9_-]+):\*$/.exec(action);
-  if (wildcard) return listModuleNames().has(wildcard[1]);
-  return knownActions.has(action);
+  if (wildcard) {
+    return (
+      listModuleNames().has(wildcard[1]) || isRegisteredIamModule(wildcard[1])
+    );
+  }
+  return (
+    knownActions.has(action) || findIamActionRegistration(action) !== undefined
+  );
 };
 
 /**

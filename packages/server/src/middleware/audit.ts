@@ -59,6 +59,15 @@ export const recordAuthorizationDecision = (
   });
 };
 
+/**
+ * Drops the checks recorded so far: for a request that asks what its caller
+ * may do rather than doing it, so no entry claims an action was performed.
+ */
+export const discardAuthorizationChecks = (ctx: Context): void => {
+  const checks = ctx.state?.auditChecks as RecordedCheck[] | undefined;
+  checks?.splice(0);
+};
+
 type Next = () => Promise<void>;
 
 /** One authorization decision captured during a request. */
