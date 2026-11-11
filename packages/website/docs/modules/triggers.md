@@ -386,7 +386,13 @@ resource type with properties `name`, `description`, `type`, `target_type`,
       "type": "policy",
       "properties": {
         "document": {
-          "statement": [{ "effect": "Allow", "action": ["orchestrations:StartRun"] }]
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["orchestrations:StartRun"],
+              "resource": ["srn:proj_V1StGXR8Z5jdHi6B:*:*"]
+            }
+          ]
         }
       }
     },

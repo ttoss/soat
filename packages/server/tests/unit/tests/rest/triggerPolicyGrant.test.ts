@@ -236,7 +236,11 @@ describe('Trigger policy grant check', () => {
                 properties: {
                   document: {
                     statement: [
-                      { effect: 'Allow', action: ['orchestrations:StartRun'] },
+                      {
+                        effect: 'Allow',
+                        action: ['orchestrations:StartRun'],
+                        resource: [`srn:${projectId}:*:*`],
+                      },
                     ],
                   },
                 },

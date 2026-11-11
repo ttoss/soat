@@ -169,12 +169,6 @@ export type FormationModuleAuthorization =
       update?: string;
       delete: string;
       /**
-       * True where the REST equivalent gates on the `admin` role rather than a
-       * policy-grantable action, so a granted action alone would make the
-       * formation path weaker than the route it mirrors (`policy`).
-       */
-      adminOnly?: true;
-      /**
        * Actions a create or update also needs on resources the declared
        * properties name by literal id (a tool's `secrets:UseSecret`). An id
        * resolved only at deploy is refused by the module's own lib call.
@@ -208,7 +202,6 @@ export type FormationAuthorizationRequest = {
   srnResourceType: string;
   /** The resource's physical id, or `*` for a create — nothing exists yet. */
   resourceId: string;
-  adminOnly: boolean;
 };
 
 /**

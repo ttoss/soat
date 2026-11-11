@@ -7,22 +7,21 @@ import {
   getPolicy,
   updatePolicy,
 } from '../policies';
+import { findProjectPublicId } from '../projects';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 import { isObjectRecord } from './formationSpecLoader';
 
 export const policiesFormationModule = defineFormationModule({
   resourceType: 'policy',
-  // The policies routes gate on the `admin` role, not on a policy-grantable
-  // action — a policy that granted `policies:CreatePolicy` to a non-admin would
-  // otherwise make the formation path the weaker of the two: a template
-  // declaring a `*` policy plus an `api_key` carrying it is an escalation.
+  // A project policy, authorized as `POST /policies` with a project: its
+  // `Allow` statements stay inside the project, and attaching it anywhere
+  // still needs the attacher's grants.
   authorization: {
     srnResourceType: 'policy',
     create: 'policies:CreatePolicy',
     update: 'policies:UpdatePolicy',
     delete: 'policies:DeletePolicy',
-    adminOnly: true,
   },
 
   // Only the semantic action-name check — structure is validated downstream.
@@ -36,8 +35,12 @@ export const policiesFormationModule = defineFormationModule({
     }
   },
 
-  create: async ({ properties }) => {
+  create: async ({ properties, projectId }) => {
     const result = await createPolicy({
+      project: {
+        id: projectId,
+        publicId: await findProjectPublicId({ id: projectId }),
+      },
       name: toOptionalString(properties.name) ?? undefined,
       description: toOptionalString(properties.description) ?? undefined,
       document: properties.document as PolicyDocument,

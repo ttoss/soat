@@ -184,35 +184,4 @@ describe('Admin gate and credential scope', () => {
       expect(res.status).toBe(403);
     });
   });
-
-  describe('formation resources gated to admins', () => {
-    test('a policy resource is refused for an admin key bound to the project', async () => {
-      const key = await mintAdminKey({ projectId });
-      const res = await authenticatedTestClient(key)
-        .post('/api/v1/formations')
-        .send({
-          project_id: projectId,
-          name: 'agc-policy-stack',
-          template: {
-            resources: {
-              Escalation: {
-                type: 'policy',
-                properties: {
-                  document: { statement: [{ effect: 'Allow', action: ['*'] }] },
-                },
-              },
-            },
-          },
-        });
-
-      expect(res.status).toBe(403);
-      expect(res.body.error.meta.denied_actions).toEqual([
-        {
-          logical_id: 'Escalation',
-          resource_type: 'policy',
-          action: 'policies:CreatePolicy',
-        },
-      ]);
-    });
-  });
 });

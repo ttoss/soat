@@ -545,7 +545,7 @@ The check runs over the whole template **before anything is applied**: no format
 
 [`POST /api/v1/formations/plan`](/docs/api/formations/plan-formation) changes nothing, so it **reports** the same list under `unauthorized_actions` instead of refusing; the field is absent when the caller may perform every action the plan implies.
 
-- A `policy` resource needs the `admin` role rather than an action, as the policies routes do.
+- A `policy` resource is a [project policy](./policies.md) of the formation's project, authorized as `policies:CreatePolicy` there; its `Allow` statements must name that project's resources (`srn:<project_id>:<type>:<id>`), else the apply fails with `VALIDATION_FAILED`.
 - An `api_key` resource is minted **under the deploying caller**, as [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key) mints under the requesting user; the owner's permissions are its ceiling, so declaring one needs only `api-keys:CreateApiKey`. A narrowed deploying key also bounds its `policy_ids` by the [same rule as the routes](./api-keys.md#a-narrowed-key-stays-inside-its-boundary); a refusal fails the apply with `API_KEY_POLICY_BOUNDARY`. A project-scoped token (OAuth, trigger or run) [writes no key](./api-keys.md#a-project-scoped-token-writes-no-key): the apply fails with `API_KEY_SCOPED_TOKEN`.
 - A `trigger` resource acts under its `policy_ids` ([execution identity](./triggers.md#execution-identity)), which the deploying caller must hold, so a firing never exceeds who declared it.
 - A [custom resource type](#custom-resource-types) has no SOAT action, so it is gated on the request's `formations:*` action alone.

@@ -68,7 +68,6 @@ const buildAuthorizationRequest = (args: {
     action,
     srnResourceType: authorization.srnResourceType,
     resourceId: args.physicalResourceId ?? NEW_RESOURCE_ID,
-    adminOnly: authorization.adminOnly === true,
   };
 };
 
@@ -83,7 +82,7 @@ const buildReferenceRequests = (args: {
   if (!authorization || 'operatorRegistered' in authorization) return [];
   return (authorization.references?.(args.decl.properties) ?? []).map(
     (reference) => {
-      return { ...args.request, ...reference, adminOnly: false };
+      return { ...args.request, ...reference };
     }
   );
 };

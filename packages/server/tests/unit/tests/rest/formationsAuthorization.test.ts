@@ -82,7 +82,6 @@ describe('Formation resource authorization', () => {
         'memories:CreateMemoryStore',
         'memories:UpdateMemoryStore',
         'memories:DeleteMemoryStore',
-        // Granted to prove `policy` is refused on the role gate, not on this.
         'policies:CreatePolicy',
         'api-keys:CreateApiKey',
       ],
@@ -171,28 +170,76 @@ describe('Formation resource authorization', () => {
       ).toBe(false);
     });
 
-    test('a policy resource is refused for a non-admin even with the action granted', async () => {
+    const policyTemplate = (statement: object[]) => {
+      return {
+        resources: {
+          ReadOnly: { type: 'policy', properties: { document: { statement } } },
+        },
+      };
+    };
+
+    test('a policy resource is a project policy, authorized like POST /policies', async () => {
       const res = await authenticatedTestClient(deployToken)
         .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: 'policy-stack',
-          template: {
-            resources: {
-              Escalation: {
-                type: 'policy',
-                properties: {
-                  document: { statement: [{ effect: 'Allow', action: ['*'] }] },
-                },
-              },
+          template: policyTemplate([
+            {
+              effect: 'Allow',
+              action: ['memories:*'],
+              resource: [`srn:${projectId}:*:*`],
             },
-          },
+          ]),
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      const policy = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies/${res.body.resources[0].physical_resource_id}`
+      );
+      expect(policy.body.project_id).toBe(projectId);
+    });
+
+    test('a policy resource allowing outside the project creates nothing', async () => {
+      const res = await authenticatedTestClient(deployToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'policy-escalation-stack',
+          template: policyTemplate([{ effect: 'Allow', action: ['*'] }]),
+        });
+
+      expect(res.body.status).not.toBe('active');
+      const policies = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies?project_id=${projectId}`
+      );
+      expect(
+        policies.body.data.some((policy: { document: unknown }) => {
+          return JSON.stringify(policy.document).includes('"action":["*"]');
+        })
+      ).toBe(false);
+    });
+
+    test('a policy resource is refused without policies:CreatePolicy', async () => {
+      const res = await authenticatedTestClient(noKeyToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'policy-denied-stack',
+          template: policyTemplate([
+            {
+              effect: 'Allow',
+              action: ['memories:*'],
+              resource: [`srn:${projectId}:*:*`],
+            },
+          ]),
         });
 
       expect(res.status).toBe(403);
       expect(res.body.error.meta.denied_actions).toEqual([
         {
-          logical_id: 'Escalation',
+          logical_id: 'ReadOnly',
           resource_type: 'policy',
           action: 'policies:CreatePolicy',
         },
