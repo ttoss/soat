@@ -23,6 +23,7 @@ import {
   Formations as FormationsSdk,
   Generations as GenerationsSdk,
   Guardrails as GuardrailsSdk,
+  Iam as IamSdk,
   IngestionRules as IngestionRulesSdk,
   Knowledge as KnowledgeSdk,
   Memories as MemoriesSdk,
@@ -140,6 +141,7 @@ export class SoatClient {
   readonly formations: typeof FormationsSdk;
   readonly generations: typeof GenerationsSdk;
   readonly guardrails: typeof GuardrailsSdk;
+  readonly iam: typeof IamSdk;
   readonly ingestionRules: typeof IngestionRulesSdk;
   readonly knowledge: typeof KnowledgeSdk;
   readonly memories: typeof MemoriesSdk;
@@ -199,6 +201,7 @@ export class SoatClient {
     this.formations = bindResource(FormationsSdk, httpClient);
     this.generations = bindResource(GenerationsSdk, httpClient);
     this.guardrails = bindResource(GuardrailsSdk, httpClient);
+    this.iam = bindResource(IamSdk, httpClient);
     this.ingestionRules = bindResource(IngestionRulesSdk, httpClient);
     this.knowledge = bindResource(KnowledgeSdk, httpClient);
     this.memories = bindResource(MemoriesSdk, httpClient);
