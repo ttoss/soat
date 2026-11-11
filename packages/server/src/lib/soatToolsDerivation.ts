@@ -13,7 +13,6 @@ import {
   type ToolDefinition,
 } from '@ttoss/http-server-mcp-openapi';
 
-import { stripPresenceUnions } from './openapiPresenceUnions';
 import { prepareToolExtensions } from './soatToolsExtensions';
 
 export type { ToolDefinition };
@@ -69,9 +68,7 @@ export const deriveToolDefinitions = (args: {
 }): ToolDefinition[] => {
   const documents: OpenApiDocuments = {};
   for (const { file, spec } of args.specs) {
-    const prepared = prepareToolExtensions({ spec, file });
-    stripPresenceUnions(prepared);
-    documents[`./${file}`] = prepared;
+    documents[`./${file}`] = prepareToolExtensions({ spec, file });
   }
 
   return openApiToToolDefinitions({

@@ -172,13 +172,58 @@ type Operation = {
   requestBody?: {
     content?: Record<
       string,
-      { example?: unknown; examples?: Record<string, { value?: unknown }> }
+      {
+        schema?: unknown;
+        example?: unknown;
+        examples?: Record<string, { value?: unknown }>;
+      }
     >;
   };
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+/** Markers that keep a body field out of the tool schema (`soatToolsDerivation.ts`). */
+const TOOL_HIDDEN_MARKERS = [
+  'x-soat-server-managed',
+  'x-soat-tool-unsupported',
+  'x-soat-tool-forced',
+];
+
+/** Body fields a tool deliberately omits; an example sending one is not the tool's to accept. */
+const toolHiddenFields = (args: {
+  spec: Record<string, unknown>;
+  schema: unknown;
+}): Set<string> => {
+  let schema = args.schema;
+  if (isRecord(schema) && typeof schema.$ref === 'string') {
+    const name = schema.$ref.startsWith('#/components/schemas/')
+      ? schema.$ref.slice('#/components/schemas/'.length)
+      : '';
+    const components = isRecord(args.spec.components)
+      ? args.spec.components
+      : {};
+    const schemas = isRecord(components.schemas) ? components.schemas : {};
+    schema = schemas[name];
+  }
+  const properties =
+    isRecord(schema) && isRecord(schema.properties) ? schema.properties : {};
+  return new Set(
+    Object.entries(properties)
+      .filter(([, property]) => {
+        return (
+          isRecord(property) &&
+          TOOL_HIDDEN_MARKERS.some((marker) => {
+            return marker in property;
+          })
+        );
+      })
+      .map(([name]) => {
+        return name;
+      })
+  );
 };
 
 /** Each request body a spec documents as an example, by operationId. */
@@ -189,24 +234,39 @@ const documentedBodies = (): Array<{ operationId: string; body: unknown }> => {
       return file.endsWith('.yaml');
     })
     .flatMap((file) => {
-      const spec = load(fs.readFileSync(path.join(SPEC_DIR, file), 'utf8'));
-      const paths = isRecord(spec) && isRecord(spec.paths) ? spec.paths : {};
+      const loaded = load(fs.readFileSync(path.join(SPEC_DIR, file), 'utf8'));
+      const spec = isRecord(loaded) ? loaded : {};
+      const paths = isRecord(spec.paths) ? spec.paths : {};
       return Object.values(paths)
         .filter(isRecord)
         .flatMap((item) => {
-          return Object.values(item).filter(isRecord) as Operation[];
+          return (Object.values(item).filter(isRecord) as Operation[]).map(
+            (operation) => {
+              return { spec, operation };
+            }
+          );
         });
     })
-    .flatMap((operation) => {
+    .flatMap(({ spec, operation }) => {
       const json = operation.requestBody?.content?.['application/json'];
       if (!operation.operationId || !json) return [];
+      const hidden = toolHiddenFields({ spec, schema: json.schema });
       return [
         ...(json.example ? [json.example] : []),
         ...Object.values(json.examples ?? {}).map((example) => {
           return example.value;
         }),
       ].map((body) => {
-        return { operationId: operation.operationId as string, body };
+        return {
+          operationId: operation.operationId as string,
+          body: isRecord(body)
+            ? Object.fromEntries(
+                Object.entries(body).filter(([key]) => {
+                  return !hidden.has(key);
+                })
+              )
+            : body,
+        };
       });
     });
 };
@@ -229,6 +289,13 @@ describe('MCP tool arguments', () => {
     const missing = await call({ name: 'get-agent', arguments: {} });
     expect(missing.isError).toBe(true);
     expect(missing.content?.[0]?.text).toContain('agent_id');
+
+    const undeclared = await call({
+      name: 'get-agent',
+      arguments: { agent_id: 'agent_x', colour: 'blue' },
+    });
+    expect(undeclared.isError).toBe(true);
+    expect(undeclared.content?.[0]?.text).toContain('additional properties');
   });
 
   test('accept the minimal arguments of every tool, each alternative once', async () => {

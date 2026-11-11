@@ -343,8 +343,8 @@ importers:
         specifier: ^1.41.0
         version: 1.41.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.10.1
+        version: 0.10.1
       '@ttoss/test-utils':
         specifier: ^4.4.0
         version: 4.4.0(@types/jest@30.0.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(encoding@0.1.13)(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)
@@ -413,8 +413,8 @@ importers:
         specifier: ^1.41.0
         version: 1.41.0(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.10.1
+        version: 0.10.1
       '@types/node':
         specifier: ^26.6.4
         version: 26.6.4
@@ -432,28 +432,28 @@ importers:
     dependencies:
       '@ai-sdk/amazon-bedrock':
         specifier: ^5.0.105
-        version: 5.0.105(zod@4.6.4)
+        version: 5.0.105(zod@4.6.7)
       '@ai-sdk/anthropic':
         specifier: ^4.0.71
-        version: 4.0.71(zod@4.6.4)
+        version: 4.0.71(zod@4.6.7)
       '@ai-sdk/azure':
         specifier: ^4.0.90
-        version: 4.0.90(zod@4.6.4)
+        version: 4.0.90(zod@4.6.7)
       '@ai-sdk/google':
         specifier: ^4.0.87
-        version: 4.0.87(zod@4.6.4)
+        version: 4.0.87(zod@4.6.7)
       '@ai-sdk/google-vertex':
         specifier: 5.0.101
-        version: 5.0.101(supports-color@8.1.1)(zod@4.6.4)
+        version: 5.0.101(supports-color@8.1.1)(zod@4.6.7)
       '@ai-sdk/groq':
         specifier: ^4.0.54
-        version: 4.0.54(zod@4.6.4)
+        version: 4.0.54(zod@4.6.7)
       '@ai-sdk/openai':
         specifier: ^4.0.83
-        version: 4.0.83(zod@4.6.4)
+        version: 4.0.83(zod@4.6.7)
       '@ai-sdk/xai':
         specifier: ^5.0.14
-        version: 5.0.14(zod@4.6.4)
+        version: 5.0.14(zod@4.6.7)
       '@aws-sdk/client-bedrock':
         specifier: ^3.1146.0
         version: 3.1146.0
@@ -485,14 +485,14 @@ importers:
         specifier: ^0.34.2
         version: 0.34.2(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/http-server-mcp-openapi':
-        specifier: ^0.8.2
-        version: 0.8.2(hono@4.12.30)(supports-color@8.1.1)
+        specifier: ^0.12.5
+        version: 0.12.5(supports-color@8.1.1)
       '@ttoss/postgresdb':
         specifier: ^0.14.1
         version: 0.14.1(@types/node@26.6.4)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
       ai:
         specifier: ^7.0.127
-        version: 7.0.127(zod@4.6.4)
+        version: 7.0.127(zod@4.6.7)
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -637,8 +637,8 @@ importers:
         specifier: 3.10.2
         version: 3.10.2(@swc/core@1.16.2)(@swc/html@1.16.2)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.28))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.28)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)(svgo@3.3.5)(uglify-js@3.19.3)
       '@ttoss/openapi-codegen':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.10.1
+        version: 0.10.1
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -2806,14 +2806,23 @@ packages:
   '@formatjs/icu-messageformat-parser@3.5.21':
     resolution: {integrity: sha512-Vnl7IOSyMRaP4Pjv48etkT2nlcIwzh4QWIa3hewzGlZZPBbft+TbMir4MijpDViOLN/1hvkGC10oYMuilsG+fw==}
 
+  '@formatjs/icu-messageformat-parser@3.5.23':
+    resolution: {integrity: sha512-iB1fYfhtSGd8uH9A8b1m01Ujcv6QtQnJasefP3jPApmz72L/zNipzf3BdoinTMd1xuviVChjUJWL60iTwjUQ+w==}
+
   '@formatjs/icu-skeleton-parser@2.1.11':
     resolution: {integrity: sha512-j8cUmOJzVgkHuS0QiQ6ga76UIoLOFSAMWhs7aZJztH3aAdCOAE6vpC8KVvFB4cU10ON0y2/5oOVmPJ43s2lTwA==}
 
   '@formatjs/icu-skeleton-parser@2.1.12':
     resolution: {integrity: sha512-ca7tZMLpfHX3sUD7hP6gE/qr6Iq89EDd3ZLeRhbsB7r0UD55DGJq+tmFLzrGrnx5StahUevQmQQVtbDRHsfDHA==}
 
+  '@formatjs/icu-skeleton-parser@2.1.13':
+    resolution: {integrity: sha512-IdAJ9NrHn7AF0zqncD9UpxQozTYyJtbwwrZnJMEKVxTcOOXtVkUb2XYTpNOGTAv58NCsk0rjRB9G+i2SvBmGAQ==}
+
   '@formatjs/intl@4.2.1':
     resolution: {integrity: sha512-GiL0cReencWQkhfJedNLMe0Aorb/wyTRJdi+hLgG9gsDPy4yw2N+EkMcijf5+oGKd5jde75tr5nujsPg78bUTw==}
+
+  '@formatjs/intl@6.1.5':
+    resolution: {integrity: sha512-WicSXzsz4wO1ksJb6Pp9a+vdOpIkidcEm8ldVtXkqFoMB/o/ETEikyPeCFgTVuSTLBb7ZNJ3ZLKXSQ/X/0+BAg==}
 
   '@formatjs/ts-transformer@4.4.16':
     resolution: {integrity: sha512-HgZuZhZ+/sFq2aYOm42GA9vN90L+enU/YZGn4S2CkkGtT092CEa9jhziIb0nAJLoBohCSzRHDg5yY9bKOKyytQ==}
@@ -3418,6 +3427,10 @@ packages:
     resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
     engines: {node: '>=20'}
 
+  '@modelcontextprotocol/core@2.4.0':
+    resolution: {integrity: sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q==}
+    engines: {node: '>=20'}
+
   '@modelcontextprotocol/node@2.0.0':
     resolution: {integrity: sha512-Y4hAC2XdGDUdDOCbLDOCA4+aL3NUldjsOWlDL/YwpAxrPhRm1xHd7lZ+mLacvZ9t3PaH28wgNoaLQGrIk1P2pg==}
     engines: {node: '>=20'}
@@ -3428,8 +3441,18 @@ packages:
       hono:
         optional: true
 
+  '@modelcontextprotocol/node@2.1.2':
+    resolution: {integrity: sha512-IIcIqBpr6NCQQs5DgJTgvbSOAw+3iaR/uquqg+e0nXCdudfjPg/80x0TseUnQx14AUAtE4fsJCEpJKPyb6WPVA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@modelcontextprotocol/server': ^2.4.0
+
   '@modelcontextprotocol/server@2.0.0':
     resolution: {integrity: sha512-YhHWdHfpFMQfd0prsEnxKeS3Qz3ytIGmsS0sth4KDjnacIT7hxk6hXHkJ9KysxlkvTM+WZAtQbbcUhdoP4Hvtw==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/server@2.4.0':
+    resolution: {integrity: sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q==}
     engines: {node: '>=20'}
 
   '@module-federation/error-codes@0.22.0':
@@ -4829,6 +4852,9 @@ packages:
   '@ttoss/auth-core@0.16.1':
     resolution: {integrity: sha512-uTv/1lc6lRgFs2bg6RTP+DLUtmmoOMy0RrOZS5MJbaxFYyGkK218scjlnY3I9PyQSzOab51T6+pdMDBKZhlwqA==}
 
+  '@ttoss/auth-core@0.26.0':
+    resolution: {integrity: sha512-aaVwF1MUOZ2jnsoEjvQ+x3zEP4FsLtXuFsO0exLtANLRN8X7+ZXajIDAZ0n9jq+eOWUcgxvug8hUgm6PcbgxHg==}
+
   '@ttoss/cloudformation@0.16.1':
     resolution: {integrity: sha512-fDEng0mtSKBCRMXP9A/Kfx45l6Xi5WPXFc/62BM2ZW+iPFD9+6NeemV0ItX7vANqiKw2awdiPU0iQUnVQAF7gQ==}
 
@@ -4836,24 +4862,41 @@ packages:
     resolution: {integrity: sha512-r/9qE83n2NO31J6gL1VMc6StzoWjkT4EzbO15kGQhSG4MPeI3m5ngsbBNflHqmm6TgxpD1uAmt4tehzlUrZrTg==}
     hasBin: true
 
+  '@ttoss/errors@0.5.0':
+    resolution: {integrity: sha512-vBWO4mmmnBWIYJqb8mE2FoaqV5VKiCmqUo97eve7r8nbGVkM8YJrFuwWNcVZpS92yO3aFTD4AMHEy7aP2eLjiw==}
+
   '@ttoss/eslint-config@3.0.0':
     resolution: {integrity: sha512-gBL8FVGAUb9m+uiFpYuHqF165n5/La3tt1uUVQyjf9ROAwrRI479mGiN3HLQU6V4Bs5tk2Shdf2qnr0ZlTU+7Q==}
     peerDependencies:
       eslint: ^10
+
+  '@ttoss/http-server-auth@0.12.4':
+    resolution: {integrity: sha512-mOI98tyYM95cBTFzF0pBhVR98FVNk/EmiX1ATBHFwANOOltbduQeiqymE7ocbmzctawRWMLdIH11F0wL1p6CLA==}
+    peerDependencies:
+      '@ttoss/http-server': ^0.15.0
 
   '@ttoss/http-server-auth@0.8.1':
     resolution: {integrity: sha512-oEAkarWFTKEP4zuaerD0jz6c4rLv/3YV87P1S8x9TTKIJaN7OVJSoXGt5sNJNC/cbqpjEoyvn//oN8JTJnXfSw==}
     peerDependencies:
       '@ttoss/http-server': ^0.11.1
 
-  '@ttoss/http-server-mcp-openapi@0.8.2':
-    resolution: {integrity: sha512-usAxQkmHhvatSeGUdPDtsYxMg59R0ijxTG1SXGWW1dHaR3SyKn6zVzan0rGbDano0oKpxTmfFSz2mr3oc5gLFA==}
+  '@ttoss/http-server-mcp-openapi@0.12.5':
+    resolution: {integrity: sha512-fejE/DUK9vOWATc7pzau40kGTwWjFxUfYu9qCk6RaKMGhUuTdxMkotNUnXUwZlEhwkeGtmfETRgkArj/tO9T/w==}
 
   '@ttoss/http-server-mcp@0.34.2':
     resolution: {integrity: sha512-FV3LGFxrZnQK9qAR+1FpcTUyeajtp+M80PJH6DXTfgxgXOyIq1Td1KOZkjvcHLJ40DKnnDQLa1AQ3Kq5tG2ziw==}
 
+  '@ttoss/http-server-mcp@0.44.4':
+    resolution: {integrity: sha512-WCHvwGQjQGwGGW60wtrSpQ43TXsXuIJCokIcshPONnRdC4z81uIXI+5CmlnMvsGff3IFlh4yghdVHvmT3ofOBg==}
+
   '@ttoss/http-server@0.11.1':
     resolution: {integrity: sha512-QY/ukryzYlscCt0Of28hOF6H0124oMbMXt/ZylIW+hS6VqcZj21AVXhNIALEzhxE/FnbXVYwry3JEh/d+72baQ==}
+
+  '@ttoss/http-server@0.15.0':
+    resolution: {integrity: sha512-z5JQ+YX11AwsgvxDy4C1XCetmkgLrQoTMBC6tcl5PKIdvFzMINJjudRVbBMkyhVAVDx+iJU9Rg0Gvr/6mkVxDw==}
+
+  '@ttoss/i18n-core@0.10.0':
+    resolution: {integrity: sha512-mssmCbyafnMnJKnEYK53qaCCxmmuFjAL0zlu1WuwA6CkiN2rL9StTvt5JUby+wMt1YHbMKSX0bcshWp7t5lsYA==}
 
   '@ttoss/i18n-core@0.7.0':
     resolution: {integrity: sha512-TG5zt8f7QGe4Sj3rYMpUBSOPCSlku27NdsWJsfBVkhpTxdu5F9z4I9+0/w0Uah+bUTBbG5DrtetgV+3NyUFlXA==}
@@ -4865,8 +4908,8 @@ packages:
     resolution: {integrity: sha512-brpHOKKEjK5plef0X2FyfNUMlNOXDVKdJZIvWvSAXB6opsov2faaH1Wt/dfOxIde06dnl5WA4wKFsdq1CSBOdA==}
     hasBin: true
 
-  '@ttoss/openapi-codegen@0.10.0':
-    resolution: {integrity: sha512-mKmEf7CVgsevH0NOzjxRwIBDMVc75a2Bx7F5gRvAh4NNXmZWS4VN8Z7/ARpATnwQvds/OkYnaHNH5sTpPKORkw==}
+  '@ttoss/openapi-codegen@0.10.1':
+    resolution: {integrity: sha512-ynO3cEoUXA2b4KQD5Vw2gn8DPbNOFtKFyyGWwIAk1fJTwBAVzLvftjPYJ1cgJvJfB6wdu9MW8h7KKEqortdwcg==}
 
   '@ttoss/postgresdb-cli@0.5.1':
     resolution: {integrity: sha512-S47tWhtqtefBrxv5M1Vw7/33lOzJPSkJcM7e84ZlFkyVlJr/IthvPytcu87C+TdSE8HtY56Txqf5tT1WSn/N+A==}
@@ -5992,6 +6035,10 @@ packages:
   aws-jwt-verify@4.0.1:
     resolution: {integrity: sha512-kzvi71eD3w/mCpYRUY7cz6DX4bfYihGdI2yV3FYQ2JuZZenqAqDPz0gWj0ew6vlAtdEVBNb7p+Dm2TAIxpVYMA==}
     engines: {node: '>=14.0.0'}
+
+  aws-jwt-verify@5.2.1:
+    resolution: {integrity: sha512-J+buA4M+qvQDk58WXFBLkDodkEX3DDL1ac5XFQPW3opxAsaLXYu5hYnlSHsaBRDBUXBAn695kE/cw/mdyJKwJg==}
+    engines: {node: '>=18.0.0'}
 
   aws-sdk@2.1693.0:
     resolution: {integrity: sha512-cJmb8xEnVLT+R6fBS5sn/EFJiX7tUnDaPtOPZ1vFbOJtd0fnZn/Ky2XGgsvvoeliWeH7mL3TWSX5zXXGSQV6gQ==}
@@ -8748,6 +8795,9 @@ packages:
   intl-messageformat@11.2.15:
     resolution: {integrity: sha512-W4VNytsXyWgW5lvVchmsb9xgA5rSKqoflu3/IQ9UCtB0z4R+Bx9MoEkwFT/+30RCl/KzUoH0QGGe9lppF5SuvQ==}
 
+  intl-messageformat@12.1.5:
+    resolution: {integrity: sha512-quhcDFAxy4wr/GrgWgmMjuegoedNUIxGNLORfXgDgdjuv8cBM88ClLTLXmfYC1roMSR1PPc55yUEkpJ5m67W2g==}
+
   invariant@2.2.4:
     resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
 
@@ -10190,6 +10240,10 @@ packages:
 
   multer@2.1.1:
     resolution: {integrity: sha512-mo+QTzKlx8R7E5ylSXxWzGoXoZbOsRMpyitcht8By2KHvMbf3tjwosZ/Mu/XYU6UuJ3VZnODIrak5ZrPiPyB6A==}
+    engines: {node: '>= 10.16.0'}
+
+  multer@2.4.0:
+    resolution: {integrity: sha512-7dqa0ZcFfzbefdTuIkzOSMvZWC0J7FLqBOjJUZvDCXShIURWKxAyTT1wHhnE5q19c7jOJf43IYYKjBmZVZmvhg==}
     engines: {node: '>= 10.16.0'}
 
   multicast-dns@7.2.5:
@@ -13494,6 +13548,9 @@ packages:
   zod@4.6.4:
     resolution: {integrity: sha512-AXSD6hvGdvRjajG/l1cC+d6IrhH+sjmPKtYeQdJIK8MFJl3LyClzS+o/YsVC+zQZPupAaeH5skwwm8YqYH7BqA==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -13508,98 +13565,98 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@ai-sdk/amazon-bedrock@5.0.105(zod@4.6.4)':
+  '@ai-sdk/amazon-bedrock@5.0.105(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/anthropic': 4.0.71(zod@4.6.4)
-      '@ai-sdk/openai': 4.0.83(zod@4.6.4)
+      '@ai-sdk/anthropic': 4.0.71(zod@4.6.7)
+      '@ai-sdk/openai': 4.0.83(zod@4.6.7)
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
       '@smithy/eventstream-codec': 4.5.2
       '@smithy/util-utf8': 4.5.2
       aws4fetch: 1.0.20
-      zod: 4.6.4
+      zod: 4.6.7
 
-  '@ai-sdk/anthropic@4.0.71(zod@4.6.4)':
+  '@ai-sdk/anthropic@4.0.71(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/azure@4.0.90(zod@4.6.4)':
+  '@ai-sdk/azure@4.0.90(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/deepseek': 3.0.58(zod@4.6.4)
-      '@ai-sdk/openai': 4.0.83(zod@4.6.4)
+      '@ai-sdk/deepseek': 3.0.58(zod@4.6.7)
+      '@ai-sdk/openai': 4.0.83(zod@4.6.7)
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/deepseek@3.0.58(zod@4.6.4)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
-
-  '@ai-sdk/gateway@4.0.103(zod@4.6.4)':
+  '@ai-sdk/deepseek@3.0.58(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
+
+  '@ai-sdk/gateway@4.0.103(zod@4.6.7)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
       '@vercel/oidc': 3.2.0
-      zod: 4.6.4
+      zod: 4.6.7
 
-  '@ai-sdk/google-vertex@5.0.101(supports-color@8.1.1)(zod@4.6.4)':
+  '@ai-sdk/google-vertex@5.0.101(supports-color@8.1.1)(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/anthropic': 4.0.71(zod@4.6.4)
-      '@ai-sdk/google': 4.0.87(zod@4.6.4)
-      '@ai-sdk/openai-compatible': 3.0.62(zod@4.6.4)
+      '@ai-sdk/anthropic': 4.0.71(zod@4.6.7)
+      '@ai-sdk/google': 4.0.87(zod@4.6.7)
+      '@ai-sdk/openai-compatible': 3.0.62(zod@4.6.7)
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
       google-auth-library: 10.9.1(supports-color@8.1.1)
-      zod: 4.6.4
+      zod: 4.6.7
     transitivePeerDependencies:
       - supports-color
 
-  '@ai-sdk/google@4.0.87(zod@4.6.4)':
+  '@ai-sdk/google@4.0.87(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/groq@4.0.54(zod@4.6.4)':
+  '@ai-sdk/groq@4.0.54(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/openai-compatible@3.0.62(zod@4.6.4)':
+  '@ai-sdk/openai-compatible@3.0.62(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/openai@4.0.83(zod@4.6.4)':
+  '@ai-sdk/openai@4.0.83(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
-  '@ai-sdk/provider-utils@5.0.53(zod@4.6.4)':
+  '@ai-sdk/provider-utils@5.0.53(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.1
-      zod: 4.6.4
+      zod: 4.6.7
 
   '@ai-sdk/provider@4.0.21':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/xai@5.0.14(zod@4.6.4)':
+  '@ai-sdk/xai@5.0.14(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
   '@algolia/abtesting@1.25.0':
     dependencies:
@@ -17106,15 +17163,27 @@ snapshots:
     dependencies:
       '@formatjs/icu-skeleton-parser': 2.1.12
 
+  '@formatjs/icu-messageformat-parser@3.5.23':
+    dependencies:
+      '@formatjs/icu-skeleton-parser': 2.1.13
+
   '@formatjs/icu-skeleton-parser@2.1.11': {}
 
   '@formatjs/icu-skeleton-parser@2.1.12': {}
+
+  '@formatjs/icu-skeleton-parser@2.1.13': {}
 
   '@formatjs/intl@4.2.1':
     dependencies:
       '@formatjs/fast-memoize': 3.1.7
       '@formatjs/icu-messageformat-parser': 3.5.18
       intl-messageformat: 11.2.15
+
+  '@formatjs/intl@6.1.5':
+    dependencies:
+      '@formatjs/fast-memoize': 3.1.7
+      '@formatjs/icu-messageformat-parser': 3.5.23
+      intl-messageformat: 12.1.5
 
   '@formatjs/ts-transformer@4.4.16':
     dependencies:
@@ -17773,6 +17842,11 @@ snapshots:
       koa: 3.2.1
       multer: 2.1.1
 
+  '@koa/multer@4.0.0(koa@3.2.1)(multer@2.4.0)':
+    dependencies:
+      koa: 3.2.1
+      multer: 2.4.0
+
   '@koa/router@15.7.0(koa@3.2.1)(supports-color@8.1.1)':
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
@@ -17947,6 +18021,10 @@ snapshots:
     dependencies:
       zod: 4.6.4
 
+  '@modelcontextprotocol/core@2.4.0':
+    dependencies:
+      zod: 4.6.4
+
   '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.30)':
     dependencies:
       '@hono/node-server': 1.19.17(hono@4.12.30)
@@ -17954,9 +18032,20 @@ snapshots:
     optionalDependencies:
       hono: 4.12.30
 
+  '@modelcontextprotocol/node@2.1.2(@modelcontextprotocol/server@2.4.0)':
+    dependencies:
+      '@hono/node-server': 1.19.17(hono@4.12.30)
+      '@modelcontextprotocol/server': 2.4.0
+      hono: 4.12.30
+
   '@modelcontextprotocol/server@2.0.0':
     dependencies:
       '@modelcontextprotocol/core': 2.0.0
+      zod: 4.6.4
+
+  '@modelcontextprotocol/server@2.4.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.4.0
       zod: 4.6.4
 
   '@module-federation/error-codes@0.22.0': {}
@@ -19401,6 +19490,12 @@ snapshots:
       aws-jwt-verify: 4.0.1
       jose: 6.2.12
 
+  '@ttoss/auth-core@0.26.0':
+    dependencies:
+      '@ttoss/errors': 0.5.0
+      aws-jwt-verify: 5.2.1
+      jose: 6.2.12
+
   '@ttoss/cloudformation@0.16.1':
     dependencies:
       '@ttoss/read-config-file': 2.5.1
@@ -19423,6 +19518,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - ts-jest
+
+  '@ttoss/errors@0.5.0': {}
 
   '@ttoss/eslint-config@3.0.0(@testing-library/dom@10.4.2)(@typescript-eslint/utils@8.71.2(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(prettier@3.9.9)(supports-color@8.1.1)':
     dependencies:
@@ -19460,17 +19557,21 @@ snapshots:
       - supports-color
       - ts-jest
 
+  '@ttoss/http-server-auth@0.12.4(@ttoss/http-server@0.15.0(supports-color@8.1.1))':
+    dependencies:
+      '@ttoss/auth-core': 0.26.0
+      '@ttoss/http-server': 0.15.0(supports-color@8.1.1)
+
   '@ttoss/http-server-auth@0.8.1(@ttoss/http-server@0.11.1(supports-color@8.1.1))':
     dependencies:
       '@ttoss/auth-core': 0.16.1
       '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
 
-  '@ttoss/http-server-mcp-openapi@0.8.2(hono@4.12.30)(supports-color@8.1.1)':
+  '@ttoss/http-server-mcp-openapi@0.12.5(supports-color@8.1.1)':
     dependencies:
-      '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
-      '@ttoss/http-server-mcp': 0.34.2(hono@4.12.30)(supports-color@8.1.1)
+      '@ttoss/http-server': 0.15.0(supports-color@8.1.1)
+      '@ttoss/http-server-mcp': 0.44.4(supports-color@8.1.1)
     transitivePeerDependencies:
-      - hono
       - supports-color
 
   '@ttoss/http-server-mcp@0.34.2(hono@4.12.30)(supports-color@8.1.1)':
@@ -19486,6 +19587,18 @@ snapshots:
       - hono
       - supports-color
 
+  '@ttoss/http-server-mcp@0.44.4(supports-color@8.1.1)':
+    dependencies:
+      '@modelcontextprotocol/node': 2.1.2(@modelcontextprotocol/server@2.4.0)
+      '@modelcontextprotocol/server': 2.4.0
+      '@ttoss/auth-core': 0.26.0
+      '@ttoss/http-server': 0.15.0(supports-color@8.1.1)
+      '@ttoss/http-server-auth': 0.12.4(@ttoss/http-server@0.15.0(supports-color@8.1.1))
+      '@ttoss/i18n-core': 0.10.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - supports-color
+
   '@ttoss/http-server@0.11.1(supports-color@8.1.1)':
     dependencies:
       '@koa/bodyparser': 6.1.0(koa@3.2.1)
@@ -19499,6 +19612,24 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@ttoss/http-server@0.15.0(supports-color@8.1.1)':
+    dependencies:
+      '@koa/bodyparser': 6.1.0(koa@3.2.1)
+      '@koa/cors': 5.0.0
+      '@koa/multer': 4.0.0(koa@3.2.1)(multer@2.4.0)
+      '@koa/router': 15.7.0(koa@3.2.1)(supports-color@8.1.1)
+      '@ttoss/errors': 0.5.0
+      '@ttoss/i18n-core': 0.10.0
+      koa: 3.2.1
+      koa-static: 5.0.0(supports-color@8.1.1)
+      multer: 2.4.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@ttoss/i18n-core@0.10.0':
+    dependencies:
+      '@formatjs/intl': 6.1.5
+
   '@ttoss/i18n-core@0.7.0':
     dependencies:
       '@formatjs/intl': 4.2.1
@@ -19509,7 +19640,7 @@ snapshots:
     dependencies:
       commander: 14.0.3
 
-  '@ttoss/openapi-codegen@0.10.0':
+  '@ttoss/openapi-codegen@0.10.1':
     dependencies:
       js-yaml: 5.5.0
 
@@ -20471,12 +20602,12 @@ snapshots:
       clean-stack: 2.2.0
       indent-string: 4.0.0
 
-  ai@7.0.127(zod@4.6.4):
+  ai@7.0.127(zod@4.6.7):
     dependencies:
-      '@ai-sdk/gateway': 4.0.103(zod@4.6.4)
+      '@ai-sdk/gateway': 4.0.103(zod@4.6.7)
       '@ai-sdk/provider': 4.0.21
-      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.4)
-      zod: 4.6.4
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.6.7)
+      zod: 4.6.7
 
   ajv-draft-04@1.0.0(ajv@8.20.0):
     optionalDependencies:
@@ -20703,6 +20834,8 @@ snapshots:
       possible-typed-array-names: 1.1.0
 
   aws-jwt-verify@4.0.1: {}
+
+  aws-jwt-verify@5.2.1: {}
 
   aws-sdk@2.1693.0:
     dependencies:
@@ -24064,6 +24197,11 @@ snapshots:
       '@formatjs/fast-memoize': 3.1.7
       '@formatjs/icu-messageformat-parser': 3.5.18
 
+  intl-messageformat@12.1.5:
+    dependencies:
+      '@formatjs/fast-memoize': 3.1.7
+      '@formatjs/icu-messageformat-parser': 3.5.23
+
   invariant@2.2.4:
     dependencies:
       loose-envify: 1.4.0
@@ -25945,6 +26083,12 @@ snapshots:
       append-field: 1.0.0
       busboy: 1.6.0
       concat-stream: 2.0.0
+      type-is: 1.6.18
+
+  multer@2.4.0:
+    dependencies:
+      append-field: 1.0.0
+      busboy: 1.6.0
       type-is: 1.6.18
 
   multicast-dns@7.2.5:
@@ -29642,5 +29786,7 @@ snapshots:
       zod: 4.6.4
 
   zod@4.6.4: {}
+
+  zod@4.6.7: {}
 
   zwitch@2.0.4: {}
