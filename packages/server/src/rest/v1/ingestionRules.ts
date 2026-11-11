@@ -13,12 +13,8 @@ import {
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const ingestionRulesRouter = new Router<Context>();
@@ -57,14 +53,14 @@ type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
 
 ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const { limit, cursor } = parsePagination(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'ingestion-rules:ListIngestionRules',
     resourceType: 'ingestionRule',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listIngestionRules({ projectIds, limit, cursor });
 });

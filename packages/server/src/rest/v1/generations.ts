@@ -21,8 +21,8 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
   requireFound,
-  requireProjectAccess,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
 
 export const generationsRouter = new Router<Context>();
@@ -50,10 +50,12 @@ const generationAccess = makeItemRouteAuthorizer({
 generationsRouter.get('/generations', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'generations:ListGenerations',
     resourceType: 'generation',
+    projectSelector: 'none',
+    emptyScope: 'forbidden',
   });
 
   const {
@@ -68,7 +70,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
   } = ctx.query as Record<string, string | undefined>;
 
   const result = await listGenerations({
-    projectIds: projectIds ?? undefined,
+    projectIds,
     agentId,
     traceId,
     sessionId,

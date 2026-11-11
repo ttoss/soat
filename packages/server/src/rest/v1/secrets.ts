@@ -9,12 +9,8 @@ import {
   updateSecret,
 } from 'src/lib/secrets';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const secretsRouter = new Router<Context>();
@@ -39,13 +35,12 @@ const secretAccess = makeItemRouteAuthorizer({
 secretsRouter.get('/secrets', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'secrets:ListSecrets',
     resourceType: 'secret',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listSecrets({

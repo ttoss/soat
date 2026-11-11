@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import {
   auditEntries,
   getAuditEntry,
@@ -8,12 +7,8 @@ import {
   streamAuditEntriesNdjson,
 } from 'src/lib/auditLog';
 
-import {
-  parseDateQuery,
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-} from './helpers';
+import { parseDateQuery, parsePagination, requireAuth } from './helpers';
+import { resolveListScope } from './listScope';
 import { sendNdjson } from './ndjsonResponse';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
@@ -33,13 +28,12 @@ const auditEntryAccess = makeItemRouteAuthorizer({
 auditLogRouter.get('/audit-log', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'audit:ListAuditEntries',
     resourceType: 'audit',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listAuditEntries({
@@ -59,19 +53,14 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
 auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
   // Export is deliberately per-project: an unbounded cross-project dump is a
   // different (and much larger) egress surface than this endpoint offers.
-  if (!projectPublicId) {
-    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
-  }
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'audit:ExportAuditEntries',
     resourceType: 'audit',
+    projectSelector: 'required',
+    emptyScope: 'empty',
   });
 
   // The generator emits the snake_case read contract directly.

@@ -79,7 +79,7 @@ const ROUTE_REGISTRATION = /\.(get|post|patch|put|delete)\(\s*'([^']+)'/g;
  * reporting the next statement's keys.
  */
 const PROJECT_LEVEL_SCOPE =
-  /\b(requireProjectAccess|resolveReadProjectIds)\(\{[^}]*\bresourceType:/;
+  /\b(requireProjectAccess|resolveReadProjectIds|resolveListScope)\(\{[^}]*\bresourceType:/;
 
 /**
  * The registration's own closing line, at column 0 — `});` for the one-line

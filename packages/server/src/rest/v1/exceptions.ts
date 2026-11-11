@@ -19,8 +19,8 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 
 const exceptionsRouter = new Router<Context>();
@@ -39,13 +39,12 @@ const exceptionSrn = (exception: { id: string } & ProjectOwned): string => {
 exceptionsRouter.get('/exceptions', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'exceptions:ListExceptions',
     resourceType: 'exception',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listExceptions({

@@ -21,9 +21,9 @@ import {
   type ProjectOwned,
   requireAuth,
   requireProjectAccess,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
@@ -131,13 +131,13 @@ chatsRouter.post('/chats', async (ctx: Context) => {
 
 chatsRouter.get('/chats', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'chats:ListChats',
     resourceType: 'chat',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listChats({

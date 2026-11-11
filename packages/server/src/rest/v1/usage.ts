@@ -21,10 +21,9 @@ import {
   parsePagination,
   requireAdmin,
   requireAuth,
-  requireProjectAccess,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 export const usageRouter = new Router<Context>();
@@ -100,14 +99,16 @@ const usageNarrowings = (ctx: Context): UsageNarrowings => {
 usageRouter.get('/usage/events', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'usage:ListEvents',
     resourceType: 'usage',
+    projectSelector: 'none',
+    emptyScope: 'forbidden',
   });
 
   const result = await listUsageEvents({
-    projectIds: projectIds ?? undefined,
+    projectIds,
     ...usageNarrowings(ctx),
     ...parsePagination(ctx),
   });
@@ -141,37 +142,26 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
   requireAuth(ctx);
 
   const {
-    project_id: projectPublicId,
     from,
     to,
     group_by: groupBy,
     include,
   } = ctx.query as Record<string, string | undefined>;
 
-  if (!projectPublicId) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'project_id query parameter is required.'
-    );
-  }
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'usage:GetAggregate',
     resourceType: 'usage',
+    projectSelector: 'required',
+    emptyScope: 'forbidden',
   });
-
-  if (
-    projectIds === null ||
-    projectIds === undefined ||
-    projectIds.length === 0
-  ) {
+  const projectId = projectIds?.[0];
+  if (projectId === undefined || projectPublicId === undefined) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = await aggregateUsage({
-    projectId: projectIds[0],
+    projectId,
     projectPublicId,
     from,
     to,
@@ -194,20 +184,16 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
 usageRouter.get('/usage/thresholds', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'usage:ListThresholds',
     resourceType: 'usage',
+    projectSelector: 'optional',
+    emptyScope: 'forbidden',
   });
 
-  const { project_id: projectId } = ctx.query as Record<
-    string,
-    string | undefined
-  >;
-
   ctx.body = await listThresholds({
-    projectIds: projectIds ?? undefined,
-    projectId,
+    projectIds,
     ...parsePagination(ctx),
   });
 });
@@ -362,10 +348,12 @@ const resolveReceipt = async (args: {
 usageRouter.get('/usage/receipt', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'usage:GetReceipt',
     resourceType: 'usage',
+    projectSelector: 'none',
+    emptyScope: 'forbidden',
   });
 
   const {
@@ -376,7 +364,7 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
   ctx.body = await resolveReceipt({
     generationId,
     orchestrationRunId,
-    projectIds: projectIds ?? undefined,
+    projectIds,
   });
 });
 

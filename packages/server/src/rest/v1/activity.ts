@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import {
   ACTIVITY_KINDS,
   ACTIVITY_SEVERITIES,
@@ -9,12 +8,8 @@ import {
 } from 'src/lib/activity';
 import { streamActivityNdjson } from 'src/lib/activityExport';
 
-import {
-  parseEnumQuery,
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-} from './helpers';
+import { parseEnumQuery, parsePagination, requireAuth } from './helpers';
+import { resolveListScope } from './listScope';
 import { sendNdjson } from './ndjsonResponse';
 
 const activityRouter = new Router<Context>();
@@ -39,13 +34,12 @@ const readActivityFilters = (
 activityRouter.get('/activity', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'activity:ListActivity',
     resourceType: 'activity',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listActivity({
@@ -58,18 +52,13 @@ activityRouter.get('/activity', async (ctx: Context) => {
 activityRouter.get('/activity/export', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
   // Per-project, as every export is.
-  if (!projectPublicId) {
-    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
-  }
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'activity:ExportActivity',
     resourceType: 'activity',
+    projectSelector: 'required',
+    emptyScope: 'empty',
   });
 
   sendNdjson({

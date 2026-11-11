@@ -12,12 +12,8 @@ import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 
 type Next = () => Promise<unknown>;
@@ -49,16 +45,16 @@ const filesRouter = new Router<Context>();
 filesRouter.get('/files', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = (ctx.query as Record<string, string>).project_id;
   const pathPrefix = (ctx.query as Record<string, string>).path_prefix;
   const tags = readTagQuery(ctx.query.tags);
   const { limit, cursor } = parsePagination(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'files:GetFile',
     resourceType: 'file',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

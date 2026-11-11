@@ -633,13 +633,24 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('admin without project scoping and no project_id returns 400', async () => {
+    test('admin without project scoping and no project_id lists every project', async () => {
       const response = await authenticatedTestClient(adminToken).get(
         '/api/v1/orchestrations'
       );
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toBe('project_id is required');
+      expect(response.status).toBe(200);
+      expect(
+        response.body.data.some((o: { id: string }) => {
+          return o.id === orchestrationId;
+        })
+      ).toBe(true);
+    });
+
+    test('user permitted in no project and no project_id lists nothing', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        '/api/v1/orchestrations'
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
     });
 
     test('user without permission returns 404', async () => {

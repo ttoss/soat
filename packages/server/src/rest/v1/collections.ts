@@ -37,10 +37,10 @@ import {
   type AuthenticatedContext,
   parsePagination,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 import { registerTagRoutes } from './tagRoutes';
 
@@ -51,11 +51,12 @@ type ItemBody = { data?: unknown; tags?: unknown };
 
 collectionsRouter.get('/collections', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'collections:ListCollections',
     resourceType: 'collection',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listCollections({ projectIds, ...parsePagination(ctx) });
 });

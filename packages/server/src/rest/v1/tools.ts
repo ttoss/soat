@@ -27,8 +27,8 @@ import {
   parseToolContextBody,
   requireAuth,
   requireProjectAccess,
-  resolveReadProjectIds,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 import { authorizeSharedUse } from './sharedAccess';
 
@@ -190,13 +190,12 @@ toolsRouter.post('/tools', async (ctx: Context) => {
 toolsRouter.get('/tools', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'tools:ListTools',
     resourceType: 'tool',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const page = await listTools({ projectIds, ...parsePagination(ctx) });

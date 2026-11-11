@@ -21,10 +21,10 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { playbookAccess, playbookAuthorOf } from './playbookAccess';
 import { playbookCasesRouter } from './playbookCases';
 import { playbookExportsRouter } from './playbookExports';
@@ -133,11 +133,12 @@ playbooksRouter.post('/playbooks', async (ctx: Context) => {
  */
 playbooksRouter.get('/playbooks', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'playbooks:ListPlaybooks',
     resourceType: 'playbook',
-    projectPublicId: parseString(ctx.query.project_id),
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listPlaybooks({ projectIds, ...parsePagination(ctx) });

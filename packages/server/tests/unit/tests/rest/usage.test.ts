@@ -2428,17 +2428,15 @@ describe('Usage', () => {
         ).toBe(false);
       });
 
-      test('listing thresholds for an unknown project returns an empty list', async () => {
+      test('listing thresholds for an unknown project returns 403', async () => {
         const res = await authenticatedTestClient(userToken).get(
           '/api/v1/usage/thresholds?project_id=proj_doesNotExist01'
         );
-        expect(res.status).toBe(200);
-        expect(res.body.data).toEqual([]);
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('FORBIDDEN');
       });
 
-      test('listing thresholds for an out-of-scope project returns an empty list', async () => {
-        // A project the user cannot access: filtering by it yields nothing
-        // rather than leaking another project's thresholds.
+      test('listing thresholds for an out-of-scope project returns 403', async () => {
         const other = await authenticatedTestClient(adminToken)
           .post('/api/v1/projects')
           .send({ name: `usage-thresholds-other-${Date.now()}` });
@@ -2447,8 +2445,8 @@ describe('Usage', () => {
         const res = await authenticatedTestClient(userToken).get(
           `/api/v1/usage/thresholds?project_id=${other.body.id}`
         );
-        expect(res.status).toBe(200);
-        expect(res.body.data).toEqual([]);
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('FORBIDDEN');
       });
 
       test('deleting an unknown threshold returns 404', async () => {

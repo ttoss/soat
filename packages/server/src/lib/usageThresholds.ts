@@ -88,39 +88,21 @@ const isWindow = (value: string): value is UsageThresholdWindow => {
 };
 
 /**
- * Lists a project's usage thresholds. `projectIds` is the set the caller may
- * access (undefined = admin, no filter); an explicit `projectId` narrows to one
- * project when it is in scope, else yields an empty list.
+ * Lists the usage thresholds in `projectIds`, the set the caller may access
+ * (undefined = admin, no filter).
  */
 export const listThresholds = async (args: {
   projectIds?: number[];
-  projectId?: string;
   limit?: number;
   cursor?: string;
 }): Promise<Page<PersistedUsageThreshold>> => {
-  const where: Record<string, unknown> = {};
   if (args.projectIds?.length === 0) return emptyPage(args);
-  Object.assign(where, projectScopeWhere({ projectIds: args.projectIds }));
-
-  if (args.projectId !== undefined) {
-    const project = await db.Project.findOne({
-      where: { publicId: args.projectId },
-    });
-    if (!project) return emptyPage(args);
-    const internalId = project.id as number;
-    if (
-      args.projectIds !== undefined &&
-      !args.projectIds.includes(internalId)
-    ) {
-      return emptyPage(args);
-    }
-    where.projectId = internalId;
-  }
+  const where = projectScopeWhere({ projectIds: args.projectIds });
 
   return paginatedList({
     limit: args.limit,
     cursor: args.cursor,
-    filters: { projectIds: args.projectIds, projectId: args.projectId },
+    filters: { projectIds: args.projectIds },
     where,
     order: [['createdAt', 'DESC']],
     query: ({ where: pageWhere, limit, order }) => {

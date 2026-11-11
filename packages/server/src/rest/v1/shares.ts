@@ -28,10 +28,10 @@ import {
   parseEnumListQuery,
   parsePagination,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { authorizeShareParty, publisherShareAccess } from './shareAccess';
 
 const sharesRouter = new Router<Context>();
@@ -88,7 +88,6 @@ sharesRouter.post('/shares', async (ctx: Context) => {
  */
 sharesRouter.get('/shares', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const pagination = parsePagination(ctx);
   const [role] = parseEnumListQuery({
     ctx,
@@ -97,31 +96,30 @@ sharesRouter.get('/shares', async (ctx: Context) => {
   }) ?? ['publisher'];
 
   if (role === 'grantee') {
-    const granteePublicId = resolveWriteProjectPublicId({
+    const { projectIds, projectPublicId } = await resolveListScope({
       ctx,
-      projectPublicId,
-    });
-    const projectIds = await resolveReadProjectIds({
-      ctx,
-      projectPublicId: granteePublicId,
       action: 'shares:ListShares',
       resourceType: 'share',
+      projectSelector: 'implied',
+      emptyScope: 'empty',
     });
-    ctx.body = projectIds?.length
-      ? await listReceivedShares({
-          projectId: projectIds[0],
-          projectPublicId: granteePublicId,
-          ...pagination,
-        })
-      : emptyPage(pagination);
+    ctx.body =
+      projectIds?.length && projectPublicId
+        ? await listReceivedShares({
+            projectId: projectIds[0],
+            projectPublicId,
+            ...pagination,
+          })
+        : emptyPage(pagination);
     return;
   }
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'shares:ListShares',
     resourceType: 'share',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listPublishedShares({
     projectIds,

@@ -25,9 +25,11 @@ import { join } from 'node:path';
 const V1_DIR = join(__dirname, '../../../../src/rest/v1');
 
 /**
- * The helper's own module defines it and calls it from `requireProjectAccess`.
+ * The modules that define the read helpers and call them with the action they
+ * were handed: `helpers.ts` from `requireProjectAccess`, `listScope.ts` from
+ * `resolveListScope`, whose own call sites this test reads instead.
  */
-const PREAMBLE_OWNER = 'helpers.ts';
+const PREAMBLE_OWNERS = ['helpers.ts', 'listScope.ts'];
 
 /**
  * Verbs whose routes tolerate an empty scope, because "the caller may read zero
@@ -58,7 +60,8 @@ const readHelperCalls = (
   rawSource: string
 ): { line: number; action?: string }[] => {
   const source = stripComments(rawSource);
-  const calls = /\bresolveReadProjectIds\s*\(([\s\S]{0,400}?)\)/g;
+  const calls =
+    /\b(?:resolveReadProjectIds|resolveListScope)\s*\(([\s\S]{0,400}?)\)/g;
   const found: { line: number; action?: string }[] = [];
 
   let match: RegExpExecArray | null;
@@ -76,7 +79,7 @@ const readHelperCalls = (
 
 describe('resolveReadProjectIds only guards read actions', () => {
   const files = readdirSync(V1_DIR).filter((f) => {
-    return f.endsWith('.ts') && f !== PREAMBLE_OWNER;
+    return f.endsWith('.ts') && !PREAMBLE_OWNERS.includes(f);
   });
 
   test('every v1 handler file is scanned', () => {

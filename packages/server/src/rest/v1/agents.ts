@@ -26,9 +26,9 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
-  resolveReadProjectIds,
   writePreconditionOf,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { authorizeSharedUse } from './sharedAccess';
 
 export const agentsRouter = new Router<Context>();
@@ -276,13 +276,12 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 agentsRouter.get('/agents', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'agents:ListAgents',
     resourceType: 'agent',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const page = await listAgents({ projectIds, ...parsePagination(ctx) });

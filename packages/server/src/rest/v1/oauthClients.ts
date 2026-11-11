@@ -10,12 +10,8 @@ import {
   updateOauthClient,
 } from 'src/lib/oauthClients';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const oauthClientsRouter = new Router<Context>();
@@ -60,11 +56,12 @@ const readInput = (body: OauthClientBody): OauthClientInput => {
 
 oauthClientsRouter.get('/oauth-clients', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'oauth-clients:ListOauthClients',
     resourceType: 'oauth_client',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listOauthClients({
     projectIds,

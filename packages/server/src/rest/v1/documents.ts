@@ -37,11 +37,11 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
+import { resolveListScope } from './listScope';
 import { sendNdjson } from './ndjsonResponse';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
@@ -122,7 +122,6 @@ export const checkDocumentPermission = async (
 documentsRouter.get('/documents', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const { limit, cursor } = parsePagination(ctx);
   const pathPrefix = ctx.query.path_prefix as string | undefined;
   const relatedTo = ctx.query.related_to as string | undefined;
@@ -130,11 +129,12 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   const metadata = readStructuredQuery({ name: 'metadata', query: ctx.query });
   const includeWithdrawn = ctx.query.include_withdrawn === 'true';
 
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'documents:ListDocuments',
     resourceType: 'document',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   // A neighbour filter resolves to row ids once, here, so the listing stays
@@ -174,19 +174,14 @@ documentsRouter.get('/documents', async (ctx: Context) => {
 documentsRouter.get('/documents/export', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
   // Per-project, as the audit-log export is: an unbounded cross-project dump
   // is a different egress surface than this endpoint offers.
-  if (!projectPublicId) {
-    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
-  }
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds, projectPublicId } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'documents:ExportDocuments',
     resourceType: 'document',
+    projectSelector: 'required',
+    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

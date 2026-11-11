@@ -27,10 +27,10 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
 } from './helpers';
+import { resolveListScope } from './listScope';
 import { playbookAuthorOf } from './playbookAccess';
 import { resourceRefusal } from './resourceAccess';
 
@@ -245,13 +245,12 @@ formationsRouter.post('/formations', async (ctx: Context) => {
 formationsRouter.get('/formations', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'formations:ListFormations',
     resourceType: 'formation',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   ctx.body = await listFormations({

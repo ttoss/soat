@@ -16,12 +16,8 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 
-import {
-  parsePagination,
-  requireAuth,
-  resolveReadProjectIds,
-  resolveWriteProjectId,
-} from './helpers';
+import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 
 const aiProvidersRouter = new Router<Context>();
@@ -51,13 +47,12 @@ const validateCreateAiProviderBody = (
 aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectPublicId = ctx.query.project_id as string | undefined;
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'ai-providers:ListAiProviders',
     resourceType: 'aiProvider',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   const page = await listAiProviders({

@@ -32,10 +32,10 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
+import { resolveListScope } from './listScope';
 import { resourceRefusal } from './resourceAccess';
 
 const tasksRouter = new Router<Context>();
@@ -61,13 +61,13 @@ const principalFromCtx = (ctx: Context): TaskPrincipal => {
  */
 tasksRouter.get('/tasks', async (ctx: Context) => {
   requireAuth(ctx);
-  const projectPublicId = ctx.query.project_id as string | undefined;
   const metadata = readStructuredQuery({ name: 'metadata', query: ctx.query });
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId,
     action: 'tasks:ListTasks',
     resourceType: 'task',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
 
   // The absent status is a value a task really holds, so it is a value of the

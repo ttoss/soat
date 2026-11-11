@@ -4,7 +4,8 @@ import { getOrchestrationQueueDriver } from 'src/lib/orchestration-queue-drivers
 import type { QueueStats } from 'src/lib/orchestration-queue-drivers/types';
 import { pageOf } from 'src/lib/pagination';
 
-import { parsePagination, requireAuth, requireProjectAccess } from './helpers';
+import { parsePagination, requireAuth } from './helpers';
+import { resolveListScope } from './listScope';
 
 /**
  * The wire projection of a `QueueStats` snapshot. The driver type stays
@@ -46,16 +47,16 @@ const mapQueueStats = (args: { stats: QueueStats; restricted: boolean }) => {
  */
 const queueStatsFor = async (ctx: Context) => {
   requireAuth(ctx);
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await resolveListScope({
     ctx,
     action: 'orchestrations:GetQueueStats',
     resourceType: 'orchestration',
+    projectSelector: 'none',
+    emptyScope: 'forbidden',
   });
   return {
-    stats: await getOrchestrationQueueDriver().stats({
-      projectIds: projectIds ?? undefined,
-    }),
-    restricted: projectIds !== null && projectIds !== undefined,
+    stats: await getOrchestrationQueueDriver().stats({ projectIds }),
+    restricted: projectIds !== undefined,
   };
 };
 

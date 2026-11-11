@@ -16,7 +16,8 @@ import {
 import { findMemoryStoreScope } from 'src/lib/memoryStores';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import { parsePagination, requireAuth } from './helpers';
+import { resolveListScope } from './listScope';
 import { requireMemoryStore } from './memoryStoreAccess';
 
 const memoryRulesRouter = new Router<Context>();
@@ -146,11 +147,12 @@ memoryRulesRouter.get('/memory-rules', async (ctx: Context) => {
   // Passed through, never defaulted to `[]`: `undefined` is an unrestricted
   // (admin) scope, and collapsing it into an empty array would answer an
   // empty page instead of everything.
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await resolveListScope({
     ctx,
-    projectPublicId: ctx.query.project_id as string | undefined,
     action: 'memories:ListMemoryRules',
     resourceType: 'memory_store',
+    projectSelector: 'optional',
+    emptyScope: 'empty',
   });
   ctx.body = await listMemoryRules({ projectIds, ...parsePagination(ctx) });
 });
