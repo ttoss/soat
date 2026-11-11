@@ -8,6 +8,11 @@ import {
 } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
 import { paginatedList } from './pagination';
+import { EVERY_PROJECT } from './policyCarriers';
+import {
+  assertWriterMayAttach,
+  type GetWriterPolicies,
+} from './policyGrantCoverage';
 
 const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   return {
@@ -128,6 +133,7 @@ export const deleteUser = async (args: { id: string }) => {
 export const attachUserPolicies = async (args: {
   userId: string;
   policyIds: string[];
+  writerPolicies: GetWriterPolicies;
 }): Promise<void> => {
   const user = await db.User.findOne({ where: { publicId: args.userId } });
 
@@ -154,9 +160,14 @@ export const attachUserPolicies = async (args: {
     );
   }
 
-  await user.update({
-    policyIds: policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-      return p.id as number;
-    }),
+  const policyIds = policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+    return p.id as number;
   });
+  await assertWriterMayAttach({
+    carrier: 'users',
+    getPolicies: args.writerPolicies,
+    actsIn: EVERY_PROJECT,
+    policyIds,
+  });
+  await user.update({ policyIds });
 };

@@ -9,7 +9,12 @@ import {
   type PolicySets,
   type Statement,
 } from './iam';
-import { DIRECT_POLICY_CARRIERS } from './policyCarriers';
+import {
+  EVERY_PROJECT,
+  POLICY_CARRIERS,
+  type PolicyCarrier,
+  type PolicyCarrierName,
+} from './policyCarriers';
 
 const log = createDebug('soat:policyGrantCoverage');
 
@@ -77,13 +82,15 @@ export const globOverlaps = (args: { a: string; b: string }): boolean => {
 /**
  * A granted resource pattern as it reaches inside one project: an attached
  * policy acts only there, so `*` reads as that project's SRNs and a pattern
- * naming another project reaches nothing (`null`).
+ * naming another project reaches nothing (`null`). In `EVERY_PROJECT` it
+ * reaches as written.
  */
 const withinProject = (args: {
   pattern: string;
   projectPublicId: string;
 }): string | null => {
   const { pattern, projectPublicId } = args;
+  if (projectPublicId === EVERY_PROJECT) return pattern;
   if (pattern === '*') return `srn:${projectPublicId}:*:*`;
   const parts = /^srn:([^:]+):(.+)$/.exec(pattern);
   if (!parts) return pattern;
@@ -256,91 +263,114 @@ const assertCovered = async (args: {
   );
 };
 
-/**
- * Attaching policies to a resource that acts under them (a trigger, an agent)
- * needs a writer who holds every grant they carry inside its project.
- */
-export const assertWriterHoldsPolicies = async (args: {
-  getPolicies: GetWriterPolicies;
-  projectId: number;
-  policyIds: number[];
-}): Promise<void> => {
-  log(
-    'assertWriterHoldsPolicies: projectId=%d policyIds=%o',
-    args.projectId,
-    args.policyIds
-  );
-  if (args.policyIds.length === 0) return;
-  const [project, rows] = await Promise.all([
-    db.Project.findByPk(args.projectId, { rejectOnEmpty: true }),
-    db.Policy.findAll({ where: { id: args.policyIds } }),
-  ]);
-  await assertCovered({
-    getPolicies: args.getPolicies,
-    projectPublicId: project.publicId as string,
-    policies: rows.map((row) => {
-      return {
-        policyId: row.publicId as string,
-        document: row.document as PolicyDocument,
-      };
-    }),
-  });
-};
-
-const directCarrierProjects = (): string => {
-  return Object.values(DIRECT_POLICY_CARRIERS)
-    .map((model) => {
-      return `
-     UNION
-     SELECT p.public_id
-       FROM ${model().tableName} c
-       JOIN projects p ON p.id = c.project_id
-      WHERE c.policy_ids @> :ids::jsonb`;
-    })
-    .join('');
-};
-
-/**
- * The projects of every direct carrier naming the policy, and of every agent
- * whose live config or any archived version names it: a version is served
- * again by a release or a restore.
- */
-const projectsOfCarriers = async (
-  policyPublicId: string
-): Promise<string[]> => {
-  const [rows] = await db.sequelize.query(
-    `SELECT DISTINCT p.public_id
-       FROM agents a
-       JOIN projects p ON p.id = a.project_id
-      WHERE a.policy_ids @> :ids::jsonb
-         OR EXISTS (
-              SELECT 1 FROM agent_versions v
-               WHERE v.agent_id = a.id
-                 AND (v.config::jsonb -> 'policy_ids') @> :ids::jsonb)
-${directCarrierProjects()}`,
-    { replacements: { ids: JSON.stringify([policyPublicId]) } }
-  );
-  return (rows as { public_id: string }[]).map((row) => {
-    return row.public_id;
-  });
-};
-
-/**
- * Editing a policy already attached to a resource that acts under it is
- * attaching the new document again, in every project it is attached in.
- */
-export const assertWriterHoldsAttachedEdit = async (args: {
-  getPolicies: GetWriterPolicies;
-  policyPublicId: string;
+type ScopedPolicy = {
+  policyId: string;
   document: PolicyDocument;
+  /** The project a project policy belongs to; `null` for a global one. */
+  projectPublicId: string | null;
+};
+
+/** A project policy reaches only its own project, wherever it is attached. */
+const scopeOf = (args: { actsIn: string; policy: ScopedPolicy }): string => {
+  return args.actsIn === EVERY_PROJECT && args.policy.projectPublicId
+    ? args.policy.projectPublicId
+    : args.actsIn;
+};
+
+/**
+ * Each scope's policies against the writer's sets for that scope; a writer
+ * confined to one project holds nothing in `EVERY_PROJECT`.
+ */
+const assertCoveredIn = async (args: {
+  getPolicies: GetWriterPolicies;
+  actsIn: string[];
+  policies: ScopedPolicy[];
 }): Promise<void> => {
-  log('assertWriterHoldsAttachedEdit: policy=%s', args.policyPublicId);
-  const projectPublicIds = await projectsOfCarriers(args.policyPublicId);
-  for (const projectPublicId of projectPublicIds) {
+  const byScope = new Map<string, ScopedPolicy[]>();
+  for (const actsIn of args.actsIn) {
+    for (const policy of args.policies) {
+      const scope = scopeOf({ actsIn, policy });
+      byScope.set(scope, [...(byScope.get(scope) ?? []), policy]);
+    }
+  }
+  for (const [projectPublicId, policies] of byScope) {
     await assertCovered({
       getPolicies: args.getPolicies,
       projectPublicId,
-      policies: [{ policyId: args.policyPublicId, document: args.document }],
+      policies,
     });
   }
+};
+
+const loadScopedPolicies = async (
+  policyIds: number[]
+): Promise<ScopedPolicy[]> => {
+  const rows = await db.Policy.findAll({
+    where: { id: policyIds },
+    include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
+  });
+  return rows.map((row) => {
+    return {
+      policyId: row.publicId as string,
+      document: row.document as PolicyDocument,
+      projectPublicId: row.project?.publicId ?? null,
+    };
+  });
+};
+
+/**
+ * The one check every attach of policies to a carrier goes through, answered
+ * by the carrier's `POLICY_CARRIERS` entry. `actsIn` is the carrier's project
+ * public id, or `EVERY_PROJECT`.
+ */
+export const assertWriterMayAttach = async (args: {
+  carrier: PolicyCarrierName;
+  getPolicies: GetWriterPolicies;
+  actsIn: string;
+  policyIds: number[];
+}): Promise<void> => {
+  log(
+    'assertWriterMayAttach: carrier=%s actsIn=%s policyIds=%o',
+    args.carrier,
+    args.actsIn,
+    args.policyIds
+  );
+  const carrier: PolicyCarrier = POLICY_CARRIERS[args.carrier];
+  if (carrier.attach === 'bounded_by_owner' || args.policyIds.length === 0) {
+    return;
+  }
+  await assertCoveredIn({
+    getPolicies: args.getPolicies,
+    actsIn: [args.actsIn],
+    policies: await loadScopedPolicies(args.policyIds),
+  });
+};
+
+/**
+ * The one check every policy edit goes through: editing a policy a carrier
+ * names attaches the new document again, wherever each carrier acts.
+ */
+export const assertWriterHoldsAttachedEdit = async (args: {
+  getPolicies: GetWriterPolicies;
+  policy: { id: number; publicId: string; projectPublicId: string | null };
+  document: PolicyDocument;
+}): Promise<void> => {
+  log('assertWriterHoldsAttachedEdit: policy=%s', args.policy.publicId);
+  const carriers: PolicyCarrier[] = Object.values(POLICY_CARRIERS);
+  const actsIn = await Promise.all(
+    carriers.map((carrier) => {
+      return carrier.actsIn(args.policy);
+    })
+  );
+  await assertCoveredIn({
+    getPolicies: args.getPolicies,
+    actsIn: [...new Set(actsIn.flat())],
+    policies: [
+      {
+        policyId: args.policy.publicId,
+        document: args.document,
+        projectPublicId: args.policy.projectPublicId,
+      },
+    ],
+  });
 };

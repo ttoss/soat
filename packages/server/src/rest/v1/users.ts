@@ -97,6 +97,7 @@ usersRouter.delete('/users/:user_id', async (ctx: Context) => {
 });
 
 usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
+  requireAuth(ctx);
   requireAdmin(ctx, 'users:AttachUserPolicies');
   const { policy_ids: policyIds } = ctx.request.body as {
     policy_ids: string[];
@@ -109,6 +110,7 @@ usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
   await attachUserPolicies({
     userId: ctx.params.user_id,
     policyIds,
+    writerPolicies: ctx.authUser.getPolicies,
   });
 
   ctx.status = 204;

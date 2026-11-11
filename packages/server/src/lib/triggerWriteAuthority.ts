@@ -16,6 +16,7 @@ export const assertTriggerPoliciesHeld = async (args: {
   current: string[] | null;
 }): Promise<void> => {
   await assertRequiredPoliciesAttachable({
+    carrier: 'triggers',
     policyIds: args.policyIds,
     current: args.current,
     projectId: args.projectId,

@@ -207,7 +207,11 @@ export const updatePolicy = async (args: {
   }
   await assertWriterHoldsAttachedEdit({
     getPolicies: args.writerPolicies,
-    policyPublicId: args.policyId,
+    policy: {
+      id: policy.id as number,
+      publicId: args.policyId,
+      projectPublicId: project?.publicId ?? null,
+    },
     document: args.document,
   });
 
