@@ -2106,7 +2106,6 @@ describe('MCP tools - happy path', () => {
 
     test('get-webhook returns the webhook', async () => {
       const res = await mcpCall('get-webhook', {
-        project_id: projectId,
         webhook_id: webhookId,
       });
       expect(res.status).toBe(200);
@@ -2116,7 +2115,6 @@ describe('MCP tools - happy path', () => {
 
     test('update-webhook updates the webhook', async () => {
       const res = await mcpCall('update-webhook', {
-        project_id: projectId,
         webhook_id: webhookId,
         name: 'MCP Webhook Updated',
         active: false,
@@ -2129,7 +2127,6 @@ describe('MCP tools - happy path', () => {
 
     test('rotate-webhook-secret returns new secret', async () => {
       const res = await mcpCall('rotate-webhook-secret', {
-        project_id: projectId,
         webhook_id: webhookId,
       });
       expect(res.status).toBe(200);
@@ -2139,7 +2136,6 @@ describe('MCP tools - happy path', () => {
 
     test('list-webhook-deliveries returns results', async () => {
       const res = await mcpCall('list-webhook-deliveries', {
-        project_id: projectId,
         webhook_id: webhookId,
       });
       expect(res.status).toBe(200);
